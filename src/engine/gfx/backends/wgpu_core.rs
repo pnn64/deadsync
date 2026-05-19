@@ -528,7 +528,6 @@ fn init(
         instance_buffer,
         instance_capacity,
         prep: DrawScratch::with_capacity(
-            instance_capacity,
             mesh_vertex_capacity,
             tmesh_vertex_capacity,
             tmesh_instance_capacity,
@@ -988,13 +987,13 @@ pub fn draw(
         });
     }
 
-    let instance_len = state.prep.sprite_instances.len();
+    let instance_len = render_list.sprite_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
         state.queue.write_buffer(
             &state.instance_buffer,
             0,
-            cast_slice(state.prep.sprite_instances.as_slice()),
+            cast_slice(render_list.sprite_instances.as_slice()),
         );
     }
     let mesh_len = state.prep.mesh_vertices.len();
@@ -1172,12 +1171,10 @@ pub fn draw(
                         );
                         last_camera = Some(run.camera);
                     }
-                    match run.mode {
-                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
-                            run.vertex_start..(run.vertex_start + run.vertex_count),
-                            0..1,
-                        ),
-                    }
+                    pass.draw(
+                        run.vertex_start..(run.vertex_start + run.vertex_count),
+                        0..1,
+                    );
                 }
                 DrawOp::TexturedMesh(run) => {
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
@@ -1246,12 +1243,10 @@ pub fn draw(
                     }
                     let draw_start = run.source.vertex_start();
                     let draw_end = draw_start + run.source.vertex_count();
-                    match run.mode {
-                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
-                            draw_start..draw_end,
-                            run.instance_start..(run.instance_start + run.instance_count),
-                        ),
-                    }
+                    pass.draw(
+                        draw_start..draw_end,
+                        run.instance_start..(run.instance_start + run.instance_count),
+                    );
                 }
             }
         }

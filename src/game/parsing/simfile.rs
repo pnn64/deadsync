@@ -36,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 9;
+const SONG_CACHE_VERSION: u8 = 10;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -1658,6 +1658,14 @@ fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<
     resolve_song_path_like_itg(song_dir, asset_tag).filter(|path| path.is_file())
 }
 
+fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
+    let direct = dir.join("default.lua");
+    if direct.is_file() {
+        return Some(direct);
+    }
+    resolve_song_dir_entry_ci(dir, "default.lua").filter(|path| path.is_file())
+}
+
 #[derive(Default)]
 struct ResolvedSongArtwork {
     banner_path: Option<PathBuf>,
@@ -1689,6 +1697,12 @@ fn is_song_art_image(path: &Path) -> bool {
         })
 }
 
+#[inline(always)]
+fn is_mac_resource_fork(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+}
+
 fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     let Ok(read_dir) = fs::read_dir(song_dir) else {
         return Vec::new();
@@ -1696,7 +1710,7 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     let mut paths = read_dir
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| path.is_file() && is_song_art_image(path))
+        .filter(|path| !is_mac_resource_fork(path) && path.is_file() && is_song_art_image(path))
         .collect::<Vec<_>>();
     paths.sort_by_cached_key(|path| {
         path.file_name()
@@ -1876,7 +1890,15 @@ fn path_uses_lua_like_itg(path: &Path) -> bool {
     {
         return true;
     }
-    path.is_dir() && path.join("default.lua").is_file()
+    path.is_dir() && resolve_dir_default_lua_like_itg(path).is_some()
+}
+
+fn song_lua_entry_path_like_itg(path: PathBuf) -> PathBuf {
+    if path.is_dir() {
+        resolve_dir_default_lua_like_itg(&path).unwrap_or_else(|| path.join("default.lua"))
+    } else {
+        path
+    }
 }
 
 #[inline(always)]
@@ -2213,6 +2235,9 @@ fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
 
 fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
     let path = resolve_song_path_like_itg(song_dir, target)?;
+    if path_uses_lua_like_itg(&path) {
+        return None;
+    }
     if path.is_dir() {
         return resolve_foreground_media_dir(&path);
     }
@@ -2282,11 +2307,7 @@ fn extract_foreground_lua_changes(
             else {
                 continue;
             };
-            let path = if path.is_dir() {
-                path.join("default.lua")
-            } else {
-                path
-            };
+            let path = song_lua_entry_path_like_itg(path);
             out.push(SerializableSongForegroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
@@ -2312,11 +2333,7 @@ fn extract_background_lua_changes(
     let entries = list_song_dir_rel_entries(song_dir);
     let mut out = Vec::new();
     let mut push_change = |start_beat: f32, path: PathBuf| {
-        let path = if path.is_dir() {
-            path.join("default.lua")
-        } else {
-            path
-        };
+        let path = song_lua_entry_path_like_itg(path);
         out.push(SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
@@ -2667,6 +2684,21 @@ mod tests {
     }
 
     #[test]
+    fn simfile_uses_lua_detects_fgchange_dir_default_lua_case_insensitively() {
+        let root = test_dir("lua-fgchange-dir-case");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("Visuals");
+        fs::create_dir_all(&fg_dir).unwrap();
+        fs::write(fg_dir.join("Default.lua"), "return Def.ActorFrame{}").unwrap();
+
+        assert!(simfile_uses_lua(
+            &song_dir,
+            b"#TITLE:Lua Test;#FGCHANGES:0=Visuals=1=0=0=0=0;",
+            "",
+        ));
+    }
+
+    #[test]
     fn extract_foreground_lua_changes_resolves_default_lua_file() {
         let root = test_dir("lua-fgchange-path");
         let song_dir = root.join("Song");
@@ -2685,12 +2717,29 @@ mod tests {
     }
 
     #[test]
+    fn extract_foreground_lua_changes_resolves_default_lua_file_case_insensitively() {
+        let root = test_dir("lua-fgchange-path-case");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("Visuals");
+        fs::create_dir_all(&fg_dir).unwrap();
+        let default_lua = fg_dir.join("Default.lua");
+        fs::write(&default_lua, "return Def.ActorFrame{}").unwrap();
+
+        let changes = extract_foreground_lua_changes(
+            &song_dir,
+            b"#TITLE:Lua Test;#FGCHANGES:4=Visuals=1=0=0=0=0;",
+        );
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].start_beat, 4.0);
+        assert_eq!(PathBuf::from(&changes[0].path), default_lua);
+    }
+
+    #[test]
     fn extract_foreground_changes_resolves_media_dir_movie() {
         let root = test_dir("fgchange-media-dir");
         let song_dir = root.join("Song");
         let fg_dir = song_dir.join("animations");
         fs::create_dir_all(&fg_dir).unwrap();
-        fs::write(fg_dir.join("default.lua"), "return Def.ActorFrame{}").unwrap();
         let movie = fg_dir.join("badapple.avi");
         fs::write(&movie, b"avi").unwrap();
 
@@ -2702,6 +2751,23 @@ mod tests {
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].start_beat, 0.0);
         assert_eq!(PathBuf::from(&changes[0].path), movie);
+    }
+
+    #[test]
+    fn extract_foreground_changes_skips_media_inside_lua_dir() {
+        let root = test_dir("fgchange-lua-dir-no-media");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("multitap");
+        fs::create_dir_all(&fg_dir).unwrap();
+        fs::write(fg_dir.join("Default.lua"), "return Def.ActorFrame{}").unwrap();
+        fs::write(fg_dir.join("flip69.png"), b"png").unwrap();
+
+        let changes = extract_foreground_changes(
+            &song_dir,
+            b"#TITLE:Lua Test;#FGCHANGES:0=multitap=1=0=0=0=0;",
+        );
+
+        assert!(changes.is_empty());
     }
 
     #[test]

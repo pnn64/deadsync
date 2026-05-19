@@ -722,11 +722,10 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
 }
 
 /// Raw gamepad handler used only while capturing a new mapping.
-/// This consumes the first pressed gamepad element and writes it into
-/// the appropriate binding slot for the active row/slot.
-pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+/// Returns `true` when the raw press was consumed as the new binding.
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
     if !state.capture_active {
-        return;
+        return false;
     }
 
     // Only react to press edges; releases and pure axis motion are ignored.
@@ -739,7 +738,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             ..
         } => {
             if !pressed {
-                return;
+                return false;
             }
             let dev = usize::from(id);
             let code_u32 = code.into_u32();
@@ -760,7 +759,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             ..
         } => {
             if !pressed {
-                return;
+                return false;
             }
             let dev = usize::from(id);
             Some((InputBinding::PadDirOn { device: dev, dir }, timestamp))
@@ -769,10 +768,10 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     };
 
     let Some((binding, timestamp)) = binding_opt else {
-        return;
+        return false;
     };
     if capture_debounce_active(state, timestamp) {
-        return;
+        return false;
     }
 
     if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
@@ -802,6 +801,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
     // Any captured pad input ends capture.
     cancel_capture(state);
+    true
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -1769,11 +1769,12 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActiveSlot, handle_input, handle_raw_key_event, init, invalid_capture_key,
-        keymap_raw_nav_action,
+        ActiveSlot, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event, init,
+        invalid_capture_key, keymap_raw_nav_action,
     };
     use crate::engine::input::{
-        InputBinding, InputEvent, InputSource, Keymap, RawKeyboardEvent, VirtualAction,
+        InputBinding, InputEvent, InputSource, Keymap, PadCode, PadEvent, PadId, RawKeyboardEvent,
+        VirtualAction,
     };
     use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
@@ -1872,6 +1873,27 @@ mod tests {
             &raw_key(KeyCode::Enter, true, t0 + Duration::from_millis(3)),
         );
         assert!(state.capture_active);
+    }
+
+    #[test]
+    fn raw_pad_capture_consumes_accepted_press() {
+        let mut state = init();
+        let t0 = Instant::now();
+        state.selected_row = 8;
+        begin_capture(&mut state, t0);
+
+        let event = PadEvent::RawButton {
+            id: PadId(0),
+            timestamp: t0 + Duration::from_millis(250),
+            host_nanos: 7,
+            code: PadCode(9),
+            uuid: [1; 16],
+            value: 1.0,
+            pressed: true,
+        };
+
+        assert!(handle_raw_pad_event(&mut state, &event));
+        assert!(!state.capture_active);
     }
 
     #[test]

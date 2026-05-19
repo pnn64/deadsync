@@ -11,6 +11,17 @@ pub fn update_machine_font(font: MachineFont) {
     save_without_keymaps();
 }
 
+pub fn update_machine_bar_color(color: MachineBarColor) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_bar_color == color {
+            return;
+        }
+        cfg.machine_bar_color = color;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
     {
         let mut cfg = lock_config();
@@ -187,6 +198,17 @@ pub fn update_show_select_music_gameplay_timer(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_stage_display(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_stage_display == enabled {
+            return;
+        }
+        cfg.show_select_music_stage_display = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_scorebox(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -260,6 +282,17 @@ pub fn update_select_music_chart_info_peak_nps(enabled: bool) {
             return;
         }
         cfg.select_music_chart_info_peak_nps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_chart_info_effective_bpm(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_effective_bpm == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_effective_bpm = enabled;
     }
     save_without_keymaps();
 }

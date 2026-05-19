@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::config::{self, MachineBarColor};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -31,6 +32,14 @@ pub enum ScreenBarPosition {
 pub enum ScreenBarTitlePlacement {
     Left,
     Center,
+}
+
+#[derive(Clone, Copy)]
+enum ScreenBarContext {
+    Normal,
+    SelectMusic,
+    NoBackground,
+    TitleMenu,
 }
 
 #[derive(Clone, Copy)]
@@ -67,18 +76,52 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
+fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Background> {
+    if matches!(
+        context,
+        ScreenBarContext::TitleMenu | ScreenBarContext::NoBackground
+    ) {
+        return None;
+    }
+
+    let cfg = config::get();
+    match cfg.machine_bar_color.resolve(cfg.visual_style) {
+        MachineBarColor::Default if transparent => None,
+        MachineBarColor::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
+        MachineBarColor::Colored => {
+            Some(Background::Color(color::srpg9_rgba(cfg.simply_love_color)))
+        }
+        MachineBarColor::Transparent if matches!(context, ScreenBarContext::SelectMusic) => {
+            Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
+        }
+        MachineBarColor::Transparent => None,
+    }
+}
+
 pub fn build(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::Normal)
+}
+
+pub fn build_select_music(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::SelectMusic)
+}
+
+pub fn build_title_menu(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::TitleMenu)
+}
+
+pub fn build_no_background(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::NoBackground)
+}
+
+fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
     // Base placement per bar (height & anchor)
     let (align, offset) = match params.position {
         ScreenBarPosition::Top => ([0.0, 0.0], [0.0, 0.0]),
         ScreenBarPosition::Bottom => ([0.0, 1.0], [0.0, screen_height()]),
     };
 
-    let background = if params.transparent {
-        None
-    } else {
-        Some(Background::Color(color::rgba_hex("#a6a6a6")))
-    };
+    let background = bar_background(params.transparent, context);
 
     let mut children = Vec::with_capacity(4);
     let title = cached_str_ref(params.title);
@@ -207,5 +250,34 @@ pub fn build(params: ScreenBarParams) -> Actor {
         children,
         background,
         z: 120i16,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_bar_params() -> ScreenBarParams<'static> {
+        ScreenBarParams {
+            title: "",
+            title_placement: ScreenBarTitlePlacement::Center,
+            position: ScreenBarPosition::Bottom,
+            transparent: false,
+            left_text: None,
+            center_text: None,
+            right_text: None,
+            left_avatar: None,
+            right_avatar: None,
+            fg_color: [1.0; 4],
+        }
+    }
+
+    #[test]
+    fn no_background_bar_has_no_frame_background() {
+        let actor = build_no_background(empty_bar_params());
+        let Actor::Frame { background, .. } = actor else {
+            panic!("screen bar should build a frame");
+        };
+        assert!(background.is_none());
     }
 }

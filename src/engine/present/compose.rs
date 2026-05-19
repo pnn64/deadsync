@@ -73,6 +73,12 @@ pub fn build_screen_cached_with_scratch(
         objects.reserve(object_capacity - objects.len());
     }
     debug_assert!(objects.capacity() >= object_capacity);
+    let mut sprite_instances = std::mem::take(&mut scratch.sprite_instances);
+    sprite_instances.clear();
+    if sprite_instances.capacity() < object_capacity {
+        sprite_instances.reserve(object_capacity - sprite_instances.len());
+    }
+    debug_assert!(sprite_instances.capacity() >= object_capacity);
     let mut cameras = std::mem::take(&mut scratch.cameras);
     cameras.clear();
     if cameras.capacity() < 4 {
@@ -101,24 +107,24 @@ pub fn build_screen_cached_with_scratch(
     let parent_z: i16 = 0;
     let camera: u8 = 0;
 
-    for actor in actors {
-        build_actor_recursive(
-            actor,
-            root_rect,
-            m,
-            fonts,
-            scratch,
-            parent_z,
-            camera,
-            &mut cameras,
-            &mut masks,
-            &mut order_counter,
-            &mut objects,
-            text_cache,
-            &mut texture_cache,
-            total_elapsed,
-        );
-    }
+    build_actor_list(
+        actors,
+        root_rect,
+        m,
+        fonts,
+        scratch,
+        parent_z,
+        camera,
+        ComposeStyle::IDENTITY,
+        &mut cameras,
+        &mut masks,
+        &mut order_counter,
+        &mut objects,
+        &mut sprite_instances,
+        text_cache,
+        &mut texture_cache,
+        total_elapsed,
+    );
 
     // Prefer the dense stable z-bucket pass for common dense ranges, but fall
     // back to `(z, order)` sorting when insertion order and draw order differ.
@@ -131,6 +137,7 @@ pub fn build_screen_cached_with_scratch(
     RenderList {
         clear_color,
         cameras,
+        sprite_instances,
         objects,
     }
 }
@@ -138,6 +145,7 @@ pub fn build_screen_cached_with_scratch(
 #[derive(Default)]
 pub struct ComposeScratch {
     objects: Vec<RenderObject>,
+    sprite_instances: Vec<renderer::SpriteInstanceRaw>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
     z_counts: Vec<usize>,
@@ -165,6 +173,9 @@ impl ComposeScratch {
             self.recycled_text_mesh_vertices.push(vertices);
         }
         self.objects = objects;
+        let mut sprite_instances = std::mem::take(&mut render.sprite_instances);
+        sprite_instances.clear();
+        self.sprite_instances = sprite_instances;
         let mut cameras = std::mem::take(&mut render.cameras);
         cameras.clear();
         self.cameras = cameras;
@@ -386,49 +397,49 @@ struct TextLayoutPlacement {
 }
 
 struct OwnedLayoutEntry {
-    layout: Arc<CachedTextLayout>,
+    layout_index: usize,
     last_used: u64,
 }
 
 struct SharedLayoutEntry {
     _owner: Arc<str>,
-    layout: Arc<CachedTextLayout>,
+    layout_index: usize,
     last_used: u64,
 }
 
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
-type TextureMetaMap = HashMap<String, assets::TexMeta, TextLayoutHasher>;
-type TextureSheetMap = HashMap<String, (u32, u32), TextLayoutHasher>;
-type TextureHandleLookupMap = HashMap<String, renderer::TextureHandle, TextLayoutHasher>;
-type PtrTextureMetaMap = HashMap<usize, assets::TexMeta, TextLayoutHasher>;
-type PtrTextureSheetMap = HashMap<usize, (u32, u32), TextLayoutHasher>;
-type PtrTextureHandleLookupMap = HashMap<usize, renderer::TextureHandle, TextLayoutHasher>;
+
+#[derive(Clone, Copy)]
+struct TextureCacheEntry<T> {
+    fingerprint: u64,
+    value: T,
+}
+
+type TextureMetaMap = HashMap<usize, TextureCacheEntry<assets::TexMeta>, TextLayoutHasher>;
+type TextureSheetMap = HashMap<usize, TextureCacheEntry<(u32, u32)>, TextLayoutHasher>;
+type TextureHandleLookupMap =
+    HashMap<usize, TextureCacheEntry<renderer::TextureHandle>, TextLayoutHasher>;
 
 #[derive(Default)]
 struct TextureLookupCache {
     generation: u64,
     dims: TextureMetaMap,
-    stable_dims: PtrTextureMetaMap,
     sheets: TextureSheetMap,
-    stable_sheets: PtrTextureSheetMap,
     handles: TextureHandleLookupMap,
-    stable_handles: PtrTextureHandleLookupMap,
 }
 
 impl TextureLookupCache {
     fn begin_frame(&mut self) {
         let generation = assets::texture_registry_generation();
-        if self.generation != generation {
-            self.generation = generation;
-            self.dims.clear();
-            self.stable_dims.clear();
-            self.sheets.clear();
-            self.stable_sheets.clear();
-            self.handles.clear();
-            self.stable_handles.clear();
+        if self.generation == generation {
+            return;
         }
+        self.generation = generation;
+        self.dims.clear();
+        self.sheets.clear();
+        self.handles.clear();
     }
 
     #[inline(always)]
@@ -437,113 +448,70 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
-    fn texture_dims(&mut self, key: &str) -> Option<assets::TexMeta> {
-        if let Some(&meta) = self.dims.get(key) {
-            return Some(meta);
+    fn key_fingerprint(key: &str) -> u64 {
+        let mut hasher = XxHash64::default();
+        key.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[inline(always)]
+    fn texture_dims(&mut self, key_ptr: *const str, key: &str) -> Option<assets::TexMeta> {
+        let key_ptr = Self::ptr_cache_key(key_ptr);
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.dims.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return Some(entry.value);
+            }
         }
         let meta = assets::texture_dims(key)?;
-        self.dims.insert(key.to_owned(), meta);
+        self.dims.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: meta,
+            },
+        );
         Some(meta)
     }
 
     #[inline(always)]
-    fn texture_dims_stable_ptr(
-        &mut self,
-        key_ptr: *const str,
-        key: &str,
-    ) -> Option<assets::TexMeta> {
+    fn sprite_sheet_dims(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&meta) = self.stable_dims.get(&key_ptr) {
-            return Some(meta);
-        }
-        let meta = self.texture_dims(key)?;
-        self.stable_dims.insert(key_ptr, meta);
-        Some(meta)
-    }
-
-    #[inline(always)]
-    fn texture_dims_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> Option<assets::TexMeta> {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.texture_dims_stable_ptr(key_ptr, key);
-        }
-        self.texture_dims(key)
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims(&mut self, key: &str) -> (u32, u32) {
-        if let Some(&dims) = self.sheets.get(key) {
-            return dims;
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.sheets.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
         let dims = assets::sprite_sheet_dims(key);
-        self.sheets.insert(key.to_owned(), dims);
+        self.sheets.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: dims,
+            },
+        );
         dims
     }
 
     #[inline(always)]
-    fn sprite_sheet_dims_stable_ptr(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
+    fn texture_handle(&mut self, key_ptr: *const str, key: &str) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&dims) = self.stable_sheets.get(&key_ptr) {
-            return dims;
-        }
-        let dims = self.sprite_sheet_dims(key);
-        self.stable_sheets.insert(key_ptr, dims);
-        dims
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> (u32, u32) {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.sprite_sheet_dims_stable_ptr(key_ptr, key);
-        }
-        self.sprite_sheet_dims(key)
-    }
-
-    #[inline(always)]
-    fn texture_handle(&mut self, key: &str) -> renderer::TextureHandle {
-        if let Some(&handle) = self.handles.get(key) {
-            return handle;
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.handles.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
         let handle = assets::texture_handle(key);
-        self.handles.insert(key.to_owned(), handle);
+        self.handles.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: handle,
+            },
+        );
         handle
-    }
-
-    #[inline(always)]
-    fn texture_handle_stable_ptr(
-        &mut self,
-        key_ptr: *const str,
-        key: &str,
-    ) -> renderer::TextureHandle {
-        let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&handle) = self.stable_handles.get(&key_ptr) {
-            return handle;
-        }
-        let handle = self.texture_handle(key);
-        self.stable_handles.insert(key_ptr, handle);
-        handle
-    }
-
-    #[inline(always)]
-    fn texture_handle_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> renderer::TextureHandle {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.texture_handle_stable_ptr(key_ptr, key);
-        }
-        self.texture_handle(key)
     }
 }
 
@@ -566,19 +534,12 @@ pub struct TextLayoutFrameStats {
     pub misses: u32,
     pub built_lines: u32,
     pub built_glyphs: u32,
-    pub prunes: u32,
     pub owned_entries: u32,
     pub shared_aliases: u32,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum TextLayoutOverflowPolicy {
-    PruneOwnedEntries,
-    #[default]
-    Saturating,
-}
-
 pub struct TextLayoutCache {
+    layouts: Vec<Arc<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
     shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
     entry_count: usize,
@@ -587,33 +548,20 @@ pub struct TextLayoutCache {
     max_aliases: usize,
     use_tick: u64,
     frame_stats: TextLayoutFrameStats,
-    overflow_policy: TextLayoutOverflowPolicy,
     uncached_layout: Option<Arc<CachedTextLayout>>,
-    prune_ages: Vec<u64>,
 }
 
 impl Default for TextLayoutCache {
     fn default() -> Self {
-        Self::saturating(4096)
+        Self::new(4096)
     }
 }
 
 impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
-        Self::saturating(max_entries)
-    }
-
-    pub fn saturating(max_entries: usize) -> Self {
-        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::Saturating)
-    }
-
-    pub fn pruning(max_entries: usize) -> Self {
-        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
-    }
-
-    pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
         let max_entries = max_entries.max(1);
         Self {
+            layouts: Vec::new(),
             owned_entries: HashMap::default(),
             shared_aliases: HashMap::default(),
             entry_count: 0,
@@ -622,27 +570,24 @@ impl TextLayoutCache {
             max_aliases: max_entries,
             use_tick: 0,
             frame_stats: TextLayoutFrameStats::default(),
-            overflow_policy,
             uncached_layout: None,
-            prune_ages: Vec::new(),
         }
     }
 
-    pub fn configure(&mut self, max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) {
+    pub fn configure(&mut self, max_entries: usize) {
         self.max_entries = max_entries.max(1);
         self.max_aliases = self.max_entries;
-        self.overflow_policy = overflow_policy;
     }
 
     /// Freeze the cache at its current size so future misses saturate instead of
-    /// pruning or growing during a live frame.
+    /// growing during a live frame.
     pub fn lock_growth(&mut self) {
         self.max_entries = self.entry_count.max(1);
         self.max_aliases = self.alias_count;
-        self.overflow_policy = TextLayoutOverflowPolicy::Saturating;
     }
 
     pub fn clear(&mut self) {
+        self.layouts.clear();
         self.owned_entries.clear();
         self.shared_aliases.clear();
         self.entry_count = 0;
@@ -650,7 +595,6 @@ impl TextLayoutCache {
         self.use_tick = 0;
         self.frame_stats = TextLayoutFrameStats::default();
         self.uncached_layout = None;
-        self.prune_ages.clear();
     }
 
     #[inline(always)]
@@ -673,133 +617,10 @@ impl TextLayoutCache {
         self.use_tick
     }
 
-    fn prune_owned_entries(&mut self) {
-        if self.entry_count < self.max_entries {
-            return;
-        }
-        let keep = self
-            .max_entries
-            .saturating_sub((self.max_entries / 4).max(1));
-        let remove = self.entry_count.saturating_sub(keep).max(1);
-        let cutoff = {
-            let ages = &mut self.prune_ages;
-            ages.clear();
-            ages.reserve(self.entry_count.saturating_sub(ages.len()));
-            for font_entries in self.owned_entries.values() {
-                ages.extend(font_entries.values().map(|entry| entry.last_used));
-            }
-            if ages.is_empty() {
-                self.clear();
-                return;
-            }
-            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
-            ages.select_nth_unstable(cutoff_ix);
-            ages[cutoff_ix]
-        };
-        let mut removed = 0usize;
-        self.owned_entries.retain(|_, font_entries| {
-            font_entries.retain(|_, entry| {
-                let drop = removed < remove && entry.last_used <= cutoff;
-                removed += usize::from(drop);
-                !drop
-            });
-            !font_entries.is_empty()
-        });
-        if removed == 0 {
-            self.clear();
-            return;
-        }
-        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
-        self.entry_count = self.entry_count.saturating_sub(removed);
-    }
-
-    fn prune_shared_aliases(&mut self) {
-        if self.alias_count < self.max_aliases {
-            return;
-        }
-        let keep = self
-            .max_aliases
-            .saturating_sub((self.max_aliases / 4).max(1));
-        let remove = self.alias_count.saturating_sub(keep).max(1);
-        let cutoff = {
-            let ages = &mut self.prune_ages;
-            ages.clear();
-            ages.reserve(self.alias_count.saturating_sub(ages.len()));
-            for font_entries in self.shared_aliases.values() {
-                ages.extend(font_entries.values().map(|entry| entry.last_used));
-            }
-            if ages.is_empty() {
-                self.shared_aliases.clear();
-                self.alias_count = 0;
-                return;
-            }
-            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
-            ages.select_nth_unstable(cutoff_ix);
-            ages[cutoff_ix]
-        };
-        let mut removed = 0usize;
-        self.shared_aliases.retain(|_, font_entries| {
-            font_entries.retain(|_, entry| {
-                let drop = removed < remove && entry.last_used <= cutoff;
-                removed += usize::from(drop);
-                !drop
-            });
-            !font_entries.is_empty()
-        });
-        if removed == 0 {
-            self.shared_aliases.clear();
-            self.alias_count = 0;
-            return;
-        }
-        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
-        self.alias_count = self.alias_count.saturating_sub(removed);
-    }
-
-    #[inline(always)]
-    fn touch_owned_layout(&mut self, key: TextLayoutKey, text: &str, tick: u64) -> bool {
-        let Some(entry) = self
-            .owned_entries
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(text))
-        else {
-            return false;
-        };
-        entry.last_used = tick;
-        true
-    }
-
-    #[inline(always)]
+    #[cfg(test)]
     fn owned_layout(&self, key: TextLayoutKey, text: &str) -> Option<&CachedTextLayout> {
-        Some(self.owned_entries.get(&key)?.get(text)?.layout.as_ref())
-    }
-
-    #[inline(always)]
-    fn owned_layout_arc(&self, key: TextLayoutKey, text: &str) -> Option<&Arc<CachedTextLayout>> {
-        Some(&self.owned_entries.get(&key)?.get(text)?.layout)
-    }
-
-    #[inline(always)]
-    fn touch_shared_layout(&mut self, key: TextLayoutKey, text_key: usize, tick: u64) -> bool {
-        let Some(entry) = self
-            .shared_aliases
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(&text_key))
-        else {
-            return false;
-        };
-        entry.last_used = tick;
-        true
-    }
-
-    #[inline(always)]
-    fn shared_layout(&self, key: TextLayoutKey, text_key: usize) -> Option<&CachedTextLayout> {
-        Some(
-            self.shared_aliases
-                .get(&key)?
-                .get(&text_key)?
-                .layout
-                .as_ref(),
-        )
+        let layout_index = self.owned_entries.get(&key)?.get(text)?.layout_index;
+        Some(self.layouts.get(layout_index)?.as_ref())
     }
 
     #[inline(always)]
@@ -828,30 +649,23 @@ impl TextLayoutCache {
         text: &str,
         layout: Arc<CachedTextLayout>,
         tick: u64,
-    ) -> bool {
+    ) -> Option<usize> {
         if self.entry_count >= self.max_entries {
-            match self.overflow_policy {
-                TextLayoutOverflowPolicy::PruneOwnedEntries => {
-                    // Avoid hard-clearing the entire cache; that was causing visible
-                    // compose spikes once gameplay churn hit the entry cap.
-                    self.prune_owned_entries();
-                }
-                TextLayoutOverflowPolicy::Saturating => {
-                    self.uncached_layout = Some(layout);
-                    return false;
-                }
-            }
+            self.uncached_layout = Some(layout);
+            return None;
         }
+        let layout_index = self.layouts.len();
         let replaced = self.owned_entries.entry(key).or_default().insert(
             text.into(),
             OwnedLayoutEntry {
-                layout,
+                layout_index,
                 last_used: tick,
             },
         );
         debug_assert!(replaced.is_none());
         self.entry_count += usize::from(replaced.is_none());
-        true
+        self.layouts.push(layout);
+        Some(layout_index)
     }
 
     fn insert_shared_layout(
@@ -861,29 +675,24 @@ impl TextLayoutCache {
         text: Arc<str>,
         layout: Arc<CachedTextLayout>,
         tick: u64,
-    ) -> bool {
+    ) -> Option<usize> {
         if self.alias_count >= self.max_aliases {
-            match self.overflow_policy {
-                TextLayoutOverflowPolicy::PruneOwnedEntries => {
-                    self.prune_shared_aliases();
-                }
-                TextLayoutOverflowPolicy::Saturating => {
-                    self.uncached_layout = Some(layout);
-                    return false;
-                }
-            }
+            self.uncached_layout = Some(layout);
+            return None;
         }
+        let layout_index = self.layouts.len();
         let replaced = self.shared_aliases.entry(key).or_default().insert(
             text_key,
             SharedLayoutEntry {
                 _owner: text,
-                layout,
+                layout_index,
                 last_used: tick,
             },
         );
         debug_assert!(replaced.is_none());
         self.alias_count += usize::from(replaced.is_none());
-        true
+        self.layouts.push(layout);
+        Some(layout_index)
     }
 
     pub fn prewarm_text(
@@ -932,11 +741,15 @@ impl TextLayoutCache {
         text: &str,
     ) -> &CachedTextLayout {
         let tick = self.next_use_tick();
-        if self.touch_owned_layout(key, text, tick) {
+        if let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            return self
-                .owned_layout(key, text)
-                .expect("owned text layout cache entry touched");
+            return self.layouts[layout_index].as_ref();
         }
         let layout = Arc::new(build_cached_text_layout(
             font,
@@ -947,9 +760,8 @@ impl TextLayoutCache {
             text_layout_mesh_seed(key, text),
         ));
         self.record_layout_build(layout.as_ref());
-        if self.insert_owned_layout(key, text, layout, tick) {
-            self.owned_layout(key, text)
-                .expect("owned text layout cache entry inserted")
+        if let Some(layout_index) = self.insert_owned_layout(key, text, layout, tick) {
+            self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
         }
@@ -965,34 +777,38 @@ impl TextLayoutCache {
         let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
         let text_ref = text.as_ref();
-        if self.touch_shared_layout(key, text_key, tick) {
+        if let Some(entry) = self
+            .shared_aliases
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(&text_key))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
-            return self
-                .shared_layout(key, text_key)
-                .expect("shared text layout cache entry touched");
+            return self.layouts[layout_index].as_ref();
         }
 
-        if self.touch_owned_layout(key, text_ref, tick) {
+        if let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text_ref))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            if self.alias_count >= self.max_aliases
-                && self.overflow_policy == TextLayoutOverflowPolicy::Saturating
-            {
-                return self
-                    .owned_layout(key, text_ref)
-                    .expect("owned text layout cache entry available");
+            if self.alias_count < self.max_aliases {
+                let replaced = self.shared_aliases.entry(key).or_default().insert(
+                    text_key,
+                    SharedLayoutEntry {
+                        _owner: Arc::clone(text),
+                        layout_index,
+                        last_used: tick,
+                    },
+                );
+                debug_assert!(replaced.is_none());
+                self.alias_count += usize::from(replaced.is_none());
             }
-            let layout = Arc::clone(
-                self.owned_layout_arc(key, text_ref)
-                    .expect("owned text layout cache entry touched"),
-            );
-            if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
-                return self
-                    .shared_layout(key, text_key)
-                    .expect("shared text layout cache entry inserted from owned layout");
-            }
-            return self
-                .owned_layout(key, text_ref)
-                .expect("owned text layout cache entry available");
+            return self.layouts[layout_index].as_ref();
         }
 
         let layout = Arc::new(build_cached_text_layout(
@@ -1004,9 +820,10 @@ impl TextLayoutCache {
             text_layout_mesh_seed(key, text_ref),
         ));
         self.record_layout_build(layout.as_ref());
-        if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
-            self.shared_layout(key, text_key)
-                .expect("shared text layout cache entry inserted")
+        if let Some(layout_index) =
+            self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick)
+        {
+            self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
         }
@@ -2115,6 +1932,7 @@ fn sprite_source_handle(
 
 fn push_shadow_objects_for_range(
     out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
     end: usize,
     len: [f32; 2],
@@ -2125,41 +1943,123 @@ fn push_shadow_objects_for_range(
         let obj = &out[i];
         let mut obj_type = obj.object_type.clone();
         match &mut obj_type {
-            renderer::ObjectType::Sprite { center, tint, .. } => {
+            renderer::ObjectType::Sprite(sprite_index) => {
+                let mut sprite = sprite_instances[*sprite_index as usize];
                 let mut shadow_tint = color;
-                shadow_tint[3] *= (*tint)[3];
-                *tint = shadow_tint;
-                center[0] += len[0];
-                center[1] += len[1];
+                shadow_tint[3] *= sprite.tint[3];
+                sprite.tint = shadow_tint;
+                sprite.center[0] += len[0];
+                sprite.center[1] += len[1];
+                *sprite_index = sprite_instances.len() as u32;
+                sprite_instances.push(sprite);
             }
-            renderer::ObjectType::Mesh { tint, .. } => {
+            renderer::ObjectType::Mesh {
+                transform, tint, ..
+            } => {
                 tint[0] *= color[0];
                 tint[1] *= color[1];
                 tint[2] *= color[2];
                 tint[3] *= color[3];
+                *transform = t_world * *transform;
             }
-            renderer::ObjectType::TexturedMesh { tint, .. } => {
+            renderer::ObjectType::TexturedMesh { instance, .. } => {
                 let mut shadow_tint = color;
-                shadow_tint[0] *= tint[0];
-                shadow_tint[1] *= tint[1];
-                shadow_tint[2] *= tint[2];
-                shadow_tint[3] *= tint[3];
-                *tint = shadow_tint;
+                shadow_tint[0] *= instance.tint[0];
+                shadow_tint[1] *= instance.tint[1];
+                shadow_tint[2] *= instance.tint[2];
+                shadow_tint[3] *= instance.tint[3];
+                instance.tint = shadow_tint;
+                instance.set_transform(t_world * instance.transform());
             }
         }
 
         out.push(renderer::RenderObject {
             object_type: obj_type,
             texture_handle: obj.texture_handle,
-            transform: match &obj.object_type {
-                renderer::ObjectType::Sprite { .. } => obj.transform,
-                _ => t_world * obj.transform,
-            },
             blend: obj.blend,
             z: obj.z.saturating_sub(1),
             order: obj.order,
             camera: obj.camera,
         });
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ComposeStyle {
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+}
+
+impl ComposeStyle {
+    const IDENTITY: Self = Self {
+        tint: [1.0; 4],
+        blend: None,
+    };
+
+    #[inline(always)]
+    fn child(self, tint: [f32; 4], blend: Option<BlendMode>) -> Self {
+        Self {
+            tint: mul_rgba(self.tint, tint),
+            blend: self.blend.or(blend),
+        }
+    }
+}
+
+#[inline(always)]
+fn mul_rgba(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]]
+}
+
+#[inline(always)]
+fn build_actor_list<'a>(
+    actors: &'a [actors::Actor],
+    parent: SmRect,
+    m: &Metrics,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    scratch: &mut ComposeScratch,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    cameras: &mut Vec<Matrix4>,
+    masks: &mut Vec<WorldRect>,
+    order_counter: &mut u32,
+    out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache,
+    total_elapsed: f32,
+) {
+    let mut active_camera = camera;
+    let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
+    for actor in actors {
+        match actor {
+            actors::Actor::CameraPush { view_proj } => {
+                cameras.push(*view_proj);
+                camera_stack.push(active_camera);
+                active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            }
+            actors::Actor::CameraPop => {
+                active_camera = camera_stack.pop().unwrap_or(camera);
+            }
+            _ => build_actor_recursive(
+                actor,
+                parent,
+                m,
+                fonts,
+                scratch,
+                base_z,
+                active_camera,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            ),
+        }
     }
 }
 
@@ -2172,10 +2072,12 @@ fn build_actor_recursive<'a>(
     scratch: &mut ComposeScratch,
     base_z: i16,
     camera: u8,
+    style: ComposeStyle,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
@@ -2224,22 +2126,20 @@ fn build_actor_recursive<'a>(
                 return;
             }
 
-            let (is_solid, texture_name, texture_key_ptr, texture_key_stable) = match source {
-                actors::SpriteSource::TextureStatic(name) => {
-                    (false, *name, Some(str_ptr(name)), true)
-                }
+            let (is_solid, texture_name, texture_key_ptr) = match source {
+                actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
                 actors::SpriteSource::TextureStaticHandle { key, .. } => {
-                    (false, *key, Some(str_ptr(key)), true)
+                    (false, *key, str_ptr(key))
                 }
                 actors::SpriteSource::Texture(name) => {
                     let name = name.as_ref();
-                    (false, name, Some(str_ptr(name)), false)
+                    (false, name, str_ptr(name))
                 }
                 actors::SpriteSource::TextureHandle { key, .. } => {
                     let name = key.as_ref();
-                    (false, name, Some(str_ptr(name)), false)
+                    (false, name, str_ptr(name))
                 }
-                actors::SpriteSource::Solid => (true, "__white", Some(str_ptr("__white")), true),
+                actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
             };
 
             let mut chosen_cell = *cell;
@@ -2247,11 +2147,7 @@ fn build_actor_recursive<'a>(
 
             if !is_solid && uv_rect.is_none() {
                 let (cols, rows) = grid.unwrap_or_else(|| {
-                    texture_cache.sprite_sheet_dims_cached(
-                        texture_key_ptr,
-                        texture_name,
-                        texture_key_stable,
-                    )
+                    texture_cache.sprite_sheet_dims(texture_key_ptr, texture_name)
                 });
                 let total = cols.saturating_mul(rows).max(1);
 
@@ -2286,13 +2182,14 @@ fn build_actor_recursive<'a>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            effect_tint = mul_rgba(effect_tint, style.tint);
+            let actor_blend = style.blend.unwrap_or(*blend);
 
             let resolved_size = resolve_sprite_size_like_sm(
                 *size,
                 is_solid,
                 texture_name,
                 texture_key_ptr,
-                texture_key_stable,
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
@@ -2313,15 +2210,16 @@ fn build_actor_recursive<'a>(
             }
 
             let before = out.len();
+            let before_sprite = sprite_instances.len();
             push_sprite(
                 out,
+                sprite_instances,
                 camera,
                 rect,
                 m,
                 is_solid,
                 texture_name,
                 texture_key_ptr,
-                texture_key_stable,
                 effect_tint,
                 *uv_rect,
                 chosen_cell,
@@ -2336,7 +2234,7 @@ fn build_actor_recursive<'a>(
                 *faderight,
                 *fadetop,
                 *fadebottom,
-                *blend,
+                actor_blend,
                 effect_rot[0],
                 effect_rot[1],
                 effect_rot[2],
@@ -2352,7 +2250,9 @@ fn build_actor_recursive<'a>(
             if *mask_dest {
                 clip_objects_range_to_world_masks(
                     out,
+                    sprite_instances,
                     before,
+                    before_sprite,
                     masks,
                     &mut scratch.recycled_text_mesh_vertices,
                 );
@@ -2369,19 +2269,27 @@ fn build_actor_recursive<'a>(
                 };
             }
             if has_shadow(*shadow_len) {
-                push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
+                push_shadow_objects_for_range(
+                    out,
+                    sprite_instances,
+                    before,
+                    end,
+                    *shadow_len,
+                    mul_rgba(*shadow_color, style.tint),
+                );
             }
             if glow[3] > 0.0001 {
                 let before = out.len();
+                let before_sprite = sprite_instances.len();
                 push_sprite(
                     out,
+                    sprite_instances,
                     camera,
                     rect,
                     m,
                     is_solid,
                     texture_name,
                     texture_key_ptr,
-                    texture_key_stable,
                     *glow,
                     *uv_rect,
                     chosen_cell,
@@ -2396,7 +2304,7 @@ fn build_actor_recursive<'a>(
                     *faderight,
                     *fadetop,
                     *fadebottom,
-                    *blend,
+                    actor_blend,
                     effect_rot[0],
                     effect_rot[1],
                     effect_rot[2],
@@ -2412,7 +2320,9 @@ fn build_actor_recursive<'a>(
                 if *mask_dest {
                     clip_objects_range_to_world_masks(
                         out,
+                        sprite_instances,
                         before,
+                        before_sprite,
                         masks,
                         &mut scratch.recycled_text_mesh_vertices,
                     );
@@ -2434,7 +2344,6 @@ fn build_actor_recursive<'a>(
             offset,
             size,
             vertices,
-            mode,
             visible,
             blend,
             z,
@@ -2452,13 +2361,12 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::Mesh {
+                    transform,
                     tint: [1.0; 4],
                     vertices: Arc::clone(vertices),
-                    mode: *mode,
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
-                transform,
-                blend: *blend,
+                blend: style.blend.unwrap_or(*blend),
                 z: 0,
                 order: 0,
                 camera,
@@ -2486,7 +2394,6 @@ fn build_actor_recursive<'a>(
             glow,
             vertices,
             geom_cache_key,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -2507,21 +2414,26 @@ fn build_actor_recursive<'a>(
                 * *local_transform;
 
             let before = out.len();
+            let texture_key = texture.as_ref();
+            let texture_key_ptr = str_ptr(texture_key);
+            let texture_handle = texture_cache.texture_handle(texture_key_ptr, texture_key);
+            let actor_blend = style.blend.unwrap_or(*blend);
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
-                    tint: *tint,
+                    instance: renderer::TexturedMeshInstanceRaw::new(
+                        transform,
+                        *tint,
+                        *uv_scale,
+                        *uv_offset,
+                        *uv_tex_shift,
+                        false,
+                    ),
                     vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
                     geom_cache_key: *geom_cache_key,
-                    mode: *mode,
-                    uv_scale: *uv_scale,
-                    uv_offset: *uv_offset,
-                    uv_tex_shift: *uv_tex_shift,
-                    texture_mask: false,
                     depth_test: *depth_test,
                 },
-                texture_handle: texture_cache.texture_handle(texture.as_ref()),
-                transform,
-                blend: *blend,
+                texture_handle,
+                blend: actor_blend,
                 z: 0,
                 order: 0,
                 camera,
@@ -2540,19 +2452,20 @@ fn build_actor_recursive<'a>(
                 let before = out.len();
                 out.push(renderer::RenderObject {
                     object_type: renderer::ObjectType::TexturedMesh {
-                        tint: *glow,
+                        instance: renderer::TexturedMeshInstanceRaw::new(
+                            transform,
+                            *glow,
+                            *uv_scale,
+                            *uv_offset,
+                            *uv_tex_shift,
+                            true,
+                        ),
                         vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
                         geom_cache_key: *geom_cache_key,
-                        mode: *mode,
-                        uv_scale: *uv_scale,
-                        uv_offset: *uv_offset,
-                        uv_tex_shift: *uv_tex_shift,
-                        texture_mask: true,
                         depth_test: *depth_test,
                     },
-                    texture_handle: texture_cache.texture_handle(texture.as_ref()),
-                    transform,
-                    blend: *blend,
+                    texture_handle,
+                    blend: actor_blend,
                     z: 0,
                     order: 0,
                     camera,
@@ -2579,17 +2492,26 @@ fn build_actor_recursive<'a>(
                 scratch,
                 base_z,
                 camera,
+                style,
                 cameras,
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
             );
             let end = out.len();
             if has_shadow(*len) {
-                push_shadow_objects_for_range(out, start, end, *len, *color);
+                push_shadow_objects_for_range(
+                    out,
+                    sprite_instances,
+                    start,
+                    end,
+                    *len,
+                    mul_rgba(*color, style.tint),
+                );
             }
         }
 
@@ -2599,25 +2521,27 @@ fn build_actor_recursive<'a>(
         } => {
             cameras.push(*view_proj);
             let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-            for child in children {
-                build_actor_recursive(
-                    child,
-                    parent,
-                    m,
-                    fonts,
-                    scratch,
-                    base_z,
-                    id,
-                    cameras,
-                    masks,
-                    order_counter,
-                    out,
-                    text_cache,
-                    texture_cache,
-                    total_elapsed,
-                );
-            }
+            build_actor_list(
+                children,
+                parent,
+                m,
+                fonts,
+                scratch,
+                base_z,
+                id,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
         }
+
+        actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
 
         actors::Actor::Text {
             align,
@@ -2661,8 +2585,12 @@ fn build_actor_recursive<'a>(
                 let mut effect_color = *color;
                 let mut effect_scale = *scale;
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
-                let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
+                effect_color = mul_rgba(effect_color, style.tint);
+                let mut stroke_rgba = stroke_color
+                    .map(|color| mul_rgba(color, style.tint))
+                    .unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
+                let actor_blend = style.blend.unwrap_or(*blend);
                 let needs_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
                 let clip_world = (*clip).map(|[x, y, w, h]| {
                     sm_rect_to_world_edges(
@@ -2676,6 +2604,7 @@ fn build_actor_recursive<'a>(
                     )
                 });
                 let before = out.len();
+                let before_sprite = sprite_instances.len();
                 let layer = base_z.saturating_add(*z);
                 let end = if let Some(placement) = resolve_text_layout_placement(
                     layout,
@@ -2704,13 +2633,16 @@ fn build_actor_recursive<'a>(
                         if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(
                                 out,
+                                sprite_instances,
                                 before,
+                                before_sprite,
                                 clip_world,
                                 &mut scratch.recycled_text_mesh_vertices,
                             );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
+                            let stroke_start_sprite = sprite_instances.len();
                             push_text_mesh_batches(
                                 out,
                                 layout.stroke_batches(*align_text),
@@ -2723,7 +2655,9 @@ fn build_actor_recursive<'a>(
                             if let Some(clip_world) = clip_world {
                                 clip_objects_range_to_world_rect(
                                     out,
+                                    sprite_instances,
                                     stroke_start,
+                                    stroke_start_sprite,
                                     clip_world,
                                     &mut scratch.recycled_text_mesh_vertices,
                                 );
@@ -2735,7 +2669,7 @@ fn build_actor_recursive<'a>(
                                     *order_counter += 1;
                                     o
                                 };
-                                obj.blend = *blend;
+                                obj.blend = actor_blend;
                                 obj.camera = camera;
                             }
                         }
@@ -2763,13 +2697,16 @@ fn build_actor_recursive<'a>(
                         if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(
                                 out,
+                                sprite_instances,
                                 before,
+                                before_sprite,
                                 clip_world,
                                 recycled_vertices,
                             );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
+                            let stroke_start_sprite = sprite_instances.len();
                             if text_distortion > 1e-6 {
                                 build_transient_text_mesh_builders(
                                     layout,
@@ -2804,7 +2741,9 @@ fn build_actor_recursive<'a>(
                             if let Some(clip_world) = clip_world {
                                 clip_objects_range_to_world_rect(
                                     out,
+                                    sprite_instances,
                                     stroke_start,
+                                    stroke_start_sprite,
                                     clip_world,
                                     recycled_vertices,
                                 );
@@ -2816,7 +2755,7 @@ fn build_actor_recursive<'a>(
                                     *order_counter += 1;
                                     o
                                 };
-                                obj.blend = *blend;
+                                obj.blend = actor_blend;
                                 obj.camera = camera;
                             }
                         }
@@ -2828,7 +2767,9 @@ fn build_actor_recursive<'a>(
                 if *mask_dest {
                     clip_objects_range_to_world_masks(
                         out,
+                        sprite_instances,
                         before,
+                        before_sprite,
                         masks,
                         &mut scratch.recycled_text_mesh_vertices,
                     );
@@ -2840,17 +2781,26 @@ fn build_actor_recursive<'a>(
                         *order_counter += 1;
                         o
                     };
-                    obj.blend = *blend;
+                    obj.blend = actor_blend;
                     obj.camera = camera;
-                    if let renderer::ObjectType::TexturedMesh { tint, .. } = &mut obj.object_type {
-                        tint[0] *= effect_color[0];
-                        tint[1] *= effect_color[1];
-                        tint[2] *= effect_color[2];
-                        tint[3] *= effect_color[3];
+                    if let renderer::ObjectType::TexturedMesh { instance, .. } =
+                        &mut obj.object_type
+                    {
+                        instance.tint[0] *= effect_color[0];
+                        instance.tint[1] *= effect_color[1];
+                        instance.tint[2] *= effect_color[2];
+                        instance.tint[3] *= effect_color[3];
                     }
                 }
                 if has_shadow(*shadow_len) {
-                    push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
+                    push_shadow_objects_for_range(
+                        out,
+                        sprite_instances,
+                        before,
+                        end,
+                        *shadow_len,
+                        mul_rgba(*shadow_color, style.tint),
+                    );
                 }
             }
         }
@@ -2872,13 +2822,13 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
                             true,
                             "__white",
-                            Some(str_ptr("__white")),
-                            true,
+                            str_ptr("__white"),
                             *c,
                             None,
                             None,
@@ -2919,13 +2869,13 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
                             false,
                             tex,
-                            Some(str_ptr(tex)),
-                            true,
+                            str_ptr(tex),
                             [1.0; 4],
                             None,
                             None,
@@ -2965,24 +2915,157 @@ fn build_actor_recursive<'a>(
                 }
             }
 
-            for child in children {
-                build_actor_recursive(
-                    child,
-                    rect,
-                    m,
-                    fonts,
-                    scratch,
-                    layer,
-                    camera,
-                    cameras,
-                    masks,
-                    order_counter,
-                    out,
-                    text_cache,
-                    texture_cache,
-                    total_elapsed,
-                );
+            build_actor_list(
+                children,
+                rect,
+                m,
+                fonts,
+                scratch,
+                layer,
+                camera,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
+        }
+
+        actors::Actor::SharedFrame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            z,
+            tint,
+            blend,
+        } => {
+            let rect = place_rect(parent, *align, *offset, *size);
+            let layer = base_z.saturating_add(*z);
+
+            if let Some(bg) = background {
+                match bg {
+                    actors::Background::Color(c) => {
+                        let before = out.len();
+                        push_sprite(
+                            out,
+                            sprite_instances,
+                            camera,
+                            rect,
+                            m,
+                            true,
+                            "__white",
+                            str_ptr("__white"),
+                            *c,
+                            None,
+                            None,
+                            None,
+                            false,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            BlendMode::Alpha,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            [0.0, 0.0],
+                            [0.0, 1.0],
+                            None,
+                            None,
+                            texture_cache,
+                            total_elapsed,
+                            false,
+                        );
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            };
+                        }
+                    }
+                    actors::Background::Texture(tex) => {
+                        let before = out.len();
+                        push_sprite(
+                            out,
+                            sprite_instances,
+                            camera,
+                            rect,
+                            m,
+                            false,
+                            tex,
+                            str_ptr(tex),
+                            [1.0; 4],
+                            None,
+                            None,
+                            None,
+                            false,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            BlendMode::Alpha,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            [0.0, 0.0],
+                            [0.0, 1.0],
+                            None,
+                            None,
+                            texture_cache,
+                            total_elapsed,
+                            false,
+                        );
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            };
+                        }
+                    }
+                }
             }
+
+            let child_style = style.child(*tint, *blend);
+            build_actor_list(
+                children,
+                rect,
+                m,
+                fonts,
+                scratch,
+                layer,
+                camera,
+                child_style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
         }
     }
 }
@@ -2994,9 +3077,8 @@ fn resolve_sprite_size_like_sm(
     size: [SizeSpec; 2],
     is_solid: bool,
     texture_name: &str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
-    uv_rect: Option<[f32; 4]>,
+    texture_key_ptr: *const str,
+    _uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
     scale: [f32; 2],
@@ -3008,9 +3090,7 @@ fn resolve_sprite_size_like_sm(
     fn native_dims(
         is_solid: bool,
         texture_name: &str,
-        texture_key_ptr: Option<*const str>,
-        texture_key_stable: bool,
-        _uv: Option<[f32; 4]>,
+        texture_key_ptr: *const str,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
         texture_cache: &mut TextureLookupCache,
@@ -3018,20 +3098,13 @@ fn resolve_sprite_size_like_sm(
         if is_solid {
             return (1.0, 1.0);
         }
-        let Some(meta) =
-            texture_cache.texture_dims_cached(texture_key_ptr, texture_name, texture_key_stable)
-        else {
+        let Some(meta) = texture_cache.texture_dims(texture_key_ptr, texture_name) else {
             return (0.0, 0.0);
         };
         let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
         if cell.is_some() {
-            let (gc, gr) = grid.unwrap_or_else(|| {
-                texture_cache.sprite_sheet_dims_cached(
-                    texture_key_ptr,
-                    texture_name,
-                    texture_key_stable,
-                )
-            });
+            let (gc, gr) = grid
+                .unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_key_ptr, texture_name));
             let cols = gc.max(1);
             let rows = gr.max(1);
             tw /= cols as f32;
@@ -3040,26 +3113,30 @@ fn resolve_sprite_size_like_sm(
         (tw, th)
     }
 
+    let (w, h) = match (size[0], size[1]) {
+        (Px(w), Px(h)) if w == 0.0 && h == 0.0 => (w, h),
+        (Px(w), Px(h)) if w > 0.0 && h == 0.0 => (w, h),
+        (Px(w), Px(h)) if w == 0.0 && h > 0.0 => (w, h),
+        _ => return size,
+    };
+
     let (nw, nh) = native_dims(
         is_solid,
         texture_name,
         texture_key_ptr,
-        texture_key_stable,
-        uv_rect,
         cell,
         grid,
         texture_cache,
     );
     let aspect = if nw > 0.0 && nh > 0.0 { nh / nw } else { 1.0 };
 
-    match (size[0], size[1]) {
-        (Px(w), Px(h)) if w == 0.0 && h == 0.0 => [Px(nw * scale[0]), Px(nh * scale[1])],
-        (Px(w), Px(h)) if w > 0.0 && h == 0.0 => [Px(w), Px(w * aspect)],
-        (Px(w), Px(h)) if w == 0.0 && h > 0.0 => {
-            let inv_aspect = if aspect > 0.0 { 1.0 / aspect } else { 1.0 };
-            [Px(h * inv_aspect), Px(h)]
-        }
-        _ => size,
+    if w == 0.0 && h == 0.0 {
+        [Px(nw * scale[0]), Px(nh * scale[1])]
+    } else if h == 0.0 {
+        [Px(w), Px(w * aspect)]
+    } else {
+        let inv_aspect = if aspect > 0.0 { 1.0 / aspect } else { 1.0 };
+        [Px(h * inv_aspect), Px(h)]
     }
 }
 
@@ -3088,8 +3165,7 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
 #[inline(always)]
 fn calculate_uvs(
     texture: &str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
+    texture_key_ptr: *const str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -3108,9 +3184,8 @@ fn calculate_uvs(
         let dv = (v1 - v0).abs().max(1e-6);
         ([du, dv], [u0.min(u1), v0.min(v1)])
     } else if let Some((cx, cy)) = cell {
-        let (gc, gr) = grid.unwrap_or_else(|| {
-            texture_cache.sprite_sheet_dims_cached(texture_key_ptr, texture, texture_key_stable)
-        });
+        let (gc, gr) =
+            grid.unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_key_ptr, texture));
         let cols = gc.max(1);
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {
@@ -3185,13 +3260,13 @@ fn fold_sprite_xy_rot(
 #[inline(always)]
 fn push_sprite<'a>(
     out: &mut Vec<renderer::RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     camera: u8,
     rect: SmRect,
     m: &Metrics,
     is_solid: bool,
     texture_id: &'a str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
+    texture_key_ptr: *const str,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
@@ -3248,7 +3323,6 @@ fn push_sprite<'a>(
         calculate_uvs(
             texture_id,
             texture_key_ptr,
-            texture_key_stable,
             uv_rect,
             cell,
             grid,
@@ -3316,25 +3390,27 @@ fn push_sprite<'a>(
         Some(handle) => handle,
         None => {
             let texture_key = if is_solid { "__white" } else { texture_id };
-            texture_cache.texture_handle_cached(texture_key_ptr, texture_key, texture_key_stable)
+            texture_cache.texture_handle(texture_key_ptr, texture_key)
         }
     };
 
+    let sprite_index = sprite_instances.len() as u32;
+    sprite_instances.push(renderer::SpriteInstanceRaw {
+        center: [center_x, center_y, world_z, 0.0],
+        size: [size_x, size_y],
+        rot_sin_cos: [sin_z, cos_z],
+        tint,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
+        texture_mask: texture_mask as u8 as f32,
+    });
+
     out.push(renderer::RenderObject {
-        object_type: renderer::ObjectType::Sprite {
-            center: [center_x, center_y, world_z, 0.0],
-            size: [size_x, size_y],
-            rot_sin_cos: [sin_z, cos_z],
-            tint,
-            uv_scale,
-            uv_offset,
-            local_offset,
-            local_offset_rot_sin_cos,
-            edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
-            texture_mask,
-        },
+        object_type: renderer::ObjectType::Sprite(sprite_index),
         texture_handle,
-        transform: Matrix4::IDENTITY,
         blend,
         z: 0,
         order: 0,
@@ -3418,18 +3494,19 @@ fn push_text_mesh_batches(
         let texture_key = unsafe { str_from_cached_ptr(batch.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
-                tint,
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
                 vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
-                mode: renderer::MeshMode::Triangles,
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
-            texture_handle: texture_cache.texture_handle_stable_ptr(batch.texture_key, texture_key),
-            transform,
+            texture_handle: texture_cache.texture_handle(batch.texture_key, texture_key),
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -3468,19 +3545,19 @@ fn push_transient_text_mesh_builders(
         let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
-                tint,
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-                mode: renderer::MeshMode::Triangles,
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
-            texture_handle: texture_cache
-                .texture_handle_stable_ptr(builder.texture_key, texture_key),
-            transform,
+            texture_handle: texture_cache.texture_handle(builder.texture_key, texture_key),
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -3526,7 +3603,9 @@ fn sm_rect_to_world_edges(rect: SmRect, m: &Metrics) -> WorldRect {
 
 fn clip_objects_range_to_world_masks(
     objects: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
+    sprite_start: usize,
     masks: &[WorldRect],
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
@@ -3535,10 +3614,18 @@ fn clip_objects_range_to_world_masks(
     }
     if masks.is_empty() {
         objects.truncate(start);
+        sprite_instances.truncate(sprite_start);
         return;
     }
     if let [mask] = masks {
-        clip_objects_range_to_world_rect(objects, start, *mask, recycled_vertices);
+        clip_objects_range_to_world_rect(
+            objects,
+            sprite_instances,
+            start,
+            sprite_start,
+            *mask,
+            recycled_vertices,
+        );
         return;
     }
     let len = objects.len();
@@ -3546,7 +3633,7 @@ fn clip_objects_range_to_world_masks(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_object_to_world_masks(obj, masks)
+            clip_object_to_world_masks(obj, sprite_instances, masks)
         };
         if keep {
             if write != read {
@@ -3556,28 +3643,40 @@ fn clip_objects_range_to_world_masks(
         }
     }
     objects.truncate(write);
+    compact_sprite_instances_for_range(&mut objects[start..], sprite_instances, sprite_start);
 }
 
 struct ClippedSpriteObject {
     object_type: renderer::ObjectType,
-    transform: Matrix4,
+    sprite: Option<renderer::SpriteInstanceRaw>,
 }
 
 #[inline(always)]
-fn object_world_area(object_type: &renderer::ObjectType, transform: &Matrix4) -> f32 {
-    match object_type {
-        renderer::ObjectType::Sprite { size, .. } => (size[0] * size[1]).abs(),
-        renderer::ObjectType::TexturedMesh { vertices, .. } => {
+fn object_world_area(
+    clipped: &ClippedSpriteObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
+) -> f32 {
+    if let Some(sprite) = clipped.sprite {
+        return (sprite.size[0] * sprite.size[1]).abs();
+    }
+    match &clipped.object_type {
+        renderer::ObjectType::Sprite(index) => {
+            let sprite = sprite_instances[*index as usize];
+            (sprite.size[0] * sprite.size[1]).abs()
+        }
+        renderer::ObjectType::TexturedMesh {
+            instance, vertices, ..
+        } => {
             if vertices.len() < 3 {
                 return 0.0;
             }
-            let t = transform;
+            let transform = instance.transform();
             let mut area = 0.0_f32;
             let mut i = 0usize;
             while i + 2 < vertices.len() {
-                let p0 = world_xy_3d(t, vertices[i].pos);
-                let p1 = world_xy_3d(t, vertices[i + 1].pos);
-                let p2 = world_xy_3d(t, vertices[i + 2].pos);
+                let p0 = world_xy_3d(&transform, vertices[i].pos);
+                let p1 = world_xy_3d(&transform, vertices[i + 1].pos);
+                let p2 = world_xy_3d(&transform, vertices[i + 2].pos);
                 let a = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
                 area += 0.5 * a.abs();
                 i += 3;
@@ -3588,22 +3687,32 @@ fn object_world_area(object_type: &renderer::ObjectType, transform: &Matrix4) ->
     }
 }
 
-fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bool {
+fn clip_object_to_world_masks(
+    obj: &mut RenderObject,
+    sprite_instances: &mut [renderer::SpriteInstanceRaw],
+    masks: &[WorldRect],
+) -> bool {
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
-        let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask, None) else {
+        let Some(candidate) =
+            clipped_sprite_object_to_world_rect(obj, sprite_instances, mask, None)
+        else {
             continue;
         };
-        let area = object_world_area(&candidate.object_type, &candidate.transform);
+        let area = object_world_area(&candidate, sprite_instances);
         if area > best_area {
             best_area = area;
             best_obj = Some(candidate);
         }
     }
     if let Some(chosen) = best_obj {
+        if let Some(sprite) = chosen.sprite
+            && let renderer::ObjectType::Sprite(index) = &chosen.object_type
+        {
+            sprite_instances[*index as usize] = sprite;
+        }
         obj.object_type = chosen.object_type;
-        obj.transform = chosen.transform;
         true
     } else {
         false
@@ -3612,7 +3721,9 @@ fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bo
 
 fn clip_objects_range_to_world_rect(
     objects: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
+    sprite_start: usize,
     clip: WorldRect,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
@@ -3621,6 +3732,7 @@ fn clip_objects_range_to_world_rect(
     }
     if clip.left >= clip.right || clip.bottom >= clip.top {
         objects.truncate(start);
+        sprite_instances.truncate(sprite_start);
         return;
     }
 
@@ -3629,7 +3741,12 @@ fn clip_objects_range_to_world_rect(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_sprite_object_to_world_rect_with_recycled(obj, clip, Some(&mut *recycled_vertices))
+            clip_sprite_object_to_world_rect_with_recycled(
+                obj,
+                sprite_instances,
+                clip,
+                Some(&mut *recycled_vertices),
+            )
         };
         if keep {
             if write != read {
@@ -3639,28 +3756,93 @@ fn clip_objects_range_to_world_rect(
         }
     }
     objects.truncate(write);
+    compact_sprite_instances_for_range(&mut objects[start..], sprite_instances, sprite_start);
+}
+
+fn compact_sprite_instances_for_range(
+    objects: &mut [RenderObject],
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    sprite_start: usize,
+) {
+    let mut write = sprite_start;
+    for obj in objects {
+        let renderer::ObjectType::Sprite(index) = &mut obj.object_type else {
+            continue;
+        };
+        let sprite = sprite_instances[*index as usize];
+        *index = write as u32;
+        if write < sprite_instances.len() {
+            sprite_instances[write] = sprite;
+        } else {
+            sprite_instances.push(sprite);
+        }
+        write += 1;
+    }
+    sprite_instances.truncate(write);
 }
 
 #[cfg(test)]
-fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> bool {
-    clip_sprite_object_to_world_rect_with_recycled(obj, clip, None)
+fn clip_sprite_object_to_world_rect(
+    obj: &mut RenderObject,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    clip: WorldRect,
+) -> bool {
+    clip_sprite_object_to_world_rect_with_recycled(obj, sprite_instances, clip, None)
 }
 
 fn clip_sprite_object_to_world_rect_with_recycled(
     obj: &mut RenderObject,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> bool {
-    let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip, recycled_vertices) else {
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        return false;
+    }
+    match &obj.object_type {
+        renderer::ObjectType::Mesh { .. } => return true,
+        renderer::ObjectType::TexturedMesh {
+            instance, vertices, ..
+        } => {
+            let transform = instance.transform();
+            let Some(bounds) = textured_mesh_world_bounds(vertices.as_ref(), transform) else {
+                return false;
+            };
+            if bounds.right < clip.left
+                || bounds.left > clip.right
+                || bounds.top < clip.bottom
+                || bounds.bottom > clip.top
+            {
+                return false;
+            }
+            if bounds.left >= clip.left
+                && bounds.right <= clip.right
+                && bounds.bottom >= clip.bottom
+                && bounds.top <= clip.top
+            {
+                return true;
+            }
+        }
+        renderer::ObjectType::Sprite(_) => {}
+    }
+
+    let Some(clipped) =
+        clipped_sprite_object_to_world_rect(obj, sprite_instances, clip, recycled_vertices)
+    else {
         return false;
     };
+    if let Some(sprite) = clipped.sprite
+        && let renderer::ObjectType::Sprite(index) = &clipped.object_type
+    {
+        sprite_instances[*index as usize] = sprite;
+    }
     obj.object_type = clipped.object_type;
-    obj.transform = clipped.transform;
     true
 }
 
 fn clipped_sprite_object_to_world_rect(
     obj: &RenderObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
@@ -3668,46 +3850,39 @@ fn clipped_sprite_object_to_world_rect(
         return None;
     }
     match &obj.object_type {
-        renderer::ObjectType::Sprite {
-            center,
-            size,
-            rot_sin_cos,
-            tint,
-            uv_scale,
-            uv_offset,
-            local_offset,
-            local_offset_rot_sin_cos,
-            edge_fade,
-            texture_mask,
-        } => {
+        renderer::ObjectType::Sprite(index) => {
+            let sprite = sprite_instances[*index as usize];
             let eps = 1e-6;
             let offset_world = [
-                local_offset_rot_sin_cos[1].mul_add(
-                    local_offset[0],
-                    -(local_offset_rot_sin_cos[0] * local_offset[1]),
+                sprite.local_offset_rot_sin_cos[1].mul_add(
+                    sprite.local_offset[0],
+                    -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
                 ),
-                local_offset_rot_sin_cos[0].mul_add(
-                    local_offset[0],
-                    local_offset_rot_sin_cos[1] * local_offset[1],
+                sprite.local_offset_rot_sin_cos[0].mul_add(
+                    sprite.local_offset[0],
+                    sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
                 ),
             ];
-            let world_center = [center[0] + offset_world[0], center[1] + offset_world[1]];
-            if rot_sin_cos[0].abs() > eps || rot_sin_cos[1] < 1.0 - eps {
+            let world_center = [
+                sprite.center[0] + offset_world[0],
+                sprite.center[1] + offset_world[1],
+            ];
+            if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
                 return clip_rotated_sprite_to_world_rect(
-                    *tint,
-                    *center,
-                    *size,
-                    *rot_sin_cos,
-                    *uv_scale,
-                    *uv_offset,
+                    sprite.tint,
+                    sprite.center,
+                    sprite.size,
+                    sprite.rot_sin_cos,
+                    sprite.uv_scale,
+                    sprite.uv_offset,
                     offset_world,
                     clip,
-                    *texture_mask,
+                    sprite.texture_mask != 0.0,
                 );
             }
 
-            let w = size[0];
-            let h = size[1];
+            let w = sprite.size[0];
+            let h = sprite.size[1];
             if w <= eps || h <= eps {
                 return None;
             }
@@ -3743,10 +3918,10 @@ fn clipped_sprite_object_to_world_rect(
             }
 
             let uv_offset = [
-                uv_offset[0] + uv_scale[0] * cl,
-                uv_offset[1] + uv_scale[1] * ct,
+                sprite.uv_offset[0] + sprite.uv_scale[0] * cl,
+                sprite.uv_offset[1] + sprite.uv_scale[1] * ct,
             ];
-            let uv_scale = [uv_scale[0] * sx_crop, uv_scale[1] * sy_crop];
+            let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
 
             let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
             let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
@@ -3754,32 +3929,27 @@ fn clipped_sprite_object_to_world_rect(
             let new_h = h * sy_crop;
 
             Some(ClippedSpriteObject {
-                object_type: renderer::ObjectType::Sprite {
-                    center: [center_x, center_y, center[2], center[3]],
+                object_type: renderer::ObjectType::Sprite(*index),
+                sprite: Some(renderer::SpriteInstanceRaw {
+                    center: [center_x, center_y, sprite.center[2], sprite.center[3]],
                     size: [new_w, new_h],
-                    rot_sin_cos: *rot_sin_cos,
-                    tint: *tint,
+                    rot_sin_cos: sprite.rot_sin_cos,
+                    tint: sprite.tint,
                     uv_scale,
                     uv_offset,
-                    local_offset: *local_offset,
-                    local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                    edge_fade: *edge_fade,
-                    texture_mask: *texture_mask,
-                },
-                transform: Matrix4::IDENTITY,
+                    local_offset: sprite.local_offset,
+                    local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+                    edge_fade: sprite.edge_fade,
+                    texture_mask: sprite.texture_mask,
+                }),
             })
         }
         renderer::ObjectType::TexturedMesh {
-            tint,
-            vertices,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            texture_mask,
-            ..
+            instance, vertices, ..
         } => {
             let vertices = vertices.as_ref();
-            let Some(bounds) = textured_mesh_world_bounds(vertices, obj.transform) else {
+            let transform = instance.transform();
+            let Some(bounds) = textured_mesh_world_bounds(vertices, transform) else {
                 return None;
             };
             if bounds.right < clip.left
@@ -3796,24 +3966,24 @@ fn clipped_sprite_object_to_world_rect(
             {
                 return Some(ClippedSpriteObject {
                     object_type: obj.object_type.clone(),
-                    transform: obj.transform,
+                    sprite: None,
                 });
             }
             clip_textured_mesh_to_world_rect(
-                *tint,
+                instance.tint,
                 vertices,
-                obj.transform,
-                *uv_scale,
-                *uv_offset,
-                *uv_tex_shift,
+                transform,
+                instance.uv_scale,
+                instance.uv_offset,
+                instance.uv_tex_shift,
                 clip,
-                *texture_mask,
+                instance.texture_mask != 0.0,
                 recycled_vertices,
             )
         }
         renderer::ObjectType::Mesh { .. } => Some(ClippedSpriteObject {
             object_type: obj.object_type.clone(),
-            transform: obj.transform,
+            sprite: None,
         }),
     }
 }
@@ -4083,17 +4253,19 @@ fn clip_textured_mesh_to_world_rect(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            tint,
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                tint,
+                [1.0, 1.0],
+                [0.0, 0.0],
+                [0.0, 0.0],
+                texture_mask,
+            ),
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-            mode: renderer::MeshMode::Triangles,
-            uv_scale: [1.0, 1.0],
-            uv_offset: [0.0, 0.0],
-            uv_tex_shift: [0.0, 0.0],
-            texture_mask,
             depth_test: false,
         },
-        transform: Matrix4::IDENTITY,
+        sprite: None,
     })
 }
 
@@ -4158,17 +4330,19 @@ fn clip_rotated_sprite_to_world_rect(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            tint,
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                tint,
+                [1.0, 1.0],
+                [0.0, 0.0],
+                [0.0, 0.0],
+                texture_mask,
+            ),
             vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-            mode: renderer::MeshMode::Triangles,
-            uv_scale: [1.0, 1.0],
-            uv_offset: [0.0, 0.0],
-            uv_tex_shift: [0.0, 0.0],
-            texture_mask,
             depth_test: false,
         },
-        transform: Matrix4::IDENTITY,
+        sprite: None,
     })
 }
 
@@ -4176,15 +4350,15 @@ fn clip_rotated_sprite_to_world_rect(
 mod tests {
     use super::{
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextLayoutOverflowPolicy, TextureLookupCache, WorldRect,
-        build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
-        clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        resolve_sprite_size_like_sm, sort_render_objects, wrap_text_lines_by_words,
+        TextLayoutKey, TextureCacheEntry, TextureLookupCache, WorldRect, build_cached_text_layout,
+        build_screen, build_screen_cached_with_scratch, clip_object_to_world_masks,
+        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
+        sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::assets;
     use crate::engine::gfx::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType, RenderObject,
-        TMeshCacheKey, TexturedMeshVertex,
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
+        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
     use crate::engine::present::font::{Font, Glyph};
@@ -4238,7 +4412,6 @@ mod tests {
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             vertices: Arc::from(vec![MeshVertex::default(); 3]),
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4269,6 +4442,95 @@ mod tests {
 
         assert!(render.objects.capacity() >= actors.len().saturating_mul(4));
         assert!(render.cameras.capacity() >= 4);
+    }
+
+    #[test]
+    fn flat_camera_scope_matches_nested_camera() {
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+        ]);
+        let mesh = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            vertices,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        };
+        let view_proj = Matrix4::from_cols_array(&[
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 2.0, 0.0, 0.0, //
+            0.0, 0.0, 3.0, 0.0, //
+            4.0, 5.0, 6.0, 1.0,
+        ]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = HashMap::new();
+        let nested = [Actor::Camera {
+            view_proj,
+            children: vec![mesh.clone()],
+        }];
+        let flat = [Actor::CameraPush { view_proj }, mesh, Actor::CameraPop];
+
+        let nested_render = build_screen(&nested, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+        let flat_render = build_screen(&flat, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(nested_render.clear_color, flat_render.clear_color);
+        assert_eq!(nested_render.cameras.len(), flat_render.cameras.len());
+        for (nested_camera, flat_camera) in nested_render.cameras.iter().zip(&flat_render.cameras) {
+            assert_eq!(nested_camera.to_cols_array(), flat_camera.to_cols_array());
+        }
+        assert_eq!(nested_render.objects.len(), flat_render.objects.len());
+        let nested_obj = &nested_render.objects[0];
+        let flat_obj = &flat_render.objects[0];
+        assert_eq!(nested_obj.texture_handle, flat_obj.texture_handle);
+        assert_eq!(nested_obj.blend, flat_obj.blend);
+        assert_eq!(nested_obj.z, flat_obj.z);
+        assert_eq!(nested_obj.order, flat_obj.order);
+        assert_eq!(nested_obj.camera, flat_obj.camera);
+
+        let ObjectType::Mesh {
+            transform: nested_transform,
+            tint: nested_tint,
+            vertices: nested_vertices,
+        } = &nested_obj.object_type
+        else {
+            panic!("expected nested mesh render object");
+        };
+        let ObjectType::Mesh {
+            transform: flat_transform,
+            tint: flat_tint,
+            vertices: flat_vertices,
+        } = &flat_obj.object_type
+        else {
+            panic!("expected flat mesh render object");
+        };
+        assert_eq!(
+            nested_transform.to_cols_array(),
+            flat_transform.to_cols_array()
+        );
+        assert_eq!(nested_tint, flat_tint);
+        assert_eq!(nested_vertices.len(), flat_vertices.len());
+        for (nested_vertex, flat_vertex) in nested_vertices.iter().zip(flat_vertices.iter()) {
+            assert_eq!(nested_vertex.pos, flat_vertex.pos);
+            assert_eq!(nested_vertex.color, flat_vertex.color);
+        }
     }
 
     fn test_font() -> Font {
@@ -4390,20 +4652,8 @@ mod tests {
 
     fn test_render_object(z: i16, order: u32) -> RenderObject {
         RenderObject {
-            object_type: ObjectType::Sprite {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [1.0, 1.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+            object_type: ObjectType::Sprite(0),
             texture_handle: 0,
-            transform: Matrix4::IDENTITY,
             blend: BlendMode::Alpha,
             z,
             order,
@@ -4520,21 +4770,21 @@ mod tests {
 
     #[test]
     fn mask_clip_chooses_largest_intersection() {
+        let mut sprite_instances = vec![SpriteInstanceRaw {
+            center: [0.0, 0.0, 0.0, 0.0],
+            size: [10.0, 10.0],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [1.0; 4],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }];
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [10.0, 10.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+            object_type: ObjectType::Sprite(0),
             texture_handle: 0,
-            transform: Matrix4::IDENTITY,
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -4543,6 +4793,7 @@ mod tests {
 
         assert!(clip_object_to_world_masks(
             &mut obj,
+            &mut sprite_instances,
             &[
                 WorldRect {
                     left: -2.0,
@@ -4559,39 +4810,33 @@ mod tests {
             ],
         ));
 
-        if let ObjectType::Sprite {
-            size,
-            uv_scale,
-            uv_offset,
-            ..
-        } = &obj.object_type
-        {
-            assert_eq!(*size, [10.0, 10.0]);
-            assert_eq!(*uv_scale, [1.0, 1.0]);
-            assert_eq!(*uv_offset, [0.0, 0.0]);
+        if let ObjectType::Sprite(index) = &obj.object_type {
+            let sprite = sprite_instances[*index as usize];
+            assert_eq!(sprite.size, [10.0, 10.0]);
+            assert_eq!(sprite.uv_scale, [1.0, 1.0]);
+            assert_eq!(sprite.uv_offset, [0.0, 0.0]);
         } else {
             panic!("expected sprite to remain in fast clip path");
         }
-        assert_eq!(obj.transform, Matrix4::IDENTITY);
     }
 
     #[test]
     fn rotated_clip_preserves_texture_handle() {
+        let mut sprite_instances = vec![SpriteInstanceRaw {
+            center: [0.0, 0.0, 0.0, 0.0],
+            size: [10.0, 10.0],
+            rot_sin_cos: [45.0_f32.to_radians().sin(), 45.0_f32.to_radians().cos()],
+            tint: [0.25, 0.5, 0.75, 1.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }];
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [10.0, 10.0],
-                rot_sin_cos: [45.0_f32.to_radians().sin(), 45.0_f32.to_radians().cos()],
-                tint: [0.25, 0.5, 0.75, 1.0],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+            object_type: ObjectType::Sprite(0),
             texture_handle: 17,
-            transform: Matrix4::IDENTITY,
             blend: BlendMode::Alpha,
             z: 0,
             order: 0,
@@ -4600,6 +4845,7 @@ mod tests {
 
         assert!(clip_sprite_object_to_world_rect(
             &mut obj,
+            &mut sprite_instances,
             WorldRect {
                 left: -3.0,
                 right: 3.0,
@@ -4609,8 +4855,11 @@ mod tests {
         ));
 
         match &obj.object_type {
-            ObjectType::TexturedMesh { vertices, .. } => {
+            ObjectType::TexturedMesh {
+                instance, vertices, ..
+            } => {
                 assert_eq!(obj.texture_handle, 17);
+                assert_eq!(instance.transform(), Matrix4::IDENTITY);
                 assert!(!vertices.is_empty());
             }
             _ => panic!("expected rotated clip to produce textured mesh"),
@@ -4618,86 +4867,56 @@ mod tests {
     }
 
     #[test]
-    fn texture_lookup_cache_uses_string_tables_for_dynamic_ptrs() {
+    fn texture_lookup_cache_uses_frame_ptr_tables() {
         let mut cache = TextureLookupCache::default();
         let key = Arc::<str>::from("frame_tex");
         let key_ptr = key.as_ref() as *const str;
-        cache.generation = assets::texture_registry_generation();
-        cache
-            .dims
-            .insert(key.to_string(), assets::TexMeta { w: 64, h: 32 });
-        cache.sheets.insert(key.to_string(), (4, 2));
-        cache.handles.insert(key.to_string(), 11);
-
-        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), key.as_ref(), false) else {
-            panic!("expected cached texture dims");
-        };
-        assert_eq!(meta.w, 64);
-        assert_eq!(meta.h, 32);
-        assert_eq!(
-            cache.sprite_sheet_dims_cached(Some(key_ptr), key.as_ref(), false),
-            (4, 2)
-        );
-        assert_eq!(
-            cache.texture_handle_cached(Some(key_ptr), key.as_ref(), false),
-            11
-        );
-
-        cache.begin_frame();
-
-        let Some(meta) = cache.dims.get("frame_tex") else {
-            panic!("expected persistent texture dims");
-        };
-        assert_eq!(meta.w, 64);
-        assert_eq!(meta.h, 32);
-        assert_eq!(cache.sheets.get("frame_tex"), Some(&(4, 2)));
-        assert_eq!(cache.handles.get("frame_tex"), Some(&11));
-    }
-
-    #[test]
-    fn texture_lookup_cache_keeps_stable_ptr_tables_across_frames() {
-        let mut cache = TextureLookupCache::default();
-        const KEY: &str = "stable_tex";
-        let key_ptr = KEY as *const str;
         let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
+        let fingerprint = TextureLookupCache::key_fingerprint(key.as_ref());
         cache.generation = assets::texture_registry_generation();
-        cache
-            .dims
-            .insert(KEY.to_string(), assets::TexMeta { w: 128, h: 64 });
-        cache.sheets.insert(KEY.to_string(), (8, 4));
-        cache.handles.insert(KEY.to_string(), 23);
+        cache.dims.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: assets::TexMeta { w: 64, h: 32 },
+            },
+        );
+        cache.sheets.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: (4, 2),
+            },
+        );
+        cache.handles.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: 11,
+            },
+        );
 
-        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), KEY, true) else {
+        let Some(meta) = cache.texture_dims(key_ptr, key.as_ref()) else {
             panic!("expected cached texture dims");
         };
-        assert_eq!(meta.w, 128);
-        assert_eq!(meta.h, 64);
-        assert_eq!(
-            cache.sprite_sheet_dims_cached(Some(key_ptr), KEY, true),
-            (8, 4)
-        );
-        assert_eq!(cache.texture_handle_cached(Some(key_ptr), KEY, true), 23);
-        assert_eq!(
-            cache
-                .stable_dims
-                .get(&key_addr)
-                .map(|meta| (meta.w, meta.h)),
-            Some((128, 64))
-        );
-        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
-        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+        assert_eq!(meta.w, 64);
+        assert_eq!(meta.h, 32);
+        assert_eq!(cache.sprite_sheet_dims(key_ptr, key.as_ref()), (4, 2));
+        assert_eq!(cache.texture_handle(key_ptr, key.as_ref()), 11);
+        assert!(cache.texture_dims(key_ptr, "other_frame_tex").is_none());
 
         cache.begin_frame();
 
-        assert_eq!(
-            cache
-                .stable_dims
-                .get(&key_addr)
-                .map(|meta| (meta.w, meta.h)),
-            Some((128, 64))
-        );
-        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
-        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+        assert_eq!(cache.dims.len(), 1);
+        assert_eq!(cache.sheets.len(), 1);
+        assert_eq!(cache.handles.len(), 1);
+
+        cache.generation = cache.generation.wrapping_sub(1);
+        cache.begin_frame();
+
+        assert!(cache.dims.is_empty());
+        assert!(cache.sheets.is_empty());
+        assert!(cache.handles.is_empty());
     }
 
     #[test]
@@ -4710,8 +4929,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             None,
             None,
             None,
@@ -4722,8 +4940,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,
@@ -4734,8 +4951,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,
@@ -4791,32 +5007,51 @@ mod tests {
             line_spacing: 10,
             wrap_width_pixels: -1,
         };
-        let mut cache =
-            TextLayoutCache::new_with_policy(4, TextLayoutOverflowPolicy::PruneOwnedEntries);
-        assert!(cache.insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1));
+        let mut cache = TextLayoutCache::new(4);
+        assert!(
+            cache
+                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .is_some()
+        );
         assert_eq!(cache.entry_count, 1);
 
         cache.lock_growth();
 
         assert_eq!(cache.max_entries, 1);
         assert_eq!(cache.max_aliases, 0);
-        assert!(cache.overflow_policy == TextLayoutOverflowPolicy::Saturating);
-        assert!(!cache.insert_owned_layout(key, "beta", Arc::new(test_layout()), 2));
+        assert!(
+            cache
+                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .is_none()
+        );
         assert_eq!(cache.entry_count, 1);
-        assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
     }
 
     #[test]
-    fn text_layout_cache_defaults_to_saturating() {
-        assert!(TextLayoutOverflowPolicy::default() == TextLayoutOverflowPolicy::Saturating);
-        assert!(TextLayoutCache::default().overflow_policy == TextLayoutOverflowPolicy::Saturating);
-        assert!(TextLayoutCache::new(4).overflow_policy == TextLayoutOverflowPolicy::Saturating);
+    fn text_layout_cache_saturates_at_capacity() {
+        let key = TextLayoutKey {
+            font_key: 7,
+            line_spacing: 10,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(1);
+
         assert!(
-            TextLayoutCache::pruning(4).overflow_policy
-                == TextLayoutOverflowPolicy::PruneOwnedEntries
+            cache
+                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .is_some()
         );
+        assert!(
+            cache
+                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .is_none()
+        );
+        assert_eq!(cache.entry_count, 1);
+        assert!(cache.owned_layout(key, "alpha").is_some());
+        assert!(cache.owned_layout(key, "beta").is_none());
+        assert!(cache.uncached_layout.is_some());
     }
 
     #[test]
@@ -4825,23 +5060,25 @@ mod tests {
         let mut render = crate::engine::gfx::RenderList {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: Vec::new(),
+            sprite_instances: Vec::new(),
             objects: vec![RenderObject {
                 object_type: ObjectType::TexturedMesh {
-                    tint: [1.0; 4],
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0, 1.0],
+                        [0.0, 0.0],
+                        [0.0, 0.0],
+                        false,
+                    ),
                     vertices: crate::engine::gfx::TexturedMeshVertices::Transient(vec![
                         TexturedMeshVertex::default();
                         6
                     ]),
                     geom_cache_key: INVALID_TMESH_CACHE_KEY,
-                    mode: MeshMode::Triangles,
-                    uv_scale: [1.0, 1.0],
-                    uv_offset: [0.0, 0.0],
-                    uv_tex_shift: [0.0, 0.0],
-                    texture_mask: false,
                     depth_test: false,
                 },
                 texture_handle: 9,
-                transform: Matrix4::IDENTITY,
                 blend: BlendMode::Alpha,
                 z: 0,
                 order: 0,
@@ -4910,7 +5147,6 @@ mod tests {
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
             geom_cache_key: CACHE_KEY,
-            mode: MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -4943,20 +5179,20 @@ mod tests {
         match (&shadow.object_type, &original.object_type) {
             (
                 crate::engine::gfx::ObjectType::TexturedMesh {
-                    tint: shadow_tint,
+                    instance: shadow_instance,
                     geom_cache_key: shadow_key,
                     ..
                 },
                 crate::engine::gfx::ObjectType::TexturedMesh {
-                    tint: original_tint,
+                    instance: original_instance,
                     geom_cache_key: original_key,
                     ..
                 },
             ) => {
                 assert_eq!(*shadow_key, CACHE_KEY);
                 assert_eq!(*original_key, CACHE_KEY);
-                assert_eq!(*original_tint, [0.25, 0.5, 0.75, 0.8]);
-                assert_eq!(*shadow_tint, [0.125, 0.125, 0.5625, 0.4]);
+                assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
+                assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
             }
             _ => panic!("expected textured-mesh objects"),
         }
@@ -5006,12 +5242,12 @@ mod tests {
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
-                tint,
+                instance,
                 vertices,
                 geom_cache_key,
                 ..
             } => {
-                assert_eq!(*tint, [0.5, 0.75, 1.0, 1.0]);
+                assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
                 assert_eq!(vertices.len(), 12);
                 assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }

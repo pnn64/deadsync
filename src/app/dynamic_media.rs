@@ -8,6 +8,7 @@ use crate::game::profile;
 use image::RgbaImage;
 use log::warn;
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::mpsc,
@@ -578,40 +579,44 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
         desired_path: Option<&Path>,
+        desired_key: Option<&str>,
         animate_video: bool,
     ) -> Option<String> {
         const FALLBACK_KEY: &str = "__black";
 
-        let desired_key = desired_path.map(|path| path.to_string_lossy().into_owned());
-        if self.failed_gameplay_background_key.as_deref() != desired_key.as_deref() {
-            self.failed_gameplay_background_key = None;
-        }
-
         let Some(path) = desired_path else {
             self.failed_gameplay_background_key = None;
             self.reset_pending_gameplay_background();
+            let had_background = self.current_dynamic_background.is_some();
             self.destroy_current_dynamic_background(assets, backend);
-            return Some(FALLBACK_KEY.to_string());
+            return had_background.then(|| FALLBACK_KEY.to_string());
         };
-        let desired_key = desired_key.unwrap();
+        let desired_key = desired_key
+            .map(Cow::Borrowed)
+            .unwrap_or_else(|| path.to_string_lossy());
+        let desired_key = desired_key.as_ref();
+        if self.failed_gameplay_background_key.as_deref() != Some(desired_key) {
+            self.failed_gameplay_background_key = None;
+        }
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
 
         if wants_video {
-            self.drain_gameplay_background_preps(&desired_key);
+            self.drain_gameplay_background_preps(desired_key);
         } else {
             self.reset_pending_gameplay_background();
         }
 
-        if !assets.has_texture_key(&desired_key) {
-            if self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str()) {
+        if !assets.has_texture_key(desired_key) {
+            if self.failed_gameplay_background_key.as_deref() != Some(desired_key) {
                 warn!(
                     "Gameplay background '{}' was not prewarmed; using fallback.",
                     path.display()
                 );
-                self.failed_gameplay_background_key = Some(desired_key.clone());
+                self.failed_gameplay_background_key = Some(desired_key.to_owned());
+                self.destroy_current_dynamic_background(assets, backend);
+                return Some(FALLBACK_KEY.to_string());
             }
-            self.destroy_current_dynamic_background(assets, backend);
-            return Some(FALLBACK_KEY.to_string());
+            return None;
         }
 
         let current_matches = self
@@ -639,26 +644,22 @@ impl DynamicMedia {
         if !current_path_matches {
             self.destroy_current_dynamic_background(assets, backend);
             self.current_dynamic_background = Some(DynamicBackgroundState {
-                key: desired_key.clone(),
+                key: desired_key.to_owned(),
                 path: path.to_path_buf(),
                 video: None,
             });
             if wants_video
-                && !self
-                    .pending_gameplay_background_preps
-                    .contains(&desired_key)
-                && self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str())
+                && !self.pending_gameplay_background_preps.contains(desired_key)
+                && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
             {
                 self.spawn_gameplay_background_prep(path);
             }
-            return Some(desired_key);
+            return Some(desired_key.to_owned());
         }
 
         if wants_video
-            && !self
-                .pending_gameplay_background_preps
-                .contains(&desired_key)
-            && self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str())
+            && !self.pending_gameplay_background_preps.contains(desired_key)
+            && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
         {
             self.spawn_gameplay_background_prep(path);
         }

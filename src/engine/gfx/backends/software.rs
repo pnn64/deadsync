@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
-    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, RenderObject, SamplerDesc,
-    SamplerFilter, SamplerWrap, Texture as RendererTexture, TextureHandleMap,
+    BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
+    SamplerWrap, SpriteInstanceRaw, Texture as RendererTexture, TextureHandleMap,
 };
 use crate::engine::space::ortho_for_window;
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
@@ -112,6 +112,7 @@ pub fn draw(
     let default_proj = state.projection;
     let cameras = render_list.cameras.as_slice();
     let objects = render_list.objects.as_slice();
+    let sprite_instances = render_list.sprite_instances.as_slice();
     let vertex_counter = AtomicU32::new(0);
 
     let threads_auto = thread::available_parallelism()
@@ -161,6 +162,7 @@ pub fn draw(
                         };
                         local_vertices = local_vertices.saturating_add(draw_rows(
                             objects,
+                            sprite_instances,
                             cameras,
                             default_proj,
                             textures,
@@ -180,6 +182,7 @@ pub fn draw(
         vertex_counter.store(
             draw_rows(
                 objects,
+                sprite_instances,
                 cameras,
                 default_proj,
                 textures,
@@ -205,6 +208,7 @@ pub fn draw(
 
 fn draw_rows(
     objects: &[RenderObject],
+    sprite_instances: &[SpriteInstanceRaw],
     cameras: &[Matrix4],
     default_proj: Matrix4,
     textures: &TextureHandleMap<RendererTexture>,
@@ -222,33 +226,24 @@ fn draw_rows(
             .copied()
             .unwrap_or(default_proj);
         let drawn = match &obj.object_type {
-            ObjectType::Sprite {
-                center,
-                size,
-                rot_sin_cos,
-                tint,
-                uv_scale,
-                uv_offset,
-                local_offset,
-                local_offset_rot_sin_cos,
-                edge_fade: _,
-                texture_mask,
-                ..
-            } => {
+            ObjectType::Sprite(sprite_index) => {
+                let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
+                    continue;
+                };
                 let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
                     continue;
                 };
                 rasterize_sprite(
                     &proj,
-                    *center,
-                    *size,
-                    *rot_sin_cos,
-                    *tint,
-                    *uv_scale,
-                    *uv_offset,
-                    *local_offset,
-                    *local_offset_rot_sin_cos,
-                    *texture_mask,
+                    sprite.center,
+                    sprite.size,
+                    sprite.rot_sin_cos,
+                    sprite.tint,
+                    sprite.uv_scale,
+                    sprite.uv_offset,
+                    sprite.local_offset,
+                    sprite.local_offset_rot_sin_cos,
+                    sprite.texture_mask != 0.0,
                     obj.blend,
                     &tex.image,
                     tex.sampler,
@@ -260,58 +255,47 @@ fn draw_rows(
                 )
             }
             ObjectType::Mesh {
+                transform,
                 tint,
                 vertices,
-                mode,
-            } => match mode {
-                MeshMode::Triangles => rasterize_mesh_triangles(
+            } => rasterize_mesh_triangles(
+                &proj,
+                transform,
+                *tint,
+                vertices.as_ref(),
+                obj.blend,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            ),
+            ObjectType::TexturedMesh {
+                instance, vertices, ..
+            } => {
+                let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
+                    continue;
+                };
+                let transform = instance.transform();
+                rasterize_textured_mesh_triangles(
                     &proj,
-                    &obj.transform,
-                    *tint,
+                    &transform,
                     vertices.as_ref(),
+                    instance.tint,
+                    instance.uv_scale,
+                    instance.uv_offset,
+                    instance.uv_tex_shift,
+                    instance.texture_mask != 0.0,
                     obj.blend,
+                    &tex.image,
+                    tex.sampler,
                     width,
                     height,
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
-                ),
-            },
-            ObjectType::TexturedMesh {
-                tint,
-                vertices,
-                mode,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                texture_mask,
-                ..
-            } => match mode {
-                MeshMode::Triangles => {
-                    let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle)
-                    else {
-                        continue;
-                    };
-                    rasterize_textured_mesh_triangles(
-                        &proj,
-                        &obj.transform,
-                        vertices.as_ref(),
-                        *tint,
-                        *uv_scale,
-                        *uv_offset,
-                        *uv_tex_shift,
-                        *texture_mask,
-                        obj.blend,
-                        &tex.image,
-                        tex.sampler,
-                        width,
-                        height,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    )
-                }
-            },
+                )
+            }
         };
         vertices_drawn = vertices_drawn.saturating_add(drawn);
     }

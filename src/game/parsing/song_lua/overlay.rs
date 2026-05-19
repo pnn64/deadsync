@@ -1,6 +1,7 @@
 use crate::engine::gfx::TexturedMeshVertex;
 use crate::engine::present::actors::{TextAlign, TextAttribute};
 use crate::engine::present::anim::{EffectClock, EffectMode};
+use crate::game::parsing::noteskin::SpriteSlot;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -64,6 +65,9 @@ pub enum SongLuaOverlayKind {
     Model {
         layers: Arc<[SongLuaOverlayModelLayer]>,
     },
+    NoteskinActor {
+        slots: Arc<[SpriteSlot]>,
+    },
     SongMeterDisplay {
         stream_width: f32,
         stream_state: SongLuaOverlayState,
@@ -104,6 +108,8 @@ pub struct SongLuaOverlayModelLayer {
     pub uv_scale: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
+    pub uv_velocity: [f32; 2],
+    pub uv_cycle_seconds: Option<f32>,
     pub draw: SongLuaOverlayModelDraw,
 }
 

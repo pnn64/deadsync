@@ -1,8 +1,10 @@
 use deadsync::engine::gfx::draw_prep::{
-    self, DrawOp, DrawScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
-    TexturedMeshSource,
+    self, DrawOp, DrawScratch, PrepareStats, TexturedMeshSource,
 };
-use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList, TexturedMeshVertex};
+use deadsync::engine::gfx::{
+    BlendMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshInstanceRaw,
+    TexturedMeshVertex,
+};
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -104,7 +106,6 @@ enum PlanOpSnapshot {
     Mesh {
         vertex_start: u32,
         vertex_count: u32,
-        mode: &'static str,
         blend: &'static str,
         camera: u8,
     },
@@ -112,7 +113,6 @@ enum PlanOpSnapshot {
         source: PlanTMeshSourceSnapshot,
         instance_start: u32,
         instance_count: u32,
-        mode: &'static str,
         blend: &'static str,
         texture: u64,
         camera: u8,
@@ -340,7 +340,6 @@ fn benchmark_draw(
     }
 
     let mut scratch = DrawScratch::with_capacity(
-        initial.snapshot.sprite_instances.len().max(256),
         initial.snapshot.mesh_vertices.len().max(1024),
         initial.snapshot.tmesh_vertices.len().max(1024),
         initial.snapshot.tmesh_instances.len().max(256),
@@ -348,7 +347,7 @@ fn benchmark_draw(
     );
     for _ in 0..warmup {
         let stats = draw_prep::prepare(&render, &mut scratch, |_, _| true);
-        black_box(checksum_plan(&scratch, stats));
+        black_box(checksum_plan(&render, &scratch, stats));
     }
 
     let start_alloc = ALLOC.begin_measurement();
@@ -358,7 +357,7 @@ fn benchmark_draw(
         let stats = draw_prep::prepare(black_box(&render), &mut scratch, |_, _| true);
         checksum = checksum
             .wrapping_mul(131)
-            .wrapping_add(checksum_plan(&scratch, stats));
+            .wrapping_add(checksum_plan(&render, &scratch, stats));
         black_box(checksum);
     }
 
@@ -392,18 +391,18 @@ struct BuiltPlan {
 }
 
 fn build_plan(render: &RenderList) -> Result<BuiltPlan, Box<dyn Error>> {
-    let mut scratch = DrawScratch::with_capacity(256, 1024, 1024, 256, 64);
+    let mut scratch = DrawScratch::with_capacity(1024, 1024, 256, 64);
     let stats = draw_prep::prepare(render, &mut scratch, |_, _| true);
     Ok(BuiltPlan {
-        snapshot: plan_snapshot(&scratch, stats),
+        snapshot: plan_snapshot(render, &scratch, stats),
     })
 }
 
-fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
+fn plan_snapshot(render: &RenderList, scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
     PlanSnapshot {
         dynamic_upload_vertices: stats.dynamic_upload_vertices,
         cached_upload_vertices: stats.cached_upload_vertices,
-        sprite_instances: scratch.sprite_instances.clone(),
+        sprite_instances: render.sprite_instances.clone(),
         mesh_vertices: scratch.mesh_vertices.clone(),
         tmesh_vertices: scratch.tmesh_vertices.clone(),
         tmesh_instances: scratch.tmesh_instances.clone(),
@@ -421,7 +420,6 @@ fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
                 DrawOp::Mesh(run) => PlanOpSnapshot::Mesh {
                     vertex_start: run.vertex_start,
                     vertex_count: run.vertex_count,
-                    mode: mesh_mode_name(run.mode),
                     blend: blend_name(run.blend),
                     camera: run.camera,
                 },
@@ -429,7 +427,6 @@ fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
                     source: tmesh_source_snapshot(run.source),
                     instance_start: run.instance_start,
                     instance_count: run.instance_count,
-                    mode: mesh_mode_name(run.mode),
                     blend: blend_name(run.blend),
                     texture: run.texture_handle,
                     camera: run.camera,
@@ -439,14 +436,14 @@ fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
     }
 }
 
-fn checksum_plan(scratch: &DrawScratch, stats: PrepareStats) -> u64 {
+fn checksum_plan(render: &RenderList, scratch: &DrawScratch, stats: PrepareStats) -> u64 {
     let mut sum = stats.dynamic_upload_vertices;
     sum = sum
         .wrapping_mul(131)
         .wrapping_add(stats.cached_upload_vertices);
     sum = sum
         .wrapping_mul(131)
-        .wrapping_add(scratch.sprite_instances.len() as u64);
+        .wrapping_add(render.sprite_instances.len() as u64);
     sum = sum
         .wrapping_mul(131)
         .wrapping_add(scratch.mesh_vertices.len() as u64);
@@ -520,7 +517,7 @@ fn ensure_texture_handles(render: &mut RenderList) {
             continue;
         }
         obj.texture_handle = match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite { .. }
+            deadsync::engine::gfx::ObjectType::Sprite(_)
             | deadsync::engine::gfx::ObjectType::TexturedMesh { .. } => {
                 let handle = next_handle;
                 next_handle = next_handle.wrapping_add(1).max(1);
@@ -539,12 +536,6 @@ fn blend_name(blend: BlendMode) -> &'static str {
         BlendMode::Add => "add",
         BlendMode::Multiply => "multiply",
         BlendMode::Subtract => "subtract",
-    }
-}
-
-fn mesh_mode_name(mode: MeshMode) -> &'static str {
-    match mode {
-        MeshMode::Triangles => "triangles",
     }
 }
 

@@ -8,23 +8,22 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     state.preview_time += dt;
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = session_active_players();
-    let now = Instant::now();
     let arcade_style = crate::config::get().arcade_options_navigation;
     let mut pending_action: Option<ScreenAction> = None;
     sync_selected_rows_with_visibility(state, active);
 
     // Hold-to-scroll per player.
     for player_idx in active_player_indices(active) {
-        let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
-            state.nav_input[player_idx].held_direction,
-            state.nav_input[player_idx].held_since,
-            state.nav_input[player_idx].last_scrolled_at,
-        ) else {
+        let Some(direction) = state.nav_input[player_idx].held_direction else {
             continue;
         };
-        if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
-            || now.duration_since(last_scrolled_at) < NAV_REPEAT_SCROLL_INTERVAL
-        {
+        let nav_input = &mut state.nav_input[player_idx];
+        if !screen_input::advance_hold_repeat(
+            &mut nav_input.held_for,
+            &mut nav_input.next_repeat_at,
+            NAV_REPEAT_SCROLL_INTERVAL,
+            dt,
+        ) {
             continue;
         }
 
@@ -63,12 +62,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 }
             }
         }
-        state.nav_input[player_idx].last_scrolled_at = Some(now);
     }
 
     if arcade_style {
         for player_idx in active_player_indices(active) {
-            let action = repeat_held_arcade_start(state, asset_manager, active, player_idx, now);
+            let action = repeat_held_arcade_start(state, asset_manager, active, player_idx, dt);
             if pending_action.is_none() {
                 pending_action = action;
             }
@@ -186,49 +184,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             let w = compute_row_window(visible_rows, selected_visible, active);
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-            let measure_counter_anchor_visible_idx = parent_anchor_visible_index(
-                &state.pane().row_map,
-                RowId::MeasureCounter,
-                visibility,
-            );
-            let judgment_tilt_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::JudgmentTilt, visibility);
-            let error_bar_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
-            let hide_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
-            let fa_plus_anchor_visible_idx = parent_anchor_visible_index(
-                &state.pane().row_map,
-                RowId::FAPlusOptions,
-                visibility,
-            );
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
-                let visible = is_row_visible(&state.pane().row_map, i, visibility);
-                let (f_pos, hidden) = if visible {
-                    let ii = visible_idx;
-                    visible_idx += 1;
-                    f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
-                } else {
-                    let anchor =
-                        state.pane().row_map.get_at(i).and_then(
-                            |row| match conditional_row_parent(row.id) {
-                                Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
-                                Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
-                                Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
-                                Some(RowId::Hide) => hide_anchor_visible_idx,
-                                Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
-                                _ => None,
-                            },
-                        );
-                    if let Some(anchor_idx) = anchor {
-                        let (anchor_f_pos, _) =
-                            f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
-                        (anchor_f_pos, true)
-                    } else {
-                        (-0.5, true)
-                    }
-                };
+                let (f_pos, hidden) = row_f_pos_for_index(
+                    &state.pane().row_map,
+                    i,
+                    visibility,
+                    &mut visible_idx,
+                    w,
+                    mid_pos,
+                    bottom_pos,
+                );
 
                 let dest_y = first_row_center_y + row_step * f_pos;
                 let dest_a = if hidden { 0.0 } else { 1.0 };
@@ -323,32 +289,37 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 pub fn on_nav_press(state: &mut State, player_idx: usize, dir: NavDirection) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     state.nav_input[idx].held_direction = Some(dir);
-    state.nav_input[idx].held_since = Some(Instant::now());
-    state.nav_input[idx].last_scrolled_at = Some(Instant::now());
+    let nav_input = &mut state.nav_input[idx];
+    screen_input::reset_hold_repeat(
+        &mut nav_input.held_for,
+        &mut nav_input.next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 pub fn on_nav_release(state: &mut State, player_idx: usize, dir: NavDirection) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     if state.nav_input[idx].held_direction == Some(dir) {
-        state.nav_input[idx].held_direction = None;
-        state.nav_input[idx].held_since = None;
-        state.nav_input[idx].last_scrolled_at = None;
+        state.nav_input[idx] = PlayerNavInput::default();
     }
 }
 
 #[inline(always)]
 pub(super) fn on_start_press(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let now = Instant::now();
-    state.start_input[idx].held_since = Some(now);
-    state.start_input[idx].last_triggered_at = Some(now);
+    state.start_input[idx].held = true;
+    let start_input = &mut state.start_input[idx];
+    screen_input::reset_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 #[inline(always)]
 pub(super) fn clear_start_hold(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.start_input[idx].held_since = None;
-    state.start_input[idx].last_triggered_at = None;
+    state.start_input[idx] = PlayerStartInput::default();
 }
 
 pub(super) fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) {
@@ -443,9 +414,7 @@ pub(super) fn handle_nav_event(
 #[inline(always)]
 pub(super) fn clear_nav_hold(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.nav_input[idx].held_direction = None;
-    state.nav_input[idx].held_since = None;
-    state.nav_input[idx].last_scrolled_at = None;
+    state.nav_input[idx] = PlayerNavInput::default();
 }
 
 #[inline(always)]
@@ -484,25 +453,25 @@ pub(super) fn repeat_held_arcade_start(
     asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
-    now: Instant,
+    dt: f32,
 ) -> Option<ScreenAction> {
     if !active[player_idx] {
         clear_start_hold(state, player_idx);
         return None;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let (Some(held_since), Some(last_triggered_at)) = (
-        state.start_input[idx].held_since,
-        state.start_input[idx].last_triggered_at,
-    ) else {
+    if !state.start_input[idx].held {
         return None;
     };
-    if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
-        || now.duration_since(last_triggered_at) < NAV_REPEAT_SCROLL_INTERVAL
-    {
+    let start_input = &mut state.start_input[idx];
+    if !screen_input::advance_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_REPEAT_SCROLL_INTERVAL,
+        dt,
+    ) {
         return None;
     }
-    state.start_input[idx].last_triggered_at = Some(now);
     handle_arcade_start_press(state, asset_manager, active, player_idx, true)
 }
 

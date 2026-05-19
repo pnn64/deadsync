@@ -14,7 +14,7 @@ pub struct GameplayBenchFixture {
 }
 
 impl GameplayBenchFixture {
-    pub fn build(&self, retained: bool) -> Vec<Actor> {
+    pub fn build(&mut self, retained: bool) -> Vec<Actor> {
         if !retained {
             for cache in &self.state.notefield_model_cache {
                 cache.borrow_mut().clear();
@@ -23,7 +23,7 @@ impl GameplayBenchFixture {
         let mut actors = Vec::new();
         gameplay_screen::push_actors(
             &mut actors,
-            &self.state,
+            &mut self.state,
             &self.asset_manager,
             gameplay_screen::ActorViewOverride::default(),
         );
@@ -41,7 +41,7 @@ pub fn fixture() -> GameplayBenchFixture {
         let state = base.state_mut();
         state.song_full_title = Arc::from("Gameplay Screen Benchmark");
         state.stage_intro_text = Arc::from("STAGE 1");
-        state.background_texture_key = "bench/gameplay_bg.png".to_string();
+        state.background_texture_key = Arc::from("bench/gameplay_bg.png");
         state.autoplay_enabled = true;
         state.replay_status_text = Some(Arc::from("REPLAY BENCH"));
         state.sync_overlay_message = Some(Arc::from("Clock drift stable"));

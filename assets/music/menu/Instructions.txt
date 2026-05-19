@@ -1,0 +1,12 @@
+Drop `.ogg` files in any of these subfolders (one per visual style) to
+override the bundled menu music with your own.
+
+When the matching `{style}/` folder contains one or more `.ogg` files, a
+random one is chosen each time menu music starts; if the folder is empty
+or missing, the bundled per-style file is used instead.
+
+Folder names match the lowercase visual-style identifier:
+    hearts, arrows, bears, ducks, cats, spooky, gay, stars,
+    thonk, technique, srpg9
+
+Files starting with `_` are ignored.

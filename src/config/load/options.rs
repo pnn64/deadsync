@@ -250,6 +250,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "MenuMusic")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.menu_music, |v| v != 0);
+    cfg.custom_sounds_enabled = conf
+        .get("Options", "CustomSoundsEnabled")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.custom_sounds_enabled, |v| v != 0);
     cfg.music_volume = conf
         .get("Options", "MusicVolume")
         .and_then(|v| v.parse().ok())
@@ -323,6 +327,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicShowBreakdown")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.show_select_music_breakdown, |v| v != 0);
+    cfg.show_select_music_stage_display = conf
+        .get("Options", "SelectMusicShowStageDisplay")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.show_select_music_stage_display, |v| v != 0);
     cfg.show_select_music_cdtitles = conf
         .get("Options", "SelectMusicShowCDTitles")
         .and_then(|v| v.parse::<u8>().ok())
@@ -406,6 +414,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicChartInfoPeakNps")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.select_music_chart_info_peak_nps, |v| v != 0);
+    cfg.select_music_chart_info_effective_bpm = conf
+        .get("Options", "SelectMusicChartInfoEffectiveBpm")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.select_music_chart_info_effective_bpm, |v| v != 0);
     cfg.select_music_chart_info_matrix_rating = conf
         .get("Options", "SelectMusicChartInfoMatrixRating")
         .and_then(|v| v.parse::<u8>().ok())
@@ -465,6 +477,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "ArcadeOptionsNavigation")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.arcade_options_navigation);
+    cfg.delayed_back = conf
+        .get("Options", "DelayedBack")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.delayed_back);
     cfg.three_key_navigation = conf
         .get("Options", "ThreeKeyNavigation")
         .and_then(|v| parse_loose_bool_str(&v))
@@ -473,6 +489,23 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "UseFSRs")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.use_fsrs);
+    cfg.lights_driver = conf
+        .get("Options", "LightsDriver")
+        .map(|v| crate::engine::lights::parse_driver_or_default(&v, default.lights_driver))
+        .unwrap_or(default.lights_driver);
+    cfg.lights_gameplay_pad_lights = conf
+        .get("Options", "GameplayPadLights")
+        .map(|v| {
+            crate::engine::lights::parse_gameplay_pad_lights_or_default(
+                &v,
+                default.lights_gameplay_pad_lights,
+            )
+        })
+        .unwrap_or(default.lights_gameplay_pad_lights);
+    cfg.lights_com_port = conf
+        .get("Options", "LightsComPort")
+        .map(|v| crate::engine::lights::SerialPortName::parse(&v, default.lights_com_port))
+        .unwrap_or(default.lights_com_port);
     cfg.only_dedicated_menu_buttons = conf
         .get("Options", "OnlyDedicatedMenuButtons")
         .and_then(|v| v.parse::<u8>().ok())

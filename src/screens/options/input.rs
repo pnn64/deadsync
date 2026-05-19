@@ -3,30 +3,41 @@ use super::*;
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
-    state.nav_key_held_since = Some(Instant::now());
-    state.nav_key_last_scrolled_at = Some(Instant::now());
+    screen_input::reset_hold_repeat(
+        &mut state.nav_key_held_for,
+        &mut state.nav_key_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     if state.nav_key_held_direction == Some(dir) {
         state.nav_key_held_direction = None;
-        state.nav_key_held_since = None;
-        state.nav_key_last_scrolled_at = None;
+        screen_input::reset_hold_repeat(
+            &mut state.nav_key_held_for,
+            &mut state.nav_key_next_repeat_at,
+            NAV_INITIAL_HOLD_DELAY,
+        );
     }
 }
 
 pub(super) fn on_lr_press(state: &mut State, delta: isize) {
-    let now = Instant::now();
     state.nav_lr_held_direction = Some(delta);
-    state.nav_lr_held_since = Some(now);
-    state.nav_lr_last_adjusted_at = Some(now);
+    screen_input::reset_hold_repeat(
+        &mut state.nav_lr_held_for,
+        &mut state.nav_lr_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 pub(super) fn on_lr_release(state: &mut State, delta: isize) {
     if state.nav_lr_held_direction == Some(delta) {
         state.nav_lr_held_direction = None;
-        state.nav_lr_held_since = None;
-        state.nav_lr_last_adjusted_at = None;
+        screen_input::reset_hold_repeat(
+            &mut state.nav_lr_held_for,
+            &mut state.nav_lr_next_repeat_at,
+            NAV_INITIAL_HOLD_DELAY,
+        );
     }
 }
 
@@ -339,6 +350,14 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::MenuButtons {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);
         }
+    } else if matches!(kind, SubmenuKind::Lights) {
+        let row = &rows[row_index];
+        if row.id == SubRowId::LightsDriver {
+            config::update_lights_driver(lights_driver_from_choice(new_index));
+        }
+        if row.id == SubRowId::GameplayPadLights {
+            config::update_lights_gameplay_pad_lights(lights_gameplay_pad_from_choice(new_index));
+        }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
         let enabled = new_index == 1;
@@ -358,6 +377,9 @@ pub(super) fn apply_submenu_choice_delta(
                 MachinePreferredPlayMode::from_choice(new_index),
             ),
             SubRowId::Font => config::update_machine_font(MachineFont::from_choice(new_index)),
+            SubRowId::BarColor => {
+                config::update_machine_bar_color(MachineBarColor::from_choice(new_index))
+            }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
@@ -369,6 +391,10 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)
             }
+            SubRowId::PackIniOffsets => config::update_machine_pack_ini_offsets(enabled),
+            SubRowId::DefaultSyncOffset => config::update_machine_default_sync_offset(
+                DefaultSyncOffset::from_choice(new_index),
+            ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
             SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),
@@ -432,6 +458,9 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_zmod_rating_box_text(new_index == 1);
         } else if row.id == SubRowId::BpmDecimal {
             config::update_show_bpm_decimal(new_index == 1);
+        } else if row.id == SubRowId::DelayedBack {
+            // Choice 0 = Instant (delayed_back = false), 1 = Hold (delayed_back = true).
+            config::update_delayed_back(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
@@ -556,6 +585,8 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_select_music_preview_loop(new_index == 1);
         } else if row.id == SubRowId::ShowGameplayTimer {
             config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::ShowStageDisplay {
+            config::update_show_select_music_stage_display(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowGsBox {
             config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::GsBoxPlacement {
@@ -596,6 +627,251 @@ pub(super) fn apply_submenu_choice_delta(
     }
     clear_render_cache(state);
     action
+}
+
+fn move_main_selection(state: &mut State, dir: NavDirection) {
+    let total = visible_items().len();
+    if total == 0 {
+        return;
+    }
+    state.selected = match dir {
+        NavDirection::Up => {
+            if state.selected == 0 {
+                total - 1
+            } else {
+                state.selected - 1
+            }
+        }
+        NavDirection::Down => (state.selected + 1) % total,
+    };
+}
+
+fn move_options_selection_vertical(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    dir: NavDirection,
+) {
+    match state.view {
+        OptionsView::Main => move_main_selection(state, dir),
+        OptionsView::Submenu(kind) => {
+            move_submenu_selection_vertical(state, asset_manager, kind, dir, NavWrap::Wrap);
+        }
+    }
+}
+
+fn start_side(action: VirtualAction) -> Option<profile::PlayerSide> {
+    match action {
+        VirtualAction::p1_start => Some(profile::PlayerSide::P1),
+        VirtualAction::p2_start => Some(profile::PlayerSide::P2),
+        _ => None,
+    }
+}
+
+fn on_start_press(state: &mut State, side: profile::PlayerSide) {
+    let idx = screen_input::player_side_ix(side);
+    state.start_input[idx].held = true;
+    let start_input = &mut state.start_input[idx];
+    screen_input::reset_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
+}
+
+fn clear_start_hold(state: &mut State, side: profile::PlayerSide) {
+    let idx = screen_input::player_side_ix(side);
+    state.start_input[idx] = OptionsStartInput::default();
+}
+
+fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
+    matches!(
+        action,
+        VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
+            | VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
+            | VirtualAction::p1_start
+            | VirtualAction::p2_start
+    )
+}
+
+fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
+    matches!(
+        view,
+        OptionsView::Main | OptionsView::Submenu(SubmenuKind::Input)
+    )
+}
+
+fn handle_dedicated_three_key_start_nav(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    side: profile::PlayerSide,
+    repeated: bool,
+) -> ScreenAction {
+    if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
+        move_submenu_selection_vertical(
+            state,
+            asset_manager,
+            kind,
+            NavDirection::Up,
+            NavWrap::Clamp,
+        );
+        return ScreenAction::None;
+    }
+    if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
+        if repeated {
+            return ScreenAction::None;
+        }
+        clear_navigation_holds(state);
+        return activate_current_selection(state, asset_manager);
+    }
+    move_submenu_selection_vertical(
+        state,
+        asset_manager,
+        kind,
+        NavDirection::Down,
+        NavWrap::Clamp,
+    );
+    ScreenAction::None
+}
+
+pub(super) fn repeat_held_dedicated_three_key_start(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    side: profile::PlayerSide,
+    dt: f32,
+) -> Option<ScreenAction> {
+    let OptionsView::Submenu(kind) = state.view else {
+        clear_start_hold(state, side);
+        return None;
+    };
+    if dedicated_three_key_menu_nav(state.view) {
+        clear_start_hold(state, side);
+        return None;
+    }
+    let idx = screen_input::player_side_ix(side);
+    if !state.start_input[idx].held {
+        return None;
+    };
+    let start_input = &mut state.start_input[idx];
+    if !screen_input::advance_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_REPEAT_SCROLL_INTERVAL,
+        dt,
+    ) {
+        return None;
+    }
+    let action = handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, true);
+    (!matches!(action, ScreenAction::None)).then_some(action)
+}
+
+pub(super) fn handle_dedicated_three_key_options_input(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    ev: &InputEvent,
+) -> ScreenAction {
+    if !ev.pressed {
+        match ev.action {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
+                state.menu_lr_undo = 0;
+                if dedicated_three_key_menu_nav(state.view) {
+                    on_nav_release(state, NavDirection::Up);
+                } else {
+                    on_lr_release(state, -1);
+                }
+            }
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
+                state.menu_lr_undo = 0;
+                if dedicated_three_key_menu_nav(state.view) {
+                    on_nav_release(state, NavDirection::Down);
+                } else {
+                    on_lr_release(state, 1);
+                }
+            }
+            VirtualAction::p1_start => clear_start_hold(state, profile::PlayerSide::P1),
+            VirtualAction::p2_start => clear_start_hold(state, profile::PlayerSide::P2),
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
+
+    if dedicated_three_key_menu_nav(state.view) {
+        return match ev.action {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                on_nav_press(state, NavDirection::Up);
+                ScreenAction::None
+            }
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
+                on_nav_press(state, NavDirection::Down);
+                ScreenAction::None
+            }
+            VirtualAction::p1_start | VirtualAction::p2_start => {
+                clear_navigation_holds(state);
+                activate_current_selection(state, asset_manager)
+            }
+            _ => ScreenAction::None,
+        };
+    }
+
+    match state.view {
+        OptionsView::Submenu(kind) => match ev.action {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
+                {
+                    on_lr_press(state, -1);
+                    return action;
+                }
+                on_lr_press(state, -1);
+                ScreenAction::None
+            }
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
+                {
+                    on_lr_press(state, 1);
+                    return action;
+                }
+                on_lr_press(state, 1);
+                ScreenAction::None
+            }
+            VirtualAction::p1_start | VirtualAction::p2_start => {
+                let Some(side) = start_side(ev.action) else {
+                    return ScreenAction::None;
+                };
+                on_start_press(state, side);
+                handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, false)
+            }
+            _ => ScreenAction::None,
+        },
+        OptionsView::Main => ScreenAction::None,
+    }
 }
 
 pub(super) fn cancel_current_view(state: &mut State) -> ScreenAction {
@@ -690,6 +966,12 @@ pub(super) fn activate_current_selection(
                 ItemId::InputOptions => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Input);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
+                ItemId::LightsOptions => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Lights);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
@@ -858,6 +1140,17 @@ pub(super) fn activate_current_selection(
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::WriteFsrDump;
                 }
+            } else if matches!(kind, SubmenuKind::Lights) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ScreenAction::None;
+                };
+                if let Some(row) = rows.get(row_idx)
+                    && row.id == SubRowId::TestLights
+                {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    return ScreenAction::Navigate(Screen::TestLights);
+                }
             } else if matches!(kind, SubmenuKind::OnlineScoring) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
@@ -1005,31 +1298,6 @@ pub fn handle_input(
         return ScreenAction::None;
     }
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
-    if screen_input::dedicated_three_key_nav_enabled() {
-        match ev.action {
-            VirtualAction::p1_left
-            | VirtualAction::p1_menu_left
-            | VirtualAction::p2_left
-            | VirtualAction::p2_menu_left
-                if !ev.pressed =>
-            {
-                state.menu_lr_undo = 0;
-                on_nav_release(state, NavDirection::Up);
-                return ScreenAction::None;
-            }
-            VirtualAction::p1_right
-            | VirtualAction::p1_menu_right
-            | VirtualAction::p2_right
-            | VirtualAction::p2_menu_right
-                if !ev.pressed =>
-            {
-                state.menu_lr_undo = 0;
-                on_nav_release(state, NavDirection::Down);
-                return ScreenAction::None;
-            }
-            _ => {}
-        }
-    }
     if state.score_import_pack_picker.is_some() {
         if let Some((_, nav)) = three_key_action {
             match nav {
@@ -1326,52 +1594,22 @@ pub fn handle_input(
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return ScreenAction::None;
     }
+    if screen_input::dedicated_three_key_nav_enabled()
+        && matches!(state.view, OptionsView::Main | OptionsView::Submenu(_))
+        && dedicated_three_key_options_event(ev.action)
+    {
+        return handle_dedicated_three_key_options_input(state, asset_manager, ev);
+    }
     if let Some((_, nav)) = three_key_action {
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = visible_items().len();
-                        if total > 0 {
-                            state.selected = if state.selected == 0 {
-                                total - 1
-                            } else {
-                                state.selected - 1
-                            };
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Up,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
                 state.menu_lr_undo = 1;
                 ScreenAction::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = visible_items().len();
-                        if total > 0 {
-                            state.selected = (state.selected + 1) % total;
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Down,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
                 state.menu_lr_undo = -1;
                 ScreenAction::None
@@ -1399,27 +1637,7 @@ pub fn handle_input(
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             if ev.pressed {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = visible_items().len();
-                        if total > 0 {
-                            state.selected = if state.selected == 0 {
-                                total - 1
-                            } else {
-                                state.selected - 1
-                            };
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Up,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
             } else {
                 on_nav_release(state, NavDirection::Up);
@@ -1430,23 +1648,7 @@ pub fn handle_input(
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             if ev.pressed {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = visible_items().len();
-                        if total > 0 {
-                            state.selected = (state.selected + 1) % total;
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Down,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
@@ -1456,7 +1658,14 @@ pub fn handle_input(
         | VirtualAction::p1_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if ev.pressed {
+            if matches!(state.view, OptionsView::Main) {
+                if ev.pressed {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                    on_nav_press(state, NavDirection::Up);
+                } else {
+                    on_nav_release(state, NavDirection::Up);
+                }
+            } else if ev.pressed {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
                 {
@@ -1472,7 +1681,14 @@ pub fn handle_input(
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if ev.pressed {
+            if matches!(state.view, OptionsView::Main) {
+                if ev.pressed {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Down);
+                    on_nav_press(state, NavDirection::Down);
+                } else {
+                    on_nav_release(state, NavDirection::Down);
+                }
+            } else if ev.pressed {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
                 {

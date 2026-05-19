@@ -1,9 +1,8 @@
 use crate::engine::gfx::{
-    BlendMode, DrawStats, FastU64Map, MeshMode, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
-    draw_prep::{
-        self, DrawOp, DrawScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshSource,
-    },
+    BlendMode, DrawStats, FastU64Map, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    SpriteInstanceRaw, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    TexturedMeshInstanceRaw, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
 use glam::Mat4 as Matrix4;
@@ -511,7 +510,7 @@ pub fn init(
         tmesh_vao,
         tmesh_vbo,
         tmesh_instance_vbo,
-        prep: DrawScratch::with_capacity(256, 1024, 1024, 256, 64),
+        prep: DrawScratch::with_capacity(1024, 1024, 256, 64),
         cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         vsync_enabled,
@@ -836,11 +835,11 @@ pub fn draw(
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_depth_test = Some(false);
 
-        if !state.prep.sprite_instances.is_empty() {
+        if !render_list.sprite_instances.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(state.prep.sprite_instances.as_slice()),
+                bytemuck::cast_slice(render_list.sprite_instances.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
@@ -1031,10 +1030,11 @@ pub fn draw(
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    let prim = match run.mode {
-                        MeshMode::Triangles => glow::TRIANGLES,
-                    };
-                    gl.draw_arrays(prim, run.vertex_start as i32, run.vertex_count as i32);
+                    gl.draw_arrays(
+                        glow::TRIANGLES,
+                        run.vertex_start as i32,
+                        run.vertex_count as i32,
+                    );
                     vertices = vertices.saturating_add(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
@@ -1190,13 +1190,10 @@ pub fn draw(
                         last_bound_tex = Some(texture);
                     }
 
-                    let prim = match run.mode {
-                        MeshMode::Triangles => glow::TRIANGLES,
-                    };
                     let draw_start = run.source.vertex_start() as i32;
                     let draw_count = run.source.vertex_count() as i32;
                     gl.draw_arrays_instanced(
-                        prim,
+                        glow::TRIANGLES,
                         draw_start,
                         draw_count,
                         run.instance_count as i32,

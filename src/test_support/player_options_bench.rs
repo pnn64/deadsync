@@ -68,8 +68,9 @@ fn actor_z(actor: &Actor) -> i16 {
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::TexturedMesh { z, .. }
-        | Actor::Frame { z, .. } => *z,
-        Actor::Camera { .. } => 0,
+        | Actor::Frame { z, .. }
+        | Actor::SharedFrame { z, .. } => *z,
+        Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
         Actor::Shadow { child, .. } => actor_z(child),
     }
 }

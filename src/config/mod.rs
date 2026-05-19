@@ -28,12 +28,12 @@ pub use self::runtime::{
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
-    AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
-    LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode,
-    ThemeFlag, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
+    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -52,6 +52,7 @@ use self::runtime::{
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::input::WindowsPadBackend;
+use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use crate::engine::logging;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
@@ -144,6 +145,7 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    pub show_select_music_stage_display: bool,
     pub show_select_music_banners: bool,
     pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
@@ -160,6 +162,9 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
+    /// ITGmania parity (`DelayedBack`): when `true`, the BACK button must be held to
+    /// exit a song; when `false`, BACK exits instantly on first press.
+    pub delayed_back: bool,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
@@ -179,13 +184,20 @@ pub struct Config {
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
     /// Machine font for Bold/Header/Footer/numbers/ScreenEval roles.
-    /// Default `Common` keeps Wendy; `Mega` swaps those roles to Mega.
+    /// Default `Wendy` keeps Wendy; `Mega` swaps those roles to Mega.
     /// Body text (Normal role) stays Miso regardless.
     pub machine_font: MachineFont,
+    /// Machine-wide screen bar color behavior.
+    /// Default preserves each screen's current bar background choice.
+    pub machine_bar_color: MachineBarColor,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
     pub machine_allow_per_player_global_offsets: bool,
+    /// Apply ITGmania Pack.ini SyncOffset values to gameplay timing.
+    pub machine_pack_ini_offsets: bool,
+    /// Sync offset to assume for packs without a Pack.ini SyncOffset value.
+    pub machine_default_sync_offset: DefaultSyncOffset,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -220,6 +232,7 @@ pub struct Config {
     pub select_music_scorebox_cycle_hard_ex: bool,
     pub select_music_scorebox_cycle_tournaments: bool,
     pub select_music_chart_info_peak_nps: bool,
+    pub select_music_chart_info_effective_bpm: bool,
     pub select_music_chart_info_matrix_rating: bool,
     pub show_random_courses: bool,
     pub show_most_played_courses: bool,
@@ -229,6 +242,7 @@ pub struct Config {
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
     pub menu_music: bool,
+    pub custom_sounds_enabled: bool,
     pub music_volume: u8,
     // ITGmania PrefsManager "MusicWheelSwitchSpeed" (default 15).
     pub music_wheel_switch_speed: u8,
@@ -269,6 +283,12 @@ pub struct Config {
     pub three_key_navigation: bool,
     /// Enable direct FSR device diagnostics in Test Input for supported controllers.
     pub use_fsrs: bool,
+    /// Native cabinet/pad light output driver.
+    pub lights_driver: LightsDriverKind,
+    /// Source for gameplay arrow pad lights.
+    pub lights_gameplay_pad_lights: GameplayPadLightMode,
+    /// Serial port used by the Litboard/SextetStream lights driver.
+    pub lights_com_port: SerialPortName,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -279,7 +299,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
-            present_mode_policy: PresentModePolicy::Immediate,
+            present_mode_policy: PresentModePolicy::Mailbox,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -307,6 +327,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            show_select_music_stage_display: true,
             show_select_music_banners: true,
             show_select_music_video_banners: true,
             show_select_music_breakdown: true,
@@ -330,9 +351,13 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
-            machine_font: MachineFont::Common,
+            machine_font: MachineFont::Wendy,
+            machine_bar_color: MachineBarColor::Default,
+            delayed_back: true,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
+            machine_pack_ini_offsets: false,
+            machine_default_sync_offset: DefaultSyncOffset::Null,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
@@ -358,6 +383,7 @@ impl Default for Config {
             select_music_scorebox_cycle_hard_ex: true,
             select_music_scorebox_cycle_tournaments: true,
             select_music_chart_info_peak_nps: true,
+            select_music_chart_info_effective_bpm: false,
             select_music_chart_info_matrix_rating: false,
             show_random_courses: true,
             show_most_played_courses: true,
@@ -367,6 +393,7 @@ impl Default for Config {
             visual_delay_seconds: 0.0,
             master_volume: 90,
             menu_music: true,
+            custom_sounds_enabled: true,
             music_volume: 100,
             music_wheel_switch_speed: 15,
             assist_tick_volume: 100,
@@ -392,6 +419,9 @@ impl Default for Config {
             arcade_options_navigation: false,
             three_key_navigation: false,
             use_fsrs: false,
+            lights_driver: LightsDriverKind::Off,
+            lights_gameplay_pad_lights: GameplayPadLightMode::Input,
+            lights_com_port: SerialPortName::default(),
             only_dedicated_menu_buttons: false,
         }
     }

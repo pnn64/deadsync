@@ -193,6 +193,7 @@ pub(super) fn start_active_hold(
     end_time_ns: SongTimeNs,
     current_time_ns: SongTimeNs,
 ) {
+    settle_replaced_active_hold(state, column, note_index, start_time_ns);
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
         hold.life = MAX_HOLD_LIFE;
         hold.let_go_started_at = None;
@@ -208,6 +209,25 @@ pub(super) fn start_active_hold(
         life: MAX_HOLD_LIFE,
         last_update_time_ns: current_time_ns,
     });
+}
+
+#[inline(always)]
+fn settle_replaced_active_hold(
+    state: &mut State,
+    column: usize,
+    next_note_index: usize,
+    next_start_time_ns: SongTimeNs,
+) {
+    let Some(active) = state.active_holds[column].as_ref() else {
+        return;
+    };
+    if active.note_index == next_note_index || active.end_time_ns > next_start_time_ns {
+        return;
+    }
+    // A fast same-column hold jack can hit the next head early while the
+    // previous hold is still alive. ITG stores hold state per TapNote; settle
+    // the previous non-overlapping hold before replacing this column slot.
+    integrate_active_hold_to_time(state, column, active.end_time_ns);
 }
 
 #[inline(always)]

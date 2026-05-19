@@ -458,6 +458,16 @@ bitflags! {
     }
 }
 
+bitflags! {
+    /// Persisted bitmask of live timing statistics shown during gameplay.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct LiveTimingStatsMask: u8 {
+        const MEAN     = 1 << 0;
+        const MEAN_ABS = 1 << 1;
+        const MAX      = 1 << 2;
+    }
+}
+
 // --- Profile Data ---
 const DEFAULT_PROFILE_ID: &str = "00000000";
 const PROFILE_STATS_VERSION_V1: u16 = 1;
@@ -677,6 +687,14 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "DisplayScorebox={}\n",
         i32::from(options.display_scorebox)
     ));
+    content.push_str(&format!(
+        "LiveTimingStats={}\n",
+        i32::from(options.live_timing_stats)
+    ));
+    content.push_str(&format!(
+        "LiveTimingStatsMask={}\n",
+        options.live_timing_stats_mask.bits()
+    ));
     content.push_str(&format!("RainbowMax={}\n", i32::from(options.rainbow_max)));
     content.push_str(&format!(
         "ResponsiveColors={}\n",
@@ -776,6 +794,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "HoldJudgmentGraphic={}\n",
         options.hold_judgment_graphic
     ));
+    content.push_str(&format!("HeldGraphic={}\n", options.held_miss_graphic));
     content.push_str(&format!("JudgmentGraphic={}\n", options.judgment_graphic));
     content.push_str(&format!("ComboFont={}\n", options.combo_font));
     content.push_str(&format!("ComboColors={}\n", options.combo_colors));
@@ -850,6 +869,11 @@ fn load_player_options(
         .get(section, "HoldJudgmentGraphic")
         .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
         .unwrap_or_else(|| options.hold_judgment_graphic.clone());
+    options.held_miss_graphic = profile_conf
+        .get(section, "HeldGraphic")
+        .or_else(|| profile_conf.get(section, "HeldMissGraphic"))
+        .and_then(|s| HeldMissGraphic::from_str(&s).ok())
+        .unwrap_or_else(|| options.held_miss_graphic.clone());
     options.judgment_graphic = profile_conf
         .get(section, "JudgmentGraphic")
         .and_then(|s| JudgmentGraphic::from_str(&s).ok())
@@ -1000,6 +1024,23 @@ fn load_player_options(
         .get(section, "DisplayScorebox")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.display_scorebox, |v| v != 0);
+    let legacy_live_timing_stats = profile_conf
+        .get(section, "LiveTimingStats")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.live_timing_stats, |v| v != 0);
+    if let Some(mask) = profile_conf
+        .get(section, "LiveTimingStatsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(LiveTimingStatsMask::from_bits_truncate)
+    {
+        options.live_timing_stats_mask = mask;
+        options.live_timing_stats = legacy_live_timing_stats;
+    } else {
+        options.live_timing_stats = legacy_live_timing_stats;
+        if legacy_live_timing_stats {
+            options.live_timing_stats_mask = LiveTimingStatsMask::all();
+        }
+    }
     options.rainbow_max = profile_conf
         .get(section, "RainbowMax")
         .and_then(|s| s.parse::<u8>().ok())
@@ -1563,6 +1604,64 @@ impl FromStr for HoldJudgmentGraphic {
 }
 
 impl core::fmt::Display for HoldJudgmentGraphic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeldMissGraphic(String);
+
+impl HeldMissGraphic {
+    pub const DEFAULT_KEY: &'static str = "None";
+
+    const STOCK_ALIASES: &'static [(&'static str, &'static str)] = &[
+        ("love", "held_miss/Love (doubleres).png"),
+        ("love (doubleres).png", "held_miss/Love (doubleres).png"),
+        (
+            "held_miss/love (doubleres).png",
+            "held_miss/Love (doubleres).png",
+        ),
+    ];
+
+    #[inline(always)]
+    pub fn new(raw: &str) -> Self {
+        Self(
+            normalize_graphic_key(raw, "held_miss", Self::STOCK_ALIASES)
+                .unwrap_or_else(|_| Self::DEFAULT_KEY.to_string()),
+        )
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn is_none(&self) -> bool {
+        self.0.eq_ignore_ascii_case("None")
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self) -> Option<&str> {
+        (!self.is_none()).then_some(self.as_str())
+    }
+}
+
+impl Default for HeldMissGraphic {
+    fn default() -> Self {
+        Self(Self::DEFAULT_KEY.to_string())
+    }
+}
+
+impl FromStr for HeldMissGraphic {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        normalize_graphic_key(s, "held_miss", Self::STOCK_ALIASES).map(Self)
+    }
+}
+
+impl core::fmt::Display for HeldMissGraphic {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(&self.0)
     }
@@ -2544,6 +2643,7 @@ impl core::fmt::Display for TargetScoreSetting {
 pub struct PlayerOptionsData {
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
     pub combo_colors: ComboColors,
@@ -2584,6 +2684,8 @@ pub struct PlayerOptionsData {
     pub judgment_back: bool,
     pub error_ms_display: bool,
     pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
     pub rainbow_max: bool,
     pub responsive_colors: bool,
     pub show_life_percent: bool,
@@ -2640,6 +2742,7 @@ fn default_player_options() -> PlayerOptionsData {
     PlayerOptionsData {
         background_filter: BackgroundFilter::default(),
         hold_judgment_graphic: HoldJudgmentGraphic::default(),
+        held_miss_graphic: HeldMissGraphic::default(),
         judgment_graphic: JudgmentGraphic::default(),
         combo_font: ComboFont::default(),
         combo_colors: ComboColors::default(),
@@ -2680,6 +2783,8 @@ fn default_player_options() -> PlayerOptionsData {
         judgment_back: false,
         error_ms_display: false,
         display_scorebox: true,
+        live_timing_stats: false,
+        live_timing_stats_mask: LiveTimingStatsMask::empty(),
         rainbow_max: false,
         responsive_colors: false,
         show_life_percent: false,
@@ -2758,6 +2863,7 @@ pub struct Profile {
     // active session play style so existing read paths can stay simple.
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
     pub combo_colors: ComboColors,
@@ -2821,6 +2927,8 @@ pub struct Profile {
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
     pub error_ms_display: bool,
     pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
     // zmod LifeBarOptions (Arrow Cloud semantics).
     pub rainbow_max: bool,
     pub responsive_colors: bool,
@@ -2936,6 +3044,7 @@ impl Default for Profile {
             arrowcloud_api_key: String::new(),
             background_filter: player_options.background_filter,
             hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
+            held_miss_graphic: player_options.held_miss_graphic.clone(),
             judgment_graphic: player_options.judgment_graphic.clone(),
             combo_font: player_options.combo_font,
             combo_colors: player_options.combo_colors,
@@ -2981,6 +3090,8 @@ impl Default for Profile {
             judgment_back: player_options.judgment_back,
             error_ms_display: player_options.error_ms_display,
             display_scorebox: player_options.display_scorebox,
+            live_timing_stats: player_options.live_timing_stats,
+            live_timing_stats_mask: player_options.live_timing_stats_mask,
             rainbow_max: player_options.rainbow_max,
             responsive_colors: player_options.responsive_colors,
             show_life_percent: player_options.show_life_percent,
@@ -3098,6 +3209,7 @@ impl Profile {
         PlayerOptionsData {
             background_filter: self.background_filter,
             hold_judgment_graphic: self.hold_judgment_graphic.clone(),
+            held_miss_graphic: self.held_miss_graphic.clone(),
             judgment_graphic: self.judgment_graphic.clone(),
             combo_font: self.combo_font,
             combo_colors: self.combo_colors,
@@ -3138,6 +3250,8 @@ impl Profile {
             judgment_back: self.judgment_back,
             error_ms_display: self.error_ms_display,
             display_scorebox: self.display_scorebox,
+            live_timing_stats: self.live_timing_stats,
+            live_timing_stats_mask: self.live_timing_stats_mask,
             rainbow_max: self.rainbow_max,
             responsive_colors: self.responsive_colors,
             show_life_percent: self.show_life_percent,
@@ -3194,6 +3308,7 @@ impl Profile {
     fn apply_player_options(&mut self, options: &PlayerOptionsData) {
         self.background_filter = options.background_filter;
         self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
+        self.held_miss_graphic = options.held_miss_graphic.clone();
         self.judgment_graphic = options.judgment_graphic.clone();
         self.combo_font = options.combo_font;
         self.combo_colors = options.combo_colors;
@@ -3236,6 +3351,8 @@ impl Profile {
         self.judgment_back = options.judgment_back;
         self.error_ms_display = options.error_ms_display;
         self.display_scorebox = options.display_scorebox;
+        self.live_timing_stats = options.live_timing_stats;
+        self.live_timing_stats_mask = options.live_timing_stats_mask;
         self.rainbow_max = options.rainbow_max;
         self.responsive_colors = options.responsive_colors;
         self.show_life_percent = options.show_life_percent;
@@ -5105,7 +5222,7 @@ mod tests {
     fn persisted_row_mask_bit_layouts_are_stable() {
         use super::{
             AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-            RemoveMask, VisualEffectsMask,
+            LiveTimingStatsMask, RemoveMask, VisualEffectsMask,
         };
 
         // InsertMask: persisted bits 0..=6 (Mines is runtime-only and
@@ -5169,6 +5286,11 @@ mod tests {
         assert_eq!(ErrorBarMask::HIGHLIGHT.bits(), 1 << 3);
         assert_eq!(ErrorBarMask::AVERAGE.bits(), 1 << 4);
         assert_eq!(ErrorBarMask::all().bits(), 0b0001_1111);
+
+        assert_eq!(LiveTimingStatsMask::MEAN.bits(), 1 << 0);
+        assert_eq!(LiveTimingStatsMask::MEAN_ABS.bits(), 1 << 1);
+        assert_eq!(LiveTimingStatsMask::MAX.bits(), 1 << 2);
+        assert_eq!(LiveTimingStatsMask::all().bits(), 0b0000_0111);
     }
 
     #[test]

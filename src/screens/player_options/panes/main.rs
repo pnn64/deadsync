@@ -1,3 +1,4 @@
+use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
@@ -171,9 +172,7 @@ fn apply_noteskin_delta(
     wrap: NavWrap,
     apply: fn(&mut State, usize, &str, bool, gp::PlayerSide),
 ) -> Outcome {
-    let Some(new_index) =
-        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
-    else {
+    let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
         return Outcome::NONE;
     };
     let choice = state
@@ -183,7 +182,7 @@ fn apply_noteskin_delta(
         .and_then(|r| r.choices.get(new_index))
         .cloned()
         .unwrap_or_default();
-    let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+    let (should_persist, side) = choice::persist_ctx(player_idx);
     apply(state, player_idx, &choice, should_persist, side);
     Outcome::persisted()
 }
@@ -349,8 +348,7 @@ const SPEED_MOD: CustomBinding = CustomBinding {
 
 const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -397,8 +395,7 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
 
 const MINI: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -415,7 +412,7 @@ const MINI: CustomBinding = CustomBinding {
             return Outcome::persisted();
         };
         state.player_profiles[player_idx].mini_percent = val;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_mini_percent_for_side(side, val);
         }
@@ -425,17 +422,16 @@ const MINI: CustomBinding = CustomBinding {
 
 const JUDGMENT_FONT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
         let setting = assets::judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::JudgmentGraphic::new(&choice.key))
+            .map(|choice| gp::JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].judgment_graphic = setting;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_judgment_graphic_for_side(
                 side,
@@ -448,17 +444,16 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
 
 const HOLD_JUDGMENT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
         let setting = assets::hold_judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::HoldJudgmentGraphic::new(&choice.key))
+            .map(|choice| gp::HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_hold_judgment_graphic_for_side(
                 side,
@@ -471,10 +466,31 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
     },
 };
 
+const HELD_GRAPHIC: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let setting = assets::held_miss_texture_choices()
+            .get(new_index)
+            .map(|choice| gp::HeldMissGraphic::new(choice.key.as_ref()))
+            .unwrap_or_default();
+        state.player_profiles[player_idx].held_miss_graphic = setting;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_held_miss_graphic_for_side(
+                side,
+                state.player_profiles[player_idx].held_miss_graphic.clone(),
+            );
+        }
+        Outcome::persisted()
+    },
+};
+
 const STEPCHART: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -756,6 +772,16 @@ pub(super) fn build_main_rows(
         lookup_key("PlayerOptionsHelp", "HoldJudgmentHelp"),
         HOLD_JUDGMENT,
         assets::hold_judgment_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+    ));
+    b.push(Row::custom(
+        RowId::HeldGraphic,
+        lookup_key("PlayerOptions", "HeldGraphic"),
+        lookup_key("PlayerOptionsHelp", "HeldGraphicHelp"),
+        HELD_GRAPHIC,
+        assets::held_miss_texture_choices()
             .iter()
             .map(|choice| choice.label.clone())
             .collect(),

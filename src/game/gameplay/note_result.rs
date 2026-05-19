@@ -1,7 +1,7 @@
 use crate::game::judgment::{JudgeGrade, Judgment};
 use crate::game::note::NoteType;
 
-use super::{PlayerRuntime, State, display_judge_ix};
+use super::{HeldMissRenderInfo, MAX_COLS, PlayerRuntime, State, display_judge_ix};
 
 #[inline(always)]
 pub(super) fn add_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
@@ -76,5 +76,13 @@ pub(super) fn set_final_note_result(
     state.notes[note_index].result = Some(judgment);
     if was_unjudged {
         mark_row_note_finalized(state, note_index);
+        if judgment.grade == JudgeGrade::Miss && judgment.miss_because_held {
+            let column = state.notes[note_index].column;
+            if column < MAX_COLS {
+                state.held_miss_judgments[column] = Some(HeldMissRenderInfo {
+                    started_at_screen_s: state.total_elapsed_in_screen,
+                });
+            }
+        }
     }
 }

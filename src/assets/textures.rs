@@ -39,11 +39,75 @@ pub struct TextureHints {
     pub sampler_wrap: Option<SamplerWrap>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextureChoice {
-    pub key: String,
+    pub key: Arc<str>,
     pub label: String,
+    cached_handle: AtomicU64,
+    cached_generation: AtomicU64,
 }
+
+impl TextureChoice {
+    fn new(key: String, label: String) -> Self {
+        Self {
+            key: Arc::from(key),
+            label,
+            cached_handle: AtomicU64::new(INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+        let generation = texture_registry_generation();
+        let handle = self.cached_handle.load(Ordering::Relaxed);
+        if handle != INVALID_TEXTURE_HANDLE
+            && self.cached_generation.load(Ordering::Relaxed) == generation
+        {
+            return crate::engine::present::dsl::TextureKeyHandle {
+                key: Arc::clone(&self.key),
+                handle,
+                generation,
+            };
+        }
+
+        let handle = texture_handle(self.key.as_ref());
+        self.cached_handle.store(handle, Ordering::Relaxed);
+        self.cached_generation.store(generation, Ordering::Relaxed);
+        crate::engine::present::dsl::TextureKeyHandle {
+            key: Arc::clone(&self.key),
+            handle,
+            generation,
+        }
+    }
+}
+
+impl Clone for TextureChoice {
+    fn clone(&self) -> Self {
+        Self {
+            key: Arc::clone(&self.key),
+            label: self.label.clone(),
+            cached_handle: AtomicU64::new(self.cached_handle.load(Ordering::Relaxed)),
+            cached_generation: AtomicU64::new(self.cached_generation.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl core::fmt::Debug for TextureChoice {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TextureChoice")
+            .field("key", &self.key)
+            .field("label", &self.label)
+            .finish()
+    }
+}
+
+impl PartialEq for TextureChoice {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.label == other.label
+    }
+}
+
+impl Eq for TextureChoice {}
 
 #[derive(Clone, Debug)]
 struct DiscoveredTexture {
@@ -54,6 +118,7 @@ struct DiscoveredTexture {
 
 static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
+static HELD_MISS_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 const NONE_TEXTURE_CHOICE_KEY: &str = "None";
 
 impl TextureHints {
@@ -143,6 +208,13 @@ fn has_multiframe_hint(filename: &str) -> bool {
     false
 }
 
+fn is_png_file(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+}
+
 pub fn strip_sprite_hints(name: &str) -> String {
     let file_name = Path::new(name)
         .file_name()
@@ -177,7 +249,11 @@ pub fn strip_sprite_hints(name: &str) -> String {
     out.replace(" (doubleres)", "").trim().to_string()
 }
 
-fn discover_graphic_textures(folder: &str, love_first: bool) -> Vec<DiscoveredTexture> {
+fn discover_graphic_textures(
+    folder: &str,
+    love_first: bool,
+    require_multiframe_hint: bool,
+) -> Vec<DiscoveredTexture> {
     let mut discovered = Vec::new();
     let mut seen_keys = HashSet::new();
     for root in graphics_roots(folder) {
@@ -192,7 +268,10 @@ fn discover_graphic_textures(folder: &str, love_first: bool) -> Vec<DiscoveredTe
             let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
-            if !has_multiframe_hint(file_name) {
+            if require_multiframe_hint && !has_multiframe_hint(file_name) {
+                continue;
+            }
+            if !require_multiframe_hint && !is_png_file(file_name) {
                 continue;
             }
             let key = format!("{folder}/{file_name}");
@@ -229,32 +308,37 @@ fn texture_choices_from_discovered(
     folder: &str,
     love_first: bool,
     include_none: bool,
+    require_multiframe_hint: bool,
 ) -> Vec<TextureChoice> {
-    let mut choices: Vec<TextureChoice> = discover_graphic_textures(folder, love_first)
-        .into_iter()
-        .map(|texture| TextureChoice {
-            key: texture.key,
-            label: texture.label,
-        })
-        .collect();
+    let mut choices: Vec<TextureChoice> =
+        discover_graphic_textures(folder, love_first, require_multiframe_hint)
+            .into_iter()
+            .map(|texture| TextureChoice::new(texture.key, texture.label))
+            .collect();
     if include_none {
-        choices.push(TextureChoice {
-            key: NONE_TEXTURE_CHOICE_KEY.to_string(),
-            label: NONE_TEXTURE_CHOICE_KEY.to_string(),
-        });
+        choices.push(TextureChoice::new(
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+        ));
     }
     choices
 }
 
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
     JUDGMENT_TEXTURE_CHOICES
-        .get_or_init(|| texture_choices_from_discovered("judgements", true, true))
+        .get_or_init(|| texture_choices_from_discovered("judgements", true, true, true))
         .as_slice()
 }
 
 pub fn hold_judgment_texture_choices() -> &'static [TextureChoice] {
     HOLD_JUDGMENT_TEXTURE_CHOICES
-        .get_or_init(|| texture_choices_from_discovered("hold_judgements", false, true))
+        .get_or_init(|| texture_choices_from_discovered("hold_judgements", false, true, true))
+        .as_slice()
+}
+
+pub fn held_miss_texture_choices() -> &'static [TextureChoice] {
+    HELD_MISS_TEXTURE_CHOICES
+        .get_or_init(|| texture_choices_from_discovered("held_miss", false, true, false))
         .as_slice()
 }
 
@@ -262,6 +346,13 @@ pub fn resolve_texture_choice<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a str> {
+    resolve_texture_choice_entry(requested, choices).map(|choice| choice.key.as_ref())
+}
+
+pub fn resolve_texture_choice_entry<'a>(
+    requested: Option<&str>,
+    choices: &'a [TextureChoice],
+) -> Option<&'a TextureChoice> {
     // When the caller explicitly opts out of a texture (e.g. user selected "None"),
     // honor that and render nothing. Only fall back to the first available choice
     // when a texture was requested but could not be located in the discovered set
@@ -269,13 +360,14 @@ pub fn resolve_texture_choice<'a>(
     let key = requested?;
     choices
         .iter()
-        .find(|choice| choice.key.eq_ignore_ascii_case(key))
-        .map(|choice| choice.key.as_str())
+        .find(|choice| choice.key.as_ref().eq_ignore_ascii_case(key))
         .or_else(|| {
-            choices
-                .iter()
-                .find(|choice| !choice.key.eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY))
-                .map(|choice| choice.key.as_str())
+            choices.iter().find(|choice| {
+                !choice
+                    .key
+                    .as_ref()
+                    .eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY)
+            })
         })
 }
 
@@ -676,6 +768,27 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
+fn direct_texture_key_path(raw: &str, key: &str) -> Option<PathBuf> {
+    for candidate in [Path::new(raw), Path::new(key)] {
+        if candidate.is_absolute() && candidate.is_file() {
+            return Some(candidate.to_path_buf());
+        }
+    }
+
+    #[cfg(unix)]
+    for candidate in [raw, key] {
+        if candidate.starts_with('/') {
+            continue;
+        }
+        let absolute = PathBuf::from(format!("/{candidate}"));
+        if absolute.is_file() {
+            return Some(absolute);
+        }
+    }
+
+    None
+}
+
 fn open_image_fallback_mode(
     path: &Path,
     warn_mismatch: bool,
@@ -746,8 +859,13 @@ pub(crate) fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, 
     }
 }
 
-fn append_graphic_textures(list: &mut Vec<(String, String)>, folder: &str, love_first: bool) {
-    for texture in discover_graphic_textures(folder, love_first) {
+fn append_graphic_textures(
+    list: &mut Vec<(String, String)>,
+    folder: &str,
+    love_first: bool,
+    require_multiframe_hint: bool,
+) {
+    for texture in discover_graphic_textures(folder, love_first, require_multiframe_hint) {
         list.push((texture.key, texture.source_path));
     }
 }
@@ -934,6 +1052,38 @@ impl AssetManager {
             (
                 "test_input/highlightarrow.png".to_string(),
                 "test_input/highlightarrow.png".to_string(),
+            ),
+            (
+                "test_lights/bass light (blue).png".to_string(),
+                "test_lights/bass light (blue).png".to_string(),
+            ),
+            (
+                "test_lights/blue.png".to_string(),
+                "test_lights/blue.png".to_string(),
+            ),
+            (
+                "test_lights/cabinet ITG2.png".to_string(),
+                "test_lights/cabinet ITG2.png".to_string(),
+            ),
+            (
+                "test_lights/dance.png".to_string(),
+                "test_lights/dance.png".to_string(),
+            ),
+            (
+                "test_lights/highlight.png".to_string(),
+                "test_lights/highlight.png".to_string(),
+            ),
+            (
+                "test_lights/pink.png".to_string(),
+                "test_lights/pink.png".to_string(),
+            ),
+            (
+                "test_lights/red.png".to_string(),
+                "test_lights/red.png".to_string(),
+            ),
+            (
+                "test_lights/white.png".to_string(),
+                "test_lights/white.png".to_string(),
             ),
             ("meter_arrow.png".to_string(), "meter_arrow.png".to_string()),
             (
@@ -1125,8 +1275,9 @@ impl AssetManager {
         }
 
         append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
-        append_graphic_textures(&mut textures_to_load, "judgements", true);
-        append_graphic_textures(&mut textures_to_load, "hold_judgements", false);
+        append_graphic_textures(&mut textures_to_load, "judgements", true, true);
+        append_graphic_textures(&mut textures_to_load, "hold_judgements", false, true);
+        append_graphic_textures(&mut textures_to_load, "held_miss", false, false);
 
         #[inline(always)]
         fn decode_rgba(
@@ -1236,17 +1387,38 @@ impl AssetManager {
     }
 
     pub(crate) fn ensure_texture_for_key(&mut self, backend: &mut Backend, texture_key: &str) {
+        self.load_texture_key(backend, texture_key, None, false);
+    }
+
+    pub(crate) fn ensure_texture_for_key_with_sampler(
+        &mut self,
+        backend: &mut Backend,
+        texture_key: &str,
+        sampler: SamplerDesc,
+    ) {
+        self.load_texture_key(backend, texture_key, Some(sampler), true);
+    }
+
+    fn load_texture_key(
+        &mut self,
+        backend: &mut Backend,
+        texture_key: &str,
+        sampler_override: Option<SamplerDesc>,
+        force_reload: bool,
+    ) {
         if texture_key.is_empty() {
             return;
         }
         let key = canonical_texture_key(texture_key);
-        if self.has_texture_key(&key) {
+        if !force_reload && self.has_texture_key(&key) {
             return;
         }
         if let Some(generated) = generated_texture(&key) {
-            match backend.create_texture(generated.image.as_ref(), generated.sampler) {
+            let sampler = sampler_override.unwrap_or(generated.sampler);
+            match backend.create_texture(generated.image.as_ref(), sampler) {
                 Ok(texture) => {
-                    self.insert_texture(
+                    self.set_texture_for_key(
+                        backend,
                         key,
                         texture,
                         generated.image.width(),
@@ -1263,25 +1435,31 @@ impl AssetManager {
             return;
         }
 
-        let dirs = dirs::app_dirs();
-        let mut path = dirs.resolve_asset_path(&format!("assets/{key}"));
-        if !path.is_file() {
-            path = dirs.resolve_asset_path(&format!("assets/graphics/{key}"));
-        }
+        let path = direct_texture_key_path(texture_key, &key).unwrap_or_else(|| {
+            let dirs = dirs::app_dirs();
+            let path = dirs.resolve_asset_path(&format!("assets/{key}"));
+            if path.is_file() {
+                path
+            } else {
+                dirs.resolve_asset_path(&format!("assets/graphics/{key}"))
+            }
+        });
         if !path.is_file() {
             warn!("Failed to resolve texture key '{key}' for preload.");
             return;
         }
 
         let hints = parse_texture_hints(&key);
-        let sampler = if needs_repeat_sampler(&key) {
-            SamplerDesc {
-                wrap: SamplerWrap::Repeat,
-                ..hints.sampler_desc()
+        let sampler = sampler_override.unwrap_or_else(|| {
+            if needs_repeat_sampler(&key) {
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..hints.sampler_desc()
+                }
+            } else {
+                hints.sampler_desc()
             }
-        } else {
-            hints.sampler_desc()
-        };
+        });
         match open_image_fallback(&path) {
             Ok(img) => {
                 let mut rgba = img.to_rgba8();
@@ -1291,7 +1469,13 @@ impl AssetManager {
                 fix_hidden_alpha(&mut rgba);
                 match backend.create_texture(&rgba, sampler) {
                     Ok(texture) => {
-                        self.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
+                        self.set_texture_for_key(
+                            backend,
+                            key.clone(),
+                            texture,
+                            rgba.width(),
+                            rgba.height(),
+                        );
                         register_texture_dims(&key, rgba.width(), rgba.height());
                     }
                     Err(e) => {
@@ -1309,6 +1493,38 @@ impl AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn direct_texture_key_path_accepts_absolute_keys() {
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-texture-key-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Tap Note parts (mipmaps).png");
+        fs::write(&path, [0u8]).unwrap();
+
+        let key = path.to_string_lossy().replace('\\', "/");
+        let resolved = direct_texture_key_path(&key, &key).unwrap();
+        assert!(resolved.is_file());
+        assert_eq!(resolved.file_name(), path.file_name());
+
+        #[cfg(unix)]
+        {
+            let stripped = key.trim_start_matches('/');
+            assert_eq!(
+                direct_texture_key_path(stripped, stripped).as_deref(),
+                Some(path.as_path())
+            );
+        }
+
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(&dir);
+    }
 
     #[test]
     fn texture_handle_lookup_tracks_registry_lifecycle() {

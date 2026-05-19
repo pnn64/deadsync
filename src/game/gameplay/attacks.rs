@@ -4,8 +4,9 @@ use crate::game::note::Note;
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
     SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
-    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+    SongLuaNoteHideWindow, SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
+    SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    compile_song_lua,
 };
 use crate::game::profile;
 use crate::game::scroll::ScrollSpeedSetting;
@@ -2455,6 +2456,7 @@ pub(super) fn build_song_lua_runtime_windows(
     SongLuaCapturedActor,
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
+    [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
     Vec<PathBuf>,
     f32,
     f32,
@@ -2503,6 +2505,8 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let mut note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
     let mut sound_paths = Vec::new();
     let screen_width = screen_width();
     let screen_height = screen_height();
@@ -2530,6 +2534,7 @@ pub(super) fn build_song_lua_runtime_windows(
             song_foreground,
             song_foreground_events,
             hidden_players,
+            note_hides,
             sound_paths,
             screen_width,
             screen_height,
@@ -2574,6 +2579,7 @@ pub(super) fn build_song_lua_runtime_windows(
                     song_foreground,
                     song_foreground_events,
                     hidden_players,
+                    note_hides,
                     sound_paths,
                     screen_width,
                     screen_height,
@@ -2614,6 +2620,11 @@ pub(super) fn build_song_lua_runtime_windows(
             &compiled.song_foreground.message_commands,
         );
         hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
+        for hide in &compiled.note_hides {
+            if hide.player < MAX_PLAYERS {
+                note_hides[hide.player].push(*hide);
+            }
+        }
 
         let mut unsupported_targets = 0usize;
         let mut total_constant = 0usize;
@@ -2753,6 +2764,7 @@ pub(super) fn build_song_lua_runtime_windows(
         song_foreground,
         song_foreground_events,
         hidden_players,
+        note_hides,
         sound_paths,
         out_screen_width,
         out_screen_height,

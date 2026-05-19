@@ -92,6 +92,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "VisualDelaySeconds", default.visual_delay_seconds);
     push_line(content, "MasterVolume", default.master_volume);
     push_bool(content, "MenuMusic", default.menu_music);
+    push_bool(
+        content,
+        "CustomSoundsEnabled",
+        default.custom_sounds_enabled,
+    );
     push_bool(content, "MineHitSound", default.mine_hit_sound);
     push_line(content, "MusicVolume", default.music_volume);
     push_line(
@@ -123,6 +128,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         content,
         "SelectMusicShowBreakdown",
         default.show_select_music_breakdown,
+    );
+    push_bool(
+        content,
+        "SelectMusicShowStageDisplay",
+        default.show_select_music_stage_display,
     );
     push_bool(
         content,
@@ -216,6 +226,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(
         content,
+        "SelectMusicChartInfoEffectiveBpm",
+        default.select_music_chart_info_effective_bpm,
+    );
+    push_bool(
+        content,
         "SelectMusicChartInfoMatrixRating",
         default.select_music_chart_info_matrix_rating,
     );
@@ -242,8 +257,16 @@ fn push_default_options(content: &mut String, default: &Config) {
         "ArcadeOptionsNavigation",
         default.arcade_options_navigation,
     );
+    push_bool(content, "DelayedBack", default.delayed_back);
     push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
     push_bool(content, "UseFSRs", default.use_fsrs);
+    push_line(content, "LightsDriver", default.lights_driver.as_str());
+    push_line(
+        content,
+        "GameplayPadLights",
+        default.lights_gameplay_pad_lights.as_str(),
+    );
+    push_line(content, "LightsComPort", default.lights_com_port.as_str());
     push_bool(
         content,
         "OnlyDedicatedMenuButtons",
@@ -330,6 +353,16 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachineAllowPerPlayerGlobalOffsets",
         default.machine_allow_per_player_global_offsets,
     );
+    push_bool(
+        content,
+        "MachinePackIniOffsets",
+        default.machine_pack_ini_offsets,
+    );
+    push_line(
+        content,
+        "MachineDefaultSyncOffset",
+        default.machine_default_sync_offset.as_str(),
+    );
     push_line(
         content,
         "MachinePreferredStyle",
@@ -341,6 +374,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
         default.machine_preferred_play_mode.as_str(),
     );
     push_line(content, "MachineFont", default.machine_font.as_str());
+    push_line(
+        content,
+        "MachineBarColor",
+        default.machine_bar_color.as_str(),
+    );
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

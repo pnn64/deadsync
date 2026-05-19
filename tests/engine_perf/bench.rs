@@ -1,6 +1,11 @@
 use deadsync::assets;
-use deadsync::engine::gfx::BlendMode as GfxBlendMode;
+use deadsync::engine::gfx::{
+    self, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
+    TexturedMeshInstanceRaw as GfxTexturedMeshInstanceRaw,
+    TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
+};
 use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
+use deadsync::engine::present::dsl::TextureKeyHandle;
 use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -25,11 +30,14 @@ const TMESH_ITERS: usize = 20_000;
 const INPUT_TEMP_ITERS: usize = 500_000;
 const ACTIVE_SFX_ITERS: usize = 100_000;
 const DRAW_PREP_RESERVE_ITERS: usize = 12_000;
+const DRAW_PREP_TMESH_ITERS: usize = 25_000;
 const TMESH_REPACK_ITERS: usize = 30_000;
 const TEXTURE_LOOKUP_ITERS: usize = 12_000;
 const COMPOSE_TEXTURE_LOOKUP_ITERS: usize = 20_000;
 const COMPOSE_REGISTRY_CHURN_ITERS: usize = 1_500;
 const COMPOSE_TEXT_CACHE_ITERS: usize = 800;
+const SPRITE_KEY_ITERS: usize = 12_000;
+const SPRITE_KEY_ACTORS: usize = 128;
 const TEXT_CACHE_CHURN_POOL: usize = 512;
 const MARKER_SCAN_ITERS: usize = 80_000;
 const SHADOW_BUILD_ITERS: usize = 12_000;
@@ -39,6 +47,8 @@ const VIDEO_FRAME_ITERS: usize = 800;
 const VIDEO_QUEUE_ITERS: usize = 1_200;
 const AUDIO_CLOCK_ITERS: usize = 600_000;
 const CLIP_RECYCLE_ITERS: usize = 18_000;
+const CLIP_FAST_ACCEPT_ITERS: usize = 20_000;
+const SHADOW_TMESH_ITERS: usize = 4_000;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -136,6 +146,18 @@ struct TexturedMeshVertex {
     uv: [f32; 2],
     tex_matrix_scale: [f32; 2],
     color: [f32; 4],
+}
+
+#[derive(Clone)]
+enum ClipTMeshVertices {
+    Shared(Arc<[TexturedMeshVertex]>),
+    Transient(Vec<TexturedMeshVertex>),
+}
+
+#[derive(Clone)]
+struct ClipTMeshObj {
+    tint: [f32; 4],
+    vertices: ClipTMeshVertices,
 }
 
 #[derive(Clone, Copy)]
@@ -337,6 +359,12 @@ fn main() {
     println!("engine perf microbench");
     println!("synthetic targeted checks for review recommendations\n");
 
+    if std::env::args().any(|arg| arg == "--sprite-texture-key") {
+        bench_sprite_texture_keys();
+        return;
+    }
+
+    bench_sprite_texture_keys();
     bench_sorting();
     bench_draw_prep_reserves();
     bench_tmesh_repack();
@@ -493,6 +521,22 @@ fn bench_compose_registry_churn() {
     println!();
 }
 
+fn bench_sprite_texture_keys() {
+    println!("sprite texture key actor build");
+    let tex = "bench/judgment.png";
+    let tex_string = tex.to_string();
+    let tex_arc = Arc::<str>::from(tex);
+    run_sprite_texture_key_pair(
+        format!("{SPRITE_KEY_ACTORS} sprites"),
+        tex,
+        &tex_string,
+        &tex_arc,
+        17,
+        1,
+    );
+    println!();
+}
+
 fn bench_text_layout_cache_churn() {
     println!("compose text layout cache churn");
     let stable_scenario = compose_scenarios::build_scenario("perf-text-plain")
@@ -524,7 +568,7 @@ fn bench_text_layout_cache_churn() {
     let mut churn_scenario = compose_scenarios::build_scenario("perf-text-plain")
         .expect("perf-text-plain scenario should exist");
     let text_pool = make_text_pool(TEXT_CACHE_CHURN_POOL);
-    let mut churn_cache = compose::TextLayoutCache::saturating(64);
+    let mut churn_cache = compose::TextLayoutCache::new(64);
     let mut churn_scratch = compose::ComposeScratch::default();
     let mut frame = 0usize;
     let churn = bench(
@@ -552,38 +596,6 @@ fn bench_text_layout_cache_churn() {
         },
     );
 
-    let mut prune_scenario = compose_scenarios::build_scenario("perf-text-plain")
-        .expect("perf-text-plain scenario should exist");
-    let mut prune_cache = compose::TextLayoutCache::pruning(64);
-    let mut prune_scratch = compose::ComposeScratch::default();
-    let mut prune_frame = 0usize;
-    let pruning = bench(
-        "rotating shared text, prune capped 64",
-        COMPOSE_TEXT_CACHE_ITERS,
-        || {
-            let text_count =
-                retarget_text_contents(&mut prune_scenario.actors, &text_pool, prune_frame);
-            prune_frame = prune_frame.wrapping_add(1);
-            prune_cache.begin_frame_stats();
-            let render = compose::build_screen_cached_with_scratch(
-                black_box(&prune_scenario.actors),
-                prune_scenario.clear_color,
-                &prune_scenario.metrics,
-                &prune_scenario.fonts,
-                prune_scenario.total_elapsed,
-                &mut prune_cache,
-                &mut prune_scratch,
-            );
-            let stats = prune_cache.frame_stats();
-            checksum_gfx_render(black_box(&render))
-                .wrapping_add(text_count as u64)
-                .wrapping_add((u64::from(stats.shared_hits)) << 8)
-                .wrapping_add((u64::from(stats.misses)) << 24)
-                .wrapping_add((u64::from(stats.prunes)) << 32)
-                .wrapping_add((u64::from(stats.built_glyphs)) << 40)
-        },
-    );
-
     print_result(&stable);
     print_result(&churn);
     print_ratio(
@@ -591,8 +603,6 @@ fn bench_text_layout_cache_churn() {
         &churn,
         &stable,
     );
-    print_result(&pruning);
-    print_ratio("pruning vs saturating capped cache", &churn, &pruning);
     println!();
 }
 
@@ -636,6 +646,8 @@ fn bench_shadow_build() {
     run_real_shadow_build_pair("real Actor 256 shadowed sprites", 256);
     run_shadow_build_pair("64 shadowed sprites", 64);
     run_shadow_build_pair("256 shadowed sprites", 256);
+    run_shadow_transient_mesh_pair("128 transient meshes x 96 verts", 128, 96);
+    run_shadow_transient_mesh_pair("512 transient meshes x 24 verts", 512, 24);
     println!();
 }
 
@@ -969,6 +981,8 @@ fn bench_clip_vertex_recycle() {
     print_result(&local);
     print_result(&reused);
     print_ratio("scratch recycle vs local pool", &local, &reused);
+    run_clip_fast_accept_pair("inside transient meshes 128 x 96", 128, 96);
+    run_clip_fast_accept_pair("inside transient meshes 512 x 24", 512, 24);
     println!();
 }
 
@@ -978,6 +992,18 @@ fn bench_transient_tmesh() {
     run_tmesh_pair("duplicate 64 meshes x 24 verts", 64, 24, true);
     run_tmesh_pair("unique 256 meshes x 6 verts", 256, 6, false);
     run_tmesh_pair("duplicate 256 meshes x 6 verts", 256, 6, true);
+    run_draw_prep_tmesh_prepare_pair(
+        "prepare unique transient 256 meshes x 6 verts",
+        256,
+        6,
+        false,
+    );
+    run_draw_prep_tmesh_prepare_pair(
+        "prepare repeated shared invalid 256 meshes x 6 verts",
+        256,
+        6,
+        true,
+    );
     println!();
 }
 
@@ -1142,6 +1168,30 @@ fn run_tmesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize, duplicat
     print_ratio("direct vs dedupe", &dedupe, &direct);
 }
 
+fn run_draw_prep_tmesh_prepare_pair(
+    name: &str,
+    mesh_count: usize,
+    verts_per_mesh: usize,
+    shared_invalid: bool,
+) {
+    let render_list = make_draw_prep_tmesh_render_list(mesh_count, verts_per_mesh, shared_invalid);
+    let mut scratch = gfx::draw_prep::DrawScratch::with_capacity(
+        0,
+        mesh_count * verts_per_mesh,
+        mesh_count,
+        mesh_count,
+    );
+
+    let result = bench(name, DRAW_PREP_TMESH_ITERS, || {
+        let stats = gfx::draw_prep::prepare(black_box(&render_list), &mut scratch, |_, _| false);
+        checksum_draw_prep_scratch(&scratch)
+            .wrapping_add(stats.dynamic_upload_vertices)
+            .wrapping_add(stats.cached_upload_vertices << 32)
+    });
+
+    print_result(&result);
+}
+
 fn run_prep_reserve_pair(name: &str, objects: &[PrepObj], cold: bool) {
     if cold {
         let current = bench(
@@ -1236,15 +1286,10 @@ fn run_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
 
 fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
     let (keys, handles, mut cache) = make_compose_texture_work(texture_count, op_count);
-    let old_frame_ptr = bench(
-        format!("{name}: old frame ptr + String map"),
+    let frame_ptr = bench(
+        format!("{name}: frame ptr cache"),
         COMPOSE_TEXTURE_LOOKUP_ITERS,
         || lookup_compose_textures_frame_ptr(black_box(&keys), &mut cache),
-    );
-    let string_map = bench(
-        format!("{name}: String map only"),
-        COMPOSE_TEXTURE_LOOKUP_ITERS,
-        || lookup_compose_textures_string_map(black_box(&keys), &cache),
     );
     let direct = bench(
         format!("{name}: direct TextureHandle"),
@@ -1252,11 +1297,54 @@ fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: u
         || lookup_compose_textures_direct(black_box(&handles)),
     );
 
-    print_result(&old_frame_ptr);
-    print_result(&string_map);
-    print_ratio("String map vs old frame ptr", &old_frame_ptr, &string_map);
+    print_result(&frame_ptr);
     print_result(&direct);
-    print_ratio("direct handles vs String map", &string_map, &direct);
+    print_ratio("direct handles vs frame ptr", &frame_ptr, &direct);
+}
+
+fn run_sprite_texture_key_pair(
+    name: String,
+    tex: &'static str,
+    tex_string: &String,
+    tex_arc: &Arc<str>,
+    handle: TextureHandle,
+    generation: u64,
+) {
+    let str_expr = bench(
+        format!("{name}: act sprite(&str)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_str(black_box(tex), SPRITE_KEY_ACTORS),
+    );
+    let string_ref = bench(
+        format!("{name}: act sprite(&String)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_string_ref(black_box(tex_string), SPRITE_KEY_ACTORS),
+    );
+    let owned_string = bench(
+        format!("{name}: act sprite(String)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_owned_string(black_box(tex), SPRITE_KEY_ACTORS),
+    );
+    let arc_ref = bench(
+        format!("{name}: act sprite(&Arc<str>)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_arc_ref(black_box(tex_arc), SPRITE_KEY_ACTORS),
+    );
+    let key_handle = bench(
+        format!("{name}: act sprite(TextureKeyHandle)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_handle(black_box(tex_arc), handle, generation, SPRITE_KEY_ACTORS),
+    );
+
+    print_result(&str_expr);
+    print_result(&string_ref);
+    print_result(&owned_string);
+    print_result(&arc_ref);
+    print_result(&key_handle);
+    print_ratio("TextureKeyHandle vs &str", &str_expr, &key_handle);
+    print_ratio("TextureKeyHandle vs &String", &string_ref, &key_handle);
+    print_ratio("TextureKeyHandle vs String", &owned_string, &key_handle);
+    print_ratio("&Arc<str> vs &str", &str_expr, &arc_ref);
 }
 
 fn run_shadow_build_pair(name: &str, count: usize) {
@@ -1289,6 +1377,30 @@ fn run_real_shadow_build_pair(name: &str, count: usize) {
     print_result(&boxed);
     print_result(&inline);
     print_ratio("inline actor shadow vs boxed", &boxed, &inline);
+}
+
+fn run_shadow_transient_mesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize) {
+    let base = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let mut out = Vec::with_capacity(mesh_count);
+    let current = bench(
+        format!("{name}: clone transient Vec"),
+        SHADOW_TMESH_ITERS,
+        || {
+            let mut meshes = base.clone();
+            shadow_tmesh_current(black_box(&mut meshes), &mut out)
+        },
+    );
+    let shared = bench(
+        format!("{name}: convert to shared"),
+        SHADOW_TMESH_ITERS,
+        || {
+            let mut meshes = base.clone();
+            shadow_tmesh_shared(black_box(&mut meshes), &mut out)
+        },
+    );
+    print_result(&current);
+    print_result(&shared);
+    print_ratio("shared shadow vs clone", &current, &shared);
 }
 
 #[derive(Clone, Copy)]
@@ -1609,10 +1721,6 @@ impl TextureLookupSim {
         self.frame_handles.insert(key_ptr, handle);
         handle
     }
-
-    fn handle_string_map(&self, key: &str) -> TextureHandle {
-        *self.handles.get(key).unwrap_or(&0)
-    }
 }
 
 fn make_compose_texture_work(
@@ -1643,22 +1751,130 @@ fn lookup_compose_textures_frame_ptr(keys: &[Arc<str>], cache: &mut TextureLooku
     out
 }
 
-fn lookup_compose_textures_string_map(keys: &[Arc<str>], cache: &TextureLookupSim) -> u64 {
-    let mut out = 0u64;
-    for key in keys {
-        out = out
-            .wrapping_mul(131)
-            .wrapping_add(cache.handle_string_map(key.as_ref()));
-    }
-    out
-}
-
 fn lookup_compose_textures_direct(handles: &[TextureHandle]) -> u64 {
     let mut out = 0u64;
     for &handle in handles {
         out = out.wrapping_mul(131).wrapping_add(handle);
     }
     out
+}
+
+fn build_sprite_key_str(tex: &str, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_string_ref(tex: &String, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_owned_string(tex: &str, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex.to_string()):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_arc_ref(tex: &Arc<str>, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_handle(
+    tex: &Arc<str>,
+    handle: TextureHandle,
+    generation: u64,
+    count: usize,
+) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(TextureKeyHandle {
+            key: Arc::clone(tex),
+            handle,
+            generation,
+        }):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn checksum_sprite_key_actor(actor: &Actor) -> u64 {
+    match actor {
+        Actor::Sprite {
+            source,
+            offset,
+            size,
+            z,
+            ..
+        } => {
+            let size_bits = match size[0] {
+                SizeSpec::Px(value) => value.to_bits() as u64,
+                SizeSpec::Fill => 1,
+            };
+            (offset[0].to_bits() as u64)
+                .wrapping_add(size_bits)
+                .wrapping_add(*z as u16 as u64)
+                .wrapping_add(checksum_sprite_source(source))
+        }
+        _ => 0,
+    }
+}
+
+fn checksum_sprite_source(source: &SpriteSource) -> u64 {
+    match source {
+        SpriteSource::TextureStatic(key) => key.len() as u64,
+        SpriteSource::TextureStaticHandle {
+            key,
+            handle,
+            generation,
+        } => (key.len() as u64)
+            .wrapping_add(*handle)
+            .wrapping_add(generation.wrapping_mul(17)),
+        SpriteSource::TextureHandle {
+            key,
+            handle,
+            generation,
+        } => (key.len() as u64)
+            .wrapping_add(*handle)
+            .wrapping_add(generation.wrapping_mul(17)),
+        SpriteSource::Texture(key) => key.len() as u64,
+        SpriteSource::Solid => 1,
+    }
 }
 
 fn make_marker_texts(count: usize, marked: bool) -> Vec<String> {
@@ -2197,6 +2413,105 @@ fn clip_meshes_into(
     checksum
 }
 
+fn run_clip_fast_accept_pair(name: &str, mesh_count: usize, verts_per_mesh: usize) {
+    let mut current = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let mut keep = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let current = bench(
+        format!("{name}: current clone"),
+        CLIP_FAST_ACCEPT_ITERS,
+        || clip_inside_current(black_box(&mut current)),
+    );
+    let keep = bench(
+        format!("{name}: keep in place"),
+        CLIP_FAST_ACCEPT_ITERS,
+        || clip_inside_keep(black_box(&mut keep)),
+    );
+    print_result(&current);
+    print_result(&keep);
+    print_ratio("keep vs clone", &current, &keep);
+}
+
+fn make_clip_tmesh_objects(mesh_count: usize, verts_per_mesh: usize) -> Vec<ClipTMeshObj> {
+    make_clip_meshes(mesh_count, verts_per_mesh)
+        .into_iter()
+        .map(|vertices| ClipTMeshObj {
+            tint: [1.0; 4],
+            vertices: ClipTMeshVertices::Transient(vertices),
+        })
+        .collect()
+}
+
+fn clip_inside_current(meshes: &mut [ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        let clipped = mesh.clone();
+        *mesh = clipped;
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64);
+    }
+    checksum
+}
+
+fn clip_inside_keep(meshes: &mut [ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64);
+    }
+    checksum
+}
+
+fn shadow_tmesh_current(meshes: &mut [ClipTMeshObj], out: &mut Vec<ClipTMeshObj>) -> u64 {
+    out.clear();
+    for mesh in meshes {
+        let mut shadow = mesh.clone();
+        shadow.tint = [0.0, 0.0, 0.0, mesh.tint[3] * 0.5];
+        out.push(shadow);
+    }
+    checksum_clip_tmeshes(out)
+}
+
+fn shadow_tmesh_shared(meshes: &mut [ClipTMeshObj], out: &mut Vec<ClipTMeshObj>) -> u64 {
+    out.clear();
+    for mesh in meshes {
+        let shadow_vertices = match &mut mesh.vertices {
+            ClipTMeshVertices::Shared(vertices) => ClipTMeshVertices::Shared(Arc::clone(vertices)),
+            ClipTMeshVertices::Transient(vertices) => {
+                let shared =
+                    Arc::<[TexturedMeshVertex]>::from(std::mem::take(vertices).into_boxed_slice());
+                let shadow_vertices = ClipTMeshVertices::Shared(Arc::clone(&shared));
+                mesh.vertices = ClipTMeshVertices::Shared(shared);
+                shadow_vertices
+            }
+        };
+        out.push(ClipTMeshObj {
+            tint: [0.0, 0.0, 0.0, mesh.tint[3] * 0.5],
+            vertices: shadow_vertices,
+        });
+    }
+    checksum_clip_tmeshes(out)
+}
+
+fn clip_tmesh_len(mesh: &ClipTMeshObj) -> usize {
+    match &mesh.vertices {
+        ClipTMeshVertices::Shared(vertices) => vertices.len(),
+        ClipTMeshVertices::Transient(vertices) => vertices.len(),
+    }
+}
+
+fn checksum_clip_tmeshes(meshes: &[ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64)
+            .wrapping_add(mesh.tint[3].to_bits() as u64);
+    }
+    checksum
+}
+
 fn cached_input_map(keymap: &RwLock<u64>, generation: &AtomicU64) -> u64 {
     let current_generation = generation.load(Ordering::Acquire);
     INPUT_MAP_CACHE_SIM.with(|cache| {
@@ -2228,24 +2543,25 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
             .wrapping_add((obj.order as u64) << 16)
             .wrapping_add((obj.camera as u64) << 48);
         match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite {
-                center, size, tint, ..
-            } => {
+            deadsync::engine::gfx::ObjectType::Sprite(index) => {
+                let sprite = render.sprite_instances[*index as usize];
                 out = out
-                    .wrapping_add(center[0].to_bits() as u64)
-                    .wrapping_add(center[1].to_bits() as u64)
-                    .wrapping_add(size[0].to_bits() as u64)
-                    .wrapping_add((tint[3].to_bits() as u64) << 1);
+                    .wrapping_add(sprite.center[0].to_bits() as u64)
+                    .wrapping_add(sprite.center[1].to_bits() as u64)
+                    .wrapping_add(sprite.size[0].to_bits() as u64)
+                    .wrapping_add((sprite.tint[3].to_bits() as u64) << 1);
             }
             deadsync::engine::gfx::ObjectType::Mesh { tint, vertices, .. } => {
                 out = out
                     .wrapping_add(vertices.len() as u64)
                     .wrapping_add(tint[3].to_bits() as u64);
             }
-            deadsync::engine::gfx::ObjectType::TexturedMesh { tint, vertices, .. } => {
+            deadsync::engine::gfx::ObjectType::TexturedMesh {
+                instance, vertices, ..
+            } => {
                 out = out
                     .wrapping_add(vertices.len() as u64)
-                    .wrapping_add(tint[3].to_bits() as u64);
+                    .wrapping_add(instance.tint[3].to_bits() as u64);
             }
         }
     }
@@ -2608,6 +2924,95 @@ fn make_tmesh_storage(
         storage.push(vertices);
     }
     storage
+}
+
+fn make_draw_prep_tmesh_render_list(
+    mesh_count: usize,
+    verts_per_mesh: usize,
+    shared_invalid: bool,
+) -> gfx::RenderList {
+    let shared = shared_invalid.then(|| {
+        Arc::<[GfxTexturedMeshVertex]>::from(
+            make_gfx_tmesh_vertices(0, verts_per_mesh).into_boxed_slice(),
+        )
+    });
+    let mut objects = Vec::with_capacity(mesh_count);
+    for mesh in 0..mesh_count {
+        let vertices = match &shared {
+            Some(vertices) => GfxTexturedMeshVertices::Shared(Arc::clone(vertices)),
+            None => {
+                GfxTexturedMeshVertices::Transient(make_gfx_tmesh_vertices(mesh, verts_per_mesh))
+            }
+        };
+        objects.push(gfx::RenderObject {
+            object_type: gfx::ObjectType::TexturedMesh {
+                instance: GfxTexturedMeshInstanceRaw::new(
+                    glam::Mat4::IDENTITY,
+                    [1.0, 1.0, 1.0, 1.0],
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices,
+                geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                depth_test: false,
+            },
+            texture_handle: 1,
+            blend: GfxBlendMode::Alpha,
+            z: 0,
+            order: mesh as u32,
+            camera: 0,
+        });
+    }
+    gfx::RenderList {
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        cameras: vec![glam::Mat4::IDENTITY],
+        sprite_instances: Vec::new(),
+        objects,
+    }
+}
+
+fn make_gfx_tmesh_vertices(mesh: usize, verts_per_mesh: usize) -> Vec<GfxTexturedMeshVertex> {
+    let mut vertices = Vec::with_capacity(verts_per_mesh);
+    for i in 0..verts_per_mesh {
+        vertices.push(GfxTexturedMeshVertex {
+            pos: [i as f32, mesh as f32, 0.0],
+            uv: [i as f32 * 0.01, mesh as f32 * 0.01],
+            color: [1.0, 0.5, 0.25, 1.0],
+            tex_matrix_scale: [1.0, 1.0],
+        });
+    }
+    vertices
+}
+
+fn checksum_draw_prep_scratch(scratch: &gfx::draw_prep::DrawScratch) -> u64 {
+    let mut out = scratch
+        .tmesh_vertices
+        .len()
+        .wrapping_add(scratch.tmesh_instances.len() << 8)
+        .wrapping_add(scratch.ops.len() << 16) as u64;
+    for op in scratch.ops.iter() {
+        if let gfx::draw_prep::DrawOp::TexturedMesh(run) = op {
+            out = out
+                .wrapping_mul(131)
+                .wrapping_add(run.source.vertex_start() as u64)
+                .wrapping_add(run.source.vertex_count() as u64)
+                .wrapping_add(run.instance_count as u64)
+                .wrapping_add(run.texture_handle);
+        }
+    }
+    out.wrapping_add(checksum_gfx_tmesh_tail(&scratch.tmesh_vertices))
+}
+
+fn checksum_gfx_tmesh_tail(vertices: &[GfxTexturedMeshVertex]) -> u64 {
+    let Some(v) = vertices.last() else {
+        return 0;
+    };
+    v.pos[0].to_bits() as u64
+        ^ v.pos[1].to_bits() as u64
+        ^ v.uv[0].to_bits() as u64
+        ^ v.tex_matrix_scale[0].to_bits() as u64
 }
 
 fn copy_tmesh_dedupe(

@@ -114,6 +114,15 @@ pub(super) fn row_layout_params() -> (f32, f32) {
 }
 
 #[inline(always)]
+pub(super) fn player_option_column_x(player_idx: usize) -> f32 {
+    if player_idx == P2 {
+        screen_center_x() + widescale(140.0, 154.0)
+    } else {
+        screen_center_x() + widescale(-77.0, -100.0)
+    }
+}
+
+#[inline(always)]
 pub(super) fn init_row_tweens(
     row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
@@ -154,50 +163,19 @@ pub(super) fn init_row_tweens(
     let w = compute_row_window(visible_rows, selected_visible, active);
     let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-    let measure_counter_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::MeasureCounter, visibility);
-    let judgment_font_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::JudgmentFont, visibility);
-    let judgment_tilt_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::JudgmentTilt, visibility);
-    let combo_font_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::ComboFont, visibility);
-    let error_bar_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::ErrorBar, visibility);
-    let hide_anchor_visible_idx = parent_anchor_visible_index(row_map, RowId::Hide, visibility);
-    let fa_plus_anchor_visible_idx =
-        parent_anchor_visible_index(row_map, RowId::FAPlusOptions, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
     for i in 0..total_rows {
-        let visible = is_row_visible(row_map, i, visibility);
-        let (f_pos, hidden) = if visible {
-            let ii = visible_idx;
-            visible_idx += 1;
-            f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
-        } else {
-            let anchor = row_map
-                .display_order()
-                .get(i)
-                .and_then(|&id| row_map.get(id))
-                .and_then(|row| match conditional_row_parent(row.id) {
-                    Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
-                    Some(RowId::JudgmentFont) => judgment_font_anchor_visible_idx,
-                    Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
-                    Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
-                    Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
-                    Some(RowId::Hide) => hide_anchor_visible_idx,
-                    Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
-                    _ => None,
-                });
-            if let Some(anchor_idx) = anchor {
-                let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
-                (anchor_f_pos, true)
-            } else {
-                (-0.5, true)
-            }
-        };
+        let (f_pos, hidden) = row_f_pos_for_index(
+            row_map,
+            i,
+            visibility,
+            &mut visible_idx,
+            w,
+            mid_pos,
+            bottom_pos,
+        );
 
         let y = (row_step * f_pos) + first_row_center_y;
         let a = if hidden { 0.0 } else { 1.0 };
@@ -241,6 +219,29 @@ pub(super) fn f_pos_for_visible_idx(
     (shown_pos as f32, false)
 }
 
+pub(super) fn row_f_pos_for_index(
+    row_map: &RowMap,
+    row_idx: usize,
+    visibility: RowVisibility,
+    visible_idx: &mut i32,
+    window: RowWindow,
+    mid_pos: f32,
+    bottom_pos: f32,
+) -> (f32, bool) {
+    if is_row_visible(row_map, row_idx, visibility) {
+        let idx = *visible_idx;
+        *visible_idx += 1;
+        return f_pos_for_visible_idx(idx, window, mid_pos, bottom_pos);
+    }
+
+    if let Some(anchor_idx) = hidden_row_anchor_visible_index(row_map, row_idx, visibility) {
+        let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, window, mid_pos, bottom_pos);
+        return (anchor_f_pos, true);
+    }
+
+    (-0.5, true)
+}
+
 pub(super) fn cursor_dest_for_player(
     state: &State,
     asset_manager: &AssetManager,
@@ -250,9 +251,10 @@ pub(super) fn cursor_dest_for_player(
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
+    let active = session_active_players();
     let visibility = row_visibility(
         &state.pane().row_map,
-        session_active_players(),
+        active,
         state.option_masks,
         state.allow_per_player_global_offsets,
     );
@@ -286,8 +288,6 @@ pub(super) fn cursor_dest_for_player(
     let max_pad_x = widescale(22.0, 28.0);
     let width_ref = widescale(180.0, 220.0);
 
-    let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
-
     // Shared geometry for Music Rate centering (must match get_actors()).
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
@@ -316,7 +316,12 @@ pub(super) fn cursor_dest_for_player(
         }
         let ring_w = draw_w + pad_x * 2.0;
         let ring_h = draw_h + pad_y * 2.0;
-        return Some((speed_mod_x, y, ring_w, ring_h));
+        let center_x = if active[P2] && !active[P1] {
+            player_option_column_x(P2)
+        } else {
+            player_option_column_x(P1)
+        };
+        return Some((center_x, y, ring_w, ring_h));
     }
 
     if row_shows_all_choices_inline(row.id) {
@@ -390,11 +395,9 @@ pub(super) fn cursor_dest_for_player(
     }
 
     // Single value rows (ShowOneInRow).
-    let mut center_x = speed_mod_x;
+    let mut center_x = player_option_column_x(player_idx);
     if row.id == RowId::MusicRate {
         center_x = music_rate_center_x;
-    } else if player_idx == P2 {
-        center_x = screen_center_x().mul_add(2.0, -center_x);
     }
 
     let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {

@@ -23,6 +23,7 @@ pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
+pub mod test_lights;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
@@ -53,6 +54,8 @@ pub struct SongOffsetSyncChange {
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
     None,
+    /// Consume the current input edge without scheduling app-level work.
+    ConsumeInput,
     Navigate(Screen),
     /// Navigate immediately without running the current screen's out-transition.
     /// This is used for cases where the current screen already rendered its own
@@ -90,6 +93,9 @@ pub enum ScreenAction {
         high_dpi: Option<bool>,
     },
     UpdateShowOverlay(u8),
+    TestLightsSetAuto,
+    TestLightsStepCabinet(i8),
+    TestLightsStepButton(i8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +122,7 @@ pub enum Screen {
     Evaluation,
     EvaluationSummary,
     PlayerOptions,
+    TestLights,
 }
 
 impl Screen {
@@ -144,6 +151,7 @@ impl Screen {
             Self::Evaluation => "ScreenEvaluationStage",
             Self::EvaluationSummary => "ScreenEvaluationSummary",
             Self::PlayerOptions => "ScreenPlayerOptions",
+            Self::TestLights => "ScreenTestLights",
         }
     }
 }
@@ -179,6 +187,10 @@ mod tests {
         assert_eq!(
             Screen::PlayerOptions.current_screen_file_name(),
             "ScreenPlayerOptions"
+        );
+        assert_eq!(
+            Screen::TestLights.current_screen_file_name(),
+            "ScreenTestLights"
         );
     }
 }

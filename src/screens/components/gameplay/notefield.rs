@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -9,9 +9,9 @@ use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,
-    NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    TRANSITION_IN_DURATION, VisualEffects,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
+    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
     active_chart_attack_effects_for_player, active_hold_is_engaged,
@@ -25,8 +25,9 @@ use crate::game::gameplay::{
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelEffectMode, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
+use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
     profile, scores,
@@ -64,6 +65,7 @@ const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
     HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
 const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
     HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
+const HELD_MISS_OFFSET_FROM_RECEPTOR: f32 = 60.0;
 const ERROR_BAR_JUDGMENT_HEIGHT: f32 = 40.0; // SL: judgmentHeight in SL-Layout.lua
 const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.0; // SL: top/bottom +/-25px
 
@@ -553,6 +555,7 @@ struct GameplayModsTextKey {
     dark: i16,
     blind: i16,
     cover: i16,
+    disabled_timing_windows: u8,
 }
 
 #[inline(always)]
@@ -754,6 +757,38 @@ fn turn_option_name(turn: profile::TurnOption) -> Option<&'static str> {
 }
 
 #[inline(always)]
+fn disabled_timing_window_bits(setting: profile::TimingWindowsOption) -> u8 {
+    setting
+        .disabled_windows()
+        .into_iter()
+        .enumerate()
+        .fold(0, |bits, (i, disabled)| {
+            bits | if disabled { 1 << i } else { 0 }
+        })
+}
+
+fn disabled_timing_windows_name(bits: u8) -> Option<String> {
+    if bits == 0 {
+        return None;
+    }
+    let mut text = String::from("No ");
+    let mut first = true;
+    for i in 0..5 {
+        if bits & (1 << i) == 0 {
+            continue;
+        }
+        if first {
+            first = false;
+        } else {
+            text.push('/');
+        }
+        text.push('W');
+        text.push(char::from(b'1' + i as u8));
+    }
+    Some(text)
+}
+
+#[inline(always)]
 const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
     match turn {
         profile::TurnOption::None => 0,
@@ -952,6 +987,7 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         dark: mod_percent_key(dark),
         blind: mod_percent_key(visibility.blind),
         cover: mod_percent_key(cover),
+        disabled_timing_windows: disabled_timing_window_bits(profile.timing_windows),
     }
 }
 
@@ -973,11 +1009,10 @@ pub struct ViewOverride {
 }
 
 pub struct BuiltNotefield {
-    pub actors: Vec<Actor>,
     pub layout_center_x: f32,
-    pub field_actors: Vec<Actor>,
-    pub judgment_actors: Vec<Actor>,
-    pub combo_actors: Vec<Actor>,
+    pub field_actors: Vec<Arc<[Actor]>>,
+    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
+    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -990,25 +1025,30 @@ pub struct ProxyCaptureRequests {
 impl BuiltNotefield {
     fn empty(layout_center_x: f32) -> Self {
         Self {
-            actors: Vec::new(),
             layout_center_x,
             field_actors: Vec::new(),
-            judgment_actors: Vec::new(),
-            combo_actors: Vec::new(),
+            judgment_actors: None,
+            combo_actors: None,
         }
     }
 }
 
-fn push_hud_capture(
-    hud_actors: &mut Vec<Actor>,
-    capture_actors: &mut Vec<Actor>,
-    capture_enabled: bool,
-    actor: Actor,
-) {
-    if capture_enabled {
-        capture_actors.push(actor.clone());
+fn share_hud_range(hud_actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<[Actor]>>> {
+    if start >= hud_actors.len() {
+        return None;
     }
-    hud_actors.push(actor);
+    let children = Arc::<[Actor]>::from(hud_actors.drain(start..).collect::<Vec<_>>());
+    hud_actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Arc::clone(&children),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+    Some(vec![children])
 }
 #[inline(always)]
 fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
@@ -1068,6 +1108,23 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
+}
+
+#[inline(always)]
+fn hold_explosion_slot_for_col(
+    explosion_ns: Option<&Noteskin>,
+    col: usize,
+    is_roll: bool,
+) -> Option<&SpriteSlot> {
+    let ns = explosion_ns?;
+    let visuals = ns.hold_visuals_for_col(col, is_roll);
+    visuals.explosion.as_ref().or_else(|| {
+        if is_roll {
+            ns.roll.explosion.as_ref()
+        } else {
+            ns.hold.explosion.as_ref()
+        }
+    })
 }
 
 #[inline(always)]
@@ -1666,12 +1723,11 @@ const fn hold_glow_color(alpha: f32) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn push_hold_strip_quad(
-    out: &mut Vec<TexturedMeshVertex>,
+fn hold_strip_quad(
     top: [TexturedMeshVertex; 2],
     bottom: [TexturedMeshVertex; 2],
-) {
-    out.extend_from_slice(&[top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]);
+) -> [TexturedMeshVertex; 6] {
+    [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
 }
 
 #[inline(always)]
@@ -1693,7 +1749,6 @@ fn hold_strip_actor(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -2013,6 +2068,23 @@ fn hallway_judgment_zoom(perspective_tilt: f32, perspective_skew: f32) -> f32 {
 }
 
 #[inline(always)]
+fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
+    let mini_scale = (1.0 - mini * 0.5).max(0.0);
+    if elapsed < 0.1 {
+        let t = (elapsed / 0.1).clamp(0.0, 1.0);
+        let ease_t = 1.0 - (1.0 - t).powi(2);
+        let zoom_x = 0.8 + (0.75 - 0.8) * ease_t;
+        return (zoom_x * mini_scale, 0.75 * mini_scale);
+    }
+    if elapsed < 0.3 {
+        return (0.75 * mini_scale, 0.75 * mini_scale);
+    }
+    let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
+    let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
+    (zoom, zoom)
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -2112,6 +2184,9 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         parts.push(state.player_profiles[player_idx].noteskin.to_string());
         if key.visual_delay_ms != 0 {
             parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
+        }
+        if let Some(disabled_windows) = disabled_timing_windows_name(key.disabled_timing_windows) {
+            parts.push(disabled_windows);
         }
 
         parts.join(", ")
@@ -2215,19 +2290,57 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
 }
 
 #[inline(always)]
-fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&str> {
-    assets::resolve_texture_choice(
+fn tap_judgment_is_blue_fantastic(profile: &profile::Profile, judgment: &Judgment) -> bool {
+    if judgment.grade != JudgeGrade::Fantastic {
+        return false;
+    }
+    if !profile.show_fa_plus_window {
+        return true;
+    }
+    if profile.fa_plus_10ms_blue_window
+        && !profile.split_15_10ms
+        && !profile.custom_fantastic_window
+    {
+        return judgment.time_error_ms.abs() <= crate::game::timing::FA_PLUS_W010_MS;
+    }
+    judgment.window == Some(TimingWindow::W0)
+}
+
+#[inline(always)]
+fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
         profile.judgment_graphic.texture_key(),
         assets::judgment_texture_choices(),
     )
 }
 
 #[inline(always)]
-fn resolved_hold_judgment_texture(profile: &profile::Profile) -> Option<&str> {
-    assets::resolve_texture_choice(
+fn resolved_hold_judgment_texture(
+    profile: &profile::Profile,
+) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
         profile.hold_judgment_graphic.texture_key(),
         assets::hold_judgment_texture_choices(),
     )
+}
+
+#[inline(always)]
+fn resolved_held_miss_texture(
+    profile: &profile::Profile,
+) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
+        profile.held_miss_graphic.texture_key(),
+        assets::held_miss_texture_choices(),
+    )
+}
+
+#[inline(always)]
+fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
+    let Some(meta) = assets::texture_dims(texture_key) else {
+        return [0.0, 76.0];
+    };
+    let (w, h) = assets::texture_source_frame_dims_from_real(texture_key, meta.w, meta.h);
+    [w as f32, h as f32]
 }
 
 #[inline(always)]
@@ -2254,9 +2367,10 @@ fn tap_judgment_rows(
                 // white Fantastic art at half alpha for the 10ms-15ms slice.
                 (0, Some(1))
             } else if profile.show_fa_plus_window {
-                match judgment.window {
-                    Some(TimingWindow::W0) => (0, None),
-                    _ => (1, None),
+                if tap_judgment_is_blue_fantastic(profile, judgment) {
+                    (0, None)
+                } else {
+                    (1, None)
                 }
             } else {
                 (0, None)
@@ -3365,6 +3479,15 @@ fn hold_head_render_flags(
 }
 
 #[inline(always)]
+fn hold_explosion_active(
+    active_state: Option<&ActiveHold>,
+    current_beat: f32,
+    note_beat: f32,
+) -> bool {
+    current_beat >= note_beat && active_state.is_some_and(active_hold_is_engaged)
+}
+
+#[inline(always)]
 fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_beat: f32) -> f32 {
     // ITG updates and renders from one song position. deadsync keeps separate
     // gameplay and display clocks, so a dropped hold head must never render
@@ -3394,12 +3517,18 @@ fn lane_window_bounds_by_note_row(
     if max_row < 0 {
         return (0, 0);
     }
-    let min_row = min_row.max(0) as usize;
-    let max_row = max_row as usize;
+    let min_row = min_row.max(0);
     (
-        note_indices.partition_point(|&note_index| notes[note_index].row_index < min_row),
-        note_indices.partition_point(|&note_index| notes[note_index].row_index <= max_row),
+        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < min_row),
+        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) <= max_row),
     )
+}
+
+#[inline(always)]
+fn note_itg_row(note: &Note) -> i32 {
+    // ITG's TrackMap rows are BeatToNoteRow(beat). Dead Sync keeps a separate
+    // dense row_index for gameplay row bookkeeping.
+    beat_to_note_row(note.beat)
 }
 
 #[inline(always)]
@@ -3410,14 +3539,14 @@ fn lane_hold_window_bounds_by_note_row(
     max_row: i32,
 ) -> (usize, usize) {
     let (mut start, end) = lane_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
-    let min_row = min_row.max(0) as usize;
+    let min_row = min_row.max(0);
     while start > 0 {
         let prev_note_index = hold_indices[start - 1];
         let prev_end_row = notes[prev_note_index]
             .hold
             .as_ref()
-            .map_or(notes[prev_note_index].row_index, |hold| {
-                beat_to_note_row(hold.end_beat).max(0) as usize
+            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
             });
         if prev_end_row < min_row {
             break;
@@ -3550,14 +3679,33 @@ fn hold_overlaps_visible_window(
         let hold_end_row = notes[note_index]
             .hold
             .as_ref()
-            .map_or(notes[note_index].row_index, |hold| {
-                beat_to_note_row(hold.end_beat).max(0) as usize
+            .map_or(note_itg_row(&notes[note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
             });
         return max_row >= 0
-            && hold_end_row >= min_row.max(0) as usize
-            && notes[note_index].row_index <= max_row as usize;
+            && hold_end_row >= min_row.max(0)
+            && note_itg_row(&notes[note_index]) <= max_row;
     }
     true
+}
+
+#[inline(always)]
+fn song_lua_hides_note_window(
+    windows: &[SongLuaNoteHideWindow],
+    local_col: usize,
+    beat: f32,
+) -> bool {
+    const EPS: f32 = 1.0e-4;
+    windows.iter().any(|window| {
+        window.column == local_col
+            && beat + EPS >= window.start_beat
+            && beat <= window.end_beat + EPS
+    })
+}
+
+#[inline(always)]
+fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
+    song_lua_hides_note_window(&state.song_lua_note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -3575,8 +3723,13 @@ pub fn build_bundles(
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
     view: ViewOverride,
+    mut actors: &mut Vec<Actor>,
+    mut hud_actors: &mut Vec<Actor>,
 ) -> BuiltNotefield {
+    actors.clear();
+    hud_actors.clear();
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
+    let held_miss_texture = resolved_held_miss_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
     // In P2-only single-player, we still have a single player runtime (index 0),
@@ -3632,16 +3785,19 @@ pub fn build_bundles(
         + if !error_bar_mask.is_empty() { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
+        + if held_miss_texture.is_some() {
+            num_cols
+        } else {
+            0
+        }
         + if profile.hide_combo { 0 } else { 2 }
         + if error_bar_mask.contains(profile::ErrorBarMask::TEXT) {
             1
         } else {
             0
         };
-    let mut actors = Vec::with_capacity(actor_cap);
-    let mut hud_actors: Vec<Actor> = Vec::with_capacity(hud_cap);
-    let mut judgment_actors = Vec::with_capacity(4);
-    let mut combo_actors = Vec::with_capacity(8);
+    actors.reserve(actor_cap);
+    hud_actors.reserve(hud_cap);
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -3830,6 +3986,9 @@ pub fn build_bundles(
         let current_time_ns = state.current_music_time_visible_ns[player_idx];
         let current_time = song_time_ns_to_seconds(current_time_ns);
         let current_beat = state.current_beat_visible[player_idx];
+        // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
+        // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
+        let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns);
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -3905,7 +4064,7 @@ pub fn build_bundles(
         // no accel mods are active.
         let visible_row_range = {
             let first_beat_to_draw = find_first_displayed_beat(
-                current_beat,
+                current_search_beat,
                 draw_distance_after_targets,
                 &state.note_count_stats[player_idx],
                 |beat| {
@@ -3919,7 +4078,7 @@ pub fn build_bundles(
                 },
             );
             let last_beat_to_draw = find_last_displayed_beat(
-                current_beat,
+                current_search_beat,
                 draw_distance_before_targets,
                 display_speed_percent,
                 accel.boomerang > f32::EPSILON,
@@ -4387,6 +4546,8 @@ pub fn build_bundles(
         // Receptors + glow
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
+            let receptor_hidden_by_song_lua =
+                song_lua_hides_note(state, player_idx, i, current_beat);
             let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
             let receptor_center = receptor_row_center(
                 playfield_center_x,
@@ -4399,14 +4560,18 @@ pub fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
-            if !profile.hide_targets && receptor_alpha > f32::EPSILON {
-                let bop_timer = state.receptor_bop_timers[col];
-                let bop_zoom = if bop_timer > 0.0 {
-                    let t = (0.11 - bop_timer) / 0.11;
-                    0.75 + (1.0 - 0.75) * t
-                } else {
-                    1.0
-                };
+            let bop_timer = state.receptor_bop_timers[col];
+            let bop_zoom = if bop_timer > 0.0 {
+                receptor_ns
+                    .receptor_step_behavior_for_col(i)
+                    .sample_zoom(bop_timer)
+            } else {
+                1.0
+            };
+            if !receptor_hidden_by_song_lua
+                && !profile.hide_targets
+                && receptor_alpha > f32::EPSILON
+            {
                 let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
                 let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_reverse = receptor_ns
@@ -4474,19 +4639,20 @@ pub fn build_bundles(
                     ));
                 }
             }
-            let hold_slot = if let Some(active) = state.active_holds[col]
-                .as_ref()
-                .filter(|active| active_hold_is_engaged(active))
-            {
-                let note_type = &state.notes[active.note_index].note_type;
-                let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
-                if let Some(slot) = visuals.explosion.as_ref() {
-                    Some(slot)
-                } else {
-                    ns.hold.explosion.as_ref().map(|slot| slot)
-                }
-            } else {
+            let hold_slot = if receptor_hidden_by_song_lua {
                 None
+            } else {
+                state.active_holds[col].as_ref().and_then(|active| {
+                    let note = state.notes.get(active.note_index)?;
+                    if !hold_explosion_active(Some(active), current_beat, note.beat) {
+                        return None;
+                    }
+                    hold_explosion_slot_for_col(
+                        tap_explosion_ns,
+                        i,
+                        matches!(note.note_type, NoteType::Roll),
+                    )
+                })
             };
             if let Some(hold_slot) = hold_slot {
                 let draw = song_lua_note_model_draw(
@@ -4595,7 +4761,8 @@ pub fn build_bundles(
                     }
                 }
             }
-            if !profile.hide_targets
+            if !receptor_hidden_by_song_lua
+                && !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
                 && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
                 && let Some(glow_slot) = receptor_ns
@@ -4646,8 +4813,8 @@ pub fn build_bundles(
                                 align(0.5, glow_reverse.vert_align()):
                                 xy(center[0], center[1]):
                                 setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, 1.0)):
-                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
+                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
                                 rotationy(note_rotation_y):
                                 rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -4660,8 +4827,8 @@ pub fn build_bundles(
                                 align(0.5, glow_reverse.vert_align()):
                                 xy(center[0], center[1]):
                                 setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, 1.0)):
-                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
+                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
                                 rotationy(note_rotation_y):
                                 rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -4680,9 +4847,16 @@ pub fn build_bundles(
             .iter()
             .enumerate()
         {
+            if song_lua_hides_note(state, player_idx, i, current_beat) {
+                continue;
+            }
             if let Some(active) = active_opt.as_ref()
                 && let Some(tap_explosion_ns) = tap_explosion_ns
-                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col(i, active.window)
+                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col_with_bright(
+                    i,
+                    active.window,
+                    active.bright,
+                )
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(
@@ -4696,86 +4870,89 @@ pub fn build_bundles(
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
                 );
-                let anim_time = active.elapsed;
-                let slot = &explosion.slot;
-                let beat_for_anim = if slot.source.is_beat_based() {
-                    (state.current_beat_display - active.start_beat).max(0.0)
-                } else {
-                    state.current_beat_display
-                };
-                let frame = slot.frame_index(anim_time, beat_for_anim);
-                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-                let size = scale_explosion(logical_slot_size(slot));
-                let explosion_visual = explosion.animation.state_at(active.elapsed);
-                if !explosion_visual.visible {
-                    continue;
-                }
                 let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
-                let glow = explosion_visual.glow;
-                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                if explosion.animation.blend_add {
-                    actors.push(act!(sprite(slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(receptor_center[0], receptor_center[1]):
-                        setsize(size[0], size[1]):
-                        zoom(explosion_visual.zoom):
-                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            explosion_visual.diffuse[0],
-                            explosion_visual.diffuse[1],
-                            explosion_visual.diffuse[2],
-                            explosion_visual.diffuse[3]
-                        ):
-                        rotationy(flat_tap_face_rotation_y):
-                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                        blend(add):
-                        z(Z_TAP_EXPLOSION)
-                    ));
-                    if glow_strength > f32::EPSILON {
+                for layer in explosion.layers.iter() {
+                    let anim_time = active.elapsed;
+                    let slot = &layer.slot;
+                    let beat_for_anim = if slot.source.is_beat_based() {
+                        (state.current_beat_display - active.start_beat).max(0.0)
+                    } else {
+                        state.current_beat_display
+                    };
+                    let frame = slot.frame_index(anim_time, beat_for_anim);
+                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+                    let size = scale_explosion(logical_slot_size(slot));
+                    let explosion_visual = layer.animation.state_at(active.elapsed);
+                    if !explosion_visual.visible {
+                        continue;
+                    }
+                    let glow = explosion_visual.glow;
+                    let glow_strength =
+                        glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                    if layer.animation.blend_add {
                         actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            diffuse(
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3]
+                            ):
                             rotationy(flat_tap_face_rotation_y):
                             rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(add):
                             z(Z_TAP_EXPLOSION)
                         ));
-                    }
-                } else {
-                    actors.push(act!(sprite(slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(receptor_center[0], receptor_center[1]):
-                        setsize(size[0], size[1]):
-                        zoom(explosion_visual.zoom):
-                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            explosion_visual.diffuse[0],
-                            explosion_visual.diffuse[1],
-                            explosion_visual.diffuse[2],
-                            explosion_visual.diffuse[3]
-                        ):
-                        rotationy(flat_tap_face_rotation_y):
-                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                        blend(normal):
-                        z(Z_TAP_EXPLOSION)
-                    ));
-                    if glow_strength > f32::EPSILON {
+                        if glow_strength > f32::EPSILON {
+                            actors.push(act!(sprite(slot.texture_key_handle()):
+                                align(0.5, 0.5):
+                                xy(receptor_center[0], receptor_center[1]):
+                                setsize(size[0], size[1]):
+                                zoom(explosion_visual.zoom):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(glow[0], glow[1], glow[2], glow[3]):
+                                rotationy(flat_tap_face_rotation_y):
+                                rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                                blend(add):
+                                z(Z_TAP_EXPLOSION)
+                            ));
+                        }
+                    } else {
                         actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            diffuse(
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3]
+                            ):
                             rotationy(flat_tap_face_rotation_y):
                             rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(normal):
                             z(Z_TAP_EXPLOSION)
                         ));
+                        if glow_strength > f32::EPSILON {
+                            actors.push(act!(sprite(slot.texture_key_handle()):
+                                align(0.5, 0.5):
+                                xy(receptor_center[0], receptor_center[1]):
+                                setsize(size[0], size[1]):
+                                zoom(explosion_visual.zoom):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(glow[0], glow[1], glow[2], glow[3]):
+                                rotationy(flat_tap_face_rotation_y):
+                                rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                                blend(normal):
+                                z(Z_TAP_EXPLOSION)
+                            ));
+                        }
                     }
                 }
             }
@@ -4791,11 +4968,6 @@ pub fn build_bundles(
             let Some(explosion) = mine_ns.mine_hit_explosion.as_ref() else {
                 continue;
             };
-            let slot = &explosion.slot;
-            let explosion_visual = explosion.animation.state_at(active.elapsed);
-            if !explosion_visual.visible {
-                continue;
-            }
             let receptor_y_lane = column_receptor_ys[i];
             let receptor_center = receptor_row_center(
                 playfield_center_x,
@@ -4808,29 +4980,18 @@ pub fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
-            let frame = slot.frame_index(active.elapsed, current_beat);
-            let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-            let size = scale_explosion(logical_slot_size(slot));
-            let glow = explosion_visual.glow;
-            let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-            if explosion.animation.blend_add {
-                actors.push(act!(sprite(slot.texture_key_handle()):
-                    align(0.5, 0.5):
-                    xy(receptor_center[0], receptor_center[1]):
-                    setsize(size[0], size[1]):
-                    zoom(explosion_visual.zoom):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    rotationz(-explosion_visual.rotation_z):
-                    diffuse(
-                        explosion_visual.diffuse[0],
-                        explosion_visual.diffuse[1],
-                        explosion_visual.diffuse[2],
-                        explosion_visual.diffuse[3]
-                    ):
-                    blend(add):
-                    z(Z_MINE_EXPLOSION)
-                ));
-                if glow_strength > f32::EPSILON {
+            for layer in explosion.layers.iter() {
+                let slot = &layer.slot;
+                let explosion_visual = layer.animation.state_at(active.elapsed);
+                if !explosion_visual.visible {
+                    continue;
+                }
+                let frame = slot.frame_index(active.elapsed, current_beat);
+                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+                let size = scale_explosion(logical_slot_size(slot));
+                let glow = explosion_visual.glow;
+                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                if layer.animation.blend_add {
                     actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
@@ -4838,29 +4999,29 @@ pub fn build_bundles(
                         zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         rotationz(-explosion_visual.rotation_z):
-                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        diffuse(
+                            explosion_visual.diffuse[0],
+                            explosion_visual.diffuse[1],
+                            explosion_visual.diffuse[2],
+                            explosion_visual.diffuse[3]
+                        ):
                         blend(add):
                         z(Z_MINE_EXPLOSION)
                     ));
-                }
-            } else {
-                actors.push(act!(sprite(slot.texture_key_handle()):
-                    align(0.5, 0.5):
-                    xy(receptor_center[0], receptor_center[1]):
-                    setsize(size[0], size[1]):
-                    zoom(explosion_visual.zoom):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    rotationz(-explosion_visual.rotation_z):
-                    diffuse(
-                        explosion_visual.diffuse[0],
-                        explosion_visual.diffuse[1],
-                        explosion_visual.diffuse[2],
-                        explosion_visual.diffuse[3]
-                    ):
-                    blend(normal):
-                    z(Z_MINE_EXPLOSION)
-                ));
-                if glow_strength > f32::EPSILON {
+                    if glow_strength > f32::EPSILON {
+                        actors.push(act!(sprite(slot.texture_key_handle()):
+                            align(0.5, 0.5):
+                            xy(receptor_center[0], receptor_center[1]):
+                            setsize(size[0], size[1]):
+                            zoom(explosion_visual.zoom):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            rotationz(-explosion_visual.rotation_z):
+                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            blend(add):
+                            z(Z_MINE_EXPLOSION)
+                        ));
+                    }
+                } else {
                     actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
@@ -4868,10 +5029,28 @@ pub fn build_bundles(
                         zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         rotationz(-explosion_visual.rotation_z):
-                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        diffuse(
+                            explosion_visual.diffuse[0],
+                            explosion_visual.diffuse[1],
+                            explosion_visual.diffuse[2],
+                            explosion_visual.diffuse[3]
+                        ):
                         blend(normal):
                         z(Z_MINE_EXPLOSION)
                     ));
+                    if glow_strength > f32::EPSILON {
+                        actors.push(act!(sprite(slot.texture_key_handle()):
+                            align(0.5, 0.5):
+                            xy(receptor_center[0], receptor_center[1]):
+                            setsize(size[0], size[1]):
+                            zoom(explosion_visual.zoom):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            rotationz(-explosion_visual.rotation_z):
+                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            blend(normal):
+                            z(Z_MINE_EXPLOSION)
+                        ));
+                    }
                 }
             }
         }
@@ -4882,6 +5061,9 @@ pub fn build_bundles(
             }
             let local_col = note.column - col_start;
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                return;
+            }
+            if song_lua_hides_note(state, player_idx, local_col, note.beat) {
                 return;
             }
             let Some(hold) = &note.hold else {
@@ -5321,10 +5503,8 @@ pub fn build_bundles(
                             let body_slice_step = if hold_depth_test { 4.0 } else { 16.0 };
                             let use_body_mesh =
                                 body_slot.model.is_none() && !hold_y_rotation_active;
-                            let mut body_mesh_vertices =
-                                use_body_mesh.then(|| Vec::with_capacity(96));
-                            let mut body_glow_vertices =
-                                use_body_mesh.then(|| Vec::with_capacity(96));
+                            let mut body_mesh_vertices: Option<Vec<TexturedMeshVertex>> = None;
+                            let mut body_glow_vertices: Option<Vec<TexturedMeshVertex>> = None;
                             let mut prev_body_row: Option<[[f32; 3]; 2]> = None;
 
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
@@ -5453,7 +5633,7 @@ pub fn build_bundles(
                                         Some(v) => v.max(slice_bottom),
                                     });
 
-                                    if let Some(mesh_vertices) = body_mesh_vertices.as_mut() {
+                                    if use_body_mesh {
                                         let top_alpha = note_alpha(
                                             slice_top_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
@@ -5543,11 +5723,12 @@ pub fn build_bundles(
                                                 hold_diffuse[3] * bottom_alpha,
                                             ],
                                         );
-                                        push_hold_strip_quad(mesh_vertices, top_row, bottom_row);
-                                        if let Some(glow_vertices) = body_glow_vertices.as_mut()
-                                            && (top_glow > f32::EPSILON
-                                                || bottom_glow > f32::EPSILON)
-                                        {
+                                        let mesh_vertices = body_mesh_vertices
+                                            .get_or_insert_with(|| Vec::with_capacity(96));
+                                        mesh_vertices.extend_from_slice(&hold_strip_quad(
+                                            top_row, bottom_row,
+                                        ));
+                                        if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
                                             let top_glow_row = hold_strip_row_from_positions(
                                                 top_row[0].pos,
                                                 top_row[1].pos,
@@ -5564,11 +5745,12 @@ pub fn build_bundles(
                                                 slice_v1,
                                                 hold_glow_color(bottom_glow),
                                             );
-                                            push_hold_strip_quad(
-                                                glow_vertices,
+                                            let glow_vertices = body_glow_vertices
+                                                .get_or_insert_with(|| Vec::with_capacity(96));
+                                            glow_vertices.extend_from_slice(&hold_strip_quad(
                                                 top_glow_row,
                                                 bottom_glow_row,
-                                            );
+                                            ));
                                         }
                                         body_tail_row =
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
@@ -5809,11 +5991,9 @@ pub fn build_bundles(
                                     ],
                                 )
                             };
-                            let mut cap_vertices = Vec::with_capacity(6);
-                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
-                                Arc::from(cap_vertices),
+                                Arc::new(hold_strip_quad(top_row, bottom_row)),
                                 BlendMode::Alpha,
                                 hold_depth_test,
                                 Z_HOLD_CAP as i16,
@@ -5835,15 +6015,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                let mut cap_glow_vertices = Vec::with_capacity(6);
-                                push_hold_strip_quad(
-                                    &mut cap_glow_vertices,
-                                    top_glow_row,
-                                    bottom_glow_row,
-                                );
                                 actors.push(hold_strip_actor(
                                     cap_slot.texture_key_shared(),
-                                    Arc::from(cap_glow_vertices),
+                                    Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
                                     BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
@@ -6078,11 +6252,9 @@ pub fn build_bundles(
                                     hold_diffuse[3] * bottom_alpha,
                                 ],
                             );
-                            let mut cap_vertices = Vec::with_capacity(6);
-                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
-                                Arc::from(cap_vertices),
+                                Arc::new(hold_strip_quad(top_row, bottom_row)),
                                 BlendMode::Alpha,
                                 hold_depth_test,
                                 Z_HOLD_CAP as i16,
@@ -6104,15 +6276,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                let mut cap_glow_vertices = Vec::with_capacity(6);
-                                push_hold_strip_quad(
-                                    &mut cap_glow_vertices,
-                                    top_glow_row,
-                                    bottom_glow_row,
-                                );
                                 actors.push(hold_strip_actor(
                                     cap_slot.texture_key_shared(),
-                                    Arc::from(cap_glow_vertices),
+                                    Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
                                     BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
@@ -6181,16 +6347,29 @@ pub fn build_bundles(
                 let head_center = [head_center_x, head_draw_y];
                 let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
                 let elapsed = state.total_elapsed_in_screen;
-                let head_slot = if use_active {
+                let head_layers = if use_active {
+                    visuals
+                        .head_active_layers
+                        .as_deref()
+                        .or(visuals.head_inactive_layers.as_deref())
+                } else {
+                    visuals
+                        .head_inactive_layers
+                        .as_deref()
+                        .or(visuals.head_active_layers.as_deref())
+                };
+                let head_slot = if head_layers.is_none() && use_active {
                     visuals
                         .head_active
                         .as_ref()
                         .or(visuals.head_inactive.as_ref())
-                } else {
+                } else if head_layers.is_none() {
                     visuals
                         .head_inactive
                         .as_ref()
                         .or(visuals.head_active.as_ref())
+                } else {
+                    None
                 };
                 let hold_head_translation =
                     ns.part_uv_translation(hold_head_part, note.beat, false);
@@ -6324,7 +6503,9 @@ pub fn build_bundles(
                         },
                         &mut model_cache,
                     );
-                } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                } else if let Some(note_slots) = head_layers
+                    .or_else(|| ns.note_layers.get(note_idx).map(|layers| layers.as_ref()))
+                {
                     let note_scale = hold_note_scale;
                     for note_slot in note_slots.iter() {
                         let draw = song_lua_note_model_draw(
@@ -6564,7 +6745,7 @@ pub fn build_bundles(
         // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_note_indices = &state.lane_note_indices[col];
+            let column_note_indices = &state.lane_note_row_indices[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -6579,13 +6760,16 @@ pub fn build_bundles(
             for_each_visible_note_index(
                 column_note_indices,
                 &state.notes,
-                // Tap positions are culled below by exact travel offset. A
-                // row-derived prefilter can hide valid taps when displayed
-                // timing and chart rows are not ordered the same way.
-                None,
+                // ITGmania gets tap candidates from a row-keyed TrackMap via
+                // GetTapNoteRangeInclusive, then NoteDisplay::IsOnScreen
+                // performs the exact ArrowEffects visibility check below.
+                visible_row_range,
                 |note_index| {
                     let note = &state.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                        return;
+                    }
+                    if song_lua_hides_note(state, player_idx, col_idx, note.beat) {
                         return;
                     }
                     if !note.is_fake {
@@ -6688,17 +6872,8 @@ pub fn build_bundles(
                                     let width = size[0];
                                     let height = size[1];
                                     let base_rotation = -slot.def.rotation_deg as f32;
-                                    let has_scripted_rot =
-                                        matches!(slot.model_effect.mode, ModelEffectMode::Spin)
-                                            || slot.model_auto_rot_total_frames > f32::EPSILON
-                                            || draw.rot[2].abs() > f32::EPSILON;
-                                    let legacy_rot = if has_scripted_rot {
-                                        0.0
-                                    } else {
-                                        -note_display_time * 45.0
-                                    };
-                                    let sprite_rotation =
-                                        base_rotation + legacy_rot + draw.rot[2] + note_rot;
+                                    // ITG only rotates mines when the actor/model declares it.
+                                    let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
                                     let center = [column_center_x, y_pos];
                                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                         slot,
@@ -6706,7 +6881,7 @@ pub fn build_bundles(
                                         center,
                                         [width, height],
                                         uv,
-                                        base_rotation + legacy_rot + note_rot,
+                                        base_rotation + note_rot,
                                         [1.0, 1.0, 1.0, 0.9 * note_alpha],
                                         BlendMode::Alpha,
                                         (Z_TAP_NOTE - 1) as i16,
@@ -6751,17 +6926,8 @@ pub fn build_bundles(
                             );
                             let size = scale_mine_slot_for_note(slot);
                             let base_rotation = -slot.def.rotation_deg as f32;
-                            let has_scripted_rot =
-                                matches!(slot.model_effect.mode, ModelEffectMode::Spin)
-                                    || slot.model_auto_rot_total_frames > f32::EPSILON
-                                    || draw.rot[2].abs() > f32::EPSILON;
-                            let legacy_rot = if has_scripted_rot {
-                                0.0
-                            } else {
-                                note_display_time * 120.0
-                            };
-                            let sprite_rotation =
-                                base_rotation + legacy_rot + draw.rot[2] + note_rot;
+                            // ITG only rotates mines when the actor/model declares it.
+                            let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
                             let center = [column_center_x, y_pos];
                             if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                 slot,
@@ -6769,7 +6935,7 @@ pub fn build_bundles(
                                 center,
                                 size,
                                 uv,
-                                base_rotation + legacy_rot + note_rot,
+                                base_rotation + note_rot,
                                 [1.0, 1.0, 1.0, note_alpha],
                                 BlendMode::Alpha,
                                 Z_TAP_NOTE as i16,
@@ -6822,6 +6988,154 @@ pub fn build_bundles(
                         };
                     if let Some(use_roll_head) = tap_replacement_roll {
                         let visuals = ns.hold_visuals_for_col(col_idx, use_roll_head);
+                        let part = if use_roll_head {
+                            NoteAnimPart::RollHead
+                        } else {
+                            NoteAnimPart::HoldHead
+                        };
+                        if let Some(head_slots) = visuals
+                            .head_inactive_layers
+                            .as_deref()
+                            .or(visuals.head_active_layers.as_deref())
+                        {
+                            let head_phase =
+                                ns.part_uv_phase(part, elapsed, current_beat, note.beat);
+                            let head_translation = ns.part_uv_translation(part, note.beat, false);
+                            let note_scale = col_note_scale;
+                            let center = [column_center_x, y_pos];
+                            for head_slot in head_slots.iter() {
+                                let draw = song_lua_note_model_draw(
+                                    head_slot.model_draw_at(elapsed, current_beat),
+                                    note_rotation_y,
+                                );
+                                if !draw.visible {
+                                    continue;
+                                }
+                                let note_frame = head_slot.frame_index_from_phase(head_phase);
+                                let uv_elapsed = if head_slot.model.is_some() {
+                                    head_phase
+                                } else {
+                                    elapsed
+                                };
+                                let note_uv = translated_uv_rect(
+                                    head_slot.uv_for_frame_at(note_frame, uv_elapsed),
+                                    head_translation,
+                                );
+                                let base_size = note_slot_base_size(head_slot, note_scale);
+                                let local_offset =
+                                    [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
+                                let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
+                                let model_center = if head_slot.model.is_some() {
+                                    let [sin_r, cos_r] = local_offset_rot_sin_cos;
+                                    let offset = [
+                                        local_offset[0] * cos_r - local_offset[1] * sin_r,
+                                        local_offset[0] * sin_r + local_offset[1] * cos_r,
+                                    ];
+                                    [center[0] + offset[0], center[1] + offset[1]]
+                                } else {
+                                    center
+                                };
+                                let note_size = [
+                                    base_size[0] * draw.zoom[0].max(0.0),
+                                    base_size[1] * draw.zoom[1].max(0.0),
+                                ];
+                                if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
+                                    continue;
+                                }
+                                let blend = if draw.blend_add {
+                                    BlendMode::Add
+                                } else {
+                                    BlendMode::Alpha
+                                };
+                                let color = [
+                                    draw.tint[0],
+                                    draw.tint[1],
+                                    draw.tint[2],
+                                    draw.tint[3] * note_alpha,
+                                ];
+                                if !prefer_sprite_note_path
+                                    && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                                        head_slot,
+                                        draw,
+                                        model_center,
+                                        note_size,
+                                        note_uv,
+                                        -head_slot.def.rotation_deg as f32 + note_rot,
+                                        color,
+                                        blend,
+                                        Z_TAP_NOTE as i16,
+                                        &mut model_cache,
+                                    )
+                                {
+                                    actors.push(actor_with_world_z(model_actor, note_world_z));
+                                } else {
+                                    let sprite_center = offset_center(
+                                        center,
+                                        local_offset,
+                                        local_offset_rot_sin_cos,
+                                    );
+                                    if draw.blend_add {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(head_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(sprite_center[0], sprite_center[1]):
+                                                setsize(note_size[0], note_size[1]):
+                                                rotationy(flat_tap_face_rotation_y):
+                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
+                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(add):
+                                                z(Z_TAP_NOTE)
+                                            ),
+                                            note_world_z,
+                                        ));
+                                    } else {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(head_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(sprite_center[0], sprite_center[1]):
+                                                setsize(note_size[0], note_size[1]):
+                                                rotationy(flat_tap_face_rotation_y):
+                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
+                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(normal):
+                                                z(Z_TAP_NOTE)
+                                            ),
+                                            note_world_z,
+                                        ));
+                                    }
+                                }
+                                push_note_glow_actor(
+                                    &mut actors,
+                                    NoteGlowDraw {
+                                        slot: head_slot,
+                                        draw,
+                                        model_center,
+                                        sprite_center: offset_center(
+                                            center,
+                                            local_offset,
+                                            local_offset_rot_sin_cos,
+                                        ),
+                                        size: note_size,
+                                        uv: note_uv,
+                                        rotation_y: flat_tap_face_rotation_y,
+                                        model_rotation_z: -head_slot.def.rotation_deg as f32
+                                            + note_rot,
+                                        sprite_rotation_z: draw.rot[2]
+                                            - head_slot.def.rotation_deg as f32
+                                            + note_rot,
+                                        alpha: note_glow,
+                                        blend,
+                                        z: Z_TAP_NOTE as i16,
+                                        world_z: note_world_z,
+                                        prefer_sprite: prefer_sprite_note_path,
+                                    },
+                                    &mut model_cache,
+                                );
+                            }
+                            return;
+                        }
                         if let Some(head_slot) = visuals
                             .head_inactive
                             .as_ref()
@@ -7190,6 +7504,7 @@ pub fn build_bundles(
         }
     }
 
+    let combo_capture_start = hud_actors.len();
     // Combo Milestone Explosions (100 / 1000 combo)
     if !blind_active
         && !profile.hide_combo
@@ -7214,20 +7529,15 @@ pub fn build_bundles(
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                capture_requests.combo,
-                                act!(sprite("combo_explosion.png"):
-                                    align(0.5, 0.5):
-                                    xy(combo_center_x, combo_center_y):
-                                    zoom(zoom):
-                                    rotationz(rotation):
-                                    diffuse(1.0, 1.0, 1.0, alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_explosion.png"):
+                                align(0.5, 0.5):
+                                xy(combo_center_x, combo_center_y):
+                                zoom(zoom):
+                                rotationz(rotation):
+                                diffuse(1.0, 1.0, 1.0, alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
@@ -7236,40 +7546,30 @@ pub fn build_bundles(
                         let zoom = (0.25 + (2.0 - 0.25) * eased) * combo_zoom_mod;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        push_hud_capture(
-                            &mut hud_actors,
-                            &mut combo_actors,
-                            capture_requests.combo,
-                            act!(sprite("combo_100milestone_splode.png"):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(zoom):
-                                rotationz(rotation):
-                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                blend(add):
-                                z(89)
-                            ),
-                        );
+                        hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
+                            align(0.5, 0.5):
+                            xy(combo_center_x, combo_center_y):
+                            zoom(zoom):
+                            rotationz(rotation):
+                            diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                            blend(add):
+                            z(89)
+                        ));
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
                             let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress) * combo_zoom_mod;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                capture_requests.combo,
-                                act!(sprite("combo_100milestone_minisplode.png"):
-                                    align(0.5, 0.5):
-                                    xy(combo_center_x, combo_center_y):
-                                    zoom(mini_zoom):
-                                    rotationz(mini_rotation):
-                                    diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
+                                align(0.5, 0.5):
+                                xy(combo_center_x, combo_center_y):
+                                zoom(mini_zoom):
+                                rotationz(mini_rotation):
+                                diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                 }
@@ -7283,20 +7583,15 @@ pub fn build_bundles(
                         let x_offset = 100.0 * progress * combo_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                capture_requests.combo,
-                                act!(sprite("combo_1000milestone_swoosh.png"):
-                                    align(0.5, 0.5):
-                                    xy(final_x, combo_center_y):
-                                    zoom(zoom):
-                                    zoomx(zoom * direction):
-                                    diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
+                                align(0.5, 0.5):
+                                xy(final_x, combo_center_y):
+                                zoom(zoom):
+                                zoomx(zoom * direction):
+                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                 }
@@ -7309,18 +7604,13 @@ pub fn build_bundles(
         let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
             if let Some(font_name) = combo_font_name {
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut combo_actors,
-                    capture_requests.combo,
-                    act!(text:
-                        font(font_name): settext(cached_int_u32(p.miss_combo)):
-                        align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                        diffuse(1.0, 0.0, 0.0, 1.0):
-                        z(90)
-                    ),
-                );
+                hud_actors.push(act!(text:
+                    font(font_name): settext(cached_int_u32(p.miss_combo)):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
+                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
+                    diffuse(1.0, 0.0, 0.0, 1.0):
+                    z(90)
+                ));
             }
         } else if p.combo >= SHOW_COMBO_AT {
             let quint_active = zmod_combo_quint_active(state, player_idx, profile);
@@ -7387,21 +7677,20 @@ pub fn build_bundles(
                 }
             };
             if let Some(font_name) = combo_font_name {
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut combo_actors,
-                    capture_requests.combo,
-                    act!(text:
-                        font(font_name): settext(cached_int_u32(p.combo)):
-                        align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                        diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-                        z(90)
-                    ),
-                );
+                hud_actors.push(act!(text:
+                    font(font_name): settext(cached_int_u32(p.combo)):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
+                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
+                    diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
+                    z(90)
+                ));
             }
         }
     }
+    let combo_actors = capture_requests
+        .combo
+        .then(|| share_hud_range(&mut hud_actors, combo_capture_start))
+        .flatten();
 
     let show_error_bar_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
     let show_error_bar_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
@@ -8092,10 +8381,12 @@ pub fn build_bundles(
         ));
     }
 
+    let judgment_capture_start = hud_actors.len();
     // Judgment Sprite (tap judgments)
     if !blind_active && let Some(render_info) = &p.last_judgment {
         if let Some(judgment_texture) = resolved_judgment_texture(profile) {
-            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(judgment_texture);
+            let (frame_cols, frame_rows) =
+                assets::parse_sprite_sheet_dims(judgment_texture.key.as_ref());
             let judgment = &render_info.judgment;
             let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
             if elapsed < 0.9 {
@@ -8118,29 +8409,66 @@ pub fn build_bundles(
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
                 let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut judgment_actors,
-                    capture_requests.judgment,
-                    act!(sprite(judgment_texture):
-                        align(0.5, 0.5): xy(judgment_x, judgment_y):
-                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
-                    ),
-                );
+                let [judgment_w, judgment_h] = judgment_frame_size(judgment_texture.key.as_ref());
+                hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
+                    align(0.5, 0.5): xy(judgment_x, judgment_y):
+                    z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(linear_index): zoom(zoom)
+                ));
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
-                    push_hud_capture(
-                        &mut hud_actors,
-                        &mut judgment_actors,
-                        capture_requests.judgment,
-                        act!(sprite(judgment_texture):
-                            align(0.5, 0.5): xy(judgment_x, judgment_y):
-                            z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
-                            diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
-                        ),
-                    );
+                    hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
+                        align(0.5, 0.5): xy(judgment_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(overlay_index): zoom(zoom):
+                        diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
+                    ));
                 }
             }
+        }
+    }
+    if !blind_active && let Some(texture) = held_miss_texture {
+        let texture_scale = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
+            0.5
+        } else {
+            1.0
+        };
+        for (i, held_miss) in state.held_miss_judgments[col_start..col_start + num_cols]
+            .iter()
+            .enumerate()
+        {
+            let Some(render_info) = held_miss.as_ref() else {
+                continue;
+            };
+            let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
+            if elapsed >= HELD_MISS_TOTAL_DURATION {
+                continue;
+            }
+            let (zoom_x, zoom_y) = held_miss_zoom(elapsed, mini);
+            let zoom_x = zoom_x * texture_scale;
+            let zoom_y = zoom_y * texture_scale;
+            if zoom_x <= f32::EPSILON || zoom_y <= f32::EPSILON {
+                continue;
+            }
+            let y = sm_scale(
+                column_reverse_percent[i],
+                0.0,
+                1.0,
+                receptor_y_normal + HELD_MISS_OFFSET_FROM_RECEPTOR,
+                receptor_y_reverse - HELD_MISS_OFFSET_FROM_RECEPTOR,
+            );
+            let column_offset = state.noteskin[player_idx]
+                .as_ref()
+                .and_then(|ns| ns.column_xs.get(i))
+                .map(|&x| x as f32 * spacing_mult)
+                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            hud_actors.push(act!(sprite(texture.texture_key_handle()):
+                align(0.5, 0.5):
+                xy(playfield_center_x + column_offset, y):
+                z(196):
+                setstate(0):
+                zoomx(zoom_x):
+                zoomy(zoom_y):
+                diffusealpha(1.0)
+            ));
         }
     }
     for (i, hold_judgment) in state.hold_judgments[col_start..col_start + num_cols]
@@ -8183,21 +8511,20 @@ pub fn build_bundles(
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32 * spacing_mult)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
-            push_hud_capture(
-                &mut hud_actors,
-                &mut judgment_actors,
-                capture_requests.judgment,
-                act!(sprite(texture):
-                    align(0.5, 0.5):
-                    xy(judgment_x + column_offset, hold_judgment_y):
-                    z(195):
-                    setstate(frame_index):
-                    zoom(zoom):
-                    diffusealpha(1.0)
-                ),
-            );
+            hud_actors.push(act!(sprite(texture.texture_key_handle()):
+                align(0.5, 0.5):
+                xy(judgment_x + column_offset, hold_judgment_y):
+                z(195):
+                setstate(frame_index):
+                zoom(zoom):
+                diffusealpha(1.0)
+            ));
         }
     }
+    let judgment_actors = capture_requests
+        .judgment
+        .then(|| share_hud_range(&mut hud_actors, judgment_capture_start))
+        .flatten();
 
     let (tilt, skew) = (perspective.tilt, perspective.skew);
     if !actors.is_empty() {
@@ -8211,25 +8538,29 @@ pub fn build_bundles(
             skew,
             reverse_scroll,
         ) {
-            actors = vec![Actor::Camera {
-                view_proj,
-                children: actors,
-            }];
+            actors.reserve(2);
+            actors.insert(0, Actor::CameraPush { view_proj });
+            actors.push(Actor::CameraPop);
         }
     }
 
-    let field_actors = if capture_requests.note_field {
-        actors.clone()
+    let field_actors = if capture_requests.note_field && !actors.is_empty() {
+        let children = Arc::<[Actor]>::from(actors.drain(..).collect::<Vec<_>>());
+        actors.push(Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::clone(&children),
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        });
+        vec![children]
     } else {
         Vec::new()
     };
-    if !hud_actors.is_empty() {
-        hud_actors.reserve(actors.len());
-        hud_actors.extend(actors);
-        actors = hud_actors;
-    }
     BuiltNotefield {
-        actors,
         layout_center_x,
         field_actors,
         judgment_actors,
@@ -8244,17 +8575,19 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
-        confusion_rotation_deg, hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
-        hold_head_render_flags, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        move_x_extra, move_y_extra, note_alpha, note_glow, note_slot_base_size,
-        note_world_z_for_bumpy, note_x_extra, offset_center, predictive_itg_percents,
-        pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts, receptor_row_center,
-        scroll_receptor_y, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
-        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
-        zmod_subtractive_counter_state,
+        confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
+        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
+        hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
+        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
+        note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
+        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
+        receptor_row_center, scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows,
+        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
+        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
+    use crate::assets;
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
     use crate::game::gameplay::{
@@ -8268,6 +8601,7 @@ mod tests {
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
+    use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
     use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
     use std::sync::Arc;
@@ -8299,6 +8633,12 @@ mod tests {
             is_fake: false,
             can_be_judged: true,
         }
+    }
+
+    fn test_note_at_dense_row(beat: f32, row_index: usize) -> Note {
+        let mut note = test_note_at_beat(beat);
+        note.row_index = row_index;
+        note
     }
 
     #[test]
@@ -8396,6 +8736,25 @@ mod tests {
     }
 
     #[test]
+    fn visible_note_window_uses_itg_rows_not_dense_rows() {
+        let notes = vec![
+            test_note_at_dense_row(0.0, 0),
+            test_note_at_dense_row(4.0, 1),
+        ];
+        let note_indices = vec![0usize, 1usize];
+        let mut visited = Vec::new();
+
+        super::for_each_visible_note_index(
+            &note_indices,
+            &notes,
+            Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
+            |note_index| visited.push(note_index),
+        );
+
+        assert_eq!(visited, vec![1]);
+    }
+
+    #[test]
     fn first_visible_beat_uses_note_count_cutoff() {
         let stats = (0..80)
             .map(|i| NoteCountStat {
@@ -8426,6 +8785,51 @@ mod tests {
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
         assert!(!engaged);
         assert!(!use_active);
+    }
+
+    #[test]
+    fn hold_explosion_waits_for_receptor_on_early_hit() {
+        let active = ActiveHold {
+            note_index: 42,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 12_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 1.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+
+        assert!(!hold_explosion_active(Some(&active), 99.99, 100.0));
+        assert!(hold_explosion_active(Some(&active), 100.0, 100.0));
+    }
+
+    #[test]
+    fn hold_explosion_requires_live_hold_state() {
+        let exhausted = ActiveHold {
+            note_index: 7,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 8_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 0.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+        let let_go = ActiveHold {
+            note_index: 7,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 8_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: true,
+            is_pressed: true,
+            life: 1.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+
+        assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
+        assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
+        assert!(!hold_explosion_active(None, 100.0, 100.0));
     }
 
     #[test]
@@ -8516,6 +8920,21 @@ mod tests {
     fn receptor_glow_draws_under_hold_body() {
         assert!(Z_RECEPTOR < Z_HOLD_BODY);
         assert!(Z_HOLD_GLOW < Z_HOLD_BODY);
+    }
+
+    #[test]
+    fn song_lua_zoom_hide_window_covers_receptor_beat() {
+        let windows = [SongLuaNoteHideWindow {
+            player: 0,
+            column: 2,
+            start_beat: 40.0,
+            end_beat: 44.0,
+        }];
+
+        assert!(song_lua_hides_note_window(&windows, 2, 40.0));
+        assert!(song_lua_hides_note_window(&windows, 2, 44.0));
+        assert!(!song_lua_hides_note_window(&windows, 1, 42.0));
+        assert!(!song_lua_hides_note_window(&windows, 2, 44.01));
     }
 
     #[test]
@@ -9055,6 +9474,22 @@ mod tests {
     }
 
     #[test]
+    fn display_mods_use_itg_disabled_timing_window_names() {
+        let bits = disabled_timing_window_bits(profile::TimingWindowsOption::DecentsAndWayOffs);
+        assert_eq!(
+            disabled_timing_windows_name(bits),
+            Some("No W4/W5".to_string())
+        );
+
+        let bits =
+            disabled_timing_window_bits(profile::TimingWindowsOption::FantasticsAndExcellents);
+        assert_eq!(
+            disabled_timing_windows_name(bits),
+            Some("No W1/W2".to_string())
+        );
+    }
+
+    #[test]
     fn display_mods_perspective_names_match_itg_rules() {
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, 0, 0);
@@ -9141,6 +9576,25 @@ mod tests {
     }
 
     #[test]
+    fn judgment_frame_size_uses_logical_atlas_frame_dims() {
+        let censored = "judgements/Test Censored 1x7 (doubleres).png";
+        let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
+        let love = "judgements/Test Love 2x7 (doubleres).png";
+        assets::register_texture_dims(censored, 600, 1400);
+        assets::register_texture_dims(tight_censored, 600, 1050);
+        assets::register_texture_dims(love, 880, 1036);
+
+        assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
+        assert_eq!(judgment_frame_size(tight_censored), [300.0, 75.0]);
+        assert_eq!(judgment_frame_size(love), [220.0, 74.0]);
+
+        let visible_art_h = 68.0 / 2.0;
+        let original_drawn_art_h = visible_art_h * judgment_frame_size(censored)[1] / 100.0;
+        let tight_drawn_art_h = visible_art_h * judgment_frame_size(tight_censored)[1] / 75.0;
+        assert_eq!(original_drawn_art_h, tight_drawn_art_h);
+    }
+
+    #[test]
     fn judgment_tilt_thresholds_deadzone_and_cap() {
         let profile = profile::Profile {
             judgment_tilt: true,
@@ -9219,6 +9673,33 @@ mod tests {
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_use_10ms_blue_window() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            ..profile::Profile::default()
+        };
+        let blue = fantastic_judgment(TimingWindow::W0, crate::game::timing::FA_PLUS_W010_MS);
+        let white = fantastic_judgment(TimingWindow::W0, 12.0);
+
+        assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
+        assert_eq!(tap_judgment_rows(&profile, &white, 7), (1, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_split_keeps_blue_base_above_10ms() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            split_15_10ms: true,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
+
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
     }
 
     #[test]
@@ -9324,6 +9805,44 @@ mod tests {
         assert!(
             (scale_h - model_h).abs() <= 1e-4,
             "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
+        );
+    }
+
+    #[test]
+    fn hold_explosion_slot_respects_explosion_noteskin_choice() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let default_ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let ddr_vivid_ns = load_itg_skin(&style, "ddr-vivid")
+            .expect("dance/ddr-vivid should load from assets/noteskins");
+
+        let base_slot = hold_explosion_slot_for_col(Some(&cel_ns), 0, false)
+            .expect("cel should define a hold explosion");
+        let selected_slot = hold_explosion_slot_for_col(Some(&ddr_vivid_ns), 0, false)
+            .expect("ddr-vivid should define a hold explosion");
+
+        assert_ne!(
+            selected_slot.texture_key(),
+            base_slot.texture_key(),
+            "hold explosions should come from the selected explosion noteskin"
+        );
+        assert!(
+            selected_slot.texture_key().contains("ddr-vivid"),
+            "selected hold explosion should resolve from ddr-vivid, got '{}'",
+            selected_slot.texture_key()
+        );
+        assert!(
+            hold_explosion_slot_for_col(Some(&default_ns), 0, false).is_none(),
+            "a selected noteskin with blank hold explosions must not fall back to the base noteskin"
+        );
+        assert!(
+            hold_explosion_slot_for_col(None, 0, false).is_none(),
+            "the no-explosion choice should also hide hold explosions"
         );
     }
 

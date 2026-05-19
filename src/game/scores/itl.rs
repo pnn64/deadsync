@@ -3,7 +3,7 @@ use super::{
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitPlayerJob, LeaderboardApiEntry,
     LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
-    get_or_fetch_player_leaderboards_for_side_inner, groovestats_eval_state_from_gameplay,
+    get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts, leaderboard_entries_from_api,
 };
 use crate::config::dirs;
@@ -948,6 +948,14 @@ pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) 
     ex_hundredths(ex_percent)
 }
 
+pub(super) fn current_score_hundredths_for_submit(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Option<u32> {
+    itl_all_timing_windows_enabled(&gs.player_profiles[player_idx])
+        .then(|| current_score_hundredths(gs, player_idx))
+}
+
 fn itl_file_path(profile_id: &str) -> PathBuf {
     profile::local_profile_dir_for_id(profile_id).join(ITL_FILE_NAME)
 }
@@ -1304,18 +1312,21 @@ pub(super) fn handle_submit_player_unlocks(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) {
-    if let Some(itl) = response.itl.as_ref()
-        && let Some(profile_id) = player.profile_id.as_deref()
-        && let Some(progress) = itl.progress.as_ref()
-    {
-        for quest in &progress.quests_completed {
-            update_unlock_folders(profile_id, quest.song_download_folders.as_slice());
+    let accept_itl_response = player.itl_score_hundredths.is_some();
+    if accept_itl_response {
+        if let Some(itl) = response.itl.as_ref()
+            && let Some(profile_id) = player.profile_id.as_deref()
+            && let Some(progress) = itl.progress.as_ref()
+        {
+            for quest in &progress.quests_completed {
+                update_unlock_folders(profile_id, quest.song_download_folders.as_slice());
+            }
         }
     }
     if let Some(rpg) = response.rpg.as_ref() {
         handle_submit_event_unlocks(player, rpg);
     }
-    if let Some(itl) = response.itl.as_ref() {
+    if accept_itl_response && let Some(itl) = response.itl.as_ref() {
         handle_submit_event_unlocks(player, itl);
     }
 }
@@ -1665,8 +1676,8 @@ fn itl_judgments_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlJu
         w1: counts.fantastic,
         w2: counts.excellent,
         w3: counts.great,
-        w4: counts.decent,
-        w5: counts.way_off,
+        w4: counts.decent_count(),
+        w5: counts.way_off_count(),
         miss: counts.miss,
         total_steps: counts.total_steps,
         holds: counts.holds_held,
@@ -1676,6 +1687,15 @@ fn itl_judgments_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlJu
         rolls: counts.rolls_held,
         total_rolls: counts.total_rolls,
     }
+}
+
+#[inline(always)]
+fn itl_all_timing_windows_enabled(profile: &profile::Profile) -> bool {
+    profile
+        .timing_windows
+        .disabled_windows()
+        .iter()
+        .all(|disabled| !*disabled)
 }
 
 fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
@@ -1713,6 +1733,8 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     };
     let remove_mask = gs.player_profiles[player_idx].remove_active_mask.bits();
     let mines_enabled = (remove_mask & (1u8 << 1)) == 0;
+    let all_timing_windows_enabled =
+        itl_all_timing_windows_enabled(&gs.player_profiles[player_idx]);
     let passed = gameplay_run_passed(
         gs.song_completed_naturally,
         gs.players[player_idx].is_failing,
@@ -1720,7 +1742,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
         gs.players[player_idx].fail_time.is_some(),
     );
 
-    let mut reason_lines = Vec::with_capacity(4);
+    let mut reason_lines = Vec::with_capacity(5);
     if !gs_valid.valid {
         if gs_valid.reason_lines.is_empty() {
             reason_lines.push("Score is not valid for GrooveStats.".to_string());
@@ -1733,6 +1755,9 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     }
     if !mines_enabled {
         reason_lines.push("ITL requires mines to be enabled.".to_string());
+    }
+    if !all_timing_windows_enabled {
+        reason_lines.push("ITL requires all timing windows to be enabled.".to_string());
     }
     if !passed {
         reason_lines.push("ITL only saves passing scores.".to_string());
@@ -1789,12 +1814,7 @@ pub fn get_or_fetch_itl_self_score_for_side(
     // Keep the wheel's ITL prefetch aligned with the Select Music scorebox cache width.
     // Smaller requests seed the shared leaderboard cache with partial panes, so the
     // scorebox briefly renders a truncated list before refetching the remaining rows.
-    let _ = get_or_fetch_player_leaderboards_for_side_inner(
-        chart_hash,
-        side,
-        ITL_WHEEL_FETCH_ENTRIES,
-        false,
-    )?;
+    let _ = get_or_fetch_player_leaderboards_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
     get_cached_itl_self_score_for_side(chart_hash, side)
 }
 
@@ -1805,12 +1825,7 @@ pub fn get_or_fetch_itl_tournament_rank_for_side(
     if let Some(rank) = get_cached_itl_tournament_rank_for_side(chart_hash, side) {
         return Some(rank);
     }
-    let _ = get_or_fetch_player_leaderboards_for_side_inner(
-        chart_hash,
-        side,
-        ITL_WHEEL_FETCH_ENTRIES,
-        false,
-    )?;
+    let _ = get_or_fetch_player_leaderboards_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
     get_cached_itl_tournament_rank_for_side(chart_hash, side)
 }
 
@@ -1944,6 +1959,21 @@ mod tests {
 
         assert!(itl_judgments_better(&better, &prev));
         assert!(!itl_judgments_better(&worse, &prev));
+    }
+
+    #[test]
+    fn itl_requires_all_timing_windows_enabled() {
+        let mut profile = profile::Profile::default();
+        assert!(itl_all_timing_windows_enabled(&profile));
+
+        for setting in [
+            profile::TimingWindowsOption::WayOffs,
+            profile::TimingWindowsOption::DecentsAndWayOffs,
+            profile::TimingWindowsOption::FantasticsAndExcellents,
+        ] {
+            profile.timing_windows = setting;
+            assert!(!itl_all_timing_windows_enabled(&profile));
+        }
     }
 
     #[test]

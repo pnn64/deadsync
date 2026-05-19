@@ -25,10 +25,6 @@ const ROW_STEP: f32 = 43.0;
 const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
 const POLL_BUDGET: Duration = Duration::from_millis(2);
-pub(crate) fn all_label() -> std::sync::Arc<str> {
-    tr("PackSync", "AllPacksLabel")
-}
-
 pub(crate) struct TargetSpec {
     pub simfile_path: PathBuf,
     pub song_title: String,

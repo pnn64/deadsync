@@ -1,13 +1,3 @@
-use std::path::Path;
-
-fn write_dump_file(path: &Path, content: String) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create '{}': {e}", parent.display()))?;
-    }
-    std::fs::write(path, content).map_err(|e| format!("failed to write '{}': {e}", path.display()))
-}
-
 #[cfg(any(
     windows,
     target_os = "linux",
@@ -15,11 +5,10 @@ fn write_dump_file(path: &Path, content: String) -> Result<(), String> {
     target_os = "macos"
 ))]
 mod imp {
-    use crate::screens::components::shared::test_input::{FsrBarView, FsrView};
+    use crate::engine::input::fsr::{BarView as FsrBarView, VIEW_SENSOR_COUNT, View as FsrView};
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
     use std::fmt::Write as _;
-    use std::path::Path;
     use std::time::{Duration, Instant, SystemTime};
 
     const ADP_VENDOR_ID: u16 = 0x1209;
@@ -30,7 +19,6 @@ mod imp {
     const REPORT_ID_NAME: u8 = 0x05;
 
     const SENSOR_COUNT: usize = 12;
-    const VIEW_SENSOR_COUNT: usize = 4;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
     const LINEARIZATION_POWER: u32 = 4;
@@ -84,6 +72,8 @@ mod imp {
                     value_norm: normalize_sensor_value(self.input.sensor_values[i]),
                     raw_threshold: self.config.sensor_thresholds[i],
                     threshold_norm: normalize_sensor_value(self.config.sensor_thresholds[i]),
+                    min_raw_threshold: 0,
+                    max_raw_threshold: MAX_SENSOR_VALUE,
                     active: self.input.sensor_values[i] >= self.config.sensor_thresholds[i],
                 }),
             })
@@ -105,10 +95,10 @@ mod imp {
             false
         }
 
-        pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
+        pub fn debug_dump(&mut self) -> String {
             self.ensure_device();
             self.read_pending_reports();
-            super::write_dump_file(path, build_debug_dump(self))
+            build_debug_dump(self)
         }
 
         fn ensure_device(&mut self) {
@@ -551,48 +541,6 @@ mod imp {
 
     fn normalize_sensor_value(raw: u16) -> f32 {
         linearize_value(raw) / MAX_SENSOR_VALUE as f32
-    }
-}
-
-#[cfg(not(any(
-    windows,
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "macos"
-)))]
-mod imp {
-    use crate::screens::components::shared::test_input::FsrView;
-    use std::fmt::Write as _;
-    use std::path::Path;
-    use std::time::SystemTime;
-
-    #[derive(Default)]
-    pub struct Monitor;
-
-    impl Monitor {
-        pub const fn new() -> Self {
-            Self
-        }
-
-        pub fn poll_view(&mut self) -> Option<FsrView> {
-            None
-        }
-
-        pub fn update_threshold(&mut self, _sensor_index: usize, _threshold: u16) -> bool {
-            false
-        }
-
-        pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
-            let mut out = String::new();
-            let _ = writeln!(out, "DeadSync FSR debug dump");
-            let _ = writeln!(out, "generated: {:?}", SystemTime::now());
-            let _ = writeln!(out);
-            let _ = writeln!(
-                out,
-                "FSR HID diagnostics are not available on this platform."
-            );
-            super::write_dump_file(path, out)
-        }
     }
 }
 

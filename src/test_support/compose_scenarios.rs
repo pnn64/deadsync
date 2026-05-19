@@ -1,5 +1,5 @@
 use crate::assets;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex, TexturedMeshVertex};
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
@@ -218,7 +218,7 @@ fn gameplay_stats_versus_scenario(
 }
 
 fn gameplay_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
-    let fixture = gameplay_bench::fixture();
+    let mut fixture = gameplay_bench::fixture();
     ComposeScenario {
         name: gameplay_bench::SCENARIO_NAME,
         actors: fixture.build(true),
@@ -1078,7 +1078,6 @@ fn colored_mesh() -> Actor {
         offset: screen_pos(0.0, 178.0),
         size: [SizeSpec::Px(140.0), SizeSpec::Px(80.0)],
         vertices: verts,
-        mode: MeshMode::Triangles,
         visible: true,
         blend: BlendMode::Add,
         z: 2,
@@ -1105,7 +1104,6 @@ fn textured_mesh() -> Actor {
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: verts,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -1315,11 +1313,26 @@ fn remap_actor_texture_case(actors: &mut [Actor]) {
                 }
                 remap_actor_texture_case(children);
             }
+            Actor::SharedFrame {
+                background,
+                children,
+                ..
+            } => {
+                if let Some(Background::Texture(texture)) = background {
+                    *texture = Box::leak(mixed_case_texture_key(texture).into_boxed_str());
+                }
+                let mut remapped = children.to_vec();
+                remap_actor_texture_case(&mut remapped);
+                *children = Arc::from(remapped);
+            }
             Actor::Camera { children, .. } => remap_actor_texture_case(children),
             Actor::Shadow { child, .. } => {
                 remap_actor_texture_case(std::slice::from_mut(child.as_mut()))
             }
-            Actor::Text { .. } | Actor::Mesh { .. } => {}
+            Actor::Text { .. }
+            | Actor::Mesh { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => {}
         }
     }
 }

@@ -52,6 +52,10 @@ pub enum SubRowId {
     OptionsNavigation,
     MenuButtons,
     Debounce,
+    // Lights Options
+    LightsDriver,
+    GameplayPadLights,
+    TestLights,
     // Machine Options
     SelectProfile,
     SelectColor,
@@ -61,6 +65,7 @@ pub enum SubRowId {
     SelectPlayMode,
     PreferredMode,
     Font,
+    BarColor,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -69,6 +74,8 @@ pub enum SubRowId {
     VisualStyle,
     Replays,
     PerPlayerGlobalOffsets,
+    PackIniOffsets,
+    DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
     // Gameplay Options
@@ -76,6 +83,7 @@ pub enum SubRowId {
     CenteredP1Notefield,
     ZmodRatingBox,
     BpmDecimal,
+    DelayedBack,
     AutoScreenshot,
     // Select Music Options
     ShowBanners,
@@ -98,6 +106,7 @@ pub enum SubRowId {
     PreviewMarker,
     LoopMusic,
     ShowGameplayTimer,
+    ShowStageDisplay,
     ShowGsBox,
     GsBoxPlacement,
     GsBoxLeaderboards,

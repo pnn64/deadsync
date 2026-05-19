@@ -9,7 +9,7 @@ pub const SCENARIO_NAME: &str = "gs-scorebox";
 
 pub struct GsScoreboxBenchFixture {
     snapshot: CachedPlayerLeaderboardData,
-    side: profile::PlayerSide,
+    profile_snapshot: crate::game::scores::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -19,8 +19,8 @@ pub struct GsScoreboxBenchFixture {
 impl GsScoreboxBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
         gs_scorebox::gameplay_scorebox_actors_from_cached_snapshot(
-            self.side,
             &self.snapshot,
+            &self.profile_snapshot,
             self.center_x,
             self.center_y,
             self.zoom,
@@ -30,6 +30,8 @@ impl GsScoreboxBenchFixture {
 }
 
 pub fn fixture() -> GsScoreboxBenchFixture {
+    let mut profile = profile::Profile::default();
+    profile.display_scorebox = true;
     GsScoreboxBenchFixture {
         snapshot: CachedPlayerLeaderboardData {
             loading: false,
@@ -46,7 +48,9 @@ pub fn fixture() -> GsScoreboxBenchFixture {
                 itl_self_rank: None,
             }),
         },
-        side: profile::PlayerSide::P1,
+        profile_snapshot: crate::game::scores::GameplayScoreboxProfileSnapshot::from_profile(
+            &profile, true, None,
+        ),
         center_x: 704.0,
         center_y: 108.0,
         zoom: 1.0,

@@ -1,7 +1,7 @@
 use super::*;
 pub use crate::game::profile::{
-    AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask, RemoveMask,
-    VisualEffectsMask,
+    AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
+    LiveTimingStatsMask, RemoveMask, VisualEffectsMask,
 };
 use bitflags::bitflags;
 
@@ -60,7 +60,8 @@ bitflags! {
         const FLASH_COLUMN_FOR_MISS = 1 << 0;
         const DENSITY_GRAPH_AT_TOP  = 1 << 1;
         const COLUMN_CUES           = 1 << 2;
-        const DISPLAY_SCOREBOX      = 1 << 3;
+        const LIVE_TIMING_STATS     = 1 << 3;
+        const DISPLAY_SCOREBOX      = 1 << 4;
     }
 }
 
@@ -130,6 +131,7 @@ pub struct PlayerOptionMasks {
     pub fa_plus: FaPlusMask,
     pub early_dw: EarlyDwMask,
     pub gameplay_extras: GameplayExtrasMask,
+    pub live_timing_stats: LiveTimingStatsMask,
     pub gameplay_extras_more: GameplayExtrasMoreMask,
     pub results_extras: ResultsExtrasMask,
     pub life_bar_options: LifeBarOptionsMask,
@@ -163,8 +165,8 @@ pub(super) struct NoteskinState {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PlayerNavInput {
     pub held_direction: Option<NavDirection>,
-    pub held_since: Option<Instant>,
-    pub last_scrolled_at: Option<Instant>,
+    pub held_for: Duration,
+    pub next_repeat_at: Duration,
 }
 
 /// Per-player Start button hold/repeat timing.
@@ -172,8 +174,9 @@ pub struct PlayerNavInput {
 /// Stored as `[PlayerStartInput; PLAYER_SLOTS]` on `State`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PlayerStartInput {
-    pub held_since: Option<Instant>,
-    pub last_triggered_at: Option<Instant>,
+    pub held: bool,
+    pub held_for: Duration,
+    pub next_repeat_at: Duration,
 }
 
 #[derive(Clone, Copy, Debug)]

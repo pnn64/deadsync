@@ -163,6 +163,7 @@ fn push_saved_options(
     push_line(content, "VisualDelaySeconds", cfg.visual_delay_seconds);
     push_line(content, "MasterVolume", cfg.master_volume);
     push_bool(content, "MenuMusic", cfg.menu_music);
+    push_bool(content, "CustomSoundsEnabled", cfg.custom_sounds_enabled);
     push_bool(content, "MineHitSound", cfg.mine_hit_sound);
     push_line(content, "MusicVolume", cfg.music_volume);
     push_line(
@@ -194,6 +195,11 @@ fn push_saved_options(
         content,
         "SelectMusicShowBreakdown",
         cfg.show_select_music_breakdown,
+    );
+    push_bool(
+        content,
+        "SelectMusicShowStageDisplay",
+        cfg.show_select_music_stage_display,
     );
     push_bool(
         content,
@@ -283,6 +289,11 @@ fn push_saved_options(
     );
     push_bool(
         content,
+        "SelectMusicChartInfoEffectiveBpm",
+        cfg.select_music_chart_info_effective_bpm,
+    );
+    push_bool(
+        content,
         "SelectMusicChartInfoMatrixRating",
         cfg.select_music_chart_info_matrix_rating,
     );
@@ -309,8 +320,16 @@ fn push_saved_options(
         "ArcadeOptionsNavigation",
         cfg.arcade_options_navigation,
     );
+    push_bool(content, "DelayedBack", cfg.delayed_back);
     push_bool(content, "ThreeKeyNavigation", cfg.three_key_navigation);
     push_bool(content, "UseFSRs", cfg.use_fsrs);
+    push_line(content, "LightsDriver", cfg.lights_driver.as_str());
+    push_line(
+        content,
+        "GameplayPadLights",
+        cfg.lights_gameplay_pad_lights.as_str(),
+    );
+    push_line(content, "LightsComPort", cfg.lights_com_port.as_str());
     push_bool(
         content,
         "OnlyDedicatedMenuButtons",
@@ -393,6 +412,16 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         "MachineAllowPerPlayerGlobalOffsets",
         cfg.machine_allow_per_player_global_offsets,
     );
+    push_bool(
+        content,
+        "MachinePackIniOffsets",
+        cfg.machine_pack_ini_offsets,
+    );
+    push_line(
+        content,
+        "MachineDefaultSyncOffset",
+        cfg.machine_default_sync_offset.as_str(),
+    );
     push_line(
         content,
         "MachinePreferredStyle",
@@ -404,6 +433,7 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         cfg.machine_preferred_play_mode.as_str(),
     );
     push_line(content, "MachineFont", cfg.machine_font.as_str());
+    push_line(content, "MachineBarColor", cfg.machine_bar_color.as_str());
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

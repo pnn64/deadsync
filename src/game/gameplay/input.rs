@@ -1,3 +1,4 @@
+use crate::config;
 use crate::engine::audio;
 use crate::engine::input::{
     INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
@@ -5,18 +6,18 @@ use crate::engine::input::{
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
 use log::{debug, warn};
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
 use super::{
     ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, GAMEPLAY_INPUT_BACKLOG_WARN,
-    GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayUpdatePhaseTimings,
-    HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS,
-    MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
-    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
-    abort_hold_to_exit, add_elapsed_us, current_music_time_s, elapsed_us_between,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, ExitTransitionKind,
+    GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
+    GameplayUpdatePhaseTimings, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
+    HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION,
+    RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC,
+    RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit,
+    add_elapsed_us, begin_exit_transition, current_music_time_s, elapsed_us_between,
     gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
     live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
     refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
@@ -125,6 +126,23 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
     };
     receptor_glow_behavior_noteskin(state, player)
         .map(|ns| ns.receptor_glow_behavior)
+        .unwrap_or_default()
+}
+
+#[inline(always)]
+fn receptor_step_behavior_for_col(state: &State, col: usize) -> noteskin::ReceptorStepBehavior {
+    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
+        0
+    } else {
+        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+    };
+    let local_col = if state.cols_per_player == 0 {
+        col
+    } else {
+        col % state.cols_per_player
+    };
+    receptor_glow_behavior_noteskin(state, player)
+        .map(|ns| ns.receptor_step_behavior_for_col(local_col))
         .unwrap_or_default()
 }
 
@@ -275,6 +293,16 @@ pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
 }
 
 #[inline(always)]
+pub(super) fn trigger_receptor_step_pulse(state: &mut State, col: usize) {
+    if col >= state.num_cols {
+        return;
+    }
+    start_receptor_glow_press(state, col);
+    let duration = receptor_step_behavior_for_col(state, col).duration;
+    state.receptor_bop_timers[col] = state.receptor_bop_timers[col].max(duration);
+}
+
+#[inline(always)]
 fn start_receptor_glow_press(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     state.receptor_glow_timers[col] = 0.0;
@@ -305,12 +333,12 @@ pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f
         return None;
     }
     let behavior = receptor_glow_behavior_for_col(state, col);
+    if state.receptor_glow_press_timers[col] > f32::EPSILON
+        && behavior.press_duration > f32::EPSILON
+    {
+        return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
+    }
     if lane_is_pressed(state, col) {
-        if state.receptor_glow_press_timers[col] > f32::EPSILON
-            && behavior.press_duration > f32::EPSILON
-        {
-            return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
-        }
         return Some((behavior.press_alpha_end, behavior.press_zoom_end));
     }
     if state.receptor_glow_timers[col] > f32::EPSILON {
@@ -537,18 +565,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         }
         VirtualAction::p1_back if p1_menu_active => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
+                if !config::get().delayed_back {
+                    begin_exit_transition(state, ExitTransitionKind::Cancel);
+                } else {
+                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
+                    state.hold_to_exit_start = Some(ev.timestamp);
+                    state.hold_to_exit_aborted_at = None;
+                }
             } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
         VirtualAction::p2_back if p2_menu_active => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
+                if !config::get().delayed_back {
+                    begin_exit_transition(state, ExitTransitionKind::Cancel);
+                } else {
+                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
+                    state.hold_to_exit_start = Some(ev.timestamp);
+                    state.hold_to_exit_aborted_at = None;
+                }
             } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
                 abort_hold_to_exit(state, ev.timestamp);
             }
@@ -569,17 +605,8 @@ pub(super) fn process_input_edges(
         return;
     }
 
-    let mut pending = VecDeque::new();
-    if trace_enabled {
-        let started = Instant::now();
-        std::mem::swap(&mut pending, &mut state.pending_edges);
-        add_elapsed_us(&mut phase_timings.input_queue_us, started);
-    } else {
-        std::mem::swap(&mut pending, &mut state.pending_edges);
-    }
-
     let input_log = gameplay_input_log_enabled();
-    while let Some(mut edge) = pending.pop_front() {
+    while let Some(mut edge) = state.pending_edges.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             if input_log {
@@ -610,7 +637,7 @@ pub(super) fn process_input_edges(
                     edge.input_slot,
                     edge.pressed,
                     edge.captured_host_nanos,
-                    pending.len() + state.pending_edges.len(),
+                    state.pending_edges.len(),
                 );
             }
             continue;
@@ -675,7 +702,7 @@ pub(super) fn process_input_edges(
                 capture_to_queue_us,
                 queue_to_process_us,
                 capture_to_process_us,
-                pending.len() + state.pending_edges.len(),
+                state.pending_edges.len(),
             );
         }
         if edge_judges_tap {
@@ -717,7 +744,7 @@ pub(super) fn process_input_edges(
                     queue_to_process_us,
                     capture_to_queue_us,
                     capture_to_process_us,
-                    pending.len() + state.pending_edges.len() + 1,
+                    state.pending_edges.len() + 1,
                     current_music_time_s(state),
                     song_time_ns_to_seconds(edge.event_music_time_ns),
                 );
@@ -782,34 +809,17 @@ pub(super) fn process_input_edges(
             }
             if hit_note {
                 if state.tick_mode == TickMode::Hit {
-                    audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                    audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
                 }
             } else {
-                state.receptor_bop_timers[lane_idx] = 0.11;
+                trigger_receptor_step_pulse(state, lane_idx);
             }
         } else if edge_judges_lift {
             let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
-                audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
             }
         }
-    }
-
-    if !state.pending_edges.is_empty() {
-        if trace_enabled {
-            let started = Instant::now();
-            pending.append(&mut state.pending_edges);
-            add_elapsed_us(&mut phase_timings.input_queue_us, started);
-        } else {
-            pending.append(&mut state.pending_edges);
-        }
-    }
-    if trace_enabled {
-        let started = Instant::now();
-        state.pending_edges = pending;
-        add_elapsed_us(&mut phase_timings.input_queue_us, started);
-    } else {
-        state.pending_edges = pending;
     }
 }
 
@@ -820,8 +830,13 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             state.receptor_glow_timers[col] = 0.0;
             state.receptor_glow_press_timers[col] =
                 (state.receptor_glow_press_timers[col] - delta_time).max(0.0);
+        } else if state.receptor_glow_press_timers[col] > f32::EPSILON {
+            if state.receptor_glow_press_timers[col] <= delta_time {
+                release_receptor_glow(state, col);
+            } else {
+                state.receptor_glow_press_timers[col] -= delta_time;
+            }
         } else {
-            state.receptor_glow_press_timers[col] = 0.0;
             state.receptor_glow_timers[col] =
                 (state.receptor_glow_timers[col] - delta_time).max(0.0);
         }
@@ -847,9 +862,9 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
     for col in 0..state.tap_explosions.len() {
-        let Some((window, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
+        let Some((window, bright, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
             active.elapsed += delta_time;
-            (active.window, active.elapsed)
+            (active.window, active.bright, active.elapsed)
         }) else {
             continue;
         };
@@ -864,8 +879,8 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             col % cols_per_player
         };
         let lifetime = tap_explosion_noteskin_for_player(state, player)
-            .and_then(|ns| ns.tap_explosion_for_col(local_col, window))
-            .map_or(0.0, |explosion| explosion.animation.duration());
+            .and_then(|ns| ns.tap_explosion_for_col_with_bright(local_col, window, bright))
+            .map_or(0.0, |explosion| explosion.duration());
         if lifetime <= 0.0 || elapsed >= lifetime {
             state.tap_explosions[col] = None;
         }
@@ -881,9 +896,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             let lifetime = state.mine_noteskin[player]
                 .as_ref()
                 .and_then(|ns| ns.mine_hit_explosion.as_ref())
-                .map_or(MINE_EXPLOSION_DURATION, |explosion| {
-                    explosion.animation.duration()
-                });
+                .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.duration());
             if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }
@@ -893,6 +906,14 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
         if let Some(render_info) = slot
             && state.total_elapsed_in_screen - render_info.started_at_screen_s
                 >= HOLD_JUDGMENT_TOTAL_DURATION
+        {
+            *slot = None;
+        }
+    }
+    for slot in &mut state.held_miss_judgments {
+        if let Some(render_info) = slot
+            && state.total_elapsed_in_screen - render_info.started_at_screen_s
+                >= HELD_MISS_TOTAL_DURATION
         {
             *slot = None;
         }

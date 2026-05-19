@@ -87,6 +87,20 @@ const TEXT_CACHE_LIMIT: usize = 4096;
 
 thread_local! {
     static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(1024));
+    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
+}
+
+#[inline(always)]
+fn cached_u32_text(value: u32) -> Arc<str> {
+    cached_text(&UINT_TEXT_CACHE, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
+}
+
+#[inline(always)]
+fn unknown_text() -> Arc<str> {
+    static UNKNOWN: OnceLock<Arc<str>> = OnceLock::new();
+    UNKNOWN.get_or_init(|| Arc::<str>::from("?")).clone()
 }
 
 #[inline(always)]
@@ -180,7 +194,6 @@ struct CourseRatingMeta {
 
 struct InitData {
     all_entries: Vec<MusicWheelEntry>,
-    pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
 }
@@ -226,7 +239,6 @@ pub struct State {
     pub session_elapsed: f32,
 
     all_entries: Vec<MusicWheelEntry>,
-    pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
     bg: visual_style_bg::State,
@@ -998,7 +1010,6 @@ fn build_init_data() -> InitData {
 
     InitData {
         all_entries,
-        pack_course_counts: HashMap::new(),
         course_meta_by_path,
         course_text_color_overrides,
     }
@@ -1181,7 +1192,6 @@ pub fn init() -> State {
         current_banner_key: "banner1.png".to_string(),
         session_elapsed: 0.0,
         all_entries: init.all_entries,
-        pack_course_counts: init.pack_course_counts,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
         bg: visual_style_bg::State::new(),
@@ -1983,10 +1993,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build(
-        &tr("ScreenTitles", "SelectCourse"),
-        None,
-    ));
+    screen_bars::push(&mut actors, &tr("ScreenTitles", "SelectCourse"));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
@@ -2047,45 +2054,44 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         match selected_rating {
             Some(rating) => {
                 let meter = if let Some(course_meter) = rating.course_meter {
-                    course_meter.to_string()
+                    cached_u32_text(course_meter)
                 } else if rating.meter_count > 0 {
-                    format!(
-                        "{}",
-                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as i32
+                    cached_u32_text(
+                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as u32,
                     )
                 } else {
-                    "?".to_string()
+                    unknown_text()
                 };
                 if rating.rated_entry_count > 0 {
                     (
-                        rating.totals.steps.to_string(),
-                        rating.totals.jumps.to_string(),
-                        rating.totals.holds.to_string(),
-                        rating.totals.mines.to_string(),
-                        rating.totals.hands.to_string(),
-                        rating.totals.rolls.to_string(),
+                        cached_u32_text(rating.totals.steps),
+                        cached_u32_text(rating.totals.jumps),
+                        cached_u32_text(rating.totals.holds),
+                        cached_u32_text(rating.totals.mines),
+                        cached_u32_text(rating.totals.hands),
+                        cached_u32_text(rating.totals.rolls),
                         meter,
                     )
                 } else {
                     (
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
                         meter,
                     )
                 }
             }
             None => (
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
             ),
         };
 
@@ -2135,19 +2141,22 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         show_rivals: false,
         loading_text: None,
     };
-    actors.extend(select_pane::build_base(select_pane::StatsPaneParams {
-        pane_cx,
-        accent_color: pane_sel_col,
-        values: select_pane::StatsValues {
-            steps: steps_text,
-            mines: mines_text,
-            jumps: jumps_text,
-            hands: hands_text,
-            holds: holds_text,
-            rolls: rolls_text,
+    select_pane::push_base(
+        &mut actors,
+        select_pane::StatsPaneParams {
+            pane_cx,
+            accent_color: pane_sel_col,
+            values: select_pane::StatsValues {
+                steps: steps_text,
+                mines: mines_text,
+                jumps: jumps_text,
+                hands: hands_text,
+                holds: holds_text,
+                rolls: rolls_text,
+            },
+            meter: (!gs_view.show_rivals).then_some(meter_text),
         },
-        meter: (!gs_view.show_rivals).then_some(meter_text),
-    }));
+    );
     let pane_layout = select_pane::layout();
     let lines = [
         (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
@@ -2399,7 +2408,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         screen_center_x() - 345.5
     };
     let step_artist_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
-    actors.extend(step_artist_bar::build(
+    step_artist_bar::push(
+        &mut actors,
         step_artist_bar::StepArtistBarParams {
             x0: step_artist_x0,
             center_y: step_artist_y,
@@ -2417,7 +2427,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 1.0,
             ],
         },
-    ));
+    );
 
     if has_desc {
         actors.push(act!(quad:
@@ -2445,10 +2455,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
         selection_animation_beat,
-        pack_song_counts: &state.pack_course_counts,
         color_pack_headers: true,
+        selected_charts: [None, None],
         preferred_difficulty_index: [0, 0],
-        selected_steps_index: [0, 0],
         song_box_color: None,
         song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
         song_text_color_overrides: Some(&state.course_text_color_overrides),
@@ -2459,6 +2468,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
         allow_online_fetch: false,
         new_pack_names: None,
+        pack_sync_prefs: None,
+        default_sync_offset: crate::config::DefaultSyncOffset::Null,
     }));
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {

@@ -1,9 +1,10 @@
 use super::{
-    EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE,
+    EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, MultitapPhase, SONG_LUA_INITIAL_LIFE,
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
-    SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, compile_song_lua,
-    file_path_string,
+    SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaOverlayState, SongLuaPlayerContext,
+    SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
+    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, multitap_deco_state,
+    push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 use crate::engine::present::actors::TextAlign;
 use chrono::{Datelike, Local};
@@ -763,6 +764,194 @@ return Def.ActorFrame{
                 && matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. })
         }),
         "noteskin actor should materialize as a sprite overlay when it resolves to an image"
+    );
+}
+
+#[test]
+fn compile_song_lua_reuses_noteskin_tap_model_slots() {
+    let song_dir = test_dir("noteskin-tap-model-slots");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+	return Def.ActorFrame{
+	    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", "ddr-note")..{
+	        Name="NoteskinTap",
+	    },
+	}
+	"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Noteskin Tap Model Slots"),
+    )
+    .unwrap();
+    let overlay = compiled
+        .overlays
+        .iter()
+        .find(|overlay| overlay.name.as_deref() == Some("NoteskinTap"))
+        .unwrap();
+    let SongLuaOverlayKind::NoteskinActor { slots } = &overlay.kind else {
+        panic!("tap note model should keep loaded noteskin slots");
+    };
+    assert!(slots.len() >= 2);
+    assert!(slots.iter().any(|slot| {
+        slot.texture_key().to_ascii_lowercase().contains("ddr-note")
+            && slot
+                .model
+                .as_ref()
+                .is_some_and(|model| model.vertices.len() > 6)
+    }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [0.0, 0.0])
+        })
+    }));
+}
+
+#[test]
+fn multitap_sample_eases_step_visibility_edges() {
+    let baseline = SongLuaOverlayState {
+        visible: false,
+        ..SongLuaOverlayState::default()
+    };
+    let hidden = baseline;
+    let visible_a = SongLuaOverlayState {
+        visible: true,
+        x: 100.0,
+        y: -20.0,
+        rot_z_deg: 90.0,
+        ..SongLuaOverlayState::default()
+    };
+    let visible_b = SongLuaOverlayState {
+        visible: true,
+        x: 120.0,
+        y: -10.0,
+        rot_z_deg: 90.0,
+        ..SongLuaOverlayState::default()
+    };
+    let samples = [
+        (0.0, hidden),
+        (0.125, visible_a),
+        (0.25, visible_b),
+        (0.375, hidden),
+    ];
+    let mut eases = Vec::new();
+
+    push_overlay_sample_eases(&mut eases, 7, baseline, &samples);
+
+    assert!(eases.iter().any(|ease| {
+        ease.overlay_index == 7
+            && ease.start == 0.125
+            && ease.limit == 0.0
+            && ease.to.visible == Some(true)
+            && ease.to.x == Some(100.0)
+            && ease.to.y == Some(-20.0)
+    }));
+    assert!(eases.iter().any(|ease| {
+        ease.overlay_index == 7
+            && ease.start == 0.125
+            && ease.limit == 0.125
+            && ease.from.x == Some(100.0)
+            && ease.to.x == Some(120.0)
+            && ease.to.visible == Some(true)
+    }));
+    let hide = eases
+        .iter()
+        .find(|ease| {
+            ease.overlay_index == 7
+                && ease.start == 0.375
+                && ease.limit == 0.0
+                && ease.to.visible == Some(false)
+        })
+        .expect("visibility should step off instead of tweening to the baseline");
+    assert_eq!(hide.to.x, None);
+    assert_eq!(hide.to.y, None);
+    assert!(!eases.iter().any(|ease| {
+        ease.to.visible == Some(false)
+            && ease.limit > 0.0
+            && (ease.to.x.is_some() || ease.to.y.is_some())
+    }));
+}
+
+#[test]
+fn multitap_deco_state_rotates_yinyang_during_bounce() {
+    let state = multitap_deco_state(
+        SongLuaOverlayState::default(),
+        "ddr-note",
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 0.75,
+            qtc: 1,
+            visible: true,
+        },
+    );
+
+    assert!(state.visible);
+    assert_eq!(state.rot_z_deg, 135.0);
+}
+
+#[test]
+fn multitap_arrow_sampler_does_not_emit_inactive_baseline() {
+    let baseline = SongLuaOverlayState {
+        visible: true,
+        rot_z_deg: 0.0,
+        ..SongLuaOverlayState::default()
+    };
+    let mut samples = Vec::new();
+
+    push_multitap_arrow_sample(
+        &mut samples,
+        10.0,
+        baseline,
+        "ddr-note",
+        1,
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 1.0,
+            qtc: 1,
+            visible: true,
+        },
+    );
+    push_multitap_arrow_sample(
+        &mut samples,
+        10.001,
+        baseline,
+        "ddr-note",
+        1,
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 0.0,
+            qtc: 0,
+            visible: false,
+        },
+    );
+
+    assert_eq!(samples.len(), 1);
+    assert_eq!(samples[0].1.visible, true);
+    assert_eq!(samples[0].1.rot_z_deg, 90.0);
+
+    let mut eases = Vec::new();
+    push_overlay_sample_eases(&mut eases, 3, baseline, &samples);
+
+    assert!(!eases.iter().any(|ease| {
+        ease.overlay_index == 3
+            && ease.limit > 0.0
+            && ease.from.rot_z_deg == Some(90.0)
+            && ease.to.rot_z_deg == Some(0.0)
+    }));
+    assert!(
+        !eases
+            .iter()
+            .any(|ease| ease.overlay_index == 3 && ease.to.visible == Some(false))
     );
 }
 
@@ -2480,6 +2669,53 @@ return Def.ActorFrame{
     assert_eq!(compiled.messages[0].message, "update-queued");
     assert_eq!(compiled.overlays.len(), 1);
     assert_eq!(compiled.overlays[0].initial_state.x, 12.0);
+}
+
+#[test]
+fn compile_song_lua_samples_update_function_overlay_motion() {
+    let song_dir = test_dir("set-update-function-overlay-motion");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local target
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self)
+            target = self
+            self:visible(false):zoomto(16, 16)
+        end,
+    },
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                target:visible(beat >= 2 and beat <= 4)
+                target:x(beat * 10)
+                target:rotationz(beat * 15)
+            end)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let mut context = SongLuaCompileContext::new(&song_dir, "SetUpdateFunction Overlay Motion");
+    context.music_length_seconds = 6.0;
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.overlays.len(), 1);
+    assert!(
+        compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == 0 && ease.from.x.is_some() && ease.to.x.is_some()
+        })
+    );
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == 0 && ease.from.rot_z_deg.is_some() && ease.to.rot_z_deg.is_some()
+    }));
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == 0 && ease.from.visible.is_some() && ease.to.visible.is_some()
+    }));
 }
 
 #[test]
@@ -7733,7 +7969,59 @@ return Def.ActorFrame{
     )
     .unwrap();
     assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "-96:0");
+    assert_eq!(compiled.messages[0].message, "-96:-125");
+    assert_eq!(compiled.note_hides.len(), 1);
+    assert_eq!(compiled.note_hides[0].player, 0);
+    assert_eq!(compiled.note_hides[0].column, 0);
+}
+
+#[test]
+fn compile_song_lua_supports_double_style_notefield_columns() {
+    let song_dir = test_dir("double-style-notefield-columns");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function(actor)
+            local style = GAMESTATE:GetCurrentStyle()
+            local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+            local cols = nf:GetColumnActors()
+            local col8 = style:GetColumnInfo(PLAYER_1, 8)
+            mod_actions = {
+                {
+                    1,
+                    string.format(
+                        "%s:%s:%s:%d:%.0f:%d:%.0f:%d:%.0f",
+                        style:GetName(),
+                        style:GetStepsType(),
+                        style:GetStyleType(),
+                        style:ColumnsPerPlayer(),
+                        style:GetWidth(PLAYER_1),
+                        #cols,
+                        cols[8]:GetX(),
+                        col8.Track,
+                        col8.XOffset
+                    ),
+                    true
+                },
+            }
+        end)
+    end,
+}
+"#,
+    )
+    .unwrap();
+
+    let mut context = SongLuaCompileContext::new(&song_dir, "Double Style NoteField Columns");
+    context.style_name = "double".to_string();
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(
+        compiled.messages[0].message,
+        "double:StepsType_Dance_Double:StyleType_OnePlayerTwoSides:8:512:8:224:7:224"
+    );
 }
 
 #[test]
@@ -7771,6 +8059,71 @@ return Def.ActorFrame{
     .unwrap();
     assert_eq!(compiled.messages.len(), 1);
     assert_eq!(compiled.messages[0].message, "1.00:0.25:true");
+}
+
+#[test]
+fn compile_song_lua_custom_mod_vars_do_not_probe_as_player_options() {
+    let song_dir = test_dir("custom-mod-vars-player-options");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+local activeMods = { ConstellationBg = { value = 1 } }
+
+local function getVar(name)
+    local value = 0
+    if not po[name] then
+        local activeMod = activeMods[name]
+        if activeMod and activeMod.value then
+            value = activeMod.value
+        end
+    end
+    return value
+end
+
+return Def.ActorFrame{
+    InitCommand=function(self)
+        if type(po["MoveX16"]) ~= "function" then
+            error("expected real multicol PlayerOptions method")
+        end
+        if po["ConstellationBg"] ~= nil then
+            error("custom mod variable should not be a PlayerOptions method")
+        end
+    end,
+    Def.ActorFrame{
+        Name="ConstellationFrame",
+        ConstellationBgShowMessageCommand=function(self)
+            if getVar("ConstellationBg") ~= 1 then
+                error("custom mod variable masked by PlayerOptions")
+            end
+            local decoy = Def.ActorFrame{ Name="Decoy" }
+            local constellationFrame = decoy:GetChild("ConstellationFrame")
+            local starfieldFrame = constellationFrame and constellationFrame:GetChild("StarfieldFrame")
+            local starFrame = starfieldFrame and starfieldFrame:GetChild("StarFrame")
+            if starFrame ~= nil then
+                error("missing actor children should not synthesize a StarFrame")
+            end
+            self:x(12)
+        end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                MESSAGEMAN:Broadcast("ConstellationBgShow")
+            end)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Custom Mod Vars"),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -10806,6 +11159,135 @@ fn compile_song_lua_supports_step_your_game_up_sample_if_present() {
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(!compiled.beat_mods.is_empty());
     assert!(!compiled.overlays.is_empty());
+}
+
+#[test]
+fn compile_song_lua_supports_flip69_sample_if_present() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("songs/ITL Online 2026 Unlocks/[10] flip69 (DX) [Telperion]");
+    let entry = root.join("multitap/Default.lua");
+    if !entry.is_file() {
+        return;
+    }
+
+    let mut context = SongLuaCompileContext::new(&root, "[5604] [10] flip69");
+    context.style_name = "double".to_string();
+    context.music_length_seconds = 48.0;
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            noteskin_name: "ddr-note".to_string(),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: false,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert!(!compiled.overlays.is_empty());
+    assert!(!compiled.overlay_eases.is_empty());
+    assert!(!compiled.note_hides.is_empty());
+    let field = compiled
+        .overlays
+        .iter()
+        .find(|overlay| overlay.name.as_deref() == Some("MultitapFrameP1"))
+        .unwrap();
+    assert_eq!(field.initial_state.x, context.players[0].screen_x);
+    assert_eq!(field.initial_state.y, context.players[0].screen_y);
+    let first_arrow = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapArrowP1_1"))
+        .unwrap();
+    assert!(
+        compiled
+            .overlay_eases
+            .iter()
+            .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
+    );
+    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[first_arrow].kind else {
+        panic!("ddr-note multitap arrow should reuse the loaded noteskin actor");
+    };
+    assert!(slots.len() >= 2);
+    assert!(slots.iter().any(|slot| {
+        slot.texture_key().to_ascii_lowercase().contains("ddr-note")
+            && slot
+                .model
+                .as_ref()
+                .is_some_and(|model| model.vertices.len() > 6)
+    }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [1.0, 1.0])
+        })
+    }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [0.0, 0.0])
+        })
+    }));
+    assert!(slots.iter().any(|slot| slot.uv_velocity[1] < -0.5));
+    let first_frame = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapP1_1"))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_frame
+            && ease
+                .to
+                .y
+                .is_some_and(|y| (y - THEME_RECEPTOR_Y_STD).abs() <= 0.01)
+    }));
+    let first_deco = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapDeco1_1"))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_deco
+            && ease
+                .to
+                .effect_color1
+                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
+    }));
+    let first_deco_child = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.parent_index == Some(first_deco))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_deco_child
+            && ease
+                .to
+                .effect_color1
+                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
+    }));
+    let explosion_message = "__songlua_multitap_explosion_p1_4";
+    assert!(compiled.messages.iter().any(|message| {
+        message.message == explosion_message && (message.beat - 40.0).abs() <= 0.01
+    }));
+    assert!(compiled.overlays.iter().any(|overlay| {
+        overlay.message_commands.iter().any(|command| {
+            command.message == explosion_message
+                && command
+                    .blocks
+                    .iter()
+                    .any(|block| block.delta.visible.is_some() || block.delta.diffuse.is_some())
+        })
+    }));
 }
 
 #[test]

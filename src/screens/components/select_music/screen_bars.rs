@@ -1,11 +1,14 @@
+use crate::act;
 use crate::assets::i18n::tr;
-use crate::engine::present::actors::Actor;
+use crate::assets::{FontRole, current_machine_font_key};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::space::screen_center_x;
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 
-pub fn build(top_title: &str, stage_number: Option<usize>) -> [Actor; 2] {
+pub fn push(out: &mut Vec<Actor>, top_title: &str) {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
     let p1_avatar = p1_profile
@@ -25,8 +28,6 @@ pub fn build(top_title: &str, stage_number: Option<usize>) -> [Actor; 2] {
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");
     let event_mode = tr("Common", "EventMode");
-
-    let stage_text = stage_number.map(|n| format!("Stage {n}"));
 
     let (footer_left, left_avatar) = if p1_joined {
         (
@@ -53,30 +54,62 @@ pub fn build(top_title: &str, stage_number: Option<usize>) -> [Actor; 2] {
         (Some(press_start.as_ref()), None)
     };
 
-    [
-        screen_bar::build(ScreenBarParams {
-            title: top_title,
-            title_placement: ScreenBarTitlePlacement::Left,
-            position: ScreenBarPosition::Top,
-            transparent: false,
-            fg_color: [1.0; 4],
-            left_text: None,
-            center_text: None,
-            right_text: stage_text.as_deref(),
-            left_avatar: None,
-            right_avatar: None,
-        }),
-        screen_bar::build(ScreenBarParams {
-            title: event_mode.as_ref(),
-            title_placement: ScreenBarTitlePlacement::Center,
-            position: ScreenBarPosition::Bottom,
-            transparent: false,
-            fg_color: [1.0; 4],
-            left_text: footer_left,
-            center_text: None,
-            right_text: footer_right,
-            left_avatar,
-            right_avatar,
-        }),
-    ]
+    out.push(screen_bar::build_select_music(ScreenBarParams {
+        title: top_title,
+        title_placement: ScreenBarTitlePlacement::Left,
+        position: ScreenBarPosition::Top,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: None,
+        center_text: None,
+        right_text: None,
+        left_avatar: None,
+        right_avatar: None,
+    }));
+    out.push(screen_bar::build_select_music(ScreenBarParams {
+        title: event_mode.as_ref(),
+        title_placement: ScreenBarTitlePlacement::Center,
+        position: ScreenBarPosition::Bottom,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: footer_left,
+        center_text: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
+    }));
+}
+
+pub fn build_stage_display(stage_number: usize) -> Actor {
+    let text = format!("Stage {stage_number}");
+    Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [screen_center_x(), 40.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 124,
+        children: vec![
+            act!(quad:
+                align(0.5, 0.5):
+                xy(0.0, 0.0):
+                zoomto(75.0, 22.5):
+                diffuse(0.0, 0.0, 0.0, 0.4):
+                fadeleft(0.2):
+                faderight(0.2):
+                z(0)
+            ),
+            act!(text:
+                font(current_machine_font_key(FontRole::Normal)):
+                settext(text):
+                align(0.5, 0.5):
+                xy(0.0, -0.75):
+                zoom(0.75):
+                shadowlength(0.75):
+                strokecolor(0.0, 0.0, 0.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(1):
+                horizalign(center)
+            ),
+        ],
+    }
 }

@@ -392,6 +392,10 @@ fn difficulty_meter(difficulty: SongLuaDifficulty) -> i32 {
 
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    table.set(
+        "__songlua_reference_bpm",
+        player.display_bpms[1].max(player.display_bpms[0]).max(1.0),
+    )?;
     install_speedmod_method(lua, &table, "CMod", player.speedmod, SongLuaSpeedMod::C)?;
     install_speedmod_state_method(lua, &table, "CAMod", Value::Nil)?;
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
@@ -510,6 +514,9 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
             let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
                 return Ok(Value::Nil);
             };
+            if !is_player_option_method_name(&name) {
+                return Ok(Value::Nil);
+            }
             Ok(Value::Function(create_player_option_method(
                 lua,
                 &fallback_owner,
@@ -519,6 +526,17 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     )?;
     let _ = table.set_metatable(Some(mt));
     Ok(table)
+}
+
+fn is_player_option_method_name(name: &str) -> bool {
+    SONG_LUA_PLAYER_OPTION_CAPABILITIES.contains(&name)
+        || SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES
+            .iter()
+            .any(|prefix| {
+                name.strip_prefix(prefix)
+                    .and_then(|suffix| suffix.parse::<usize>().ok())
+                    .is_some_and(|column| (1..=16).contains(&column))
+            })
 }
 
 fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
@@ -1555,38 +1573,37 @@ fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
 
 pub(super) fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let style_name = style_name.to_string();
-    let style_name_for_get = style_name.clone();
+    let style = song_lua_style_info(style_name);
+    let style_name_for_get = style.name.to_string();
     table.set(
         "GetName",
         lua.create_function(move |lua, _args: MultiValue| {
             Ok(Value::String(lua.create_string(&style_name_for_get)?))
         })?,
     )?;
-    set_string_method(lua, &table, "GetStepsType", "StepsType_Dance_Single")?;
-    set_string_method(lua, &table, "GetStyleType", "StyleType_OnePlayerOneSide")?;
+    set_string_method(lua, &table, "GetStepsType", style.steps_type)?;
+    set_string_method(lua, &table, "GetStyleType", style.style_type)?;
     table.set(
         "ColumnsPerPlayer",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_NOTE_COLUMNS as i64))?,
+        lua.create_function(move |_, _args: MultiValue| Ok(style.columns as i64))?,
     )?;
     table.set(
         "GetWidth",
-        lua.create_function(|_, _args: MultiValue| Ok(256.0_f32))?,
+        lua.create_function(move |_, _args: MultiValue| Ok(style.width))?,
     )?;
     table.set(
         "GetColumnInfo",
-        lua.create_function(|lua, args: MultiValue| {
+        lua.create_function(move |lua, args: MultiValue| {
             let index = method_arg(&args, 1)
                 .cloned()
                 .and_then(read_i32_value)
                 .unwrap_or(1)
-                .clamp(1, SONG_LUA_NOTE_COLUMNS as i32) as usize
+                .clamp(1, style.columns as i32) as usize
                 - 1;
-            let names = ["Left", "Down", "Up", "Right"];
             let info = lua.create_table()?;
-            info.set("Name", names[index])?;
+            info.set("Name", song_lua_style_column_name(index))?;
             info.set("Track", index as i64)?;
-            info.set("XOffset", SONG_LUA_COLUMN_X[index])?;
+            info.set("XOffset", song_lua_style_column_x(style.name, index))?;
             Ok(info)
         })?,
     )?;

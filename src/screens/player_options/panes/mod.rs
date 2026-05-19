@@ -187,6 +187,16 @@ pub(super) fn apply_profile_defaults(
             })
             .unwrap_or(0);
     }
+    if let Some(row) = row_map.get_mut(RowId::HeldGraphic) {
+        row.selected_choice_index[player_idx] = assets::held_miss_texture_choices()
+            .iter()
+            .position(|choice| {
+                choice
+                    .key
+                    .eq_ignore_ascii_case(profile.held_miss_graphic.as_str())
+            })
+            .unwrap_or(0);
+    }
     // Initialize Mini row from profile (range -100..150, stored as percent).
     if let Some(row) = row_map.get_mut(RowId::Mini) {
         let val = profile.mini_percent.clamp(-100, 150);
@@ -288,7 +298,7 @@ fn init_opted_in_bitmask_rows(
         let RowBehavior::Bitmask(binding) = row.behavior else {
             continue;
         };
-        if binding.init.is_none() {
+        if binding.init().is_none() {
             continue;
         }
         let row = row_map.get_mut(id).expect("row was just observed");

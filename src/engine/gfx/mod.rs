@@ -87,13 +87,13 @@ impl<V> TextureHandleMap<V> {
 pub struct RenderList {
     pub clear_color: [f32; 4],
     pub cameras: Vec<Matrix4>,
+    pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub objects: Vec<RenderObject>,
 }
 #[derive(Clone)]
 pub struct RenderObject {
     pub object_type: ObjectType,
     pub texture_handle: TextureHandle,
-    pub transform: Matrix4,
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,
@@ -164,40 +164,159 @@ impl Deref for TexturedMeshVertices {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MeshMode {
-    Triangles,
+#[repr(C)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
+pub struct SpriteInstanceRaw {
+    pub center: [f32; 4],
+    pub size: [f32; 2],
+    pub rot_sin_cos: [f32; 2],
+    pub tint: [f32; 4],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub local_offset: [f32; 2],
+    pub local_offset_rot_sin_cos: [f32; 2],
+    pub edge_fade: [f32; 4],
+    pub texture_mask: f32,
 }
 
-#[derive(Clone)]
-pub enum ObjectType {
-    Sprite {
-        center: [f32; 4],
-        size: [f32; 2],
-        rot_sin_cos: [f32; 2],
+#[repr(C)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
+pub struct TexturedMeshInstanceRaw {
+    pub model_col0: [f32; 4],
+    pub model_col1: [f32; 4],
+    pub model_col2: [f32; 4],
+    pub model_col3: [f32; 4],
+    pub tint: [f32; 4],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub uv_tex_shift: [f32; 2],
+    pub texture_mask: f32,
+}
+
+impl TexturedMeshInstanceRaw {
+    #[inline(always)]
+    pub fn new(
+        transform: Matrix4,
         tint: [f32; 4],
-        uv_scale: [f32; 2],
-        uv_offset: [f32; 2],
-        local_offset: [f32; 2],
-        local_offset_rot_sin_cos: [f32; 2],
-        edge_fade: [f32; 4],
-        texture_mask: bool,
-    },
-    Mesh {
-        tint: [f32; 4],
-        vertices: Arc<[MeshVertex]>,
-        mode: MeshMode,
-    },
-    #[allow(dead_code)]
-    TexturedMesh {
-        tint: [f32; 4],
-        vertices: TexturedMeshVertices,
-        geom_cache_key: TMeshCacheKey,
-        mode: MeshMode,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         texture_mask: bool,
+    ) -> Self {
+        Self {
+            model_col0: [
+                transform.x_axis.x,
+                transform.x_axis.y,
+                transform.x_axis.z,
+                transform.x_axis.w,
+            ],
+            model_col1: [
+                transform.y_axis.x,
+                transform.y_axis.y,
+                transform.y_axis.z,
+                transform.y_axis.w,
+            ],
+            model_col2: [
+                transform.z_axis.x,
+                transform.z_axis.y,
+                transform.z_axis.z,
+                transform.z_axis.w,
+            ],
+            model_col3: [
+                transform.w_axis.x,
+                transform.w_axis.y,
+                transform.w_axis.z,
+                transform.w_axis.w,
+            ],
+            tint,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            texture_mask: texture_mask as u8 as f32,
+        }
+    }
+
+    #[inline(always)]
+    pub fn transform(&self) -> Matrix4 {
+        Matrix4::from_cols_array(&[
+            self.model_col0[0],
+            self.model_col0[1],
+            self.model_col0[2],
+            self.model_col0[3],
+            self.model_col1[0],
+            self.model_col1[1],
+            self.model_col1[2],
+            self.model_col1[3],
+            self.model_col2[0],
+            self.model_col2[1],
+            self.model_col2[2],
+            self.model_col2[3],
+            self.model_col3[0],
+            self.model_col3[1],
+            self.model_col3[2],
+            self.model_col3[3],
+        ])
+    }
+
+    #[inline(always)]
+    pub fn set_transform(&mut self, transform: Matrix4) {
+        self.model_col0 = [
+            transform.x_axis.x,
+            transform.x_axis.y,
+            transform.x_axis.z,
+            transform.x_axis.w,
+        ];
+        self.model_col1 = [
+            transform.y_axis.x,
+            transform.y_axis.y,
+            transform.y_axis.z,
+            transform.y_axis.w,
+        ];
+        self.model_col2 = [
+            transform.z_axis.x,
+            transform.z_axis.y,
+            transform.z_axis.z,
+            transform.z_axis.w,
+        ];
+        self.model_col3 = [
+            transform.w_axis.x,
+            transform.w_axis.y,
+            transform.w_axis.z,
+            transform.w_axis.w,
+        ];
+    }
+}
+
+#[derive(Clone)]
+pub enum ObjectType {
+    Sprite(u32),
+    Mesh {
+        transform: Matrix4,
+        tint: [f32; 4],
+        vertices: Arc<[MeshVertex]>,
+    },
+    TexturedMesh {
+        instance: TexturedMeshInstanceRaw,
+        vertices: TexturedMeshVertices,
+        geom_cache_key: TMeshCacheKey,
         depth_test: bool,
     },
 }

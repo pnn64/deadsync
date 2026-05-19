@@ -18,6 +18,7 @@ const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const BODY_FONT_HEIGHT: f32 = 19.0;
 const BODY_LINE_SPACING: f32 = 24.0;
 const UPPER_ROW_HEIGHT: f32 = 25.0;
+const UPPER_HEADER_FONT: &str = "wendy";
 const OVERLAY_ROW_HEIGHT: f32 = 24.0;
 const POPUP_DISMISS_TEXT: &str = "Press &START; to dismiss.";
 const MORE_INFO_TEXT: &str = "More Information";
@@ -167,8 +168,13 @@ struct BodyLayout {
     zoom: f32,
 }
 
+struct HeaderLayout {
+    text: String,
+    zoom: f32,
+}
+
 #[inline(always)]
-fn wrap_body_text_with_measure<F>(
+fn wrap_text_with_measure<F>(
     raw_text: &str,
     max_width_px: f32,
     zoom: f32,
@@ -242,10 +248,47 @@ where
 
     for zoom_step in (2..=20).rev() {
         let zoom = zoom_step as f32 / 20.0;
-        let wrapped = wrap_body_text_with_measure(text, pane_width, zoom, &mut measure);
+        let wrapped = wrap_text_with_measure(text, pane_width, zoom, &mut measure);
         let line_count = wrapped.split('\n').count().max(1) as f32;
         let block_height = BODY_FONT_HEIGHT + (line_count - 1.0).max(0.0) * BODY_LINE_SPACING;
         let layout = BodyLayout {
+            text: wrapped,
+            zoom,
+        };
+        if block_height * zoom <= max_height {
+            return layout;
+        }
+        best = layout;
+    }
+
+    best
+}
+
+#[inline(always)]
+fn header_layout_with_measure<F>(
+    text: &str,
+    pane_width: f32,
+    row_height: f32,
+    font_height: f32,
+    line_spacing: f32,
+    mut measure: F,
+) -> HeaderLayout
+where
+    F: FnMut(&str) -> f32,
+{
+    let max_width = pane_width - 6.0;
+    let max_height = row_height * 2.0;
+    let mut best = HeaderLayout {
+        text: text.to_string(),
+        zoom: 0.1,
+    };
+
+    for zoom_step in (2..=10).rev() {
+        let zoom = zoom_step as f32 / 20.0;
+        let wrapped = wrap_text_with_measure(text, max_width, zoom, &mut measure);
+        let line_count = wrapped.split('\n').count().max(1) as f32;
+        let block_height = font_height + (line_count - 1.0).max(0.0) * line_spacing;
+        let layout = HeaderLayout {
             text: wrapped,
             zoom,
         };
@@ -278,6 +321,35 @@ fn body_layout(
             body_layout_with_measure(text, pane_width, pane_height, row_height, |candidate| {
                 candidate.chars().count() as f32 * 8.0
             })
+        })
+}
+
+#[inline(always)]
+fn upper_header_layout(asset_manager: &AssetManager, text: &str, pane_width: f32) -> HeaderLayout {
+    asset_manager
+        .with_fonts(|all_fonts| {
+            asset_manager.with_font(UPPER_HEADER_FONT, |header_font| {
+                header_layout_with_measure(
+                    text,
+                    pane_width,
+                    UPPER_ROW_HEIGHT,
+                    header_font.height as f32,
+                    header_font.line_spacing.max(header_font.height) as f32,
+                    |candidate| {
+                        font::measure_line_width_logical(header_font, candidate, all_fonts) as f32
+                    },
+                )
+            })
+        })
+        .unwrap_or_else(|| {
+            header_layout_with_measure(
+                text,
+                pane_width,
+                UPPER_ROW_HEIGHT,
+                36.0,
+                36.0,
+                |candidate| candidate.chars().count() as f32 * 16.0,
+            )
         })
 }
 
@@ -387,6 +459,28 @@ fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
     }
 
     attrs
+}
+
+#[inline(always)]
+fn build_upper_header_text(
+    asset_manager: &AssetManager,
+    text: String,
+    pane_width: f32,
+    y: f32,
+    z: i16,
+) -> Actor {
+    let layout = upper_header_layout(asset_manager, text.as_str(), pane_width);
+    act!(text:
+        font(UPPER_HEADER_FONT):
+        settext(layout.text):
+        align(0.5, 0.5):
+        xy(0.0, y):
+        zoom(layout.zoom):
+        wrapwidthpixels((pane_width - 6.0) / layout.zoom):
+        horizalign(center):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+        z(z)
+    )
 }
 
 #[inline(always)]
@@ -624,7 +718,8 @@ fn build_upper_panel(
         diffuse(0.0, 0.0, 0.0, 0.85):
         z(1)
     ));
-    children.push(build_header_text(
+    children.push(build_upper_header_text(
+        asset_manager,
         header_name(progress.name.as_str(), progress.is_doubles),
         pane_width,
         -pane_height * 0.5 + 15.0,
@@ -883,7 +978,9 @@ pub fn build_itl_event_overlay(
 
 #[cfg(test)]
 mod tests {
-    use super::{OVERLAY_ROW_HEIGHT, body_layout_with_measure};
+    use super::{
+        OVERLAY_ROW_HEIGHT, UPPER_ROW_HEIGHT, body_layout_with_measure, header_layout_with_measure,
+    };
 
     #[test]
     fn long_achievement_titles_wrap_without_shrinking_body_text() {
@@ -920,5 +1017,19 @@ mod tests {
             |candidate| candidate.chars().count() as f32 * 8.0,
         );
         assert!(layout.zoom < 1.0);
+    }
+
+    #[test]
+    fn doubles_itl_header_wraps_in_narrow_progress_box() {
+        let layout = header_layout_with_measure(
+            "ITL 2026 Doubles",
+            118.0,
+            UPPER_ROW_HEIGHT,
+            36.0,
+            36.0,
+            |candidate| candidate.chars().count() as f32 * 16.0,
+        );
+        assert_eq!(layout.zoom, 0.5);
+        assert_eq!(layout.text, "ITL 2026\nDoubles");
     }
 }

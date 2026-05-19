@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, TextAlign};
@@ -452,7 +453,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         row_spacing: MENU_ROW_SPACING,
         selected_color: selected,
         normal_color: normal,
-        font: "wendy",
+        font: current_machine_font_key(FontRole::Bold),
     };
     actors.extend(menu_list::build_vertical_menu(params));
 
@@ -462,7 +463,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let event_mode = tr("Common", "EventMode");
     let press_start = tr("Common", "PressStart");
 
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
         title: event_mode.as_ref(),
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
@@ -550,6 +551,29 @@ fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
     }
 }
 
+#[inline(always)]
+const fn menu_nav_delta(action: VirtualAction) -> Option<isize> {
+    match action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => Some(-1),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => Some(1),
+        _ => None,
+    }
+}
+
 // Event-driven virtual input handler
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if let Some(side) = screen_input::menu_lr_side(ev.action)
@@ -587,25 +611,45 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if let Some(delta) = menu_nav_delta(ev.action) {
+        move_selection(state, delta);
+        return ScreenAction::None;
+    }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             start_selected(state, matches!(ev.action, VirtualAction::p2_start))
         }
         VirtualAction::p1_back | VirtualAction::p2_back => ScreenAction::Exit,
-        VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => {
-            move_selection(state, -1);
-            ScreenAction::None
-        }
-        VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down => {
-            move_selection(state, 1);
-            ScreenAction::None
-        }
         _ => ScreenAction::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::menu_nav_delta;
+    use crate::engine::input::VirtualAction;
+
+    #[test]
+    fn title_menu_left_and_up_move_previous() {
+        assert_eq!(menu_nav_delta(VirtualAction::p1_left), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_menu_left), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_up), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_menu_up), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_left), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_menu_left), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_up), Some(-1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_menu_up), Some(-1));
+    }
+
+    #[test]
+    fn title_menu_right_and_down_move_next() {
+        assert_eq!(menu_nav_delta(VirtualAction::p1_right), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_menu_right), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_down), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p1_menu_down), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_right), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_menu_right), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_down), Some(1));
+        assert_eq!(menu_nav_delta(VirtualAction::p2_menu_down), Some(1));
     }
 }

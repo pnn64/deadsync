@@ -51,8 +51,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let speed_mod_zoom = 0.5_f32;
     let speed_mod_scaled_y = 52.0_f32;
     let speed_mod_scaled_zoom = 0.3_f32;
-    let speed_mod_x_p1 = screen_center_x() + widescale(-77.0, -100.0);
-    let speed_mod_x_p2 = screen_center_x() + widescale(140.0, 154.0);
+    let speed_mod_x_p1 = player_option_column_x(P1);
+    let speed_mod_x_p2 = player_option_column_x(P2);
     let speed_mod_x = speed_mod_x_p1;
     // All previews (judgment, hold, noteskin, combo) share this center line.
     // Tweak these to dial in parity with Simply Love.
@@ -136,7 +136,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         asset_manager,
         active,
         show_p2,
-        speed_mod_x,
+        option_column_x: [speed_mod_x_p1, speed_mod_x_p2],
         row_left,
         row_width,
         preview_x: [preview_x_for(P1), preview_x_for(P2)],
@@ -262,8 +262,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 sl_gray
             };
-            // Align Exit horizontally with other single-value options (Speed Mod line)
-            let choice_center_x = speed_mod_x;
+            // Align Exit horizontally with other single-value options. In versus
+            // it remains a shared row, so the stacked cursors stay together.
+            let choice_center_x = if active[P2] && !active[P1] {
+                speed_mod_x_p2
+            } else {
+                speed_mod_x
+            };
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
                 align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(INLINE_CHOICE_VALUE_ZOOM):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
@@ -393,7 +398,7 @@ pub(super) struct FrameCtx<'a> {
     pub asset_manager: &'a AssetManager,
     pub active: [bool; PLAYER_SLOTS],
     pub show_p2: bool,
-    pub speed_mod_x: f32,
+    pub option_column_x: [f32; PLAYER_SLOTS],
     pub row_left: f32,
     pub row_width: f32,
     pub preview_x: [f32; PLAYER_SLOTS],
@@ -525,7 +530,7 @@ pub(super) fn select_preview_texture<'a>(
             if choice.key.eq_ignore_ascii_case("None") {
                 None
             } else {
-                crate::assets::resolve_texture_choice(Some(choice.key.as_str()), choices)
+                crate::assets::resolve_texture_choice(Some(choice.key.as_ref()), choices)
             }
         })
 }
@@ -554,6 +559,10 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
         FAPlusOptions => (state.option_masks[player_idx].fa_plus.bits() & 0b0000_1111).into(),
         FAPlusWindowOptions => ((state.option_masks[player_idx].fa_plus.bits() >> 4) & 0b11).into(),
         GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
+        LiveTimingStats => state.option_masks[player_idx]
+            .live_timing_stats
+            .bits()
+            .into(),
         GameplayExtrasMore => state.option_masks[player_idx]
             .gameplay_extras_more
             .bits()
@@ -592,6 +601,7 @@ pub(super) fn is_multi_select_row(row_id: RowId) -> bool {
             | FAPlusOptions
             | FAPlusWindowOptions
             | GameplayExtras
+            | LiveTimingStats
             | GameplayExtrasMore
             | ResultsExtras
             | MeasureCounterOptions
@@ -891,6 +901,7 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
     match rc.row.id {
         RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
+        RowId::HeldGraphic => draw_held_graphic_preview(actors, rc, primary_player_idx),
         RowId::NoteSkin | RowId::MineSkin | RowId::ReceptorSkin | RowId::TapExplosionSkin => {
             draw_noteskin_family_preview(actors, rc, primary_player_idx)
         }
@@ -901,15 +912,13 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
 
 fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     // Single value display (default behavior)
-    // By default, align single-value choices to the same line as Speed Mod.
+    // By default, align single-value choices to each player's Speed Mod column.
     // For Music Rate, center within the item column (to match SL parity).
-    let mut choice_center_x = rc.fc.speed_mod_x;
+    let mut choice_center_x = rc.fc.option_column_x[primary_player_idx];
     if rc.row.id == RowId::MusicRate {
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
         let item_col_w = rc.fc.row_width - TITLE_BG_WIDTH;
         choice_center_x = item_col_left + item_col_w * 0.5;
-    } else if primary_player_idx == P2 {
-        choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
     }
     let choice_text_idx = rc.row.selected_choice_index[primary_player_idx]
         .min(rc.row.choices.len().saturating_sub(1));
@@ -988,7 +997,7 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 String::new()
             };
             if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
-                let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
+                let p2_choice_center_x = rc.fc.option_column_x[P2];
                 let mut p2_w = crate::engine::present::font::measure_line_width_logical(
                     metrics_font,
                     &p2_text,
@@ -1090,6 +1099,37 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
             && let Some(texture) = texture_for(P2)
         {
             draw_hold_preview(texture, rc.fc.preview_x[P2], &mut *actors);
+        }
+    }
+}
+
+fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+    if rc.row.id == RowId::HeldGraphic {
+        let texture_for = |player_idx: usize| -> Option<&str> {
+            select_preview_texture(rc.row, player_idx, assets::held_miss_texture_choices())
+        };
+        if let Some(texture) = texture_for(primary_player_idx) {
+            actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(rc.fc.preview_x[primary_player_idx], rc.current_row_y):
+                setstate(0):
+                zoom(JUDGMENT_PREVIEW_ZOOM):
+                diffuse(1.0, 1.0, 1.0, rc.a):
+                z(Z_ROW_PREVIEW)
+            ));
+        }
+        if rc.fc.show_p2
+            && primary_player_idx != P2
+            && let Some(texture) = texture_for(P2)
+        {
+            actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(rc.fc.preview_x[P2], rc.current_row_y):
+                setstate(0):
+                zoom(JUDGMENT_PREVIEW_ZOOM):
+                diffuse(1.0, 1.0, 1.0, rc.a):
+                z(Z_ROW_PREVIEW)
+            ));
         }
     }
 }
@@ -1523,7 +1563,7 @@ fn draw_tap_explosion_preview(
     else {
         return;
     };
-    let duration = explosion.animation.duration();
+    let duration = explosion.duration();
     let anim_time = if duration > f32::EPSILON {
         preview_time.rem_euclid(duration)
     } else {

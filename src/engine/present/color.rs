@@ -171,6 +171,24 @@ pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#FF7D00"),
 ];
 
+/// Simply Love SRPG9 event colors mapped to the normal Select Color hue wheel.
+/// The source theme uses `SL.SRPG9.Colors` directly when SRPG9 is active, but
+/// DeadSync's Select Color screen is keyed to `DECORATIVE_RGBA`.
+pub const SRPG9_RGBA: [[f32; 4]; 12] = [
+    rgba_hex("#c32020"), // Red
+    rgba_hex("#bf0052"), // Pink
+    rgba_hex("#9c0082"), // Purple
+    rgba_hex("#5131a4"), // Violet
+    rgba_hex("#006ecb"), // Blue
+    rgba_hex("#009bcf"), // Light Blue
+    rgba_hex("#51c0c8"), // Cyan
+    rgba_hex("#36855b"), // Green-Blue
+    rgba_hex("#3d6526"), // Green
+    rgba_hex("#666000"), // Yellow
+    rgba_hex("#954f00"), // Orange
+    rgba_hex("#954f00"), // Orange
+];
+
 /// Simply Love-ish UI accent palette
 pub const SIMPLY_LOVE_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#FF5D47"),
@@ -252,6 +270,11 @@ pub fn decorative_rgba(idx: i32) -> [f32; 4] {
 }
 
 #[inline(always)]
+pub fn srpg9_rgba(idx: i32) -> [f32; 4] {
+    SRPG9_RGBA[wrap(SRPG9_RGBA.len(), idx)]
+}
+
+#[inline(always)]
 pub fn simply_love_rgba(idx: i32) -> [f32; 4] {
     SIMPLY_LOVE_RGBA[wrap(SIMPLY_LOVE_RGBA.len(), idx)]
 }
@@ -266,4 +289,18 @@ pub fn lighten_rgba(c: [f32; 4]) -> [f32; 4] {
 #[inline(always)]
 pub fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
     simply_love_rgba(active_idx - 2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn srpg9_order_tracks_decorative_wheel() {
+        assert_eq!(srpg9_rgba(0), rgba_hex("#c32020"));
+        assert_eq!(srpg9_rgba(7), rgba_hex("#36855b"));
+        assert_eq!(srpg9_rgba(8), rgba_hex("#3d6526"));
+        assert_eq!(srpg9_rgba(9), rgba_hex("#666000"));
+        assert_eq!(srpg9_rgba(11), rgba_hex("#954f00"));
+    }
 }

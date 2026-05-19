@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -12,7 +12,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
     shared::{
-        banner as shared_banner, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        banner as shared_banner, lobby_hud, mode_pads, screen_bar, test_input, timers, transitions,
         visual_style_bg,
     },
 };
@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::input::{InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::game::profile;
 use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
@@ -574,6 +574,7 @@ pub struct ScoreInfo {
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
+    pub disabled_timing_windows: [bool; 5],
     pub machine_records: Vec<scores::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
     pub personal_records: Vec<scores::LeaderboardEntry>,
@@ -1248,6 +1249,7 @@ mod tests {
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1285,6 +1287,7 @@ mod tests {
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1314,6 +1317,7 @@ mod tests {
             EvalPane::Timing,
             EvalPane::TimingEx,
             EvalPane::TimingHardEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1377,6 +1381,7 @@ pub(crate) enum EvalPane {
     Timing,
     TimingEx,
     TimingHardEx,
+    TestInput,
 }
 
 #[inline(always)]
@@ -1421,6 +1426,7 @@ fn eval_pane_cycle(
     has_gs: bool,
     has_itl: bool,
     has_arrowcloud: bool,
+    has_test_input: bool,
 ) -> Vec<EvalPane> {
     let mut panes = Vec::with_capacity(13);
     panes.push(EvalPane::Standard);
@@ -1448,7 +1454,18 @@ fn eval_pane_cycle(
     if has_hard_ex {
         panes.push(EvalPane::TimingHardEx);
     }
+    if has_test_input {
+        panes.push(EvalPane::TestInput);
+    }
     panes
+}
+
+#[inline(always)]
+fn eval_has_test_input_pane() -> bool {
+    // SL parity: ScreenEvaluation Pane6 is gated on OnlyDedicatedMenuButtons so
+    // that pad arrows can't accidentally cycle panes while the player is testing
+    // their inputs and get stuck on the TestInput pane.
+    crate::config::get().only_dedicated_menu_buttons
 }
 
 #[inline(always)]
@@ -1461,7 +1478,14 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud);
+    let panes = eval_pane_cycle(
+        has_hard_ex,
+        has_qr,
+        has_gs,
+        has_itl,
+        has_arrowcloud,
+        eval_has_test_input_pane(),
+    );
     let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
         return panes.first().copied().unwrap_or(EvalPane::Standard);
     };
@@ -1545,6 +1569,7 @@ pub struct State {
     pub auto_screenshot_taken: bool,
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
+    submit_record_sfx_played: bool,
     submit_groovestats_fallback: [Option<scores::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<scores::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -1555,6 +1580,7 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
+    test_input_state: test_input::State,
 }
 
 impl Clone for State {
@@ -1584,6 +1610,7 @@ impl Clone for State {
             auto_screenshot_taken: self.auto_screenshot_taken,
             itl_overlay_visible: self.itl_overlay_visible,
             itl_overlay_shown: self.itl_overlay_shown,
+            submit_record_sfx_played: self.submit_record_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
@@ -1594,6 +1621,7 @@ impl Clone for State {
             menu_lr_chord: self.menu_lr_chord,
             menu_lr_undo: self.menu_lr_undo,
             favorite_code: self.favorite_code.clone(),
+            test_input_state: self.test_input_state.clone(),
         }
     }
 }
@@ -1720,7 +1748,27 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 }
             };
             let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
-            let graph_last_second = gs.song.total_length_seconds as f32;
+            let chart_last_second = {
+                let mut latest_ns: i64 = i64::MIN;
+                for (idx, &t_ns) in note_times.iter().enumerate() {
+                    if !crate::game::gameplay::song_time_ns_invalid(t_ns) && t_ns > latest_ns {
+                        latest_ns = t_ns;
+                    }
+                    if let Some(end_ns) = hold_end_times.get(idx).copied().flatten()
+                        && !crate::game::gameplay::song_time_ns_invalid(end_ns)
+                        && end_ns > latest_ns
+                    {
+                        latest_ns = end_ns;
+                    }
+                }
+                if latest_ns == i64::MIN {
+                    (gs.song.total_length_seconds.max(0) as f32).max(graph_first_second + 0.001)
+                } else {
+                    crate::game::gameplay::song_time_ns_to_seconds(latest_ns)
+                        .max(graph_first_second + 0.001)
+                }
+            };
+            let graph_last_second = chart_last_second;
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
@@ -1902,6 +1950,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
                 track_early_judgments: prof.track_early_judgments,
+                disabled_timing_windows: prof.timing_windows.disabled_windows(),
                 machine_records,
                 machine_record_highlight_rank,
                 personal_records,
@@ -1924,7 +1973,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let last_second = si.song.total_length_seconds.max(0) as f32;
+                let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
                 let verts = crate::engine::present::density::build_density_histogram_mesh(
                     &si.chart.measure_nps_vec,
                     si.chart.max_nps,
@@ -2142,6 +2191,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        submit_record_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2152,6 +2202,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
+        test_input_state: test_input::State::default(),
     }
 }
 
@@ -2222,6 +2273,7 @@ pub fn init_from_score_info(
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        submit_record_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2232,6 +2284,7 @@ pub fn init_from_score_info(
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
+        test_input_state: test_input::State::default(),
     }
 }
 
@@ -2262,6 +2315,46 @@ fn sync_submit_itl_progress(state: &mut State) {
         state.itl_overlay_visible = true;
         state.itl_overlay_shown = true;
     }
+}
+
+/// Fires a one-shot PB / WR sound effect (zmod parity, issue #375) when the
+/// GrooveStats submit response first lands with a record banner. Triggers
+/// once per evaluation visit; subsequent retries or repeated banners do not
+/// re-fire the SFX.
+fn sync_submit_record_sfx(state: &mut State) {
+    if state.submit_record_sfx_played {
+        return;
+    }
+    let mut best: Option<scores::GrooveStatsSubmitRecordBanner> = None;
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        ) else {
+            continue;
+        };
+        // WorldRecord{,Ex} beats PersonalBest if any joined player earned it.
+        best = Some(match (best, banner) {
+            (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecord), _)
+            | (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecordEx), _) => best.unwrap(),
+            (_, scores::GrooveStatsSubmitRecordBanner::WorldRecord)
+            | (_, scores::GrooveStatsSubmitRecordBanner::WorldRecordEx) => banner,
+            _ => best.unwrap_or(banner),
+        });
+    }
+    let Some(banner) = best else {
+        return;
+    };
+    let folder = match banner {
+        scores::GrooveStatsSubmitRecordBanner::WorldRecord
+        | scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
+        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
+    };
+    crate::engine::audio::folder::play_random_sfx(folder);
+    state.submit_record_sfx_played = true;
 }
 
 fn sync_missing_submit_status_fallbacks(state: &mut State) {
@@ -2328,6 +2421,7 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
+    sync_submit_record_sfx(state);
     scores::tick_groovestats_auto_retries();
     scores::tick_arrowcloud_auto_retries();
     for controller_idx in 0..MAX_PLAYERS {
@@ -2485,6 +2579,14 @@ pub fn retry_submissions(state: &State) -> bool {
     retried
 }
 
+/// Returns true if any controller currently has the TestInput pane active.
+pub fn test_input_pane_active(state: &State) -> bool {
+    state
+        .active_pane
+        .iter()
+        .any(|&pane| matches!(pane, EvalPane::TestInput))
+}
+
 #[inline(always)]
 fn eval_player_color_rgba(side: profile::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
@@ -2507,7 +2609,7 @@ fn eval_grade_for_result(
     }
 }
 
-fn all_joined_players_failed(state: &State) -> bool {
+pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     let play_style = profile::get_session_play_style();
     let side_to_idx = |side: profile::PlayerSide| match (play_style, side) {
         (profile::PlayStyle::Versus, profile::PlayerSide::P1) => 0,
@@ -2660,6 +2762,16 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         .or(state.submit_groovestats_fallback[player_idx]);
         match status {
             None | Some(scores::GrooveStatsSubmitUiStatus::Submitting) => return true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted) => {
+                if scores::get_groovestats_submit_itl_progress_for_side(
+                    si.chart.short_hash.as_str(),
+                    si.side,
+                )
+                .is_some()
+                {
+                    return true;
+                }
+            }
             _ => {}
         }
     }
@@ -2778,7 +2890,30 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
     Some((t, min_life))
 }
 
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    test_input::apply_raw_pad_event(&mut state.test_input_state, pad_event);
+}
+
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
+    test_input::apply_raw_key_event(&mut state.test_input_state, key_event);
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    // Feed virtual input through the test_input state so the highlight feedback on the
+    // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
+    let _ = test_input::apply_virtual_input(&mut state.test_input_state, ev);
+
+    // When the TestInput pane is active and OnlyDedicatedMenuButtons is on, gameplay
+    // arrow presses are routed here purely to drive the pad's highlight feedback —
+    // they must NOT also trigger pane cycling, favorite-code tracking, or other
+    // arrow-driven side effects. Short-circuit before the rest of the handler.
+    if ev.action.is_gameplay_arrow()
+        && crate::config::get().only_dedicated_menu_buttons
+        && test_input_pane_active(state)
+    {
+        return ScreenAction::None;
+    }
+
     let chord_side = if crate::config::get().three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
@@ -3458,7 +3593,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let line_count = step_artist_lines.len().max(1);
                     let zmod_diff_box_x = upper_origin_x + 129.5 * dir;
                     let x = zmod_diff_box_x - 21.5 * dir;
-                    let y_base = if line_count > 2 { cy - 62.0 } else { cy - 59.0 };
+                    // DeadSync's bottom-aligned text block does not include
+                    // StepMania's trailing BitmapText height, so Arrow Cloud's
+                    // raw cy-42/cy-43 anchor must be compensated here.
+                    let y_base = if line_count > 2 { cy - 58.0 } else { cy - 59.0 };
                     let align_x = if side == profile::PlayerSide::P1 {
                         0.0
                     } else {
@@ -3553,8 +3691,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
 
             // Breakdown Text (under grade)
+            let breakdown_x = if cfg.zmod_rating_box_text {
+                upper_origin_x + 148.0 * dir
+            } else {
+                upper_origin_x + 150.0 * dir
+            };
             let breakdown_width = if cfg.zmod_rating_box_text {
-                screen_width() * 0.26
+                let banner_half_w = 418.0 * 0.7 * 0.5;
+                let banner_edge_x = screen_center_x() + banner_half_w * dir;
+                ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
             } else {
                 155.0
             };
@@ -3602,11 +3747,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             {
-                let x = if cfg.zmod_rating_box_text {
-                    upper_origin_x + 148.0 * dir
-                } else {
-                    upper_origin_x + 150.0 * dir
-                };
+                let x = breakdown_x;
                 let y = if cfg.zmod_rating_box_text {
                     cy - 97.0
                 } else {
@@ -3628,12 +3769,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     all_fonts,
                                 ) as f32;
                                 let line_h = miso_font.height.max(1) as f32;
-                                let bg_w = (text_w + 10.0).min(breakdown_width).max(10.0) * 0.7;
+                                let bg_w = (text_w * 0.7 + 7.0).min(breakdown_width).max(7.0);
                                 let bg_h = (line_h + 4.0).max(4.0) * 0.7;
                                 (bg_w, bg_h)
                             })
                         })
-                        .unwrap_or((breakdown_width * 0.7, 14.0));
+                        .unwrap_or((breakdown_width, 14.0));
                     let bg_x = upper_origin_x + 150.0 * dir;
                     let bg_y = cy - 95.5;
                     let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
@@ -3816,6 +3957,65 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         state.screen_elapsed,
                     ));
                 }
+                EvalPane::TestInput => {
+                    // Centered, uniformly scaled TestInput panel (text on left, pad on right).
+                    let pane_ox =
+                        crate::screens::components::evaluation::test_input_pane_origin_x(
+                            controller,
+                        );
+                    let panel_scale = 1.0_f32;
+                    let (panel_w, panel_h) = test_input::evaluation_panel_size();
+                    let panel_w_scaled = panel_w * panel_scale;
+                    let panel_h_scaled = panel_h * panel_scale;
+
+                    // Center the panel horizontally in the per-controller pane,
+                    // and vertically around screen_center_y + 50 (matches the other panes' visible area).
+                    let panel_center_x = pane_ox;
+                    let panel_center_y = screen_center_y() + 50.0;
+                    let anchor_x = panel_center_x - panel_w_scaled * 0.5;
+                    let anchor_y = panel_center_y - panel_h_scaled * 0.5;
+
+                    let title_font = current_machine_font_key(FontRole::Normal);
+                    let body_font = current_machine_font_key(FontRole::Normal);
+                    let title = tr("Evaluation", "TestInputTitle");
+                    let instructions = tr("Evaluation", "TestInputInstructions");
+
+                    if play_style == profile::PlayStyle::Double {
+                        let pad_scale = 0.75_f32 * panel_scale;
+                        let pad_half = test_input::evaluation_pad_half_width(pad_scale);
+                        let gap = pad_half + 6.0;
+                        actors.extend(test_input::build_evaluation_pad(
+                            &state.test_input_state,
+                            test_input::PlayerSlot::P1,
+                            pane_ox - gap,
+                            panel_center_y,
+                            pad_scale,
+                        ));
+                        actors.extend(test_input::build_evaluation_pad(
+                            &state.test_input_state,
+                            test_input::PlayerSlot::P2,
+                            pane_ox + gap,
+                            panel_center_y,
+                            pad_scale,
+                        ));
+                    } else {
+                        let slot = match controller {
+                            profile::PlayerSide::P1 => test_input::PlayerSlot::P1,
+                            profile::PlayerSide::P2 => test_input::PlayerSlot::P2,
+                        };
+                        actors.extend(test_input::build_evaluation_panel(
+                            &state.test_input_state,
+                            slot,
+                            anchor_x,
+                            anchor_y,
+                            panel_scale,
+                            title_font,
+                            title,
+                            body_font,
+                            instructions,
+                        ));
+                    }
+                }
             }
         }
     }
@@ -3911,7 +4111,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 offset: [0.0, graph_height],
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 vertices: mesh.clone(),
-                                mode: MeshMode::Triangles,
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 1,
@@ -3942,7 +4141,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 offset: [0.0, 0.0],
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 vertices: mesh.clone(),
-                                mode: MeshMode::Triangles,
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 3,
@@ -4412,12 +4610,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // --- "ITG" text and Pads (top right) ---
+    // --- "DS" text and Pads (top right) ---
     {
-        let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        let itg_text = tr("Evaluation", "ITGLabel");
-        let itg_font = current_machine_font_key_for_text(FontRole::Header, &itg_text);
-        actors.push(act!(text: font(itg_font): settext(itg_text): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        let ds_text_x = screen_width() - widescale(55.0, 62.0);
+        let ds_text = "DS";
+        let ds_font = current_machine_font_key_for_text(FontRole::Header, ds_text);
+        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }
 
@@ -4441,10 +4639,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+
     let (p1_footer_text, p1_footer_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
@@ -4456,7 +4656,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (p2_footer_text, p2_footer_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
@@ -4480,7 +4680,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
             }
         };
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_no_background(ScreenBarParams {
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
@@ -4499,7 +4699,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let timestamp_text = now.format("%Y/%m/%d %H:%M").to_string();
 
     actors.push(act!(text:
-        font("wendy_monospace_numbers"):
+        font(current_machine_font_key(FontRole::Numbers)):
         settext(timestamp_text):
         align(0.5, 1.0): // align bottom-center of text block
         xy(screen_center_x(), screen_height() - 14.0):

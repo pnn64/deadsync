@@ -1,4 +1,4 @@
-use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
@@ -152,7 +152,6 @@ fn actor_from_vertices(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key,
-        mode: MeshMode::Triangles,
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -200,6 +199,21 @@ fn actor_from_draw(
         blend,
         z,
     ))
+}
+
+#[inline(always)]
+pub(crate) fn noteskin_model_actor_from_draw(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    actor_from_draw(slot, draw, xy, size, uv_rect, rotation_deg, color, blend, z)
 }
 
 #[inline(always)]

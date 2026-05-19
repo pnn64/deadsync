@@ -20,6 +20,7 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
+        SubmenuKind::Lights => LIGHTS_OPTIONS_ROWS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ROWS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ROWS,
         SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ROWS,
@@ -42,6 +43,7 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
+        SubmenuKind::Lights => LIGHTS_OPTIONS_ITEMS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ITEMS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ITEMS,
         SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ITEMS,
@@ -64,6 +66,7 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
+        SubmenuKind::Lights => "LIGHTS OPTIONS",
         SubmenuKind::OnlineScoring => "ONLINE SCORE SERVICES",
         SubmenuKind::NullOrDie => "NULL-OR-DIE OPTIONS",
         SubmenuKind::NullOrDieOptions => "NULL-OR-DIE OPTIONS",
@@ -200,6 +203,12 @@ pub(super) fn submenu_visible_row_indices(
             )
             .unwrap_or(1)
                 == 0;
+            let show_default_sync_offset = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::PackIniOffsets,
+            )
+            .is_some_and(yes_no_from_choice);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -208,6 +217,8 @@ pub(super) fn submenu_visible_row_indices(
                     } else if row.id == SubRowId::PreferredStyle && !show_preferred_style {
                         None
                     } else if row.id == SubRowId::PreferredMode && !show_preferred_mode {
+                        None
+                    } else if row.id == SubRowId::DefaultSyncOffset && !show_default_sync_offset {
                         None
                     } else {
                         Some(idx)

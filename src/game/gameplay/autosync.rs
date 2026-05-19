@@ -83,9 +83,7 @@ pub(super) fn apply_autosync_for_row_hits(state: &mut State, row_entry_index: us
         return;
     }
 
-    let row_len = state.row_entries[row_entry_index]
-        .nonmine_note_indices
-        .len();
+    let row_len = usize::from(state.row_entries[row_entry_index].nonmine_note_count);
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];

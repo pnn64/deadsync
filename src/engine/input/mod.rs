@@ -8,6 +8,7 @@ use winit::keyboard::KeyCode;
 
 mod backends;
 mod debounce;
+pub mod fsr;
 
 use debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,

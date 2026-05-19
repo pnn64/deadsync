@@ -18,6 +18,7 @@ pub enum SubmenuKind {
     Graphics,
     Input,
     InputBackend,
+    Lights,
     OnlineScoring,
     NullOrDie,
     NullOrDieOptions,
@@ -34,11 +35,12 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 17] = [
+    pub(super) const ALL: [Self; 18] = [
         Self::System,
         Self::Graphics,
         Self::Input,
         Self::InputBackend,
+        Self::Lights,
         Self::OnlineScoring,
         Self::NullOrDie,
         Self::NullOrDieOptions,
@@ -95,6 +97,13 @@ impl std::ops::IndexMut<SubmenuKind> for SubmenuStates {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct OptionsStartInput {
+    pub(super) held: bool,
+    pub(super) held_for: Duration,
+    pub(super) next_repeat_at: Duration,
+}
+
 #[inline(always)]
 pub(super) const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
     matches!(
@@ -143,11 +152,11 @@ pub struct State {
     pub active_color_index: i32, // <-- ADDED
     pub(super) bg: visual_style_bg::State,
     pub(super) nav_key_held_direction: Option<NavDirection>,
-    pub(super) nav_key_held_since: Option<Instant>,
-    pub(super) nav_key_last_scrolled_at: Option<Instant>,
+    pub(super) nav_key_held_for: Duration,
+    pub(super) nav_key_next_repeat_at: Duration,
     pub(super) nav_lr_held_direction: Option<isize>,
-    pub(super) nav_lr_held_since: Option<Instant>,
-    pub(super) nav_lr_last_adjusted_at: Option<Instant>,
+    pub(super) nav_lr_held_for: Duration,
+    pub(super) nav_lr_next_repeat_at: Duration,
     pub(super) view: OptionsView,
     pub(super) submenu_transition: SubmenuTransition,
     pub(super) pending_submenu_kind: Option<SubmenuKind>,
@@ -162,6 +171,7 @@ pub struct State {
     pub(super) sync_pack_confirm: Option<SyncPackConfirmState>,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
     pub(super) menu_lr_undo: i8,
+    pub(super) start_input: [OptionsStartInput; 2],
     pub(super) pending_dedicated_menu_buttons: Option<bool>,
     // Submenu state
     pub(super) sub_selected: usize,
@@ -251,11 +261,11 @@ pub fn init() -> State {
         bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
-        nav_key_held_since: None,
-        nav_key_last_scrolled_at: None,
+        nav_key_held_for: Duration::ZERO,
+        nav_key_next_repeat_at: NAV_INITIAL_HOLD_DELAY,
         nav_lr_held_direction: None,
-        nav_lr_held_since: None,
-        nav_lr_last_adjusted_at: None,
+        nav_lr_held_for: Duration::ZERO,
+        nav_lr_next_repeat_at: NAV_INITIAL_HOLD_DELAY,
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
         pending_submenu_parent_kind: None,
@@ -269,6 +279,7 @@ pub fn init() -> State {
         sync_pack_confirm: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: 0,
+        start_input: [OptionsStartInput::default(); 2],
         pending_dedicated_menu_buttons: None,
         view: OptionsView::Main,
         sub_selected: 0,
@@ -486,6 +497,18 @@ pub fn init() -> State {
         usize::from(cfg.only_dedicated_menu_buttons),
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::Lights].choice_indices,
+        LIGHTS_OPTIONS_ROWS,
+        SubRowId::LightsDriver,
+        lights_driver_choice_index(cfg.lights_driver),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Lights].choice_indices,
+        LIGHTS_OPTIONS_ROWS,
+        SubRowId::GameplayPadLights,
+        lights_gameplay_pad_choice_index(cfg.lights_gameplay_pad_lights),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectProfile,
@@ -537,6 +560,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::BarColor,
+        cfg.machine_bar_color.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::EvalSummary,
         usize::from(cfg.machine_show_eval_summary),
     );
@@ -575,6 +604,18 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::PerPlayerGlobalOffsets,
         usize::from(cfg.machine_allow_per_player_global_offsets),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::PackIniOffsets,
+        usize::from(cfg.machine_pack_ini_offsets),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::DefaultSyncOffset,
+        cfg.machine_default_sync_offset.choice_index(),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
@@ -718,6 +759,12 @@ pub fn init() -> State {
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::BpmDecimal,
         usize::from(cfg.show_bpm_decimal),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::DelayedBack,
+        usize::from(cfg.delayed_back),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
@@ -878,6 +925,7 @@ pub fn init() -> State {
         SubRowId::ChartInfo,
         select_music_chart_info_cursor_index(
             cfg.select_music_chart_info_peak_nps,
+            cfg.select_music_chart_info_effective_bpm,
             cfg.select_music_chart_info_matrix_rating,
         ),
     );
@@ -904,6 +952,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowGameplayTimer,
         yes_no_choice_index(cfg.show_select_music_gameplay_timer),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ShowStageDisplay,
+        yes_no_choice_index(cfg.show_select_music_stage_display),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

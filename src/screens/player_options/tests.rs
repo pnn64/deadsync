@@ -2,15 +2,18 @@ use super::*;
 
 #[cfg(test)]
 pub(super) mod tests {
+    use super::super::panes;
     use super::{
-        BitmaskBinding, BitmaskInit, ChoiceBinding, CursorInit, CycleInit, ErrorBarMask,
-        FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
-        HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL,
-        NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior, RowId, RowMap,
-        ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
-        hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
-        is_row_visible, judgment_tilt_options_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
+        BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding, CursorInit,
+        CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
+        NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
+        RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
+        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
+        init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
+        judgment_tilt_options_visible, on_start_press, player_option_column_x,
+        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -18,7 +21,7 @@ pub(super) mod tests {
     use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     fn ensure_i18n() {
         use std::sync::Once;
@@ -72,6 +75,40 @@ pub(super) mod tests {
         }
         map
     }
+
+    fn hidden_child_f_pos(row_map: &RowMap) -> (f32, bool) {
+        let active = [true, false];
+        let masks = [PlayerOptionMasks::default(), PlayerOptionMasks::default()];
+        let visibility = row_visibility(row_map, active, masks, false);
+        assert!(is_row_visible(row_map, 0, visibility));
+        assert!(!is_row_visible(row_map, 1, visibility));
+
+        let visible_rows = count_visible_rows(row_map, visibility);
+        let window = compute_row_window(visible_rows, [0, 0], active);
+        let mut visible_idx = 0;
+        let (parent_f_pos, parent_hidden) =
+            row_f_pos_for_index(row_map, 0, visibility, &mut visible_idx, window, 0.0, 0.0);
+        assert!(!parent_hidden);
+        let (child_f_pos, child_hidden) =
+            row_f_pos_for_index(row_map, 1, visibility, &mut visible_idx, window, 0.0, 0.0);
+        assert!(
+            (child_f_pos - parent_f_pos).abs() < 0.001,
+            "hidden child should collapse into its parent row"
+        );
+        (child_f_pos, child_hidden)
+    }
+
+    /// Stub writeback for synthetic test bindings whose tests only exercise
+    /// the init contract (`apply_profile_defaults`). The toggle path is
+    /// never invoked so `project`/`persist`/`bit_mapping` semantics are
+    /// irrelevant; we just need a value-typed `BitmaskWriteback` to fit
+    /// into `BitmaskBinding::Generic`.
+    const TEST_WRITEBACK: BitmaskWriteback = BitmaskWriteback {
+        project: |_, _, _| {},
+        persist_for_side: |_, _| {},
+        bit_mapping: BitMapping::Sequential { width: 0 },
+        sync_visibility: false,
+    };
 
     #[test]
     fn sync_profile_scroll_speed_matches_speed_mod() {
@@ -136,6 +173,60 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn hidden_dropdown_children_anchor_to_parent_row() {
+        ensure_i18n();
+        for (parent, child, choices, off_idx) in [
+            (
+                RowId::JudgmentFont,
+                RowId::JudgmentOffsetX,
+                &["Wendy", "None"][..],
+                1,
+            ),
+            (
+                RowId::ComboFont,
+                RowId::ComboOffsetX,
+                &["Wendy", "None"][..],
+                1,
+            ),
+            (
+                RowId::RescoreEarlyHits,
+                RowId::EarlyDecentWayOffOptions,
+                &["No", "Yes"][..],
+                0,
+            ),
+            (
+                RowId::CustomBlueFantasticWindow,
+                RowId::CustomBlueFantasticWindowMs,
+                &["No", "Yes"][..],
+                0,
+            ),
+            (
+                RowId::DataVisualizations,
+                RowId::TargetScore,
+                &["None", "Target Score Graph", "Step Statistics"][..],
+                0,
+            ),
+        ] {
+            let row_map = test_row_map(vec![
+                test_row(
+                    parent,
+                    lookup_key("PlayerOptions", "JudgmentFont"),
+                    choices,
+                    [off_idx; 2],
+                ),
+                test_row(
+                    child,
+                    lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                    &["0"],
+                    [0; 2],
+                ),
+            ]);
+            let (_, child_hidden) = hidden_child_f_pos(&row_map);
+            assert!(child_hidden, "{child:?} should hide at its parent row");
+        }
+    }
+
+    #[test]
     fn error_bar_offsets_hide_with_empty_error_bar_mask() {
         ensure_i18n();
         let row_map = test_row_map(vec![
@@ -185,6 +276,46 @@ pub(super) mod tests {
                     error_bar: ErrorBarMask::empty(),
                     ..Default::default()
                 },
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
+    fn live_timing_stats_options_hide_until_parent_toggle_active() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::GameplayExtras,
+                lookup_key("PlayerOptions", "GameplayExtras"),
+                &["LiveTiming"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::LiveTimingStats,
+                lookup_key("PlayerOptions", "LiveTimingStats"),
+                &["Mean", "MeanAbs", "Max"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    gameplay_extras: GameplayExtrasMask::LIVE_TIMING_STATS,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
             ],
             false,
         );
@@ -505,9 +636,8 @@ pub(super) mod tests {
             &["Exit"],
             [0, 0],
         )]);
-        let scroll_binding = BitmaskBinding {
-            toggle: super::super::choice::toggle_scroll_row,
-            init: Some(BitmaskInit {
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     use crate::game::profile::ScrollOption;
                     let mut bits = ScrollMask::empty();
@@ -533,7 +663,8 @@ pub(super) mod tests {
                     m.scroll = ScrollMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
@@ -549,25 +680,15 @@ pub(super) mod tests {
         )]);
 
         let mut main = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
+        panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
         assert_eq!(main.scroll, ScrollMask::empty());
 
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
         let mut combined = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
-        super::super::panes::apply_profile_defaults(
-            &mut advanced_rows,
-            &profile,
-            P1,
-            &mut combined,
-        );
-        super::super::panes::apply_profile_defaults(
-            &mut uncommon_rows,
-            &profile,
-            P1,
-            &mut combined,
-        );
+        panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
+        panes::apply_profile_defaults(&mut advanced_rows, &profile, P1, &mut combined);
+        panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1, &mut combined);
         assert!(
             combined.scroll.contains(ScrollMask::REVERSE),
             "Reverse bit preserved after in-place accumulation"
@@ -591,9 +712,8 @@ pub(super) mod tests {
         profile.hide_targets = false;
         profile.hide_song_bg = true;
 
-        let hide_binding = BitmaskBinding {
-            toggle: super::super::choice::toggle_hide_row,
-            init: Some(BitmaskInit {
+        let hide_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = HideMask::empty();
                     if p.hide_targets {
@@ -624,7 +744,8 @@ pub(super) mod tests {
                     m.hide = HideMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
@@ -636,7 +757,7 @@ pub(super) mod tests {
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.hide,
@@ -663,9 +784,8 @@ pub(super) mod tests {
         profile.show_fa_plus_window = false;
         profile.show_ex_score = true;
 
-        let fa_plus_binding = BitmaskBinding {
-            toggle: super::super::choice::toggle_fa_plus_row,
-            init: Some(BitmaskInit {
+        let fa_plus_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = FaPlusMask::empty();
                     if p.show_fa_plus_window {
@@ -693,7 +813,8 @@ pub(super) mod tests {
                     m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::Fixed(0),
-            }),
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
@@ -703,7 +824,7 @@ pub(super) mod tests {
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.fa_plus,
@@ -729,14 +850,14 @@ pub(super) mod tests {
         ensure_i18n();
         let mut profile = Profile::default();
         profile.column_cues = true;
+        profile.live_timing_stats = true;
         profile.display_scorebox = true;
 
         // No GameplayExtrasMore row exists (orphan; see the
         // `every_row_id_is_constructed_by_some_pane` test) — we still expect
         // the derived mask bits to be populated.
-        let gameplay_extras_binding = BitmaskBinding {
-            toggle: super::super::choice::toggle_gameplay_extras_row,
-            init: Some(BitmaskInit {
+        let gameplay_extras_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = GameplayExtrasMask::empty();
                     if p.column_flash_on_miss {
@@ -748,6 +869,9 @@ pub(super) mod tests {
                     if p.column_cues {
                         bits.insert(GameplayExtrasMask::COLUMN_CUES);
                     }
+                    if p.live_timing_stats {
+                        bits.insert(GameplayExtrasMask::LIVE_TIMING_STATS);
+                    }
                     if p.display_scorebox {
                         bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
                     }
@@ -758,23 +882,36 @@ pub(super) mod tests {
                     m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
             lookup_key("PlayerOptions", "GameplayExtras"),
-            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
+            &[
+                "FlashMiss",
+                "DensityTop",
+                "ColumnCues",
+                "LiveTiming",
+                "Scorebox",
+            ],
             gameplay_extras_binding,
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
 
         assert!(
             masks
                 .gameplay_extras
                 .contains(GameplayExtrasMask::COLUMN_CUES),
             "GameplayExtras COLUMN_CUES bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::LIVE_TIMING_STATS),
+            "GameplayExtras LIVE_TIMING_STATS bit set from profile",
         );
         assert!(
             masks
@@ -830,13 +967,17 @@ pub(super) mod tests {
         let second_row = state.pane().selected_row[P1];
         assert!(second_row > first_row);
 
-        let now = Instant::now();
-        state.start_input[P1].held_since =
-            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_input[P1].last_triggered_at =
-            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
-
-        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        on_start_press(&mut state, P1);
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert!(state.pane().selected_row[P1] > second_row);
     }
 
@@ -861,13 +1002,17 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = last_row;
         state.pane_mut().prev_selected_row[P1] = last_row;
 
-        let now = Instant::now();
-        state.start_input[P1].held_since =
-            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_input[P1].last_triggered_at =
-            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
-
-        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        on_start_press(&mut state, P1);
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert_eq!(state.pane().selected_row[P1], last_row);
     }
 
@@ -897,6 +1042,94 @@ pub(super) mod tests {
         }
         let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         (state, asset_manager)
+    }
+
+    #[test]
+    fn held_speed_mod_repeat_uses_update_dt() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let active = session_active_players();
+        let speed_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::SpeedMod)
+            .expect("Speed Mod should be in Main pane");
+        state.pane_mut().selected_row[P1] = speed_row;
+        state.pane_mut().prev_selected_row[P1] = speed_row;
+
+        let before = state.speed_mod[P1].value;
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            active,
+            P1,
+            NavDirection::Right,
+            true,
+        );
+        let after_press = state.speed_mod[P1].value;
+        assert!(after_press > before);
+
+        update(&mut state, 0.0, &asset_manager);
+        assert_eq!(state.speed_mod[P1].value, after_press);
+
+        update(
+            &mut state,
+            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            &asset_manager,
+        );
+        assert!(state.speed_mod[P1].value > after_press);
+    }
+
+    #[test]
+    fn p2_speed_row_uses_p2_option_column() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_versus_state();
+        state.speed_mod[P1] = SpeedMod {
+            mod_type: SpeedModType::M,
+            value: 690.0,
+        };
+        state.speed_mod[P2] = SpeedMod {
+            mod_type: SpeedModType::M,
+            value: 250.0,
+        };
+
+        let speed_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::SpeedMod)
+            .expect("Speed Mod should be in Main pane");
+        state.pane_mut().selected_row[P2] = speed_row;
+        let row_y = state.pane().row_tweens[speed_row].y();
+        let expected_x = player_option_column_x(P2);
+
+        let (cursor_x, _, _, _) =
+            super::cursor_dest_for_player(&state, &asset_manager, P2).unwrap();
+        assert!(
+            (cursor_x - expected_x).abs() < 0.01,
+            "P2 cursor should use the P2 option column"
+        );
+
+        let actors = super::get_actors(&state, &asset_manager);
+        let p2_text_x = actors.iter().find_map(|actor| match actor {
+            crate::engine::present::actors::Actor::Text {
+                offset, content, z, ..
+            } if *z == super::Z_ROW_FOREGROUND
+                && content.as_str() == "M250"
+                && (offset[1] - row_y).abs() < 0.01 =>
+            {
+                Some(offset[0])
+            }
+            _ => None,
+        });
+        let p2_text_x = p2_text_x.expect("P2 Speed Mod row text should render");
+        assert!(
+            (p2_text_x - expected_x).abs() < 0.01,
+            "P2 Speed Mod row text should use the P2 option column"
+        );
     }
 
     #[test]
@@ -1014,13 +1247,28 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        // Insert a Scroll row directly since it lives in the Advanced pane.
+        // Inline Scroll binding (toggle-capable) for this dispatch test.
+        // Mirrors the shape of the production SCROLL binding without
+        // taking a dependency on the panes module's private constants.
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |_| 0,
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, _, _| {},
+                persist_for_side: |_, _| {},
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
         let scroll_row = Row {
             id: RowId::Scroll,
-            behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
-                toggle: super::choice::toggle_scroll_row,
-                init: None,
-            }),
+            behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
                 .iter()
@@ -1363,12 +1611,25 @@ pub(super) mod tests {
 
         // Insert a Bitmask row (Scroll lives in the Advanced pane, so attach it
         // to the Main row_map directly for this isolated test).
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |_| 0,
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, _, _| {},
+                persist_for_side: |_, _| {},
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
         let scroll_row = Row {
             id: RowId::Scroll,
-            behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
-                toggle: super::choice::toggle_scroll_row,
-                init: None,
-            }),
+            behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
                 .iter()
@@ -1796,7 +2057,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         // Cycle rows: assert the selected variant matches the profile value.
         assert_variant_at_cursor(
@@ -1856,7 +2117,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         assert_choice_at_cursor(
             &row_map,
@@ -1913,7 +2174,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         assert_variant_at_cursor(
             &row_map,
@@ -2033,6 +2294,361 @@ pub(super) mod tests {
         assert_eq!(
             actual, expected,
             "Row {id:?}: variant at cursor {idx} = {actual:?}, expected {expected:?}"
+        );
+    }
+
+    use crate::game::profile::{
+        AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
+        VisualEffectsMask,
+    };
+
+    fn install_bitmask_row(
+        state: &mut super::State,
+        id: RowId,
+        binding: BitmaskBinding,
+        choices: &[&str],
+        choice_index: usize,
+    ) -> usize {
+        let row = test_bitmask_row(id, lookup_key("PlayerOptions", "Insert"), choices, binding);
+        state.pane_mut().row_map.display_order.push(id);
+        state.pane_mut().row_map.insert(row);
+        let row_index = state.pane().row_map.display_order().len() - 1;
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(id)
+            .unwrap()
+            .selected_choice_index = [choice_index, choice_index];
+        state.pane_mut().selected_row[P1] = row_index;
+        row_index
+    }
+
+    #[test]
+    fn generic_toggle_insert_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.insert_active_mask.bits() as u32,
+                get_active: |m| m.insert.bits() as u32,
+                set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 7 },
+                sync_visibility: false,
+            },
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Insert,
+            binding,
+            &["W", "B", "Q", "M", "S", "E", "T"],
+            2,
+        );
+        state.option_masks[P1].insert = InsertMask::empty();
+        state.player_profiles[P1].insert_active_mask = InsertMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(
+            state.option_masks[P1].insert.bits(),
+            1u8 << 2,
+            "Insert bit at choice index 2 should be set"
+        );
+        assert_eq!(
+            state.player_profiles[P1].insert_active_mask.bits(),
+            1u8 << 2,
+            "Insert profile should mirror the mask"
+        );
+
+        // Toggle again to clear.
+        handle_start_event(&mut state, &asset_manager, active, P1);
+        assert_eq!(state.option_masks[P1].insert, InsertMask::empty());
+        assert_eq!(
+            state.player_profiles[P1].insert_active_mask,
+            InsertMask::empty()
+        );
+    }
+
+    #[test]
+    fn generic_toggle_insert_row_ignores_out_of_width_choice() {
+        // Insert clamps to choice_index < 7. A row with 7 choices and a
+        // selected index of 7 (impossible in practice; defensive) must
+        // produce no toggle.
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.insert_active_mask.bits() as u32,
+                get_active: |m| m.insert.bits() as u32,
+                set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 7 },
+                sync_visibility: false,
+            },
+        };
+        // 8 choices, cursor at index 7 — out of width.
+        install_bitmask_row(
+            &mut state,
+            RowId::Insert,
+            binding,
+            &["a", "b", "c", "d", "e", "f", "g", "h"],
+            7,
+        );
+        state.option_masks[P1].insert = InsertMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(
+            state.option_masks[P1].insert,
+            InsertMask::empty(),
+            "out-of-width choice index must not toggle a bit"
+        );
+    }
+
+    #[test]
+    fn generic_toggle_remove_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.remove_active_mask.bits() as u32,
+                get_active: |m| m.remove.bits() as u32,
+                set_active: |m, b| m.remove = RemoveMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_remove_mask_for_side(s, p.remove_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 8 },
+                sync_visibility: false,
+            },
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Remove,
+            binding,
+            &["L", "M", "H", "J", "Hands", "Q", "Lifts", "Fakes"],
+            5,
+        );
+        state.option_masks[P1].remove = RemoveMask::empty();
+        state.player_profiles[P1].remove_active_mask = RemoveMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
+        assert_eq!(
+            state.player_profiles[P1].remove_active_mask.bits(),
+            1u8 << 5
+        );
+    }
+
+    #[test]
+    fn generic_toggle_holds_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.holds_active_mask.bits() as u32,
+                get_active: |m| m.holds.bits() as u32,
+                set_active: |m, b| m.holds = HoldsMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_holds_mask_for_side(s, p.holds_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
+        // Holds in production has 5 choices; bit_mapping is Sequential { width: 5 }.
+        install_bitmask_row(
+            &mut state,
+            RowId::Holds,
+            binding,
+            &["Planted", "Floored", "Twister", "NoRolls", "ToRolls"],
+            3,
+        );
+        state.option_masks[P1].holds = HoldsMask::empty();
+        state.player_profiles[P1].holds_active_mask = HoldsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].holds.bits(), 1u8 << 3);
+        assert_eq!(state.player_profiles[P1].holds_active_mask.bits(), 1u8 << 3);
+    }
+
+    #[test]
+    fn generic_toggle_accel_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.accel_effects_active_mask.bits() as u32,
+                get_active: |m| m.accel_effects.bits() as u32,
+                set_active: |m, b| m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_accel_effects_mask_for_side(s, p.accel_effects_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Accel,
+            binding,
+            &["Boost", "Brake", "Wave", "Expand", "Boomerang"],
+            1,
+        );
+        state.option_masks[P1].accel_effects = AccelEffectsMask::empty();
+        state.player_profiles[P1].accel_effects_active_mask = AccelEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].accel_effects.bits(), 1u8 << 1);
+        assert_eq!(
+            state.player_profiles[P1].accel_effects_active_mask.bits(),
+            1u8 << 1
+        );
+    }
+
+    #[test]
+    fn generic_toggle_visual_effects_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.visual_effects_active_mask.bits() as u32,
+                get_active: |m| m.visual_effects.bits() as u32,
+                set_active: |m, b| m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16),
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_visual_effects_mask_for_side(s, p.visual_effects_active_mask);
+                },
+                bit_mapping: BitMapping::Sequential { width: 10 },
+                sync_visibility: false,
+            },
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Effect,
+            binding,
+            &[
+                "Drunk",
+                "Dizzy",
+                "Confusion",
+                "Big",
+                "Flip",
+                "Invert",
+                "Tornado",
+                "Tipsy",
+                "Bumpy",
+                "Beat",
+            ],
+            9,
+        );
+        state.option_masks[P1].visual_effects = VisualEffectsMask::empty();
+        state.player_profiles[P1].visual_effects_active_mask = VisualEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].visual_effects.bits(), 1u16 << 9);
+        assert_eq!(
+            state.player_profiles[P1].visual_effects_active_mask.bits(),
+            1u16 << 9
+        );
+    }
+
+    #[test]
+    fn generic_toggle_appearance_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
+                get_active: |m| m.appearance_effects.bits() as u32,
+                set_active: |m, b| {
+                    m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8)
+                },
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, p, b| {
+                    p.appearance_effects_active_mask =
+                        AppearanceEffectsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, p| {
+                    profile::update_appearance_effects_mask_for_side(
+                        s,
+                        p.appearance_effects_active_mask,
+                    );
+                },
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Appearance,
+            binding,
+            &["Hidden", "Sudden", "Stealth", "Blink", "RVanish"],
+            4,
+        );
+        state.option_masks[P1].appearance_effects = AppearanceEffectsMask::empty();
+        state.player_profiles[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);
+        assert_eq!(
+            state.player_profiles[P1]
+                .appearance_effects_active_mask
+                .bits(),
+            1u8 << 4
         );
     }
 }

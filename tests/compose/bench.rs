@@ -397,7 +397,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                 )
             }
             gameplay_bench::SCENARIO_NAME => {
-                let fixture = gameplay_bench::fixture();
+                let mut fixture = gameplay_bench::fixture();
                 benchmark_actor_builder(
                     scenario.name,
                     scenario.clear_color,
@@ -762,10 +762,10 @@ fn benchmark_actor_builder<F>(
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,
-    build_actors: F,
+    mut build_actors: F,
 ) -> Result<BenchmarkResult, Box<dyn Error>>
 where
-    F: Fn() -> Vec<Actor>,
+    F: FnMut() -> Vec<Actor>,
 {
     let sample_actors = build_actors();
     let _assets = compose_case::asset_manager_for_scene(name, &sample_actors, fonts)?;

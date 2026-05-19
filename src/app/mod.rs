@@ -1,6 +1,5 @@
 mod commands;
 mod dynamic_media;
-mod fsr;
 mod graphics;
 mod input_routing;
 pub(crate) mod media_cache;
@@ -22,8 +21,12 @@ use crate::engine::gfx::{
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
 use crate::engine::input::{self, InputEvent};
+use crate::engine::lights::{
+    self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
+};
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
+use crate::game::note::NoteType;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
@@ -31,7 +34,7 @@ use crate::screens::{
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
     initials, input as input_screen, manage_local_profiles, mappings, menu, options,
     player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style,
+    select_music, select_profile, select_style, test_lights,
 };
 use winit::{
     application::ApplicationHandler,
@@ -102,12 +105,311 @@ const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
+const LIGHTS_AHEAD_NS: crate::game::gameplay::SongTimeNs = 50_000_000;
+const LIGHTS_MAX_CATCHUP_NS: crate::game::gameplay::SongTimeNs = 500_000_000;
+const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
+
+#[derive(Clone, Copy, Debug, Default)]
+struct GameplayLightTracker {
+    notes_ptr: usize,
+    notes_len: usize,
+    cursor: usize,
+    last_time_ns: crate::game::gameplay::SongTimeNs,
+}
+
+impl GameplayLightTracker {
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    fn queue_blinks(&mut self, lights: &mut lights::Manager, state: &crate::game::gameplay::State) {
+        let now_ns = state.current_music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
+        let notes_ptr = state.notes.as_ptr() as usize;
+        let reset = self.notes_ptr != notes_ptr
+            || self.notes_len != state.notes.len()
+            || now_ns < self.last_time_ns
+            || now_ns.saturating_sub(self.last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
+        if reset {
+            self.notes_ptr = notes_ptr;
+            self.notes_len = state.notes.len();
+            self.cursor = state.note_time_cache_ns.partition_point(|&t| t <= now_ns);
+            self.last_time_ns = now_ns;
+            return;
+        }
+
+        while self.cursor < state.notes.len() && state.note_time_cache_ns[self.cursor] <= now_ns {
+            let note = &state.notes[self.cursor];
+            if gameplay_note_lights(note) {
+                blink_note_lights(lights, state, note.column);
+            }
+            self.cursor += 1;
+        }
+        self.last_time_ns = now_ns;
+    }
+}
+
+fn gameplay_note_lights(note: &crate::game::note::Note) -> bool {
+    note.can_be_judged
+        && !note.is_fake
+        && matches!(
+            note.note_type,
+            NoteType::Tap | NoteType::Hold | NoteType::Roll
+        )
+}
+
+fn blink_note_lights(
+    lights: &mut lights::Manager,
+    state: &crate::game::gameplay::State,
+    column: usize,
+) {
+    lights.blink_cabinet(CabinetLight::BassLeft);
+    lights.blink_cabinet(CabinetLight::BassRight);
+    let Some(local_col) = physical_light_col(state, column) else {
+        return;
+    };
+    if let Some(cabinet) = cabinet_light_for_col(local_col) {
+        lights.blink_cabinet(cabinet);
+    }
+    if let Some((player, button)) = pad_light_for_col(state, column) {
+        lights.blink_button(player, button);
+    }
+}
+
+fn physical_light_col(state: &crate::game::gameplay::State, column: usize) -> Option<usize> {
+    if state.cols_per_player == 0 {
+        return None;
+    }
+    let local = column % state.cols_per_player;
+    if state.cols_per_player >= 8 && state.num_players == 1 {
+        return Some(local % 4);
+    }
+    (local < 4).then_some(local)
+}
+
+const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
+    match local_col {
+        0 => Some(CabinetLight::MarqueeUpperLeft),
+        1 => Some(CabinetLight::MarqueeUpperRight),
+        2 => Some(CabinetLight::MarqueeLowerLeft),
+        3 => Some(CabinetLight::MarqueeLowerRight),
+        _ => None,
+    }
+}
+
+fn pad_light_for_col(
+    state: &crate::game::gameplay::State,
+    column: usize,
+) -> Option<(LightPlayer, ButtonLight)> {
+    if state.cols_per_player == 0 {
+        return None;
+    }
+    let local = column % state.cols_per_player;
+    let (player, local_col) = if state.cols_per_player >= 8 && state.num_players == 1 {
+        let player = if local < 4 {
+            LightPlayer::P1
+        } else {
+            LightPlayer::P2
+        };
+        (player, local % 4)
+    } else {
+        let player_ix = column / state.cols_per_player;
+        let player = match player_ix {
+            0 => LightPlayer::P1,
+            1 => LightPlayer::P2,
+            _ => return None,
+        };
+        (player, local)
+    };
+    button_light_for_col(local_col).map(|button| (player, button))
+}
+
+const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
+    match local_col {
+        0 => Some(ButtonLight::Left),
+        1 => Some(ButtonLight::Down),
+        2 => Some(ButtonLight::Up),
+        3 => Some(ButtonLight::Right),
+        _ => None,
+    }
+}
+
+const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
+    match screen {
+        CurrentScreen::Init => LightMode::Attract,
+        CurrentScreen::Gameplay | CurrentScreen::Practice => LightMode::Gameplay,
+        CurrentScreen::TestLights => LightMode::TestAutoCycle,
+        CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+            LightMode::Cleared
+        }
+        CurrentScreen::GameOver => LightMode::Stage,
+        CurrentScreen::Menu
+        | CurrentScreen::Options
+        | CurrentScreen::Credits
+        | CurrentScreen::ManageLocalProfiles
+        | CurrentScreen::Mappings
+        | CurrentScreen::Input
+        | CurrentScreen::SelectProfile
+        | CurrentScreen::SelectColor
+        | CurrentScreen::SelectStyle
+        | CurrentScreen::SelectPlayMode
+        | CurrentScreen::ProfileLoad
+        | CurrentScreen::SelectMusic
+        | CurrentScreen::SelectCourse
+        | CurrentScreen::Sandbox
+        | CurrentScreen::PlayerOptions => LightMode::MenuStartAndDirections,
+    }
+}
+
+const fn light_button_from_action(action: input::VirtualAction) -> Option<LightButtonSource> {
+    match action {
+        input::VirtualAction::p1_left => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Left))
+        }
+        input::VirtualAction::p1_down => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Down))
+        }
+        input::VirtualAction::p1_up => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Up))
+        }
+        input::VirtualAction::p1_right => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Right))
+        }
+        input::VirtualAction::p1_menu_left => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Left))
+        }
+        input::VirtualAction::p1_menu_down => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Down))
+        }
+        input::VirtualAction::p1_menu_up => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Up))
+        }
+        input::VirtualAction::p1_menu_right => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Right))
+        }
+        input::VirtualAction::p1_start => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Start))
+        }
+        input::VirtualAction::p1_select => Some(LightButtonSource::Menu(
+            LightPlayer::P1,
+            ButtonLight::Select,
+        )),
+        input::VirtualAction::p2_left => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Left))
+        }
+        input::VirtualAction::p2_down => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Down))
+        }
+        input::VirtualAction::p2_up => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Up))
+        }
+        input::VirtualAction::p2_right => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Right))
+        }
+        input::VirtualAction::p2_menu_left => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Left))
+        }
+        input::VirtualAction::p2_menu_down => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Down))
+        }
+        input::VirtualAction::p2_menu_up => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Up))
+        }
+        input::VirtualAction::p2_menu_right => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Right))
+        }
+        input::VirtualAction::p2_start => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Start))
+        }
+        input::VirtualAction::p2_select => Some(LightButtonSource::Menu(
+            LightPlayer::P2,
+            ButtonLight::Select,
+        )),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+const fn is_operator_menu_action(action: input::VirtualAction) -> bool {
+    matches!(
+        action,
+        input::VirtualAction::p1_operator | input::VirtualAction::p2_operator
+    )
+}
+
+#[inline(always)]
+const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
+    !matches!(
+        screen,
+        CurrentScreen::Options
+            | CurrentScreen::Mappings
+            | CurrentScreen::Input
+            | CurrentScreen::TestLights
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LightButtonSource {
+    Pad(LightPlayer, ButtonLight),
+    Menu(LightPlayer, ButtonLight),
+}
+
+fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 2] {
+    std::array::from_fn(|player| {
+        hide_flags_from_profile(state.player_profiles[player].hide_light_type)
+    })
+}
+
+const fn hide_flags_from_profile(hide: profile::HideLightType) -> HideFlags {
+    match hide {
+        profile::HideLightType::NoHideLights => HideFlags {
+            all: false,
+            marquee: false,
+            bass: false,
+        },
+        profile::HideLightType::HideAllLights => HideFlags {
+            all: true,
+            marquee: true,
+            bass: true,
+        },
+        profile::HideLightType::HideMarqueeLights => HideFlags {
+            all: false,
+            marquee: true,
+            bass: false,
+        },
+        profile::HideLightType::HideBassLights => HideFlags {
+            all: false,
+            marquee: false,
+            bass: true,
+        },
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 struct GameplayOffsetSavePrompt {
     target: CurrentScreen,
     navigate_no_fade: bool,
     active_choice: u8, // 0 = Yes, 1 = No
+}
+
+#[inline(always)]
+const fn gameplay_offset_prompt_choice_delta(
+    action: input::VirtualAction,
+    dedicated_menu_only: bool,
+) -> Option<i8> {
+    if dedicated_menu_only && action.is_gameplay_arrow() {
+        return None;
+    }
+    match action {
+        input::VirtualAction::p1_left
+        | input::VirtualAction::p1_menu_left
+        | input::VirtualAction::p2_left
+        | input::VirtualAction::p2_menu_left => Some(-1),
+        input::VirtualAction::p1_right
+        | input::VirtualAction::p1_menu_right
+        | input::VirtualAction::p2_right
+        | input::VirtualAction::p2_menu_right => Some(1),
+        _ => None,
+    }
 }
 
 #[derive(Clone)]
@@ -543,12 +845,22 @@ fn actor_tree_stats(actors: &[crate::engine::present::actors::Actor]) -> ActorTr
                     visit(stats, child);
                 }
             }
+            crate::engine::present::actors::Actor::SharedFrame { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children.iter() {
+                    visit(stats, child);
+                }
+            }
             crate::engine::present::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
+            crate::engine::present::actors::Actor::CameraPush { .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+            }
+            crate::engine::present::actors::Actor::CameraPop => {}
             crate::engine::present::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);
@@ -757,6 +1069,7 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    alt_held: bool,
     tab_held: bool,
     backquote_held: bool,
     tab_acceleration_enabled: bool,
@@ -845,6 +1158,7 @@ pub struct ScreensState {
     manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
+    test_lights_state: test_lights::State,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -870,6 +1184,11 @@ pub struct SessionState {
     course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
+    /// SL/zmod parity: when a restart key is pressed mid-gameplay, the gameplay
+    /// state runs its fast Cancel exit. This flag intercepts the resulting
+    /// `NavigateNoFade(SelectMusic)` and redirects it back to Gameplay so the
+    /// player skips the long out-transition.
+    restart_pending: bool,
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
     course_eval_page_index: usize,
@@ -926,6 +1245,7 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            alt_held: false,
             tab_held: false,
             backquote_held: false,
             tab_acceleration_enabled: cfg.tab_acceleration,
@@ -1265,6 +1585,7 @@ impl SessionState {
             course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
+            restart_pending: false,
             course_run: None,
             course_eval_pages: Vec::new(),
             course_eval_page_index: 0,
@@ -1288,6 +1609,20 @@ fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
         profile::get_for_side(profile::PlayerSide::P1).current_combo,
         profile::get_for_side(profile::PlayerSide::P2).current_combo,
     ]
+}
+
+#[inline(always)]
+fn preferred_difficulty_for_side(
+    side: profile::PlayerSide,
+    play_style: profile::PlayStyle,
+) -> usize {
+    let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
+        .len()
+        .saturating_sub(1);
+    profile::get_for_side(side)
+        .last_played(play_style)
+        .difficulty_index
+        .min(max_diff_index)
 }
 
 fn course_stage_runtime_from_plan(
@@ -1604,6 +1939,9 @@ fn score_info_from_stage(
         show_hard_ex_score: player.show_hard_ex_score,
         show_fa_plus_pane: player.show_fa_plus_pane,
         track_early_judgments: player.track_early_judgments,
+        disabled_timing_windows: profile::get_for_side(side)
+            .timing_windows
+            .disabled_windows(),
         machine_records,
         machine_record_highlight_rank,
         personal_records,
@@ -1638,6 +1976,16 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
         parts.push("Centered".to_string());
     }
     parts.push(profile.perspective.to_string());
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    if disabled_windows.iter().any(|disabled| *disabled) {
+        let windows = disabled_windows
+            .iter()
+            .enumerate()
+            .filter_map(|(i, disabled)| disabled.then(|| format!("W{}", i + 1)))
+            .collect::<Vec<_>>()
+            .join("/");
+        parts.push(format!("No {windows}"));
+    }
     parts.push(profile.noteskin.to_string());
     Arc::<str>::from(parts.join(", "))
 }
@@ -1719,6 +2067,13 @@ fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
         paths.push(path.clone());
     }
     paths
+}
+
+fn model_texture_sampler(key: &str) -> SamplerDesc {
+    SamplerDesc {
+        wrap: SamplerWrap::Repeat,
+        ..crate::assets::parse_texture_hints(key).sampler_desc()
+    }
 }
 
 fn prewarm_gameplay_assets(
@@ -1804,35 +2159,82 @@ fn prewarm_gameplay_assets(
         paths
     }
 
+    fn prewarm_model_texture_key(
+        assets: &mut AssetManager,
+        backend: &mut renderer::Backend,
+        seen: &mut HashSet<String>,
+        seen_model_textures: &mut HashSet<String>,
+        key: &str,
+    ) {
+        let key = crate::assets::canonical_texture_key(key);
+        if !seen_model_textures.insert(key.clone()) {
+            return;
+        }
+        assets.ensure_texture_for_key_with_sampler(backend, &key, model_texture_sampler(&key));
+        seen.insert(key);
+    }
+
+    fn prewarm_noteskin_textures(
+        assets: &mut AssetManager,
+        backend: &mut renderer::Backend,
+        seen: &mut HashSet<String>,
+        seen_model_textures: &mut HashSet<String>,
+        noteskin: &crate::game::parsing::noteskin::Noteskin,
+    ) {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+        noteskin.for_each_model_slot(|slot| {
+            prewarm_model_texture_key(
+                assets,
+                backend,
+                seen,
+                seen_model_textures,
+                slot.texture_key(),
+            )
+        });
+    }
+
     let mut seen = HashSet::<String>::with_capacity(256);
+    let mut seen_model_textures = HashSet::<String>::with_capacity(64);
     let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.mine_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.receptor_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.tap_explosion_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for path in gameplay_media_paths(state) {
         let key = path.to_string_lossy().into_owned();
@@ -1889,12 +2291,6 @@ fn prewarm_gameplay_assets(
                             media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } => {
-                        let key = sound_path.to_string_lossy().into_owned();
-                        if seen.insert(key.clone()) {
-                            crate::engine::audio::preload_sfx(&key);
-                        }
-                    }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
                         texture_key: Some(texture_key),
@@ -1926,8 +2322,27 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::Model { layers } => {
                         for layer in layers.iter() {
-                            if seen.insert(layer.texture_key.to_string()) {
-                                assets.ensure_texture_for_key(backend, layer.texture_key.as_ref());
+                            prewarm_model_texture_key(
+                                assets,
+                                backend,
+                                &mut seen,
+                                &mut seen_model_textures,
+                                layer.texture_key.as_ref(),
+                            );
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                        for slot in slots.iter() {
+                            if slot.model.is_some() {
+                                prewarm_model_texture_key(
+                                    assets,
+                                    backend,
+                                    &mut seen,
+                                    &mut seen_model_textures,
+                                    slot.texture_key(),
+                                );
+                            } else if seen.insert(slot.texture_key().to_owned()) {
+                                assets.ensure_texture_for_key(backend, slot.texture_key());
                             }
                         }
                     }
@@ -1942,14 +2357,41 @@ fn prewarm_gameplay_assets(
     for layer in &state.song_lua_foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
+}
+
+fn prewarm_gameplay_sfx(state: &gameplay::State) {
+    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
+    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
+
+    let mut seen = HashSet::<String>::with_capacity(state.song_lua_sound_paths.len());
+    let mut prewarm_sound_overlays =
+        |overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor]| {
+            for overlay in overlays {
+                let crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } =
+                    &overlay.kind
+                else {
+                    continue;
+                };
+                let key = sound_path.to_string_lossy().into_owned();
+                if seen.insert(key.clone()) {
+                    crate::engine::audio::preload_sfx(&key);
+                }
+            }
+        };
+
+    prewarm_sound_overlays(&state.song_lua_overlays);
+    for layer in &state.song_lua_background_visual_layers {
+        prewarm_sound_overlays(&layer.overlays);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        prewarm_sound_overlays(&layer.overlays);
+    }
     for sound_path in &state.song_lua_sound_paths {
         let key = sound_path.to_string_lossy().into_owned();
         if seen.insert(key.clone()) {
             crate::engine::audio::preload_sfx(&key);
         }
     }
-    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
-    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
 
 fn prewarm_gameplay_text_layout_cache(
@@ -1962,10 +2404,7 @@ fn prewarm_gameplay_text_layout_cache(
     // Gameplay prewarm owns the whole cache for the next song, so start from an
     // empty working set instead of scan-pruning stale entries from older screens.
     cache.clear();
-    cache.configure(
-        GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::engine::present::compose::TextLayoutOverflowPolicy::Saturating,
-    );
+    cache.configure(GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT);
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
@@ -2348,6 +2787,9 @@ impl ScreensState {
         let mut input_state = input_screen::init();
         input_state.active_color_index = color_index;
 
+        let mut test_lights_state = test_lights::init();
+        test_lights_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -2373,6 +2815,7 @@ impl ScreensState {
             manage_local_profiles_state,
             mappings_state,
             input_state,
+            test_lights_state,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -2427,6 +2870,10 @@ impl ScreensState {
             }
             CurrentScreen::Input => (
                 input_screen::update(&mut self.input_state, delta_time),
+                false,
+            ),
+            CurrentScreen::TestLights => (
+                test_lights::update(&mut self.test_lights_state, delta_time),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -2596,7 +3043,9 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
-    fsr_monitor: fsr::Monitor,
+    fsr_monitor: input::fsr::Monitor,
+    lights: lights::Manager,
+    gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
@@ -2626,9 +3075,14 @@ impl App {
 
     #[inline(always)]
     fn apply_present_back_pressure(&self) -> bool {
-        !self.state.shell.vsync_enabled
-            && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
-            && self.effective_frame_interval().is_none()
+        if self.state.shell.vsync_enabled {
+            return false;
+        }
+        #[cfg(target_os = "macos")]
+        if self.backend_type == BackendType::OpenGL {
+            return true;
+        }
+        self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
     }
 
     #[inline(always)]
@@ -2665,9 +3119,11 @@ impl App {
         if !focused {
             self.state.shell.shift_held = false;
             self.state.shell.ctrl_held = false;
+            self.state.shell.alt_held = false;
             self.state.shell.tab_held = false;
             self.state.shell.backquote_held = false;
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
         } else if let Some(w) = window {
             self.request_redraw(w, "focus");
@@ -2705,6 +3161,77 @@ impl App {
             &mut self.state.screens.select_music_state,
             on_select_music.then_some(view).flatten(),
         );
+    }
+
+    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
+        let config = config::get();
+        self.lights
+            .set_driver(config.lights_driver, config.lights_com_port.as_str());
+        self.lights
+            .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
+        let screen = self.state.screens.current_screen;
+        if screen != CurrentScreen::TestLights {
+            self.lights.set_mode(light_mode_for_screen(screen));
+        }
+        self.lights.set_joined([
+            profile::is_session_side_joined(profile::PlayerSide::P1),
+            profile::is_session_side_joined(profile::PlayerSide::P2),
+        ]);
+        self.lights.set_hide_flags(self.current_light_hide_flags());
+        self.sync_gameplay_light_blinks();
+        self.lights.tick(delta_time, elapsed_seconds);
+    }
+
+    fn sync_light_input(&mut self, ev: &InputEvent) {
+        let Some(source) = light_button_from_action(ev.action) else {
+            return;
+        };
+        match source {
+            LightButtonSource::Pad(player, button) => {
+                self.lights.set_button_pressed(player, button, ev.pressed);
+            }
+            LightButtonSource::Menu(player, button) => {
+                self.lights
+                    .set_menu_button_pressed(player, button, ev.pressed);
+            }
+        }
+    }
+
+    fn current_light_hide_flags(&self) -> [HideFlags; 2] {
+        let screen = self.state.screens.current_screen;
+        let gameplay_state = match screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            CurrentScreen::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| &state.gameplay),
+            _ => None,
+        };
+        gameplay_state.map_or([HideFlags::default(); 2], |state| {
+            hide_flags_for_gameplay(state)
+        })
+    }
+
+    fn sync_gameplay_light_blinks(&mut self) {
+        match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => {
+                if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+                    self.gameplay_lights.queue_blinks(&mut self.lights, gs);
+                    return;
+                }
+            }
+            CurrentScreen::Practice => {
+                if let Some(ps) = self.state.screens.practice_state.as_ref() {
+                    self.gameplay_lights
+                        .queue_blinks(&mut self.lights, &ps.gameplay);
+                    return;
+                }
+            }
+            _ => {}
+        }
+        self.gameplay_lights.clear();
     }
 
     #[inline(always)]
@@ -2984,6 +3511,7 @@ impl App {
             self.on_fade_complete(target, event_loop);
         }
         let update_us: u32 = elapsed_us_since(update_started);
+        self.sync_lights(delta_time, total_elapsed);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
             self.state.shell.last_frame_end_time = Instant::now();
@@ -3003,7 +3531,14 @@ impl App {
         self.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
-        let post_select_banner_paths = if config::get().show_select_music_video_banners
+        let (show_select_music_video_banners, show_select_music_banners) = {
+            let cfg = config::get();
+            (
+                cfg.show_select_music_video_banners,
+                cfg.show_select_music_banners,
+            )
+        };
+        let post_select_banner_paths = if show_select_music_video_banners
             && matches!(
                 current_screen,
                 CurrentScreen::EvaluationSummary | CurrentScreen::Initials
@@ -3031,8 +3566,8 @@ impl App {
             match current_screen {
                 CurrentScreen::SelectMusic => {
                     let state = &screens.select_music_state;
-                    let desired_path = if config::get().show_select_music_video_banners
-                        && config::get().show_select_music_banners
+                    let desired_path = if show_select_music_video_banners
+                        && show_select_music_banners
                         && state.banner_high_quality_requested
                     {
                         match state.entries.get(state.selected_index) {
@@ -3055,8 +3590,8 @@ impl App {
                 }
                 CurrentScreen::SelectCourse => {
                     let state = &screens.select_course_state;
-                    let desired_path = if config::get().show_select_music_video_banners
-                        && config::get().show_select_music_banners
+                    let desired_path = if show_select_music_video_banners
+                        && show_select_music_banners
                         && state.banner_high_quality_requested
                     {
                         match state.entries.get(state.selected_index) {
@@ -3078,7 +3613,7 @@ impl App {
                     );
                 }
                 CurrentScreen::Evaluation => {
-                    let desired_path = if config::get().show_select_music_video_banners {
+                    let desired_path = if show_select_music_video_banners {
                         screens
                             .evaluation_state
                             .score_info
@@ -3212,9 +3747,10 @@ impl App {
         let total_elapsed_end = frame_finished
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
+        let frame_host_nanos = crate::engine::host_time::now_nanos();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
         self.record_stutter_diag_frame(
-            frame_finished,
+            frame_host_nanos,
             self.state.screens.current_screen,
             frame_seconds,
             pre_redraw_gap_us,
@@ -3244,7 +3780,7 @@ impl App {
             compose_breakdown,
         );
         self.trace_stutter_diag_dump_if_needed(
-            frame_finished,
+            frame_host_nanos,
             total_elapsed_end,
             self.state.screens.current_screen,
             frame_seconds,
@@ -3271,6 +3807,8 @@ impl App {
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(from, CurrentScreen::Mappings | CurrentScreen::Input) {
             options::open_input_submenu(&mut self.state.screens.options_state);
+        } else if from == CurrentScreen::TestLights {
+            options::open_lights_submenu(&mut self.state.screens.options_state);
         }
     }
 
@@ -3288,18 +3826,19 @@ impl App {
             window: None,
             backend: None,
             backend_type,
-            fsr_monitor: fsr::Monitor::new(),
+            fsr_monitor: input::fsr::Monitor::new(),
+            lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
+            gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
-            // Screen transitions clear the UI cache, so saturating avoids full
-            // prune sweeps during a live compose without changing its footprint.
-            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::saturating(
+            // Screen transitions clear the UI cache, so misses stop inserting
+            // once the cache reaches its fixed footprint.
+            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
                 UI_TEXT_LAYOUT_CACHE_LIMIT,
             ),
-            gameplay_text_layout_cache:
-                crate::engine::present::compose::TextLayoutCache::saturating(
-                    GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-                ),
+            gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
+                GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+            ),
             ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_actor_scratch: Vec::with_capacity(256),
@@ -3315,6 +3854,16 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let action = match action {
+            // SL/zmod parity: a restart-triggered Cancel exit returns
+            // `NavigateNoFade(SelectMusic)`. Redirect it to Gameplay so the
+            // player skips the trip through SelectMusic.
+            ScreenAction::NavigateNoFade(CurrentScreen::SelectMusic)
+                if self.state.session.restart_pending
+                    && self.state.screens.current_screen == CurrentScreen::Gameplay =>
+            {
+                self.state.session.restart_pending = false;
+                ScreenAction::NavigateNoFade(CurrentScreen::Gameplay)
+            }
             ScreenAction::Navigate(CurrentScreen::Evaluation)
                 if self.should_chain_course_to_next_stage() =>
             {
@@ -3635,6 +4184,20 @@ impl App {
                 options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                 Vec::new()
             }
+            ScreenAction::TestLightsSetAuto => {
+                test_lights::on_enter(&mut self.state.screens.test_lights_state);
+                self.lights.set_test_auto_cycle();
+                Vec::new()
+            }
+            ScreenAction::TestLightsStepCabinet(delta) => {
+                self.lights.step_test_cabinet(delta);
+                Vec::new()
+            }
+            ScreenAction::TestLightsStepButton(delta) => {
+                self.lights.step_test_button(delta);
+                Vec::new()
+            }
+            ScreenAction::ConsumeInput => Vec::new(),
             ScreenAction::None => Vec::new(),
         };
         self.run_commands(commands, event_loop)
@@ -3815,11 +4378,11 @@ impl App {
         if !ev.pressed {
             return true;
         }
-        let decision = match ev.action {
-            input::VirtualAction::p1_left
-            | input::VirtualAction::p1_menu_left
-            | input::VirtualAction::p2_left
-            | input::VirtualAction::p2_menu_left => {
+        let decision = match gameplay_offset_prompt_choice_delta(
+            ev.action,
+            config::get().only_dedicated_menu_buttons,
+        ) {
+            Some(-1) => {
                 let mut moved = false;
                 if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
                     && prompt.active_choice > 0
@@ -3832,10 +4395,7 @@ impl App {
                 }
                 None
             }
-            input::VirtualAction::p1_right
-            | input::VirtualAction::p1_menu_right
-            | input::VirtualAction::p2_right
-            | input::VirtualAction::p2_menu_right => {
+            Some(1) => {
                 let mut moved = false;
                 if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
                     && prompt.active_choice < 1
@@ -3848,20 +4408,22 @@ impl App {
                 }
                 None
             }
-            input::VirtualAction::p1_start
-            | input::VirtualAction::p2_start
-            | input::VirtualAction::p1_select
-            | input::VirtualAction::p2_select => {
-                let save_changes = self
-                    .state
-                    .gameplay_offset_save_prompt
-                    .as_ref()
-                    .is_some_and(|prompt| prompt.active_choice == 0);
-                crate::engine::audio::play_sfx("assets/sounds/start.ogg");
-                Some(save_changes)
-            }
-            input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
-            _ => None,
+            _ => match ev.action {
+                input::VirtualAction::p1_start
+                | input::VirtualAction::p2_start
+                | input::VirtualAction::p1_select
+                | input::VirtualAction::p2_select => {
+                    let save_changes = self
+                        .state
+                        .gameplay_offset_save_prompt
+                        .as_ref()
+                        .is_some_and(|prompt| prompt.active_choice == 0);
+                    crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+                    Some(save_changes)
+                }
+                input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
+                _ => None,
+            },
         };
         if let Some(save_changes) = decision {
             self.finalize_gameplay_offset_prompt(save_changes, event_loop);
@@ -4030,20 +4592,37 @@ impl App {
     }
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if self.prepare_player_options_for_gameplay_restart() {
-            let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
-            if let Err(e) =
-                self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
-            {
-                log::error!("Failed to restart Gameplay with {label}: {e}");
-            } else {
-                self.state.session.gameplay_restart_count = restart_count;
-            }
-            true
-        } else {
+        if !self.prepare_player_options_for_gameplay_restart() {
             log::warn!("Ignored {label} restart: no restartable stage state.");
-            false
+            return false;
         }
+        let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
+
+        // SL/zmod parity: if we're already in Gameplay, run the fast Cancel
+        // exit (~0.5s) instead of the full ~1.5s gameplay out-transition.
+        // The Cancel navigation is intercepted in `handle_action` and
+        // redirected back to Gameplay, which uses a shortened in-transition.
+        if self.state.screens.current_screen == CurrentScreen::Gameplay
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            let already_exiting = gs.exit_transition.is_some();
+            crate::game::gameplay::begin_restart_exit(gs);
+            if !already_exiting && gs.exit_transition.is_some() {
+                self.state.session.gameplay_restart_count = restart_count;
+                self.state.session.restart_pending = true;
+            }
+            return true;
+        }
+
+        // Fallback (e.g. Ctrl+R from Evaluation): use the standard navigation.
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+        {
+            log::error!("Failed to restart Gameplay with {label}: {e}");
+        } else {
+            self.state.session.gameplay_restart_count = restart_count;
+        }
+        true
     }
 
     fn should_chain_course_to_next_stage(&self) -> bool {
@@ -4113,6 +4692,19 @@ impl App {
         self.state.screens.evaluation_state.return_to_course =
             self.state.session.course_run.is_some();
         self.state.screens.evaluation_state.auto_advance_seconds = None;
+
+        // Pass / Fail SFX (zmod parity, issue #375). Based on the per-stage
+        // result that was just captured into `eval_snapshot` — the
+        // course-summary replacement below would only run on the very last
+        // course stage, and the per-stage pass/fail is still the right cue
+        // for the player at that moment.
+        let failed = crate::screens::evaluation::all_joined_players_failed(&eval_snapshot);
+        let folder = if failed {
+            "assets/sounds/evaluation_fail"
+        } else {
+            "assets/sounds/evaluation_pass"
+        };
+        crate::engine::audio::folder::play_random_sfx(folder);
 
         if let Some(course_run) = self.state.session.course_run.as_mut() {
             if course_run.next_stage_index >= course_run.stages.len() {
@@ -4342,11 +4934,47 @@ impl App {
         true
     }
 
+    fn reset_operator_game_state(&mut self) {
+        const RESET_STYLE: profile::PlayStyle = profile::PlayStyle::Single;
+
+        profile::set_session_play_style(RESET_STYLE);
+        profile::set_session_play_mode(profile::PlayMode::Regular);
+        profile::set_session_player_side(profile::PlayerSide::P1);
+        profile::set_session_joined(false, false);
+        profile::set_session_music_rate(1.0);
+        profile::set_session_timing_tick_mode(profile::TimingTickMode::Off);
+        profile::set_fast_profile_switch_from_select_music(false);
+
+        let preferred = preferred_difficulty_for_side(profile::PlayerSide::P1, RESET_STYLE);
+        self.state.session = SessionState::new(preferred, combo_carry_from_profiles());
+        self.state.gameplay_offset_save_prompt = None;
+    }
+
+    fn route_operator_menu_button(&mut self, ev: &InputEvent) -> bool {
+        if !ev.pressed || !is_operator_menu_action(ev.action) {
+            return false;
+        }
+        if !allow_operator_menu_button(self.state.screens.current_screen) {
+            return true;
+        }
+
+        info!("{SERVICE_SWITCH_PRESSED}");
+        self.state.shell.gamepad_overlay_state =
+            Some((SERVICE_SWITCH_PRESSED.to_string(), Instant::now()));
+        self.reset_operator_game_state();
+        self.handle_navigation_action_after_prompt(CurrentScreen::Options);
+        true
+    }
+
     fn route_input_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
+        self.sync_light_input(&ev);
+        if self.route_operator_menu_button(&ev) {
+            return Ok(());
+        }
         if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
             return Ok(());
         }
@@ -4362,6 +4990,9 @@ impl App {
                         .select_music_state
                         .test_input_overlay_visible
                 }
+                CurrentScreen::Evaluation => crate::screens::evaluation::test_input_pane_active(
+                    &self.state.screens.evaluation_state,
+                ),
                 _ => false,
             };
             if !allow_gameplay_arrow {
@@ -4387,7 +5018,10 @@ impl App {
             return Ok(());
         }
         if ev.pressed
-            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Gameplay | CurrentScreen::Evaluation
+            )
             && self.state.gameplay_offset_save_prompt.is_none()
             && self.state.session.course_run.is_none()
             && matches!(
@@ -4442,6 +5076,10 @@ impl App {
             CurrentScreen::Input => {
                 crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev)
             }
+            CurrentScreen::TestLights => crate::screens::test_lights::handle_input(
+                &mut self.state.screens.test_lights_state,
+                &ev,
+            ),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
@@ -4502,6 +5140,24 @@ impl App {
         self.handle_action(action, event_loop)
     }
 
+    fn refresh_gameplay_background_path(
+        state: &mut crate::game::gameplay::State,
+        show_video_backgrounds: bool,
+    ) -> Option<PathBuf> {
+        let path = state
+            .song
+            .gameplay_background_path_for_change_ix(
+                state.next_background_change_ix,
+                show_video_backgrounds,
+            )
+            .cloned();
+        state.current_background_key = path.as_deref().map(crate::game::gameplay::media_path_key);
+        state.current_background_path = path.clone();
+        state.background_allow_video = show_video_backgrounds;
+        state.background_path_dirty = false;
+        path
+    }
+
     fn sync_gameplay_background(&mut self) {
         if !matches!(
             self.state.screens.current_screen,
@@ -4510,7 +5166,7 @@ impl App {
             return;
         }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let desired_path = {
+        let (desired_path, desired_key) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -4524,27 +5180,24 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            if let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix)
-            {
-                if gs.current_beat >= next_change.start_beat {
-                    while let Some(change) =
-                        gs.song.background_changes.get(gs.next_background_change_ix)
-                    {
-                        if gs.current_beat < change.start_beat {
-                            break;
-                        }
-                        gs.next_background_change_ix += 1;
-                    }
+            let mut background_changed = false;
+            while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+                if gs.current_beat < change.start_beat {
+                    break;
                 }
+                gs.next_background_change_ix += 1;
+                background_changed = true;
             }
-            let desired = gs
-                .song
-                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                .cloned();
-            if desired != gs.current_background_path {
-                gs.current_background_path = desired.clone();
+            if background_changed {
+                gs.background_path_dirty = true;
             }
-            desired
+            if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
+                Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
+            }
+            (
+                gs.current_background_path.clone(),
+                gs.current_background_key.clone(),
+            )
         };
 
         let next_key = self.backend.as_mut().and_then(|backend| {
@@ -4552,10 +5205,12 @@ impl App {
                 &mut self.asset_manager,
                 backend,
                 desired_path.as_deref(),
+                desired_key.as_deref(),
                 show_video_backgrounds,
             )
         });
         if let Some(key) = next_key {
+            let key = Arc::<str>::from(key);
             match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => {
                     if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
@@ -4762,6 +5417,12 @@ impl App {
                 screen_alpha_multiplier,
             ),
             CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
+            CurrentScreen::TestLights => test_lights::get_actors(
+                &self.state.screens.test_lights_state,
+                self.lights.state_snapshot(),
+                self.lights.mode(),
+                screen_alpha_multiplier,
+            ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)
@@ -4953,7 +5614,7 @@ impl App {
     #[inline(always)]
     fn record_stutter_diag_frame(
         &mut self,
-        frame_finished: Instant,
+        frame_host_nanos: u64,
         screen: CurrentScreen,
         frame_seconds: f32,
         pre_redraw_gap_us: u32,
@@ -4985,7 +5646,7 @@ impl App {
             .shell
             .stutter_diag
             .push_frame(StutterDiagFrameSample {
-                host_nanos: crate::engine::host_time::instant_nanos(frame_finished),
+                host_nanos: frame_host_nanos,
                 screen,
                 redraw_request_reason,
                 frame_us: seconds_to_us_u32(frame_seconds),
@@ -5134,7 +5795,7 @@ impl App {
 
     fn trace_stutter_diag_dump_if_needed(
         &mut self,
-        frame_finished: Instant,
+        now_host_nanos: u64,
         total_elapsed: f32,
         screen: CurrentScreen,
         frame_seconds: f32,
@@ -5142,7 +5803,6 @@ impl App {
         if !stutter_diag_enabled() {
             return;
         }
-        let now_host_nanos = crate::engine::host_time::instant_nanos(frame_finished);
         if now_host_nanos == 0 {
             return;
         }
@@ -5267,7 +5927,7 @@ impl App {
         let actor_stats = actor_tree_stats(actors);
         let audio_stats = crate::engine::audio::get_output_timing_snapshot();
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_prunes:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
             severity,
             screen,
@@ -5303,7 +5963,6 @@ impl App {
             compose_breakdown.text_layout.misses,
             compose_breakdown.text_layout.built_lines,
             compose_breakdown.text_layout.built_glyphs,
-            compose_breakdown.text_layout.prunes,
             compose_breakdown.text_layout.owned_entries,
             compose_breakdown.text_layout.shared_aliases,
             redraw_late_us as f32 / 1000.0,
@@ -5647,6 +6306,9 @@ impl App {
             KeyCode::ControlLeft | KeyCode::ControlRight => {
                 self.state.shell.ctrl_held = raw_key.pressed;
             }
+            KeyCode::AltLeft | KeyCode::AltRight => {
+                self.state.shell.alt_held = raw_key.pressed;
+            }
             KeyCode::Tab => {
                 self.state.shell.tab_held = raw_key.pressed;
             }
@@ -5654,6 +6316,12 @@ impl App {
                 self.state.shell.backquote_held = raw_key.pressed;
             }
             _ => {}
+        }
+
+        if raw_key.pressed && raw_key.code == KeyCode::F4 && self.state.shell.alt_held {
+            info!("Alt+F4 quit shortcut pressed. Shutting down.");
+            event_loop.exit();
+            return true;
         }
 
         if self.state.screens.current_screen == CurrentScreen::Sandbox {
@@ -5742,6 +6410,10 @@ impl App {
                 }
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            crate::screens::evaluation::handle_raw_key_event(
+                &mut self.state.screens.evaluation_state,
+                &raw_key,
+            );
             if App::raw_keyboard_restart_screen(self.state.screens.current_screen)
                 && raw_key.pressed
                 && !raw_key.repeat
@@ -5803,6 +6475,7 @@ impl App {
 
         if is_transitioning {
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return true;
         }
@@ -5921,6 +6594,7 @@ impl App {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning {
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return;
         }
@@ -5989,8 +6663,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs()
-                        .resolve_asset_path(visual_styles::menu_music_asset_path()),
+                    path: visual_styles::menu_music_resolved_path(),
                     looped: true,
                     volume: 1.0,
                 });
@@ -6161,6 +6834,12 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target == CurrentScreen::TestLights {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.test_lights_state = test_lights::init();
+            self.state.screens.test_lights_state.active_color_index = color_index;
+            test_lights::on_enter(&mut self.state.screens.test_lights_state);
+            self.lights.set_test_auto_cycle();
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
@@ -6364,6 +7043,7 @@ impl App {
             .manage_local_profiles_state
             .active_color_index = idx;
         self.state.screens.input_state.active_color_index = idx;
+        self.state.screens.test_lights_state.active_color_index = idx;
         self.state
             .screens
             .evaluation_summary_state
@@ -6393,6 +7073,16 @@ impl App {
         if target == CurrentScreen::Practice {
             crate::engine::audio::stop_music();
             if let Some(po_state) = self.state.screens.player_options_state.take() {
+                let edit_snapshot = (prev == CurrentScreen::PlayerOptions
+                    && po_state.return_screen == CurrentScreen::Practice)
+                    .then(|| {
+                        self.state
+                            .screens
+                            .practice_state
+                            .as_ref()
+                            .map(practice::edit_snapshot)
+                    })
+                    .flatten();
                 let song_arc = po_state.song.clone();
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
@@ -6555,6 +7245,9 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(&gs);
 
+                let sfx_prewarm_started = Instant::now();
+                prewarm_gameplay_sfx(&gs);
+                let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
@@ -6582,17 +7275,19 @@ impl App {
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 debug!(
-                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
+                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
                     gs.song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
-                commands.push(Command::SetDynamicBackground(
-                    gs.song
-                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                        .cloned(),
-                ));
-                self.state.screens.practice_state = Some(practice::init(gs));
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
+                commands.push(Command::SetDynamicBackground(background_path));
+                let mut practice_state = practice::init(gs);
+                if let Some(snapshot) = edit_snapshot {
+                    practice::restore_edit_snapshot(&mut practice_state, snapshot);
+                }
+                self.state.screens.practice_state = Some(practice_state);
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
                     crate::screens::practice::on_enter(ps);
                 }
@@ -6604,6 +7299,7 @@ impl App {
             crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
+                self.state.session.restart_pending = false;
             }
             let mut course_display_carry = None;
             let course_display_totals = self
@@ -6902,6 +7598,9 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(&gs);
 
+                let sfx_prewarm_started = Instant::now();
+                prewarm_gameplay_sfx(&gs);
+                let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
@@ -6931,7 +7630,7 @@ impl App {
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
                 if total_ms >= 50.0 {
                     info!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         gs.song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
@@ -6942,7 +7641,7 @@ impl App {
                     );
                 } else {
                     debug!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         gs.song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
@@ -6954,14 +7653,27 @@ impl App {
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
-                commands.push(Command::SetDynamicBackground(
-                    gs.song
-                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                        .cloned(),
-                ));
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
+                commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::screens::gameplay::on_enter(gs);
+                }
+                // Song Start / Restart SFX (zmod parity, issue #375). At this
+                // point `gameplay_restart_count` has already been zeroed for
+                // fresh entries (line above) and preserved for in-screen
+                // restarts (`try_gameplay_restart` incremented it before we
+                // arrived).
+                let restart_count = self.state.session.gameplay_restart_count;
+                if restart_count == 0 {
+                    crate::engine::audio::folder::play_random_sfx("assets/sounds/song_start");
+                } else {
+                    crate::engine::audio::folder::play_indexed_sfx(
+                        "assets/sounds/song_start/restart",
+                        restart_count,
+                        "restart.ogg",
+                    );
                 }
                 if let Some(course) = self.state.session.course_run.as_mut() {
                     course.next_stage_index = course.next_stage_index.saturating_add(1);
@@ -7481,13 +8193,14 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 let handled_started = Instant::now();
+                let mut raw_pad_consumed = false;
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
                     crate::screens::sandbox::handle_raw_pad_event(
                         &mut self.state.screens.sandbox_state,
                         &ev,
                     );
                 } else if self.state.screens.current_screen == CurrentScreen::Mappings {
-                    crate::screens::mappings::handle_raw_pad_event(
+                    raw_pad_consumed = crate::screens::mappings::handle_raw_pad_event(
                         &mut self.state.screens.mappings_state,
                         &ev,
                     );
@@ -7501,8 +8214,15 @@ impl ApplicationHandler<UserEvent> for App {
                         &mut self.state.screens.select_music_state,
                         &ev,
                     );
+                } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+                    crate::screens::evaluation::handle_raw_pad_event(
+                        &mut self.state.screens.evaluation_state,
+                        &ev,
+                    );
                 }
-                self.handle_pad_event(event_loop, ev);
+                if !raw_pad_consumed {
+                    self.handle_pad_event(event_loop, ev);
+                }
                 self.state
                     .shell
                     .note_gameplay_pad_handler(gameplay_screen, elapsed_us_since(handled_started));
@@ -7858,6 +8578,58 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_offset_prompt_ignores_pad_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_right, true),
+            None
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_keeps_menu_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_right, true),
+            Some(1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_right, true),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_allows_pad_lr_when_fallback_enabled() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, false),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, false),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn song_lua_video_paths_filter_and_dedupe_video_sprites() {
         let movie = PathBuf::from("badapple.AVI");
         let overlays = vec![
@@ -7929,6 +8701,25 @@ mod tests {
         assert!(song_lua_video_paths(&overlays).is_empty());
     }
 
+    #[test]
+    fn model_texture_sampler_forces_repeat_for_plain_textures() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts.png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Linear);
+    }
+
+    #[test]
+    fn model_texture_sampler_preserves_texture_hints() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts (nearest mipmaps).png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Nearest);
+        assert!(sampler.mipmaps);
+    }
+
     fn test_score_info(
         song: Arc<SongData>,
         side: profile::PlayerSide,
@@ -7981,6 +8772,7 @@ mod tests {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             track_early_judgments: false,
+            disabled_timing_windows: [false; 5],
             machine_records: Vec::new(),
             machine_record_highlight_rank: None,
             personal_records: Vec::new(),
@@ -8004,6 +8796,30 @@ mod tests {
         assert!(!App::raw_keyboard_restart_screen(
             CurrentScreen::EvaluationSummary,
         ));
+    }
+
+    #[test]
+    fn operator_menu_button_matches_service_screen_gate() {
+        assert!(!allow_operator_menu_button(CurrentScreen::Options));
+        assert!(!allow_operator_menu_button(CurrentScreen::Mappings));
+        assert!(!allow_operator_menu_button(CurrentScreen::Input));
+        assert!(!allow_operator_menu_button(CurrentScreen::TestLights));
+
+        assert!(allow_operator_menu_button(CurrentScreen::Menu));
+        assert!(allow_operator_menu_button(CurrentScreen::Gameplay));
+        assert!(allow_operator_menu_button(CurrentScreen::SelectMusic));
+        assert!(allow_operator_menu_button(CurrentScreen::PlayerOptions));
+        assert!(allow_operator_menu_button(
+            CurrentScreen::ManageLocalProfiles
+        ));
+    }
+
+    #[test]
+    fn operator_menu_actions_are_player_operator_buttons() {
+        assert!(is_operator_menu_action(input::VirtualAction::p1_operator));
+        assert!(is_operator_menu_action(input::VirtualAction::p2_operator));
+        assert!(!is_operator_menu_action(input::VirtualAction::p1_start));
+        assert!(!is_operator_menu_action(input::VirtualAction::p2_back));
     }
 
     #[test]

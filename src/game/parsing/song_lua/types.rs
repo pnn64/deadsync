@@ -202,6 +202,14 @@ pub struct SongLuaCapturedActor {
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaNoteHideWindow {
+    pub player: usize,
+    pub column: usize,
+    pub start_beat: f32,
+    pub end_beat: f32,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CompiledSongLua {
     pub entry_path: PathBuf,
@@ -217,5 +225,6 @@ pub struct CompiledSongLua {
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
+    pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub info: SongLuaCompileInfo,
 }

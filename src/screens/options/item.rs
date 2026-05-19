@@ -9,6 +9,7 @@ pub enum ItemId {
     GraphicsOptions,
     SoundOptions,
     InputOptions,
+    LightsOptions,
     MachineOptions,
     GameplayOptions,
     SelectMusicOptions,
@@ -56,10 +57,15 @@ pub enum ItemId {
     InpGamepadBackend,
     InpUseFsrs,
     InpDebugFsrDump,
-    InpMenuButtons,
-    InpOptionsNavigation,
     InpMenuNavigation,
+    InpOptionsNavigation,
+    InpMenuButtons,
     InpDebounce,
+
+    // Lights Options submenu
+    LightsDriver,
+    LightsGameplayPadLights,
+    LightsTest,
 
     // Machine Options submenu
     MchSelectProfile,
@@ -70,6 +76,7 @@ pub enum ItemId {
     MchSelectPlayMode,
     MchPreferredMode,
     MchFont,
+    MchBarColor,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -78,6 +85,8 @@ pub enum ItemId {
     MchVisualStyle,
     MchReplays,
     MchPerPlayerGlobalOffsets,
+    MchPackIniOffsets,
+    MchDefaultSyncOffset,
     MchKeyboardFeatures,
     MchVideoBgs,
 
@@ -86,6 +95,7 @@ pub enum ItemId {
     GpCenteredP1,
     GpZmodRatingBox,
     GpBpmDecimal,
+    GpDelayedBack,
     GpAutoScreenshot,
 
     // Sound Options submenu
@@ -125,6 +135,7 @@ pub enum ItemId {
     SmPreviewMarker,
     SmPreviewLoop,
     SmGameplayTimer,
+    SmStageDisplay,
     SmShowRivals,
     SmScoreboxPlacement,
     SmScoreboxCycle,
@@ -303,11 +314,21 @@ pub const ITEMS: &[Item] = &[
         ],
     },
     Item {
+        id: ItemId::LightsOptions,
+        name: lookup_key("Options", "LightsOptions"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "LightsOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsLights", "Driver")),
+            HelpEntry::Bullet(lookup_key("OptionsLights", "GameplayPadLights")),
+        ],
+    },
+    Item {
         id: ItemId::MachineOptions,
         name: lookup_key("Options", "MachineOptions"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "BarColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "PreferredColor")),
@@ -317,6 +338,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "PackIniOffsets")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
@@ -353,6 +375,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ChartInfo")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "MusicPreviews")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGameplayTimer")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowStageDisplay")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGSBox")),
         ],
     },

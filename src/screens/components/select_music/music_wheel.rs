@@ -1,7 +1,10 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::config::{SelectMusicItlRankMode, SelectMusicItlWheelMode};
-use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::config::{
+    self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    VisualStyle,
+};
+use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
@@ -53,12 +56,14 @@ const WHEEL_BADGE_ZOOM: f32 = 0.1875;
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+const PACK_COUNT_TEXT_CACHE_LIMIT: usize = 1024;
 const STR_REF_CACHE_LIMIT: usize = 4096;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
 // Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
 // keep both lines within that same visual footprint.
 const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
+const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
 
 thread_local! {
     static ITL_RANK_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
@@ -66,6 +71,8 @@ thread_local! {
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static PACK_COUNT_TEXT_CACHE: RefCell<HashMap<usize, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(HashMap::with_capacity(1024));
@@ -153,8 +160,40 @@ fn cached_itl_points_text(points: u32) -> Arc<str> {
 }
 
 #[inline(always)]
+fn cached_pack_count_text(count: usize) -> Arc<str> {
+    PACK_COUNT_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&count) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(count.to_string());
+        if cache.len() < PACK_COUNT_TEXT_CACHE_LIMIT {
+            cache.insert(count, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, STR_REF_CACHE_LIMIT)
+}
+
+fn song_pack_sync_style(
+    song: &SongData,
+    prefs: Option<&HashMap<String, rssp::pack::SyncPref>>,
+    default: DefaultSyncOffset,
+) -> Option<DefaultSyncOffset> {
+    let prefs = prefs?;
+    let pref = song
+        .simfile_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+        .and_then(|group| prefs.get(group).copied())
+        .unwrap_or(rssp::pack::SyncPref::Default);
+    Some(crate::game::song::pack_sync_pref_default(pref, default))
 }
 
 #[inline(always)]
@@ -257,9 +296,11 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     }
 
     let preferred = preferred_index.min(num_standard - 1);
-    if let Some(chart) =
-        crate::screens::select_music::chart_for_steps_index(song, chart_type, preferred)
-    {
+    let preferred_name = color::FILE_DIFFICULTY_NAMES[preferred];
+    if let Some(chart) = song.charts.iter().find(|chart| {
+        chart.chart_type.eq_ignore_ascii_case(chart_type)
+            && chart.difficulty.eq_ignore_ascii_case(preferred_name)
+    }) {
         return Some(chart);
     }
 
@@ -298,10 +339,9 @@ pub struct MusicWheelParams<'a> {
     pub position_offset_from_selection: f32,
     pub selection_animation_timer: f32,
     pub selection_animation_beat: f32,
-    pub pack_song_counts: &'a HashMap<String, usize>,
     pub color_pack_headers: bool,
+    pub selected_charts: [Option<&'a ChartData>; profile::PLAYER_SLOTS],
     pub preferred_difficulty_index: [usize; profile::PLAYER_SLOTS],
-    pub selected_steps_index: [usize; profile::PLAYER_SLOTS],
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
@@ -312,14 +352,31 @@ pub struct MusicWheelParams<'a> {
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
+    pub pack_sync_prefs: Option<&'a HashMap<String, rssp::pack::SyncPref>>,
+    pub default_sync_offset: DefaultSyncOffset,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS + 1);
-    let translated_titles = crate::config::get().translated_titles;
+    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 8 + 1);
+    let cfg = config::get();
+    let translated_titles = cfg.translated_titles;
+    let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
+    let song_bg_alpha = if cfg.visual_style == VisualStyle::Srpg9
+        || effective_bar_color == MachineBarColor::Transparent
+    {
+        0.5
+    } else {
+        1.0
+    };
+    let section_bg_alpha = if effective_bar_color == MachineBarColor::Transparent {
+        0.5
+    } else {
+        1.0
+    };
     let play_style = profile::get_session_play_style();
     let target_chart_type = play_style.chart_type();
-    let song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+    let mut song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+    song_box_color[3] *= song_bg_alpha;
     let default_song_text_color = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
@@ -353,7 +410,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let item_h_colored: f32 = slot_spacing - 1.0;
     let center_y: f32 = screen_center_y();
     let line_gap_units: f32 = 6.0;
-    let half_item_h: f32 = item_h_full * 0.5; // NEW: Pre-calculate half height for centering children
 
     // Selection pulse (Simply Love [MusicWheel] HighlightOnCommand):
     // diffuseshift + effectclock("beatnooffset") + effectperiod(2)
@@ -364,7 +420,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let lamp_pulse_t_unscaled =
         (p.selection_animation_timer / LAMP_PULSE_PERIOD) * std::f32::consts::PI * 2.0;
     let lamp_pulse_t = f32::midpoint(lamp_pulse_t_unscaled.sin(), 1.0);
-    let grade_y = half_item_h;
     let grade_zoom = widescale(0.18, 0.3);
     let grade_x_p1 = widescale(10.0, 17.0);
     let grade_x_p2 = widescale(26.0, 47.0);
@@ -377,16 +432,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
     let selected_chart_hash_for_side = |side: profile::PlayerSide| {
-        let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
+        let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
             return None;
         };
         let ix = steps_slot_for_side(play_style, side);
-        crate::screens::select_music::chart_for_steps_index(
-            info,
-            target_chart_type,
-            p.selected_steps_index[ix],
-        )
-        .map(|chart| chart.short_hash.as_str())
+        p.selected_charts[ix].map(|chart| chart.short_hash.as_str())
     };
     if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
@@ -443,9 +493,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 MusicWheelEntry::PackHeader {
                     name,
                     original_index,
+                    song_count,
                     ..
                 } => {
-                    let bg_col = col_pack_header_box();
+                    let mut bg_col = col_pack_header_box();
+                    bg_col[3] *= section_bg_alpha;
                     let header_color = if p.color_pack_headers {
                         color::simply_love_rgba(*original_index as i32)
                     } else {
@@ -454,30 +506,29 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let show_new_badge = p.color_pack_headers
                         && p.new_pack_names
                             .is_some_and(|new_packs| new_packs.contains(name.as_str()));
-                    let mut slot_children = Vec::with_capacity(4 + usize::from(show_new_badge));
-                    slot_children.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.5):
-                        xy(0.0, half_item_h):
+                        xy(highlight_left_world, y_center_item):
                         zoomto(highlight_w, item_h_full):
-                        diffuse(0.0, 0.0, 0.0, 1.0):
-                        z(0)
+                        diffuse(0.0, 0.0, 0.0, section_bg_alpha):
+                        z(51)
                     ));
-                    slot_children.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.5):
-                        xy(0.0, half_item_h):
+                        xy(highlight_left_world, y_center_item):
                         zoomto(highlight_w, item_h_colored):
                         diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
-                        z(1)
+                        z(52)
                     ));
-                    slot_children.push(act!(text:
+                    actors.push(act!(text:
                         font("miso"):
                         settext(cached_str_ref(name.as_str())):
                         align(0.5, 0.5):
-                        xy(pack_center_x_local, half_item_h):
+                        xy(highlight_left_world + pack_center_x_local, y_center_item):
                         maxwidth(pack_name_max_w):
                         zoom(1.0):
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
-                        z(2)
+                        z(53)
                     ));
                     if show_new_badge {
                         let phase = (p.selection_animation_timer / NEW_BADGE_PULSE_PERIOD)
@@ -485,38 +536,28 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             * 2.0;
                         let pulse_t = f32::midpoint(phase.sin(), 1.0);
                         let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
-                        slot_children.push(act!(text:
+                        actors.push(act!(text:
                             font("miso"):
                             settext("NEW"):
                             align(1.0, 0.5):
-                            xy(pack_count_x_local - widescale(30.0, 40.0), half_item_h):
+                            xy(highlight_left_world + pack_count_x_local - widescale(30.0, 40.0), y_center_item):
                             zoom(0.6):
                             diffuse(color[0], color[1], color[2], color[3]):
-                            z(2)
+                            z(53)
                         ));
                     }
-                    if let Some(count) = p.pack_song_counts.get(name.as_str())
-                        && *count > 0
-                    {
-                        slot_children.push(act!(text:
+                    if *song_count > 0 {
+                        actors.push(act!(text:
                             font("miso"):
-                            settext(count.to_string()):
+                            settext(cached_pack_count_text(*song_count)):
                             align(1.0, 0.5):
-                            xy(pack_count_x_local, half_item_h):
+                            xy(highlight_left_world + pack_count_x_local, y_center_item):
                             zoom(0.75):
                             horizalign(right):
                             diffuse(1.0, 1.0, 1.0, 1.0):
-                            z(2)
+                            z(53)
                         ));
                     }
-                    actors.push(Actor::Frame {
-                        align: [0.0, 0.5],
-                        offset: [highlight_left_world, y_center_item],
-                        size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
-                        background: None,
-                        z: 51,
-                        children: slot_children,
-                    });
                     continue;
                 }
                 MusicWheelEntry::Song(info) => {
@@ -539,11 +580,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let wheel_chart_for_side = |side: profile::PlayerSide| {
                         let ix = steps_slot_for_side(play_style, side);
                         if is_selected_slot {
-                            crate::screens::select_music::chart_for_steps_index(
-                                info,
-                                target_chart_type,
-                                p.selected_steps_index[ix],
-                            )
+                            p.selected_charts[ix]
                         } else {
                             chart_for_preferred_or_nearest_standard(
                                 info,
@@ -571,55 +608,54 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                         })
                                 })
                         };
-                    let mut slot_capacity = 4
-                        + usize::from(has_subtitle)
-                        + usize::from(has_edit)
-                        + usize::from(has_lua)
-                        + usize::from(lua_submit_allowed);
-                    if p.show_music_wheel_grades {
-                        slot_capacity += 2;
-                    }
-                    if p.show_music_wheel_lamps {
-                        slot_capacity += 4;
-                    }
-                    slot_capacity += joined_sides;
-                    let mut slot_children = Vec::with_capacity(slot_capacity);
-                    slot_children.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.5):
-                        xy(0.0, half_item_h):
+                        xy(highlight_left_world, y_center_item):
                         zoomto(highlight_w, item_h_full):
                         diffuse(0.0, 10.0 / 255.0, 17.0 / 255.0, 0.5):
-                        z(0)
+                        z(51)
                     ));
-                    slot_children.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.5):
-                        xy(0.0, half_item_h):
+                        xy(highlight_left_world, y_center_item):
                         zoomto(highlight_w, item_h_colored):
                         diffuse(song_box_color[0], song_box_color[1], song_box_color[2], song_box_color[3]):
-                        z(1)
+                        z(52)
                     ));
+                    if song_pack_sync_style(info, p.pack_sync_prefs, p.default_sync_offset)
+                        == Some(DefaultSyncOffset::Null)
+                    {
+                        actors.push(act!(quad:
+                            align(0.0, 0.5):
+                            xy(highlight_left_world, y_center_item):
+                            zoomto(highlight_w, item_h_colored):
+                            diffuse(SONG_NULL_SYNC_RIGHT_EDGE[0], SONG_NULL_SYNC_RIGHT_EDGE[1], SONG_NULL_SYNC_RIGHT_EDGE[2], SONG_NULL_SYNC_RIGHT_EDGE[3] * song_bg_alpha):
+                            fadeleft(1.0):
+                            z(52)
+                        ));
+                    }
 
                     let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
-                    slot_children.push(act!(text:
+                    actors.push(act!(text:
                         font("miso"):
                         settext(cached_str_ref(title)):
                         align(0.0, 0.5):
-                        xy(title_x_local, half_item_h + subtitle_y_offset):
+                        xy(highlight_left_world + title_x_local, y_center_item + subtitle_y_offset):
                         maxwidth(title_max_w_local):
                         zoom(0.85):
                         diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
-                        z(2)
+                        z(53)
                     ));
                     if has_subtitle {
-                        slot_children.push(act!(text:
+                        actors.push(act!(text:
                             font("miso"):
                             settext(cached_str_ref(subtitle)):
                             align(0.0, 0.5):
-                            xy(title_x_local, half_item_h + line_gap_units):
+                            xy(highlight_left_world + title_x_local, y_center_item + line_gap_units):
                             maxwidth(title_max_w_local):
                             zoom(0.7):
                             diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
-                            z(2)
+                            z(53)
                         ));
                     }
                     if has_lua {
@@ -629,26 +665,26 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             badge_right_x_local
                         };
                         if lua_submit_allowed {
-                            slot_children.push(act!(sprite("GrooveStats.png"):
+                            actors.push(act!(sprite("GrooveStats.png"):
                                 align(1.0, 0.5):
-                                xy(lua_x, half_item_h):
+                                xy(highlight_left_world + lua_x, y_center_item):
                                 zoom(WHEEL_BADGE_ZOOM):
-                                z(2)
+                                z(53)
                             ));
                         }
-                        slot_children.push(act!(sprite("has_lua.png"):
+                        actors.push(act!(sprite("has_lua.png"):
                             align(1.0, 0.5):
-                            xy(lua_x, half_item_h):
+                            xy(highlight_left_world + lua_x, y_center_item):
                             zoom(WHEEL_BADGE_ZOOM):
-                            z(3)
+                            z(54)
                         ));
                     }
                     if has_edit {
-                        slot_children.push(act!(sprite("has_edit.png"):
+                        actors.push(act!(sprite("has_edit.png"):
                             align(1.0, 0.5):
-                            xy(badge_right_x_local, half_item_h):
+                            xy(highlight_left_world + badge_right_x_local, y_center_item):
                             zoom(WHEEL_BADGE_ZOOM):
-                            z(2)
+                            z(53)
                         ));
                     }
                     if p.show_music_wheel_grades || p.show_music_wheel_lamps {
@@ -676,15 +712,15 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             if p.show_music_wheel_grades {
                                 let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
                                     align(0.5, 0.5):
-                                    xy(grade_x, grade_y):
+                                    xy(highlight_left_world + grade_x, y_center_item):
                                     zoom(grade_zoom):
-                                    z(2):
+                                    z(53):
                                     visible(true)
                                 );
                                 if let Actor::Sprite { cell, .. } = &mut grade_actor {
                                     *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
                                 }
-                                slot_children.push(grade_actor);
+                                actors.push(grade_actor);
                             }
 
                             if p.show_music_wheel_lamps {
@@ -717,29 +753,28 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 } else {
                                     lamp_color
                                 };
-                                slot_children.push(act!(quad:
+                                actors.push(act!(quad:
                                     align(0.5, 0.5):
-                                    xy(lamp_x, grade_y):
+                                    xy(highlight_left_world + lamp_x, y_center_item):
                                     zoomto(lamp_w, lamp_h):
                                     diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
-                                    z(2)
+                                    z(53)
                                 ));
                                 if let Some(lamp_index) = lamp_index
                                     && let Some(count) = cached_score.lamp_judge_count
                                     && count < 10
                                 {
                                     let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
-                                    let judge_y = grade_y + 10.0;
                                     let judge_col = lamp_judge_count_color(lamp_index);
-                                    slot_children.push(act!(text:
+                                    actors.push(act!(text:
                                         font(current_machine_font_key(FontRole::ScreenEval)):
                                         settext(digit_text(count)):
                                         align(0.5, 0.5):
                                         horizalign(center):
-                                        xy(judge_x, judge_y):
+                                        xy(highlight_left_world + judge_x, y_center_item + 10.0):
                                         zoom(0.15):
                                         diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                        z(10)
+                                        z(61)
                                     ));
                                 }
                             }
@@ -790,15 +825,15 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 continue;
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
-                            slot_children.push(act!(text:
+                            actors.push(act!(text:
                                 font(current_machine_font_key(FontRole::Header)):
                                 settext(cached_itl_rank_text(rank)):
                                 align(0.5, 0.5):
                                 horizalign(center):
-                                xy(rank_x, grade_y):
+                                xy(highlight_left_world + rank_x, y_center_item):
                                 zoom(itl_rank_zoom):
                                 diffuse(rank_color[0], rank_color[1], rank_color[2], rank_color[3]):
-                                z(2)
+                                z(53)
                             ));
                         }
                     }
@@ -832,38 +867,38 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         match itl_wheel_mode {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
-                                slot_children.push(act!(text:
+                                actors.push(act!(text:
                                     font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
-                                    xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                    xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
                                     zoom(ITL_SCORE_ZOOM):
                                     diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                    z(2)
+                                    z(53)
                                 ));
                             }
                             SelectMusicItlWheelMode::PointsAndScore => {
                                 let Some(points) = points else {
-                                    slot_children.push(act!(text:
+                                    actors.push(act!(text:
                                         font(current_machine_font_key(FontRole::Numbers)):
                                         settext(cached_itl_ex_text(ex_hundredths)):
                                         align(1.0, 0.5):
                                         horizalign(right):
-                                        xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                        xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
                                         zoom(ITL_SCORE_ZOOM):
                                         diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                        z(2)
+                                        z(53)
                                     ));
                                     continue;
                                 };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
-                                slot_children.push(act!(text:
+                                actors.push(act!(text:
                                     font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
-                                    xy(itl_ex_x, half_item_h + points_y):
+                                    xy(highlight_left_world + itl_ex_x, y_center_item + points_y):
                                     zoom(ITL_POINTS_SCORE_ZOOM):
                                     diffuse(
                                         itl_points_color[0],
@@ -871,17 +906,17 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                         itl_points_color[2],
                                         itl_points_color[3]
                                     ):
-                                    z(2)
+                                    z(53)
                                 ));
-                                slot_children.push(act!(text:
+                                actors.push(act!(text:
                                     font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
-                                    xy(itl_ex_x, half_item_h + ex_y):
+                                    xy(highlight_left_world + itl_ex_x, y_center_item + ex_y):
                                     zoom(ITL_POINTS_SCORE_ZOOM):
                                     diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                    z(2)
+                                    z(53)
                                 ));
                             }
                         }
@@ -906,11 +941,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
                         };
                         if p1_fav {
-                            let heart_y = if both_joined {
-                                half_item_h - 6.0
-                            } else {
-                                half_item_h
-                            };
+                            let heart_y = if both_joined { -6.0 } else { 0.0 };
                             let col =
                                 lerp_color(HEART_COLOR_P1, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
                             let zm = if both_joined {
@@ -918,20 +949,16 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             } else {
                                 HEART_ZOOM_SINGLE
                             };
-                            slot_children.push(act!(sprite("fave-icon.png"):
+                            actors.push(act!(sprite("fave-icon.png"):
                                 align(0.5, 0.5):
-                                xy(heart_x, heart_y):
+                                xy(highlight_left_world + heart_x, y_center_item + heart_y):
                                 zoom(zm):
                                 diffuse(col[0], col[1], col[2], col[3]):
-                                z(3)
+                                z(54)
                             ));
                         }
                         if p2_fav {
-                            let heart_y = if both_joined {
-                                half_item_h + 6.0
-                            } else {
-                                half_item_h
-                            };
+                            let heart_y = if both_joined { 6.0 } else { 0.0 };
                             let col =
                                 lerp_color(HEART_COLOR_P2, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
                             let zm = if both_joined {
@@ -939,12 +966,12 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             } else {
                                 HEART_ZOOM_SINGLE
                             };
-                            slot_children.push(act!(sprite("fave-icon.png"):
+                            actors.push(act!(sprite("fave-icon.png"):
                                 align(0.5, 0.5):
-                                xy(heart_x, heart_y):
+                                xy(highlight_left_world + heart_x, y_center_item + heart_y):
                                 zoom(zm):
                                 diffuse(col[0], col[1], col[2], col[3]):
-                                z(3)
+                                z(54)
                             ));
                         }
                     }
@@ -971,56 +998,39 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 );
                             let lock_x = -12.0_f32;
                             if p1_locked {
-                                let lock_y = if both_joined {
-                                    half_item_h - 8.0
-                                } else {
-                                    half_item_h
-                                };
+                                let lock_y = if both_joined { -8.0 } else { 0.0 };
                                 let zm = if both_joined {
                                     LOCK_ZOOM_DUAL
                                 } else {
                                     LOCK_ZOOM_SINGLE
                                 };
                                 let c = LOCK_COLOR_P1;
-                                slot_children.push(act!(sprite("lock.png"):
+                                actors.push(act!(sprite("lock.png"):
                                     align(0.5, 0.5):
-                                    xy(lock_x, lock_y):
+                                    xy(highlight_left_world + lock_x, y_center_item + lock_y):
                                     zoom(zm):
                                     diffuse(c[0], c[1], c[2], c[3]):
-                                    z(3)
+                                    z(54)
                                 ));
                             }
                             if p2_locked {
-                                let lock_y = if both_joined {
-                                    half_item_h + 8.0
-                                } else {
-                                    half_item_h
-                                };
+                                let lock_y = if both_joined { 8.0 } else { 0.0 };
                                 let zm = if both_joined {
                                     LOCK_ZOOM_DUAL
                                 } else {
                                     LOCK_ZOOM_SINGLE
                                 };
                                 let c = LOCK_COLOR_P2;
-                                slot_children.push(act!(sprite("lock.png"):
+                                actors.push(act!(sprite("lock.png"):
                                     align(0.5, 0.5):
-                                    xy(lock_x, lock_y):
+                                    xy(highlight_left_world + lock_x, y_center_item + lock_y):
                                     zoom(zm):
                                     diffuse(c[0], c[1], c[2], c[3]):
-                                    z(3)
+                                    z(54)
                                 ));
                             }
                         }
                     }
-
-                    actors.push(Actor::Frame {
-                        align: [0.0, 0.5],
-                        offset: [highlight_left_world, y_center_item],
-                        size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
-                        background: None,
-                        z: 51,
-                        children: slot_children,
-                    });
                     continue;
                 }
             }
@@ -1039,49 +1049,38 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             let y_center_item = offset_from_center_f.mul_add(slot_spacing, center_y);
 
             // Use pack header colors for the empty state
-            let bg_col = col_pack_header_box();
-
-            let mut slot_children = Vec::with_capacity(3);
+            let mut bg_col = col_pack_header_box();
+            bg_col[3] *= section_bg_alpha;
 
             // Add black background for 1px gap effect, just like real pack headers
-            slot_children.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.5):
-                xy(0.0, half_item_h):
+                xy(highlight_left_world, y_center_item):
                 zoomto(highlight_w, item_h_full):
-                diffuse(0.0, 0.0, 0.0, 1.0):
-                z(0)
+                diffuse(0.0, 0.0, 0.0, section_bg_alpha):
+                z(51)
             ));
 
             // Colored (gray) quad background for the slot
-            slot_children.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.5):
-                xy(0.0, half_item_h):
+                xy(highlight_left_world, y_center_item):
                 zoomto(highlight_w, item_h_colored):
                 diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
-                z(1)
+                z(52)
             ));
 
             // "- EMPTY -" text, centered like a pack header
-            slot_children.push(act!(text:
+            actors.push(act!(text:
                 font("miso"):
                 settext(empty_text):
                 align(0.5, 0.5):
-                xy(pack_center_x_local, half_item_h):
+                xy(highlight_left_world + pack_center_x_local, y_center_item):
                 maxwidth(pack_name_max_w):
                 zoom(1.0):
                 diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
-                z(2)
+                z(53)
             ));
-
-            // Container frame for the slot
-            actors.push(Actor::Frame {
-                align: [0.0, 0.5], // left-center
-                offset: [highlight_left_world, y_center_item],
-                size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
-                background: None,
-                z: 51,
-                children: slot_children,
-            });
         }
     }
 

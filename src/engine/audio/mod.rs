@@ -1,9 +1,10 @@
 mod backends;
 pub(crate) mod decode;
+pub mod folder;
 mod resample;
 
 use crate::config::dirs;
-use crate::engine::host_time::instant_nanos;
+use crate::engine::host_time::{instant_nanos, now_nanos};
 #[cfg(windows)]
 use crate::engine::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
@@ -595,7 +596,6 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
-static AUDIO_TIMING_DIAG_ENABLED: OnceLock<bool> = OnceLock::new();
 static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
 static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
@@ -665,17 +665,7 @@ impl CallbackClockSource {
 
 #[inline(always)]
 pub(crate) fn timing_diag_enabled() -> bool {
-    *AUDIO_TIMING_DIAG_ENABLED.get_or_init(|| {
-        let Ok(value) = std::env::var("DEADSYNC_AUDIO_TIMING_DIAG") else {
-            return false;
-        };
-        let value = value.trim();
-        !(value.is_empty()
-            || value == "0"
-            || value.eq_ignore_ascii_case("false")
-            || value.eq_ignore_ascii_case("off")
-            || value.eq_ignore_ascii_case("no"))
-    })
+    log::log_enabled!(log::Level::Debug)
 }
 
 #[inline(always)]
@@ -794,7 +784,7 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
         if stutter_diag && gap_ns >= stutter_diag_callback_gap_threshold_ns() {
             record_stutter_diag_event(
                 StutterDiagAudioEventKind::CallbackGap,
-                anchor_nanos,
+                now_nanos(),
                 gap_ns,
                 OutputTimingQuality::load(),
             );
@@ -979,6 +969,11 @@ pub fn play_sfx(path: &str) {
     play_sfx_on_lane(path, SfxLane::Effect);
 }
 
+/// Plays a sound effect only if it was already preloaded.
+pub fn play_preloaded_sfx(path: &str) {
+    play_preloaded_sfx_on_lane(path, SfxLane::Effect);
+}
+
 /// Plays a gameplay assist tick that uses its own volume lane.
 pub fn play_assist_tick(path: &str) {
     if path == ASSIST_TICK_SFX_PATH
@@ -993,10 +988,24 @@ pub fn play_assist_tick(path: &str) {
     play_sfx_on_lane(path, SfxLane::AssistTick);
 }
 
-fn play_sfx_on_lane(path: &str, lane: SfxLane) {
+/// Plays a preloaded gameplay assist tick without decoding on miss.
+pub fn play_preloaded_assist_tick(path: &str) {
+    if path == ASSIST_TICK_SFX_PATH
+        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
+    {
+        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
+            data: sound_data,
+            lane: SfxLane::AssistTick,
+        });
+        return;
+    }
+    play_preloaded_sfx_on_lane(path, SfxLane::AssistTick);
+}
+
+fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
     #[cfg(test)]
     if !is_initialized() {
-        return;
+        return true;
     }
 
     let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
@@ -1005,6 +1014,19 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
             data: sound_data,
             lane,
         });
+        return true;
+    }
+    false
+}
+
+fn play_preloaded_sfx_on_lane(path: &str, lane: SfxLane) {
+    if !play_cached_sfx_on_lane(path, lane) {
+        warn!("Preloaded SFX cache miss for '{path}'; skipping synchronous decode");
+    }
+}
+
+fn play_sfx_on_lane(path: &str, lane: SfxLane) {
+    if play_cached_sfx_on_lane(path, lane) {
         return;
     }
 
@@ -1554,7 +1576,7 @@ pub(crate) fn note_output_underrun() {
     OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
     record_stutter_diag_event(
         StutterDiagAudioEventKind::Underrun,
-        instant_nanos(Instant::now()),
+        now_nanos(),
         0,
         OutputTimingQuality::load(),
     );
@@ -1574,7 +1596,7 @@ pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
     if !matches!(quality, OutputTimingQuality::Fallback) {
         record_stutter_diag_event(
             StutterDiagAudioEventKind::TimingSanity,
-            instant_nanos(Instant::now()),
+            now_nanos(),
             0,
             quality,
         );
@@ -1588,7 +1610,7 @@ pub(crate) fn note_output_clock_fallback() {
     OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
     record_stutter_diag_event(
         StutterDiagAudioEventKind::ClockFallback,
-        instant_nanos(Instant::now()),
+        now_nanos(),
         0,
         OutputTimingQuality::Fallback,
     );

@@ -3,6 +3,7 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
+use std::sync::Arc;
 
 #[derive(Clone, Copy)]
 pub struct PaneLayout {
@@ -15,19 +16,19 @@ pub struct PaneLayout {
 }
 
 pub struct StatsValues {
-    pub steps: String,
-    pub mines: String,
-    pub jumps: String,
-    pub hands: String,
-    pub holds: String,
-    pub rolls: String,
+    pub steps: Arc<str>,
+    pub mines: Arc<str>,
+    pub jumps: Arc<str>,
+    pub hands: Arc<str>,
+    pub holds: Arc<str>,
+    pub rolls: Arc<str>,
 }
 
 pub struct StatsPaneParams {
     pub pane_cx: f32,
     pub accent_color: [f32; 4],
     pub values: StatsValues,
-    pub meter: Option<String>,
+    pub meter: Option<Arc<str>>,
 }
 
 #[inline(always)]
@@ -47,7 +48,7 @@ pub fn layout() -> PaneLayout {
     }
 }
 
-pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
+pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
     let StatsPaneParams {
         pane_cx,
         accent_color,
@@ -55,7 +56,6 @@ pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
         meter,
     } = p;
     let l = layout();
-    let mut out = Vec::with_capacity(16);
     out.push(act!(quad:
         align(0.5, 0.0):
         xy(pane_cx, l.pane_top):
@@ -112,5 +112,4 @@ pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
         }
         out.push(meter_actor);
     }
-    out
 }

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
@@ -11,6 +12,7 @@ use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_
 use crate::game::{profile, scroll::ScrollSpeedSetting};
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
+use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
 const LEAD_IN_SECONDS: f32 = 1.0;
@@ -40,6 +42,13 @@ const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
 const EDIT_SNAP_SOUND: &str = "assets/sounds/screen_edit_snap.ogg";
 const EDIT_INVALID_SOUND: &str = "assets/sounds/common_invalid.ogg";
 const EDIT_SCROLL_SPEEDS: [f32; 7] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0];
+const MUSIC_RATE_HOTKEY_STEP: f32 = 0.01;
+const MUSIC_RATE_HOTKEY_MIN: f32 = 0.5;
+const MUSIC_RATE_HOTKEY_MAX: f32 = 3.0;
+const MUSIC_RATE_REPEAT_DELAY_SECONDS: f32 = 0.375;
+const MUSIC_RATE_REPEAT_INTERVAL_SECONDS: f32 = 0.05;
+const MAX_MUSIC_RATE_REPEATS_PER_FRAME: usize = 64;
+const FLASH_DURATION_SECS: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug)]
 enum Mode {
@@ -59,6 +68,19 @@ enum CursorHoldDir {
     Down,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MusicRateHoldDir {
+    Lower,
+    Raise,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PracticeNavMode {
+    GameplayButtons,
+    DedicatedFiveKey,
+    DedicatedThreeKey,
+}
+
 pub struct State {
     pub(crate) gameplay: gameplay_screen::State,
     mode: Mode,
@@ -76,53 +98,127 @@ pub struct State {
     cursor_hold_down_count: u8,
     cursor_hold_delay_left: f32,
     cursor_hold_repeat_left: f32,
-    flash: Option<(&'static str, f32)>,
+    music_rate_hold_dir: Option<MusicRateHoldDir>,
+    music_rate_hold_lower_count: u8,
+    music_rate_hold_raise_count: u8,
+    music_rate_hold_delay_left: f32,
+    music_rate_hold_repeat_left: f32,
+    flash: Option<(String, f32)>,
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct EditSnapshot {
+    cursor_beat: f32,
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+    snap_index: usize,
+    edit_scroll_speed_index: usize,
+}
+
+#[derive(Clone, Copy)]
 struct MenuState {
-    kind: MenuKind,
+    def: &'static MenuDef,
     selected: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum MenuKind {
-    Main,
-    Help,
+type MenuAction = fn(&mut State) -> ScreenAction;
+
+struct MenuRow {
+    label: LookupKey,
+    /// `None` means the row is display-only; activating it just closes the menu.
+    action: Option<MenuAction>,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum MenuItem {
-    PlayWholeSong,
-    PlayCurrentToEnd,
-    PlaySelection,
-    SetSelectionStart,
-    SetSelectionEnd,
-    EditorOptions,
-    Exit,
+struct MenuDef {
+    rows: &'static [MenuRow],
 }
 
-const MAIN_MENU_ITEMS: [MenuItem; 7] = [
-    MenuItem::PlayWholeSong,
-    MenuItem::PlayCurrentToEnd,
-    MenuItem::PlaySelection,
-    MenuItem::SetSelectionStart,
-    MenuItem::SetSelectionEnd,
-    MenuItem::EditorOptions,
-    MenuItem::Exit,
-];
+impl MenuDef {
+    fn first_actionable_row(&self) -> usize {
+        self.rows
+            .iter()
+            .position(|r| r.action.is_some())
+            .unwrap_or(0)
+    }
+}
 
-const HELP_MENU_ITEMS: [&str; 9] = [
-    "Hold Up/Down: Move by current snap",
-    "Semicolon/Apostrophe: Move one measure",
-    "Ctrl+Up/Down: Change zoom",
-    "Home/End: Move to start/end of steps",
-    "Left/Right: Select note snap",
-    "Space: Set area marker",
-    "Shift+Navigate: Select area",
-    "P: Play selection",
-    "Esc/Enter/Start/Back: Main Menu",
-];
+const MAIN_MENU: MenuDef = MenuDef {
+    rows: &[
+        MenuRow {
+            label: lookup_key("Practice", "MenuPlayWholeSong"),
+            action: Some(action_play_whole_song),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuPlayCurrentToEnd"),
+            action: Some(action_play_current_to_end),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuPlaySelection"),
+            action: Some(action_play_selection),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuSetSelectionStart"),
+            action: Some(action_set_selection_start),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuSetSelectionEnd"),
+            action: Some(action_set_selection_end),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuEditorOptions"),
+            action: Some(action_editor_options),
+        },
+        MenuRow {
+            label: lookup_key("Practice", "MenuExit"),
+            action: Some(action_exit_practice),
+        },
+    ],
+};
+
+const HELP_MENU: MenuDef = MenuDef {
+    rows: &[
+        MenuRow {
+            label: lookup_key("Practice", "HelpHoldUpDown"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpSemicolonApostrophe"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpCtrlUpDown"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpHomeEnd"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpLeftRight"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpBracketKeys"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpSpace"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpShiftNavigate"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpP"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpEscEnter"),
+            action: None,
+        },
+    ],
+};
 
 const SNAP_LABELS: [&str; 9] = [
     "4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th", "192nd",
@@ -158,10 +254,47 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         cursor_hold_down_count: 0,
         cursor_hold_delay_left: 0.0,
         cursor_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
+        music_rate_hold_dir: None,
+        music_rate_hold_lower_count: 0,
+        music_rate_hold_raise_count: 0,
+        music_rate_hold_delay_left: 0.0,
+        music_rate_hold_repeat_left: MUSIC_RATE_REPEAT_INTERVAL_SECONDS,
         flash: None,
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
     state
+}
+
+pub(crate) fn edit_snapshot(state: &State) -> EditSnapshot {
+    EditSnapshot {
+        cursor_beat: state.cursor_beat,
+        selection_anchor: state.selection_anchor,
+        selection_end: state.selection_end,
+        snap_index: state.snap_index,
+        edit_scroll_speed_index: state.edit_scroll_speed_index,
+    }
+}
+
+pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
+    clear_cursor_hold_inputs(state);
+    state.mode = Mode::Editing;
+    state.menu = None;
+    state.shift_anchor = None;
+    state.shift_held = false;
+    state.ctrl_held = false;
+    clear_music_rate_hold_inputs(state);
+    state.snap_index = snapshot.snap_index.min(SNAP_LABELS.len().saturating_sub(1));
+    state.edit_scroll_speed_index = snapshot
+        .edit_scroll_speed_index
+        .min(EDIT_SCROLL_SPEEDS.len().saturating_sub(1));
+    let (selection_anchor, selection_end) = clamp_selection(
+        snapshot.selection_anchor,
+        snapshot.selection_end,
+        max_play_beat(state),
+    );
+    state.selection_anchor = selection_anchor;
+    state.selection_end = selection_end;
+    set_cursor(state, snapshot.cursor_beat);
 }
 
 pub fn on_enter(state: &mut State) {
@@ -176,6 +309,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             state.flash = None;
         }
     }
+    update_music_rate_hold(state, delta_time);
 
     let Mode::Playing {
         start_beat,
@@ -205,7 +339,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !ev.pressed {
         if matches!(state.mode, Mode::Editing)
-            && let Some(dir) = cursor_hold_dir_for_action(ev.action)
+            && let Some(dir) = edit_cursor_hold_dir_for_action(ev.action)
         {
             release_cursor_hold_input(state, dir);
             return ScreenAction::None;
@@ -227,45 +361,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
         },
-        Mode::Editing => match ev.action {
-            VirtualAction::p1_up
-            | VirtualAction::p2_up
-            | VirtualAction::p1_menu_up
-            | VirtualAction::p2_menu_up => {
-                press_cursor_hold_input(state, CursorHoldDir::Up);
-                move_cursor_by_hold_dir(state, CursorHoldDir::Up);
-                ScreenAction::None
-            }
-            VirtualAction::p1_down
-            | VirtualAction::p2_down
-            | VirtualAction::p1_menu_down
-            | VirtualAction::p2_menu_down => {
-                press_cursor_hold_input(state, CursorHoldDir::Down);
-                move_cursor_by_hold_dir(state, CursorHoldDir::Down);
-                ScreenAction::None
-            }
-            VirtualAction::p1_left | VirtualAction::p2_left | VirtualAction::p1_menu_left => {
-                change_snap(state, -1);
-                ScreenAction::None
-            }
-            VirtualAction::p1_right | VirtualAction::p2_right | VirtualAction::p1_menu_right => {
-                change_snap(state, 1);
-                ScreenAction::None
-            }
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                open_main_menu(state);
-                ScreenAction::None
-            }
-            VirtualAction::p1_back | VirtualAction::p2_back => {
-                open_main_menu(state);
-                ScreenAction::None
-            }
-            VirtualAction::p1_select | VirtualAction::p2_select => {
-                set_area_marker(state);
-                ScreenAction::None
-            }
-            _ => ScreenAction::None,
-        },
+        Mode::Editing => handle_edit_input(state, ev),
+    }
+}
+
+fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if let Some(dir) = edit_cursor_hold_dir_for_action(ev.action) {
+        press_cursor_hold_input(state, dir);
+        move_cursor_by_hold_dir(state, dir);
+        return ScreenAction::None;
+    }
+    if let Some(delta) = edit_snap_delta_for_action(ev.action) {
+        change_snap(state, delta);
+        return ScreenAction::None;
+    }
+    match ev.action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            open_main_menu(state);
+            ScreenAction::None
+        }
+        VirtualAction::p1_back | VirtualAction::p2_back => {
+            open_main_menu(state);
+            ScreenAction::None
+        }
+        VirtualAction::p1_select | VirtualAction::p2_select => {
+            set_area_marker(state);
+            ScreenAction::None
+        }
+        _ => ScreenAction::None,
     }
 }
 
@@ -286,7 +409,20 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 
     if !raw_key.pressed {
+        if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+            release_music_rate_hold_input(state, dir);
+            return (true, ScreenAction::None);
+        }
         return (false, ScreenAction::None);
+    }
+
+    // Music rate hotkeys are global within practice mode: they work whether
+    // the user is editing, mid-loop playback, or has the menu open.
+    if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+        if !raw_key.repeat {
+            press_music_rate_hold_input(state, dir);
+        }
+        return (true, ScreenAction::None);
     }
 
     if matches!(state.mode, Mode::Playing { .. }) {
@@ -381,14 +517,10 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
-    gameplay_screen::push_actors(
-        &mut actors,
-        &state.gameplay,
-        asset_manager,
-        practice_view(state),
-    );
+    let view = practice_view(state);
+    gameplay_screen::push_actors(&mut actors, &mut state.gameplay, asset_manager, view);
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, &mut actors);
         append_edit_overlay(state, &mut actors);
@@ -396,6 +528,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if state.menu.is_some() {
         append_main_menu(state, &mut actors);
     }
+    // Render any active flash text regardless of mode so music-rate changes
+    // (and other transient feedback) are visible during loop playback as well.
+    append_flash_overlay(state, &mut actors);
     actors
 }
 
@@ -443,21 +578,11 @@ fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if let Some(delta) = menu_step_delta_for_action(ev.action) {
+        step_menu(state, delta);
+        return ScreenAction::None;
+    }
     match ev.action {
-        VirtualAction::p1_up
-        | VirtualAction::p2_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_menu_up => {
-            step_menu(state, -1);
-            ScreenAction::None
-        }
-        VirtualAction::p1_down
-        | VirtualAction::p2_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_menu_down => {
-            step_menu(state, 1);
-            ScreenAction::None
-        }
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_select
@@ -476,8 +601,8 @@ fn open_main_menu(state: &mut State) {
         audio::play_sfx("assets/sounds/start.ogg");
     }
     state.menu = Some(MenuState {
-        kind: MenuKind::Main,
-        selected: first_enabled_menu_row(MenuKind::Main),
+        def: &MAIN_MENU,
+        selected: MAIN_MENU.first_actionable_row(),
     });
 }
 
@@ -487,7 +612,7 @@ fn open_help_menu(state: &mut State) {
         audio::play_sfx("assets/sounds/start.ogg");
     }
     state.menu = Some(MenuState {
-        kind: MenuKind::Help,
+        def: &HELP_MENU,
         selected: 0,
     });
 }
@@ -501,16 +626,13 @@ fn step_menu(state: &mut State, delta: isize) {
     let Some(menu) = state.menu else {
         return;
     };
-    let len = menu_len(menu.kind) as isize;
-    let mut selected = menu.selected;
-    for _ in 0..len {
-        selected = (selected as isize + delta).rem_euclid(len) as usize;
-        if menu_row_enabled(menu.kind, selected) {
-            break;
-        }
+    let len = menu.def.rows.len() as isize;
+    if len == 0 {
+        return;
     }
+    let selected = (menu.selected as isize + delta).rem_euclid(len) as usize;
     state.menu = Some(MenuState {
-        kind: menu.kind,
+        def: menu.def,
         selected,
     });
     audio::play_sfx("assets/sounds/change.ogg");
@@ -520,68 +642,165 @@ fn activate_menu_item(state: &mut State) -> ScreenAction {
     let Some(menu) = state.menu else {
         return ScreenAction::None;
     };
-    if menu.kind == MenuKind::Help {
+    let Some(row) = menu.def.rows.get(menu.selected) else {
+        return ScreenAction::None;
+    };
+    let Some(action) = row.action else {
+        // Display-only row (e.g. Help): treat Enter as close.
         close_menu(state);
         return ScreenAction::None;
-    }
-    if !menu_row_enabled(menu.kind, menu.selected) {
-        audio::play_sfx("assets/sounds/change.ogg");
-        return ScreenAction::None;
-    }
-    let item = MAIN_MENU_ITEMS[menu.selected.min(MAIN_MENU_ITEMS.len() - 1)];
+    };
     state.menu = None;
     clear_cursor_hold_inputs(state);
     audio::play_sfx("assets/sounds/start.ogg");
-    match item {
-        MenuItem::PlayWholeSong => {
-            start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
-            ScreenAction::None
-        }
-        MenuItem::PlayCurrentToEnd => {
-            start_playback(state, state.cursor_beat, max_play_beat(state));
-            ScreenAction::None
-        }
-        MenuItem::PlaySelection => {
-            start_selection_like_itg(state);
-            ScreenAction::None
-        }
-        MenuItem::SetSelectionStart => {
-            set_selection_start(state);
-            ScreenAction::None
-        }
-        MenuItem::SetSelectionEnd => {
-            set_selection_end(state);
-            ScreenAction::None
-        }
-        MenuItem::EditorOptions => ScreenAction::Navigate(Screen::PlayerOptions),
-        MenuItem::Exit => ScreenAction::Navigate(Screen::SelectMusic),
+    action(state)
+}
+
+fn action_play_whole_song(state: &mut State) -> ScreenAction {
+    start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
+    ScreenAction::None
+}
+
+fn action_play_current_to_end(state: &mut State) -> ScreenAction {
+    let cursor = state.cursor_beat;
+    start_playback(state, cursor, max_play_beat(state));
+    ScreenAction::None
+}
+
+fn action_play_selection(state: &mut State) -> ScreenAction {
+    start_selection_like_itg(state);
+    ScreenAction::None
+}
+
+fn action_set_selection_start(state: &mut State) -> ScreenAction {
+    set_selection_start(state);
+    ScreenAction::None
+}
+
+fn action_set_selection_end(state: &mut State) -> ScreenAction {
+    set_selection_end(state);
+    ScreenAction::None
+}
+
+fn action_editor_options(_state: &mut State) -> ScreenAction {
+    ScreenAction::Navigate(Screen::PlayerOptions)
+}
+
+fn action_exit_practice(_state: &mut State) -> ScreenAction {
+    ScreenAction::Navigate(Screen::SelectMusic)
+}
+
+fn practice_nav_mode() -> PracticeNavMode {
+    let cfg = crate::config::get();
+    practice_nav_mode_from_config(cfg.only_dedicated_menu_buttons, cfg.three_key_navigation)
+}
+
+const fn practice_nav_mode_from_config(
+    only_dedicated_menu_buttons: bool,
+    three_key_navigation: bool,
+) -> PracticeNavMode {
+    if !only_dedicated_menu_buttons {
+        PracticeNavMode::GameplayButtons
+    } else if three_key_navigation {
+        PracticeNavMode::DedicatedThreeKey
+    } else {
+        PracticeNavMode::DedicatedFiveKey
     }
 }
 
-fn menu_len(kind: MenuKind) -> usize {
-    match kind {
-        MenuKind::Main => MAIN_MENU_ITEMS.len(),
-        MenuKind::Help => HELP_MENU_ITEMS.len(),
+fn edit_cursor_hold_dir_for_action(action: VirtualAction) -> Option<CursorHoldDir> {
+    edit_cursor_hold_dir_for_action_in_mode(practice_nav_mode(), action)
+}
+
+const fn edit_cursor_hold_dir_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<CursorHoldDir> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_up
+            | VirtualAction::p2_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
+            VirtualAction::p1_down
+            | VirtualAction::p2_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_up | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
+            VirtualAction::p1_menu_down | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(CursorHoldDir::Up),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
+                Some(CursorHoldDir::Down)
+            }
+            _ => None,
+        },
     }
 }
 
-fn first_enabled_menu_row(kind: MenuKind) -> usize {
-    (0..menu_len(kind))
-        .find(|&idx| menu_row_enabled(kind, idx))
-        .unwrap_or(0)
+fn edit_snap_delta_for_action(action: VirtualAction) -> Option<isize> {
+    edit_snap_delta_for_action_in_mode(practice_nav_mode(), action)
 }
 
-fn menu_row_enabled(kind: MenuKind, idx: usize) -> bool {
-    match kind {
-        MenuKind::Main => MAIN_MENU_ITEMS
-            .get(idx)
-            .is_some_and(|item| menu_item_enabled(*item)),
-        MenuKind::Help => true,
+const fn edit_snap_delta_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<isize> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_left | VirtualAction::p2_left | VirtualAction::p1_menu_left => {
+                Some(-1)
+            }
+            VirtualAction::p1_right | VirtualAction::p2_right | VirtualAction::p1_menu_right => {
+                Some(1)
+            }
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(-1),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => None,
     }
 }
 
-const fn menu_item_enabled(_item: MenuItem) -> bool {
-    true
+fn menu_step_delta_for_action(action: VirtualAction) -> Option<isize> {
+    menu_step_delta_for_action_in_mode(practice_nav_mode(), action)
+}
+
+const fn menu_step_delta_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<isize> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_up
+            | VirtualAction::p2_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_menu_up => Some(-1),
+            VirtualAction::p1_down
+            | VirtualAction::p2_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_menu_down => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_up | VirtualAction::p2_menu_up => Some(-1),
+            VirtualAction::p1_menu_down | VirtualAction::p2_menu_down => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(-1),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => Some(1),
+            _ => None,
+        },
+    }
 }
 
 fn start_selection_like_itg(state: &mut State) {
@@ -621,20 +840,6 @@ fn stop_playback(state: &mut State) {
     let current_beat = state.gameplay.current_beat.max(MIN_CURSOR_BEAT);
     state.mode = Mode::Editing;
     set_cursor(state, current_beat);
-}
-
-const fn cursor_hold_dir_for_action(action: VirtualAction) -> Option<CursorHoldDir> {
-    match action {
-        VirtualAction::p1_up
-        | VirtualAction::p2_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
-        VirtualAction::p1_down
-        | VirtualAction::p2_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
-        _ => None,
-    }
 }
 
 const fn opposite_cursor_hold_dir(dir: CursorHoldDir) -> CursorHoldDir {
@@ -697,6 +902,93 @@ fn clear_cursor_hold_inputs(state: &mut State) {
     clear_cursor_hold_timer(state);
 }
 
+const fn opposite_music_rate_hold_dir(dir: MusicRateHoldDir) -> MusicRateHoldDir {
+    match dir {
+        MusicRateHoldDir::Lower => MusicRateHoldDir::Raise,
+        MusicRateHoldDir::Raise => MusicRateHoldDir::Lower,
+    }
+}
+
+const fn music_rate_delta_for_dir(dir: MusicRateHoldDir) -> f32 {
+    match dir {
+        MusicRateHoldDir::Lower => -MUSIC_RATE_HOTKEY_STEP,
+        MusicRateHoldDir::Raise => MUSIC_RATE_HOTKEY_STEP,
+    }
+}
+
+const fn music_rate_hold_dir_for_key(code: KeyCode) -> Option<MusicRateHoldDir> {
+    match code {
+        KeyCode::BracketLeft => Some(MusicRateHoldDir::Lower),
+        KeyCode::BracketRight => Some(MusicRateHoldDir::Raise),
+        _ => None,
+    }
+}
+
+fn music_rate_hold_count(state: &State, dir: MusicRateHoldDir) -> u8 {
+    match dir {
+        MusicRateHoldDir::Lower => state.music_rate_hold_lower_count,
+        MusicRateHoldDir::Raise => state.music_rate_hold_raise_count,
+    }
+}
+
+fn music_rate_hold_count_mut(state: &mut State, dir: MusicRateHoldDir) -> &mut u8 {
+    match dir {
+        MusicRateHoldDir::Lower => &mut state.music_rate_hold_lower_count,
+        MusicRateHoldDir::Raise => &mut state.music_rate_hold_raise_count,
+    }
+}
+
+fn press_music_rate_hold_input(state: &mut State, dir: MusicRateHoldDir) {
+    let count = music_rate_hold_count_mut(state, dir);
+    if *count > 0 {
+        return;
+    }
+    *count = 1;
+    start_music_rate_hold(state, dir);
+    if !change_music_rate_by_hold_dir(state, dir) {
+        stop_music_rate_hold_dir(state, dir);
+    }
+}
+
+fn release_music_rate_hold_input(state: &mut State, dir: MusicRateHoldDir) {
+    let count = music_rate_hold_count_mut(state, dir);
+    if *count == 0 {
+        return;
+    }
+    *count = 0;
+    if state.music_rate_hold_dir != Some(dir) {
+        return;
+    }
+    stop_music_rate_hold_dir(state, dir);
+}
+
+fn start_music_rate_hold(state: &mut State, dir: MusicRateHoldDir) {
+    state.music_rate_hold_dir = Some(dir);
+    state.music_rate_hold_delay_left = MUSIC_RATE_REPEAT_DELAY_SECONDS;
+    state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_music_rate_hold_timer(state: &mut State) {
+    state.music_rate_hold_dir = None;
+    state.music_rate_hold_delay_left = 0.0;
+    state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_music_rate_hold_inputs(state: &mut State) {
+    state.music_rate_hold_lower_count = 0;
+    state.music_rate_hold_raise_count = 0;
+    clear_music_rate_hold_timer(state);
+}
+
+fn stop_music_rate_hold_dir(state: &mut State, dir: MusicRateHoldDir) {
+    let other = opposite_music_rate_hold_dir(dir);
+    if music_rate_hold_count(state, other) > 0 {
+        start_music_rate_hold(state, other);
+    } else {
+        clear_music_rate_hold_timer(state);
+    }
+}
+
 fn update_cursor_hold(state: &mut State, delta_time: f32) {
     if state.menu.is_some() || state.ctrl_held || delta_time <= 0.0 {
         return;
@@ -728,6 +1020,49 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
         state.cursor_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
         repeats += 1;
     }
+}
+
+fn update_music_rate_hold(state: &mut State, delta_time: f32) {
+    if delta_time <= 0.0 {
+        return;
+    }
+    let Some(dir) = state.music_rate_hold_dir else {
+        return;
+    };
+    if music_rate_hold_count(state, dir) == 0 {
+        clear_music_rate_hold_timer(state);
+        return;
+    }
+
+    let mut remaining = delta_time;
+    if state.music_rate_hold_delay_left > 0.0 {
+        let elapsed = remaining.min(state.music_rate_hold_delay_left);
+        state.music_rate_hold_delay_left -= elapsed;
+        remaining -= elapsed;
+        if state.music_rate_hold_delay_left > 0.0 {
+            return;
+        }
+        if !change_music_rate_by_hold_dir(state, dir) {
+            stop_music_rate_hold_dir(state, dir);
+            return;
+        }
+        state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+    }
+
+    state.music_rate_hold_repeat_left -= remaining;
+    let mut repeats = 0;
+    while state.music_rate_hold_repeat_left <= 0.0 && repeats < MAX_MUSIC_RATE_REPEATS_PER_FRAME {
+        if !change_music_rate_by_hold_dir(state, dir) {
+            stop_music_rate_hold_dir(state, dir);
+            return;
+        }
+        state.music_rate_hold_repeat_left += MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+        repeats += 1;
+    }
+}
+
+fn change_music_rate_by_hold_dir(state: &mut State, dir: MusicRateHoldDir) -> bool {
+    change_music_rate(state, music_rate_delta_for_dir(dir))
 }
 
 fn move_cursor_by_hold_dir(state: &mut State, dir: CursorHoldDir) {
@@ -796,8 +1131,91 @@ fn change_edit_scroll_speed(state: &mut State, delta: isize) {
         return;
     }
     state.edit_scroll_speed_index = next;
-    state.flash = Some(("Zoom changed", 0.75));
+    set_flash_tr(state, "FlashZoomChanged");
     audio::play_sfx(EDIT_MARKER_SOUND);
+}
+
+fn quantized_music_rate(current: f32, delta: f32) -> f32 {
+    let current_step = (current / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let delta_step = (delta / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let min_step = (MUSIC_RATE_HOTKEY_MIN / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let max_step = (MUSIC_RATE_HOTKEY_MAX / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    (current_step + delta_step).clamp(min_step, max_step) as f32 * MUSIC_RATE_HOTKEY_STEP
+}
+
+fn change_music_rate(state: &mut State, delta: f32) -> bool {
+    let current = state.gameplay.music_rate;
+    let new_rate = quantized_music_rate(current, delta);
+    if (new_rate - current).abs() <= f32::EPSILON {
+        audio::play_sfx(EDIT_INVALID_SOUND);
+        set_music_rate_flash(state, "FlashMusicRateLimit", current);
+        return false;
+    }
+    let changed = gameplay_core::set_music_rate(&mut state.gameplay, new_rate);
+    profile::set_session_music_rate(new_rate);
+    audio::set_music_rate(new_rate);
+    if changed {
+        set_music_rate_flash(state, "FlashMusicRate", new_rate);
+        audio::play_sfx(EDIT_LINE_SOUND);
+    }
+    changed
+}
+
+fn set_music_rate_flash(state: &mut State, key: &str, rate: f32) {
+    let bpm_str = effective_bpm_str(state, rate);
+    let text = i18n::tr_fmt(
+        "Practice",
+        key,
+        &[("rate", &fmt_music_rate(rate)), ("bpm", &bpm_str)],
+    )
+    .replace("\\n", "\n");
+    state.flash = Some((text, FLASH_DURATION_SECS));
+}
+
+fn effective_bpm_str(state: &State, rate: f32) -> String {
+    let song = &state.gameplay.song;
+    let chart = state.gameplay.charts.first().map(|c| c.as_ref());
+    let is_random = chart.is_some_and(|c| {
+        matches!(
+            c.display_bpm,
+            Some(crate::game::chart::ChartDisplayBpm::Random)
+        )
+    });
+    if is_random {
+        return "???".to_string();
+    }
+    let reference_bpm = song
+        .chart_display_bpm_range(chart)
+        .map(|(_, hi)| hi as f32)
+        .unwrap_or(song.max_bpm as f32);
+    let reference_bpm = if reference_bpm.is_finite() && reference_bpm > 0.0 {
+        reference_bpm
+    } else {
+        120.0
+    };
+    let effective_bpm = f64::from(reference_bpm) * f64::from(rate);
+    if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+        format!("{}", effective_bpm.round() as i32)
+    } else {
+        format!("{effective_bpm:.1}")
+    }
+}
+
+fn set_flash_tr(state: &mut State, key: &str) {
+    state.flash = Some((i18n::tr("Practice", key).to_string(), FLASH_DURATION_SECS));
+}
+
+fn fmt_music_rate(rate: f32) -> String {
+    let scaled = (rate * 100.0).round() as i32;
+    let int_part = scaled / 100;
+    let frac2 = (scaled % 100).abs();
+    if frac2 == 0 {
+        format!("{int_part}")
+    } else if frac2 % 10 == 0 {
+        format!("{}.{}", int_part, frac2 / 10)
+    } else {
+        format!("{int_part}.{frac2:02}")
+    }
 }
 
 fn seek_chart_note(state: &mut State, dir: i32) {
@@ -832,21 +1250,21 @@ fn set_area_marker(state: &mut State) {
     match (state.selection_anchor, state.selection_end) {
         (None, None) => {
             state.selection_anchor = Some(state.cursor_beat);
-            state.flash = Some(("Area marker start set", 0.75));
+            set_flash_tr(state, "FlashAreaMarkerStartSet");
         }
         (Some(begin), None) => {
             if same_beat(begin, state.cursor_beat) {
                 clear_selection(state);
             } else {
                 set_marker_range(state, begin, state.cursor_beat);
-                state.flash = Some(("Area marker end set", 0.75));
+                set_flash_tr(state, "FlashAreaMarkerEndSet");
             }
         }
         _ => {
             state.selection_anchor = Some(state.cursor_beat);
             state.selection_end = None;
             state.shift_anchor = None;
-            state.flash = Some(("Area marker start set", 0.75));
+            set_flash_tr(state, "FlashAreaMarkerStartSet");
         }
     }
 }
@@ -856,12 +1274,12 @@ fn set_selection_start(state: &mut State) {
         .selection_end
         .is_some_and(|end| state.cursor_beat >= end)
     {
-        state.flash = Some(("Invalid selection start", 0.75));
+        set_flash_tr(state, "FlashInvalidSelectionStart");
         audio::play_sfx(EDIT_INVALID_SOUND);
         return;
     }
     state.selection_anchor = Some(state.cursor_beat);
-    state.flash = Some(("Selection start set", 0.75));
+    set_flash_tr(state, "FlashSelectionStartSet");
     audio::play_sfx(EDIT_MARKER_SOUND);
 }
 
@@ -870,12 +1288,12 @@ fn set_selection_end(state: &mut State) {
         .selection_anchor
         .is_some_and(|start| state.cursor_beat <= start)
     {
-        state.flash = Some(("Invalid selection end", 0.75));
+        set_flash_tr(state, "FlashInvalidSelectionEnd");
         audio::play_sfx(EDIT_INVALID_SOUND);
         return;
     }
     state.selection_end = Some(state.cursor_beat);
-    state.flash = Some(("Selection end set", 0.75));
+    set_flash_tr(state, "FlashSelectionEndSet");
     audio::play_sfx(EDIT_MARKER_SOUND);
 }
 
@@ -883,12 +1301,35 @@ fn clear_selection(state: &mut State) {
     state.selection_anchor = None;
     state.selection_end = None;
     state.shift_anchor = None;
-    state.flash = Some(("Selection cleared", 0.75));
+    set_flash_tr(state, "FlashSelectionCleared");
 }
 
 fn set_marker_range(state: &mut State, a: f32, b: f32) {
     state.selection_anchor = Some(a.min(b));
     state.selection_end = Some(a.max(b));
+}
+
+fn clamp_selection(
+    anchor: Option<f32>,
+    end: Option<f32>,
+    max_beat: f32,
+) -> (Option<f32>, Option<f32>) {
+    let anchor = anchor.map(|beat| clamp_marker_beat(beat, max_beat));
+    let end = end.map(|beat| clamp_marker_beat(beat, max_beat));
+    match (anchor, end) {
+        (Some(a), Some(b)) if !same_beat(a, b) => (Some(a.min(b)), Some(a.max(b))),
+        (Some(a), None) => (Some(a), None),
+        (None, Some(b)) => (None, Some(b)),
+        _ => (None, None),
+    }
+}
+
+fn clamp_marker_beat(beat: f32, max_beat: f32) -> f32 {
+    if beat.is_finite() {
+        beat.clamp(MIN_CURSOR_BEAT, max_beat)
+    } else {
+        MIN_CURSOR_BEAT
+    }
 }
 
 fn same_beat(a: f32, b: f32) -> bool {
@@ -1144,7 +1585,7 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
     let pc = practice_player_color(state);
     actors.push(act!(text:
         font(current_machine_font_key(FontRole::Header)):
-        settext("PRACTICE MODE"):
+        settext(i18n::tr("Practice", "TitlePracticeMode")):
         align(1.0, 0.5):
         xy(screen_width() - 35.0, 10.0):
         zoom(EDIT_HELP_HEADER_ZOOM):
@@ -1162,22 +1603,22 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
     let status = edit_info_text(state);
     append_help_section(
         actors,
-        "Navigating",
-        "Up/Down:\n     Move One Beat\nSemicolon/Apostrophe:\n     Move One Measure\nCtrl+Up/Down:\n     Change Zoom\nHome/End:\n     Move to Start/End of Steps\nLeft/Right:\n     Select Note Snap",
+        i18n::tr("Practice", "HelpSidebarNavigatingTitle"),
+        i18n::tr("Practice", "HelpSidebarNavigatingBody"),
         0.0,
         pc,
     );
     append_help_section(
         actors,
-        "Available Menus",
-        "Escape\\Enter:\n     Main Menu\nF1:\n     Open Help Menu",
+        i18n::tr("Practice", "HelpSidebarMenusTitle"),
+        i18n::tr("Practice", "HelpSidebarMenusBody"),
         EDIT_HELP_MENU_Y,
         pc,
     );
     append_help_section(
         actors,
-        "Misc.",
-        "Space:\n     Set area marker\nShift+Navigate:\n     Select area",
+        i18n::tr("Practice", "HelpSidebarMiscTitle"),
+        i18n::tr("Practice", "HelpSidebarMiscBody"),
         EDIT_HELP_MISC_Y,
         pc,
     );
@@ -1191,11 +1632,15 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         shadowlength(1.0):
         z(3000)
     ));
-    if let Some((text, remaining)) = state.flash {
+}
+
+fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
+    if let Some((text, remaining)) = state.flash.as_ref() {
         let alpha = remaining.clamp(0.0, 1.0);
+        let label = text.clone();
         actors.push(act!(text:
             font("miso"):
-            settext(text):
+            settext(label):
             align(0.5, 0.5):
             xy(screen_width() * 0.5, screen_height() - 80.0):
             zoom(0.9):
@@ -1215,43 +1660,114 @@ fn edit_info_text(state: &State) -> String {
     let song = &state.gameplay.song;
     let current_second = gameplay_core::music_time_for_beat(&state.gameplay, state.cursor_beat);
     let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
-    let mut status = format!(
-        "Current beat:  {:.3}\nCurrent second:  {:.6}\nSnap to: {}\n",
-        state.cursor_beat, current_second, SNAP_LABELS[state.snap_index]
-    );
+    let snap = SNAP_LABELS[state.snap_index];
+    let mut status = String::new();
+    status.push_str(&i18n::tr_fmt(
+        "Practice",
+        "InfoCurrentBeat",
+        &[("beat", &format!("{:.3}", state.cursor_beat))],
+    ));
+    status.push('\n');
+    status.push_str(&i18n::tr_fmt(
+        "Practice",
+        "InfoCurrentSecond",
+        &[("sec", &format!("{current_second:.6}"))],
+    ));
+    status.push('\n');
+    status.push_str(&i18n::tr_fmt("Practice", "InfoSnapTo", &[("snap", snap)]));
+    status.push('\n');
     if let Some(selection) = selection_info_text(state) {
         status.push_str(&selection);
         status.push('\n');
     }
-    status.push_str(&format!("Difficulty:  {} {}\n\n", difficulty, chart.meter));
-    push_info_line(&mut status, "Main title", &song.title);
-    push_info_line(&mut status, "Subtitle", &song.subtitle);
-    push_info_line(&mut status, "Description", &chart.description);
-    push_info_line(&mut status, "Chart name", &chart.chart_name);
-    push_info_line(&mut status, "Step author", &chart.step_artist);
-    push_info_line(&mut status, "Chart style", &chart.chart_type);
-    status.push('\n');
-    status.push_str(&format!(
-        "Num steps: {}\nNum jumps: {}\nNum hands: {}\nNum holds: {}\nNum mines: {}\nNum rolls: {}\nNum lifts: {}\nNum fakes: {}",
-        chart.stats.total_steps,
-        chart.stats.jumps,
-        chart.stats.hands,
-        state.gameplay.holds_total[0],
-        state.gameplay.mines_total[0],
-        state.gameplay.rolls_total[0],
-        chart.stats.lifts,
-        chart.stats.fakes,
+    status.push_str(&i18n::tr_fmt(
+        "Practice",
+        "InfoDifficulty",
+        &[
+            ("difficulty", difficulty),
+            ("meter", &chart.meter.to_string()),
+        ],
     ));
+    status.push_str("\n\n");
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoMainTitle"),
+        &song.title,
+    );
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoSubtitle"),
+        &song.subtitle,
+    );
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoDescription"),
+        &chart.description,
+    );
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoChartName"),
+        &chart.chart_name,
+    );
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoStepAuthor"),
+        &chart.step_artist,
+    );
+    push_info_line(
+        &mut status,
+        &i18n::tr("Practice", "InfoChartStyle"),
+        &chart.chart_type,
+    );
+    status.push('\n');
+    let stat_lines: [(&str, String); 8] = [
+        ("InfoNumSteps", chart.stats.total_steps.to_string()),
+        ("InfoNumJumps", chart.stats.jumps.to_string()),
+        ("InfoNumHands", chart.stats.hands.to_string()),
+        ("InfoNumHolds", state.gameplay.holds_total[0].to_string()),
+        ("InfoNumMines", state.gameplay.mines_total[0].to_string()),
+        ("InfoNumRolls", state.gameplay.rolls_total[0].to_string()),
+        ("InfoNumLifts", chart.stats.lifts.to_string()),
+        ("InfoNumFakes", chart.stats.fakes.to_string()),
+    ];
+    for (idx, (key, count)) in stat_lines.iter().enumerate() {
+        if idx > 0 {
+            status.push('\n');
+        }
+        status.push_str(&i18n::tr_fmt("Practice", key, &[("count", count)]));
+    }
     status
 }
 
 fn selection_info_text(state: &State) -> Option<String> {
     match (state.selection_anchor, state.selection_end) {
-        (Some(start), Some(stop)) if stop > start => {
-            Some(format!("Selection beat:  {start:.3}-{stop:.3}"))
-        }
-        (Some(start), None) => Some(format!("Selection beat:  {start:.3} ...")),
-        (None, Some(stop)) => Some(format!("Selection beat:  ...-{stop:.3}")),
+        (Some(start), Some(stop)) if stop > start => Some(
+            i18n::tr_fmt(
+                "Practice",
+                "InfoSelectionBeatRange",
+                &[
+                    ("start", &format!("{start:.3}")),
+                    ("stop", &format!("{stop:.3}")),
+                ],
+            )
+            .to_string(),
+        ),
+        (Some(start), None) => Some(
+            i18n::tr_fmt(
+                "Practice",
+                "InfoSelectionBeatStart",
+                &[("start", &format!("{start:.3}"))],
+            )
+            .to_string(),
+        ),
+        (None, Some(stop)) => Some(
+            i18n::tr_fmt(
+                "Practice",
+                "InfoSelectionBeatEnd",
+                &[("stop", &format!("{stop:.3}"))],
+            )
+            .to_string(),
+        ),
         _ => None,
     }
 }
@@ -1280,40 +1796,17 @@ fn append_main_menu(state: &State, actors: &mut Vec<Actor>) {
     let Some(menu) = state.menu else {
         return;
     };
-    let row_count = menu_len(menu.kind);
+    let row_count = menu.def.rows.len();
     let selected_color = practice_player_color(state);
-    for idx in 0..row_count {
+    for (idx, row) in menu.def.rows.iter().enumerate() {
         append_menu_row(
             actors,
             idx,
             row_count,
             menu.selected == idx,
-            menu_row_enabled(menu.kind, idx),
-            menu_row_label(menu.kind, idx),
+            row.label.get(),
             selected_color,
         );
-    }
-}
-
-const fn menu_item_label(item: MenuItem) -> &'static str {
-    match item {
-        MenuItem::PlayWholeSong => "Play whole song",
-        MenuItem::PlayCurrentToEnd => "Play current beat to end",
-        MenuItem::PlaySelection => "Play selection",
-        MenuItem::SetSelectionStart => "Set selection start",
-        MenuItem::SetSelectionEnd => "Set selection end",
-        MenuItem::EditorOptions => "Editor options",
-        MenuItem::Exit => "Exit Edit Mode",
-    }
-}
-
-fn menu_row_label(kind: MenuKind, idx: usize) -> &'static str {
-    match kind {
-        MenuKind::Main => MAIN_MENU_ITEMS
-            .get(idx)
-            .map(|item| menu_item_label(*item))
-            .unwrap_or(""),
-        MenuKind::Help => HELP_MENU_ITEMS.get(idx).copied().unwrap_or(""),
     }
 }
 
@@ -1322,16 +1815,13 @@ fn append_menu_row(
     idx: usize,
     row_count: usize,
     selected: bool,
-    enabled: bool,
-    label: &'static str,
+    label: Arc<str>,
     selected_color: [f32; 4],
 ) {
     let y = menu_row_y(idx, row_count);
     let bg_x = screen_center_x();
     let bg_w = widescale(543.0, 720.0);
-    let (bg, fg) = if !enabled {
-        ([0.015, 0.015, 0.015, 0.95], [0.65, 0.0, 0.0, 1.0])
-    } else if selected {
+    let (bg, fg) = if selected {
         ([0.161, 0.196, 0.22, 0.95], selected_color)
     } else {
         ([0.027, 0.063, 0.086, 0.95], [1.0, 1.0, 1.0, 1.0])
@@ -1367,8 +1857,8 @@ fn menu_row_y(idx: usize, row_count: usize) -> f32 {
 
 fn append_help_section(
     actors: &mut Vec<Actor>,
-    label: &'static str,
-    body: &'static str,
+    label: Arc<str>,
+    body: Arc<str>,
     y: f32,
     player_color: [f32; 4],
 ) {
@@ -1398,4 +1888,269 @@ fn append_help_section(
         shadowlength(1.0):
         z(3000)
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PracticeNavMode, clamp_selection,
+        edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
+        fmt_music_rate, menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
+        music_rate_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
+    };
+    use crate::assets::i18n;
+    use crate::engine::input::VirtualAction;
+    use winit::keyboard::KeyCode;
+
+    /// Every i18n key the practice screen looks up at runtime, outside of the
+    /// menu definitions (which already have their own coverage tests). Keep
+    /// this in sync with call sites — the test below proves each key resolves.
+    const PRACTICE_RUNTIME_KEYS: &[&str] = &[
+        "TitlePracticeMode",
+        "HelpSidebarNavigatingTitle",
+        "HelpSidebarNavigatingBody",
+        "HelpSidebarMenusTitle",
+        "HelpSidebarMenusBody",
+        "HelpSidebarMiscTitle",
+        "HelpSidebarMiscBody",
+        "FlashZoomChanged",
+        "FlashMusicRate",
+        "FlashMusicRateLimit",
+        "FlashAreaMarkerStartSet",
+        "FlashAreaMarkerEndSet",
+        "FlashInvalidSelectionStart",
+        "FlashSelectionStartSet",
+        "FlashInvalidSelectionEnd",
+        "FlashSelectionEndSet",
+        "FlashSelectionCleared",
+        "InfoCurrentBeat",
+        "InfoCurrentSecond",
+        "InfoSnapTo",
+        "InfoDifficulty",
+        "InfoSelectionBeatRange",
+        "InfoSelectionBeatStart",
+        "InfoSelectionBeatEnd",
+        "InfoMainTitle",
+        "InfoSubtitle",
+        "InfoDescription",
+        "InfoChartName",
+        "InfoStepAuthor",
+        "InfoChartStyle",
+        "InfoNumSteps",
+        "InfoNumJumps",
+        "InfoNumHands",
+        "InfoNumHolds",
+        "InfoNumMines",
+        "InfoNumRolls",
+        "InfoNumLifts",
+        "InfoNumFakes",
+    ];
+
+    #[test]
+    fn practice_nav_mode_follows_dedicated_menu_config() {
+        assert_eq!(
+            practice_nav_mode_from_config(false, false),
+            PracticeNavMode::GameplayButtons
+        );
+        assert_eq!(
+            practice_nav_mode_from_config(true, false),
+            PracticeNavMode::DedicatedFiveKey
+        );
+        assert_eq!(
+            practice_nav_mode_from_config(true, true),
+            PracticeNavMode::DedicatedThreeKey
+        );
+    }
+
+    #[test]
+    fn dedicated_five_key_ignores_gameplay_arrows_in_practice_editing() {
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_up,
+            ),
+            None
+        );
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_menu_up,
+            ),
+            Some(CursorHoldDir::Up)
+        );
+        assert_eq!(
+            edit_snap_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_left,
+            ),
+            None
+        );
+        assert_eq!(
+            edit_snap_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(-1)
+        );
+    }
+
+    #[test]
+    fn dedicated_three_key_uses_menu_left_right_for_practice_navigation() {
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(CursorHoldDir::Up)
+        );
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_right,
+            ),
+            Some(CursorHoldDir::Down)
+        );
+        assert_eq!(
+            menu_step_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(-1)
+        );
+        assert_eq!(
+            menu_step_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_up,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn music_rate_hotkey_increment_is_quantized_and_clamped() {
+        assert!((quantized_music_rate(1.0, MUSIC_RATE_HOTKEY_STEP) - 1.01).abs() < 1e-5);
+        assert!((quantized_music_rate(1.0, -MUSIC_RATE_HOTKEY_STEP) - 0.99).abs() < 1e-5);
+        assert!((quantized_music_rate(0.93, -MUSIC_RATE_HOTKEY_STEP) - 0.92).abs() < 1e-5);
+        assert!((quantized_music_rate(0.93, MUSIC_RATE_HOTKEY_STEP) - 0.94).abs() < 1e-5);
+        assert!(
+            (quantized_music_rate(MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_STEP)
+                - MUSIC_RATE_HOTKEY_MAX)
+                .abs()
+                < 1e-5
+        );
+        assert!(
+            (quantized_music_rate(MUSIC_RATE_HOTKEY_MIN, -MUSIC_RATE_HOTKEY_STEP)
+                - MUSIC_RATE_HOTKEY_MIN)
+                .abs()
+                < 1e-5
+        );
+    }
+
+    #[test]
+    fn music_rate_brackets_map_to_hold_deltas() {
+        assert_eq!(
+            music_rate_hold_dir_for_key(KeyCode::BracketLeft),
+            Some(MusicRateHoldDir::Lower)
+        );
+        assert_eq!(
+            music_rate_hold_dir_for_key(KeyCode::BracketRight),
+            Some(MusicRateHoldDir::Raise)
+        );
+        assert_eq!(music_rate_hold_dir_for_key(KeyCode::KeyP), None);
+        assert_eq!(
+            music_rate_delta_for_dir(MusicRateHoldDir::Lower),
+            -MUSIC_RATE_HOTKEY_STEP
+        );
+        assert_eq!(
+            music_rate_delta_for_dir(MusicRateHoldDir::Raise),
+            MUSIC_RATE_HOTKEY_STEP
+        );
+    }
+
+    #[test]
+    fn fmt_music_rate_matches_player_options_format() {
+        assert_eq!(fmt_music_rate(1.0), "1");
+        assert_eq!(fmt_music_rate(1.5), "1.5");
+        assert_eq!(fmt_music_rate(0.85), "0.85");
+        assert_eq!(fmt_music_rate(2.05), "2.05");
+        assert_eq!(fmt_music_rate(0.5), "0.5");
+    }
+
+    #[test]
+    fn practice_selection_restore_preserves_valid_range() {
+        assert_eq!(
+            clamp_selection(Some(64.0), Some(32.0), 128.0),
+            (Some(32.0), Some(64.0))
+        );
+    }
+
+    #[test]
+    fn practice_selection_restore_drops_collapsed_range() {
+        assert_eq!(clamp_selection(Some(96.0), Some(128.0), 64.0), (None, None));
+    }
+
+    #[test]
+    fn help_menu_item_keys_resolve_through_i18n() {
+        i18n::init_for_tests();
+        assert_menu_labels_localized(&HELP_MENU);
+    }
+
+    #[test]
+    fn main_menu_item_keys_resolve_through_i18n() {
+        i18n::init_for_tests();
+        assert_menu_labels_localized(&MAIN_MENU);
+    }
+
+    #[test]
+    fn help_menu_rows_have_no_actions_main_menu_rows_all_have_actions() {
+        assert!(
+            HELP_MENU.rows.iter().all(|r| r.action.is_none()),
+            "help rows are display-only"
+        );
+        assert!(
+            MAIN_MENU.rows.iter().all(|r| r.action.is_some()),
+            "every main row must dispatch an action"
+        );
+    }
+
+    #[test]
+    fn all_practice_runtime_keys_resolve_through_i18n() {
+        i18n::init_for_tests();
+        for key in PRACTICE_RUNTIME_KEYS {
+            let resolved = i18n::tr("Practice", key);
+            assert_ne!(
+                resolved.as_ref(),
+                format!("Practice.{key}").as_str(),
+                "missing i18n entry for Practice.{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn placeholder_keys_substitute_named_args() {
+        i18n::init_for_tests();
+        let rate = i18n::tr_fmt("Practice", "FlashMusicRate", &[("rate", "1.5")]);
+        assert!(
+            rate.contains("1.5") && !rate.contains("{rate}"),
+            "FlashMusicRate did not substitute placeholder: {rate}"
+        );
+        let beat = i18n::tr_fmt("Practice", "InfoCurrentBeat", &[("beat", "3.000")]);
+        assert!(
+            beat.contains("3.000") && !beat.contains("{beat}"),
+            "InfoCurrentBeat did not substitute placeholder: {beat}"
+        );
+    }
+
+    fn assert_menu_labels_localized(def: &MenuDef) {
+        for row in def.rows {
+            let resolved = row.label.get();
+            let fallback = format!("{}.{}", row.label.section, row.label.key);
+            assert_ne!(
+                resolved.as_ref(),
+                fallback.as_str(),
+                "missing i18n entry for {fallback}"
+            );
+        }
+    }
 }
