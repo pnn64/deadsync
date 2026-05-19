@@ -88,6 +88,7 @@ pub enum ItemId {
     MchDefaultSyncOffset,
     MchKeyboardFeatures,
     MchVideoBgs,
+    MchVersionOverlay,
 
     // Gameplay Options submenu
     GpBgBrightness,

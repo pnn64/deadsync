@@ -181,6 +181,7 @@ fn push_saved_options(
         "SelectMusicShowBanners",
         cfg.show_select_music_banners,
     );
+    push_bool(content, "ShowVersionOverlay", cfg.show_version_overlay);
     push_bool(
         content,
         "SelectMusicShowVideoBanners",

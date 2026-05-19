@@ -186,6 +186,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::VersionOverlay,
+        label: lookup_key("OptionsMachine", "VersionOverlay"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
@@ -355,6 +364,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "VideoBgsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchVersionOverlay,
+        name: lookup_key("OptionsMachine", "VersionOverlay"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "VersionOverlayHelp",
         ))],
     },
     Item {

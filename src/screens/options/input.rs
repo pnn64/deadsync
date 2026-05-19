@@ -397,6 +397,7 @@ pub(super) fn apply_submenu_choice_delta(
             ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
+            SubRowId::VersionOverlay => config::update_show_version_overlay(enabled),
             SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),
             _ => {}
         }

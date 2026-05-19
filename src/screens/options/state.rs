@@ -632,6 +632,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::VersionOverlay,
+        usize::from(cfg.show_version_overlay),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::WriteCurrentScreen,
         usize::from(cfg.write_current_screen),
     );

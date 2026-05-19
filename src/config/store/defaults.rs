@@ -114,6 +114,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SelectMusicShowBanners",
         default.show_select_music_banners,
     );
+    push_bool(content, "ShowVersionOverlay", default.show_version_overlay);
     push_bool(
         content,
         "SelectMusicShowVideoBanners",
