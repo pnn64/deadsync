@@ -94,6 +94,7 @@ pub enum ItemId {
     GpCenteredP1,
     GpZmodRatingBox,
     GpBpmDecimal,
+    GpDelayedBack,
     GpAutoScreenshot,
 
     // Sound Options submenu

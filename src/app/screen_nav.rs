@@ -522,6 +522,7 @@ impl App {
             CurrentScreen::Gameplay => gameplay::in_transition(
                 self.state.screens.gameplay_state.as_ref(),
                 &self.asset_manager,
+                self.state.session.gameplay_restart_count > 0,
             ),
             CurrentScreen::Practice => gameplay::in_transition(
                 self.state
@@ -530,6 +531,7 @@ impl App {
                     .as_ref()
                     .map(|state| &state.gameplay),
                 &self.asset_manager,
+                false,
             ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),

@@ -162,6 +162,9 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
+    /// ITGmania parity (`DelayedBack`): when `true`, the BACK button must be held to
+    /// exit a song; when `false`, BACK exits instantly on first press.
+    pub delayed_back: bool,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
@@ -343,6 +346,7 @@ impl Default for Config {
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_font: MachineFont::Wendy,
             machine_bar_color: MachineBarColor::Default,
+            delayed_back: true,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_pack_ini_offsets: false,

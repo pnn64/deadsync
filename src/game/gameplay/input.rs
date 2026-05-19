@@ -1,3 +1,4 @@
+use crate::config;
 use crate::engine::audio;
 use crate::engine::input::{
     INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
@@ -10,14 +11,15 @@ use std::time::Instant;
 
 use super::{
     ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, GAMEPLAY_INPUT_BACKLOG_WARN,
-    GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayUpdatePhaseTimings,
-    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS,
-    MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
-    REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot,
-    SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us, current_music_time_s,
-    elapsed_us_between, gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift,
-    judge_a_tap, live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, ExitTransitionKind,
+    GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
+    GameplayUpdatePhaseTimings, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
+    HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION,
+    RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC,
+    RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit,
+    add_elapsed_us, begin_exit_transition, current_music_time_s, elapsed_us_between,
+    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
+    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
     refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
     song_time_ns_to_seconds,
 };
@@ -563,18 +565,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         }
         VirtualAction::p1_back if p1_menu_active => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
+                if !config::get().delayed_back {
+                    begin_exit_transition(state, ExitTransitionKind::Cancel);
+                } else {
+                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
+                    state.hold_to_exit_start = Some(ev.timestamp);
+                    state.hold_to_exit_aborted_at = None;
+                }
             } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
         VirtualAction::p2_back if p2_menu_active => {
             if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
+                if !config::get().delayed_back {
+                    begin_exit_transition(state, ExitTransitionKind::Cancel);
+                } else {
+                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
+                    state.hold_to_exit_start = Some(ev.timestamp);
+                    state.hold_to_exit_aborted_at = None;
+                }
             } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
                 abort_hold_to_exit(state, ev.timestamp);
             }

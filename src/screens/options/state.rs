@@ -763,6 +763,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::DelayedBack,
+        usize::from(cfg.delayed_back),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );

@@ -175,6 +175,11 @@ pub(crate) use self::time::{
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 pub const TRANSITION_IN_DURATION: f32 = 2.0;
+/// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
+/// stage-text in-transition (`ScreenGameplay in/default.lua` calls
+/// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
+/// short fade-from-black so the new gameplay frame doesn't pop in.
+pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
@@ -4649,7 +4654,17 @@ fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind) {
         kind,
         started_at: Instant::now(),
     });
-    audio::stop_music();
+    if audio::is_initialized() {
+        audio::stop_music();
+    }
+}
+
+/// SL/zmod parity: trigger the fast Cancel exit fade (~0.5s) used by BACK,
+/// so an in-progress song can hand off to the next gameplay entry without
+/// playing the long ~1.5s gameplay out-transition. The app shell intercepts
+/// the resulting `Cancel` navigation and re-enters Gameplay.
+pub fn begin_restart_exit(state: &mut State) {
+    begin_exit_transition(state, ExitTransitionKind::Cancel);
 }
 
 pub fn danger_overlay_rgba(state: &State, player: usize) -> Option<[f32; 4]> {
@@ -8577,9 +8592,10 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
-        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HELD_MISS_TOTAL_DURATION,
-        HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS,
+        COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
+        FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
+        HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
+        INSERT_MASK_BIT_MINES, MAX_COLS,
         MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting,
         SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng,
         active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
@@ -9347,6 +9363,111 @@ return Def.ActorFrame{}
                 assert_eq!(state.hold_to_exit_start, hold_start);
                 assert_eq!(state.hold_to_exit_aborted_at, None);
             },
+        );
+    }
+
+    #[test]
+    fn delayed_back_false_exits_song_on_first_press() {
+        with_session(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let prev = crate::config::get().delayed_back;
+                crate::config::update_delayed_back(false);
+
+                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let mut state = regression_state(state_profiles);
+
+                handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
+
+                let exit = state.exit_transition;
+                let hold_key = state.hold_to_exit_key;
+
+                crate::config::update_delayed_back(prev);
+
+                assert!(
+                    exit.is_some(),
+                    "exit_transition should be armed immediately when delayed_back is false"
+                );
+                assert_eq!(
+                    exit.unwrap().kind,
+                    ExitTransitionKind::Cancel,
+                    "BACK should trigger a Cancel exit transition"
+                );
+                assert_eq!(
+                    hold_key, None,
+                    "hold_to_exit_key should remain unset in instant-back mode"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn delayed_back_true_preserves_hold_arming() {
+        with_session(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let prev = crate::config::get().delayed_back;
+                crate::config::update_delayed_back(true);
+
+                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let mut state = regression_state(state_profiles);
+
+                handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
+
+                let hold_key = state.hold_to_exit_key;
+                let hold_start = state.hold_to_exit_start;
+                let exit = state.exit_transition;
+
+                crate::config::update_delayed_back(prev);
+
+                assert_eq!(hold_key, Some(HoldToExitKey::Back));
+                assert!(hold_start.is_some());
+                assert!(
+                    exit.is_none(),
+                    "exit_transition should not fire until the hold elapses"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn begin_restart_exit_arms_cancel_transition_like_back_out() {
+        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(state_profiles);
+        assert!(state.exit_transition.is_none());
+
+        super::begin_restart_exit(&mut state);
+
+        let exit = state
+            .exit_transition
+            .expect("begin_restart_exit should arm an exit_transition");
+        assert_eq!(
+            exit.kind,
+            ExitTransitionKind::Cancel,
+            "restart should reuse the fast Cancel out-fade for SL/zmod parity"
+        );
+    }
+
+    #[test]
+    fn begin_restart_exit_is_idempotent_when_already_exiting() {
+        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(state_profiles);
+
+        // Pretend a give-up exit is already in flight.
+        super::begin_exit_transition(&mut state, ExitTransitionKind::Out);
+        let original = state.exit_transition.expect("primed exit");
+
+        super::begin_restart_exit(&mut state);
+        let after = state.exit_transition.expect("still exiting");
+        assert_eq!(
+            after.kind, original.kind,
+            "begin_restart_exit must not overwrite an in-flight exit transition"
         );
     }
 
