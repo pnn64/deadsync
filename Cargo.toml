@@ -32,6 +32,10 @@ path = "scripts/lang_coverage.rs"
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
 
+[[bin]]
+name = "replaygain_bench"
+path = "scripts/replaygain_bench.rs"
+
 
 [features]
 pipewire-audio = ["dep:pipewire"]

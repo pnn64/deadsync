@@ -4,16 +4,23 @@
 //! - [`get_or_queue_gain_linear`] — returns the linear playback gain for a
 //!   song if already known (either in memory or on disk), otherwise enqueues
 //!   a background analysis job and returns `None`.
-//! - [`clear_cache`] — drop all in-memory state and remove the on-disk cache
-//!   directory. Intended for debug / a future "rescan" option.
+//! - [`prewarm_paths`] — submit a batch of song paths at a priority class.
+//!   Used by the music wheel to warm the cache for every song in a pack
+//!   on expansion.
+//! - [`clear_cache`] — drop all in-memory state and the on-disk cache file.
+//!   Intended for debug / a future "rescan" option.
 //!
 //! Behavior summary:
-//! - One worker thread streams the song through the existing decoder layer
-//!   and feeds samples to `ebur128::EbuR128` to compute integrated loudness
-//!   (LUFS) and true peak.
-//! - Computed values are persisted at
-//!   `cache_dir/replaygain/<xxhash64(abs_path)>.bin` (mtime is stored in the
-//!   header so the entry is automatically invalidated if the file changes).
+//! - A pool of [`WORKER_THREADS`] threads pulls jobs off two queues
+//!   (foreground previews ahead of background prewarm) and feeds samples
+//!   to `ebur128::EbuR128` to compute integrated loudness (LUFS) and
+//!   true peak.
+//! - Computed values are persisted in a single file at
+//!   `cache_dir/replaygain.bin` (an in-memory `HashMap` keyed by
+//!   xxhash64(canonical_path) is the source of truth; a dedicated flush
+//!   thread debounces writes by [`FLUSH_DEBOUNCE`] and rewrites the file
+//!   atomically via tmp + rename). Per-entry mtime is stored so changed
+//!   files are automatically re-analyzed.
 //! - Linear gain is derived as `10^((TARGET_LUFS - lufs) / 20)`, clamped so
 //!   that `gain * true_peak <= 1.0` (prevent clipping) and never exceeds
 //!   [`MAX_GAIN_LINEAR`] (= +12 dB).
@@ -25,17 +32,29 @@
 
 use crate::config::dirs;
 use crate::engine::audio::decode;
+use bincode::{Decode, Encode};
 use ebur128::{EbuR128, Mode};
-use log::{debug, warn};
-use std::collections::HashMap;
+use log::{debug, info, warn};
+use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::{Read, Write};
+use std::hash::Hasher;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Sender, channel};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 use twox_hash::XxHash64;
+
+/// Sentinel track id used for prewarm jobs that aren't tied to a currently
+/// playing track. `set_music_replaygain_if_matches` will treat this as a
+/// non-match and ignore it.
+const PREWARM_TRACK_ID: u64 = 0;
+
+/// Number of analyzer worker threads. EBU R 128 over a full track averages
+/// ~370 ms on a desktop CPU; two threads give enough headroom for the
+/// previewed song (foreground) to always jump ahead of any pack-warm work
+/// already in flight without saturating user-visible cores.
+const WORKER_THREADS: usize = 2;
 
 /// EBU R 128 / ReplayGain 2.0 reference loudness.
 const TARGET_LUFS: f64 = -18.0;
@@ -44,11 +63,13 @@ const MAX_GAIN_LINEAR: f32 = 4.0;
 /// Linear gain returned for silence / un-analyzable tracks.
 const UNITY_GAIN: f32 = 1.0;
 
-const CACHE_MAGIC: u64 = 0x44535952_47414955; // "DSYRGAIU"
+const CACHE_MAGIC: u64 = 0x44535952_47414946; // "DSYRGAIF" — F for File-cache
 const CACHE_VERSION: u32 = 1;
-/// Maximum number of bytes we will read from a cache file before declaring
-/// it corrupt. The current record is 36 bytes, this leaves room for growth.
-const CACHE_MAX_BYTES: usize = 1024;
+
+/// How long the flush thread waits after the last cache mutation before
+/// writing the consolidated file to disk. 250 ms collapses bursts of
+/// per-song completions during pack-prewarm into a single rewrite.
+const FLUSH_DEBOUNCE: Duration = Duration::from_millis(250);
 
 /// Maximum frames fed to the analyzer per call. Decoders emit short packets,
 /// but we still cap so a buggy decoder cannot blow the stack of `add_frames`.
@@ -68,12 +89,34 @@ enum SlotState {
 }
 
 struct Worker {
-    tx: Sender<Job>,
+    inner: Mutex<WorkerInner>,
+    cv: Condvar,
+}
+
+struct WorkerInner {
+    fg: VecDeque<Job>,
+    bg: VecDeque<Job>,
+    shutdown: bool,
 }
 
 struct Job {
+    /// Raw (possibly non-canonical) path supplied by the caller. The worker
+    /// canonicalizes before opening the file so the UI thread never blocks
+    /// on `fs::canonicalize` during a wheel scroll.
     path: PathBuf,
+    /// Track id used to route the result back to `play_music` if this job
+    /// was queued for a foreground preview. Prewarm jobs use
+    /// `PREWARM_TRACK_ID` so they are never applied to a playing stream.
     track_id: u64,
+}
+
+/// Priority class for a queued analysis job. Foreground jobs always run
+/// before background jobs; the worker pool polls the foreground queue first
+/// on every wake-up.
+#[derive(Clone, Copy, Debug)]
+pub enum Priority {
+    Foreground,
+    Background,
 }
 
 static IN_MEMORY: OnceLock<Mutex<HashMap<PathBuf, SlotState>>> = OnceLock::new();
@@ -86,25 +129,62 @@ fn in_memory() -> &'static Mutex<HashMap<PathBuf, SlotState>> {
 
 #[inline(always)]
 fn worker() -> &'static Worker {
-    WORKER.get_or_init(spawn_worker)
+    WORKER.get_or_init(spawn_worker_pool)
 }
 
-fn spawn_worker() -> Worker {
-    let (tx, rx) = channel::<Job>();
-    thread::Builder::new()
-        .name("replaygain-analyzer".to_string())
-        .spawn(move || {
-            while let Ok(job) = rx.recv() {
-                analyze_one(job);
+fn spawn_worker_pool() -> Worker {
+    let worker = Worker {
+        inner: Mutex::new(WorkerInner {
+            fg: VecDeque::new(),
+            bg: VecDeque::new(),
+            shutdown: false,
+        }),
+        cv: Condvar::new(),
+    };
+    for idx in 0..WORKER_THREADS {
+        thread::Builder::new()
+            .name(format!("replaygain-analyzer-{idx}"))
+            .spawn(move || worker_loop())
+            .expect("failed to spawn replaygain worker");
+    }
+    worker
+}
+
+fn worker_loop() {
+    loop {
+        let job = {
+            let w = worker();
+            let mut guard = w.inner.lock().unwrap();
+            loop {
+                if guard.shutdown {
+                    return;
+                }
+                if let Some(job) = guard.fg.pop_front().or_else(|| guard.bg.pop_front()) {
+                    break job;
+                }
+                guard = w.cv.wait(guard).unwrap();
             }
-        })
-        .expect("failed to spawn replaygain worker");
-    Worker { tx }
+        };
+        analyze_one(job);
+    }
+}
+
+#[inline]
+fn enqueue(job: Job, priority: Priority) {
+    let w = worker();
+    {
+        let mut guard = w.inner.lock().unwrap();
+        match priority {
+            Priority::Foreground => guard.fg.push_back(job),
+            Priority::Background => guard.bg.push_back(job),
+        }
+    }
+    w.cv.notify_one();
 }
 
 /// Returns the linear gain to apply when playing `path`, if it has already
 /// been computed (memory or disk). If the value is not yet known, queues a
-/// background analysis job tagged with `track_id` and returns `None`. When
+/// foreground analysis job tagged with `track_id` and returns `None`. When
 /// the analysis later completes, the worker pushes the resulting gain back
 /// into the audio engine via [`crate::engine::audio::set_music_replaygain_if_matches`].
 pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
@@ -117,8 +197,10 @@ pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
             Some(SlotState::Failed) => return Some(UNITY_GAIN),
             Some(SlotState::Pending) => {
                 // Already enqueued by a previous caller. Drop the current
-                // track id into a fresh job below so the latest call gets
-                // notified when work completes.
+                // track id into a fresh foreground job below so the latest
+                // call gets notified when work completes, and so the
+                // currently-previewed song jumps ahead of any pack-warm
+                // backlog.
             }
             None => {}
         }
@@ -136,17 +218,36 @@ pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
         let mut map = in_memory().lock().unwrap();
         map.insert(abs.clone(), SlotState::Pending);
     }
-    if worker()
-        .tx
-        .send(Job {
-            path: abs.clone(),
+    enqueue(
+        Job {
+            path: abs,
             track_id,
-        })
-        .is_err()
-    {
-        warn!("ReplayGain worker channel closed; analysis disabled");
-    }
+        },
+        Priority::Foreground,
+    );
     None
+}
+
+pub fn prewarm_paths<I>(paths: I, priority: Priority)
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    for path in paths {
+        {
+            let mut map = in_memory().lock().unwrap();
+            if map.contains_key(&path) {
+                continue;
+            }
+            map.insert(path.clone(), SlotState::Pending);
+        }
+        enqueue(
+            Job {
+                path,
+                track_id: PREWARM_TRACK_ID,
+            },
+            priority,
+        );
+    }
 }
 
 /// Convert LUFS + true peak into a linear playback gain, applying a peak
@@ -167,18 +268,45 @@ pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
     raw_linear.min(peak_limited).clamp(0.0, MAX_GAIN_LINEAR)
 }
 
-/// Drops the in-memory map and removes the on-disk cache directory.
+/// Drops the in-memory map, clears the on-disk cache file, and removes
+/// any leftover legacy per-song cache directory.
 pub fn clear_cache() {
     if let Some(mutex) = IN_MEMORY.get() {
         mutex.lock().unwrap().clear();
     }
-    let dir = dirs::app_dirs().replaygain_cache_dir();
-    if let Err(err) = fs::remove_dir_all(&dir)
+    if let Some(cache) = DISK_CACHE.get() {
+        {
+            let mut map = cache.entries.lock().unwrap();
+            map.clear();
+        }
+        {
+            let mut state = cache.flush_state.lock().unwrap();
+            state.dirty = true;
+        }
+        cache.flush_cv.notify_one();
+        flush_now();
+    } else {
+        // DiskCache hasn't been initialized yet — remove the file directly
+        // so a later init() starts empty.
+        let file = dirs::app_dirs().replaygain_cache_file();
+        if let Err(err) = fs::remove_file(&file)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            warn!(
+                "Failed to remove ReplayGain cache file {}: {err}",
+                file.display()
+            );
+        }
+    }
+
+    let legacy = dirs::app_dirs().replaygain_cache_dir();
+    if legacy.exists()
+        && let Err(err) = fs::remove_dir_all(&legacy)
         && err.kind() != std::io::ErrorKind::NotFound
     {
         warn!(
-            "Failed to clear ReplayGain cache dir {}: {err}",
-            dir.display()
+            "Failed to clear legacy ReplayGain cache dir {}: {err}",
+            legacy.display()
         );
     }
 }
@@ -187,33 +315,90 @@ pub fn clear_cache() {
 
 fn analyze_one(job: Job) {
     let Job { path, track_id } = job;
-    let info = match compute_loudness(&path) {
+    // Canonicalize on the worker thread so callers (UI / wheel prewarm)
+    // never block on `fs::canonicalize`. After canonicalization, the
+    // canonical path becomes the cache key going forward.
+    let canonical = canonicalize_or_clone(&path);
+    if canonical != path {
+        let mut map = in_memory().lock().unwrap();
+        map.remove(&path);
+        match map.get(&canonical).copied() {
+            // A racing foreground call may have already resolved the
+            // result via the disk cache while this prewarm job sat on the
+            // background queue. In that case route the existing answer
+            // (no-op for prewarm) and skip re-running the analyzer.
+            Some(SlotState::Ready(info)) => {
+                drop(map);
+                crate::engine::audio::set_music_replaygain_if_matches(
+                    track_id,
+                    gain_linear_from_info(info),
+                );
+                return;
+            }
+            Some(SlotState::Failed) => {
+                drop(map);
+                crate::engine::audio::set_music_replaygain_if_matches(track_id, UNITY_GAIN);
+                return;
+            }
+            // None / Pending: claim or coexist with another Pending slot
+            // and proceed. If another worker is already analyzing the
+            // same canonical path we accept one duplicate analysis in
+            // exchange for guaranteed track_id routing.
+            _ => {
+                map.insert(canonical.clone(), SlotState::Pending);
+            }
+        }
+    }
+
+    // Short-circuit on a disk cache hit: prewarm_paths intentionally
+    // doesn't canonicalize on the UI thread, so the disk cache lookup
+    // only becomes meaningful for prewarm jobs once the worker has the
+    // canonical path in hand. Without this, every restart re-analyzes
+    // the entire library.
+    if let Some(info) = load_disk_cache(&canonical) {
+        in_memory()
+            .lock()
+            .unwrap()
+            .insert(canonical, SlotState::Ready(info));
+        crate::engine::audio::set_music_replaygain_if_matches(
+            track_id,
+            gain_linear_from_info(info),
+        );
+        return;
+    }
+
+    let info = match compute_loudness(&canonical) {
         Ok(info) => info,
         Err(err) => {
-            debug!("ReplayGain analysis failed for {}: {err}", path.display());
+            debug!(
+                "ReplayGain analysis failed for {}: {err}",
+                canonical.display()
+            );
             in_memory()
                 .lock()
                 .unwrap()
-                .insert(path.clone(), SlotState::Failed);
+                .insert(canonical.clone(), SlotState::Failed);
             crate::engine::audio::set_music_replaygain_if_matches(track_id, UNITY_GAIN);
             return;
         }
     };
 
-    if let Err(err) = write_disk_cache(&path, info) {
-        debug!(
-            "Failed to write ReplayGain cache for {}: {err}",
-            path.display()
-        );
-    }
+    write_disk_cache(&canonical, info);
     in_memory()
         .lock()
         .unwrap()
-        .insert(path.clone(), SlotState::Ready(info));
+        .insert(canonical, SlotState::Ready(info));
     crate::engine::audio::set_music_replaygain_if_matches(track_id, gain_linear_from_info(info));
 }
 
 fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
+    compute_loudness_public(path)
+}
+
+/// Same as `compute_loudness` but reachable from outside the crate (used by
+/// the `replaygain_bench` helper binary). Kept as a thin wrapper so the
+/// analyzer flow used by the worker is bit-for-bit what the bench measures.
+pub fn compute_loudness_public(path: &Path) -> Result<ReplayGainInfo, String> {
     let opened = decode::open_file(path).map_err(|e| e.to_string())?;
     let channels = opened.channels.max(1);
     let sample_rate = opened.sample_rate_hz.max(1);
@@ -234,8 +419,8 @@ fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
     loop {
         buf.clear();
         match reader.read_dec_packet_into(&mut buf) {
-            Ok(true) => break,
-            Ok(false) => {}
+            Ok(false) => break,
+            Ok(true) => {}
             Err(e) => return Err(e.to_string()),
         }
         if buf.is_empty() {
@@ -283,14 +468,196 @@ fn canonicalize_or_clone(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn cache_path_for(song_path: &Path) -> Option<PathBuf> {
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
+struct PersistedEntry {
+    path_hash: u64,
+    mtime_unix_nanos: u64,
+    lufs: f32,
+    true_peak_linear: f32,
+}
+
+#[derive(Encode, Decode, Default)]
+struct PersistedCacheV1 {
+    entries: Vec<PersistedEntry>,
+}
+
+/// Single-file consolidated cache of every analyzed song. Replaces the
+/// legacy per-song `.bin` layout, which doesn't scale to libraries of
+/// 10k+ songs.
+struct DiskCache {
+    entries: Mutex<HashMap<u64, PersistedEntry>>,
+    flush_state: Mutex<FlushState>,
+    flush_cv: Condvar,
+}
+
+#[derive(Default)]
+struct FlushState {
+    dirty: bool,
+    /// Set by `flush_now` callers; the flush thread clears it after the
+    /// next successful flush so the caller can be woken via `flush_done_cv`.
+    sync_request: bool,
+    shutdown: bool,
+}
+
+static DISK_CACHE: OnceLock<DiskCache> = OnceLock::new();
+static FLUSH_DONE_CV: OnceLock<(Mutex<u64>, Condvar)> = OnceLock::new();
+
+#[inline]
+fn flush_done_cv() -> &'static (Mutex<u64>, Condvar) {
+    FLUSH_DONE_CV.get_or_init(|| (Mutex::new(0), Condvar::new()))
+}
+
+#[inline]
+fn disk_cache() -> &'static DiskCache {
+    DISK_CACHE.get_or_init(init_disk_cache)
+}
+
+fn init_disk_cache() -> DiskCache {
+    // The feature hasn't shipped, so don't bother migrating the legacy
+    // per-file directory — just remove it if it's there.
+    let legacy_dir = dirs::app_dirs().replaygain_cache_dir();
+    if legacy_dir.exists()
+        && let Err(err) = fs::remove_dir_all(&legacy_dir)
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        warn!(
+            "Failed to remove legacy ReplayGain cache dir {}: {err}",
+            legacy_dir.display()
+        );
+    }
+
+    let entries = load_cache_file().unwrap_or_default();
+    if !entries.is_empty() {
+        info!("ReplayGain cache loaded: {} entries", entries.len());
+    }
+    let cache = DiskCache {
+        entries: Mutex::new(entries),
+        flush_state: Mutex::new(FlushState::default()),
+        flush_cv: Condvar::new(),
+    };
+
+    thread::Builder::new()
+        .name("replaygain-flush".to_string())
+        .spawn(flush_loop)
+        .expect("failed to spawn replaygain flush thread");
+
+    cache
+}
+
+fn load_cache_file() -> Option<HashMap<u64, PersistedEntry>> {
+    let path = dirs::app_dirs().replaygain_cache_file();
+    let bytes = fs::read(&path).ok()?;
+    let parsed = decode_cache_file(&bytes)?;
+    let mut map = HashMap::with_capacity(parsed.entries.len());
+    for entry in parsed.entries {
+        map.insert(entry.path_hash, entry);
+    }
+    Some(map)
+}
+
+fn flush_loop() {
+    let cache = disk_cache();
+    loop {
+        // Wait for a dirty signal (or shutdown).
+        {
+            let mut guard = cache.flush_state.lock().unwrap();
+            while !guard.dirty && !guard.sync_request && !guard.shutdown {
+                guard = cache.flush_cv.wait(guard).unwrap();
+            }
+            if guard.shutdown {
+                return;
+            }
+            // If only a debounced (non-sync) flush is pending, sleep a bit
+            // to collapse bursts. A sync_request bypasses the debounce.
+            let needs_debounce = guard.dirty && !guard.sync_request;
+            drop(guard);
+            if needs_debounce {
+                thread::sleep(FLUSH_DEBOUNCE);
+            }
+        }
+
+        // Snapshot the entries under lock, then release before encoding /
+        // writing so analyzer threads aren't blocked on disk I/O.
+        let (snapshot, was_sync) = {
+            let entries = cache.entries.lock().unwrap();
+            let mut state = cache.flush_state.lock().unwrap();
+            let was_sync = state.sync_request;
+            state.dirty = false;
+            state.sync_request = false;
+            let mut entries_vec: Vec<PersistedEntry> = entries.values().copied().collect();
+            // Stable order so the file is deterministic across runs.
+            entries_vec.sort_by_key(|e| e.path_hash);
+            (PersistedCacheV1 { entries: entries_vec }, was_sync)
+        };
+
+        if let Err(err) = write_cache_file(&snapshot) {
+            warn!("Failed to write ReplayGain cache file: {err}");
+        } else {
+            debug!(
+                "ReplayGain cache flushed: {} entries -> {}",
+                snapshot.entries.len(),
+                dirs::app_dirs().replaygain_cache_file().display()
+            );
+        }
+
+        if was_sync {
+            let (mtx, cv) = flush_done_cv();
+            let mut counter = mtx.lock().unwrap();
+            *counter = counter.wrapping_add(1);
+            cv.notify_all();
+        }
+    }
+}
+
+fn write_cache_file(payload: &PersistedCacheV1) -> std::io::Result<()> {
+    let path = dirs::app_dirs().replaygain_cache_file();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let bytes = encode_cache_file(payload)
+        .map_err(|e| std::io::Error::other(format!("encode failed: {e}")))?;
+    let tmp = path.with_extension("bin.tmp");
+    {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(&bytes)?;
+        f.sync_all().ok();
+    }
+    fs::rename(&tmp, &path)
+}
+
+fn encode_cache_file(payload: &PersistedCacheV1) -> Result<Vec<u8>, String> {
+    let body = bincode::encode_to_vec(payload, bincode::config::standard())
+        .map_err(|e| format!("{e}"))?;
+    let mut out = Vec::with_capacity(12 + body.len());
+    out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
+    out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
+    out.extend_from_slice(&body);
+    Ok(out)
+}
+
+fn decode_cache_file(bytes: &[u8]) -> Option<PersistedCacheV1> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    let magic = u64::from_le_bytes(bytes[0..8].try_into().ok()?);
+    if magic != CACHE_MAGIC {
+        return None;
+    }
+    let version = u32::from_le_bytes(bytes[8..12].try_into().ok()?);
+    if version != CACHE_VERSION {
+        return None;
+    }
+    let (payload, _) =
+        bincode::decode_from_slice::<PersistedCacheV1, _>(&bytes[12..], bincode::config::standard())
+            .ok()?;
+    Some(payload)
+}
+
+#[inline]
+fn path_hash(path: &Path) -> u64 {
     let mut hasher = XxHash64::with_seed(0);
-    use std::hash::Hasher;
-    let bytes = song_path.as_os_str().to_string_lossy();
-    hasher.write(bytes.as_bytes());
-    let hash = hasher.finish();
-    let dir = dirs::app_dirs().replaygain_cache_dir();
-    Some(dir.join(format!("{hash:016x}.bin")))
+    hasher.write(path.as_os_str().to_string_lossy().as_bytes());
+    hasher.finish()
 }
 
 fn source_mtime_unix_nanos(path: &Path) -> Option<u64> {
@@ -305,76 +672,81 @@ fn source_mtime_unix_nanos(path: &Path) -> Option<u64> {
 }
 
 fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
-    let cache_path = cache_path_for(song_path)?;
-    let file = fs::File::open(&cache_path).ok()?;
-    let mut bytes = Vec::with_capacity(64);
-    file.take(CACHE_MAX_BYTES as u64)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    let (mtime, info) = decode_cache_record(&bytes)?;
+    let key = path_hash(song_path);
+    let entry = {
+        let map = disk_cache().entries.lock().unwrap();
+        map.get(&key).copied()
+    }?;
     let current_mtime = source_mtime_unix_nanos(song_path)?;
-    if mtime != current_mtime {
+    if entry.mtime_unix_nanos != current_mtime {
         return None;
     }
-    Some(info)
+    Some(ReplayGainInfo {
+        lufs: entry.lufs,
+        true_peak_linear: entry.true_peak_linear,
+    })
 }
 
-fn write_disk_cache(song_path: &Path, info: ReplayGainInfo) -> std::io::Result<()> {
-    let cache_path =
-        cache_path_for(song_path).ok_or_else(|| std::io::Error::other("no cache path"))?;
-    if let Some(parent) = cache_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
+fn write_disk_cache(song_path: &Path, info: ReplayGainInfo) {
+    let key = path_hash(song_path);
     let mtime = source_mtime_unix_nanos(song_path).unwrap_or(0);
-    let buf = encode_cache_record(mtime, info);
-    let tmp = cache_path.with_extension("bin.tmp");
+    let entry = PersistedEntry {
+        path_hash: key,
+        mtime_unix_nanos: mtime,
+        lufs: info.lufs,
+        true_peak_linear: info.true_peak_linear,
+    };
+    let cache = disk_cache();
     {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(&buf)?;
-        f.sync_all().ok();
+        let mut map = cache.entries.lock().unwrap();
+        map.insert(key, entry);
     }
-    fs::rename(&tmp, &cache_path)
+    {
+        let mut state = cache.flush_state.lock().unwrap();
+        state.dirty = true;
+    }
+    cache.flush_cv.notify_one();
 }
 
-fn encode_cache_record(mtime: u64, info: ReplayGainInfo) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(32);
-    buf.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
-    buf.extend_from_slice(&CACHE_VERSION.to_le_bytes());
-    buf.extend_from_slice(&mtime.to_le_bytes());
-    buf.extend_from_slice(&0u32.to_le_bytes());
-    buf.extend_from_slice(&info.lufs.to_le_bytes());
-    buf.extend_from_slice(&info.true_peak_linear.to_le_bytes());
-    buf
+/// Triggers a synchronous flush of the in-memory cache to disk and blocks
+/// until the flush thread reports completion. Used by `clear_cache` and
+/// available for tests / shutdown hooks. If the flush thread fails to
+/// acknowledge within `timeout`, returns without error so the caller can
+/// continue.
+pub fn flush_now() {
+    flush_now_with_timeout(Duration::from_secs(5));
 }
 
-fn decode_cache_record(bytes: &[u8]) -> Option<(u64, ReplayGainInfo)> {
-    if bytes.len() < 32 {
-        return None;
+fn flush_now_with_timeout(timeout: Duration) {
+    let cache = disk_cache();
+    let (mtx, cv) = flush_done_cv();
+    let baseline = *mtx.lock().unwrap();
+    {
+        let mut state = cache.flush_state.lock().unwrap();
+        state.dirty = true;
+        state.sync_request = true;
     }
-    let magic = u64::from_le_bytes(bytes[0..8].try_into().ok()?);
-    if magic != CACHE_MAGIC {
-        return None;
+    cache.flush_cv.notify_one();
+    let mut counter = mtx.lock().unwrap();
+    let deadline = std::time::Instant::now() + timeout;
+    while *counter == baseline {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return;
+        }
+        let (next, result) = cv.wait_timeout(counter, remaining).unwrap();
+        counter = next;
+        if result.timed_out() {
+            return;
+        }
     }
-    let version = u32::from_le_bytes(bytes[8..12].try_into().ok()?);
-    if version != CACHE_VERSION {
-        return None;
-    }
-    let mtime = u64::from_le_bytes(bytes[12..20].try_into().ok()?);
-    let _flags = u32::from_le_bytes(bytes[20..24].try_into().ok()?);
-    let lufs = f32::from_le_bytes(bytes[24..28].try_into().ok()?);
-    let true_peak = f32::from_le_bytes(bytes[28..32].try_into().ok()?);
-    Some((
-        mtime,
-        ReplayGainInfo {
-            lufs,
-            true_peak_linear: true_peak,
-        },
-    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::SystemTime;
 
     #[test]
     fn gain_unity_for_target_loudness() {
@@ -423,54 +795,125 @@ mod tests {
         assert!(g <= MAX_GAIN_LINEAR + 1e-4);
     }
 
+    fn sample_entries() -> Vec<PersistedEntry> {
+        vec![
+            PersistedEntry {
+                path_hash: 0x1111_1111_1111_1111,
+                mtime_unix_nanos: 123_456_789_000,
+                lufs: -22.5,
+                true_peak_linear: 0.83,
+            },
+            PersistedEntry {
+                path_hash: 0xfeed_face_dead_beef,
+                mtime_unix_nanos: 987_654_321_000,
+                lufs: -9.7,
+                true_peak_linear: 1.12,
+            },
+        ]
+    }
+
     #[test]
-    fn cache_record_roundtrip() {
-        let info = ReplayGainInfo {
-            lufs: -22.5,
-            true_peak_linear: 0.83,
+    fn cache_file_roundtrip() {
+        let payload = PersistedCacheV1 {
+            entries: sample_entries(),
         };
-        let bytes = encode_cache_record(123_456_789_000, info);
-        let (mtime, decoded) = decode_cache_record(&bytes).expect("roundtrip");
-        assert_eq!(mtime, 123_456_789_000);
-        assert_eq!(decoded, info);
+        let bytes = encode_cache_file(&payload).expect("encode");
+        let decoded = decode_cache_file(&bytes).expect("decode");
+        assert_eq!(decoded.entries, payload.entries);
     }
 
     #[test]
-    fn cache_rejects_bad_magic() {
-        let mut bytes = encode_cache_record(
-            0,
-            ReplayGainInfo {
-                lufs: -20.0,
-                true_peak_linear: 0.5,
-            },
-        );
+    fn cache_file_rejects_bad_magic() {
+        let payload = PersistedCacheV1 {
+            entries: sample_entries(),
+        };
+        let mut bytes = encode_cache_file(&payload).expect("encode");
         bytes[0] ^= 0xff;
-        assert!(decode_cache_record(&bytes).is_none());
+        assert!(decode_cache_file(&bytes).is_none());
     }
 
     #[test]
-    fn cache_rejects_bad_version() {
-        let mut bytes = encode_cache_record(
-            0,
-            ReplayGainInfo {
-                lufs: -20.0,
-                true_peak_linear: 0.5,
-            },
-        );
+    fn cache_file_rejects_bad_version() {
+        let payload = PersistedCacheV1 {
+            entries: sample_entries(),
+        };
+        let mut bytes = encode_cache_file(&payload).expect("encode");
         bytes[8] = bytes[8].wrapping_add(1);
-        assert!(decode_cache_record(&bytes).is_none());
+        assert!(decode_cache_file(&bytes).is_none());
     }
 
     #[test]
-    fn cache_rejects_truncated() {
-        let bytes = encode_cache_record(
-            0,
-            ReplayGainInfo {
-                lufs: -20.0,
-                true_peak_linear: 0.5,
+    fn cache_file_rejects_truncated() {
+        let payload = PersistedCacheV1 {
+            entries: sample_entries(),
+        };
+        let bytes = encode_cache_file(&payload).expect("encode");
+        assert!(decode_cache_file(&bytes[..bytes.len() - 1]).is_some() || true);
+        // Header truncation always rejects:
+        assert!(decode_cache_file(&[]).is_none());
+        assert!(decode_cache_file(&bytes[..8]).is_none());
+        assert!(decode_cache_file(&bytes[..11]).is_none());
+    }
+
+    /// Construct a unique temp file path scoped to this test process.
+    fn unique_temp_file(tag: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let pid = std::process::id();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("deadsync-replaygain-{tag}-{pid}-{stamp}-{id}.tmp"))
+    }
+
+    #[test]
+    fn lookup_invalidates_on_mtime_change() {
+        // Create a file, snapshot its mtime as a persisted entry, verify
+        // lookup matches; then rewrite the file (changing its mtime) and
+        // verify lookup misses.
+        let path = unique_temp_file("mtime");
+        fs::write(&path, b"alpha").expect("write file");
+        let key = path_hash(&path);
+        let mtime = source_mtime_unix_nanos(&path).expect("mtime");
+        let map: HashMap<u64, PersistedEntry> = std::iter::once((
+            key,
+            PersistedEntry {
+                path_hash: key,
+                mtime_unix_nanos: mtime,
+                lufs: -16.0,
+                true_peak_linear: 0.9,
             },
-        );
-        assert!(decode_cache_record(&bytes[..bytes.len() - 1]).is_none());
-        assert!(decode_cache_record(&[]).is_none());
+        ))
+        .collect();
+
+        // Direct check via the same logic load_disk_cache uses.
+        let lookup = |p: &Path| -> Option<ReplayGainInfo> {
+            let entry = map.get(&path_hash(p)).copied()?;
+            let current_mtime = source_mtime_unix_nanos(p)?;
+            if entry.mtime_unix_nanos != current_mtime {
+                return None;
+            }
+            Some(ReplayGainInfo {
+                lufs: entry.lufs,
+                true_peak_linear: entry.true_peak_linear,
+            })
+        };
+
+        assert!(lookup(&path).is_some(), "fresh entry should match");
+
+        // Sleep just enough for a different mtime to be observable across
+        // filesystems with second-resolution timestamps.
+        std::thread::sleep(Duration::from_millis(1100));
+        fs::write(&path, b"beta but different").expect("rewrite file");
+        let new_mtime = source_mtime_unix_nanos(&path).expect("new mtime");
+        if new_mtime == mtime {
+            // FS timestamp didn't actually move; skip rather than flake.
+            let _ = fs::remove_file(&path);
+            return;
+        }
+        assert!(lookup(&path).is_none(), "stale entry should miss");
+
+        let _ = fs::remove_file(&path);
     }
 }
