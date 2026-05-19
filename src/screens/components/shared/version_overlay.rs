@@ -9,6 +9,7 @@
 //! `app/mod.rs` checks it each frame.
 
 use crate::act;
+use crate::config::VersionOverlaySide;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_height, screen_width};
 use std::sync::{Arc, OnceLock};
@@ -19,7 +20,7 @@ use std::sync::{Arc, OnceLock};
 /// the stats overlay behavior).
 const VERSION_OVERLAY_Z: i16 = 32010;
 
-const MARGIN_X: f32 = -8.0;
+const MARGIN_X: f32 = 8.0;
 const MARGIN_Y: f32 = -4.0;
 
 static VERSION_TEXT: OnceLock<Arc<str>> = OnceLock::new();
@@ -41,21 +42,35 @@ fn version_text() -> Arc<str> {
         .clone()
 }
 
-/// Builds the version watermark actor list. Returns a single text actor;
-/// the vector wrapper matches the convention used by other shared
-/// overlay components (`stats_overlay`, `gamepad_overlay`).
-pub fn build() -> Vec<Actor> {
+/// Builds the version watermark actor list. Returns a single text actor
+/// anchored to the bottom-left or bottom-right of the window based on
+/// `side`. The vector wrapper matches the convention used by other
+/// shared overlay components (`stats_overlay`, `gamepad_overlay`).
+pub fn build(side: VersionOverlaySide) -> Vec<Actor> {
     let text = version_text();
     let w = screen_width();
     let h = screen_height();
-    vec![act!(text:
-        align(1.0, 1.0):
-        xy(w + MARGIN_X, h + MARGIN_Y):
-        font("miso"):
-        zoom(0.55):
-        settext(text):
-        diffuse(1.0, 1.0, 1.0, 0.55):
-        horizalign(right):
-        z(VERSION_OVERLAY_Z)
-    )]
+    let actor = match side {
+        VersionOverlaySide::Left => act!(text:
+            align(0.0, 1.0):
+            xy(MARGIN_X, h + MARGIN_Y):
+            font("miso"):
+            zoom(0.55):
+            settext(text):
+            diffuse(1.0, 1.0, 1.0, 0.55):
+            horizalign(left):
+            z(VERSION_OVERLAY_Z)
+        ),
+        VersionOverlaySide::Right => act!(text:
+            align(1.0, 1.0):
+            xy(w - MARGIN_X, h + MARGIN_Y):
+            font("miso"):
+            zoom(0.55):
+            settext(text):
+            diffuse(1.0, 1.0, 1.0, 0.55):
+            horizalign(right):
+            z(VERSION_OVERLAY_Z)
+        ),
+    };
+    vec![actor]
 }

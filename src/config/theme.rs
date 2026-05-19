@@ -82,6 +82,37 @@ impl FromStr for DefaultSyncOffset {
     }
 }
 
+/// Which side of the screen the persistent build-version watermark sits on.
+/// Independent of [`Config::show_version_overlay`] so toggling visibility
+/// doesn't forget the user's preferred side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum VersionOverlaySide {
+    Left,
+    #[default]
+    Right,
+}
+
+impl VersionOverlaySide {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "Left",
+            Self::Right => "Right",
+        }
+    }
+}
+
+impl FromStr for VersionOverlaySide {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "left" | "l" | "lhs" => Ok(Self::Left),
+            "right" | "r" | "rhs" => Ok(Self::Right),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicPatternInfoMode {
     Tech,

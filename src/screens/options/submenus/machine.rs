@@ -195,6 +195,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::VersionOverlaySide,
+        label: lookup_key("OptionsMachine", "VersionOverlaySide"),
+        choices: &[
+            localized_choice("OptionsMachine", "VersionOverlaySideLeft"),
+            localized_choice("OptionsMachine", "VersionOverlaySideRight"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
@@ -375,6 +384,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchVersionOverlaySide,
+        name: lookup_key("OptionsMachine", "VersionOverlaySide"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "VersionOverlaySideHelp",
+        ))],
+    },
+    Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -407,6 +424,11 @@ impl ChoiceEnum for MachineBarColor {
 impl ChoiceEnum for DefaultSyncOffset {
     const ALL: &'static [Self] = &[Self::Null, Self::Itg];
     const DEFAULT: Self = Self::Null;
+}
+
+impl ChoiceEnum for VersionOverlaySide {
+    const ALL: &'static [Self] = &[Self::Left, Self::Right];
+    const DEFAULT: Self = Self::Right;
 }
 
 impl ChoiceEnum for VisualStyle {

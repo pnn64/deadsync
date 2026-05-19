@@ -182,6 +182,11 @@ fn push_saved_options(
         cfg.show_select_music_banners,
     );
     push_bool(content, "ShowVersionOverlay", cfg.show_version_overlay);
+    push_line(
+        content,
+        "VersionOverlaySide",
+        cfg.version_overlay_side.as_str(),
+    );
     push_bool(
         content,
         "SelectMusicShowVideoBanners",

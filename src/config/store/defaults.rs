@@ -115,6 +115,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         default.show_select_music_banners,
     );
     push_bool(content, "ShowVersionOverlay", default.show_version_overlay);
+    push_line(
+        content,
+        "VersionOverlaySide",
+        default.version_overlay_side.as_str(),
+    );
     push_bool(
         content,
         "SelectMusicShowVideoBanners",

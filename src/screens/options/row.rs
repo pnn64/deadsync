@@ -79,6 +79,7 @@ pub enum SubRowId {
     KeyboardFeatures,
     VideoBgs,
     VersionOverlay,
+    VersionOverlaySide,
     // Gameplay Options
     BgBrightness,
     CenteredP1Notefield,
