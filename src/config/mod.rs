@@ -331,7 +331,7 @@ impl Default for Config {
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             high_dpi: false,
-            hide_mouse_cursor: false,
+            hide_mouse_cursor: true,
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,

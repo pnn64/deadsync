@@ -46,6 +46,11 @@ fn config_default_enables_custom_sounds() {
 }
 
 #[test]
+fn config_default_hides_mouse_cursor() {
+    assert!(Config::default().hide_mouse_cursor);
+}
+
+#[test]
 fn parse_keycode_common_keys() {
     let cases = [
         ("KeyCode::Enter", KeyCode::Enter),
