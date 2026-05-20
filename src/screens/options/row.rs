@@ -79,6 +79,8 @@ pub enum SubRowId {
     DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
+    VersionOverlay,
+    VersionOverlaySide,
     // Gameplay Options
     BgBrightness,
     CenteredP1Notefield,

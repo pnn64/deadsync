@@ -5552,6 +5552,16 @@ impl App {
             }
         }
 
+        // Bottom-corner build watermark so videos / screenshots always
+        // carry the running version. Default on; user-toggleable via
+        // Options, with a separate Left/Right side preference.
+        let cfg = crate::config::get();
+        if cfg.show_version_overlay {
+            actors.extend(crate::screens::components::shared::version_overlay::build(
+                cfg.version_overlay_side,
+            ));
+        }
+
         // Gamepad connection overlay (always on top of screen, but below transitions)
         if let Some((msg, _)) = &self.state.shell.gamepad_overlay_state {
             let params =

@@ -32,8 +32,8 @@ pub use self::theme::{
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VisualStyle, auto_screenshot_bit,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -162,9 +162,14 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
-    /// ITGmania parity (`DelayedBack`): when `true`, the BACK button must be held to
-    /// exit a song; when `false`, BACK exits instantly on first press.
-    pub delayed_back: bool,
+    /// Show a small build-version watermark in the bottom-right corner of
+    /// every screen so the running version is visible in any
+    /// screenshot/video. Default on; disablable via the Options menu.
+    pub show_version_overlay: bool,
+    /// Which side of the screen the version watermark anchors to. Stored
+    /// separately from `show_version_overlay` so toggling visibility
+    /// doesn't forget the preferred side.
+    pub version_overlay_side: VersionOverlaySide,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
@@ -339,6 +344,8 @@ impl Default for Config {
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_version_overlay: true,
+            version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
             show_video_backgrounds: true,
             machine_show_select_profile: true,
