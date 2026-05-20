@@ -171,6 +171,7 @@ fn push_saved_options(
         "RateModPreservesPitch",
         cfg.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", cfg.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",

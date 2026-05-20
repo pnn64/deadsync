@@ -36,6 +36,7 @@ pub enum SubRowId {
     MineSounds,
     GlobalOffset,
     RateModPreservesPitch,
+    ReplayGain,
     #[cfg(target_os = "linux")]
     LinuxAudioBackend,
     #[cfg(target_os = "linux")]

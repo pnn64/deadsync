@@ -296,6 +296,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "RateModPreservesPitch")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
+    cfg.enable_replaygain = conf
+        .get("Options", "ReplayGain")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.enable_replaygain, |v| v != 0);
     cfg.write_current_screen = conf
         .get("Options", "WriteCurrentScreen")
         .and_then(|v| parse_bool_str(&v))
