@@ -59,6 +59,7 @@ fn bench_score_info() -> ScoreInfo {
     ScoreInfo {
         song,
         chart,
+        course_graph_stages: Vec::new(),
         side: profile::PlayerSide::P1,
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,

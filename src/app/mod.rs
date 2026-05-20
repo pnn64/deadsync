@@ -1692,6 +1692,29 @@ fn build_course_run_from_selection(
     })
 }
 
+fn build_course_graph_stages(
+    course: &CourseRunState,
+) -> [Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS] {
+    let chart_type = profile::get_session_play_style().chart_type();
+    std::array::from_fn(|player_idx| {
+        let mut out = Vec::with_capacity(course.stages.len());
+        for stage in &course.stages {
+            let Some(chart) = select_music::chart_for_steps_index(
+                stage.song.as_ref(),
+                chart_type,
+                stage.steps_index[player_idx],
+            ) else {
+                continue;
+            };
+            out.push(evaluation::CourseGraphStage {
+                chart: Arc::new(chart.clone()),
+                song_last_second: stage.song.precise_last_second(),
+            });
+        }
+        out
+    })
+}
+
 #[inline(always)]
 fn merge_window_counts(
     mut total: crate::game::timing::WindowCounts,
@@ -1893,6 +1916,7 @@ fn score_info_from_stage(
     Some(evaluation::ScoreInfo {
         song: stage.song.clone(),
         chart: player.chart.clone(),
+        course_graph_stages: Vec::new(),
         side,
         profile_name: player.profile_name.clone(),
         score_valid: player.score_valid,
@@ -1992,14 +2016,31 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
 
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
+    course_graph_stages: &[Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS],
     active_color_index: i32,
     session_elapsed: f32,
     gameplay_elapsed: f32,
 ) -> evaluation::State {
     let mut score_info: [Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS] =
         std::array::from_fn(|_| None);
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-        score_info[side_ix(side)] = score_info_from_stage(stage, side);
+    match profile::get_session_play_style() {
+        profile::PlayStyle::Versus => {
+            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                let idx = side_ix(side);
+                score_info[idx] = score_info_from_stage(stage, side);
+                if let Some(si) = score_info[idx].as_mut() {
+                    si.course_graph_stages.clone_from(&course_graph_stages[idx]);
+                }
+            }
+        }
+        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            let side = profile::get_session_player_side();
+            let idx = side_ix(side);
+            score_info[0] = score_info_from_stage(stage, side);
+            if let Some(si) = score_info[0].as_mut() {
+                si.course_graph_stages.clone_from(&course_graph_stages[idx]);
+            }
+        }
     }
     let mut state = evaluation::init_from_score_info(score_info, stage.duration_seconds);
     state.active_color_index = active_color_index;
@@ -4757,6 +4798,7 @@ impl App {
             if course_run.next_stage_index >= course_run.stages.len() {
                 let score_hash = course_run.score_hash.clone();
                 let per_song_pages = course_run.stage_eval_pages.clone();
+                let course_graph_stages = build_course_graph_stages(course_run);
                 let course_summary = build_course_summary_stage(course_run);
                 self.state.session.course_run = None;
                 self.state.session.course_eval_pages.clear();
@@ -4781,6 +4823,7 @@ impl App {
                     let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
                     let mut course_page = build_course_summary_eval_state(
                         &course_stage,
+                        &course_graph_stages,
                         color_idx,
                         session_elapsed,
                         gameplay_elapsed,
@@ -8797,6 +8840,7 @@ mod tests {
         evaluation::ScoreInfo {
             song: song.clone(),
             chart: Arc::new(test_chart(hash)),
+            course_graph_stages: Vec::new(),
             side,
             profile_name: String::new(),
             score_valid: true,

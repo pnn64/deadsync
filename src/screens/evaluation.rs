@@ -520,6 +520,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
+    pub course_graph_stages: Vec<CourseGraphStage>,
     pub side: profile::PlayerSide,
     pub profile_name: String,
     pub score_valid: bool,
@@ -582,10 +583,21 @@ pub struct ScoreInfo {
     pub show_machine_personal_split: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct CourseGraphStage {
+    pub chart: Arc<ChartData>,
+    pub song_last_second: f32,
+}
+
 impl ScoreInfo {
     #[inline(always)]
     pub fn judgment_count(&self, grade: JudgeGrade) -> u32 {
         self.judgment_counts[judgment::judge_grade_ix(grade)]
+    }
+
+    #[inline(always)]
+    fn is_course_summary(&self) -> bool {
+        !self.course_graph_stages.is_empty()
     }
 }
 
@@ -717,17 +729,222 @@ fn compute_column_judgments(
     out
 }
 
+#[inline(always)]
+fn course_graph_stage_seconds(stage: &CourseGraphStage) -> f32 {
+    if stage.song_last_second.is_finite() {
+        stage.song_last_second.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+fn course_graph_raw_seconds(stages: &[CourseGraphStage]) -> f32 {
+    stages.iter().map(course_graph_stage_seconds).sum()
+}
+
+fn course_graph_stage_spans(stages: &[CourseGraphStage], graph_width: f32) -> Vec<(f32, f32)> {
+    let total = course_graph_raw_seconds(stages);
+    let width = graph_width.max(0.0);
+    if total <= 0.0 || width <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut x = 0.0_f32;
+    let mut spans = Vec::with_capacity(stages.len());
+    for stage in stages {
+        let w = course_graph_stage_seconds(stage) / total * width;
+        spans.push((x, w));
+        x += w;
+    }
+    spans
+}
+
+fn build_course_density_graph_mesh(
+    stages: &[CourseGraphStage],
+    graph_width: f32,
+    graph_height: f32,
+    music_rate: f32,
+) -> Option<Arc<[MeshVertex]>> {
+    let total = course_graph_raw_seconds(stages);
+    let width = graph_width.max(0.0);
+    let height = graph_height.max(0.0);
+    if total <= 0.0 || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    let mut x = 0.0_f32;
+    let mut out = Vec::new();
+    for stage in stages {
+        let stage_seconds = course_graph_stage_seconds(stage);
+        let stage_width = stage_seconds / rate / total * width;
+        if stage_width <= 0.0 {
+            continue;
+        }
+
+        let first = stage.chart.first_second;
+        let last = stage_seconds.max(first + 0.001);
+        let mut verts = crate::engine::present::density::build_density_histogram_mesh(
+            &stage.chart.measure_nps_vec,
+            stage.chart.max_nps,
+            &stage.chart.measure_seconds_vec,
+            first,
+            last,
+            stage_width,
+            height,
+            0.0,
+            stage_width,
+            Some(0.5),
+            0.65,
+        );
+        for v in &mut verts {
+            v.pos[0] += x;
+        }
+        out.extend(verts);
+        x += stage_width;
+    }
+
+    (!out.is_empty()).then(|| Arc::from(out.into_boxed_slice()))
+}
+
+fn build_eval_density_graph_mesh(
+    si: &ScoreInfo,
+    graph_width: f32,
+    graph_height: f32,
+) -> Option<Arc<[MeshVertex]>> {
+    if si.is_course_summary() {
+        return build_course_density_graph_mesh(
+            &si.course_graph_stages,
+            graph_width,
+            graph_height,
+            si.music_rate,
+        );
+    }
+
+    let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
+    let verts = crate::engine::present::density::build_density_histogram_mesh(
+        &si.chart.measure_nps_vec,
+        si.chart.max_nps,
+        &si.chart.measure_seconds_vec,
+        si.graph_first_second,
+        last_second,
+        graph_width,
+        graph_height,
+        0.0,
+        graph_width,
+        Some(0.5),
+        0.5,
+    );
+    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+}
+
+fn course_graph_stripe_actors(
+    stages: &[CourseGraphStage],
+    graph_width: f32,
+    graph_height: f32,
+) -> Vec<Actor> {
+    const STRIPE_RGBA: [f32; 4] = [
+        (16.0 / 255.0) * 1.25 * 1.25,
+        (21.0 / 255.0) * 1.25 * 1.25,
+        (25.0 / 255.0) * 1.25 * 1.25,
+        0.5,
+    ];
+
+    let spans = course_graph_stage_spans(stages, graph_width);
+    let mut actors = Vec::with_capacity((spans.len() + 1) / 2);
+    for (idx, (x, w)) in spans.into_iter().enumerate() {
+        if idx % 2 != 0 || w <= 0.0 {
+            continue;
+        }
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(x, 0.0):
+            setsize(w, graph_height):
+            diffuse(STRIPE_RGBA[0], STRIPE_RGBA[1], STRIPE_RGBA[2], STRIPE_RGBA[3]):
+            z(2)
+        ));
+    }
+    actors
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell, compute_column_judgments,
-        eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
-        submit_footer_gs_label, submit_footer_lines,
+        CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
+        compute_column_judgments, course_graph_stage_spans, eval_grade_for_result, eval_pane_shift,
+        stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
+    use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
     use crate::game::scores;
+    use std::sync::Arc;
+
+    fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
+        CourseGraphStage {
+            chart: Arc::new(ChartData {
+                chart_type: "dance-single".to_string(),
+                difficulty: "Hard".to_string(),
+                description: String::new(),
+                chart_name: String::new(),
+                meter: 10,
+                step_artist: String::new(),
+                music_path: None,
+                short_hash: String::new(),
+                stats: rssp::stats::ArrowStats::default(),
+                tech_counts: rssp::TechCounts::default(),
+                mines_nonfake: 0,
+                stamina_counts: StaminaCounts::default(),
+                total_streams: 0,
+                matrix_rating: 0.0,
+                max_nps: 0.0,
+                sn_detailed_breakdown: String::new(),
+                sn_partial_breakdown: String::new(),
+                sn_simple_breakdown: String::new(),
+                detailed_breakdown: String::new(),
+                partial_breakdown: String::new(),
+                simple_breakdown: String::new(),
+                total_measures: 0,
+                measure_nps_vec: Vec::new(),
+                measure_seconds_vec: Vec::new(),
+                first_second: 0.0,
+                has_note_data: true,
+                has_chart_attacks: false,
+                possible_grade_points: 0,
+                holds_total: 0,
+                rolls_total: 0,
+                mines_total: 0,
+                display_bpm: None,
+                min_bpm: 120.0,
+                max_bpm: 120.0,
+            }),
+            song_last_second,
+        }
+    }
+
+    #[test]
+    fn course_graph_stage_spans_match_trail_entry_seconds() {
+        let stages = [
+            test_course_graph_stage(10.0),
+            test_course_graph_stage(30.0),
+            test_course_graph_stage(10.0),
+        ];
+
+        let spans = course_graph_stage_spans(&stages, 500.0);
+
+        assert_eq!(spans.len(), 3);
+        assert!((spans[0].0 - 0.0).abs() < 0.001);
+        assert!((spans[0].1 - 100.0).abs() < 0.001);
+        assert!((spans[1].0 - 100.0).abs() < 0.001);
+        assert!((spans[1].1 - 300.0).abs() < 0.001);
+        assert!((spans[2].0 - 400.0).abs() < 0.001);
+        assert!((spans[2].1 - 100.0).abs() < 0.001);
+    }
 
     fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
         Note {
@@ -1902,6 +2119,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             *score_info_slot = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
+                course_graph_stages: Vec::new(),
                 side,
                 profile_name: prof.display_name.clone(),
                 score_valid,
@@ -1973,21 +2191,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
-                let verts = crate::engine::present::density::build_density_histogram_mesh(
-                    &si.chart.measure_nps_vec,
-                    si.chart.max_nps,
-                    &si.chart.measure_seconds_vec,
-                    si.graph_first_second,
-                    last_second,
-                    graph_width,
-                    GRAPH_H,
-                    0.0,
-                    graph_width,
-                    Some(0.5),
-                    0.5,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                build_eval_density_graph_mesh(si, graph_width, GRAPH_H)
             };
 
             let scoring_scatter =
@@ -2248,6 +2452,17 @@ pub fn init_from_score_info(
         }
     }
 
+    let graph_width = if play_style == profile::PlayStyle::Versus {
+        300.0
+    } else {
+        610.0
+    };
+    let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_density_graph_mesh(si, graph_width, 64.0)
+        });
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
@@ -2257,7 +2472,7 @@ pub fn init_from_score_info(
         stage_duration_seconds,
         score_info,
         itl_progress: std::array::from_fn(|_| None),
-        density_graph_mesh: std::array::from_fn(|_| None),
+        density_graph_mesh,
         timing_hist_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh_ex: std::array::from_fn(|_| None),
         timing_hist_mesh_hard_ex: std::array::from_fn(|_| None),
@@ -3690,119 +3905,123 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
 
-            // Breakdown Text (under grade)
-            let breakdown_x = if cfg.zmod_rating_box_text {
-                upper_origin_x + 148.0 * dir
-            } else {
-                upper_origin_x + 150.0 * dir
-            };
-            let breakdown_width = if cfg.zmod_rating_box_text {
-                let banner_half_w = 418.0 * 0.7 * 0.5;
-                let banner_edge_x = screen_center_x() + banner_half_w * dir;
-                ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
-            } else {
-                155.0
-            };
-            let breakdown_text = {
-                let chart = &si.chart;
-                let (detailed, partial, simple) = match cfg.select_music_breakdown_style {
-                    crate::config::BreakdownStyle::Sn => (
-                        &chart.sn_detailed_breakdown,
-                        &chart.sn_partial_breakdown,
-                        &chart.sn_simple_breakdown,
-                    ),
-                    crate::config::BreakdownStyle::Sl => (
-                        &chart.detailed_breakdown,
-                        &chart.partial_breakdown,
-                        &chart.simple_breakdown,
-                    ),
-                };
-                asset_manager
-                    .with_fonts(|all_fonts| {
-                        asset_manager.with_font("miso", |miso_font| -> Option<Arc<str>> {
-                            let width_constraint = breakdown_width;
-                            let text_zoom = 0.7;
-                            let max_allowed_logical_width = width_constraint / text_zoom;
-
-                            let fits = |text: &str| {
-                                let logical_width =
-                                    font::measure_line_width_logical(miso_font, text, all_fonts)
-                                        as f32;
-                                logical_width <= max_allowed_logical_width
-                            };
-
-                            if fits(detailed) {
-                                Some(cached_str_ref(detailed))
-                            } else if fits(partial) {
-                                Some(cached_str_ref(partial))
-                            } else if fits(simple) {
-                                Some(cached_str_ref(simple))
-                            } else {
-                                Some(cached_total_label_text(chart.total_streams))
-                            }
-                        })
-                    })
-                    .flatten()
-                    .unwrap_or_else(|| cached_str_ref(simple))
-            };
-
-            {
-                let x = breakdown_x;
-                let y = if cfg.zmod_rating_box_text {
-                    cy - 97.0
+            // Breakdown Text (under grade). Arrow Cloud leaves this empty in
+            // course mode; the course breakdown is the lower graph instead.
+            if !si.is_course_summary() {
+                let breakdown_x = if cfg.zmod_rating_box_text {
+                    upper_origin_x + 148.0 * dir
                 } else {
-                    cy - 95.0
+                    upper_origin_x + 150.0 * dir
                 };
-                let align_x = if side == profile::PlayerSide::P1 {
-                    0.0
+                let breakdown_width = if cfg.zmod_rating_box_text {
+                    let banner_half_w = 418.0 * 0.7 * 0.5;
+                    let banner_edge_x = screen_center_x() + banner_half_w * dir;
+                    ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
                 } else {
-                    1.0
+                    155.0
                 };
-                let align_y = if cfg.zmod_rating_box_text { 1.0 } else { 0.5 };
-                if cfg.zmod_rating_box_text {
-                    let (bg_w, bg_h) = asset_manager
+                let breakdown_text = {
+                    let chart = &si.chart;
+                    let (detailed, partial, simple) = match cfg.select_music_breakdown_style {
+                        crate::config::BreakdownStyle::Sn => (
+                            &chart.sn_detailed_breakdown,
+                            &chart.sn_partial_breakdown,
+                            &chart.sn_simple_breakdown,
+                        ),
+                        crate::config::BreakdownStyle::Sl => (
+                            &chart.detailed_breakdown,
+                            &chart.partial_breakdown,
+                            &chart.simple_breakdown,
+                        ),
+                    };
+                    asset_manager
                         .with_fonts(|all_fonts| {
-                            asset_manager.with_font("miso", |miso_font| {
-                                let text_w = font::measure_line_width_logical(
-                                    miso_font,
-                                    &breakdown_text,
-                                    all_fonts,
-                                ) as f32;
-                                let line_h = miso_font.height.max(1) as f32;
-                                let bg_w = (text_w * 0.7 + 7.0).min(breakdown_width).max(7.0);
-                                let bg_h = (line_h + 4.0).max(4.0) * 0.7;
-                                (bg_w, bg_h)
+                            asset_manager.with_font("miso", |miso_font| -> Option<Arc<str>> {
+                                let width_constraint = breakdown_width;
+                                let text_zoom = 0.7;
+                                let max_allowed_logical_width = width_constraint / text_zoom;
+
+                                let fits = |text: &str| {
+                                    let logical_width = font::measure_line_width_logical(
+                                        miso_font, text, all_fonts,
+                                    )
+                                        as f32;
+                                    logical_width <= max_allowed_logical_width
+                                };
+
+                                if fits(detailed) {
+                                    Some(cached_str_ref(detailed))
+                                } else if fits(partial) {
+                                    Some(cached_str_ref(partial))
+                                } else if fits(simple) {
+                                    Some(cached_str_ref(simple))
+                                } else {
+                                    Some(cached_total_label_text(chart.total_streams))
+                                }
                             })
                         })
-                        .unwrap_or((breakdown_width, 14.0));
-                    let bg_x = upper_origin_x + 150.0 * dir;
-                    let bg_y = cy - 95.5;
-                    let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
-                        (0.0, 0.1)
+                        .flatten()
+                        .unwrap_or_else(|| cached_str_ref(simple))
+                };
+
+                {
+                    let x = breakdown_x;
+                    let y = if cfg.zmod_rating_box_text {
+                        cy - 97.0
                     } else {
-                        (0.1, 0.0)
+                        cy - 95.0
                     };
-                    actors.push(act!(quad:
-                        align(align_x, 1.0): xy(bg_x, bg_y):
-                        zoomto(bg_w, bg_h):
-                        diffuse(0.0, 0.0, 0.0, 0.7):
-                        fadeleft(fadeleft): faderight(faderight):
-                        z(102)
-                    ));
-                }
-                let text_z = if cfg.zmod_rating_box_text { 103 } else { 101 };
-                if side == profile::PlayerSide::P1 {
-                    actors.push(act!(text: font("miso"): settext(breakdown_text):
-                        align(align_x, align_y): xy(x, y): zoom(0.7):
-                        maxwidth(breakdown_width): horizalign(left): z(text_z):
-                        diffuse(1.0, 1.0, 1.0, 1.0)
-                    ));
-                } else {
-                    actors.push(act!(text: font("miso"): settext(breakdown_text):
-                        align(align_x, align_y): xy(x, y): zoom(0.7):
-                        maxwidth(breakdown_width): horizalign(right): z(text_z):
-                        diffuse(1.0, 1.0, 1.0, 1.0)
-                    ));
+                    let align_x = if side == profile::PlayerSide::P1 {
+                        0.0
+                    } else {
+                        1.0
+                    };
+                    let align_y = if cfg.zmod_rating_box_text { 1.0 } else { 0.5 };
+                    if cfg.zmod_rating_box_text {
+                        let (bg_w, bg_h) = asset_manager
+                            .with_fonts(|all_fonts| {
+                                asset_manager.with_font("miso", |miso_font| {
+                                    let text_w = font::measure_line_width_logical(
+                                        miso_font,
+                                        &breakdown_text,
+                                        all_fonts,
+                                    ) as f32;
+                                    let line_h = miso_font.height.max(1) as f32;
+                                    let bg_w = (text_w * 0.7 + 7.0).min(breakdown_width).max(7.0);
+                                    let bg_h = (line_h + 4.0).max(4.0) * 0.7;
+                                    (bg_w, bg_h)
+                                })
+                            })
+                            .unwrap_or((breakdown_width, 14.0));
+                        let bg_x = upper_origin_x + 150.0 * dir;
+                        let bg_y = cy - 95.5;
+                        let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
+                            (0.0, 0.1)
+                        } else {
+                            (0.1, 0.0)
+                        };
+                        actors.push(act!(quad:
+                            align(align_x, 1.0): xy(bg_x, bg_y):
+                            zoomto(bg_w, bg_h):
+                            diffuse(0.0, 0.0, 0.0, 0.7):
+                            fadeleft(fadeleft): faderight(faderight):
+                            z(102)
+                        ));
+                    }
+                    let text_z = if cfg.zmod_rating_box_text { 103 } else { 101 };
+                    if side == profile::PlayerSide::P1 {
+                        actors.push(act!(text: font("miso"): settext(breakdown_text):
+                            align(align_x, align_y): xy(x, y): zoom(0.7):
+                            maxwidth(breakdown_width): horizalign(left): z(text_z):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                    } else {
+                        actors.push(act!(text: font("miso"): settext(breakdown_text):
+                            align(align_x, align_y): xy(x, y): zoom(0.7):
+                            maxwidth(breakdown_width): horizalign(right): z(text_z):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                    }
                 }
             }
         }
@@ -4124,6 +4343,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         } else {
                             act!(sprite("__white"): visible(false))
                         }
+                    },
+                    Actor::Frame {
+                        align: [0.0, 0.0],
+                        offset: [0.0, 0.0],
+                        size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                        background: None,
+                        z: 2,
+                        children: course_graph_stripe_actors(
+                            &si.course_graph_stages,
+                            graph_width,
+                            graph_height,
+                        ),
                     },
                     act!(quad:
                         align(0.5, 0.5):
