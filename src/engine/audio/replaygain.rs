@@ -587,7 +587,12 @@ fn flush_loop() {
             let mut entries_vec: Vec<PersistedEntry> = entries.values().copied().collect();
             // Stable order so the file is deterministic across runs.
             entries_vec.sort_by_key(|e| e.path_hash);
-            (PersistedCacheV1 { entries: entries_vec }, was_sync)
+            (
+                PersistedCacheV1 {
+                    entries: entries_vec,
+                },
+                was_sync,
+            )
         };
 
         if let Err(err) = write_cache_file(&snapshot) {
@@ -626,8 +631,8 @@ fn write_cache_file(payload: &PersistedCacheV1) -> std::io::Result<()> {
 }
 
 fn encode_cache_file(payload: &PersistedCacheV1) -> Result<Vec<u8>, String> {
-    let body = bincode::encode_to_vec(payload, bincode::config::standard())
-        .map_err(|e| format!("{e}"))?;
+    let body =
+        bincode::encode_to_vec(payload, bincode::config::standard()).map_err(|e| format!("{e}"))?;
     let mut out = Vec::with_capacity(12 + body.len());
     out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
     out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
@@ -647,9 +652,11 @@ fn decode_cache_file(bytes: &[u8]) -> Option<PersistedCacheV1> {
     if version != CACHE_VERSION {
         return None;
     }
-    let (payload, _) =
-        bincode::decode_from_slice::<PersistedCacheV1, _>(&bytes[12..], bincode::config::standard())
-            .ok()?;
+    let (payload, _) = bincode::decode_from_slice::<PersistedCacheV1, _>(
+        &bytes[12..],
+        bincode::config::standard(),
+    )
+    .ok()?;
     Some(payload)
 }
 

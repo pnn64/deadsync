@@ -147,7 +147,7 @@ fn main_options_left_right_move_rows_like_up_down() {
     press(&mut state, &asset_manager, VirtualAction::p1_left);
     assert_eq!(state.selected, 0);
     press(&mut state, &asset_manager, VirtualAction::p2_left);
-    assert_eq!(state.selected, ITEMS.len() - 1);
+    assert_eq!(state.selected, visible_items().len() - 1);
     press(&mut state, &asset_manager, VirtualAction::p2_right);
     assert_eq!(state.selected, 0);
 }
