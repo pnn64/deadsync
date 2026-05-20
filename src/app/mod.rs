@@ -2051,6 +2051,11 @@ fn build_course_summary_eval_state(
     state
 }
 
+#[inline(always)]
+const fn course_eval_is_final(next_stage_index: usize, stage_count: usize, failed: bool) -> bool {
+    failed || next_stage_index >= stage_count
+}
+
 fn push_song_lua_video_paths<'a>(
     overlays: &'a [crate::game::parsing::song_lua::SongLuaOverlayActor],
     seen: &mut HashSet<&'a str>,
@@ -4758,12 +4763,10 @@ impl App {
             if let Some(stage) = stage_summary.as_ref() {
                 course_run.stage_summaries.push(stage.clone());
             }
-            if config::get().show_course_individual_scores {
-                let mut stage_page = eval_state.clone();
-                stage_page.return_to_course = true;
-                stage_page.auto_advance_seconds = None;
-                course_run.stage_eval_pages.push(stage_page);
-            }
+            let mut stage_page = eval_state.clone();
+            stage_page.return_to_course = true;
+            stage_page.auto_advance_seconds = None;
+            course_run.stage_eval_pages.push(stage_page);
         }
         stage_summary
     }
@@ -4782,10 +4785,9 @@ impl App {
         self.state.screens.evaluation_state.auto_advance_seconds = None;
 
         // Pass / Fail SFX (zmod parity, issue #375). Based on the per-stage
-        // result that was just captured into `eval_snapshot` — the
-        // course-summary replacement below would only run on the very last
-        // course stage, and the per-stage pass/fail is still the right cue
-        // for the player at that moment.
+        // result that was just captured into `eval_snapshot`; even when that
+        // is immediately replaced by a course summary, this is the cue tied to
+        // the player's actual exit from gameplay.
         let failed = crate::screens::evaluation::all_joined_players_failed(&eval_snapshot);
         let folder = if failed {
             "assets/sounds/evaluation_fail"
@@ -4794,8 +4796,16 @@ impl App {
         };
         crate::engine::audio::folder::play_random_sfx(folder);
 
-        if let Some(course_run) = self.state.session.course_run.as_mut() {
-            if course_run.next_stage_index >= course_run.stages.len() {
+        if self
+            .state
+            .session
+            .course_run
+            .as_ref()
+            .is_some_and(|course_run| {
+                course_eval_is_final(course_run.next_stage_index, course_run.stages.len(), failed)
+            })
+        {
+            if let Some(course_run) = self.state.session.course_run.as_ref() {
                 let score_hash = course_run.score_hash.clone();
                 let per_song_pages = course_run.stage_eval_pages.clone();
                 let course_graph_stages = build_course_graph_stages(course_run);
@@ -8907,6 +8917,13 @@ mod tests {
         assert!(!App::raw_keyboard_restart_screen(
             CurrentScreen::EvaluationSummary,
         ));
+    }
+
+    #[test]
+    fn course_eval_final_on_completion_or_failure() {
+        assert!(!course_eval_is_final(1, 3, false));
+        assert!(course_eval_is_final(1, 3, true));
+        assert!(course_eval_is_final(3, 3, false));
     }
 
     #[test]
