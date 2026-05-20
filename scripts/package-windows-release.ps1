@@ -44,6 +44,7 @@ $distDir     = 'dist'
 $pkgName     = "deadsync-$Tag-$Arch-windows"
 $stageDir    = Join-Path $distDir 'DeadSync'
 $archivePath = Join-Path $distDir "$pkgName.zip"
+$checksumPath = "$archivePath.sha256"
 
 if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
@@ -57,10 +58,15 @@ Copy-Item 'LICENSE'      -Destination $stageDir
 New-Item -ItemType File -Path (Join-Path $stageDir 'portable.txt') -Force | Out-Null
 
 if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
+if (Test-Path $checksumPath) { Remove-Item $checksumPath -Force }
 Compress-Archive -Path $stageDir -DestinationPath $archivePath
+$hash = (Get-FileHash -Algorithm SHA256 -Path $archivePath).Hash.ToLowerInvariant()
+$archiveName = Split-Path -Leaf $archivePath
+"$hash  $archiveName" | Out-File -FilePath $checksumPath -Encoding ascii
 
 if ($env:GITHUB_OUTPUT) {
     "archive=$archivePath"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "checksum=$checksumPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
     "stage=$stageDir"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 

@@ -54,6 +54,24 @@ dist_dir="dist"
 pkg_name="deadsync-${tag}-${arch}-linux"
 stage_dir="${dist_dir}/deadsync"
 archive_path="${dist_dir}/${pkg_name}.tar.gz"
+checksum_path="${archive_path}.sha256"
+
+write_sha256_sidecar() {
+  local dir="$1"
+  local file="$2"
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "${dir}" && sha256sum "${file}" > "${file}.sha256")
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "${dir}" && shasum -a 256 "${file}" > "${file}.sha256")
+  elif command -v sha256 >/dev/null 2>&1; then
+    local digest
+    digest="$(sha256 -q "${dir}/${file}")"
+    printf '%s  %s\n' "${digest}" "${file}" > "${dir}/${file}.sha256"
+  else
+    echo "missing sha256 tool" >&2
+    return 1
+  fi
+}
 
 rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}"
@@ -64,10 +82,12 @@ cp README.md LICENSE "${stage_dir}/"
 : > "${stage_dir}/portable.txt"
 
 tar -C "${dist_dir}" -czf "${archive_path}" deadsync
+write_sha256_sidecar "${dist_dir}" "${pkg_name}.tar.gz"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "archive=${archive_path}"
+    echo "checksum=${checksum_path}"
     echo "stage=${stage_dir}"
   } >> "${GITHUB_OUTPUT}"
 fi
