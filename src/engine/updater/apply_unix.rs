@@ -32,9 +32,9 @@ use std::path::{Component, Path, PathBuf};
 use flate2::read::GzDecoder;
 use tar::Archive;
 
+use super::UpdaterError;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use super::apply_journal::{self, Journal, JournalState, Op};
-use super::UpdaterError;
 
 /// Result of a successful apply.  Returned for diagnostics + tests.
 #[derive(Debug, Clone)]
@@ -124,9 +124,14 @@ pub fn extract_tar_gz(zip_bytes: &[u8], dest: &Path) -> Result<usize, UpdaterErr
         let dec = GzDecoder::new(zip_bytes);
         let mut archive = Archive::new(dec);
         let mut names = Vec::new();
-        for entry in archive.entries().map_err(|e| super::io_err_op("read tar entries", e))? {
+        for entry in archive
+            .entries()
+            .map_err(|e| super::io_err_op("read tar entries", e))?
+        {
             let entry = entry.map_err(|e| super::io_err_op("read tar entry", e))?;
-            let path = entry.path().map_err(|e| super::io_err_op("decode tar entry path", e))?;
+            let path = entry
+                .path()
+                .map_err(|e| super::io_err_op("decode tar entry path", e))?;
             if let Some(s) = path.to_str() {
                 names.push(s.to_string());
             }
@@ -138,7 +143,10 @@ pub fn extract_tar_gz(zip_bytes: &[u8], dest: &Path) -> Result<usize, UpdaterErr
     archive.set_preserve_permissions(true);
     archive.set_overwrite(true);
     let mut written = 0usize;
-    for entry in archive.entries().map_err(|e| super::io_err_op("read tar entries", e))? {
+    for entry in archive
+        .entries()
+        .map_err(|e| super::io_err_op("read tar entries", e))?
+    {
         let mut entry = entry.map_err(|e| super::io_err_op("read tar entry", e))?;
         let raw_name = entry
             .path()
@@ -178,27 +186,19 @@ pub fn extract_tar_gz(zip_bytes: &[u8], dest: &Path) -> Result<usize, UpdaterErr
             fs::create_dir_all(parent)
                 .map_err(|e| super::io_err_at("create_dir_all", parent, e))?;
         }
-        let mut out = File::create(&out_path)
-            .map_err(|e| super::io_err_at("create", &out_path, e))?;
-        io::copy(&mut entry, &mut out)
-            .map_err(|e| super::io_err_at("write", &out_path, e))?;
-        // Fsync the staged file's contents before it can be
-        // rename()'d into place. The parent-dir fsync only makes the
-        // directory entry durable; without this, a power loss between
-        // rename and the next boot can resurrect a directory entry
-        // that points at zero/partial bytes.
-        out.sync_all()
-            .map_err(|e| super::io_err_at("sync_all", &out_path, e))?;
+        let mut out =
+            File::create(&out_path).map_err(|e| super::io_err_at("create", &out_path, e))?;
+        io::copy(&mut entry, &mut out).map_err(|e| super::io_err_at("write", &out_path, e))?;
+        // Avoid a per-file fsync storm here. The archive is verified
+        // before extraction, and the journal can roll back an interrupted
+        // apply without pinning the UI for every staged asset.
         // Preserve the executable bit on Unix; on Windows this is a
         // no-op, but the call still typechecks.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             if let Ok(mode) = entry.header().mode() {
-                let _ = fs::set_permissions(
-                    &out_path,
-                    std::fs::Permissions::from_mode(mode),
-                );
+                let _ = fs::set_permissions(&out_path, std::fs::Permissions::from_mode(mode));
             }
         }
         written += 1;
@@ -400,10 +400,8 @@ pub fn apply_tar_gz(archive_path: &Path, exe_dir: &Path) -> Result<ApplyOutcome,
     if journal.staging_dir.exists() {
         let _ = fs::remove_dir_all(&journal.staging_dir);
     }
-    let staging_guard =
-        apply_journal::StagingGuard::new(journal.staging_dir.clone());
-    let bytes = fs::read(archive_path)
-        .map_err(|e| super::io_err_at("read", archive_path, e))?;
+    let staging_guard = apply_journal::StagingGuard::new(journal.staging_dir.clone());
+    let bytes = fs::read(archive_path).map_err(|e| super::io_err_at("read", archive_path, e))?;
     let installed_file_count = extract_tar_gz(&bytes, &journal.staging_dir)?;
     journal.ops = plan_ops(&journal, &journal.staging_dir, exe_dir)?;
     journal.write_atomic(exe_dir)?;
@@ -706,8 +704,7 @@ mod tests {
             tar.finish().unwrap();
         }
         let dest = tempdir("symlink-reject");
-        let err = extract_tar_gz(&buf, &dest)
-            .expect_err("symlink entry must be rejected");
+        let err = extract_tar_gz(&buf, &dest).expect_err("symlink entry must be rejected");
         let msg = format!("{err}");
         assert!(
             msg.contains("rejected non-regular tar entry"),
@@ -725,8 +722,7 @@ mod tests {
 
     #[test]
     fn is_dir_writable_returns_false_for_missing_dir() {
-        let dir =
-            std::env::temp_dir().join(format!("deadsync-no-such-dir-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("deadsync-no-such-dir-{}", std::process::id()));
         assert!(!is_dir_writable(&dir));
     }
 
@@ -803,10 +799,9 @@ mod tests {
         let journal = Journal::new(&target_dir);
         let err = plan_ops(&journal, &staging_dir, &target_dir).unwrap_err();
         match err {
-            UpdaterError::Io(msg) => assert!(
-                msg.contains("type mismatch"),
-                "unexpected error: {msg}",
-            ),
+            UpdaterError::Io(msg) => {
+                assert!(msg.contains("type mismatch"), "unexpected error: {msg}",)
+            }
             other => panic!("expected Io, got {other:?}"),
         }
         let _ = fs::remove_dir_all(&target_dir);

@@ -192,6 +192,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
 
+    if let Some(request) = cli.apply_update.clone() {
+        let code = engine::updater::cli::run_apply_helper(request);
+        log::logger().flush();
+        std::process::exit(code);
+    }
+
     config::load();
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());
@@ -199,52 +205,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if cli.restart {
         log::info!(
-            "Restarted after self-update to v{}",
-            env!("CARGO_PKG_VERSION")
+            "Restarted after self-update to {}",
+            engine::version::current_tag()
         );
     }
 
-    // Acquire the singleton lock as early as possible so two
-    // instances don't fight over the GPU / audio device.  After a
-    // self-update relaunch the previous process may still be exiting,
-    // so retry briefly when --restart is set.
-    let cache_dir = config::dirs::app_dirs().cache_dir.clone();
-    let acquire_window = if cli.restart {
-        std::time::Duration::from_secs(3)
-    } else {
-        std::time::Duration::from_millis(0)
-    };
-    let _instance_guard: Option<engine::single_instance::InstanceGuard> =
-        match engine::single_instance::acquire_with_retry(&cache_dir, acquire_window) {
-            Ok(g) => Some(g),
-            Err(engine::single_instance::AcquireError::AlreadyRunning) => {
-                log::warn!("Another instance of deadsync is already running; exiting.");
-                std::process::exit(1);
-            }
-            Err(e) => {
-                // Soft-fail on unexpected OS errors (e.g. read-only
-                // cache dir): log a warning and proceed without the
-                // guard.  Contention is the only thing we *must*
-                // enforce, and that path is handled above.
-                log::warn!("Single-instance lock unavailable ({e}); continuing without it.");
-                None
-            }
-        };
-
-    // Run updater recovery only after the singleton lock is held (or
-    // we've soft-failed past it).  Doing this *before* the lock would
-    // let a losing-race second instance roll back / clean up files
-    // that the winning instance is still actively installing during
-    // the tail of an `Applying` relaunch.
     if let Some(exe_dir) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
     {
-        // The journal at the install root is the source of truth for
-        // both apply rollback (Applying state) and post-update
-        // cleanup (Applied state).  `--cleanup-old` is accepted for
-        // back-compat with old relaunch command lines but its
-        // argument is ignored.
         let _ = cli.cleanup_old.as_deref();
         let report = engine::updater::apply_journal::recover(&exe_dir);
         if report.journal_removed {
@@ -258,13 +227,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Load updater state cache and kick off the startup check (if enabled).
-    // Network IO runs on a detached worker thread; failures are logged.
     engine::updater::state::load_persisted_cache();
     if cli.no_update_check {
         log::info!("Startup update check disabled by --no-update-check");
     } else {
-        let _ = engine::updater::state::spawn_startup_check();
+        engine::updater::state::spawn_startup_check();
     }
 
     // Initialize localization after config (which provides the language preference)

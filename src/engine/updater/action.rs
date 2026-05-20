@@ -27,13 +27,11 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::download::{
-    cross_check_api_digest, download_to_file, fetch_checksum_sidecar, parse_checksum_sidecar,
-    ApiDigestCheck,
+    download_to_file, fetch_checksum_sidecar, parse_api_digest, parse_checksum_sidecar, sha256_hex,
 };
 use super::{
-    apply_supported_for_host, classify, expected_asset_name, fetch_latest_release, host_target,
-    pick_asset_for_host, FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState,
-    UpdaterError,
+    FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError, apply_supported_for_host,
+    classify, expected_asset_name, fetch_latest_release, host_target, pick_asset_for_host,
 };
 use crate::config;
 
@@ -104,7 +102,10 @@ pub enum ActionPhase {
     /// A failure surfaced by the worker.  `kind` lets the UI pick a
     /// localised summary; `detail` is a developer-facing string for logs
     /// and tooltips.
-    Error { kind: ActionErrorKind, detail: String },
+    Error {
+        kind: ActionErrorKind,
+        detail: String,
+    },
 }
 
 /// Coarse classification of failures so the UI can show a localised
@@ -128,8 +129,9 @@ impl ActionErrorKind {
             UpdaterError::HttpStatus(_) => Self::HttpStatus,
             UpdaterError::Parse(_) => Self::Parse,
             UpdaterError::AssetNotFound(_) => Self::NoAssetForHost,
-            UpdaterError::ChecksumMismatch { .. }
-            | UpdaterError::ChecksumSidecarMalformed(_) => Self::Checksum,
+            UpdaterError::ChecksumMismatch { .. } | UpdaterError::ChecksumSidecarMalformed(_) => {
+                Self::Checksum
+            }
             UpdaterError::Io(_) => Self::Io,
             // Cancelled flows return early in the worker before
             // surfacing here, but classify defensively as Io so the
@@ -195,8 +197,7 @@ impl ProgressThrottle {
     }
 }
 
-static PHASE: LazyLock<RwLock<ActionPhase>> =
-    LazyLock::new(|| RwLock::new(ActionPhase::Idle));
+static PHASE: LazyLock<RwLock<ActionPhase>> = LazyLock::new(|| RwLock::new(ActionPhase::Idle));
 
 /// Worker-thread mutex.  Held only by `request_*` helpers so that two
 /// rapid-fire button presses never spawn two workers; the second call
@@ -365,7 +366,10 @@ pub fn request_check_now() {
         Ok(g) => g,
         Err(_) => return,
     };
-    if matches!(current(), ActionPhase::Checking | ActionPhase::Downloading { .. }) {
+    if matches!(
+        current(),
+        ActionPhase::Checking | ActionPhase::Downloading { .. }
+    ) {
         return;
     }
     // Bump the generation *before* setting the phase so any prior
@@ -373,9 +377,17 @@ pub fn request_check_now() {
     // they observe the new Checking phase.
     let generation = begin_operation();
     set_phase(ActionPhase::Checking);
-    let _ = thread::Builder::new()
+    if let Err(err) = thread::Builder::new()
         .name("deadsync-updater-check".to_owned())
-        .spawn(move || run_check_now(generation));
+        .spawn(move || run_check_now(generation))
+    {
+        set_phase_if_current(
+            generation,
+            classify_error(&UpdaterError::Io(format!(
+                "spawn update-check worker: {err}"
+            ))),
+        );
+    }
 }
 
 fn run_check_now(generation: u64) {
@@ -449,57 +461,38 @@ pub fn request_download() {
         total: Some(asset.size).filter(|s| *s > 0),
         eta_secs: None,
     });
-    let _ = thread::Builder::new()
+    if let Err(err) = thread::Builder::new()
         .name("deadsync-updater-download".to_owned())
-        .spawn(move || run_download(info, asset, generation));
+        .spawn(move || run_download(info, asset, generation))
+    {
+        set_phase_if_current(
+            generation,
+            classify_error(&UpdaterError::Io(format!(
+                "spawn update-download worker: {err}"
+            ))),
+        );
+    }
 }
 
 fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
     let check = super::check_agent();
-    let sidecar = match fetch_checksum_sidecar(&check, &asset.browser_download_url) {
-        Ok(t) => t,
+    let expected = match resolve_expected_digest(&check, &asset) {
+        Ok(d) => d,
         Err(err) => {
             if worker_should_stop(generation) {
                 return;
             }
-            log::warn!("Failed to fetch checksum sidecar: {err}");
+            log::warn!(
+                "Failed to resolve update checksum for {}: {err}",
+                asset.name
+            );
             set_phase_if_current(generation, classify_error(&err));
             return;
         }
     };
     if worker_should_stop(generation) {
-        log::info!("Update download cancelled before sidecar parse");
+        log::info!("Update download cancelled before archive fetch");
         return;
-    }
-    let expected = match parse_checksum_sidecar(&sidecar, &asset.name) {
-        Ok(d) => d,
-        Err(err) => {
-            log::warn!("Failed to parse checksum sidecar: {err}");
-            set_phase_if_current(generation, classify_error(&err));
-            return;
-        }
-    };
-    if let Some(api_digest) = asset.digest.as_deref() {
-        match cross_check_api_digest(Some(api_digest), &expected) {
-            Ok(ApiDigestCheck::Matched) => {}
-            Ok(ApiDigestCheck::UnsupportedAlgorithm) => {
-                log::info!(
-                    "Skipping API digest cross-check for {}: unsupported algorithm in '{}'",
-                    asset.name,
-                    api_digest
-                );
-            }
-            Ok(ApiDigestCheck::Absent) => unreachable!("guarded by Some(_)"),
-            Err(err) => {
-                log::warn!(
-                    "GitHub API digest cross-check failed for {} (api='{}'): {err}",
-                    asset.name,
-                    api_digest
-                );
-                set_phase_if_current(generation, classify_error(&err));
-                return;
-            }
-        }
     }
     let dest = downloads_dir().join(&asset.name);
 
@@ -584,6 +577,66 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
     }
 }
 
+fn resolve_expected_digest(
+    agent: &ureq::Agent,
+    asset: &ReleaseAsset,
+) -> Result<[u8; 32], UpdaterError> {
+    let api_digest = match asset.digest.as_deref() {
+        Some(raw) => match parse_api_digest(raw)? {
+            Some(digest) => Some(digest),
+            None => {
+                log::info!(
+                    "Skipping API digest for {}: unsupported algorithm in '{}'",
+                    asset.name,
+                    raw
+                );
+                None
+            }
+        },
+        None => None,
+    };
+
+    let sidecar = match fetch_checksum_sidecar(agent, &asset.browser_download_url) {
+        Ok(text) => Some(text),
+        Err(err) => {
+            if let Some(digest) = api_digest {
+                log::warn!(
+                    "Checksum sidecar unavailable for {}; using GitHub API digest instead: {err}",
+                    asset.name
+                );
+                return Ok(digest);
+            }
+            return Err(err);
+        }
+    };
+
+    let sidecar_digest =
+        match parse_checksum_sidecar(sidecar.as_deref().unwrap_or_default(), &asset.name) {
+            Ok(digest) => digest,
+            Err(err) => {
+                if let Some(digest) = api_digest {
+                    log::warn!(
+                        "Checksum sidecar malformed for {}; using GitHub API digest instead: {err}",
+                        asset.name
+                    );
+                    return Ok(digest);
+                }
+                return Err(err);
+            }
+        };
+
+    if let Some(api_digest) = api_digest
+        && api_digest != sidecar_digest
+    {
+        return Err(UpdaterError::ChecksumMismatch {
+            expected: format!("api={}", sha256_hex(&api_digest)),
+            actual: format!("sidecar={}", sha256_hex(&sidecar_digest)),
+        });
+    }
+
+    Ok(sidecar_digest)
+}
+
 /// Absolute path of the directory archives are downloaded into.
 pub fn downloads_dir() -> PathBuf {
     config::dirs::app_dirs().cache_dir.join(DOWNLOADS_SUBDIR)
@@ -591,9 +644,9 @@ pub fn downloads_dir() -> PathBuf {
 
 /// Spawn a worker that runs the platform apply + relaunch.  No-op if
 /// the current phase isn't [`ActionPhase::Ready`].  On success the
-/// worker spawns the new process and calls `std::process::exit(0)`, so
-/// the caller never observes any phase past [`ActionPhase::Applying`]
-/// in the success path.
+/// worker starts the platform relaunch path and terminates the current
+/// process, so the caller never observes any phase past
+/// [`ActionPhase::Applying`] in the success path.
 pub fn request_apply() {
     let _guard = match WORKER_LOCK.try_lock() {
         Ok(g) => g,
@@ -604,12 +657,40 @@ pub fn request_apply() {
         _ => return,
     };
     set_phase(ActionPhase::Applying { info: info.clone() });
-    let _ = thread::Builder::new()
+    if let Err(err) = thread::Builder::new()
         .name("deadsync-updater-apply".to_owned())
-        .spawn(move || run_apply(info, path, sha256));
+        .spawn(move || run_apply(info, path, sha256))
+    {
+        set_phase(classify_error(&UpdaterError::Io(format!(
+            "spawn update-apply worker: {err}"
+        ))));
+    }
 }
 
 fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]) {
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    {
+        let _ = &info;
+        match super::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
+            Ok(()) => {
+                log::info!("Spawned self-update helper; exiting current process");
+                log::logger().flush();
+                // SAFETY: the updater helper has been spawned with all
+                // state needed to finish the install. We want immediate
+                // process termination here, not GUI/audio destructor
+                // shutdown from a worker thread, which has hung on
+                // FreeBSD in practice.
+                unsafe { libc::_exit(0) };
+            }
+            Err(err) => {
+                log::error!("Self-update helper spawn failed: {err}");
+                set_phase(classify_error(&err));
+            }
+        }
+        return;
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     match super::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
         Ok(super::cli::ApplyOutcome::Relaunched) => {
             log::info!("Self-update applied; exiting to let new process take over");
@@ -839,10 +920,7 @@ mod tests {
         let name = expected_asset_name(&bumped, target);
         let info = release_with_tag(&bumped, &name);
 
-        let disabled = classify_check_result_with(
-            UpdateState::Available(info.clone()),
-            false,
-        );
+        let disabled = classify_check_result_with(UpdateState::Available(info.clone()), false);
         match disabled {
             ActionPhase::AvailableNoInstall { info: got } => assert_eq!(got.tag, bumped),
             other => panic!("expected AvailableNoInstall when install disabled, got {other:?}"),
@@ -1029,7 +1107,10 @@ mod tests {
         let mine = OP_GENERATION.load(Ordering::SeqCst);
         assert!(!worker_should_stop(mine));
         let _ = begin_operation();
-        assert!(worker_should_stop(mine), "advancing generation must stop a stale worker");
+        assert!(
+            worker_should_stop(mine),
+            "advancing generation must stop a stale worker"
+        );
     }
 
     #[test]
@@ -1041,7 +1122,9 @@ mod tests {
         dismiss();
         assert_eq!(current(), ActionPhase::Idle);
 
-        set_phase(ActionPhase::UpToDate { tag: "v1.2.3".into() });
+        set_phase(ActionPhase::UpToDate {
+            tag: "v1.2.3".into(),
+        });
         dismiss();
         assert_eq!(current(), ActionPhase::Idle);
 

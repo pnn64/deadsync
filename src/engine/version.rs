@@ -24,9 +24,7 @@ pub fn current() -> Version {
     {
         match parse_release_tag(&raw) {
             Some(v) => return v,
-            None => log::warn!(
-                "DEADSYNC_VERSION_OVERRIDE={raw:?} is not valid semver; ignoring"
-            ),
+            None => log::warn!("DEADSYNC_VERSION_OVERRIDE={raw:?} is not valid semver; ignoring"),
         }
     }
     Version::parse(env!("CARGO_PKG_VERSION"))

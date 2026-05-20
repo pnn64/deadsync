@@ -300,6 +300,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "RateModPreservesPitch")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
+    cfg.enable_replaygain = conf
+        .get("Options", "ReplayGain")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.enable_replaygain, |v| v != 0);
     cfg.write_current_screen = conf
         .get("Options", "WriteCurrentScreen")
         .and_then(|v| parse_bool_str(&v))
@@ -319,6 +323,14 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicShowBanners")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.show_select_music_banners, |v| v != 0);
+    cfg.show_version_overlay = conf
+        .get("Options", "ShowVersionOverlay")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.show_version_overlay, |v| v != 0);
+    cfg.version_overlay_side = conf
+        .get("Options", "VersionOverlaySide")
+        .and_then(|v| VersionOverlaySide::from_str(&v).ok())
+        .unwrap_or(default.version_overlay_side);
     cfg.show_select_music_video_banners = conf
         .get("Options", "SelectMusicShowVideoBanners")
         .and_then(|v| parse_bool_str(&v))

@@ -38,8 +38,8 @@ use std::path::{Component, Path, PathBuf};
 
 use zip::ZipArchive;
 
-use super::apply_journal::{self, Journal, JournalState, Op};
 use super::UpdaterError;
+use super::apply_journal::{self, Journal, JournalState, Op};
 
 /// Result of a successful apply.  Returned for diagnostics + tests;
 /// the caller doesn't need to thread anything back into the relaunch
@@ -208,18 +208,12 @@ pub fn extract_archive<R: Read + Seek>(reader: R, dest: &Path) -> Result<usize, 
             fs::create_dir_all(parent)
                 .map_err(|e| super::io_err_at("create_dir_all", parent, e))?;
         }
-        let mut out = File::create(&out_path)
-            .map_err(|e| super::io_err_at("create", &out_path, e))?;
-        io::copy(&mut entry, &mut out)
-            .map_err(|e| super::io_err_at("write", &out_path, e))?;
-        // Flush the staged file's contents to disk before any rename
-        // can promote it into the install tree. Without this, a power
-        // loss after the rename but before the OS commits the file
-        // body can resurrect a directory entry that points at zero or
-        // partial bytes — defeating the parent-dir fsync done after
-        // the per-op renames.
-        out.sync_all()
-            .map_err(|e| super::io_err_at("sync_all", &out_path, e))?;
+        let mut out =
+            File::create(&out_path).map_err(|e| super::io_err_at("create", &out_path, e))?;
+        io::copy(&mut entry, &mut out).map_err(|e| super::io_err_at("write", &out_path, e))?;
+        // Avoid a per-file fsync storm here. The archive is verified
+        // before extraction, and the journal can roll back an interrupted
+        // apply without pinning the UI for every staged asset.
         written += 1;
     }
     Ok(written)
@@ -424,8 +418,7 @@ pub fn apply_zip(zip_path: &Path, exe_dir: &Path) -> Result<ApplyOutcome, Update
     if journal.staging_dir.exists() {
         let _ = fs::remove_dir_all(&journal.staging_dir);
     }
-    let staging_guard =
-        apply_journal::StagingGuard::new(journal.staging_dir.clone());
+    let staging_guard = apply_journal::StagingGuard::new(journal.staging_dir.clone());
     let file = File::open(zip_path).map_err(|e| super::io_err_at("open", zip_path, e))?;
     let installed_file_count = extract_archive(file, &journal.staging_dir)?;
     journal.ops = plan_ops(&journal, &journal.staging_dir, exe_dir)?;
@@ -509,8 +502,7 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut w = ZipWriter::new(Cursor::new(&mut buf));
-            let opts =
-                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
             if let Some(prefix) = top {
                 let _ = w.add_directory(format!("{prefix}/"), opts);
             }
@@ -592,10 +584,7 @@ mod tests {
 
     #[test]
     fn extract_archive_keeps_layout_when_no_common_prefix() {
-        let zip = build_zip(
-            &[("a.txt", b"A"), ("dir/b.txt", b"B")],
-            None,
-        );
+        let zip = build_zip(&[("a.txt", b"A"), ("dir/b.txt", b"B")], None);
         let dest = tempdir("no-prefix");
         let n = extract_archive(Cursor::new(zip), &dest).unwrap();
         assert_eq!(n, 2);
@@ -627,7 +616,11 @@ mod tests {
         // named `escape.txt` written outside `dest`.
         let _ = extract_archive(Cursor::new(&zip), &dest);
         let escape = dest.parent().unwrap().join("escape.txt");
-        assert!(!escape.exists(), "traversal succeeded: {}", escape.display());
+        assert!(
+            !escape.exists(),
+            "traversal succeeded: {}",
+            escape.display()
+        );
         let _ = fs::remove_dir_all(&dest);
     }
 
@@ -640,17 +633,15 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut w = ZipWriter::new(Cursor::new(&mut buf));
-            let opts =
-                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
             w.start_file("keep.txt", opts).unwrap();
             w.write_all(b"ok").unwrap();
-            w.add_symlink("evil", "../../etc/passwd", opts)
-                .unwrap();
+            w.add_symlink("evil", "../../etc/passwd", opts).unwrap();
             w.finish().unwrap();
         }
         let dest = tempdir("symlink-reject");
-        let err = extract_archive(Cursor::new(&buf), &dest)
-            .expect_err("symlink entry must be rejected");
+        let err =
+            extract_archive(Cursor::new(&buf), &dest).expect_err("symlink entry must be rejected");
         let msg = format!("{err}");
         assert!(
             msg.contains("rejected non-regular zip entry"),
@@ -806,10 +797,7 @@ mod tests {
 
     #[test]
     fn is_dir_writable_returns_false_for_missing_dir() {
-        let dir = std::env::temp_dir().join(format!(
-            "deadsync-no-such-dir-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("deadsync-no-such-dir-{}", std::process::id()));
         assert!(!is_dir_writable(&dir));
     }
 
@@ -953,7 +941,10 @@ mod tests {
 
         assert!(rollback(&refs), "rollback should report clean");
         assert_eq!(fs::read(&target).unwrap(), b"OLD");
-        assert!(!backup.exists(), "backup should have been moved onto target");
+        assert!(
+            !backup.exists(),
+            "backup should have been moved onto target"
+        );
 
         let _ = fs::remove_dir_all(&exe_dir);
     }
@@ -974,10 +965,9 @@ mod tests {
         let journal = Journal::new(&target_dir);
         let err = plan_ops(&journal, &staging_dir, &target_dir).unwrap_err();
         match err {
-            UpdaterError::Io(msg) => assert!(
-                msg.contains("type mismatch"),
-                "unexpected error: {msg}",
-            ),
+            UpdaterError::Io(msg) => {
+                assert!(msg.contains("type mismatch"), "unexpected error: {msg}",)
+            }
             other => panic!("expected Io, got {other:?}"),
         }
         let _ = fs::remove_dir_all(&target_dir);

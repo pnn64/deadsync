@@ -21,7 +21,7 @@
 //! (`screens::components::shared::update_overlay`) calls these
 //! functions and decides what to do with the resulting path.
 
-use super::{user_agent, ReleaseAsset, UpdaterError};
+use super::{ReleaseAsset, UpdaterError, user_agent};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -176,13 +176,11 @@ pub fn parse_api_digest(value: &str) -> Result<Option<[u8; 32]>, UpdaterError> {
     if !algo.eq_ignore_ascii_case("sha256") {
         return Ok(None);
     }
-    parse_hex32(hex.trim())
-        .map(Some)
-        .ok_or_else(|| {
-            UpdaterError::ChecksumSidecarMalformed(format!(
-                "api digest '{trimmed}' is not a valid sha256 hex value"
-            ))
-        })
+    parse_hex32(hex.trim()).map(Some).ok_or_else(|| {
+        UpdaterError::ChecksumSidecarMalformed(format!(
+            "api digest '{trimmed}' is not a valid sha256 hex value"
+        ))
+    })
 }
 
 /// Cross-check GitHub's `assets[].digest` field against the parsed `.sha256`
@@ -264,8 +262,7 @@ pub fn fetch_checksum_sidecar(
         .limit(SIDECAR_MAX_BYTES)
         .read_to_vec()
         .map_err(|err| UpdaterError::Network(err.to_string()))?;
-    String::from_utf8(bytes)
-        .map_err(|err| UpdaterError::ChecksumSidecarMalformed(err.to_string()))
+    String::from_utf8(bytes).map_err(|err| UpdaterError::ChecksumSidecarMalformed(err.to_string()))
 }
 
 /// Returns the staging path (`<dest>.part`) where bytes are written
@@ -282,7 +279,7 @@ pub fn staging_path(dest: &Path) -> PathBuf {
 }
 
 /// Stream `asset` into `<dest>.part`, hashing as it goes.  On success the
-/// staging file is fsynced and atomically renamed onto `dest`; on
+/// staging file is flushed and atomically renamed onto `dest`; on
 /// failure (network, cancel, checksum mismatch) the staging file is
 /// removed and any pre-existing `dest` is left untouched.
 ///
@@ -403,8 +400,7 @@ fn stream_to_file<R: Read>(
     progress: &mut dyn FnMut(u64, Option<u64>),
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<(), UpdaterError> {
-    let mut file = File::create(staging)
-        .map_err(|err| super::io_err_at("create", staging, err))?;
+    let mut file = File::create(staging).map_err(|err| super::io_err_at("create", staging, err))?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; COPY_CHUNK_BYTES];
     let mut written: u64 = 0;
@@ -427,19 +423,12 @@ fn stream_to_file<R: Read>(
     }
     file.flush()
         .map_err(|err| super::io_err_at("flush", staging, err))?;
-    // Re-check cancellation between the last chunk and the
-    // multi-second flush/fsync tail.  Without this, a Back press
-    // during the final fsync would still let the worker proceed to
-    // the rename + publish Ready.
+    // Re-check cancellation between the last chunk and the rename. A
+    // full fsync here can block for seconds on FreeBSD/network-backed
+    // filesystems; the verified archive can always be downloaded again.
     if should_cancel() {
         return Err(UpdaterError::Cancelled);
     }
-    // fsync the staging file so its bytes are durable on disk before we
-    // rename it onto `dest`.  Without this, a crash between the rename
-    // and the next fsync could expose a zero-length file at the final
-    // name on some filesystems.
-    file.sync_all()
-        .map_err(|err| super::io_err_at("fsync", staging, err))?;
     drop(file);
 
     let actual: [u8; 32] = hasher.finalize().into();
@@ -508,9 +497,8 @@ mod tests {
 
     #[test]
     fn parse_sidecar_skips_blank_and_comment_lines() {
-        let sidecar = format!(
-            "# this is a comment\n\n{ZERO_DIGEST_HEX}  deadsync.zip\n# trailing comment\n"
-        );
+        let sidecar =
+            format!("# this is a comment\n\n{ZERO_DIGEST_HEX}  deadsync.zip\n# trailing comment\n");
         let digest = parse_checksum_sidecar(&sidecar, "deadsync.zip").unwrap();
         assert_eq!(sha256_hex(&digest), ZERO_DIGEST_HEX);
     }
@@ -543,7 +531,8 @@ mod tests {
 
     #[test]
     fn parse_sidecar_errors_on_bad_hex() {
-        let sidecar = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz  deadsync.zip\n";
+        let sidecar =
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz  deadsync.zip\n";
         let err = parse_checksum_sidecar(sidecar, "deadsync.zip").unwrap_err();
         assert!(matches!(err, UpdaterError::ChecksumSidecarMalformed(_)));
     }
@@ -675,7 +664,10 @@ mod tests {
         // responsible for the rename onto `dest`.
         let written = std::fs::read(&staging).unwrap();
         assert_eq!(written, payload);
-        assert!(!dest.exists(), "stream_to_file must not touch the final dest");
+        assert!(
+            !dest.exists(),
+            "stream_to_file must not touch the final dest"
+        );
     }
 
     #[test]
@@ -687,9 +679,10 @@ mod tests {
         let mut wrong = sha256_of(&payload);
         wrong[0] ^= 0xff;
         let mut reader = std::io::Cursor::new(payload.clone());
-        let err =
-            stream_to_file(&mut reader, &staging, &wrong, None, &mut |_, _| {}, &|| false)
-                .unwrap_err();
+        let err = stream_to_file(&mut reader, &staging, &wrong, None, &mut |_, _| {}, &|| {
+            false
+        })
+        .unwrap_err();
         assert!(matches!(err, UpdaterError::ChecksumMismatch { .. }));
         // download_to_file performs the cleanup; here we mimic that contract:
         let _ = std::fs::remove_file(&staging);
@@ -781,7 +774,10 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, UpdaterError::Cancelled));
-        assert!(saw_eof.get(), "test should have streamed the full payload first");
+        assert!(
+            saw_eof.get(),
+            "test should have streamed the full payload first"
+        );
         // download_to_file is responsible for staging cleanup on Err.
         let _ = std::fs::remove_file(&staging);
     }

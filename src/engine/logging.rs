@@ -239,7 +239,7 @@ fn path_volume(path: &Path) -> String {
 pub fn write_startup_report(lines: &[String]) {
     emit_info_line(&format!(
         "deadsync {} (build {}, {})",
-        crate::engine::version::current(),
+        env!("CARGO_PKG_VERSION"),
         option_env!("DEADSYNC_BUILD_HASH").unwrap_or("unknown"),
         option_env!("DEADSYNC_BUILD_STAMP").unwrap_or("unknown")
     ));

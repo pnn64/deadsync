@@ -109,6 +109,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "RateModPreservesPitch",
         default.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", default.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",
@@ -118,6 +119,12 @@ fn push_default_options(content: &mut String, default: &Config) {
         content,
         "SelectMusicShowBanners",
         default.show_select_music_banners,
+    );
+    push_bool(content, "ShowVersionOverlay", default.show_version_overlay);
+    push_line(
+        content,
+        "VersionOverlaySide",
+        default.version_overlay_side.as_str(),
     );
     push_bool(
         content,

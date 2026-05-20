@@ -13,12 +13,22 @@
 //!
 //! * `--no-update-check` — skips the startup network check.
 //!
+//! * `--apply-update <archive> --apply-sha256 <hex>
+//!   [--apply-parent-pid <pid>]` - helper mode used on Unix self-updates.
+//!
 //! Unknown flags are passed through unchanged; we don't want to
 //! conflict with any future windowing-system or test runner argv.
 //!
 //! All parsing is pure and table-tested.
 
 use std::path::PathBuf;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ApplyRequest {
+    pub archive_path: PathBuf,
+    pub sha256_hex: String,
+    pub parent_pid: Option<u32>,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UpdaterCli {
@@ -28,6 +38,9 @@ pub struct UpdaterCli {
     pub restart: bool,
     /// `true` if `--no-update-check` was passed (skip startup check).
     pub no_update_check: bool,
+    /// Helper-mode request. Normal startup must not continue when
+    /// this is present.
+    pub apply_update: Option<ApplyRequest>,
     /// Argv with our recognised flags removed; preserved for any
     /// downstream consumer (currently none, but keeps us future-proof).
     pub remaining: Vec<String>,
@@ -45,6 +58,9 @@ impl UpdaterCli {
         // Skip program name if present.
         let _ = iter.next();
         let mut out = UpdaterCli::default();
+        let mut apply_archive: Option<PathBuf> = None;
+        let mut apply_sha256: Option<String> = None;
+        let mut apply_parent_pid: Option<u32> = None;
         while let Some(arg) = iter.next() {
             match arg.as_str() {
                 "--cleanup-old" => {
@@ -60,8 +76,48 @@ impl UpdaterCli {
                 }
                 "--restart" => out.restart = true,
                 "--no-update-check" => out.no_update_check = true,
+                "--apply-update" => {
+                    if let Some(path) = iter.next() {
+                        apply_archive = Some(PathBuf::from(path));
+                    }
+                }
+                a if a.starts_with("--apply-update=") => {
+                    let value = &a["--apply-update=".len()..];
+                    if !value.is_empty() {
+                        apply_archive = Some(PathBuf::from(value));
+                    }
+                }
+                "--apply-sha256" => {
+                    if let Some(hex) = iter.next() {
+                        apply_sha256 = Some(hex);
+                    }
+                }
+                a if a.starts_with("--apply-sha256=") => {
+                    let value = &a["--apply-sha256=".len()..];
+                    if !value.is_empty() {
+                        apply_sha256 = Some(value.to_string());
+                    }
+                }
+                "--apply-parent-pid" => {
+                    if let Some(pid) = iter.next().and_then(|s| s.parse::<u32>().ok()) {
+                        apply_parent_pid = Some(pid);
+                    }
+                }
+                a if a.starts_with("--apply-parent-pid=") => {
+                    let value = &a["--apply-parent-pid=".len()..];
+                    if let Ok(pid) = value.parse::<u32>() {
+                        apply_parent_pid = Some(pid);
+                    }
+                }
                 _ => out.remaining.push(arg),
             }
+        }
+        if let (Some(archive_path), Some(sha256_hex)) = (apply_archive, apply_sha256) {
+            out.apply_update = Some(ApplyRequest {
+                archive_path,
+                sha256_hex,
+                parent_pid: apply_parent_pid,
+            });
         }
         out
     }
@@ -87,9 +143,108 @@ pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> 
     let _ = staging_dir;
     let report = crate::engine::updater::apply_journal::recover(exe_dir);
     let staging_removed = report.staging_removed;
-    let removed_count =
-        report.backups_removed + report.backups_restored + report.installed_removed;
+    let removed_count = report.backups_removed + report.backups_restored + report.installed_removed;
     (removed_count, staging_removed)
+}
+
+/// Runs the helper mode launched by [`spawn_apply_helper`].  The
+/// helper waits for the GUI parent to exit before mutating the install
+/// tree, so tar extraction and relaunch do not run inside the live
+/// graphics/audio process.
+pub fn run_apply_helper(request: ApplyRequest) -> i32 {
+    let fallback_exe = std::env::current_exe().ok();
+    if !wait_for_parent_exit(request.parent_pid) {
+        log::error!(
+            "Updater helper timed out waiting for parent pid {:?}; refusing to apply",
+            request.parent_pid
+        );
+        return 4;
+    }
+    let Some(sha256) = super::download::parse_hex32(&request.sha256_hex) else {
+        log::error!(
+            "Updater helper received invalid sha256 '{}'",
+            request.sha256_hex
+        );
+        return 2;
+    };
+    match apply_archive_and_relaunch(&request.archive_path, &sha256) {
+        Ok(ApplyOutcome::Relaunched) => 0,
+        Ok(ApplyOutcome::AppliedNoRelaunch { detail }) => {
+            log::error!("Updater helper applied update but could not relaunch: {detail}");
+            3
+        }
+        Err(err) => {
+            log::error!("Updater helper failed to apply update: {err}");
+            if let Some(exe) = fallback_exe
+                && let Err(spawn_err) =
+                    relaunch_with_args(&exe, &[std::ffi::OsString::from("--no-update-check")])
+            {
+                log::error!("Updater helper could not relaunch old binary: {spawn_err}");
+            }
+            1
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub fn spawn_apply_helper(
+    archive_path: &std::path::Path,
+    sha256: &[u8; 32],
+) -> Result<(), super::UpdaterError> {
+    let exe = std::env::current_exe()
+        .map_err(|e| super::UpdaterError::Io(format!("current_exe: {e}")))?;
+    relaunch_with_args(
+        &exe,
+        &[
+            std::ffi::OsString::from("--apply-update"),
+            archive_path.as_os_str().to_owned(),
+            std::ffi::OsString::from("--apply-sha256"),
+            std::ffi::OsString::from(super::download::sha256_hex(sha256)),
+            std::ffi::OsString::from("--apply-parent-pid"),
+            std::ffi::OsString::from(std::process::id().to_string()),
+        ],
+    )
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+pub fn spawn_apply_helper(
+    _archive_path: &std::path::Path,
+    _sha256: &[u8; 32],
+) -> Result<(), super::UpdaterError> {
+    Err(super::UpdaterError::Io(
+        "updater helper mode is only used on Unix apply targets".to_string(),
+    ))
+}
+
+fn wait_for_parent_exit(parent_pid: Option<u32>) -> bool {
+    let Some(pid) = parent_pid else {
+        return true;
+    };
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    {
+        use std::time::{Duration, Instant};
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while process_exists(pid) {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    let _ = pid;
+    true
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn process_exists(pid: u32) -> bool {
+    let pid = pid as libc::pid_t;
+    // SAFETY: kill(pid, 0) does not send a signal; it only asks the
+    // kernel whether the process exists and is permission-checkable.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return true;
+    }
+    std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
 }
 
 /// Try to apply the downloaded archive at [`Ready`] and re-launch.
@@ -244,19 +399,98 @@ fn apply_for_host(
 
 #[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
 fn relaunch_self(exe: &std::path::Path) -> Result<(), super::UpdaterError> {
-    use std::process::Command;
     // No `--cleanup-old <path>` is needed anymore: the new process
     // discovers the apply journal at its install root and runs
     // recovery unconditionally on startup.
-    Command::new(exe)
-        .arg("--restart")
-        .spawn()
-        .map_err(|e| super::UpdaterError::Io(format!("spawn new exe: {e}")))?;
-    Ok(())
+    relaunch_with_args(exe, &[std::ffi::OsString::from("--restart")])
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
 fn relaunch_self(_exe: &std::path::Path) -> Result<(), super::UpdaterError> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn relaunch_with_args(
+    exe: &std::path::Path,
+    args: &[std::ffi::OsString],
+) -> Result<(), super::UpdaterError> {
+    use std::process::Command;
+    Command::new(exe)
+        .args(args)
+        .spawn()
+        .map_err(|e| super::UpdaterError::Io(format!("spawn '{}': {e}", exe.display())))?;
+    Ok(())
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn relaunch_with_args(
+    exe: &std::path::Path,
+    args: &[std::ffi::OsString],
+) -> Result<(), super::UpdaterError> {
+    use std::ffi::{CString, OsStr, OsString};
+    use std::os::unix::ffi::OsStrExt;
+
+    fn cstring(os: &OsStr, label: &str) -> Result<CString, super::UpdaterError> {
+        CString::new(os.as_bytes())
+            .map_err(|_| super::UpdaterError::Io(format!("{label} contains an interior NUL byte")))
+    }
+
+    let exe_c = cstring(exe.as_os_str(), "executable path")?;
+    let mut argv_c = Vec::with_capacity(args.len() + 1);
+    argv_c.push(exe_c.clone());
+    for arg in args {
+        argv_c.push(cstring(arg.as_os_str(), "process argument")?);
+    }
+    let mut argv: Vec<*mut libc::c_char> = argv_c
+        .iter()
+        .map(|s| s.as_ptr() as *mut libc::c_char)
+        .collect();
+    argv.push(std::ptr::null_mut());
+
+    let mut env_c = Vec::new();
+    for (key, value) in std::env::vars_os() {
+        let mut pair = OsString::from(key);
+        pair.push("=");
+        pair.push(value);
+        env_c.push(cstring(pair.as_os_str(), "environment variable")?);
+    }
+    let mut envp: Vec<*mut libc::c_char> = env_c
+        .iter()
+        .map(|s| s.as_ptr() as *mut libc::c_char)
+        .collect();
+    envp.push(std::ptr::null_mut());
+
+    let mut pid: libc::pid_t = 0;
+    // SAFETY: exe_c, argv, and envp point to NUL-terminated storage
+    // owned by this stack frame and remain alive for the duration of
+    // posix_spawn. Null file-actions and attrs request default spawn
+    // behavior. posix_spawn copies what it needs before returning.
+    let rc = unsafe {
+        libc::posix_spawn(
+            &mut pid,
+            exe_c.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            argv.as_mut_ptr(),
+            envp.as_mut_ptr(),
+        )
+    };
+    if rc != 0 {
+        return Err(super::UpdaterError::Io(format!(
+            "posix_spawn '{}': {}",
+            exe.display(),
+            std::io::Error::from_raw_os_error(rc)
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
+fn relaunch_with_args(
+    _exe: &std::path::Path,
+    _args: &[std::ffi::OsString],
+) -> Result<(), super::UpdaterError> {
     Ok(())
 }
 
@@ -270,6 +504,7 @@ mod tests {
         assert!(cli.cleanup_old.is_none());
         assert!(!cli.restart);
         assert!(!cli.no_update_check);
+        assert!(cli.apply_update.is_none());
         assert!(cli.remaining.is_empty());
     }
 
@@ -291,13 +526,19 @@ mod tests {
     #[test]
     fn parse_cleanup_old_takes_path_argument() {
         let cli = UpdaterCli::parse(vec!["deadsync", "--cleanup-old", "C:\\stage"]);
-        assert_eq!(cli.cleanup_old.as_deref(), Some(std::path::Path::new("C:\\stage")));
+        assert_eq!(
+            cli.cleanup_old.as_deref(),
+            Some(std::path::Path::new("C:\\stage"))
+        );
     }
 
     #[test]
     fn parse_cleanup_old_supports_equals_form() {
         let cli = UpdaterCli::parse(vec!["deadsync", "--cleanup-old=/tmp/stage"]);
-        assert_eq!(cli.cleanup_old.as_deref(), Some(std::path::Path::new("/tmp/stage")));
+        assert_eq!(
+            cli.cleanup_old.as_deref(),
+            Some(std::path::Path::new("/tmp/stage"))
+        );
     }
 
     #[test]
@@ -324,8 +565,46 @@ mod tests {
         ]);
         assert!(cli.no_update_check);
         assert!(cli.restart);
-        assert_eq!(cli.cleanup_old.as_deref(), Some(std::path::Path::new("/x/y")));
+        assert_eq!(
+            cli.cleanup_old.as_deref(),
+            Some(std::path::Path::new("/x/y"))
+        );
         assert!(cli.remaining.is_empty());
+    }
+
+    #[test]
+    fn parse_apply_update_takes_archive_sha_and_parent() {
+        let cli = UpdaterCli::parse(vec![
+            "deadsync",
+            "--apply-update",
+            "/tmp/deadsync.tar.gz",
+            "--apply-sha256",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "--apply-parent-pid",
+            "1234",
+        ]);
+        let req = cli.apply_update.expect("apply request");
+        assert_eq!(
+            req.archive_path.as_path(),
+            std::path::Path::new("/tmp/deadsync.tar.gz")
+        );
+        assert_eq!(
+            req.sha256_hex,
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+        assert_eq!(req.parent_pid, Some(1234));
+    }
+
+    #[test]
+    fn parse_apply_update_supports_equals_form() {
+        let cli = UpdaterCli::parse(vec![
+            "deadsync",
+            "--apply-update=/tmp/deadsync.tar.gz",
+            "--apply-sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "--apply-parent-pid=1234",
+        ]);
+        assert!(cli.apply_update.is_some());
+        assert_eq!(cli.apply_update.unwrap().parent_pid, Some(1234));
     }
 
     #[test]
@@ -397,8 +676,10 @@ mod tests {
 
     #[test]
     fn reverify_archive_surfaces_io_error_for_missing_file() {
-        let path = std::env::temp_dir()
-            .join(format!("deadsync-reverify-missing-{}.bin", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-reverify-missing-{}.bin",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&path);
         let err = reverify_archive(&path, &[0u8; 32]).expect_err("must fail for missing file");
         assert!(matches!(err, super::super::UpdaterError::Io(_)));

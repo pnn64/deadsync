@@ -161,7 +161,8 @@ impl Journal {
             .map_err(|e| super::io_err_op("serialize journal", e))?;
         {
             let mut f = File::create(&tmp).map_err(|e| super::io_err_at("create", &tmp, e))?;
-            f.write_all(&bytes).map_err(|e| super::io_err_at("write", &tmp, e))?;
+            f.write_all(&bytes)
+                .map_err(|e| super::io_err_at("write", &tmp, e))?;
             // Best-effort durability: not every filesystem honours this
             // (tmpfs, some networked mounts), but on real disks it
             // ensures the journal hits stable storage before the
@@ -286,7 +287,10 @@ pub fn is_portability_marker(rel: &Path) -> bool {
     if comps.next().is_some() {
         return false;
     }
-    matches!(first.as_os_str().to_str(), Some("portable.txt") | Some("portable.ini"))
+    matches!(
+        first.as_os_str().to_str(),
+        Some("portable.txt") | Some("portable.ini")
+    )
 }
 
 /// Rejects op lists where two paths fold to the same name on a
@@ -999,8 +1003,14 @@ mod tests {
         j.write_atomic(&dir).unwrap();
 
         let r = recover(&dir);
-        assert_eq!(r.backups_restored, 1, "backup should restore over partial target");
-        assert!(r.journal_removed, "journal should be removed after successful rollback");
+        assert_eq!(
+            r.backups_restored, 1,
+            "backup should restore over partial target"
+        );
+        assert!(
+            r.journal_removed,
+            "journal should be removed after successful rollback"
+        );
         assert_eq!(fs::read(&t).unwrap(), b"OLD");
         assert!(!b.exists(), "backup file must be consumed by the rename");
         let _ = fs::remove_dir_all(&dir);
@@ -1063,7 +1073,10 @@ mod tests {
 
         let r = recover(&dir);
         assert_eq!(r.backups_removed, 0, "no backup file existed to remove");
-        assert!(r.journal_removed, "missing backup is treated as already cleaned");
+        assert!(
+            r.journal_removed,
+            "missing backup is treated as already cleaned"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

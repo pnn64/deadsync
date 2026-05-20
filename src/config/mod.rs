@@ -32,8 +32,8 @@ pub use self::theme::{
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VisualStyle, auto_screenshot_bit,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -162,9 +162,14 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
-    /// ITGmania parity (`DelayedBack`): when `true`, the BACK button must be held to
-    /// exit a song; when `false`, BACK exits instantly on first press.
-    pub delayed_back: bool,
+    /// Show a small build-version watermark in the bottom-right corner of
+    /// every screen so the running version is visible in any
+    /// screenshot/video. Default on; disablable via the Options menu.
+    pub show_version_overlay: bool,
+    /// Which side of the screen the version watermark anchors to. Stored
+    /// separately from `show_version_overlay` so toggling visibility
+    /// doesn't forget the preferred side.
+    pub version_overlay_side: VersionOverlaySide,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
@@ -208,6 +213,8 @@ pub struct Config {
     pub zmod_rating_box_text: bool,
     /// Show one decimal place for live gameplay BPM when BPM is non-integer.
     pub show_bpm_decimal: bool,
+    /// Require holding Back to leave gameplay instead of exiting on first press.
+    pub delayed_back: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
     pub default_fail_type: DefaultFailType,
     /// Choose which null-or-die sync graph the Select Music overlay displays.
@@ -257,13 +264,14 @@ pub struct Config {
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     /// Allows the in-app updater to download and install updates.
-    /// When `false`, the menu banner and "Check for Updates" still
-    /// surface that a release is available, but the overlay routes to
-    /// `AvailableNoInstall` (release page URL only) instead of offering
-    /// a Download button. Intended for builds shipped through channels
-    /// that own updates themselves (Steam, MSIX, distro packages).
+    /// Disable this for builds distributed through a channel that owns
+    /// updates itself, such as a package manager or storefront.
     pub updater_install_enabled: bool,
     pub rate_mod_preserves_pitch: bool,
+    /// Experimental: apply ReplayGain 2.0 / EBU R 128 loudness normalization
+    /// to music playback. Loudness is computed in the background and cached
+    /// on disk per song.
+    pub enable_replaygain: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
@@ -342,6 +350,8 @@ impl Default for Config {
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_version_overlay: true,
+            version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
             show_video_backgrounds: true,
             machine_show_select_profile: true,
@@ -406,6 +416,7 @@ impl Default for Config {
             auto_populate_gs_scores: false,
             updater_install_enabled: true,
             rate_mod_preserves_pitch: true,
+            enable_replaygain: false,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,

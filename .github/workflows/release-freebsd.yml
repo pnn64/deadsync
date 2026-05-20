@@ -84,18 +84,6 @@ jobs:
             "${FREEBSD_RELEASE_ARCH}" \
             "${FREEBSD_RELEASE_TARGET}"
 
-      - name: Compute SHA-256 checksum
-        id: checksum
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive='${{ steps.package.outputs.archive }}'
-          name="$(basename "$archive")"
-          sum="${archive}.sha256"
-          ( cd "$(dirname "$archive")" && sha256sum "$name" > "$(basename "$sum")" )
-          echo "checksum=${sum}" >> "$GITHUB_OUTPUT"
-          echo "Wrote ${sum}"
-
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -103,7 +91,7 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ steps.package.outputs.archive }}
-            ${{ steps.checksum.outputs.checksum }}
+            ${{ steps.package.outputs.checksum }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -112,7 +100,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             ${{ steps.package.outputs.archive }}
-            ${{ steps.checksum.outputs.checksum }}
+            ${{ steps.package.outputs.checksum }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true

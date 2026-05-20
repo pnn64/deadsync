@@ -89,6 +89,8 @@ pub enum ItemId {
     MchDefaultSyncOffset,
     MchKeyboardFeatures,
     MchVideoBgs,
+    MchVersionOverlay,
+    MchVersionOverlaySide,
 
     // Gameplay Options submenu
     GpBgBrightness,
@@ -113,6 +115,7 @@ pub enum ItemId {
     SndMineSounds,
     SndGlobalOffset,
     SndRateModPitch,
+    SndReplayGain,
 
     // Select Music Options submenu
     SmShowBanners,
@@ -235,21 +238,14 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     total_w <= inline_w
 }
 
-/// Returns the slice of `ITEMS` that should be shown given the current
-/// host + config state. Selection, navigation, and render index into the
-/// visible list, so hidden rows don't leave gaps or trap the cursor.
+/// Returns the top-level rows that should be shown for this host/config.
 pub(super) fn visible_items() -> Vec<&'static Item> {
-    ITEMS.iter().filter(|i| item_visible(i.id)).collect()
+    ITEMS.iter().filter(|item| item_visible(item.id)).collect()
 }
 
-/// Per-row visibility predicate. Defaults to true; add a match arm to
-/// gate a row on host capabilities or config.
 fn item_visible(id: ItemId) -> bool {
     match id {
-        ItemId::CheckForUpdates => {
-            crate::engine::updater::apply_supported_for_host()
-                && crate::config::get().updater_install_enabled
-        }
+        ItemId::CheckForUpdates => crate::engine::updater::apply_supported_for_host(),
         _ => true,
     }
 }
@@ -301,6 +297,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSound", "MineSounds")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "GlobalOffset")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "RateModPreservesPitch")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "ReplayGain")),
         ],
     },
     Item {

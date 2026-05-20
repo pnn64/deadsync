@@ -176,6 +176,7 @@ fn push_saved_options(
         "RateModPreservesPitch",
         cfg.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", cfg.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",
@@ -185,6 +186,12 @@ fn push_saved_options(
         content,
         "SelectMusicShowBanners",
         cfg.show_select_music_banners,
+    );
+    push_bool(content, "ShowVersionOverlay", cfg.show_version_overlay);
+    push_line(
+        content,
+        "VersionOverlaySide",
+        cfg.version_overlay_side.as_str(),
     );
     push_bool(
         content,

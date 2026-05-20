@@ -32,8 +32,7 @@ pub mod apply_unix;
 pub const RELEASES_REPO: &str = "pnn64/deadsync";
 
 /// Endpoint for the most recent non-prerelease, non-draft release.
-pub const LATEST_RELEASE_URL: &str =
-    "https://api.github.com/repos/pnn64/deadsync/releases/latest";
+pub const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/pnn64/deadsync/releases/latest";
 
 /// Environment variable that, when set, replaces [`LATEST_RELEASE_URL`]
 /// for the duration of the process.  Intended for local end-to-end
@@ -45,8 +44,7 @@ pub const ENV_RELEASE_URL_OVERRIDE: &str = "DEADSYNC_UPDATER_RELEASE_URL";
 /// [`LATEST_RELEASE_URL`], but [`ENV_RELEASE_URL_OVERRIDE`] can
 /// override it for local end-to-end tests.
 pub fn release_url() -> String {
-    std::env::var(ENV_RELEASE_URL_OVERRIDE)
-        .unwrap_or_else(|_| LATEST_RELEASE_URL.to_string())
+    std::env::var(ENV_RELEASE_URL_OVERRIDE).unwrap_or_else(|_| LATEST_RELEASE_URL.to_string())
 }
 
 /// User-Agent header value sent with every request.  GitHub rejects API
@@ -54,7 +52,10 @@ pub fn release_url() -> String {
 /// can correlate stale clients.
 #[inline]
 pub fn user_agent() -> String {
-    format!("deadsync/{} (+https://github.com/pnn64/deadsync)", env!("CARGO_PKG_VERSION"))
+    format!(
+        "deadsync/{} (+https://github.com/pnn64/deadsync)",
+        env!("CARGO_PKG_VERSION")
+    )
 }
 
 /// Networking timeouts for the updater's HTTP traffic.  Two distinct
@@ -75,17 +76,18 @@ const DOWNLOAD_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const DOWNLOAD_RESOLVE_TIMEOUT: Duration = Duration::from_secs(10);
 
 static CHECK_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
-    crate::engine::network::build_agent(crate::engine::network::AgentConfig::with_global(
-        CHECK_TIMEOUT,
-    ))
+    ureq::Agent::config_builder()
+        .timeout_global(Some(CHECK_TIMEOUT))
+        .build()
+        .into()
 });
 
 static DOWNLOAD_AGENT: std::sync::LazyLock<ureq::Agent> = std::sync::LazyLock::new(|| {
-    crate::engine::network::build_agent(crate::engine::network::AgentConfig {
-        timeout: None,
-        connect_timeout: Some(DOWNLOAD_CONNECT_TIMEOUT),
-        resolve_timeout: Some(DOWNLOAD_RESOLVE_TIMEOUT),
-    })
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(DOWNLOAD_CONNECT_TIMEOUT))
+        .timeout_resolve(Some(DOWNLOAD_RESOLVE_TIMEOUT))
+        .build()
+        .into()
 });
 
 /// Returns the shared agent used for the small update-check HTTP
@@ -153,7 +155,10 @@ pub enum UpdaterError {
     RateLimited,
     Parse(String),
     Io(String),
-    ChecksumMismatch { expected: String, actual: String },
+    ChecksumMismatch {
+        expected: String,
+        actual: String,
+    },
     ChecksumSidecarMalformed(String),
     AssetNotFound(String),
     /// The user cancelled an in-flight check or download via the
@@ -245,8 +250,8 @@ struct RawAsset {
 /// because the alternative (treating an unparseable tag as "up to date")
 /// would mask CI mistakes.
 pub fn parse_release_json(bytes: &[u8]) -> Result<ReleaseInfo, UpdaterError> {
-    let raw: RawRelease = serde_json::from_slice(bytes)
-        .map_err(|err| UpdaterError::Parse(err.to_string()))?;
+    let raw: RawRelease =
+        serde_json::from_slice(bytes).map_err(|err| UpdaterError::Parse(err.to_string()))?;
     let version = version::parse_release_tag(&raw.tag_name).ok_or_else(|| {
         UpdaterError::Parse(format!("tag '{}' is not valid semver", raw.tag_name))
     })?;
@@ -365,7 +370,11 @@ pub fn pick_asset_for_host<'a>(
 /// overlay must not pretend it can install.
 #[inline]
 pub const fn apply_supported_for_host() -> bool {
-    cfg!(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))
+    cfg!(any(
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "freebsd"
+    ))
 }
 
 /// Fetch the latest release from GitHub.

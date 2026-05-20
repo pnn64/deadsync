@@ -15,11 +15,11 @@
 //! user-editable `deadsync.ini`.  The updater cache contains opaque
 //! ETag strings the user has no business seeing or editing.
 
+use semver::Version;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{LazyLock, RwLock};
 use std::thread;
-use semver::Version;
-use serde::{Deserialize, Serialize};
 
 use super::{
     ENV_RELEASE_URL_OVERRIDE, FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError,
@@ -131,7 +131,8 @@ pub struct UpdaterCache {
     pub cached_release: Option<CachedRelease>,
 }
 
-static CACHE: LazyLock<RwLock<UpdaterCache>> = LazyLock::new(|| RwLock::new(UpdaterCache::default()));
+static CACHE: LazyLock<RwLock<UpdaterCache>> =
+    LazyLock::new(|| RwLock::new(UpdaterCache::default()));
 static SNAPSHOT: LazyLock<RwLock<Option<UpdateState>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Replace the in-memory snapshot.  Used by both the passive startup
@@ -164,7 +165,10 @@ fn write_cache(new_cache: UpdaterCache) {
     }
     let path = config::dirs::app_dirs().cache_dir.join(CACHE_FILENAME);
     if let Err(err) = save_cache_to(&path, &new_cache) {
-        log::warn!("Failed to persist updater cache to {}: {err}", path.display());
+        log::warn!(
+            "Failed to persist updater cache to {}: {err}",
+            path.display()
+        );
     }
 }
 
@@ -477,7 +481,10 @@ mod tests {
         let info = fresh_release("v9.9.9");
         let state = classify(info);
         let next = apply_fresh_to_cache(prev, &state, "v9.9.9", None);
-        assert!(next.etag.is_none(), "stale etag must not survive a Fresh-without-etag");
+        assert!(
+            next.etag.is_none(),
+            "stale etag must not survive a Fresh-without-etag"
+        );
         assert_eq!(next.last_seen_tag.as_deref(), Some("v9.9.9"));
     }
 
@@ -727,8 +734,7 @@ mod tests {
                 assets: vec![CachedAsset {
                     name: "d.tar.gz".into(),
                     browser_download_url:
-                        "https://github.com/pnn64/deadsync/releases/download/v1.0.0/d.tar.gz"
-                            .into(),
+                        "https://github.com/pnn64/deadsync/releases/download/v1.0.0/d.tar.gz".into(),
                     size: 0,
                     digest: None,
                 }],

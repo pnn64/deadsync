@@ -397,6 +397,10 @@ pub(super) fn apply_submenu_choice_delta(
             ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
+            SubRowId::VersionOverlay => config::update_show_version_overlay(enabled),
+            SubRowId::VersionOverlaySide => {
+                config::update_version_overlay_side(VersionOverlaySide::from_choice(new_index))
+            }
             SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),
             _ => {}
         }
@@ -534,6 +538,9 @@ pub(super) fn apply_submenu_choice_delta(
             }
             SubRowId::RateModPreservesPitch => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
+            }
+            SubRowId::ReplayGain => {
+                config::update_enable_replaygain(new_index == 1);
             }
             _ => {}
         }
@@ -1287,10 +1294,13 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     use crate::screens::components::shared::update_overlay;
+
     let overlay_phase = crate::engine::updater::action::current();
-    if !matches!(overlay_phase, crate::engine::updater::action::ActionPhase::Idle)
-        && update_overlay::handle_input(&overlay_phase, ev)
-            == update_overlay::InputOutcome::Consumed
+    if !matches!(
+        overlay_phase,
+        crate::engine::updater::action::ActionPhase::Idle
+    ) && update_overlay::handle_input(&overlay_phase, ev)
+        == update_overlay::InputOutcome::Consumed
     {
         return ScreenAction::None;
     }

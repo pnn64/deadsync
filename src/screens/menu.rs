@@ -186,8 +186,7 @@ fn menu_info_text(state: &State) -> Arc<str> {
     let num_packs = song_cache.len();
     let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
     let num_courses = get_course_cache().len();
-    let mut version_line =
-        tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
+    let mut version_line = tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
     if let Some(tag) = banner_tag.as_deref() {
         let suffix = tr_fmt("Menu", "UpdateAvailableSuffix", &[("version", tag)]);
         version_line.push(' ');
@@ -201,15 +200,11 @@ fn menu_info_text(state: &State) -> Arc<str> {
         "SongSummary",
         &[("songs", &songs), ("packs", &packs), ("courses", &courses)],
     );
-    let body = format!("{version_line}\n{summary}");
-    let text = Arc::<str>::from(body);
+    let text = Arc::<str>::from(format!("{version_line}\n{summary}"));
     *state.info_text_cache.borrow_mut() = Some((banner_tag, text.clone()));
     text
 }
 
-/// The release tag (e.g. `v0.3.875`) that should be advertised on the menu,
-/// or `None` when no update is available.  Used as the cache key for
-/// `info_text_cache` so a fresh check fires a re-render automatically.
 fn update_banner_tag() -> Option<String> {
     match crate::engine::updater::state::snapshot()? {
         crate::engine::updater::UpdateState::Available(info) => Some(info.tag),

@@ -23,10 +23,7 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::engine::updater::action::{
-    self, ActionErrorKind, ActionPhase,
-};
-
+use crate::engine::updater::action::{self, ActionErrorKind, ActionPhase};
 
 use super::loading_bar;
 
@@ -135,7 +132,14 @@ pub fn build(phase: &ActionPhase) -> Vec<Actor> {
     let line_gap = 36.0;
     for (i, line) in body_lines.iter().enumerate() {
         let y = next_y + (i as f32) * line_gap;
-        actors.push(panel_text_tinted(line, cx, y, BODY_PX, TextAlign::Center, body_rgba));
+        actors.push(panel_text_tinted(
+            line,
+            cx,
+            y,
+            BODY_PX,
+            TextAlign::Center,
+            body_rgba,
+        ));
     }
 
     if let Some(progress) = progress {
@@ -160,7 +164,13 @@ pub fn build(phase: &ActionPhase) -> Vec<Actor> {
     }
 
     let footer_display = animated_footer(&footer);
-    actors.push(panel_text(&footer_display, cx, footer_y, FOOTER_PX, TextAlign::Center));
+    actors.push(panel_text(
+        &footer_display,
+        cx,
+        footer_y,
+        FOOTER_PX,
+        TextAlign::Center,
+    ));
 
     if matches!(phase, ActionPhase::Checking | ActionPhase::Applying { .. }) {
         actors.push(spinner_actor(cx, cy + 60.0));
@@ -291,16 +301,9 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 )
                 .to_string(),
             );
+            body.push(tr_fmt("Updater", "BodyLatest", &[("version", &info.tag)]).to_string());
             body.push(
-                tr_fmt("Updater", "BodyLatest", &[("version", &info.tag)]).to_string(),
-            );
-            body.push(
-                tr_fmt(
-                    "Updater",
-                    "BodySize",
-                    &[("size", &format_size(asset.size))],
-                )
-                .to_string(),
+                tr_fmt("Updater", "BodySize", &[("size", &format_size(asset.size))]).to_string(),
             );
             if let Some(date) = format_published_at(info.published_at.as_deref()) {
                 body.push(tr_fmt("Updater", "BodyPublished", &[("date", &date)]).to_string());
@@ -340,14 +343,13 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
             ..
         } => {
             let mut body = match total {
-                Some(t) if *t > 0 => vec![format!("{} / {}", format_size(*written), format_size(*t))],
+                Some(t) if *t > 0 => {
+                    vec![format!("{} / {}", format_size(*written), format_size(*t))]
+                }
                 _ => vec![format_size(*written)],
             };
             if let Some(secs) = eta_secs {
-                body.push(
-                    tr("Updater", "BodyEtaShort")
-                        .replace("{time}", &format_eta(*secs)),
-                );
+                body.push(tr("Updater", "BodyEtaShort").replace("{time}", &format_eta(*secs)));
             }
             let progress = total.and_then(|t| (t > 0).then_some(*written as f32 / t as f32));
             (
@@ -357,7 +359,11 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 progress.or(Some(0.0)),
             )
         }
-        ActionPhase::Ready { info: _info, path: _path, .. } => (
+        ActionPhase::Ready {
+            info: _info,
+            path: _path,
+            ..
+        } => (
             tr("Updater", "TitleReady").to_string(),
             vec![tr("Updater", "BodyReadyShort").to_string()],
             tr("Updater", "FooterInstall").to_string(),
@@ -369,7 +375,10 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
             tr("Updater", "FooterPleaseWait").to_string(),
             None,
         ),
-        ActionPhase::AppliedRestartRequired { info: _info, detail } => (
+        ActionPhase::AppliedRestartRequired {
+            info: _info,
+            detail,
+        } => (
             tr("Updater", "TitleAppliedRestartRequired").to_string(),
             vec![
                 tr("Updater", "BodyAppliedRestartRequired").to_string(),
@@ -588,8 +597,9 @@ mod tests {
     fn phase_strings_confirm_includes_version_and_size() {
         let mut r = sample_release();
         r.published_at = Some("2026-04-30T04:17:40Z".to_owned());
-        r.assets[0].digest =
-            Some("sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68".to_owned());
+        r.assets[0].digest = Some(
+            "sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68".to_owned(),
+        );
         let asset = r.assets[0].clone();
         let phase = ActionPhase::ConfirmDownload { info: r, asset };
         let (_t, body, _f, progress) = phase_strings(&phase);
@@ -598,12 +608,27 @@ mod tests {
         // ConfirmDownload no longer renders a focal version tag — current/latest
         // are surfaced in the body instead.
         assert!(phase_version_tag(&phase).is_none());
-        assert!(joined.contains("Latest"), "latest label missing from {joined:?}");
-        assert!(joined.contains("v9.9.9"), "latest version missing from {joined:?}");
-        assert!(joined.contains("Current"), "current label missing from {joined:?}");
+        assert!(
+            joined.contains("Latest"),
+            "latest label missing from {joined:?}"
+        );
+        assert!(
+            joined.contains("v9.9.9"),
+            "latest version missing from {joined:?}"
+        );
+        assert!(
+            joined.contains("Current"),
+            "current label missing from {joined:?}"
+        );
         assert!(joined.contains("MiB"), "size missing from {joined:?}");
-        assert!(joined.contains("2026-04-30"), "date missing from {joined:?}");
-        assert!(joined.contains("c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68"), "sha missing from {joined:?}");
+        assert!(
+            joined.contains("2026-04-30"),
+            "date missing from {joined:?}"
+        );
+        assert!(
+            joined.contains("c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68"),
+            "sha missing from {joined:?}"
+        );
         assert!(
             !joined.contains("first release note"),
             "release notes should be stripped from {joined:?}",
@@ -634,7 +659,10 @@ mod tests {
         assert!(format_published_at(Some("garbage")).is_none());
         assert!(format_published_at(None).is_none());
         assert_eq!(
-            format_sha256_short(Some("sha256:C154351DD3874A4A4630B16DBE673EB81B549342AC374EBF547D6FC3AC2E2B68")).as_deref(),
+            format_sha256_short(Some(
+                "sha256:C154351DD3874A4A4630B16DBE673EB81B549342AC374EBF547D6FC3AC2E2B68"
+            ))
+            .as_deref(),
             Some("c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68"),
         );
         assert!(format_sha256_short(None).is_none());
@@ -702,7 +730,10 @@ mod tests {
         assert!(footer.contains("Install"), "footer was {footer:?}");
         // The install/restart hint belongs in the footer only — no duplicated
         // body line.
-        assert!(!joined.contains("install"), "body should not duplicate footer hint: {joined:?}");
+        assert!(
+            !joined.contains("install"),
+            "body should not duplicate footer hint: {joined:?}"
+        );
         assert!(
             !joined.contains("/tmp/"),
             "raw download path should not be shown: {joined:?}",
@@ -730,8 +761,7 @@ mod tests {
         assert_eq!(phase_version_tag(&phase).as_deref(), Some("v9.9.9"));
         let joined = body.join("\n");
         assert!(
-            title.to_lowercase().contains("install")
-                || title.to_lowercase().contains("update"),
+            title.to_lowercase().contains("install") || title.to_lowercase().contains("update"),
             "title was {title:?}",
         );
         assert!(
