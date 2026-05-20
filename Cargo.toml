@@ -196,7 +196,7 @@ winres = "0.1.12"
 opt-level = 3
 overflow-checks = false
 debug-assertions = false
-lto = "thin"
+lto = true
 debug = false
 panic = "abort"
 
