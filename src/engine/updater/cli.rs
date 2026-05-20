@@ -186,7 +186,7 @@ pub fn run_apply_helper(request: ApplyRequest) -> i32 {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 pub fn spawn_apply_helper(
     archive_path: &std::path::Path,
     sha256: &[u8; 32],
@@ -206,7 +206,7 @@ pub fn spawn_apply_helper(
     )
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
 pub fn spawn_apply_helper(
     _archive_path: &std::path::Path,
     _sha256: &[u8; 32],
@@ -220,7 +220,7 @@ fn wait_for_parent_exit(parent_pid: Option<u32>) -> bool {
     let Some(pid) = parent_pid else {
         return true;
     };
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     {
         use std::time::{Duration, Instant};
         let deadline = Instant::now() + Duration::from_secs(30);
@@ -231,12 +231,12 @@ fn wait_for_parent_exit(parent_pid: Option<u32>) -> bool {
             std::thread::sleep(Duration::from_millis(50));
         }
     }
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
     let _ = pid;
     true
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn process_exists(pid: u32) -> bool {
     let pid = pid as libc::pid_t;
     // SAFETY: kill(pid, 0) does not send a signal; it only asks the
@@ -256,10 +256,8 @@ fn process_exists(pid: u32) -> bool {
 /// transitioning to [`ActionPhase::Idle`] regardless of outcome so
 /// the menu UI doesn't re-prompt indefinitely.
 ///
-/// The platform split lives behind `cfg`: PR-11 covers Windows,
-/// PR-12 covers Linux/FreeBSD, and macOS falls through to the unix
-/// path on a best-effort basis (PR-13 was deferred — for now we
-/// surface a clear "platform not supported" error there).
+/// The platform split lives behind `cfg`: Windows uses the zip path,
+/// while Linux, FreeBSD, and macOS use the tar helper path.
 #[allow(clippy::result_large_err)]
 pub fn apply_pending_and_relaunch() -> Result<bool, super::UpdaterError> {
     use super::action::{ActionPhase, current, dismiss};
@@ -378,7 +376,7 @@ fn apply_for_host(
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn apply_for_host(
     archive_path: &std::path::Path,
     exe_dir: &std::path::Path,
@@ -387,7 +385,12 @@ fn apply_for_host(
     Ok(())
 }
 
-#[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
 fn apply_for_host(
     _archive_path: &std::path::Path,
     _exe_dir: &std::path::Path,
@@ -397,7 +400,12 @@ fn apply_for_host(
     ))
 }
 
-#[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 fn relaunch_self(exe: &std::path::Path) -> Result<(), super::UpdaterError> {
     // No `--cleanup-old <path>` is needed anymore: the new process
     // discovers the apply journal at its install root and runs
@@ -405,7 +413,12 @@ fn relaunch_self(exe: &std::path::Path) -> Result<(), super::UpdaterError> {
     relaunch_with_args(exe, &[std::ffi::OsString::from("--restart")])
 }
 
-#[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
 fn relaunch_self(_exe: &std::path::Path) -> Result<(), super::UpdaterError> {
     Ok(())
 }
@@ -423,7 +436,7 @@ fn relaunch_with_args(
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn relaunch_with_args(
     exe: &std::path::Path,
     args: &[std::ffi::OsString],
@@ -486,7 +499,12 @@ fn relaunch_with_args(
     Ok(())
 }
 
-#[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
 fn relaunch_with_args(
     _exe: &std::path::Path,
     _args: &[std::ffi::OsString],

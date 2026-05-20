@@ -1,6 +1,6 @@
 //! Unix-side "apply" half of the in-app updater.
 //!
-//! On Linux and FreeBSD the running executable file CAN be renamed
+//! On Linux, FreeBSD, and macOS the running executable file CAN be renamed
 //! and replaced atomically (the kernel keeps the on-disk inode alive
 //! until the running process exits), so technically we don't need a
 //! backup-then-install dance.  We do it anyway, mirroring the Windows
@@ -22,7 +22,7 @@
 //!    startup via [`apply_journal::recover`].
 //!
 //! `extract_archive` is portable (so the Windows test box can exercise
-//! it), but [`apply_tar_gz`] itself is gated to Linux/FreeBSD because
+//! it), but [`apply_tar_gz`] itself is gated to Unix targets because
 //! it touches a real install root.
 
 use std::fs::{self, File};
@@ -33,7 +33,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use super::UpdaterError;
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 use super::apply_journal::{self, Journal, JournalState, Op};
 
 /// Result of a successful apply.  Returned for diagnostics + tests.
@@ -208,7 +208,7 @@ pub fn extract_tar_gz(zip_bytes: &[u8], dest: &Path) -> Result<usize, UpdaterErr
 
 /* ---------- planning + journal-driven apply (Unix-only) ---------- */
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn plan_ops(
     journal: &Journal,
     staging_dir: &Path,
@@ -263,7 +263,7 @@ fn plan_ops(
     Ok(ops)
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::ExecuteFailure> {
     let mut executed: Vec<&Op> = Vec::with_capacity(journal.ops.len());
     for op in &journal.ops {
@@ -332,7 +332,7 @@ fn execute_with_rollback(journal: &Journal) -> Result<(), apply_journal::Execute
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn rollback(executed: &[&Op]) -> bool {
     let mut clean = true;
     let mut touched_parents: Vec<&Path> = Vec::new();
@@ -388,7 +388,7 @@ fn rollback(executed: &[&Op]) -> bool {
 /// writability → extract tarball into the journal's staging dir →
 /// write the journal as `Applying` → execute per-op renames with
 /// rollback on error → rewrite as `Applied`.
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 pub fn apply_tar_gz(archive_path: &Path, exe_dir: &Path) -> Result<ApplyOutcome, UpdaterError> {
     if !is_dir_writable(exe_dir) {
         return Err(UpdaterError::Io(format!(
@@ -403,6 +403,7 @@ pub fn apply_tar_gz(archive_path: &Path, exe_dir: &Path) -> Result<ApplyOutcome,
     let staging_guard = apply_journal::StagingGuard::new(journal.staging_dir.clone());
     let bytes = fs::read(archive_path).map_err(|e| super::io_err_at("read", archive_path, e))?;
     let installed_file_count = extract_tar_gz(&bytes, &journal.staging_dir)?;
+    clear_quarantine(&journal.staging_dir);
     journal.ops = plan_ops(&journal, &journal.staging_dir, exe_dir)?;
     journal.write_atomic(exe_dir)?;
     staging_guard.disarm();
@@ -456,7 +457,36 @@ pub fn is_dir_writable(dir: &Path) -> bool {
 
 /* ---------- helpers ---------- */
 
-#[cfg(any(target_os = "linux", target_os = "freebsd", test))]
+#[cfg(target_os = "macos")]
+fn clear_quarantine(path: &Path) {
+    match std::process::Command::new("xattr")
+        .arg("-rd")
+        .arg("com.apple.quarantine")
+        .arg(path)
+        .status()
+    {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            log::warn!(
+                "macOS quarantine cleanup returned status {} for '{}'",
+                status,
+                path.display()
+            );
+        }
+        Err(err) => {
+            log::warn!(
+                "macOS quarantine cleanup failed for '{}': {}",
+                path.display(),
+                err
+            );
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn clear_quarantine(_path: &Path) {}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos", test))]
 fn collect_files(root: &Path) -> Result<Vec<PathBuf>, UpdaterError> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -522,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn plan_ops_rejects_case_colliding_paths() {
         let staging = tempdir("plan-collide-staging");
         let target = tempdir("plan-collide-target");
@@ -542,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn plan_ops_skips_portability_marker_when_target_missing() {
         let staging = tempdir("plan-portable-skip-staging");
         let target = tempdir("plan-portable-skip-target");
@@ -559,7 +589,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn plan_ops_replaces_portability_marker_when_target_exists() {
         let staging = tempdir("plan-portable-keep-staging");
         let target = tempdir("plan-portable-keep-target");
@@ -577,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn apply_tar_gz_cleans_staging_when_extract_fails() {
         let exe_dir = tempdir("apply-tgz-extract-fail");
         let archive = exe_dir.join("garbage.tar.gz");
@@ -727,7 +757,7 @@ mod tests {
     }
 
     // The apply_tar_gz / plan_ops / execute_with_rollback entry
-    // points are gated to Linux/FreeBSD because they assume a real
+    // points are gated to Unix apply targets because they assume a real
     // install root.  We still cover the cross-platform helpers below.
 
     #[test]
@@ -755,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn rollback_reports_dirty_when_restore_rename_fails() {
         // When rollback can't restore a target, the function must
         // signal `clean = false` so the caller preserves the journal
@@ -781,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     fn plan_ops_rejects_directory_at_target() {
         // If the install tree currently has a directory where the
         // new release wants to place a regular file, refuse the

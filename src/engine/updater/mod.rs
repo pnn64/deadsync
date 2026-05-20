@@ -363,17 +363,15 @@ pub fn pick_asset_for_host<'a>(
 }
 
 /// Returns true when this build can perform the in-app extract + swap
-/// for the host it's running on: today that's Windows and Linux/FreeBSD.
-/// Notably **macOS is false**: we publish macOS download artifacts so
-/// users can install manually, but the apply path isn't implemented
-/// for `.app` bundle layout / code-signing concerns, so the in-app
-/// overlay must not pretend it can install.
+/// for the host it's running on: Windows uses zip archives, while
+/// Linux, FreeBSD, and macOS use tar archives.
 #[inline]
 pub const fn apply_supported_for_host() -> bool {
     cfg!(any(
         target_os = "windows",
         target_os = "linux",
-        target_os = "freebsd"
+        target_os = "freebsd",
+        target_os = "macos"
     ))
 }
 
@@ -478,6 +476,7 @@ mod tests {
             target_os = "windows",
             target_os = "linux",
             target_os = "freebsd",
+            target_os = "macos",
         ));
         assert_eq!(apply_supported_for_host(), expected);
     }

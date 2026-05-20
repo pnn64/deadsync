@@ -668,7 +668,7 @@ pub fn request_apply() {
 }
 
 fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]) {
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     {
         let _ = &info;
         match super::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
@@ -690,7 +690,7 @@ fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [
         return;
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
     match super::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
         Ok(super::cli::ApplyOutcome::Relaunched) => {
             log::info!("Self-update applied; exiting to let new process take over");
