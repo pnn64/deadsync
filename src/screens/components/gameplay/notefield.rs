@@ -2033,10 +2033,18 @@ fn effective_mini_value(
 }
 
 #[inline(always)]
-fn judgment_actor_zoom(mini: f32, judgment_back: bool) -> f32 {
+fn judgment_actor_zoom(
+    mini: f32,
+    judgment_back: bool,
+    _perspective_tilt: f32,
+    _perspective_skew: f32,
+) -> f32 {
+    // ITGmania draws the Player judgment outside PlayerNoteFieldPositioner,
+    // so Hallway/Distant/Incoming/Space never alter the judgment's own zoom.
+    // Only the NoteField actor receives the perspective 0.9x tilt scale.
     if judgment_back {
         // Arrow Cloud's JudgmentBack actorframe applies its own linear
-        // shrink on top of the Player ActorFrame inheritance.
+        // mini shrink in Lua and is likewise outside the NoteField perspective.
         ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
     } else {
         // ITGmania Player::Update applies the same min(pow(0.5, mini+tiny), 1.0)
@@ -2054,17 +2062,6 @@ fn combo_actor_zoom(mini: f32) -> f32 {
     // ActorFrame's mini scale is inherited by both the combo display and
     // the front judgment actor in Simply Love.
     0.5_f32.powf(mini).min(1.0)
-}
-
-#[inline(always)]
-fn hallway_judgment_zoom(perspective_tilt: f32, perspective_skew: f32) -> f32 {
-    // ITGmania's hallway draw path applies an extra 0.9x shrink to the notefield
-    // during the perspective pass, but the judgment actor keeps its original zoom.
-    // Mirror that apparent larger hallway judgment here for the HUD sprite path.
-    if perspective_tilt >= -f32::EPSILON || perspective_skew.abs() > f32::EPSILON {
-        return 1.0;
-    }
-    1.0 / (1.0 - 0.1 * (-perspective_tilt).clamp(0.0, 1.0)).max(0.000_001)
 }
 
 #[inline(always)]
@@ -3940,8 +3937,12 @@ pub fn build_bundles(
     let judgment_x = playfield_center_x + judgment_extra_x;
     let combo_x = playfield_center_x + combo_extra_x;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
-    let judgment_zoom_mod = judgment_actor_zoom(mini, profile.judgment_back)
-        * hallway_judgment_zoom(perspective.tilt, perspective.skew);
+    let judgment_zoom_mod = judgment_actor_zoom(
+        mini,
+        profile.judgment_back,
+        perspective.tilt,
+        perspective.skew,
+    );
     let combo_zoom_mod = combo_actor_zoom(mini);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
@@ -8576,7 +8577,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
+        hold_body_segment_budget, hold_draw_span, hold_explosion_active,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
         hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
@@ -9545,34 +9546,36 @@ mod tests {
     }
 
     #[test]
-    fn hallway_judgment_zoom_only_boosts_hallway_tilt() {
-        assert!((hallway_judgment_zoom(0.0, 0.0) - 1.0).abs() <= 1e-6);
-        assert!((hallway_judgment_zoom(-1.0, 1.0) - 1.0).abs() <= 1e-6);
-        assert!((hallway_judgment_zoom(1.0, 0.0) - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
     fn judgment_actor_zoom_matches_itgmania_player_mini_formula_without_judgment_back() {
         // Without the Arrow Cloud JudgmentBack override, the front judgment
         // inherits the Player ActorFrame's mini scale, identical to combo:
         // min(pow(0.5, mini + tiny), 1.0).
-        assert!((judgment_actor_zoom(0.0, false) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(1.0, false) - 0.5).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(0.5, false) - 0.5_f32.sqrt()).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.0, false, 0.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.0, false, 0.0, 0.0) - 0.5).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.5, false, 0.0, 0.0) - 0.5_f32.sqrt()).abs() <= 1e-6);
         // Negative mini is clamped to 1.0 by the min(_, 1.0) cap so the
         // judgment never grows past its base size.
-        assert!((judgment_actor_zoom(-1.0, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, false, 0.0, 0.0) - 1.0).abs() <= 1e-6);
+        // ITGmania draws tap judgments outside PlayerNoteFieldPositioner, so
+        // Hallway/Distant/Incoming/Space do not affect this actor's zoom.
+        assert!((judgment_actor_zoom(0.0, false, -1.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.0, false, 1.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.0, false, -1.0, 1.0) - 1.0).abs() <= 1e-6);
         // Parity with combo_actor_zoom is the whole point of this branch.
         for &mini in &[-1.0_f32, 0.0, 0.25, 0.5, 1.0, 1.5] {
-            assert!((judgment_actor_zoom(mini, false) - combo_actor_zoom(mini)).abs() <= 1e-6);
+            assert!(
+                (judgment_actor_zoom(mini, false, -1.0, 0.0) - combo_actor_zoom(mini)).abs()
+                    <= 1e-6
+            );
         }
     }
 
     #[test]
     fn judgment_actor_zoom_matches_arrow_cloud_judgment_back_formula() {
-        assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.35, true, 0.0, 0.0) - 0.825).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.5, true, 0.0, 0.0) - 0.35).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, true, 0.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.0, true, -1.0, 0.0) - 1.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -9646,12 +9649,6 @@ mod tests {
         // Big (negative mini) is clamped to 1.0 by the min(_, 1.0) cap so
         // the combo never grows past its base size.
         assert!((combo_actor_zoom(-1.0) - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hallway_judgment_zoom_matches_itgmania_hallway_quirk() {
-        let zoom = hallway_judgment_zoom(-1.0, 0.0);
-        assert!((zoom - (1.0 / 0.9)).abs() <= 1e-6);
     }
 
     #[test]
