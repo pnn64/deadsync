@@ -79,6 +79,7 @@ const CREDITS: &[CreditLine] = &[
     spacer(),
     section("DeadSync Founding Members"),
     name("flashitude"),
+    name("fingy"),
     name("BSG"),
     name("RootReducer"),
     name("dimo"),

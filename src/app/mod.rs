@@ -4514,6 +4514,7 @@ impl App {
         music_rate: f32,
         scroll_speed: [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
         active_color_index: i32,
+        return_screen: CurrentScreen,
     ) -> bool {
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
@@ -4541,7 +4542,7 @@ impl App {
             chart_steps_index,
             chart_steps_index,
             active_color_index,
-            CurrentScreen::Gameplay,
+            return_screen,
             None,
         );
         po_state.music_rate = music_rate;
@@ -4568,6 +4569,7 @@ impl App {
                 music_rate,
                 scroll_speed,
                 active_color_index,
+                CurrentScreen::Gameplay,
             );
         }
 
@@ -4588,6 +4590,29 @@ impl App {
             music_rate,
             scroll_speed,
             active_color_index,
+            CurrentScreen::Gameplay,
+        )
+    }
+
+    fn prepare_player_options_for_practice_from_eval(&mut self) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+
+        let score_info = &self.state.screens.evaluation_state.score_info;
+        let Some((song, chart_hashes, music_rate, scroll_speed)) =
+            restart_payload_from_eval(score_info)
+        else {
+            return false;
+        };
+        let active_color_index = self.state.screens.evaluation_state.active_color_index;
+        self.prepare_restart_player_options(
+            song,
+            [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+            music_rate,
+            scroll_speed,
+            active_color_index,
+            CurrentScreen::Practice,
         )
     }
 
@@ -4621,6 +4646,28 @@ impl App {
             log::error!("Failed to restart Gameplay with {label}: {e}");
         } else {
             self.state.session.gameplay_restart_count = restart_count;
+        }
+        true
+    }
+
+    /// SL-zmod parity (`BGAnimations/ScreenEvaluation common/Shared/RestartHandler.lua`):
+    /// Ctrl+P on the Evaluation screen re-enters the just-played chart in
+    /// Practice mode. Mirrors `try_gameplay_restart`, but routes to
+    /// `CurrentScreen::Practice` and does not touch
+    /// `gameplay_restart_count` / `restart_pending` (those are gameplay-only).
+    fn try_practice_from_eval(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+        if !self.prepare_player_options_for_practice_from_eval() {
+            log::warn!("Ignored {label} practice: no replayable evaluation payload.");
+            return false;
+        }
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
+        {
+            log::error!("Failed to enter Practice with {label}: {e}");
+            return false;
         }
         true
     }
@@ -5503,6 +5550,16 @@ impl App {
                     crate::screens::components::shared::stats_overlay::build_stutter(&stutters),
                 );
             }
+        }
+
+        // Bottom-corner build watermark so videos / screenshots always
+        // carry the running version. Default on; user-toggleable via
+        // Options, with a separate Left/Right side preference.
+        let cfg = crate::config::get();
+        if cfg.show_version_overlay {
+            actors.extend(crate::screens::components::shared::version_overlay::build(
+                cfg.version_overlay_side,
+            ));
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
@@ -6423,6 +6480,16 @@ impl App {
                 && self.state.session.course_run.is_none()
             {
                 self.try_gameplay_restart(event_loop, "Ctrl+R");
+                return true;
+            }
+            if raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::KeyP
+                && self.state.shell.ctrl_held
+                && config::get().keyboard_features
+                && self.state.session.course_run.is_none()
+                && self.try_practice_from_eval(event_loop, "Ctrl+P")
+            {
                 return true;
             }
             if raw_key.pressed

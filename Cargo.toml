@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.158"
+version = "0.4.163"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -31,6 +31,10 @@ path = "scripts/lang_coverage.rs"
 [[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
+
+[[bin]]
+name = "replaygain_bench"
+path = "scripts/replaygain_bench.rs"
 
 
 [features]
@@ -75,6 +79,7 @@ claxon = "0.4.3"
 opusic-c = "1.6.1"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
+ebur128 = "0.1.10"
 
 # Networking
 ureq = { version = "3.3.0", features = ["json", "rustls"] }

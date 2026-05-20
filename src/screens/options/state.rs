@@ -632,6 +632,18 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::VersionOverlay,
+        usize::from(cfg.show_version_overlay),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::VersionOverlaySide,
+        cfg.version_overlay_side.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::WriteCurrentScreen,
         usize::from(cfg.write_current_screen),
     );
@@ -828,6 +840,12 @@ pub fn init() -> State {
         SOUND_OPTIONS_ROWS,
         SubRowId::RateModPreservesPitch,
         usize::from(cfg.rate_mod_preserves_pitch),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
+        SOUND_OPTIONS_ROWS,
+        SubRowId::ReplayGain,
+        usize::from(cfg.enable_replaygain),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

@@ -1,6 +1,7 @@
 mod backends;
 pub(crate) mod decode;
 pub mod folder;
+pub mod replaygain;
 mod resample;
 
 use crate::config::dirs;
@@ -582,6 +583,20 @@ static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
 static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
+// Per-play monotonic id used to associate asynchronous ReplayGain results
+// with the track that requested them. `set_music_replaygain_if_matches` is
+// a no-op if the id no longer matches the active track, preventing a stale
+// gain value from being applied to a different song.
+static MUSIC_TRACK_ID: AtomicU64 = AtomicU64::new(0);
+// Target linear gain for the music stream. The mixer interpolates its
+// own `current_gain` toward this target across ~80 ms (RAMP_FRAMES at the
+// device sample rate) so cache-miss → cache-hit transitions don't produce
+// an audible step. Default 1.0.
+static MUSIC_TARGET_GAIN_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
+// Generation counter incremented whenever a track boundary (play / stop)
+// should snap the mixer's interpolated gain to its target instantly,
+// rather than ramping across the boundary.
+static MUSIC_GAIN_SNAP_GEN: AtomicU64 = AtomicU64::new(0);
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 
 // Last audio callback timing, used to interpolate the playback position
@@ -1418,14 +1433,63 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
         1.0
     };
     reset_music_stream_clock();
+
+    // Resolve a per-play track id and decide on the initial ReplayGain
+    // value. If the user has the experimental ReplayGain setting on, and we
+    // already have a cached/computed value, apply it immediately; otherwise
+    // queue a background analysis job. If the setting is off, force unity
+    // gain so a previous track's value doesn't leak forward.
+    let track_id = MUSIC_TRACK_ID
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1);
+    let initial_gain: f32 = if crate::config::get().enable_replaygain {
+        replaygain::get_or_queue_gain_linear(&path, track_id).unwrap_or(1.0)
+    } else {
+        1.0
+    };
+    MUSIC_TARGET_GAIN_BITS.store(initial_gain.to_bits(), Ordering::Relaxed);
+    // Snap to the new target at the track boundary so the previous track's
+    // gain doesn't audibly bleed into the start of this one.
+    MUSIC_GAIN_SNAP_GEN.fetch_add(1, Ordering::Release);
+
     let _ = ENGINE
         .command_sender
         .send(AudioCommand::PlayMusic(path, cut, looping, rate));
 }
 
+/// Applies a ReplayGain result from the background analyzer, but only if it
+/// still corresponds to the currently active music track. Called by
+/// [`replaygain`]; safe to call from any thread.
+pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
+    let active_id = MUSIC_TRACK_ID.load(Ordering::Acquire);
+    if active_id != track_id {
+        return;
+    }
+    if !MUSIC_TRACK_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+    let gain = if gain_linear.is_finite() && gain_linear > 0.0 {
+        gain_linear
+    } else {
+        1.0
+    };
+    MUSIC_TARGET_GAIN_BITS.store(gain.to_bits(), Ordering::Relaxed);
+}
+
+/// Called from the config layer when the user toggles the ReplayGain
+/// setting. When disabled, forces unity gain immediately so the change is
+/// audible without requiring track restart.
+pub fn on_replaygain_setting_changed(enabled: bool) {
+    if !enabled {
+        MUSIC_TARGET_GAIN_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
+    }
+}
+
 /// Stops the currently playing music track.
 pub fn stop_music() {
     reset_music_stream_clock();
+    MUSIC_TARGET_GAIN_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
+    MUSIC_GAIN_SNAP_GEN.fetch_add(1, Ordering::Release);
     let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
 }
 
@@ -1662,7 +1726,21 @@ struct RenderState {
     played_music_map: Arc<internal::SpscRingMusicSeg>,
     active_music_map: Option<MusicMapSeg>,
     music_map_generation: u64,
+    /// Current music gain as seen by the mixer. Ramps toward
+    /// `MUSIC_TARGET_GAIN_BITS` over [`MUSIC_GAIN_RAMP_FRAMES`] frames so
+    /// asynchronous ReplayGain results don't produce an audible step.
+    music_gain_current: f32,
+    /// Generation of `MUSIC_GAIN_SNAP_GEN` last observed; when it changes
+    /// (e.g. on a track boundary), the mixer snaps `music_gain_current`
+    /// straight to the target instead of ramping.
+    music_gain_snap_seen: u64,
 }
+
+/// Number of device frames over which the music gain ramps when the
+/// target changes. 4000 frames ≈ 83 ms at 48 kHz and ≈ 91 ms at 44.1 kHz —
+/// fast enough to feel instantaneous, slow enough to eliminate the
+/// click/step that an atomic gain swap would produce.
+const MUSIC_GAIN_RAMP_FRAMES: f32 = 4000.0;
 
 impl RenderState {
     fn new(
@@ -1681,6 +1759,8 @@ impl RenderState {
             played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
             active_music_map: None,
             music_map_generation: MUSIC_MAP_GEN.load(Ordering::Acquire),
+            music_gain_current: f32::from_bits(MUSIC_TARGET_GAIN_BITS.load(Ordering::Relaxed)),
+            music_gain_snap_seen: MUSIC_GAIN_SNAP_GEN.load(Ordering::Acquire),
         }
     }
 
@@ -1741,8 +1821,33 @@ impl RenderState {
         }
 
         let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
-        for (dst, src) in self.mix_f32.iter_mut().zip(&self.mix_i16) {
-            *dst = i16_to_f32(*src) * music_vol;
+        let target_gain = f32::from_bits(MUSIC_TARGET_GAIN_BITS.load(Ordering::Relaxed));
+        let snap_gen = MUSIC_GAIN_SNAP_GEN.load(Ordering::Acquire);
+        if snap_gen != self.music_gain_snap_seen {
+            self.music_gain_current = target_gain;
+            self.music_gain_snap_seen = snap_gen;
+        }
+        let device_channels = self.device_channels.max(1);
+        let frames_in_buf = len / device_channels;
+        let max_step = 1.0 / MUSIC_GAIN_RAMP_FRAMES;
+        for f in 0..frames_in_buf {
+            let diff = target_gain - self.music_gain_current;
+            if diff.abs() <= max_step {
+                self.music_gain_current = target_gain;
+            } else {
+                self.music_gain_current += diff.signum() * max_step;
+            }
+            let scale = music_vol * self.music_gain_current;
+            let base = f * device_channels;
+            for ch in 0..device_channels {
+                let idx = base + ch;
+                self.mix_f32[idx] = i16_to_f32(self.mix_i16[idx]) * scale;
+            }
+        }
+        // Zero any tail that doesn't divide evenly into whole frames; the
+        // mixer downstream expects exactly `len` valid f32 samples.
+        for idx in frames_in_buf * device_channels..len {
+            self.mix_f32[idx] = 0.0;
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {

@@ -36,6 +36,7 @@ pub enum SubRowId {
     MineSounds,
     GlobalOffset,
     RateModPreservesPitch,
+    ReplayGain,
     #[cfg(target_os = "linux")]
     LinuxAudioBackend,
     #[cfg(target_os = "linux")]
@@ -78,6 +79,8 @@ pub enum SubRowId {
     DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
+    VersionOverlay,
+    VersionOverlaySide,
     // Gameplay Options
     BgBrightness,
     CenteredP1Notefield,

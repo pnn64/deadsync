@@ -55,6 +55,28 @@ pub fn update_show_select_music_banners(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_version_overlay(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_version_overlay == enabled {
+            return;
+        }
+        cfg.show_version_overlay = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_version_overlay_side(side: VersionOverlaySide) {
+    {
+        let mut cfg = lock_config();
+        if cfg.version_overlay_side == side {
+            return;
+        }
+        cfg.version_overlay_side = side;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_video_banners(enabled: bool) {
     {
         let mut cfg = lock_config();
