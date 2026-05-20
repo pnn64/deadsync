@@ -455,6 +455,12 @@ pub fn init() -> State {
         SubRowId::HighDpi,
         yes_no_choice_index(cfg.high_dpi),
     );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HideMouseCursor,
+        yes_no_choice_index(cfg.hide_mouse_cursor),
+    );
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,

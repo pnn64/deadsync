@@ -74,6 +74,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "GamepadBackend", default.windows_gamepad_backend);
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
+    push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);
     push_line(
         content,
         "GlobalOffsetSeconds",

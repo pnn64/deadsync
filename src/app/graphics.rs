@@ -211,6 +211,7 @@ impl App {
         let window = Arc::new(event_loop.create_window(window_attributes)?);
         // Re-assert the opaque hint so compositors do not apply alpha-based blending.
         window.set_transparent(false);
+        window.set_cursor_visible(!config::get().hide_mouse_cursor);
         let high_dpi = config::get().high_dpi;
         let sz = window_render_size(&window, self.backend_type);
         self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);

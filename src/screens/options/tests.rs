@@ -113,6 +113,21 @@ fn input_backend_items_match_rows() {
 }
 
 #[test]
+fn graphics_hide_cursor_item_matches_row() {
+    let row_idx = row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::HideMouseCursor)
+        .expect("hide cursor row should exist");
+
+    assert_eq!(
+        GRAPHICS_OPTIONS_ITEMS.len(),
+        GRAPHICS_OPTIONS_ROWS.len() + 1
+    );
+    assert_eq!(
+        GRAPHICS_OPTIONS_ITEMS[row_idx].id,
+        ItemId::GfxHideMouseCursor
+    );
+}
+
+#[test]
 fn p2_can_navigate_and_change_system_options() {
     let asset_manager = AssetManager::new();
     let mut state = init();

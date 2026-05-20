@@ -130,6 +130,8 @@ pub struct Config {
     pub video_renderer: BackendType,
     /// Native high-DPI/Retina rendering. Currently affects macOS OpenGL only.
     pub high_dpi: bool,
+    /// Hide the OS mouse cursor while it is inside the DeadSync window.
+    pub hide_mouse_cursor: bool,
     pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
@@ -329,6 +331,7 @@ impl Default for Config {
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             high_dpi: false,
+            hide_mouse_cursor: false,
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,

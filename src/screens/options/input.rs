@@ -326,6 +326,11 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::ValidationLayers {
             config::update_gfx_debug(yes_no_from_choice(new_index));
         }
+        if row.id == SubRowId::HideMouseCursor {
+            action = Some(ScreenAction::UpdateMouseCursorHidden(yes_no_from_choice(
+                new_index,
+            )));
+        }
         if row.id == SubRowId::SoftwareRendererThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_software_renderer_threads(threads);

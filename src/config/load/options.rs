@@ -152,6 +152,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "HighDPI")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.high_dpi);
+    cfg.hide_mouse_cursor = conf
+        .get("Options", "HideMouseCursor")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.hide_mouse_cursor);
     cfg.windows_gamepad_backend = conf
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())

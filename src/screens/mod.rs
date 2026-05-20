@@ -93,6 +93,7 @@ pub enum ScreenAction {
         high_dpi: Option<bool>,
     },
     UpdateShowOverlay(u8),
+    UpdateMouseCursorHidden(bool),
     TestLightsSetAuto,
     TestLightsStepCabinet(i8),
     TestLightsStepButton(i8),

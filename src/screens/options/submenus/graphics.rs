@@ -125,6 +125,15 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::HideMouseCursor,
+        label: lookup_key("OptionsGraphics", "HideMouseCursor"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::VisualDelay,
         label: lookup_key("OptionsGraphics", "VisualDelay"),
         choices: &[literal_choice("0 ms")],
@@ -243,6 +252,14 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "HighDPIHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GfxHideMouseCursor,
+        name: lookup_key("OptionsGraphics", "HideMouseCursor"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "HideMouseCursorHelp",
         ))],
     },
     Item {

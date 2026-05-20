@@ -90,6 +90,17 @@ pub fn update_high_dpi(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_hide_mouse_cursor(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.hide_mouse_cursor == enabled {
+            return;
+        }
+        cfg.hide_mouse_cursor = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_simply_love_color(index: i32) {
     {
         let mut cfg = lock_config();

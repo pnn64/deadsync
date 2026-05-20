@@ -24,6 +24,7 @@ pub enum SubRowId {
     ShowStats,
     ValidationLayers,
     HighDpi,
+    HideMouseCursor,
     VisualDelay,
     // Sound Options
     SoundDevice,

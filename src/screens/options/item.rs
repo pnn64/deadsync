@@ -46,6 +46,7 @@ pub enum ItemId {
     GfxShowStats,
     GfxValidationLayers,
     GfxHighDpi,
+    GfxHideMouseCursor,
     GfxVisualDelay,
 
     // Input Options submenu (launcher)
@@ -280,6 +281,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "MaxFps")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "ShowStats")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "HighDPI")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "HideMouseCursor")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "VisualDelay")),
         ],
     },

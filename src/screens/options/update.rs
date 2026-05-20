@@ -149,6 +149,17 @@ pub fn sync_high_dpi(state: &mut State, enabled: bool) {
     clear_render_cache(state);
 }
 
+pub fn sync_hide_mouse_cursor(state: &mut State, enabled: bool) {
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HideMouseCursor,
+        yes_no_choice_index(enabled),
+    );
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
     state.present_mode_policy_at_load = mode;
     if let Some(slot) = get_choice_by_id_mut(

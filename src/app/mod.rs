@@ -4383,6 +4383,14 @@ impl App {
                 options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                 Vec::new()
             }
+            ScreenAction::UpdateMouseCursorHidden(hidden) => {
+                if let Some(window) = &self.window {
+                    window.set_cursor_visible(!hidden);
+                }
+                config::update_hide_mouse_cursor(hidden);
+                options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
+                Vec::new()
+            }
             ScreenAction::TestLightsSetAuto => {
                 test_lights::on_enter(&mut self.state.screens.test_lights_state);
                 self.lights.set_test_auto_cycle();
