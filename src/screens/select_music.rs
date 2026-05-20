@@ -1120,6 +1120,9 @@ pub struct State {
     playlist_library: Vec<PlaylistCacheEntry>,
     active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
+    /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
+    /// against re-enqueueing every frame while the same pack is expanded.
+    last_replaygain_prewarmed_pack: Option<String>,
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
@@ -3392,6 +3395,7 @@ pub fn init() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: initial_expanded_pack_name,
+        last_replaygain_prewarmed_pack: None,
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -3576,6 +3580,7 @@ pub fn init_placeholder() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
+        last_replaygain_prewarmed_pack: None,
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -3718,6 +3723,47 @@ fn clear_preview(state: &mut State) {
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
     audio::stop_music();
+}
+
+/// Enqueues ReplayGain analysis for every song in the currently-expanded
+/// pack as soon as the pack changes. Runs at background priority so the
+/// foreground preview always jumps ahead of any pack-warm backlog. The
+/// `last_replaygain_prewarmed_pack` guard prevents re-enqueueing every
+/// frame while the same pack stays expanded.
+fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
+    if !config::get().enable_replaygain {
+        return;
+    }
+    let Some(pack) = state.expanded_pack_name.clone() else {
+        state.last_replaygain_prewarmed_pack = None;
+        return;
+    };
+    if state.last_replaygain_prewarmed_pack.as_deref() == Some(pack.as_str()) {
+        return;
+    }
+    let mut current_pack_name: Option<&str> = None;
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for entry in &state.group_entries {
+        match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                current_pack_name = Some(name.as_str());
+            }
+            MusicWheelEntry::Song(song) if current_pack_name == Some(pack.as_str()) => {
+                if let Some(path) = song.music_path.clone() {
+                    paths.push(path);
+                }
+            }
+            MusicWheelEntry::Song(_) => {}
+        }
+    }
+    state.last_replaygain_prewarmed_pack = Some(pack);
+    if paths.is_empty() {
+        return;
+    }
+    crate::engine::audio::replaygain::prewarm_paths(
+        paths,
+        crate::engine::audio::replaygain::Priority::Background,
+    );
 }
 
 #[inline(always)]
@@ -9183,6 +9229,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     } else if state.currently_playing_preview_path.is_some() {
         clear_preview(state);
     }
+
+    maybe_prewarm_replaygain_for_pack(state);
 
     if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();

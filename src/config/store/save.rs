@@ -171,6 +171,7 @@ fn push_saved_options(
         "RateModPreservesPitch",
         cfg.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", cfg.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",
@@ -321,6 +322,7 @@ fn push_saved_options(
         "ArcadeOptionsNavigation",
         cfg.arcade_options_navigation,
     );
+    push_bool(content, "DelayedBack", cfg.delayed_back);
     push_bool(content, "ThreeKeyNavigation", cfg.three_key_navigation);
     push_bool(content, "UseFSRs", cfg.use_fsrs);
     push_line(content, "LightsDriver", cfg.lights_driver.as_str());

@@ -163,3 +163,15 @@ pub fn update_rate_mod_preserves_pitch(enabled: bool) {
     }
     save_without_keymaps();
 }
+
+pub fn update_enable_replaygain(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.enable_replaygain == enabled {
+            return;
+        }
+        cfg.enable_replaygain = enabled;
+    }
+    crate::engine::audio::on_replaygain_setting_changed(enabled);
+    save_without_keymaps();
+}

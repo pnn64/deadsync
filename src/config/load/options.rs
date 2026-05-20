@@ -296,6 +296,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "RateModPreservesPitch")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
+    cfg.enable_replaygain = conf
+        .get("Options", "ReplayGain")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.enable_replaygain, |v| v != 0);
     cfg.write_current_screen = conf
         .get("Options", "WriteCurrentScreen")
         .and_then(|v| parse_bool_str(&v))
@@ -481,6 +485,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "ArcadeOptionsNavigation")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.arcade_options_navigation);
+    cfg.delayed_back = conf
+        .get("Options", "DelayedBack")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.delayed_back);
     cfg.three_key_navigation = conf
         .get("Options", "ThreeKeyNavigation")
         .and_then(|v| parse_loose_bool_str(&v))

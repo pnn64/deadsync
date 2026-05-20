@@ -104,6 +104,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "RateModPreservesPitch",
         default.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", default.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",
@@ -258,6 +259,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "ArcadeOptionsNavigation",
         default.arcade_options_navigation,
     );
+    push_bool(content, "DelayedBack", default.delayed_back);
     push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
     push_bool(content, "UseFSRs", default.use_fsrs);
     push_line(content, "LightsDriver", default.lights_driver.as_str());

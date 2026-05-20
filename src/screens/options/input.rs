@@ -462,6 +462,9 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_zmod_rating_box_text(new_index == 1);
         } else if row.id == SubRowId::BpmDecimal {
             config::update_show_bpm_decimal(new_index == 1);
+        } else if row.id == SubRowId::DelayedBack {
+            // Choice 0 = Instant (delayed_back = false), 1 = Hold (delayed_back = true).
+            config::update_delayed_back(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
@@ -535,6 +538,9 @@ pub(super) fn apply_submenu_choice_delta(
             }
             SubRowId::RateModPreservesPitch => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
+            }
+            SubRowId::ReplayGain => {
+                config::update_enable_replaygain(new_index == 1);
             }
             _ => {}
         }

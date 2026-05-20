@@ -775,6 +775,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::DelayedBack,
+        usize::from(cfg.delayed_back),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );
@@ -834,6 +840,12 @@ pub fn init() -> State {
         SOUND_OPTIONS_ROWS,
         SubRowId::RateModPreservesPitch,
         usize::from(cfg.rate_mod_preserves_pitch),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
+        SOUND_OPTIONS_ROWS,
+        SubRowId::ReplayGain,
+        usize::from(cfg.enable_replaygain),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

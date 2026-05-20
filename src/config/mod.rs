@@ -262,6 +262,10 @@ pub struct Config {
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
+    /// Experimental: apply ReplayGain 2.0 / EBU R 128 loudness normalization
+    /// to music playback. Loudness is computed in the background and cached
+    /// on disk per song.
+    pub enable_replaygain: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
@@ -353,6 +357,7 @@ impl Default for Config {
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_font: MachineFont::Wendy,
             machine_bar_color: MachineBarColor::Default,
+            delayed_back: true,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_pack_ini_offsets: false,
@@ -404,6 +409,7 @@ impl Default for Config {
             auto_download_unlocks: false,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
+            enable_replaygain: false,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,

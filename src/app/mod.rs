@@ -1184,6 +1184,11 @@ pub struct SessionState {
     course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
+    /// SL/zmod parity: when a restart key is pressed mid-gameplay, the gameplay
+    /// state runs its fast Cancel exit. This flag intercepts the resulting
+    /// `NavigateNoFade(SelectMusic)` and redirects it back to Gameplay so the
+    /// player skips the long out-transition.
+    restart_pending: bool,
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
     course_eval_page_index: usize,
@@ -1580,6 +1585,7 @@ impl SessionState {
             course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
+            restart_pending: false,
             course_run: None,
             course_eval_pages: Vec::new(),
             course_eval_page_index: 0,
@@ -3848,6 +3854,16 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let action = match action {
+            // SL/zmod parity: a restart-triggered Cancel exit returns
+            // `NavigateNoFade(SelectMusic)`. Redirect it to Gameplay so the
+            // player skips the trip through SelectMusic.
+            ScreenAction::NavigateNoFade(CurrentScreen::SelectMusic)
+                if self.state.session.restart_pending
+                    && self.state.screens.current_screen == CurrentScreen::Gameplay =>
+            {
+                self.state.session.restart_pending = false;
+                ScreenAction::NavigateNoFade(CurrentScreen::Gameplay)
+            }
             ScreenAction::Navigate(CurrentScreen::Evaluation)
                 if self.should_chain_course_to_next_stage() =>
             {
@@ -4498,6 +4514,7 @@ impl App {
         music_rate: f32,
         scroll_speed: [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
         active_color_index: i32,
+        return_screen: CurrentScreen,
     ) -> bool {
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
@@ -4525,7 +4542,7 @@ impl App {
             chart_steps_index,
             chart_steps_index,
             active_color_index,
-            CurrentScreen::Gameplay,
+            return_screen,
             None,
         );
         po_state.music_rate = music_rate;
@@ -4552,6 +4569,7 @@ impl App {
                 music_rate,
                 scroll_speed,
                 active_color_index,
+                CurrentScreen::Gameplay,
             );
         }
 
@@ -4572,24 +4590,86 @@ impl App {
             music_rate,
             scroll_speed,
             active_color_index,
+            CurrentScreen::Gameplay,
+        )
+    }
+
+    fn prepare_player_options_for_practice_from_eval(&mut self) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+
+        let score_info = &self.state.screens.evaluation_state.score_info;
+        let Some((song, chart_hashes, music_rate, scroll_speed)) =
+            restart_payload_from_eval(score_info)
+        else {
+            return false;
+        };
+        let active_color_index = self.state.screens.evaluation_state.active_color_index;
+        self.prepare_restart_player_options(
+            song,
+            [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+            music_rate,
+            scroll_speed,
+            active_color_index,
+            CurrentScreen::Practice,
         )
     }
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if self.prepare_player_options_for_gameplay_restart() {
-            let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
-            if let Err(e) =
-                self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
-            {
-                log::error!("Failed to restart Gameplay with {label}: {e}");
-            } else {
-                self.state.session.gameplay_restart_count = restart_count;
-            }
-            true
-        } else {
+        if !self.prepare_player_options_for_gameplay_restart() {
             log::warn!("Ignored {label} restart: no restartable stage state.");
-            false
+            return false;
         }
+        let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
+
+        // SL/zmod parity: if we're already in Gameplay, run the fast Cancel
+        // exit (~0.5s) instead of the full ~1.5s gameplay out-transition.
+        // The Cancel navigation is intercepted in `handle_action` and
+        // redirected back to Gameplay, which uses a shortened in-transition.
+        if self.state.screens.current_screen == CurrentScreen::Gameplay
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            let already_exiting = gs.exit_transition.is_some();
+            crate::game::gameplay::begin_restart_exit(gs);
+            if !already_exiting && gs.exit_transition.is_some() {
+                self.state.session.gameplay_restart_count = restart_count;
+                self.state.session.restart_pending = true;
+            }
+            return true;
+        }
+
+        // Fallback (e.g. Ctrl+R from Evaluation): use the standard navigation.
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+        {
+            log::error!("Failed to restart Gameplay with {label}: {e}");
+        } else {
+            self.state.session.gameplay_restart_count = restart_count;
+        }
+        true
+    }
+
+    /// SL-zmod parity (`BGAnimations/ScreenEvaluation common/Shared/RestartHandler.lua`):
+    /// Ctrl+P on the Evaluation screen re-enters the just-played chart in
+    /// Practice mode. Mirrors `try_gameplay_restart`, but routes to
+    /// `CurrentScreen::Practice` and does not touch
+    /// `gameplay_restart_count` / `restart_pending` (those are gameplay-only).
+    fn try_practice_from_eval(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+        if !self.prepare_player_options_for_practice_from_eval() {
+            log::warn!("Ignored {label} practice: no replayable evaluation payload.");
+            return false;
+        }
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
+        {
+            log::error!("Failed to enter Practice with {label}: {e}");
+            return false;
+        }
+        true
     }
 
     fn should_chain_course_to_next_stage(&self) -> bool {
@@ -6404,6 +6484,16 @@ impl App {
             }
             if raw_key.pressed
                 && !raw_key.repeat
+                && raw_key.code == KeyCode::KeyP
+                && self.state.shell.ctrl_held
+                && config::get().keyboard_features
+                && self.state.session.course_run.is_none()
+                && self.try_practice_from_eval(event_loop, "Ctrl+P")
+            {
+                return true;
+            }
+            if raw_key.pressed
+                && !raw_key.repeat
                 && raw_key.code == KeyCode::F5
                 && crate::screens::evaluation::retry_submissions(
                     &self.state.screens.evaluation_state,
@@ -7276,6 +7366,7 @@ impl App {
             crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
+                self.state.session.restart_pending = false;
             }
             let mut course_display_carry = None;
             let course_display_totals = self

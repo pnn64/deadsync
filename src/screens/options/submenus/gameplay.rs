@@ -47,6 +47,15 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::DelayedBack,
+        label: lookup_key("OptionsGameplay", "DelayedBack"),
+        choices: &[
+            localized_choice("OptionsGameplay", "DelayedBackInstant"),
+            localized_choice("OptionsGameplay", "DelayedBackHold"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::AutoScreenshot,
         label: lookup_key("OptionsGameplay", "AutoScreenshot"),
         choices: &[
@@ -91,6 +100,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "BpmDecimalHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpDelayedBack,
+        name: lookup_key("OptionsGameplay", "DelayedBack"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "DelayedBackHelp",
         ))],
     },
     Item {

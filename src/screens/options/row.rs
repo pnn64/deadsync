@@ -36,6 +36,7 @@ pub enum SubRowId {
     MineSounds,
     GlobalOffset,
     RateModPreservesPitch,
+    ReplayGain,
     #[cfg(target_os = "linux")]
     LinuxAudioBackend,
     #[cfg(target_os = "linux")]
@@ -85,6 +86,7 @@ pub enum SubRowId {
     CenteredP1Notefield,
     ZmodRatingBox,
     BpmDecimal,
+    DelayedBack,
     AutoScreenshot,
     // Select Music Options
     ShowBanners,

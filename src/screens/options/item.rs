@@ -96,6 +96,7 @@ pub enum ItemId {
     GpCenteredP1,
     GpZmodRatingBox,
     GpBpmDecimal,
+    GpDelayedBack,
     GpAutoScreenshot,
 
     // Sound Options submenu
@@ -113,6 +114,7 @@ pub enum ItemId {
     SndMineSounds,
     SndGlobalOffset,
     SndRateModPitch,
+    SndReplayGain,
 
     // Select Music Options submenu
     SmShowBanners,
@@ -282,6 +284,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSound", "MineSounds")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "GlobalOffset")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "RateModPreservesPitch")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "ReplayGain")),
         ],
     },
     Item {
