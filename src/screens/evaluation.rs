@@ -531,15 +531,20 @@ pub struct ScoreInfo {
     pub itl: scores::ItlEvalState,
     pub judgment_counts: judgment::JudgeCounts,
     pub score_percent: f64,
+    pub earned_grade_points: i32,
+    pub possible_grade_points: i32,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub mods_text: Arc<str>,
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
+    pub holds_held_for_score: u32,
     pub holds_total: u32,
     pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
     pub rolls_total: u32,
+    pub mines_hit_for_score: u32,
     pub mines_avoided: u32,
     pub mines_total: u32,
     // Aggregate timing stats for non-miss tap judgments
@@ -838,6 +843,45 @@ fn build_eval_density_graph_mesh(
         graph_width,
         Some(0.5),
         0.5,
+    );
+    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+}
+
+fn build_eval_scatter_mesh(
+    si: &ScoreInfo,
+    graph_width: f32,
+    scale: crate::screens::components::evaluation::eval_graphs::ScatterPlotScale,
+) -> Option<Arc<[MeshVertex]>> {
+    const GRAPH_H: f32 = 64.0;
+    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+        &si.scatter,
+        si.graph_first_second,
+        si.graph_last_second,
+        graph_width,
+        GRAPH_H,
+        si.scatter_worst_window_ms,
+        scale,
+    );
+    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+}
+
+fn build_eval_timing_hist_mesh(
+    si: &ScoreInfo,
+    scale: crate::screens::components::evaluation::eval_graphs::TimingHistogramScale,
+) -> Option<Arc<[MeshVertex]>> {
+    const PANE_W: f32 = 300.0;
+    const PANE_H: f32 = 180.0;
+    const TOP_H: f32 = 26.0;
+    const BOT_H: f32 = 13.0;
+
+    let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
+    let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
+        &si.histogram,
+        PANE_W,
+        graph_h,
+        PANE_H,
+        scale,
+        crate::config::get().smooth_histogram,
     );
     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
 }
@@ -2130,6 +2174,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 itl,
                 judgment_counts: p.judgment_counts,
                 score_percent,
+                earned_grade_points: p.earned_grade_points,
+                possible_grade_points: gs.possible_grade_points[player_idx],
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
                 mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
@@ -2138,9 +2184,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 hands_achieved: p.hands_achieved,
                 hands_total: gs.hands_total[player_idx],
                 holds_held: p.holds_held,
+                holds_held_for_score: p.holds_held_for_score,
                 holds_total: gs.holds_total[player_idx],
                 rolls_held: p.rolls_held,
+                rolls_held_for_score: p.rolls_held_for_score,
                 rolls_total: gs.rolls_total[player_idx],
+                mines_hit_for_score: p.mines_hit_for_score,
                 mines_avoided: p.mines_avoided,
                 mines_total: gs.mines_total[player_idx],
                 timing: stats,
@@ -2462,6 +2511,75 @@ pub fn init_from_score_info(
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
             build_eval_density_graph_mesh(si, graph_width, 64.0)
         });
+    let scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
+            )
+        });
+    let scatter_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
+            )
+        });
+    let scatter_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
+            )
+        });
+    let scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Arrow,
+            )
+        });
+    let scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(
+                si,
+                graph_width,
+                crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Foot,
+            )
+        });
+    let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_timing_hist_mesh(
+                si,
+                crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
+            )
+        });
+    let timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_timing_hist_mesh(
+                si,
+                crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
+            )
+        });
+    let timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_timing_hist_mesh(
+                si,
+                crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
+            )
+        });
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
@@ -2473,14 +2591,14 @@ pub fn init_from_score_info(
         score_info,
         itl_progress: std::array::from_fn(|_| None),
         density_graph_mesh,
-        timing_hist_mesh: std::array::from_fn(|_| None),
-        timing_hist_mesh_ex: std::array::from_fn(|_| None),
-        timing_hist_mesh_hard_ex: std::array::from_fn(|_| None),
-        scatter_mesh_itg: std::array::from_fn(|_| None),
-        scatter_mesh_ex: std::array::from_fn(|_| None),
-        scatter_mesh_hard_ex: std::array::from_fn(|_| None),
-        scatter_mesh_arrow: std::array::from_fn(|_| None),
-        scatter_mesh_foot: std::array::from_fn(|_| None),
+        timing_hist_mesh,
+        timing_hist_mesh_ex,
+        timing_hist_mesh_hard_ex,
+        scatter_mesh_itg,
+        scatter_mesh_ex,
+        scatter_mesh_hard_ex,
+        scatter_mesh_arrow,
+        scatter_mesh_foot,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,

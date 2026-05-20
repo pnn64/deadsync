@@ -1715,6 +1715,19 @@ fn build_course_graph_stages(
     })
 }
 
+fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
+    let seconds = stage.song.precise_last_second();
+    if seconds.is_finite() {
+        seconds.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+fn course_total_seconds(course: &CourseRunState) -> f32 {
+    course.stages.iter().map(course_stage_seconds).sum()
+}
+
 #[inline(always)]
 fn merge_window_counts(
     mut total: crate::game::timing::WindowCounts,
@@ -1730,6 +1743,18 @@ fn merge_window_counts(
     total
 }
 
+#[inline(always)]
+fn window_counts_total(counts: crate::game::timing::WindowCounts) -> u32 {
+    counts
+        .w0
+        .saturating_add(counts.w1)
+        .saturating_add(counts.w2)
+        .saturating_add(counts.w3)
+        .saturating_add(counts.w4)
+        .saturating_add(counts.w5)
+        .saturating_add(counts.miss)
+}
+
 fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
     if course.stage_summaries.is_empty() {
         return None;
@@ -1739,11 +1764,12 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
     summary_song.title.clone_from(&course.name);
     summary_song.translit_title.clone_from(&course.name);
     summary_song.banner_path.clone_from(&course.banner_path);
-    let duration_seconds: f32 = course
+    let played_duration_seconds: f32 = course
         .stage_summaries
         .iter()
         .map(|stage| stage.duration_seconds.max(0.0))
         .sum();
+    let duration_seconds = course_total_seconds(course).max(played_duration_seconds);
     summary_song.music_length_seconds = duration_seconds;
     summary_song.total_length_seconds = duration_seconds.round() as i32;
     let summary_song = Arc::new(summary_song);
@@ -1752,11 +1778,12 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         std::array::from_fn(|_| None);
     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
         let idx = side_ix(side);
-        let mut weighted_score = 0.0_f64;
-        let mut weighted_ex = 0.0_f64;
-        let mut weighted_hard_ex = 0.0_f64;
-        let mut weight_sum = 0.0_f64;
+        let course_totals = course.course_display_totals[idx];
+        let mut earned_grade_points = 0i32;
+        let mut possible_grade_points = course_totals.possible_grade_points;
         let mut notes_hit: u32 = 0;
+        let mut played_total_steps: u32 = 0;
+        let mut played_possible_grade_points = 0i32;
         let mut calories_burned = 0.0_f32;
         let mut meter_sum = 0u32;
         let mut meter_count = 0u32;
@@ -1770,20 +1797,42 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut track_early_judgments = false;
         let mut counts = crate::game::timing::WindowCounts::default();
         let mut counts_10ms = crate::game::timing::WindowCounts::default();
+        let mut hands_achieved = 0u32;
+        let mut hands_total = 0u32;
+        let mut holds_held = 0u32;
+        let mut holds_held_for_score = 0u32;
+        let mut played_holds_total = 0u32;
+        let mut rolls_held = 0u32;
+        let mut rolls_held_for_score = 0u32;
+        let mut played_rolls_total = 0u32;
+        let mut mines_hit_for_score = 0u32;
+        let mut mines_avoided = 0u32;
+        let mut played_mines_total = 0u32;
+        let mut timing_offsets_ms = Vec::new();
+        let mut scatter = Vec::new();
+        let mut scatter_worst_window_ms = 0.0_f32;
+        let mut histograms = Vec::new();
+        let mut graph_first_second = 0.0_f32;
+        let mut graph_last_second = duration_seconds.max(0.001);
+        let mut life_history = Vec::new();
+        let mut fail_time = None;
+        let mut elapsed = 0.0_f32;
         let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
         for stage in &course.stage_summaries {
+            let stage_offset = elapsed;
             let Some(player) = stage.players[idx].as_ref() else {
+                elapsed += stage.duration_seconds.max(0.0);
                 continue;
             };
             if first_player.is_none() {
                 first_player = Some(player);
             }
-            let weight = player.notes_hit.max(1) as f64;
-            weighted_score += player.score_percent * weight;
-            weighted_ex += player.ex_score_percent * weight;
-            weighted_hard_ex += player.hard_ex_score_percent * weight;
-            weight_sum += weight;
+            earned_grade_points = earned_grade_points.saturating_add(player.earned_grade_points);
+            played_possible_grade_points =
+                played_possible_grade_points.saturating_add(player.possible_grade_points);
             notes_hit = notes_hit.saturating_add(player.notes_hit);
+            played_total_steps =
+                played_total_steps.saturating_add(window_counts_total(player.window_counts));
             calories_burned += player.calories_burned.max(0.0);
             meter_sum = meter_sum.saturating_add(player.chart.meter);
             meter_count = meter_count.saturating_add(1);
@@ -1797,25 +1846,80 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             track_early_judgments |= player.track_early_judgments;
             counts = merge_window_counts(counts, player.window_counts);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
+            hands_achieved = hands_achieved.saturating_add(player.hands_achieved);
+            hands_total = hands_total.saturating_add(player.hands_total);
+            holds_held = holds_held.saturating_add(player.holds_held);
+            holds_held_for_score = holds_held_for_score.saturating_add(player.holds_held_for_score);
+            played_holds_total = played_holds_total.saturating_add(player.holds_total);
+            rolls_held = rolls_held.saturating_add(player.rolls_held);
+            rolls_held_for_score = rolls_held_for_score.saturating_add(player.rolls_held_for_score);
+            played_rolls_total = played_rolls_total.saturating_add(player.rolls_total);
+            mines_hit_for_score = mines_hit_for_score.saturating_add(player.mines_hit_for_score);
+            mines_avoided = mines_avoided.saturating_add(player.mines_avoided);
+            played_mines_total = played_mines_total.saturating_add(player.mines_total);
+            scatter.reserve(player.scatter.len());
+            for point in &player.scatter {
+                let mut shifted = *point;
+                shifted.time_sec += stage_offset;
+                if let Some(offset_ms) = shifted.offset_ms {
+                    timing_offsets_ms.push(offset_ms);
+                }
+                scatter.push(shifted);
+            }
+            scatter_worst_window_ms = scatter_worst_window_ms.max(player.scatter_worst_window_ms);
+            histograms.push(player.histogram.clone());
+            graph_first_second = graph_first_second.min(player.graph_first_second + stage_offset);
+            graph_last_second = graph_last_second.max(player.graph_last_second + stage_offset);
+            life_history.reserve(player.life_history.len());
+            for &(time, life) in &player.life_history {
+                life_history.push((time + stage_offset, life));
+            }
+            if fail_time.is_none() {
+                fail_time = player.fail_time.map(|time| time + stage_offset);
+            }
+            elapsed += stage.duration_seconds.max(0.0);
         }
         let Some(first_player) = first_player else {
             continue;
         };
-        let score_percent = if weight_sum > 0.0 {
-            (weighted_score / weight_sum).clamp(0.0, 1.0)
+        if possible_grade_points <= 0 {
+            possible_grade_points = played_possible_grade_points;
+        }
+        let total_steps = course_totals.total_steps.max(played_total_steps);
+        let holds_total = if course_totals.holds_total > 0 {
+            course_totals.holds_total
         } else {
-            0.0
+            played_holds_total
         };
-        let ex_score_percent = if weight_sum > 0.0 {
-            (weighted_ex / weight_sum).clamp(0.0, 100.0)
+        let rolls_total = if course_totals.rolls_total > 0 {
+            course_totals.rolls_total
         } else {
-            0.0
+            played_rolls_total
         };
-        let hard_ex_score_percent = if weight_sum > 0.0 {
-            (weighted_hard_ex / weight_sum).clamp(0.0, 100.0)
+        let mines_total = if course_totals.mines_total > 0 {
+            course_totals.mines_total
         } else {
-            0.0
+            played_mines_total
         };
+        let score_percent = crate::game::judgment::calculate_itg_score_percent_from_points(
+            earned_grade_points,
+            possible_grade_points,
+        );
+        let ex_data = crate::game::judgment::ExScoreData {
+            counts,
+            counts_10ms,
+            holds_held: holds_held_for_score,
+            holds_resolved: holds_held_for_score,
+            rolls_held: rolls_held_for_score,
+            rolls_resolved: rolls_held_for_score,
+            mines_hit: mines_hit_for_score,
+            total_steps,
+            holds_total,
+            rolls_total,
+            mines_total,
+        };
+        let ex_score_percent = crate::game::judgment::ex_score_percent(&ex_data);
+        let hard_ex_score_percent = crate::game::judgment::hard_ex_score_percent(&ex_data);
         let mut grade = if any_failed {
             scores::Grade::Failed
         } else {
@@ -1848,12 +1952,33 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             itl: scores::ItlEvalState::default(),
             grade,
             score_percent,
+            earned_grade_points,
+            possible_grade_points,
             ex_score_percent,
             hard_ex_score_percent,
+            hands_achieved,
+            hands_total,
+            holds_held,
+            holds_held_for_score,
+            holds_total,
+            rolls_held,
+            rolls_held_for_score,
+            rolls_total,
+            mines_hit_for_score,
+            mines_avoided,
+            mines_total,
             notes_hit,
             calories_burned,
             window_counts: counts,
             window_counts_10ms: counts_10ms,
+            timing: crate::game::timing::timing_stats_from_offsets(timing_offsets_ms),
+            scatter,
+            scatter_worst_window_ms: scatter_worst_window_ms.max(45.0),
+            histogram: crate::game::timing::merge_histograms_ms(histograms.as_slice()),
+            graph_first_second,
+            graph_last_second,
+            life_history,
+            fail_time,
             show_w0,
             show_fa_plus_pane,
             show_ex_score: show_ex,
@@ -1927,30 +2052,37 @@ fn score_info_from_stage(
         itl: player.itl.clone(),
         judgment_counts,
         score_percent: player.score_percent,
+        earned_grade_points: player.earned_grade_points,
+        possible_grade_points: player.possible_grade_points,
         grade: player.grade,
         speed_mod: profile::get_for_side(side).scroll_speed,
         mods_text: fallback_eval_mods_text(side, profile::get_for_side(side).scroll_speed),
-        hands_achieved: 0,
-        hands_total: 0,
-        holds_held: 0,
-        holds_total: 0,
-        rolls_held: 0,
-        rolls_total: 0,
-        mines_avoided: 0,
-        mines_total: 0,
-        timing: crate::game::timing::TimingStats::default(),
-        scatter: Vec::new(),
-        scatter_worst_window_ms: 45.0,
-        histogram: crate::game::timing::HistogramMs::default(),
-        graph_first_second: 0.0,
-        graph_last_second: stage.song.precise_last_second(),
+        hands_achieved: player.hands_achieved,
+        hands_total: player.hands_total,
+        holds_held: player.holds_held,
+        holds_held_for_score: player.holds_held_for_score,
+        holds_total: player.holds_total,
+        rolls_held: player.rolls_held,
+        rolls_held_for_score: player.rolls_held_for_score,
+        rolls_total: player.rolls_total,
+        mines_hit_for_score: player.mines_hit_for_score,
+        mines_avoided: player.mines_avoided,
+        mines_total: player.mines_total,
+        timing: player.timing,
+        scatter: player.scatter.clone(),
+        scatter_worst_window_ms: player.scatter_worst_window_ms,
+        histogram: player.histogram.clone(),
+        graph_first_second: player.graph_first_second,
+        graph_last_second: player.graph_last_second,
         music_rate: if stage.music_rate.is_finite() && stage.music_rate > 0.0 {
             stage.music_rate
         } else {
             1.0
         },
-        life_history: Vec::new(),
-        fail_time: (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds),
+        life_history: player.life_history.clone(),
+        fail_time: player
+            .fail_time
+            .or_else(|| (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds)),
         window_counts: player.window_counts,
         window_counts_10ms: player.window_counts_10ms,
         ex_score_percent: player.ex_score_percent,
@@ -2569,12 +2701,33 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         itl: si.itl.clone(),
         grade: si.grade,
         score_percent: si.score_percent,
+        earned_grade_points: si.earned_grade_points,
+        possible_grade_points: si.possible_grade_points,
         ex_score_percent: si.ex_score_percent,
         hard_ex_score_percent: si.hard_ex_score_percent,
+        hands_achieved: si.hands_achieved,
+        hands_total: si.hands_total,
+        holds_held: si.holds_held,
+        holds_held_for_score: si.holds_held_for_score,
+        holds_total: si.holds_total,
+        rolls_held: si.rolls_held,
+        rolls_held_for_score: si.rolls_held_for_score,
+        rolls_total: si.rolls_total,
+        mines_hit_for_score: si.mines_hit_for_score,
+        mines_avoided: si.mines_avoided,
+        mines_total: si.mines_total,
         notes_hit: notes_hit(si),
         calories_burned: si.calories_burned,
         window_counts: si.window_counts,
         window_counts_10ms: si.window_counts_10ms,
+        timing: si.timing,
+        scatter: si.scatter.clone(),
+        scatter_worst_window_ms: si.scatter_worst_window_ms,
+        histogram: si.histogram.clone(),
+        graph_first_second: si.graph_first_second,
+        graph_last_second: si.graph_last_second,
+        life_history: si.life_history.clone(),
+        fail_time: si.fail_time,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
         show_fa_plus_pane: si.show_fa_plus_pane,
         show_ex_score: si.show_ex_score,
@@ -8861,15 +9014,20 @@ mod tests {
             itl: crate::game::scores::ItlEvalState::default(),
             judgment_counts: [0; crate::game::judgment::JUDGE_GRADE_COUNT],
             score_percent: 0.0,
+            earned_grade_points: 0,
+            possible_grade_points: 0,
             grade: crate::game::scores::Grade::Tier01,
             speed_mod,
             mods_text: fallback_eval_mods_text(side, speed_mod),
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
+            holds_held_for_score: 0,
             holds_total: 0,
             rolls_held: 0,
+            rolls_held_for_score: 0,
             rolls_total: 0,
+            mines_hit_for_score: 0,
             mines_avoided: 0,
             mines_total: 0,
             timing: crate::game::timing::TimingStats::default(),
@@ -8902,6 +9060,98 @@ mod tests {
         }
     }
 
+    fn test_song_with_duration(path: &str, hash: &str, seconds: f32) -> Arc<SongData> {
+        let mut song = test_song(path, 0.0, [hash, hash]);
+        song.music_length_seconds = seconds;
+        song.total_length_seconds = seconds.round() as i32;
+        song.precise_last_second_seconds = seconds;
+        Arc::new(song)
+    }
+
+    fn test_course_stage(song: Arc<SongData>) -> CourseStageRuntime {
+        CourseStageRuntime {
+            song,
+            steps_index: [0; crate::game::gameplay::MAX_PLAYERS],
+            preferred_difficulty_index: [0; crate::game::gameplay::MAX_PLAYERS],
+        }
+    }
+
+    fn test_player_stage_summary(
+        chart: Arc<ChartData>,
+        grade: scores::Grade,
+        score_percent: f64,
+        earned_grade_points: i32,
+        possible_grade_points: i32,
+    ) -> stage_stats::PlayerStageSummary {
+        stage_stats::PlayerStageSummary {
+            profile_name: "P1".to_string(),
+            chart,
+            score_valid: true,
+            disqualified: false,
+            groovestats: scores::GrooveStatsEvalState::default(),
+            itl: scores::ItlEvalState::default(),
+            grade,
+            score_percent,
+            earned_grade_points,
+            possible_grade_points,
+            ex_score_percent: 100.0,
+            hard_ex_score_percent: 100.0,
+            hands_achieved: 1,
+            hands_total: 1,
+            holds_held: 2,
+            holds_held_for_score: 2,
+            holds_total: 2,
+            rolls_held: 1,
+            rolls_held_for_score: 1,
+            rolls_total: 1,
+            mines_hit_for_score: 0,
+            mines_avoided: 3,
+            mines_total: 3,
+            notes_hit: 20,
+            calories_burned: 12.5,
+            window_counts: crate::game::timing::WindowCounts {
+                w0: 20,
+                ..Default::default()
+            },
+            window_counts_10ms: crate::game::timing::WindowCounts {
+                w0: 16,
+                w1: 4,
+                ..Default::default()
+            },
+            timing: crate::game::timing::TimingStats {
+                mean_abs_ms: 10.0,
+                mean_ms: 10.0,
+                stddev_ms: 0.0,
+                max_abs_ms: 10.0,
+            },
+            scatter: vec![crate::game::timing::ScatterPoint {
+                time_sec: 12.0,
+                offset_ms: Some(10.0),
+                direction_code: 1,
+                is_stream: false,
+                is_left_foot: true,
+                miss_because_held: false,
+            }],
+            scatter_worst_window_ms: 45.0,
+            histogram: crate::game::timing::HistogramMs {
+                bins: vec![(10, 1)],
+                smoothed: Vec::new(),
+                max_count: 1,
+                worst_observed_ms: 10.0,
+                worst_window_ms: 45.0,
+            },
+            graph_first_second: 0.0,
+            graph_last_second: 60.0,
+            life_history: vec![(0.0, 1.0), (60.0, 0.0)],
+            fail_time: Some(60.0),
+            show_w0: true,
+            show_ex_score: true,
+            show_hard_ex_score: true,
+            show_fa_plus_pane: true,
+            track_early_judgments: true,
+        }
+    }
+
     #[test]
     fn foreground_input_requires_focus_and_surface() {
         assert!(foreground_input_active(true, true));
@@ -8924,6 +9174,78 @@ mod tests {
         assert!(!course_eval_is_final(1, 3, false));
         assert!(course_eval_is_final(1, 3, true));
         assert!(course_eval_is_final(3, 3, false));
+    }
+
+    #[test]
+    fn course_summary_uses_trail_totals_and_keeps_timing_graphs() {
+        let song_a = test_song_with_duration("Songs/Test/a.ssc", "a", 60.0);
+        let song_b = test_song_with_duration("Songs/Test/b.ssc", "b", 90.0);
+        let chart = Arc::new(test_chart("stage-a"));
+        let mut stage_players: [Option<stage_stats::PlayerStageSummary>;
+            crate::game::gameplay::MAX_PLAYERS] = std::array::from_fn(|_| None);
+        stage_players[0] = Some(test_player_stage_summary(
+            chart,
+            scores::Grade::Failed,
+            1.0,
+            500,
+            500,
+        ));
+
+        let mut course_display_totals = [crate::game::gameplay::CourseDisplayTotals::default();
+            crate::game::gameplay::MAX_PLAYERS];
+        course_display_totals[0] = crate::game::gameplay::CourseDisplayTotals {
+            possible_grade_points: 1000,
+            total_steps: 40,
+            holds_total: 4,
+            rolls_total: 2,
+            mines_total: 6,
+        };
+        let course = CourseRunState {
+            path: PathBuf::from("Courses/Test.crs"),
+            name: "Test Course".to_string(),
+            banner_path: None,
+            score_hash: "course-hash".to_string(),
+            course_difficulty_name: "Hard".to_string(),
+            course_meter: Some(12),
+            course_stepchart_label: "Hard".to_string(),
+            song_stub: song_a.clone(),
+            stages: vec![
+                test_course_stage(song_a.clone()),
+                test_course_stage(song_b.clone()),
+            ],
+            course_display_totals,
+            next_stage_index: 1,
+            stage_summaries: vec![stage_stats::StageSummary {
+                song: song_a.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: stage_players,
+            }],
+            stage_eval_pages: Vec::new(),
+        };
+
+        let summary = build_course_summary_stage(&course).expect("course summary");
+        let player = summary.players[0].as_ref().expect("P1 summary");
+        assert!((summary.duration_seconds - 150.0).abs() <= f32::EPSILON);
+        assert!((player.score_percent - 0.5).abs() <= f64::EPSILON);
+        assert_eq!(player.earned_grade_points, 500);
+        assert_eq!(player.possible_grade_points, 1000);
+        assert_eq!(player.holds_total, 4);
+        assert_eq!(player.rolls_total, 2);
+        assert_eq!(player.mines_total, 6);
+        assert_eq!(player.grade, scores::Grade::Failed);
+        assert_eq!(player.scatter.len(), 1);
+        assert!(!player.histogram.bins.is_empty());
+        assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
+
+        let course_page =
+            score_info_from_stage(&summary, profile::PlayerSide::P1).expect("course page");
+        let song_page = score_info_from_stage(&course.stage_summaries[0], profile::PlayerSide::P1)
+            .expect("song page");
+        assert!((course_page.score_percent - 0.5).abs() <= f64::EPSILON);
+        assert!((song_page.score_percent - 1.0).abs() <= f64::EPSILON);
+        assert!(!course_page.histogram.bins.is_empty());
+        assert_eq!(course_page.scatter.len(), 1);
     }
 
     #[test]

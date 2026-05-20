@@ -4,7 +4,7 @@ use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::scores;
 use crate::game::song::SongData;
-use crate::game::timing::WindowCounts;
+use crate::game::timing::{HistogramMs, ScatterPoint, TimingStats, WindowCounts};
 
 #[derive(Clone, Debug)]
 pub struct StageSummary {
@@ -24,13 +24,34 @@ pub struct PlayerStageSummary {
     pub itl: scores::ItlEvalState,
     pub grade: scores::Grade,
     pub score_percent: f64,
+    pub earned_grade_points: i32,
+    pub possible_grade_points: i32,
     pub ex_score_percent: f64,
     pub hard_ex_score_percent: f64,
+    pub hands_achieved: u32,
+    pub hands_total: u32,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub holds_total: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_total: u32,
+    pub mines_hit_for_score: u32,
+    pub mines_avoided: u32,
+    pub mines_total: u32,
     /// Total hit tapnotes this stage (counts jumps/hands as >1).
     pub notes_hit: u32,
     pub calories_burned: f32,
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
+    pub timing: TimingStats,
+    pub scatter: Vec<ScatterPoint>,
+    pub scatter_worst_window_ms: f32,
+    pub histogram: HistogramMs,
+    pub graph_first_second: f32,
+    pub graph_last_second: f32,
+    pub life_history: Vec<(f32, f32)>,
+    pub fail_time: Option<f32>,
     pub show_w0: bool,
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,

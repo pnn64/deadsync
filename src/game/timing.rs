@@ -1304,6 +1304,31 @@ fn stats_from_sums(
     }
 }
 
+pub fn timing_stats_from_offsets<I>(offsets_ms: I) -> TimingStats
+where
+    I: IntoIterator<Item = f32>,
+{
+    let mut count = 0u32;
+    let mut sum_ms = 0.0_f32;
+    let mut sum_abs_ms = 0.0_f32;
+    let mut sum_sq_ms = 0.0_f32;
+    let mut max_abs_ms = 0.0_f32;
+
+    for offset_ms in offsets_ms {
+        if !offset_ms.is_finite() {
+            continue;
+        }
+        let abs = offset_ms.abs();
+        count = count.saturating_add(1);
+        sum_ms += offset_ms;
+        sum_abs_ms += abs;
+        sum_sq_ms += offset_ms * offset_ms;
+        max_abs_ms = max_abs_ms.max(abs);
+    }
+
+    stats_from_sums(count, sum_ms, sum_abs_ms, sum_sq_ms, max_abs_ms)
+}
+
 #[inline(always)]
 pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment) {
     if judgment.grade == JudgeGrade::Miss {
@@ -1717,6 +1742,46 @@ pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
         max_count: counts.max_count,
         worst_observed_ms: (meta.worst_observed_bin_abs as f32) * HIST_BIN_MS,
         worst_window_ms: worst_window_ms.max(meta.max_abs),
+    }
+}
+
+pub fn merge_histograms_ms(histograms: &[HistogramMs]) -> HistogramMs {
+    let bin_count = histograms
+        .iter()
+        .flat_map(|hist| hist.bins.iter())
+        .fold(0usize, |sum, (_, count)| {
+            sum.saturating_add(*count as usize)
+        });
+    if bin_count == 0 {
+        return HistogramMs::default();
+    }
+
+    let mut seen_bins = Vec::with_capacity(bin_count);
+    let mut worst_observed_ms = 0.0_f32;
+    let mut worst_window_ms = 0.0_f32;
+    for hist in histograms {
+        worst_observed_ms = worst_observed_ms.max(hist.worst_observed_ms);
+        worst_window_ms = worst_window_ms.max(hist.worst_window_ms);
+        for &(bin, count) in &hist.bins {
+            for _ in 0..count {
+                seen_bins.push(bin);
+            }
+        }
+    }
+
+    let counts = pack_hist_counts(seen_bins);
+    let worst_window_ms = worst_window_ms
+        .max(worst_observed_ms)
+        .max(effective_windows_ms()[1]);
+    let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round().max(1.0) as i32;
+    let smoothed = smooth_hist_counts(&counts, worst_window_bin);
+
+    HistogramMs {
+        bins: counts.bins,
+        smoothed,
+        max_count: counts.max_count,
+        worst_observed_ms,
+        worst_window_ms,
     }
 }
 
