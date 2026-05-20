@@ -263,6 +263,10 @@ pub struct Config {
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
+    /// Allows the in-app updater to download and install updates.
+    /// Disable this for builds distributed through a channel that owns
+    /// updates itself, such as a package manager or storefront.
+    pub updater_install_enabled: bool,
     pub rate_mod_preserves_pitch: bool,
     /// Experimental: apply ReplayGain 2.0 / EBU R 128 loudness normalization
     /// to music playback. Loudness is computed in the background and cached
@@ -410,6 +414,7 @@ impl Default for Config {
             audio_sample_rate_hz: None,
             auto_download_unlocks: false,
             auto_populate_gs_scores: false,
+            updater_install_enabled: true,
             rate_mod_preserves_pitch: true,
             enable_replaygain: false,
             enable_arrowcloud: false,

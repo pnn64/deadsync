@@ -19,6 +19,7 @@ pub enum ItemId {
     OnlineScoreServices,
     NullOrDieOptions,
     ReloadSongsCourses,
+    CheckForUpdates,
     Credits,
     Exit,
 
@@ -237,6 +238,18 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     total_w <= inline_w
 }
 
+/// Returns the top-level rows that should be shown for this host/config.
+pub(super) fn visible_items() -> Vec<&'static Item> {
+    ITEMS.iter().filter(|item| item_visible(item.id)).collect()
+}
+
+fn item_visible(id: ItemId) -> bool {
+    match id {
+        ItemId::CheckForUpdates => crate::engine::updater::apply_supported_for_host(),
+        _ => true,
+    }
+}
+
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
     Item {
@@ -420,6 +433,14 @@ pub const ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsHelp",
             "ReloadSongsCoursesHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::CheckForUpdates,
+        name: lookup_key("Options", "CheckForUpdates"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "CheckForUpdatesHelp",
         ))],
     },
     Item {

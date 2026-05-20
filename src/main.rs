@@ -179,6 +179,7 @@ fn install_panic_hook() {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = engine::updater::cli::UpdaterCli::from_env();
     set_runtime_dir()?;
     engine::host_time::init();
 
@@ -191,10 +192,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
 
+    if let Some(request) = cli.apply_update.clone() {
+        let code = engine::updater::cli::run_apply_helper(request);
+        log::logger().flush();
+        std::process::exit(code);
+    }
+
     config::load();
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());
     engine::logging::write_startup_report(&startup_lines(&cfg));
+
+    if cli.restart {
+        log::info!(
+            "Restarted after self-update to {}",
+            engine::version::current_tag()
+        );
+    }
+
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(std::path::PathBuf::from))
+    {
+        let _ = cli.cleanup_old.as_deref();
+        let report = engine::updater::apply_journal::recover(&exe_dir);
+        if report.journal_removed {
+            log::info!(
+                "Updater recovery: backups_removed={} backups_restored={} installed_removed={} staging_removed={}",
+                report.backups_removed,
+                report.backups_restored,
+                report.installed_removed,
+                report.staging_removed,
+            );
+        }
+    }
+
+    engine::updater::state::load_persisted_cache();
+    if cli.no_update_check {
+        log::info!("Startup update check disabled by --no-update-check");
+    } else {
+        engine::updater::state::spawn_startup_check();
+    }
 
     // Initialize localization after config (which provides the language preference)
     // and before profile/audio/screens which may use tr() for display strings.

@@ -139,14 +139,18 @@ jobs:
         with:
           name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
-          path: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: ${{ steps.package.outputs.archive }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true
