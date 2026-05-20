@@ -213,6 +213,8 @@ pub struct Config {
     pub zmod_rating_box_text: bool,
     /// Show one decimal place for live gameplay BPM when BPM is non-integer.
     pub show_bpm_decimal: bool,
+    /// Require holding Back to leave gameplay instead of exiting on first press.
+    pub delayed_back: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
     pub default_fail_type: DefaultFailType,
     /// Choose which null-or-die sync graph the Select Music overlay displays.
