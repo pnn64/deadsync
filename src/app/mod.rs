@@ -2861,13 +2861,21 @@ fn quantize_sync_offset_seconds(v: f32) -> f32 {
 }
 
 #[inline(always)]
+fn sync_offset_delta_seconds(start: f32, new: f32) -> Option<f32> {
+    let delta = quantize_sync_offset_seconds(new) - quantize_sync_offset_seconds(start);
+    (delta.abs() >= 0.000_1_f32).then_some(delta)
+}
+
+#[inline(always)]
+fn sync_offset_target_seconds(start: f32, new: f32) -> Option<f32> {
+    sync_offset_delta_seconds(start, new).map(|_| quantize_sync_offset_seconds(new))
+}
+
+#[inline(always)]
 fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
     let start_q = quantize_sync_offset_seconds(start);
     let new_q = quantize_sync_offset_seconds(new);
-    let delta_q = new_q - start_q;
-    if delta_q.abs() < 0.000_1_f32 {
-        return None;
-    }
+    let delta_q = sync_offset_delta_seconds(start, new)?;
     let direction = if delta_q > 0.0 { "earlier" } else { "later" };
     Some(format!(
         "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
@@ -4500,12 +4508,13 @@ impl App {
 
     #[inline(always)]
     fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
-        (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > 0.000_001_f32
+        sync_offset_delta_seconds(gs.initial_global_offset_seconds, gs.global_offset_seconds)
+            .is_some()
     }
 
     #[inline(always)]
     fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
-        (gs.song_offset_seconds - gs.initial_song_offset_seconds).abs() > 0.000_001_f32
+        sync_offset_delta_seconds(gs.initial_song_offset_seconds, gs.song_offset_seconds).is_some()
     }
 
     #[inline(always)]
@@ -4635,14 +4644,17 @@ impl App {
         if save_changes {
             let mut song_offset_change: Option<(PathBuf, f32)> = None;
             if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                if Self::gameplay_global_offset_changed(gs) {
-                    config::update_global_offset(gs.global_offset_seconds);
+                if let Some(global_offset) = sync_offset_target_seconds(
+                    gs.initial_global_offset_seconds,
+                    gs.global_offset_seconds,
+                ) {
+                    config::update_global_offset(global_offset);
                 }
-                if Self::gameplay_song_offset_changed(gs) {
-                    song_offset_change = Some((
-                        gs.song.simfile_path.clone(),
-                        gs.song_offset_seconds - gs.initial_song_offset_seconds,
-                    ));
+                if let Some(delta) = sync_offset_delta_seconds(
+                    gs.initial_song_offset_seconds,
+                    gs.song_offset_seconds,
+                ) {
+                    song_offset_change = Some((gs.song.simfile_path.clone(), delta));
                 }
             }
             if let Some((simfile_path, delta)) = song_offset_change
@@ -9004,6 +9016,20 @@ mod tests {
         assert_eq!(
             gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, false),
             Some(1)
+        );
+    }
+
+    #[test]
+    fn sync_offset_change_uses_millisecond_quantization() {
+        assert_eq!(sync_offset_delta_seconds(-0.0421, -0.0424), None);
+        assert_eq!(sync_change_line("Global Offset", -0.0421, -0.0424), None);
+
+        let delta = sync_offset_delta_seconds(-0.0424, -0.0426).expect("changed by one ms");
+        assert!((delta + 0.001).abs() < f32::EPSILON);
+        assert_eq!(sync_offset_target_seconds(-0.0424, -0.0426), Some(-0.043));
+        assert_eq!(
+            sync_change_line("Global Offset", -0.0424, -0.0426).as_deref(),
+            Some("Global Offset from -0.042 to -0.043 (notes later)")
         );
     }
 
