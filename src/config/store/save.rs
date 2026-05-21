@@ -169,6 +169,7 @@ fn push_saved_options(
     push_line(content, "FullscreenType", cfg.fullscreen_type.as_str());
     push_line(content, "Game", cfg.game_flag.as_str());
     push_line(content, "GamepadBackend", cfg.windows_gamepad_backend);
+    push_bool(content, "SmxInput", cfg.smx_input);
     push_bool(content, "GfxDebug", cfg.gfx_debug);
     push_bool(content, "HighDPI", cfg.high_dpi);
     push_bool(content, "HideMouseCursor", cfg.hide_mouse_cursor);

@@ -184,6 +184,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())
         .unwrap_or(default.windows_gamepad_backend);
+    cfg.smx_input = conf
+        .get("Options", "SmxInput")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.smx_input, |v| v != 0);
     cfg.gfx_debug = conf
         .get("Options", "GfxDebug")
         .and_then(|v| v.parse::<u8>().ok())

@@ -9549,6 +9549,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
         });
     }
+    // StepManiaX pad input (all platforms, user-selectable).
+    if config.smx_input {
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        if crate::engine::smx::init() {
+            crate::engine::smx::add_input_listener(Box::new(move |pe| {
+                let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+            }));
+            crate::engine::smx::add_sys_listener(Box::new(move |se| {
+                let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+            }));
+        }
+    }
     event_loop.run_app(&mut app)?;
     Ok(())
 }

@@ -144,6 +144,8 @@ pub struct Config {
     pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
+    /// Enable StepManiaX pad input via rustmaniax-sdk (all platforms).
+    pub smx_input: bool,
     // When using the Software video renderer:
     // 0 = Auto (use all logical cores)
     // 1 = Single-threaded
@@ -367,6 +369,7 @@ impl Default for Config {
             hide_mouse_cursor: true,
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
+            smx_input: false,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
