@@ -1093,6 +1093,7 @@ pub struct State {
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
+    profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
     select_music_menu: select_music_menu::State,
     leaderboard: select_music_menu::LeaderboardOverlayState,
@@ -3389,6 +3390,7 @@ pub fn init() -> State {
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
+        profile_switch_overlay_is_late_join: false,
         pending_replay: None,
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
@@ -3574,6 +3576,7 @@ pub fn init_placeholder() -> State {
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
+        profile_switch_overlay_is_late_join: false,
         pending_replay: None,
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
@@ -4288,6 +4291,41 @@ fn show_profile_switch_overlay(state: &mut State) {
         profile::is_session_side_joined(profile::PlayerSide::P2),
     );
     state.profile_switch_overlay = Some(overlay);
+    state.profile_switch_overlay_is_late_join = false;
+}
+
+/// Open the profile-select overlay for a player who pressed Start mid-set to
+/// late-join the session. The already-joined player is pre-readied with their
+/// current profile; only `joining_side` needs to pick a profile. If the
+/// joining player cancels, `handle_profile_switch_overlay_input` will revert
+/// the late-join via `cancel_late_join_profile_overlay`.
+pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile::PlayerSide) {
+    profile::set_fast_profile_switch_from_select_music(false);
+    clear_preview(state);
+    state.select_music_menu = select_music_menu::State::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    hide_test_input_overlay(state);
+    clear_menu_chord(state);
+    clear_p1_ud_chord(state);
+    clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
+    clear_nav_hold(state);
+    state.last_steps_nav_dir_p1 = None;
+    state.last_steps_nav_time_p1 = None;
+    state.last_steps_nav_dir_p2 = None;
+    state.last_steps_nav_time_p2 = None;
+
+    let mut overlay = profile_boxes::init();
+    overlay.active_color_index = state.active_color_index;
+    profile_boxes::enter_late_join(&mut overlay, joining_side);
+    state.profile_switch_overlay = Some(overlay);
+    state.profile_switch_overlay_is_late_join = true;
 }
 
 #[inline(always)]
@@ -7777,16 +7815,39 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Sc
     match profile_boxes::handle_input(overlay, ev) {
         ScreenAction::SelectProfiles { p1, p2 } => {
             state.profile_switch_overlay = None;
+            state.profile_switch_overlay_is_late_join = false;
             profile::set_fast_profile_switch_from_select_music(true);
             ScreenAction::SelectProfiles { p1, p2 }
         }
         ScreenAction::Navigate(_) => {
+            let was_late_join = state.profile_switch_overlay_is_late_join;
             state.profile_switch_overlay = None;
-            restore_select_music_menu_after_profile_overlay(state);
+            state.profile_switch_overlay_is_late_join = false;
+            if was_late_join {
+                // Cancelled mid-set join: revert to the single-player session
+                // state so the late-joiner is fully unjoined again. No menu
+                // to restore — the overlay was opened directly from a Start
+                // press, not from the quick menu.
+                cancel_late_join_session();
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+            } else {
+                restore_select_music_menu_after_profile_overlay(state);
+            }
             ScreenAction::None
         }
         _ => ScreenAction::None,
     }
+}
+
+/// Revert the session to single-player after a late-join was cancelled from
+/// the profile-switch overlay. Mirrors the inverse of `try_handle_late_join`.
+fn cancel_late_join_session() {
+    let staying_side = profile::get_session_player_side();
+    match staying_side {
+        profile::PlayerSide::P1 => profile::set_session_joined(true, false),
+        profile::PlayerSide::P2 => profile::set_session_joined(false, true),
+    }
+    profile::set_session_play_style(profile::PlayStyle::Single);
 }
 
 fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {

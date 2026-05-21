@@ -5189,6 +5189,15 @@ impl App {
         }
         if screen == CurrentScreen::SelectMusic {
             self.apply_select_music_join(join_side);
+            // Per Simply-Love-SM5#741: when the Select Profile screen is on,
+            // prompt the late-joining player with the profile-select widget
+            // instead of silently leaving them as Guest.
+            if config::get().machine_show_select_profile {
+                crate::screens::select_music::open_late_join_profile_overlay(
+                    &mut self.state.screens.select_music_state,
+                    join_side,
+                );
+            }
         }
 
         crate::engine::audio::play_sfx("assets/sounds/start.ogg");
