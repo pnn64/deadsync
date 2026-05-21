@@ -1474,6 +1474,28 @@ pub fn load_gameplay_charts(
     Ok(charts)
 }
 
+pub fn load_sync_analysis_chart(
+    song: &SongData,
+    chart_ix: usize,
+) -> Result<GameplayChartData, String> {
+    let config = crate::config::get();
+    let allow_cache_read = config.fastload || config.cachesongs;
+    let verify_cache_freshness = !config.fastload;
+    if allow_cache_read
+        && let Some(mut charts) =
+            cache::load_gameplay_charts_from_cache(song, &[chart_ix], 0.0, verify_cache_freshness)
+        && let Some(chart) = charts.pop()
+    {
+        return Ok(chart);
+    }
+
+    let song_data = load_gameplay_song_data(&song.simfile_path, false, 0.0)?;
+    let mut charts = build_requested_gameplay_charts(&song_data, &[chart_ix], 0.0)?;
+    charts
+        .pop()
+        .ok_or_else(|| format!("Chart index {chart_ix} out of range"))
+}
+
 fn parse_song_and_maybe_write_cache(
     path: &Path,
     fastload: bool,

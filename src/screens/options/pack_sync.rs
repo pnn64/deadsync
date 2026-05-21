@@ -84,6 +84,7 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
                 continue;
             };
             targets.push(shared_pack_sync::TargetSpec {
+                song: song.clone(),
                 simfile_path: song.simfile_path.clone(),
                 song_title: song.display_full_title(false),
                 chart_label: shared_pack_sync::chart_label(chart),

@@ -101,6 +101,7 @@ fn pack_sync_targets_for_group(
                     continue;
                 };
                 targets.push(shared_pack_sync::TargetSpec {
+                    song: song.clone(),
                     simfile_path: song.simfile_path.clone(),
                     song_title: song.display_full_title(false),
                     chart_label: shared_pack_sync::chart_label(chart),

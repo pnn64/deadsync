@@ -10,7 +10,9 @@ use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use crate::game::chart::ChartData;
+use crate::game::song::SongData;
 use crate::screens::SongOffsetSyncChange;
+use crate::screens::components::select_music::sync_analysis;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
@@ -26,6 +28,7 @@ const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
 const POLL_BUDGET: Duration = Duration::from_millis(2);
 pub(crate) struct TargetSpec {
+    pub song: Arc<SongData>,
     pub simfile_path: PathBuf,
     pub song_title: String,
     pub chart_label: String,
@@ -560,8 +563,8 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
                     let _ = tx.send(WorkerMsg::RowStarted { index });
                     let mut total_beats = 0usize;
                     let mut last_sent = 0usize;
-                    let result = null_or_die::api::analyze_chart_stream(
-                        target.simfile_path.as_path(),
+                    let result = sync_analysis::analyze_song_chart_stream(
+                        target.song.as_ref(),
                         target.chart_ix,
                         cfg.as_ref(),
                         stream_cfg,

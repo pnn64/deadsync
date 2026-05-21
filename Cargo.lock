@@ -1231,9 +1231,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "env_filter"
@@ -2509,19 +2509,57 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "null-or-die"
-version = "0.0.23"
-source = "git+https://github.com/pnn64/null-or-die?branch=main#f64bd318604bbc03df351e5811f576c057cc1f5a"
+version = "0.1.1"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#4de0a97cafa489ca08c094ffbbc3d235cac899f0"
+dependencies = [
+ "null-or-die-cli",
+ "null-or-die-core",
+ "null-or-die-rssp",
+]
+
+[[package]]
+name = "null-or-die-audio"
+version = "0.1.1"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#4de0a97cafa489ca08c094ffbbc3d235cac899f0"
+dependencies = [
+ "lewton",
+]
+
+[[package]]
+name = "null-or-die-cli"
+version = "0.1.1"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#4de0a97cafa489ca08c094ffbbc3d235cac899f0"
 dependencies = [
  "clap",
- "lewton",
  "md5",
+ "null-or-die-audio",
+ "null-or-die-core",
+ "null-or-die-rssp",
  "png",
  "rssp",
- "rustfft",
  "serde",
  "serde_json",
  "walkdir",
  "zstd",
+]
+
+[[package]]
+name = "null-or-die-core"
+version = "0.1.1"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#4de0a97cafa489ca08c094ffbbc3d235cac899f0"
+dependencies = [
+ "rustfft",
+ "serde",
+]
+
+[[package]]
+name = "null-or-die-rssp"
+version = "0.1.1"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#4de0a97cafa489ca08c094ffbbc3d235cac899f0"
+dependencies = [
+ "null-or-die-audio",
+ "null-or-die-core",
+ "rssp",
 ]
 
 [[package]]

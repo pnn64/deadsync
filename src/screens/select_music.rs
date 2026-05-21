@@ -27,6 +27,7 @@ use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
+        sync_analysis,
     },
     shared::{
         banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
@@ -38,7 +39,10 @@ use crate::screens::{
 };
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
-use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
+use null_or_die::{
+    BiasEstimateWithPlot, BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation,
+    KernelTarget,
+};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -927,7 +931,7 @@ impl ReloadUiState {
 
 enum NullOrDieWorkerMsg {
     Event(BiasStreamEvent),
-    Finished(Result<null_or_die::api::SyncChartResult, String>),
+    Finished(Result<BiasEstimateWithPlot, String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7235,7 +7239,7 @@ fn sync_overlay_apply_event(
 
 fn sync_overlay_apply_result(
     overlay: &mut NullOrDieOverlayData,
-    result: Result<null_or_die::api::SyncChartResult, String>,
+    result: Result<BiasEstimateWithPlot, String>,
     refresh: &mut NullOrDieOverlayRefresh,
 ) {
     match result {
@@ -7344,12 +7348,12 @@ fn show_sync_song_overlay(state: &mut State) {
             emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
             orientation: GraphOrientation::Horizontal,
         };
-        let simfile_path_thread = simfile_path.clone();
+        let song_thread = song.clone();
         let (tx, rx) = mpsc::sync_channel::<NullOrDieWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
         std::thread::spawn(move || {
             let tx_done = tx.clone();
-            let result = null_or_die::api::analyze_chart_stream(
-                simfile_path_thread.as_path(),
+            let result = sync_analysis::analyze_song_chart_stream(
+                song_thread.as_ref(),
                 chart_ix,
                 &cfg,
                 stream_cfg,
