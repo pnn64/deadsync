@@ -3327,6 +3327,8 @@ pub struct PlayerRuntime {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayCarry {
+    // ITGmania keeps the same lifemeter alive between nonstop course songs.
+    pub life: f32,
     pub judgment_counts: [u32; 6],
     pub scoring_counts: [u32; 6],
     pub full_combo_grade: Option<JudgeGrade>,
@@ -3442,6 +3444,16 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
         live_timing_stats: crate::game::timing::LiveTimingStats::default(),
+    }
+}
+
+#[inline(always)]
+fn apply_course_life_carry(player: &mut PlayerRuntime, course_carry: Option<CourseDisplayCarry>) {
+    let Some(carry) = course_carry else {
+        return;
+    };
+    if carry.life.is_finite() {
+        player.life = carry.life.clamp(0.0, 1.0);
     }
 }
 
@@ -6218,6 +6230,7 @@ pub fn init(
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
+        apply_course_life_carry(&mut players[p], course_carry);
         apply_course_combo_carry(
             &mut players[p],
             player_profiles[p].carry_combo_between_songs,
@@ -10994,6 +11007,29 @@ return Def.ActorFrame{}
         assert_eq!(player.current_combo_grade, Some(JudgeGrade::Excellent));
         assert_eq!(player.current_combo_window_counts.w0, 7);
         assert!(!player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn course_life_carry_restores_lifemeter_between_songs() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            life: 0.32,
+            ..Default::default()
+        };
+
+        super::apply_course_life_carry(&mut player, Some(carry));
+
+        assert!((player.life - 0.32).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_display_carry_captures_current_life() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.players[0].life = 0.32;
+
+        let carry = super::course_display_carry_from_state(&state);
+
+        assert!((carry[0].life - 0.32).abs() <= f32::EPSILON);
     }
 
     #[test]

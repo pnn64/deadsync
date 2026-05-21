@@ -475,6 +475,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             .course_display_carry
             .as_ref()
             .map_or(CourseDisplayCarry::default(), |old| old[player]);
+        let life = p.life.clamp(0.0, 1.0);
         let mut judgment_counts = [0u32; 6];
         let mut scoring_counts = [0u32; 6];
         for grade in DISPLAY_JUDGE_ORDER {
@@ -588,6 +589,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
                 .saturating_add(stage_window_counts_display_blue.miss),
         };
         carry[player] = CourseDisplayCarry {
+            life,
             judgment_counts,
             scoring_counts,
             full_combo_grade,
