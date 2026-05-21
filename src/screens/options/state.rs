@@ -32,10 +32,11 @@ pub enum SubmenuKind {
     GrooveStats,
     ArrowCloud,
     ScoreImport,
+    Folders,
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 18] = [
+    pub(super) const ALL: [Self; 19] = [
         Self::System,
         Self::Graphics,
         Self::Input,
@@ -54,6 +55,7 @@ impl SubmenuKind {
         Self::GrooveStats,
         Self::ArrowCloud,
         Self::ScoreImport,
+        Self::Folders,
     ];
     pub(super) const COUNT: usize = Self::ALL.len();
 

@@ -1036,6 +1036,12 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
+                ItemId::FoldersOptions => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Folders);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
                 ItemId::ManageLocalProfiles => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::Navigate(Screen::ManageLocalProfiles);
@@ -1162,6 +1168,18 @@ pub(super) fn activate_current_selection(
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::Navigate(Screen::TestLights);
+                }
+            } else if matches!(kind, SubmenuKind::Folders) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ScreenAction::None;
+                };
+                if let Some(row) = rows.get(row_idx)
+                    && is_folder_row(row.id)
+                {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    open_folder_for_row(row.id);
+                    return ScreenAction::None;
                 }
             } else if matches!(kind, SubmenuKind::OnlineScoring) {
                 let rows = submenu_rows(kind);

@@ -498,3 +498,60 @@ fn default_sync_offset_only_shows_when_pack_offsets_are_on() {
             .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::DefaultSyncOffset)
     );
 }
+
+#[test]
+fn folders_submenu_is_registered() {
+    assert!(SubmenuKind::ALL.contains(&SubmenuKind::Folders));
+    assert_eq!(submenu_rows(SubmenuKind::Folders).len(), 8);
+    // FOLDERS_OPTIONS_ITEMS has 8 folder entries plus the Exit row.
+    assert_eq!(submenu_items(SubmenuKind::Folders).len(), 9);
+    assert_eq!(submenu_title(SubmenuKind::Folders), "FOLDERS");
+}
+
+#[test]
+fn folders_top_level_item_opens_folders_submenu() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    let item_pos = visible_items()
+        .iter()
+        .position(|item| item.id == ItemId::FoldersOptions)
+        .expect("FoldersOptions should be visible on the main Options screen");
+    state.selected = item_pos;
+
+    press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.pending_submenu_kind, Some(SubmenuKind::Folders));
+    assert_eq!(
+        state.submenu_transition,
+        SubmenuTransition::FadeOutToSubmenu
+    );
+}
+
+#[test]
+fn folder_path_for_row_resolves_each_folder_row() {
+    use crate::config::dirs::app_dirs;
+    let dirs = app_dirs();
+    let expectations: &[(SubRowId, std::path::PathBuf)] = &[
+        (SubRowId::FoldersDataDir, dirs.data_dir.clone()),
+        (SubRowId::FoldersCacheDir, dirs.cache_dir.clone()),
+        (SubRowId::FoldersSongs, dirs.songs_dir()),
+        (SubRowId::FoldersCourses, dirs.courses_dir()),
+        (SubRowId::FoldersProfiles, dirs.profiles_root()),
+        (SubRowId::FoldersScreenshots, dirs.screenshots_dir()),
+        (SubRowId::FoldersLogFile, dirs.log_path()),
+        (SubRowId::FoldersConfigFile, dirs.config_path()),
+    ];
+    for (id, expected) in expectations {
+        assert_eq!(
+            folder_path_for_row(*id).as_ref(),
+            Some(expected),
+            "row {:?} should resolve to {}",
+            id,
+            expected.display()
+        );
+        assert!(is_folder_row(*id));
+    }
+
+    assert!(folder_path_for_row(SubRowId::Game).is_none());
+    assert!(!is_folder_row(SubRowId::Game));
+}

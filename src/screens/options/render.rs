@@ -188,6 +188,23 @@ pub(super) fn build_description_layout(
                         text: Arc::from(wrapped),
                     });
                 }
+                HelpEntry::Dynamic(resolver) => {
+                    let resolved = resolver();
+                    let trimmed = resolved.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let wrapped = wrap_miso_text(
+                        asset_manager,
+                        trimmed,
+                        title_max_width_px,
+                        DESC_TITLE_ZOOM * s,
+                    );
+                    blocks.push(RenderedHelpBlock::Paragraph {
+                        line_count: wrapped.lines().count().max(1),
+                        text: Arc::from(wrapped),
+                    });
+                }
             }
         }
     }

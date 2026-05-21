@@ -18,6 +18,7 @@ pub enum ItemId {
     ManageLocalProfiles,
     OnlineScoreServices,
     NullOrDieOptions,
+    FoldersOptions,
     ReloadSongsCourses,
     CheckForUpdates,
     Credits,
@@ -200,6 +201,16 @@ pub enum ItemId {
     SiPack,
     SiOnlyMissing,
     SiStart,
+
+    // Folders submenu
+    FldDataDir,
+    FldCacheDir,
+    FldSongs,
+    FldCourses,
+    FldProfiles,
+    FldScreenshots,
+    FldLogFile,
+    FldConfigFile,
 }
 
 /// An entry in the help/description pane for an option item.
@@ -209,6 +220,11 @@ pub enum HelpEntry {
     Paragraph(LookupKey),
     /// Bullet point item (rendered with "•" prefix).
     Bullet(LookupKey),
+    /// Runtime-resolved paragraph. The function is invoked every time the
+    /// description layout cache is rebuilt for this item; on cache hit the
+    /// previously-rendered text is reused. Use this for content that depends
+    /// on host state (resolved file paths, current directories, etc.).
+    Dynamic(fn() -> std::borrow::Cow<'static, str>),
 }
 
 /// A simple item model with help text for the description box.
@@ -427,6 +443,21 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "NullOrDieOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "NullOrDieOptions")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "SyncPacks")),
+        ],
+    },
+    Item {
+        id: ItemId::FoldersOptions,
+        name: lookup_key("Options", "FoldersOptions"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "FoldersOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "DataDir")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "CacheDir")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "Songs")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "Courses")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "Profiles")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "Screenshots")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "LogFile")),
+            HelpEntry::Bullet(lookup_key("OptionsFolders", "ConfigFile")),
         ],
     },
     Item {
