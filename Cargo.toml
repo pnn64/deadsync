@@ -82,6 +82,9 @@ smallvec = "1.15.1"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 
+# StepManiaX pad SDK
+rustmaniax-sdk = { path = "../rustmaniax-sdk" }
+
 # Software renderer
 softbuffer = "0.4.8"
 

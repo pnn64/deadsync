@@ -34,6 +34,8 @@ pub enum PadBackend {
     FreeBsdEvdev,
     #[cfg(target_os = "macos")]
     MacOsIohid,
+    /// StepManiaX pad via rustmaniax-sdk (all platforms).
+    Smx,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -87,7 +89,7 @@ impl std::str::FromStr for WindowsPadBackend {
 }
 
 #[inline(always)]
-fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
+pub(crate) fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
     // Deterministic, fast, and tiny (no deps): two FNV-1a 64-bit passes with different offsets.
     const OFF0: u64 = 0xcbf29ce484222325;
     const OFF1: u64 = 0xaf63dc4c8601ec8c;
