@@ -583,6 +583,9 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             window_counts,
             window_counts_10ms_blue,
             window_counts_display_blue,
+            holds_held: previous.holds_held.saturating_add(p.holds_held),
+            rolls_held: previous.rolls_held.saturating_add(p.rolls_held),
+            mines_avoided: previous.mines_avoided.saturating_add(p.mines_avoided),
             holds_held_for_score: previous
                 .holds_held_for_score
                 .saturating_add(p.holds_held_for_score),

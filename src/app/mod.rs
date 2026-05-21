@@ -1724,8 +1724,31 @@ fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
     }
 }
 
+fn course_stage_music_seconds(stage: &CourseStageRuntime) -> f32 {
+    let seconds = stage.song.music_length_seconds;
+    if seconds.is_finite() {
+        seconds.max(0.0)
+    } else {
+        0.0
+    }
+}
+
 fn course_total_seconds(course: &CourseRunState) -> f32 {
     course.stages.iter().map(course_stage_seconds).sum()
+}
+
+fn course_display_timing_for_run(
+    course: &CourseRunState,
+) -> crate::game::gameplay::CourseDisplayTiming {
+    crate::game::gameplay::CourseDisplayTiming {
+        elapsed_seconds: course
+            .stages
+            .iter()
+            .take(course.next_stage_index)
+            .map(course_stage_music_seconds)
+            .sum(),
+        total_seconds: course.stages.iter().map(course_stage_music_seconds).sum(),
+    }
 }
 
 #[inline(always)]
@@ -7520,6 +7543,7 @@ impl App {
                     }),
                     None,
                     None,
+                    None,
                     [0; crate::game::gameplay::MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
@@ -7589,6 +7613,12 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(|course| course.course_display_totals);
+            let course_display_timing = self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .map(course_display_timing_for_run);
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
@@ -7874,6 +7904,7 @@ impl App {
                     lead_in_timing,
                     course_display_carry,
                     course_display_totals,
+                    course_display_timing,
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;

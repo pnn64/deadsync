@@ -3332,11 +3332,20 @@ pub struct CourseDisplayCarry {
     pub window_counts_10ms_blue: crate::game::timing::WindowCounts,
     // Display split used by gameplay counters (legacy 10ms or custom ms option).
     pub window_counts_display_blue: crate::game::timing::WindowCounts,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
     pub holds_held_for_score: u32,
     pub holds_let_go_for_score: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayTiming {
+    pub elapsed_seconds: f32,
+    pub total_seconds: f32,
 }
 
 const DISPLAY_JUDGE_ORDER: [JudgeGrade; 6] = [
@@ -3693,6 +3702,7 @@ pub struct State {
     replay_capture_enabled: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    pub course_display_timing: Option<CourseDisplayTiming>,
     pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
     pub live_window_counts_10ms_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
     pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
@@ -5234,6 +5244,7 @@ pub fn init(
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
@@ -6290,6 +6301,7 @@ pub fn init(
         replay_capture_enabled,
         course_display_carry,
         course_display_totals,
+        course_display_timing,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
         live_window_counts_10ms_blue: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
         live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();

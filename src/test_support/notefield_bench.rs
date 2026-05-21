@@ -109,6 +109,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         None,
         None,
         None,
+        None,
         [0; MAX_PLAYERS],
     );
 

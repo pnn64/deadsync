@@ -118,20 +118,20 @@ fn judgment_label(index: usize) -> Arc<str> {
         .unwrap_or_else(|| Arc::from(""))
 }
 
-fn time_song_left_text() -> Arc<str> {
-    tr("Gameplay", "TimeSong")
-}
-
 fn time_remaining_left_text() -> Arc<str> {
     tr("Gameplay", "TimeRemaining")
 }
 
-fn time_song_right_text() -> Arc<str> {
-    tr("Gameplay", "TimeSong")
-}
-
 fn time_remaining_right_text() -> Arc<str> {
     tr("Gameplay", "TimeRemaining")
+}
+
+fn time_total_text(state: &State) -> Arc<str> {
+    if state.course_display_timing.is_some() {
+        tr("Gameplay", "TimeCourse")
+    } else {
+        tr("Gameplay", "TimeSong")
+    }
 }
 
 #[inline(always)]
@@ -145,6 +145,71 @@ fn step_stats_player_idx(state: &State, player_side: profile::PlayerSide) -> usi
         (2, profile::PlayerSide::P2) => 1,
         _ => 0,
     }
+}
+
+#[derive(Clone, Copy)]
+struct StepStatsTimeDisplay {
+    total_seconds: f32,
+    elapsed_seconds: f32,
+}
+
+#[inline(always)]
+fn step_stats_music_rate(state: &State) -> f32 {
+    if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    }
+}
+
+fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDisplay {
+    let rate = step_stats_music_rate(state);
+    let (base_elapsed, total) = state.course_display_timing.map_or_else(
+        || (0.0, state.song.total_length_seconds.max(0) as f32),
+        |timing| {
+            (
+                timing.elapsed_seconds.max(0.0),
+                timing.total_seconds.max(0.0),
+            )
+        },
+    );
+    let stage_elapsed = state
+        .players
+        .get(player_idx)
+        .and_then(|player| player.fail_time)
+        .unwrap_or(state.current_music_time_display)
+        .max(0.0);
+    let elapsed = (base_elapsed + stage_elapsed).clamp(0.0, total);
+    StepStatsTimeDisplay {
+        total_seconds: total / rate,
+        elapsed_seconds: elapsed / rate,
+    }
+}
+
+fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, u32); 3] {
+    if player_idx >= state.num_players || player_idx >= gameplay::MAX_PLAYERS {
+        return [(0, 0, 0), (1, 0, 0), (2, 0, 0)];
+    }
+    let p = &state.players[player_idx];
+    let carry = gameplay::display_carry_for_player(state, player_idx);
+    let totals = gameplay::display_totals_for_player(state, player_idx);
+    [
+        (
+            0usize,
+            p.holds_held.saturating_add(carry.holds_held),
+            totals.holds_total,
+        ),
+        (
+            1usize,
+            p.mines_avoided.saturating_add(carry.mines_avoided),
+            totals.mines_total,
+        ),
+        (
+            2usize,
+            p.rolls_held.saturating_add(carry.rolls_held),
+            totals.rolls_total,
+        ),
+    ]
 }
 
 fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
@@ -552,11 +617,15 @@ pub fn prewarm_text_layout(
 ) {
     let mut max_count = 0u32;
     for player in 0..state.num_players {
+        let totals = gameplay::display_totals_for_player(state, player);
         max_count = max_count
-            .max(state.total_steps[player])
-            .max(state.holds_total[player])
-            .max(state.rolls_total[player])
-            .max(state.mines_total[player]);
+            .max(totals.total_steps)
+            .max(totals.holds_total)
+            .max(totals.rolls_total)
+            .max(totals.mines_total);
+        for (_, achieved, total) in step_stats_hmr_categories(state, player) {
+            max_count = max_count.max(achieved).max(total);
+        }
     }
     let digits = if max_count > 0 {
         (max_count.ilog10() as usize + 1).max(4)
@@ -592,11 +661,12 @@ pub fn prewarm_text_layout(
         None,
     );
     for player in 0..state.num_players {
+        let totals = gameplay::display_totals_for_player(state, player);
         for count in [
-            state.total_steps[player],
-            state.holds_total[player],
-            state.rolls_total[player],
-            state.mines_total[player],
+            totals.total_steps,
+            totals.holds_total,
+            totals.rolls_total,
+            totals.mines_total,
         ] {
             let (dim, bright) = cached_padded_runs(count, digits);
             cache.prewarm_text(
@@ -612,12 +682,34 @@ pub fn prewarm_text_layout(
                 None,
             );
         }
+        for (_, achieved, total) in step_stats_hmr_categories(state, player) {
+            for count in [achieved, total] {
+                let (dim, bright) = cached_padded_runs(count, digits);
+                cache.prewarm_text(
+                    fonts,
+                    current_machine_font_key(FontRole::ScreenEval),
+                    dim.as_ref(),
+                    None,
+                );
+                cache.prewarm_text(
+                    fonts,
+                    current_machine_font_key(FontRole::ScreenEval),
+                    bright.as_ref(),
+                    None,
+                );
+            }
+        }
     }
     let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
         state.music_end_time_ns.max(state.notes_end_time_ns),
     )
     .ceil()
     .max(0.0) as u32;
+    let display_end_seconds = step_stats_time_display(state, 0)
+        .total_seconds
+        .ceil()
+        .max(0.0) as u32;
+    let end_seconds = end_seconds.max(display_end_seconds);
     let mode = game_time_mode(end_seconds as f32);
     for second in 0..=end_seconds.min(TIME_PREWARM_CAP_S) {
         let key = (second, mode);
@@ -629,9 +721,10 @@ pub fn prewarm_text_layout(
     let text = cached_game_time(end_seconds, mode);
     cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     let _ = cached_game_time_width_for_key(key, asset_manager);
-    cache.prewarm_text(fonts, "miso", &time_song_left_text(), None);
+    cache.prewarm_text(fonts, "miso", time_total_text(state).as_ref(), None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeSong"), None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "TimeCourse"), None);
     cache.prewarm_text(fonts, "miso", &time_remaining_left_text(), None);
-    cache.prewarm_text(fonts, "miso", &time_song_right_text(), None);
     cache.prewarm_text(fonts, "miso", &time_remaining_right_text(), None);
     cache.prewarm_text(fonts, "miso", SLASH_TEXT.as_ref(), None);
     for label in LIVE_TIMING_LABELS.iter() {
@@ -775,10 +868,10 @@ pub fn push_versus_step_stats(
 
     let center_x = screen_center_x();
 
-    let total_tapnotes = state.charts[0]
-        .stats
-        .total_steps
-        .max(state.charts[1].stats.total_steps) as f32;
+    let total_tapnotes = (0..state.num_players)
+        .map(|player| gameplay::display_totals_for_player(state, player).total_steps)
+        .max()
+        .unwrap_or(0) as f32;
     let digits = if total_tapnotes > 0.0 {
         (total_tapnotes.log10().floor() as usize + 1).max(4)
     } else {
@@ -1075,7 +1168,7 @@ pub fn push_double_step_stats(
         let origin_y = pane_cy + (40.0 * banner_data_zoom);
         let base_zoom = 0.8 * banner_data_zoom;
 
-        let total_tapnotes = state.charts[0].stats.total_steps as f32;
+        let total_tapnotes = gameplay::display_totals_for_player(state, 0).total_steps as f32;
         let digits = if total_tapnotes > 0.0 {
             (total_tapnotes.log10().floor() as usize + 1).max(4)
         } else {
@@ -1324,35 +1417,13 @@ pub fn push_double_step_stats(
         let base_x = pane_cx + ((-notefield_width + 150.0) * banner_data_zoom);
         let base_y = pane_cy + (75.0 * banner_data_zoom);
 
-        let base_total = state.song.total_length_seconds.max(0) as f32;
-        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-            state.music_rate
-        } else {
-            1.0
-        };
-        let total_display_seconds = if rate == 0.0 {
-            base_total
-        } else {
-            base_total / rate
-        };
-        let elapsed_display_seconds = if rate == 0.0 {
-            state.current_music_time_display.max(0.0)
-        } else {
-            state.current_music_time_display.max(0.0) / rate
-        };
+        let time_display = step_stats_time_display(state, 0);
+        let total_display_seconds = time_display.total_seconds;
+        let elapsed_display_seconds = time_display.elapsed_seconds;
 
         let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
         let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
-        let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
-            let fail_disp = if rate == 0.0 {
-                fail_time.max(0.0)
-            } else {
-                fail_time.max(0.0) / rate
-            };
-            (total_display_seconds - fail_disp).max(0.0)
-        } else {
-            (total_display_seconds - elapsed_display_seconds).max(0.0)
-        };
+        let remaining_display_seconds = (total_display_seconds - elapsed_display_seconds).max(0.0);
         let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
         let remaining_time_str = cached_game_time(remaining_time_key.0, remaining_time_key.1);
 
@@ -1397,7 +1468,7 @@ pub fn push_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(time_song_right_text()):
+            settext(time_total_text(state)):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + (20.0 * number_zoom) + 1.0 * number_zoom):
@@ -1676,13 +1747,7 @@ fn push_holds_mines_rolls_pane_at(
     frame_cy: f32,
     frame_zoom: f32,
 ) {
-    let p = &state.players[0];
-
-    let categories = [
-        (0usize, p.holds_held, state.holds_total[0]),
-        (1usize, p.mines_avoided, state.mines_total[0]),
-        (2usize, p.rolls_held, state.rolls_total[0]),
-    ];
+    let categories = step_stats_hmr_categories(state, 0);
 
     let largest_count = categories
         .iter()
@@ -1796,7 +1861,7 @@ fn build_holds_mines_rolls_pane(
     if !wide {
         return;
     }
-    let p = &state.players[0];
+    let player_idx = step_stats_player_idx(state, player_side);
     let banner_data_zoom = layout.banner_data_zoom;
     let local_x = match player_side {
         profile::PlayerSide::P1 => 155.0,
@@ -1807,11 +1872,7 @@ fn build_holds_mines_rolls_pane(
     let frame_cy = layout.sidepane_center_y + (local_y * banner_data_zoom);
     let frame_zoom = banner_data_zoom;
 
-    let categories = [
-        (0usize, p.holds_held, state.holds_total[0]),
-        (1usize, p.mines_avoided, state.mines_total[0]),
-        (2usize, p.rolls_held, state.rolls_total[0]),
-    ];
+    let categories = step_stats_hmr_categories(state, player_idx);
 
     let largest_count = categories
         .iter()
@@ -2049,7 +2110,7 @@ fn build_side_pane(
     let parent_local_zoom = 0.8;
     let final_text_base_zoom = layout.banner_data_zoom * parent_local_zoom;
 
-    let total_tapnotes = state.charts[player_idx].stats.total_steps as f32;
+    let total_tapnotes = gameplay::display_totals_for_player(state, player_idx).total_steps as f32;
     let digits = if total_tapnotes > 0.0 {
         (total_tapnotes.log10().floor() as usize + 1).max(4)
     } else {
@@ -2094,7 +2155,7 @@ fn build_side_pane(
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = judgment_info(*grade);
-                let count = gameplay::display_judgment_count(state, 0, *grade);
+                let count = gameplay::display_judgment_count(state, player_idx, *grade);
                 let disabled = standard_row_disabled(disabled_windows, index);
 
                 let local_y = y_base + (index as f32 * row_height);
@@ -2309,39 +2370,15 @@ fn build_side_pane(
         {
             let local_y = -40.0 * layout.banner_data_zoom;
 
-            // Base chart length in seconds (GetLastSecond semantics).
-            let base_total = state.song.total_length_seconds.max(0) as f32;
-            // Displayed duration should respect music rate (SongLength / MusicRate),
-            // while the on-screen timer still advances in real seconds.
-            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                state.music_rate
-            } else {
-                1.0
-            };
-            let total_display_seconds = if rate == 0.0 {
-                base_total
-            } else {
-                base_total / rate
-            };
-            let elapsed_display_seconds = if rate == 0.0 {
-                state.current_music_time_display.max(0.0)
-            } else {
-                state.current_music_time_display.max(0.0) / rate
-            };
+            let time_display = step_stats_time_display(state, player_idx);
+            let total_display_seconds = time_display.total_seconds;
+            let elapsed_display_seconds = time_display.elapsed_seconds;
 
             let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
             let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
 
-            let remaining_display_seconds = if let Some(fail_time) = state.players[player_idx].fail_time {
-                let fail_disp = if rate == 0.0 {
-                    fail_time.max(0.0)
-                } else {
-                    fail_time.max(0.0) / rate
-                };
-                (total_display_seconds - fail_disp).max(0.0)
-            } else {
-                (total_display_seconds - elapsed_display_seconds).max(0.0)
-            };
+            let remaining_display_seconds =
+                (total_display_seconds - elapsed_display_seconds).max(0.0);
             let remaining_time_key = game_time_key(remaining_display_seconds, total_display_seconds);
             let remaining_time_str =
                 cached_game_time(remaining_time_key.0, remaining_time_key.1);
@@ -2395,7 +2432,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(time_song_left_text()):
+                actors.push(act!(text: font(font_name): settext(time_total_text(state)):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
@@ -2408,7 +2445,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(time_song_left_text()):
+                actors.push(act!(text: font(font_name): settext(time_total_text(state)):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
