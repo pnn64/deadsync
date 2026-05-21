@@ -2169,6 +2169,71 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
     Arc::<str>::from(parts.join(", "))
 }
 
+#[inline(always)]
+fn add_column_judgments(dst: &mut evaluation::ColumnJudgments, src: evaluation::ColumnJudgments) {
+    dst.w0 = dst.w0.saturating_add(src.w0);
+    dst.w1 = dst.w1.saturating_add(src.w1);
+    dst.w2 = dst.w2.saturating_add(src.w2);
+    dst.w3 = dst.w3.saturating_add(src.w3);
+    dst.w4 = dst.w4.saturating_add(src.w4);
+    dst.w5 = dst.w5.saturating_add(src.w5);
+    dst.miss = dst.miss.saturating_add(src.miss);
+    dst.early_w1 = dst.early_w1.saturating_add(src.early_w1);
+    dst.early_w2 = dst.early_w2.saturating_add(src.early_w2);
+    dst.early_w3 = dst.early_w3.saturating_add(src.early_w3);
+    dst.early_w4 = dst.early_w4.saturating_add(src.early_w4);
+    dst.early_w5 = dst.early_w5.saturating_add(src.early_w5);
+    dst.early_total_w0 = dst.early_total_w0.saturating_add(src.early_total_w0);
+    dst.early_total_w1 = dst.early_total_w1.saturating_add(src.early_total_w1);
+    dst.early_total_w2 = dst.early_total_w2.saturating_add(src.early_total_w2);
+    dst.early_total_w3 = dst.early_total_w3.saturating_add(src.early_total_w3);
+    dst.early_total_w4 = dst.early_total_w4.saturating_add(src.early_total_w4);
+    dst.early_total_w5 = dst.early_total_w5.saturating_add(src.early_total_w5);
+    dst.held_miss = dst.held_miss.saturating_add(src.held_miss);
+}
+
+fn merge_column_judgments(
+    dst: &mut Vec<evaluation::ColumnJudgments>,
+    src: &[evaluation::ColumnJudgments],
+) {
+    if dst.len() < src.len() {
+        dst.resize(src.len(), evaluation::ColumnJudgments::default());
+    }
+    for (dst, src) in dst.iter_mut().zip(src.iter().copied()) {
+        add_column_judgments(dst, src);
+    }
+}
+
+fn score_info_for_side(
+    score_info: &[Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS],
+    side: profile::PlayerSide,
+) -> Option<&evaluation::ScoreInfo> {
+    score_info.iter().flatten().find(|si| si.side == side)
+}
+
+fn apply_course_summary_column_judgments(
+    course_page: &mut evaluation::State,
+    song_pages: &[evaluation::State],
+) {
+    for summary in course_page.score_info.iter_mut().flatten() {
+        let mut columns = Vec::new();
+        let mut noteskin = None;
+        for page in song_pages {
+            let Some(song) = score_info_for_side(&page.score_info, summary.side) else {
+                continue;
+            };
+            merge_column_judgments(&mut columns, &song.column_judgments);
+            if noteskin.is_none() && song.noteskin.is_some() {
+                noteskin.clone_from(&song.noteskin);
+            }
+        }
+        summary.column_judgments = columns;
+        if summary.noteskin.is_none() {
+            summary.noteskin = noteskin;
+        }
+    }
+}
+
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     course_graph_stages: &[Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS],
@@ -5022,6 +5087,7 @@ impl App {
                         session_elapsed,
                         gameplay_elapsed,
                     );
+                    apply_course_summary_column_judgments(&mut course_page, &per_song_pages);
                     course_page.screen_elapsed = screen_elapsed;
                     self.state.screens.evaluation_state = course_page.clone();
 
@@ -9285,6 +9351,113 @@ mod tests {
         assert!((song_page.score_percent - 1.0).abs() <= f64::EPSILON);
         assert!(!course_page.histogram.bins.is_empty());
         assert_eq!(course_page.scatter.len(), 1);
+    }
+
+    #[test]
+    fn course_summary_merges_column_judgments_from_song_pages() {
+        let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
+        let side = profile::PlayerSide::P2;
+        let mut course_score = std::array::from_fn(|_| None);
+        course_score[0] = Some(test_score_info(
+            song.clone(),
+            side,
+            "course",
+            ScrollSpeedSetting::default(),
+            1.0,
+        ));
+        let mut course_page = evaluation::init_from_score_info(course_score, 120.0);
+
+        let mut first = std::array::from_fn(|_| None);
+        let mut first_p2 = test_score_info(
+            song.clone(),
+            side,
+            "stage-a",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        first_p2.column_judgments = vec![
+            evaluation::ColumnJudgments {
+                w0: 1,
+                w1: 2,
+                early_w1: 1,
+                early_total_w0: 1,
+                held_miss: 1,
+                ..Default::default()
+            },
+            evaluation::ColumnJudgments {
+                w2: 3,
+                miss: 1,
+                early_w2: 2,
+                early_total_w2: 2,
+                ..Default::default()
+            },
+        ];
+        first[0] = Some(first_p2);
+        let mut ignored_p1 = test_score_info(
+            song.clone(),
+            profile::PlayerSide::P1,
+            "ignored",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        ignored_p1.column_judgments = vec![evaluation::ColumnJudgments {
+            w4: 1000,
+            ..Default::default()
+        }];
+        first[1] = Some(ignored_p1);
+        let first_page = evaluation::init_from_score_info(first, 60.0);
+
+        let mut second = std::array::from_fn(|_| None);
+        let mut second_p2 = test_score_info(
+            song.clone(),
+            side,
+            "stage-b",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        second_p2.column_judgments = vec![
+            evaluation::ColumnJudgments {
+                w0: 4,
+                w3: 5,
+                early_w3: 1,
+                early_total_w3: 1,
+                held_miss: 2,
+                ..Default::default()
+            },
+            evaluation::ColumnJudgments::default(),
+            evaluation::ColumnJudgments {
+                w5: 6,
+                early_w5: 3,
+                early_total_w5: 4,
+                ..Default::default()
+            },
+        ];
+        second[0] = Some(second_p2);
+        let second_page = evaluation::init_from_score_info(second, 60.0);
+
+        apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
+
+        let columns = &course_page.score_info[0]
+            .as_ref()
+            .expect("course summary score")
+            .column_judgments;
+        assert_eq!(columns.len(), 3);
+        assert_eq!(columns[0].w0, 5);
+        assert_eq!(columns[0].w1, 2);
+        assert_eq!(columns[0].w3, 5);
+        assert_eq!(columns[0].w4, 0);
+        assert_eq!(columns[0].early_w1, 1);
+        assert_eq!(columns[0].early_w3, 1);
+        assert_eq!(columns[0].early_total_w0, 1);
+        assert_eq!(columns[0].early_total_w3, 1);
+        assert_eq!(columns[0].held_miss, 3);
+        assert_eq!(columns[1].w2, 3);
+        assert_eq!(columns[1].miss, 1);
+        assert_eq!(columns[1].early_w2, 2);
+        assert_eq!(columns[1].early_total_w2, 2);
+        assert_eq!(columns[2].w5, 6);
+        assert_eq!(columns[2].early_w5, 3);
+        assert_eq!(columns[2].early_total_w5, 4);
     }
 
     #[test]
