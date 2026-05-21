@@ -72,6 +72,7 @@ pub enum DriverKind {
     Off,
     Snek,
     Litboard,
+    Win32Serial,
     Fusion,
     Gpb,
     PacDrive,
@@ -88,6 +89,7 @@ impl DriverKind {
             Self::Off => "None",
             Self::Snek => "Snek",
             Self::Litboard => "Litboard",
+            Self::Win32Serial => "Win32Serial",
             Self::Fusion => "Fusion",
             Self::Gpb => "GPB",
             Self::PacDrive => "PacDrive",
@@ -119,9 +121,8 @@ impl FromStr for DriverKind {
         match key.as_str() {
             "" | "0" | "false" | "off" | "none" | "disabled" => Ok(Self::Off),
             "snek" | "snekboard" => Ok(Self::Snek),
-            "lit" | "litboard" | "win32serial" | "sextetserial" | "sextetstream" => {
-                Ok(Self::Litboard)
-            }
+            "lit" | "litboard" | "sextetstream" => Ok(Self::Litboard),
+            "win32serial" | "lightsdriverwin32serial" | "sextetserial" => Ok(Self::Win32Serial),
             "fusion" | "icedragonfusion" | "lightsdriverfusion" => Ok(Self::Fusion),
             "gpb" | "icedragongpb" | "lightsdrivergpb" => Ok(Self::Gpb),
             "pac" | "pacdrive" | "ultimarcpacdrive" => Ok(Self::PacDrive),
@@ -709,6 +710,7 @@ fn run_worker(kind: DriverKind, litboard_port: String, rx: Receiver<Command>) {
 enum Driver {
     Snek(snek::Driver),
     Litboard(litboard::Driver),
+    Win32Serial(litboard::Driver),
     Fusion(fusion::Driver),
     Gpb(gpb::Driver),
     PacDrive(pac_drive::Driver),
@@ -725,6 +727,9 @@ impl Driver {
             DriverKind::Off => None,
             DriverKind::Snek => Some(Self::Snek(snek::Driver::new())),
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
+            DriverKind::Win32Serial => Some(Self::Win32Serial(litboard::Driver::win32_serial(
+                litboard_port,
+            ))),
             DriverKind::Fusion => Some(Self::Fusion(fusion::Driver::new())),
             DriverKind::Gpb => Some(Self::Gpb(gpb::Driver::new())),
             DriverKind::PacDrive => Some(Self::PacDrive(pac_drive::Driver::new())),
@@ -740,6 +745,7 @@ impl Driver {
         match self {
             Self::Snek(driver) => driver.set(state),
             Self::Litboard(driver) => driver.set(state),
+            Self::Win32Serial(driver) => driver.set(state),
             Self::Fusion(driver) => driver.set(state),
             Self::Gpb(driver) => driver.set(state),
             Self::PacDrive(driver) => driver.set(state),
@@ -785,7 +791,11 @@ mod tests {
         );
         assert_eq!(
             DriverKind::from_str("Win32Serial").unwrap(),
-            DriverKind::Litboard
+            DriverKind::Win32Serial
+        );
+        assert_eq!(
+            DriverKind::from_str("LightsDriver_Win32Serial").unwrap(),
+            DriverKind::Win32Serial
         );
         assert_eq!(
             DriverKind::from_str("LightsDriver_fusion").unwrap(),

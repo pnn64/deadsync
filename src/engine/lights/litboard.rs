@@ -11,6 +11,7 @@ const REPORT_SIZE: usize = 1 + PLAYER_SEXTETS * 2 + 1;
 const LINE_FEED: u8 = b'\n';
 
 pub struct Driver {
+    name: &'static str,
     port: String,
     file: Option<File>,
     last_open_attempt: Option<Instant>,
@@ -20,7 +21,16 @@ pub struct Driver {
 
 impl Driver {
     pub fn new(port: String) -> Self {
+        Self::with_name("Litboard", port)
+    }
+
+    pub fn win32_serial(port: String) -> Self {
+        Self::with_name("Win32Serial", port)
+    }
+
+    fn with_name(name: &'static str, port: String) -> Self {
         Self {
+            name,
             port,
             file: None,
             last_open_attempt: None,
@@ -39,7 +49,7 @@ impl Driver {
             return;
         };
         if let Err(e) = file.write_all(&report) {
-            warn!("Litboard lights write failed: {e}");
+            warn!("{} lights write failed: {e}", self.name);
             self.drop_file();
             return;
         }
@@ -62,16 +72,19 @@ impl Driver {
         match OpenOptions::new().write(true).open(port_path.as_ref()) {
             Ok(file) => {
                 if let Err(e) = configure_serial(&file) {
-                    warn!("Litboard serial setup failed for {}: {e}", self.port);
+                    warn!("{} serial setup failed for {}: {e}", self.name, self.port);
                     return;
                 }
-                debug!("Opened Litboard serial lights output at {}", self.port);
+                debug!("Opened {} serial lights output at {}", self.name, self.port);
                 self.warned_missing = false;
                 self.file = Some(file);
             }
             Err(e) => {
                 if !self.warned_missing {
-                    debug!("No Litboard serial lights output at {}: {e}", self.port);
+                    debug!(
+                        "No {} serial lights output at {}: {e}",
+                        self.name, self.port
+                    );
                     self.warned_missing = true;
                 }
             }

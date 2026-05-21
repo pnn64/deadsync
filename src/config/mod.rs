@@ -297,7 +297,7 @@ pub struct Config {
     pub lights_driver: LightsDriverKind,
     /// Source for gameplay arrow pad lights.
     pub lights_gameplay_pad_lights: GameplayPadLightMode,
-    /// Serial port used by the Litboard/SextetStream lights driver.
+    /// Serial port used by the Litboard/Win32Serial/Sextet lights drivers.
     pub lights_com_port: SerialPortName,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.

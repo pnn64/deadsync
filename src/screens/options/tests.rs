@@ -113,6 +113,34 @@ fn input_backend_items_match_rows() {
 }
 
 #[test]
+fn lights_driver_choices_roundtrip() {
+    let cases = [
+        LightsDriverKind::Off,
+        LightsDriverKind::Snek,
+        LightsDriverKind::Litboard,
+        LightsDriverKind::Win32Serial,
+        LightsDriverKind::Fusion,
+        LightsDriverKind::Gpb,
+        LightsDriverKind::PacDrive,
+        LightsDriverKind::PiuioLeds,
+        LightsDriverKind::Itgio,
+        LightsDriverKind::HidBlueDot,
+        LightsDriverKind::Stac2,
+        LightsDriverKind::MinimaidHid,
+    ];
+
+    assert_eq!(LIGHTS_OPTIONS_ROWS[0].choices.len(), cases.len());
+    for driver in cases {
+        let idx = lights_driver_choice_index(driver);
+        assert_eq!(lights_driver_from_choice(idx), driver);
+        assert_eq!(
+            LIGHTS_OPTIONS_ROWS[0].choices[idx].as_str_static(),
+            Some(driver.as_str())
+        );
+    }
+}
+
+#[test]
 fn graphics_hide_cursor_item_matches_row() {
     let row_idx = row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::HideMouseCursor)
         .expect("hide cursor row should exist");
