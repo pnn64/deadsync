@@ -40,7 +40,15 @@ fn resolve_target(path: &Path) -> PathBuf {
 
 #[cfg(target_os = "windows")]
 fn spawn_reveal(target: &Path, original: &Path) -> std::io::Result<()> {
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
+
+    // DETACHED_PROCESS (0x00000008) | CREATE_NEW_PROCESS_GROUP (0x00000200)
+    // | CREATE_BREAKAWAY_FROM_JOB (0x01000000). We never want explorer to
+    // inherit the game's job object, console, or handle table — doing so can
+    // pin the game's swap chain or freeze the active fullscreen window while
+    // Windows shells over to the new explorer instance.
+    const DETACH_FLAGS: u32 = 0x0000_0008 | 0x0000_0200 | 0x0100_0000;
 
     let mut cmd = Command::new("explorer.exe");
     if original.is_file() {
@@ -51,6 +59,7 @@ fn spawn_reveal(target: &Path, original: &Path) -> std::io::Result<()> {
     } else {
         cmd.arg(target.as_os_str());
     }
+    cmd.creation_flags(DETACH_FLAGS);
     spawn_cmd(cmd)
 }
 
@@ -94,6 +103,14 @@ fn spawn_reveal(_target: &Path, _original: &Path) -> std::io::Result<()> {
     target_os = "freebsd"
 ))]
 fn spawn_cmd(mut cmd: std::process::Command) -> std::io::Result<()> {
+    use std::process::Stdio;
+    // Null out stdio so the child never reads from / writes to the parent's
+    // console pipes. Without this an inherited handle can stall the parent
+    // when the OS shell takes its time forwarding the request (e.g.
+    // explorer.exe on Windows).
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     match cmd.spawn() {
         Ok(_child) => Ok(()),
         Err(e) => {
