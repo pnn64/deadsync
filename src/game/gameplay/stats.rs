@@ -487,6 +487,16 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
         let stage_window_counts = state.live_window_counts[player];
         let stage_window_counts_10ms = state.live_window_counts_10ms_blue[player];
         let stage_window_counts_display_blue = state.live_window_counts_display_blue[player];
+        let first_fc_attempt_broken = previous.first_fc_attempt_broken || p.first_fc_attempt_broken;
+        let full_combo_grade = if first_fc_attempt_broken {
+            None
+        } else {
+            match (previous.full_combo_grade, p.full_combo_grade) {
+                (Some(prev), Some(current)) => Some(prev.max(current)),
+                (Some(prev), None) => Some(prev),
+                (None, current) => current,
+            }
+        };
         let window_counts = crate::game::timing::WindowCounts {
             w0: previous
                 .window_counts
@@ -580,6 +590,14 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
         carry[player] = CourseDisplayCarry {
             judgment_counts,
             scoring_counts,
+            full_combo_grade,
+            current_combo_grade: p.current_combo_grade,
+            current_combo_window_counts: if p.combo > 0 {
+                p.current_combo_window_counts
+            } else {
+                crate::game::timing::WindowCounts::default()
+            },
+            first_fc_attempt_broken,
             window_counts,
             window_counts_10ms_blue,
             window_counts_display_blue,

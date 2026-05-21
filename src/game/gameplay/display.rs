@@ -170,6 +170,15 @@ pub(super) fn record_display_window_counts(
 }
 
 #[inline(always)]
+pub(super) fn record_current_combo_window_count(player: &mut PlayerRuntime, judgment: &Judgment) {
+    add_judgment_to_window_counts(
+        &mut player.current_combo_window_counts,
+        judgment,
+        timing::FA_PLUS_W0_MS,
+    );
+}
+
+#[inline(always)]
 pub fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayTotals::default();

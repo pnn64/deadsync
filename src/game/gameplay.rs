@@ -107,7 +107,9 @@ use self::controls::{next_tick_mode, tick_mode_status_line};
 use self::display::effective_ex_score_inputs;
 #[cfg(test)]
 use self::display::scored_hold_totals_with_carry;
-use self::display::{capture_failed_ex_score_inputs, record_display_window_counts};
+use self::display::{
+    capture_failed_ex_score_inputs, record_current_combo_window_count, record_display_window_counts,
+};
 pub use self::display::{
     display_carry_for_player, display_ex_score_percent, display_hard_ex_score_percent,
     display_itg_score_percent, display_judgment_count, display_live_timing_stats,
@@ -3275,6 +3277,7 @@ pub struct PlayerRuntime {
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: crate::game::timing::WindowCounts,
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
@@ -3326,6 +3329,10 @@ pub struct PlayerRuntime {
 pub struct CourseDisplayCarry {
     pub judgment_counts: [u32; 6],
     pub scoring_counts: [u32; 6],
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: crate::game::timing::WindowCounts,
+    pub first_fc_attempt_broken: bool,
     // Canonical FA+ split (15ms) used for EX scoring/evaluation.
     pub window_counts: crate::game::timing::WindowCounts,
     // Canonical 10ms split used for H.EX scoring/evaluation.
@@ -3394,6 +3401,7 @@ fn init_player_runtime() -> PlayerRuntime {
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,
+        current_combo_window_counts: crate::game::timing::WindowCounts::default(),
         first_fc_attempt_broken: false,
         judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
@@ -3434,6 +3442,32 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
         live_timing_stats: crate::game::timing::LiveTimingStats::default(),
+    }
+}
+
+#[inline(always)]
+fn apply_course_combo_carry(
+    player: &mut PlayerRuntime,
+    carry_combo_between_songs: bool,
+    replay_mode: bool,
+    combo_carry: u32,
+    course_carry: Option<CourseDisplayCarry>,
+) {
+    if carry_combo_between_songs && !replay_mode {
+        player.combo = combo_carry;
+        if let Some(carry) = course_carry {
+            if combo_carry > 0 {
+                player.full_combo_grade = carry.full_combo_grade;
+                player.current_combo_grade = carry.current_combo_grade;
+                player.current_combo_window_counts = carry.current_combo_window_counts;
+                player.first_fc_attempt_broken = carry.first_fc_attempt_broken;
+            } else {
+                player.first_fc_attempt_broken =
+                    carry.first_fc_attempt_broken || carry.full_combo_grade.is_some();
+            }
+        }
+    } else if course_carry.is_some() {
+        player.first_fc_attempt_broken = true;
     }
 }
 
@@ -6183,9 +6217,14 @@ pub fn init(
     let finalize_started = Instant::now();
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
-        if player_profiles[p].carry_combo_between_songs && !replay_mode {
-            players[p].combo = combo_carry[p];
-        }
+        let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
+        apply_course_combo_carry(
+            &mut players[p],
+            player_profiles[p].carry_combo_between_songs,
+            replay_mode,
+            combo_carry[p],
+            course_carry,
+        );
         let life = players[p].life;
         players[p].life_history.push((init_music_time, life));
     }
@@ -6692,9 +6731,7 @@ const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
 
 #[inline(always)]
 fn clear_full_combo_state(p: &mut PlayerRuntime) {
-    if p.full_combo_grade.is_some() {
-        p.first_fc_attempt_broken = true;
-    }
+    p.first_fc_attempt_broken = true;
     p.full_combo_grade = None;
 }
 
@@ -6706,6 +6743,7 @@ fn break_combo_state(p: &mut PlayerRuntime, miss_combo_delta: u32) {
     }
     clear_full_combo_state(p);
     p.current_combo_grade = None;
+    p.current_combo_window_counts = crate::game::timing::WindowCounts::default();
 }
 
 #[inline(always)]
@@ -8928,6 +8966,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             [0; MAX_PLAYERS],
         )
     }
@@ -9081,6 +9120,7 @@ return Def.ActorFrame{}
                                 None,
                                 None,
                                 Arc::from("TEST"),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -10932,6 +10972,101 @@ return Def.ActorFrame{}
         assert_eq!(player.miss_combo, 0);
         assert_eq!(player.full_combo_grade, Some(JudgeGrade::Great));
         assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+    }
+
+    #[test]
+    fn course_combo_carry_restores_combo_color_state_when_combo_carries() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            full_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w0: 7,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 37, Some(carry));
+
+        assert_eq!(player.combo, 37);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_window_counts.w0, 7);
+        assert!(!player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn course_combo_carry_keeps_prior_break_from_coloring_full_combo() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            current_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w1: 1,
+                ..Default::default()
+            },
+            first_fc_attempt_broken: true,
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 12, Some(carry));
+
+        assert_eq!(player.combo, 12);
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+        assert_eq!(player.current_combo_window_counts.w1, 1);
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+    }
+
+    #[test]
+    fn course_combo_carry_without_combo_disables_full_combo_reseed() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            full_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w0: 9,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 0, Some(carry));
+
+        assert_eq!(player.combo, 0);
+        assert!(player.full_combo_grade.is_none());
+        assert!(player.current_combo_grade.is_none());
+        assert_eq!(player.current_combo_window_counts.w0, 0);
+        assert_eq!(player.current_combo_window_counts.w1, 0);
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+    }
+
+    #[test]
+    fn bad_first_row_breaks_full_combo_attempt() {
+        let mut player = super::init_player_runtime();
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Decent, 1, 1);
+
+        assert_eq!(player.combo, 0);
+        assert!(player.full_combo_grade.is_none());
+        assert!(player.current_combo_grade.is_none());
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert_eq!(player.combo, 1);
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
     }
 
     #[test]

@@ -2901,7 +2901,11 @@ fn zmod_combo_quint_active(state: &State, player_idx: usize, profile: &profile::
     if !profile.show_fa_plus_window || player_idx >= state.num_players {
         return false;
     }
-    let counts = state.live_window_counts[player_idx];
+    let counts = if profile.combo_mode == profile::ComboMode::FullCombo {
+        crate::game::gameplay::display_window_counts(state, player_idx, None)
+    } else {
+        state.players[player_idx].current_combo_window_counts
+    };
     counts.w0 > 0
         && counts.w1 == 0
         && counts.w2 == 0

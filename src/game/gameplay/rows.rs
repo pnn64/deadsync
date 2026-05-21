@@ -6,7 +6,8 @@ use super::{
     apply_autosync_for_row_hits, apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
     capture_failed_ex_score_inputs, current_music_time_s, display_judge_ix, error_bar_register_tap,
     is_player_dead, judge_life_delta, max_step_distance_ns, player_col_range,
-    record_display_window_counts, set_last_judgment, update_itg_grade_totals,
+    record_current_combo_window_count, record_display_window_counts, set_last_judgment,
+    update_itg_grade_totals,
 };
 
 #[inline(always)]
@@ -72,6 +73,7 @@ pub(super) fn finalize_row_judgment(
         if !skip_life_change {
             apply_life_change(p, current_music_time, life_delta);
         }
+        record_current_combo_window_count(p, &final_judgment);
         apply_row_combo_state(p, final_grade, player_row_note_count, 1);
         if !row_has_miss && !row_has_wayoff {
             let notes_on_row_count = player_row_note_count as usize;
