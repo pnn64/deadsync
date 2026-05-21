@@ -18,7 +18,7 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
             literal_choice("STAC2"),
             literal_choice("MinimaidHID"),
         ],
-        inline: true,
+        inline: false,
     },
     SubRow {
         id: SubRowId::GameplayPadLights,

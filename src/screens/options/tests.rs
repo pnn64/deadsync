@@ -130,6 +130,10 @@ fn lights_driver_choices_roundtrip() {
     ];
 
     assert_eq!(LIGHTS_OPTIONS_ROWS[0].choices.len(), cases.len());
+    assert!(
+        !LIGHTS_OPTIONS_ROWS[0].inline,
+        "the driver list is too long to render every choice in one row"
+    );
     for driver in cases {
         let idx = lights_driver_choice_index(driver);
         assert_eq!(lights_driver_from_choice(idx), driver);
