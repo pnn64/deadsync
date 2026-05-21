@@ -2115,6 +2115,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && passed
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
+                && (gs.course_display_totals.is_none()
+                    || cfg.autosubmit_course_scores_individually)
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
                 && !disqualified
@@ -4859,10 +4861,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 side,
             )
             .or(state.submit_arrowcloud_fallback[player_idx]);
-            let groovestats_next_retry = scores::groovestats_next_retry_remaining_secs(side);
+            let groovestats_next_retry =
+                scores::groovestats_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
             let arrowcloud_next_retry =
                 scores::arrowcloud_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
-            let groovestats_next_retry_is_auto = scores::groovestats_next_retry_is_auto(side);
+            let groovestats_next_retry_is_auto =
+                scores::groovestats_next_retry_is_auto(si.chart.short_hash.as_str(), side);
             let arrowcloud_next_retry_is_auto =
                 scores::arrowcloud_next_retry_is_auto(si.chart.short_hash.as_str(), side);
             let lines = submit_footer_lines(
