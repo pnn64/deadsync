@@ -909,7 +909,9 @@ fn course_graph_stripe_actors(
             xy(x, 0.0):
             setsize(w, graph_height):
             diffuse(STRIPE_RGBA[0], STRIPE_RGBA[1], STRIPE_RGBA[2], STRIPE_RGBA[3]):
-            z(2)
+            // The parent frame sits at z=2; keep local z at 0 so course
+            // stripes stay below the scatter mesh at z=3.
+            z(0)
         ));
     }
     actors
@@ -919,10 +921,12 @@ fn course_graph_stripe_actors(
 mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
-        compute_column_judgments, course_graph_stage_spans, eval_grade_for_result, eval_pane_shift,
-        stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
+        compute_column_judgments, course_graph_stage_spans, course_graph_stripe_actors,
+        eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
+        submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
+    use crate::engine::present::actors::Actor;
     use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
@@ -988,6 +992,28 @@ mod tests {
         assert!((spans[1].1 - 300.0).abs() < 0.001);
         assert!((spans[2].0 - 400.0).abs() < 0.001);
         assert!((spans[2].1 - 100.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn course_graph_stripes_stay_below_scatter_mesh() {
+        let stages = [
+            test_course_graph_stage(10.0),
+            test_course_graph_stage(30.0),
+            test_course_graph_stage(10.0),
+        ];
+
+        let stripes = course_graph_stripe_actors(&stages, 500.0, 64.0);
+
+        assert_eq!(stripes.len(), 2);
+        for stripe in stripes {
+            let Actor::Sprite { z, .. } = stripe else {
+                panic!("course graph stripe should be a quad sprite");
+            };
+            assert_eq!(
+                z, 0,
+                "stripe quads are placed in a z=2 parent frame; local z must stay 0 so they do not draw over the z=3 scatter mesh"
+            );
+        }
     }
 
     fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
