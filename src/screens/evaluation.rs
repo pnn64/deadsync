@@ -4860,9 +4860,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
             .or(state.submit_arrowcloud_fallback[player_idx]);
             let groovestats_next_retry = scores::groovestats_next_retry_remaining_secs(side);
-            let arrowcloud_next_retry = scores::arrowcloud_next_retry_remaining_secs(side);
+            let arrowcloud_next_retry =
+                scores::arrowcloud_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
             let groovestats_next_retry_is_auto = scores::groovestats_next_retry_is_auto(side);
-            let arrowcloud_next_retry_is_auto = scores::arrowcloud_next_retry_is_auto(side);
+            let arrowcloud_next_retry_is_auto =
+                scores::arrowcloud_next_retry_is_auto(si.chart.short_hash.as_str(), side);
             let lines = submit_footer_lines(
                 si.expected_groovestats_submit,
                 si.expected_arrowcloud_submit,
