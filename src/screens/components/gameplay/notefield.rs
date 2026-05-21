@@ -2082,6 +2082,24 @@ fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
 }
 
 #[inline(always)]
+pub(crate) fn hold_indicator_column_offset(
+    column_xs: Option<&[i32]>,
+    column: usize,
+    num_cols: usize,
+    spacing_mult: f32,
+    field_zoom: f32,
+) -> f32 {
+    // ITGmania Player::Update positions HoldJudgment actors from
+    // ArrowEffects::GetXPos(), then applies fX *= (1 - Mini * 0.5).
+    // DeadSync's field_zoom is that same Mini-derived field scale.
+    if let Some(x) = column_xs.and_then(|xs| xs.get(column)) {
+        return *x as f32 * spacing_mult * field_zoom;
+    }
+    let center = (num_cols.saturating_sub(1) as f32) * 0.5;
+    (column as f32 - center) * TARGET_ARROW_PIXEL_SIZE * field_zoom
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -8460,11 +8478,15 @@ pub fn build_bundles(
                 receptor_y_normal + HELD_MISS_OFFSET_FROM_RECEPTOR,
                 receptor_y_reverse - HELD_MISS_OFFSET_FROM_RECEPTOR,
             );
-            let column_offset = state.noteskin[player_idx]
-                .as_ref()
-                .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32 * spacing_mult)
-                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            let column_offset = hold_indicator_column_offset(
+                state.noteskin[player_idx]
+                    .as_ref()
+                    .map(|ns| ns.column_xs.as_slice()),
+                i,
+                num_cols,
+                spacing_mult,
+                field_zoom,
+            );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, y):
@@ -8511,14 +8533,18 @@ pub fn build_bundles(
                 receptor_y_normal + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
                 receptor_y_reverse - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
             );
-            let column_offset = state.noteskin[player_idx]
-                .as_ref()
-                .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32 * spacing_mult)
-                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            let column_offset = hold_indicator_column_offset(
+                state.noteskin[player_idx]
+                    .as_ref()
+                    .map(|ns| ns.column_xs.as_slice()),
+                i,
+                num_cols,
+                spacing_mult,
+                field_zoom,
+            );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
-                xy(judgment_x + column_offset, hold_judgment_y):
+                xy(playfield_center_x + column_offset, hold_judgment_y):
                 z(195):
                 setstate(frame_index):
                 zoom(zoom):
@@ -8582,15 +8608,15 @@ mod tests {
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
         hold_body_segment_budget, hold_draw_span, hold_explosion_active,
-        hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
-        note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
-        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
-        receptor_row_center, scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows,
-        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
-        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_offset,
+        hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
+        hud_layout_ys, hud_y, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
+        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
+        note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
+        offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
+        push_transform_parts, receptor_row_center, scroll_receptor_y, song_lua_hides_note_window,
+        tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::assets;
     use crate::engine::gfx::BlendMode;
@@ -9518,6 +9544,30 @@ mod tests {
     fn centered_scroll_overshoots_like_itg() {
         assert!((hud_y(100.0, 500.0, 300.0, false, 2.0) - 500.0).abs() <= 1e-6);
         assert!((scroll_receptor_y(0.0, 2.0, 100.0, 500.0, 300.0) - 500.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_indicator_columns_scale_with_mini_field_zoom() {
+        let columns = [-96, -32, 32, 96];
+        let field_zoom_80_mini = 1.0 - 0.8 * 0.5;
+        const EPS: f32 = 1e-5;
+
+        assert!(
+            (hold_indicator_column_offset(Some(&columns), 0, 4, 1.0, field_zoom_80_mini) + 57.6)
+                .abs()
+                <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(Some(&columns), 3, 4, 1.0, field_zoom_80_mini) - 57.6)
+                .abs()
+                <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(None, 0, 4, 1.0, field_zoom_80_mini) + 57.6).abs() <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(None, 3, 4, 1.0, field_zoom_80_mini) - 57.6).abs() <= EPS
+        );
     }
 
     #[test]
