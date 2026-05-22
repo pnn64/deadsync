@@ -4898,7 +4898,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(1.0, 0.5):
                     xy(x - banner_w * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_GS_ICON_ZOOM):
-                    z(121)
+                    z(100)
                 ));
                 actors.push(act!(text:
                     font(banner_font):
