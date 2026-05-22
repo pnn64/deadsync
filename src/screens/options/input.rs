@@ -588,6 +588,8 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         } else if row.id == SubRowId::NewPackBadge {
             config::update_select_music_new_pack_mode(NewPackMode::from_choice(new_index));
+        } else if row.id == SubRowId::FolderStats {
+            config::update_show_select_music_folder_stats(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowPatternInfo {
             config::update_select_music_pattern_info_mode(SelectMusicPatternInfoMode::from_choice(
                 new_index,

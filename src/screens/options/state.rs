@@ -946,6 +946,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::FolderStats,
+        yes_no_choice_index(cfg.show_select_music_folder_stats),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowPatternInfo,
         cfg.select_music_pattern_info_mode.choice_index(),
     );

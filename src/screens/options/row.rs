@@ -105,6 +105,7 @@ pub enum SubRowId {
     ItlRank,
     ItlWheelData,
     NewPackBadge,
+    FolderStats,
     ShowPatternInfo,
     ChartInfo,
     MusicPreviews,

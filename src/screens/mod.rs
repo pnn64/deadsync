@@ -69,6 +69,7 @@ pub enum ScreenAction {
     RequestScreenshot(Option<PlayerSide>),
     RequestBanner(Option<PathBuf>),
     RequestCdTitle(Option<PathBuf>),
+    RequestPackBanner(Option<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,

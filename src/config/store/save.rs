@@ -242,6 +242,11 @@ fn push_saved_options(
     );
     push_bool(
         content,
+        "SelectMusicFolderStats",
+        cfg.show_select_music_folder_stats,
+    );
+    push_bool(
+        content,
         "SelectMusicPreviews",
         cfg.show_select_music_previews,
     );

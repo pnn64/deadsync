@@ -160,6 +160,8 @@ pub struct Config {
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
     pub select_music_new_pack_mode: NewPackMode,
+    /// Arrow Cloud FolderStats parity: pack clear summary box on Select Music.
+    pub show_select_music_folder_stats: bool,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
@@ -352,6 +354,7 @@ impl Default for Config {
             select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
             select_music_wheel_style: SelectMusicWheelStyle::Itg,
             select_music_new_pack_mode: NewPackMode::Disabled,
+            show_select_music_folder_stats: false,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,

@@ -179,6 +179,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(
         content,
+        "SelectMusicFolderStats",
+        default.show_select_music_folder_stats,
+    );
+    push_bool(
+        content,
         "SelectMusicPreviews",
         default.show_select_music_previews,
     );

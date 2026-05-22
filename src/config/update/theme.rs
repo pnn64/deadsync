@@ -165,6 +165,17 @@ pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_folder_stats(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_folder_stats == enabled {
+            return;
+        }
+        cfg.show_select_music_folder_stats = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_previews(enabled: bool) {
     {
         let mut cfg = lock_config();

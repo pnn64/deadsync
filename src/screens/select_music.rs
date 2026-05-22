@@ -1127,6 +1127,7 @@ pub struct State {
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
+    last_requested_folder_stats_banner_path: Option<PathBuf>,
     pub(crate) banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
@@ -1656,6 +1657,139 @@ fn group_name_for_song(
         }
     }
     None
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FolderStatsSummary {
+    count_charts: u32,
+    passes: u32,
+    star_counts: [u32; FOLDER_STATS_STAR_BUCKETS],
+    best_grade: u8,
+}
+
+const FOLDER_STATS_STAR_BUCKETS: usize = 5;
+
+#[inline(always)]
+fn media_path_key_string(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+fn selected_group_header_for_folder_stats(state: &State) -> Option<(String, Option<PathBuf>)> {
+    if state.sort_mode != WheelSortMode::Group {
+        return None;
+    }
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::PackHeader {
+            name, banner_path, ..
+        }) => Some((name.clone(), banner_path.clone())),
+        Some(MusicWheelEntry::Song(target_song)) => {
+            let mut current: Option<(&str, Option<&PathBuf>)> = None;
+            for entry in &state.group_entries {
+                match entry {
+                    MusicWheelEntry::PackHeader {
+                        name, banner_path, ..
+                    } => current = Some((name.as_str(), banner_path.as_ref())),
+                    MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song) => {
+                        return current
+                            .map(|(name, banner_path)| (name.to_string(), banner_path.cloned()));
+                    }
+                    MusicWheelEntry::Song(_) => {}
+                }
+            }
+            None
+        }
+        None => None,
+    }
+}
+
+#[inline(always)]
+fn folder_stats_grade_bucket(grade: scores::Grade) -> Option<usize> {
+    match grade {
+        scores::Grade::Quint => Some(0),
+        scores::Grade::Tier01 => Some(1),
+        scores::Grade::Tier02 => Some(2),
+        scores::Grade::Tier03 => Some(3),
+        scores::Grade::Tier04 => Some(4),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn folder_stats_best_grade(star_counts: &[u32; FOLDER_STATS_STAR_BUCKETS]) -> u8 {
+    star_counts
+        .iter()
+        .position(|count| *count > 0)
+        .map_or(0, |idx| (FOLDER_STATS_STAR_BUCKETS - idx) as u8)
+}
+
+#[inline(always)]
+fn folder_stats_difficulty_label(difficulty: &str) -> &str {
+    if difficulty.eq_ignore_ascii_case("Challenge") {
+        "Expert"
+    } else if difficulty.eq_ignore_ascii_case("Beginner") {
+        "Beginner"
+    } else if difficulty.eq_ignore_ascii_case("Easy") {
+        "Easy"
+    } else if difficulty.eq_ignore_ascii_case("Medium") {
+        "Medium"
+    } else if difficulty.eq_ignore_ascii_case("Hard") {
+        "Hard"
+    } else if difficulty.eq_ignore_ascii_case("Edit") {
+        "Edit"
+    } else {
+        difficulty
+    }
+}
+
+#[inline(always)]
+fn folder_stats_preferred_difficulty(preferred_idx: usize) -> &'static str {
+    color::FILE_DIFFICULTY_NAMES[preferred_idx.min(NUM_STANDARD_DIFFICULTIES.saturating_sub(1))]
+}
+
+fn build_folder_stats_summary(
+    state: &State,
+    group_name: &str,
+    target_chart_type: &str,
+    difficulty: &str,
+    side: profile::PlayerSide,
+) -> FolderStatsSummary {
+    let mut summary = FolderStatsSummary::default();
+    let mut in_group = false;
+    for entry in &state.group_entries {
+        match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                if in_group && name != group_name {
+                    break;
+                }
+                in_group = name == group_name;
+            }
+            MusicWheelEntry::Song(song) if in_group => {
+                for chart in &song.charts {
+                    if !chart.chart_type.eq_ignore_ascii_case(target_chart_type)
+                        || !chart.difficulty.eq_ignore_ascii_case(difficulty)
+                    {
+                        continue;
+                    }
+                    summary.count_charts = summary.count_charts.saturating_add(1);
+                    let Some(score) =
+                        scores::get_cached_local_score_for_side(&chart.short_hash, side)
+                    else {
+                        continue;
+                    };
+                    if score.grade == scores::Grade::Failed {
+                        continue;
+                    }
+                    summary.passes = summary.passes.saturating_add(1);
+                    if let Some(bucket) = folder_stats_grade_bucket(score.grade) {
+                        summary.star_counts[bucket] = summary.star_counts[bucket].saturating_add(1);
+                    }
+                }
+            }
+            MusicWheelEntry::Song(_) => {}
+        }
+    }
+    summary.best_grade = folder_stats_best_grade(&summary.star_counts);
+    summary
 }
 
 #[inline(always)]
@@ -3167,6 +3301,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.wheel_offset_from_selection = 0.0;
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
+    state.last_requested_folder_stats_banner_path = None;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -3400,6 +3535,7 @@ pub fn init() -> State {
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
+        last_requested_folder_stats_banner_path: None,
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -3585,6 +3721,7 @@ pub fn init_placeholder() -> State {
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
+        last_requested_folder_stats_banner_path: None,
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -4324,6 +4461,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
         state.wheel_offset_from_selection = 0.0;
         state.last_requested_banner_path = None;
         state.last_requested_cdtitle_path = None;
+        state.last_requested_folder_stats_banner_path = None;
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
         state.last_requested_chart_hash = None;
@@ -4340,6 +4478,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
             state.wheel_offset_from_selection = 0.0;
             state.last_requested_banner_path = None;
             state.last_requested_cdtitle_path = None;
+            state.last_requested_folder_stats_banner_path = None;
             state.cdtitle_spin_elapsed = 0.0;
             state.cdtitle_anim_elapsed = 0.0;
             state.last_requested_chart_hash = None;
@@ -4366,6 +4505,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.wheel_offset_from_selection = 0.0;
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
+    state.last_requested_folder_stats_banner_path = None;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -6376,6 +6516,7 @@ fn apply_remote_lobby_song_selection(
     state.step_artist_cycle_base = state.session_elapsed;
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
+    state.last_requested_folder_stats_banner_path = None;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -9194,6 +9335,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     } else {
         None
     };
+    let new_folder_stats_banner = if cfg.show_select_music_folder_stats {
+        selected_group_header_for_folder_stats(state).and_then(|(_, path)| path)
+    } else {
+        None
+    };
 
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path.clone_from(&new_banner);
@@ -9215,6 +9361,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
         state.last_requested_cdtitle_path.clone_from(&new_cdtitle);
         return ScreenAction::RequestCdTitle(new_cdtitle);
+    }
+    if state.last_requested_folder_stats_banner_path != new_folder_stats_banner {
+        state
+            .last_requested_folder_stats_banner_path
+            .clone_from(&new_folder_stats_banner);
+        return ScreenAction::RequestPackBanner(new_folder_stats_banner);
     }
 
     if overlays_block_delayed_updates {
@@ -9360,6 +9512,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_chart_hash_p2 = None;
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
+    state.last_requested_folder_stats_banner_path = None;
     state.banner_high_quality_requested = false;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
@@ -9613,6 +9766,176 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
     actors
 }
 
+fn push_folder_stats_overlay(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    side: profile::PlayerSide,
+    side_profile: &profile::Profile,
+    target_chart_type: &str,
+    chart: Option<&ChartData>,
+    preferred_difficulty_index: usize,
+    is_versus: bool,
+) {
+    if !profile::is_session_side_joined(side)
+        || profile::is_session_side_guest(side)
+        || side_profile.display_name.trim().is_empty()
+    {
+        return;
+    }
+    let Some((group_name, banner_path)) = selected_group_header_for_folder_stats(state) else {
+        return;
+    };
+    let difficulty = chart
+        .map(|c| c.difficulty.as_str())
+        .unwrap_or_else(|| folder_stats_preferred_difficulty(preferred_difficulty_index));
+    let summary =
+        build_folder_stats_summary(state, &group_name, target_chart_type, difficulty, side);
+
+    let not_wide = screen_width() / screen_height().max(1.0) < 16.0 / 9.0;
+    let source_w = if not_wide { 314.0 } else { 418.0 };
+    let source_h = if not_wide { 123.0 } else { 164.0 };
+    let scale = 0.45;
+    let frame_w = source_w * scale;
+    let frame_h = source_h * scale;
+    let x = if is_versus && side == profile::PlayerSide::P1 {
+        screen_center_x() * 1.305
+    } else {
+        screen_center_x() * 1.77
+    };
+    let y = screen_center_y() * 0.3;
+    let cx = frame_w * 0.5;
+    let cy = frame_h * 0.5;
+    let sx = |local_x: f32| cx + local_x * scale;
+    let sy = |local_y: f32| cy + local_y * scale;
+    let accent = color::decorative_rgba(state.active_color_index);
+    let font_key = current_machine_font_key(FontRole::Normal);
+
+    let mut children = Vec::with_capacity(18);
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        setsize((source_w + 2.0) * scale, (source_h + 2.0) * scale):
+        z(120):
+        diffuse(accent[0], accent[1], accent[2], accent[3])
+    ));
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        setsize(frame_w, frame_h):
+        z(121):
+        diffuse(0.0, 0.0, 0.0, 1.0)
+    ));
+    if let Some(path) = banner_path.as_deref() {
+        let key = media_path_key_string(path);
+        if asset_manager.has_texture_key(&key) {
+            children.push(act!(sprite(key):
+                align(0.5, 0.5):
+                xy(cx, cy):
+                setsize(frame_w, frame_h):
+                z(122)
+            ));
+        }
+    }
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        setsize(frame_w, frame_h):
+        z(123):
+        diffuse(0.0, 0.0, 0.0, 0.8)
+    ));
+
+    let folder_zoom = if not_wide { 1.5 } else { 2.0 } * scale;
+    let folder_y = if not_wide { -50.0 } else { -60.0 };
+    children.push(act!(text:
+        font(font_key):
+        settext(cached_str_ref(&group_name)):
+        align(0.5, 0.5):
+        xy(cx, sy(folder_y)):
+        maxwidth(200.0 * scale):
+        zoom(folder_zoom):
+        z(124):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+    children.push(act!(text:
+        font(font_key):
+        settext(cached_str_ref(&side_profile.display_name)):
+        align(0.5, 0.5):
+        xy(cx, sy(-20.0)):
+        maxwidth(200.0 * scale):
+        zoom(folder_zoom):
+        z(124):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+
+    let total_text = Arc::<str>::from(format!(
+        "Total {}: {}/{}",
+        folder_stats_difficulty_label(difficulty),
+        summary.passes,
+        summary.count_charts
+    ));
+    children.push(act!(text:
+        font(font_key):
+        settext(total_text):
+        align(0.5, 0.5):
+        xy(cx, sy(15.0)):
+        zoom((if not_wide { 0.94 } else { 1.25 }) * scale):
+        z(124):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+
+    if summary.best_grade > 0 {
+        let best_grade = summary.best_grade as f32;
+        let column_w = if not_wide {
+            310.0 / best_grade
+        } else {
+            400.0 / best_grade
+        };
+        let grade_y = if not_wide { 45.0 } else { 52.0 };
+        let count_dx = if not_wide { 15.0 } else { 20.0 };
+        let icon_dx = if not_wide { -15.0 } else { -20.0 };
+        let count_zoom = if not_wide { 1.05 } else { 1.4 } * scale;
+        let icon_zoom = if not_wide { 0.38 } else { 0.5 } * scale;
+        for bucket in 0..FOLDER_STATS_STAR_BUCKETS {
+            let required_grade = (FOLDER_STATS_STAR_BUCKETS - bucket) as u8;
+            if summary.best_grade < required_grade {
+                continue;
+            }
+            let column_ix = bucket as f32 - (FOLDER_STATS_STAR_BUCKETS as f32 - best_grade) + 0.5;
+            let base_x = -(column_w * best_grade * 0.5) + column_w * column_ix;
+            children.push(act!(text:
+                font(font_key):
+                settext(cached_u32_text(summary.star_counts[bucket])):
+                align(0.5, 0.5):
+                xy(sx(base_x + count_dx), sy(grade_y)):
+                zoom(count_zoom):
+                z(124):
+                diffuse(1.0, 1.0, 1.0, 1.0)
+            ));
+            let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
+                align(0.5, 0.5):
+                xy(sx(base_x + icon_dx), sy(grade_y)):
+                zoom(icon_zoom):
+                z(124):
+                visible(true)
+            );
+            if let Actor::Sprite { cell, .. } = &mut grade_actor {
+                *cell = Some((bucket as u32, u32::MAX));
+            }
+            children.push(grade_actor);
+        }
+    }
+
+    actors.push(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [x - frame_w * 0.5, y - frame_h * 0.5],
+        size: [SizeSpec::Px(frame_w), SizeSpec::Px(frame_h)],
+        background: None,
+        z: 118,
+        children,
+    });
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
@@ -9780,6 +10103,55 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         let text = cached_music_rate_banner_text(music_rate);
         actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
         actors.push(act!(text: font("miso"): settext(text): align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): zoom(0.85 * banner_zoom): shadowlength(1.0): z(53): diffuse(1.0, 1.0, 1.0, 1.0)));
+    }
+
+    if cfg.show_select_music_folder_stats {
+        if is_versus {
+            push_folder_stats_overlay(
+                &mut actors,
+                state,
+                asset_manager,
+                profile::PlayerSide::P1,
+                &p1_profile,
+                target_chart_type,
+                immediate_chart_p1,
+                state.preferred_difficulty_index,
+                true,
+            );
+            push_folder_stats_overlay(
+                &mut actors,
+                state,
+                asset_manager,
+                profile::PlayerSide::P2,
+                &p2_profile,
+                target_chart_type,
+                immediate_chart_p2,
+                state.p2_preferred_difficulty_index,
+                true,
+            );
+        } else {
+            let active_side = if is_p2_single {
+                profile::PlayerSide::P2
+            } else {
+                profile::PlayerSide::P1
+            };
+            let active_profile = if is_p2_single {
+                &p2_profile
+            } else {
+                &p1_profile
+            };
+            push_folder_stats_overlay(
+                &mut actors,
+                state,
+                asset_manager,
+                active_side,
+                active_profile,
+                target_chart_type,
+                immediate_chart_p1,
+                state.preferred_difficulty_index,
+                false,
+            );
+        }
     }
 
     // Info Box
@@ -11218,8 +11590,8 @@ mod tests {
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::engine::input::{PadDir, RawKeyboardEvent};
-    use crate::game::profile;
     use crate::game::song::SongData;
+    use crate::game::{profile, scores};
     use crate::screens::ScreenAction;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -11298,6 +11670,44 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         })
+    }
+
+    #[test]
+    fn folder_stats_buckets_match_arrow_cloud_top_grades() {
+        assert_eq!(
+            super::folder_stats_grade_bucket(scores::Grade::Quint),
+            Some(0)
+        );
+        assert_eq!(
+            super::folder_stats_grade_bucket(scores::Grade::Tier01),
+            Some(1)
+        );
+        assert_eq!(
+            super::folder_stats_grade_bucket(scores::Grade::Tier04),
+            Some(4)
+        );
+        assert_eq!(
+            super::folder_stats_grade_bucket(scores::Grade::Tier05),
+            None
+        );
+        assert_eq!(
+            super::folder_stats_grade_bucket(scores::Grade::Failed),
+            None
+        );
+    }
+
+    #[test]
+    fn folder_stats_best_grade_matches_arrow_cloud_rank() {
+        assert_eq!(super::folder_stats_best_grade(&[0, 0, 0, 0, 0]), 0);
+        assert_eq!(super::folder_stats_best_grade(&[0, 0, 0, 0, 2]), 1);
+        assert_eq!(super::folder_stats_best_grade(&[0, 0, 3, 0, 2]), 3);
+        assert_eq!(super::folder_stats_best_grade(&[1, 0, 3, 0, 2]), 5);
+    }
+
+    #[test]
+    fn folder_stats_challenge_displays_as_expert() {
+        assert_eq!(super::folder_stats_difficulty_label("Challenge"), "Expert");
+        assert_eq!(super::folder_stats_difficulty_label("Hard"), "Hard");
     }
 
     #[test]

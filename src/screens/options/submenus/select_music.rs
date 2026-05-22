@@ -130,6 +130,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::FolderStats,
+        label: lookup_key("OptionsSelectMusic", "FolderStats"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ShowPatternInfo,
         label: lookup_key("OptionsSelectMusic", "ShowPatternInfo"),
         choices: &[
@@ -336,6 +345,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "NewPackBadgeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmFolderStats,
+        name: lookup_key("OptionsSelectMusic", "FolderStats"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "FolderStatsHelp",
         ))],
     },
     Item {

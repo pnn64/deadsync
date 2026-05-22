@@ -386,6 +386,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicNewPackMode")
         .and_then(|v| NewPackMode::from_str(&v).ok())
         .unwrap_or(default.select_music_new_pack_mode);
+    cfg.show_select_music_folder_stats = conf
+        .get("Options", "SelectMusicFolderStats")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.show_select_music_folder_stats, |v| v != 0);
     cfg.show_select_music_previews = conf
         .get("Options", "SelectMusicPreviews")
         .and_then(|v| v.parse::<u8>().ok())
