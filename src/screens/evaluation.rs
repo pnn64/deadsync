@@ -927,8 +927,8 @@ mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
         compute_column_judgments, course_graph_stage_spans, course_graph_stripe_actors,
-        eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
-        submit_footer_gs_label, submit_footer_lines,
+        eval_grade_for_result, eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate,
+        stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
     use crate::engine::present::actors::Actor;
@@ -1634,6 +1634,16 @@ mod tests {
     }
 
     #[test]
+    fn eval_pane_skip_duplicate_advances_auto_switch_collision() {
+        let panes = eval_pane_cycle(false, false, true, false, false, false);
+
+        assert_eq!(
+            eval_pane_skip_duplicate(EvalPane::GrooveStats, EvalPane::GrooveStats, 1, &panes),
+            EvalPane::GrooveStatsEx
+        );
+    }
+
+    #[test]
     fn stage_in_stinger_uses_failed_text_for_disqualified_runs() {
         assert_eq!(
             stage_in_stinger_texture_key(false, true),
@@ -1760,7 +1770,7 @@ fn eval_has_test_input_pane() -> bool {
     crate::config::get().only_dedicated_menu_buttons
 }
 
-#[inline(always)]
+#[cfg(test)]
 fn eval_pane_shift(
     pane: EvalPane,
     dir: i32,
@@ -1770,20 +1780,37 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(
-        has_hard_ex,
-        has_qr,
-        has_gs,
-        has_itl,
-        has_arrowcloud,
-        eval_has_test_input_pane(),
-    );
+    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud, true);
+    eval_pane_shift_in_cycle(pane, dir, &panes)
+}
+
+#[inline(always)]
+fn eval_pane_shift_in_cycle(pane: EvalPane, dir: i32, panes: &[EvalPane]) -> EvalPane {
     let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
         return panes.first().copied().unwrap_or(EvalPane::Standard);
     };
     let step = if dir >= 0 { 1 } else { -1 };
     let next_idx = (cur_idx as i32 + step).rem_euclid(panes.len() as i32) as usize;
     panes[next_idx]
+}
+
+fn eval_pane_skip_duplicate(
+    pane: EvalPane,
+    other: EvalPane,
+    dir: i32,
+    panes: &[EvalPane],
+) -> EvalPane {
+    if panes.len() <= 1 {
+        return pane;
+    }
+    let mut next = pane;
+    for _ in 0..panes.len() {
+        if next != other {
+            return next;
+        }
+        next = eval_pane_shift_in_cycle(next, dir, panes);
+    }
+    next
 }
 
 #[inline(always)]
@@ -2790,17 +2817,23 @@ pub fn update(state: &mut State, dt: f32) {
     sync_submit_record_sfx(state);
     scores::tick_groovestats_auto_retries();
     scores::tick_arrowcloud_auto_retries();
+    let play_style = profile::get_session_play_style();
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
             continue;
         }
-        let player_idx = if profile::get_session_play_style() == profile::PlayStyle::Versus {
+        let player_idx = if play_style == profile::PlayStyle::Versus {
             controller_idx
         } else {
             0
         };
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             continue;
+        };
+        let gs_side = if play_style == profile::PlayStyle::Versus {
+            [profile::PlayerSide::P1, profile::PlayerSide::P2][controller_idx]
+        } else {
+            profile::get_session_player_side()
         };
         if matches!(
             scores::get_groovestats_submit_ui_status_for_side(
@@ -2811,6 +2844,23 @@ pub fn update(state: &mut State, dt: f32) {
             Some(scores::GrooveStatsSubmitUiStatus::Submitted)
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
+            if play_style != profile::PlayStyle::Versus {
+                let panes = eval_pane_cycle(
+                    si.show_hard_ex_score,
+                    false,
+                    eval_has_gs_pane(state.allow_online_panes),
+                    eval_has_itl_pane(state.allow_online_panes, si),
+                    eval_has_arrowcloud_pane(state.allow_online_panes, gs_side),
+                    eval_has_test_input_pane(),
+                );
+                let other_idx = 1 - controller_idx;
+                state.active_pane[controller_idx] = eval_pane_skip_duplicate(
+                    state.active_pane[controller_idx],
+                    state.active_pane[other_idx],
+                    1,
+                    &panes,
+                );
+            }
         }
     }
 }
@@ -3463,30 +3513,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         let has_itl = eval_has_itl_pane(has_online_panes, si);
         let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
 
-        state.active_pane[controller_idx] = eval_pane_shift(
-            state.active_pane[controller_idx],
-            dir,
+        let panes = eval_pane_cycle(
             has_hard_ex,
             has_qr,
             has_gs,
             has_itl,
             has_arrowcloud,
+            eval_has_test_input_pane(),
         );
+        state.active_pane[controller_idx] =
+            eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
         // Don't allow duplicate panes in single/double.
         if play_style != profile::PlayStyle::Versus {
             let other_idx = 1 - controller_idx;
-            if state.active_pane[controller_idx] == state.active_pane[other_idx] {
-                state.active_pane[controller_idx] = eval_pane_shift(
-                    state.active_pane[controller_idx],
-                    dir,
-                    has_hard_ex,
-                    has_qr,
-                    has_gs,
-                    has_itl,
-                    has_arrowcloud,
-                );
-            }
+            state.active_pane[controller_idx] = eval_pane_skip_duplicate(
+                state.active_pane[controller_idx],
+                state.active_pane[other_idx],
+                dir,
+                &panes,
+            );
         }
         state.active_pane[controller_idx] != old_pane
     };

@@ -44,7 +44,8 @@ impl RecordsPaneKind {
         match self {
             Self::ItlEx => "ITL.png",
             Self::ArrowCloudHardEx => "arrowcloud.png",
-            Self::GrooveStatsItg | Self::GrooveStatsEx => "GrooveStats.png",
+            Self::GrooveStatsItg => "GrooveStats.png",
+            Self::GrooveStatsEx => "BoogieStatsEX.png",
         }
     }
 
@@ -54,25 +55,6 @@ impl RecordsPaneKind {
             Self::ArrowCloudHardEx => 0.22,
             Self::ItlEx => 0.45,
             Self::GrooveStatsItg | Self::GrooveStatsEx => 1.5 * pane_zoom,
-        }
-    }
-
-    #[inline(always)]
-    const fn mode_text(self) -> &'static str {
-        match self {
-            Self::GrooveStatsItg => "ITG",
-            Self::GrooveStatsEx => "EX",
-            Self::ItlEx => "ITL EX",
-            Self::ArrowCloudHardEx => "H.EX",
-        }
-    }
-
-    #[inline(always)]
-    const fn mode_color(self) -> [f32; 4] {
-        match self {
-            Self::GrooveStatsEx | Self::ItlEx => color::JUDGMENT_RGBA[0],
-            Self::ArrowCloudHardEx => color::HARD_EX_SCORE_RGBA,
-            Self::GrooveStatsItg => [1.0, 1.0, 1.0, 1.0],
         }
     }
 }
@@ -297,17 +279,7 @@ fn build_records_pane(
         ));
     }
 
-    let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 2);
-    let mode_col = kind.mode_color();
-    children.push(act!(text:
-        font("miso"):
-        settext(kind.mode_text()):
-        align(0.5, 0.5):
-        xy(0.0, -4.0):
-        zoom(0.5 * pane_zoom):
-        diffuse(mode_col[0], mode_col[1], mode_col[2], mode_col[3]):
-        z(102)
-    ));
+    let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
     children.push(act!(sprite(kind.logo()):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
@@ -500,5 +472,11 @@ mod tests {
         assert!(!RecordsPaneKind::GrooveStatsEx.matches(&panes[0]));
         assert!(!RecordsPaneKind::ItlEx.matches(&panes[1]));
         assert!(!RecordsPaneKind::ArrowCloudHardEx.matches(&panes[2]));
+    }
+
+    #[test]
+    fn groovestats_ex_uses_in_pane_ex_logo() {
+        assert_eq!(RecordsPaneKind::GrooveStatsItg.logo(), "GrooveStats.png");
+        assert_eq!(RecordsPaneKind::GrooveStatsEx.logo(), "BoogieStatsEX.png");
     }
 }

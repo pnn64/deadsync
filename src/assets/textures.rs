@@ -1117,6 +1117,10 @@ impl AssetManager {
                 "folder-solid.png".to_string(),
             ),
             ("GrooveStats.png".to_string(), "GrooveStats.png".to_string()),
+            (
+                "BoogieStatsEX.png".to_string(),
+                "BoogieStatsEX.png".to_string(),
+            ),
             ("arrowcloud.png".to_string(), "arrowcloud.png".to_string()),
             ("ITL.png".to_string(), "ITL.png".to_string()),
             ("crown.png".to_string(), "crown.png".to_string()),
