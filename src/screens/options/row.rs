@@ -165,6 +165,15 @@ pub enum SubRowId {
     ScoreImportPack,
     ScoreImportOnlyMissing,
     ScoreImportStart,
+    // Folders submenu
+    FoldersDataDir,
+    FoldersCacheDir,
+    FoldersSongs,
+    FoldersCourses,
+    FoldersProfiles,
+    FoldersScreenshots,
+    FoldersLogFile,
+    FoldersConfigFile,
 }
 
 pub struct SubRow {

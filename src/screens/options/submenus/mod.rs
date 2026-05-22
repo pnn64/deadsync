@@ -1,5 +1,6 @@
 mod advanced;
 mod course;
+mod folders;
 mod gameplay;
 mod graphics;
 mod input_dev;
@@ -17,6 +18,8 @@ mod system;
 pub(super) use advanced::*;
 #[allow(unused_imports)]
 pub(super) use course::*;
+#[allow(unused_imports)]
+pub(super) use folders::*;
 #[allow(unused_imports)]
 pub(super) use gameplay::*;
 pub use graphics::update_monitor_specs;
