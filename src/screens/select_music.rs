@@ -1772,8 +1772,7 @@ fn build_folder_stats_summary(
                         continue;
                     }
                     summary.count_charts = summary.count_charts.saturating_add(1);
-                    let Some(score) =
-                        scores::get_cached_local_score_for_side(&chart.short_hash, side)
+                    let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side)
                     else {
                         continue;
                     };
