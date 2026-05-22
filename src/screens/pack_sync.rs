@@ -97,13 +97,6 @@ enum OverlayPhase {
     Review,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum ThreeKeyFocus {
-    #[default]
-    Rows,
-    Choice,
-}
-
 pub(crate) struct OverlayStateData {
     pack_name: String,
     rows: Vec<RowState>,
@@ -116,7 +109,6 @@ pub(crate) struct OverlayStateData {
     current_row: Option<usize>,
     rx: mpsc::Receiver<WorkerMsg>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
-    three_key_focus: ThreeKeyFocus,
 }
 
 pub(crate) enum OverlayState {
@@ -626,7 +618,6 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
         current_row: None,
         rx,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-        three_key_focus: ThreeKeyFocus::Rows,
     });
     true
 }
@@ -684,61 +675,29 @@ pub(crate) fn handle_input(
                         play_start = true;
                     }
                 },
-                OverlayPhase::Review => {
-                    if matches!(overlay.three_key_focus, ThreeKeyFocus::Rows) {
-                        match nav {
-                            screen_input::ThreeKeyMenuAction::Prev => {
-                                if shift(overlay, -1) {
-                                    play_change = true;
-                                }
-                            }
-                            screen_input::ThreeKeyMenuAction::Next => {
-                                if shift(overlay, 1) {
-                                    play_change = true;
-                                }
-                            }
-                            screen_input::ThreeKeyMenuAction::Confirm => {
-                                if can_save(overlay) {
-                                    overlay.three_key_focus = ThreeKeyFocus::Choice;
-                                    play_change = true;
-                                } else {
-                                    close_overlay = true;
-                                    play_start = true;
-                                }
-                            }
-                            screen_input::ThreeKeyMenuAction::Cancel => {
-                                close_overlay = true;
-                                play_start = true;
-                            }
-                        }
-                    } else {
-                        match nav {
-                            screen_input::ThreeKeyMenuAction::Prev => {
-                                if can_save(overlay) && !overlay.yes_selected {
-                                    overlay.yes_selected = true;
-                                    play_change = true;
-                                }
-                            }
-                            screen_input::ThreeKeyMenuAction::Next => {
-                                if can_save(overlay) && overlay.yes_selected {
-                                    overlay.yes_selected = false;
-                                    play_change = true;
-                                }
-                            }
-                            screen_input::ThreeKeyMenuAction::Confirm => {
-                                if can_save(overlay) && overlay.yes_selected {
-                                    apply_changes = Some(collect_changes(overlay));
-                                }
-                                close_overlay = true;
-                                play_start = true;
-                            }
-                            screen_input::ThreeKeyMenuAction::Cancel => {
-                                overlay.three_key_focus = ThreeKeyFocus::Rows;
-                                play_change = true;
-                            }
+                OverlayPhase::Review => match nav {
+                    screen_input::ThreeKeyMenuAction::Prev => {
+                        if choose_review_answer(overlay, true) {
+                            play_change = true;
                         }
                     }
-                }
+                    screen_input::ThreeKeyMenuAction::Next => {
+                        if choose_review_answer(overlay, false) {
+                            play_change = true;
+                        }
+                    }
+                    screen_input::ThreeKeyMenuAction::Confirm => {
+                        if can_save(overlay) && overlay.yes_selected {
+                            apply_changes = Some(collect_changes(overlay));
+                        }
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                    screen_input::ThreeKeyMenuAction::Cancel => {
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                },
             }
         } else {
             match overlay.phase {
@@ -786,61 +745,59 @@ pub(crate) fn handle_input(
                     }
                     _ => {}
                 },
-                OverlayPhase::Review => match ev.action {
-                    VirtualAction::p1_up
-                    | VirtualAction::p1_menu_up
-                    | VirtualAction::p2_up
-                    | VirtualAction::p2_menu_up => {
-                        if shift(overlay, -1) {
+                OverlayPhase::Review => {
+                    if let Some(delta) =
+                        review_choice_delta(ev.action, config::get().only_dedicated_menu_buttons)
+                    {
+                        if choose_review_answer(overlay, delta < 0) {
                             play_change = true;
                         }
-                    }
-                    VirtualAction::p1_down
-                    | VirtualAction::p1_menu_down
-                    | VirtualAction::p2_down
-                    | VirtualAction::p2_menu_down => {
-                        if shift(overlay, 1) {
-                            play_change = true;
+                    } else {
+                        match ev.action {
+                            VirtualAction::p1_up
+                            | VirtualAction::p1_menu_up
+                            | VirtualAction::p2_up
+                            | VirtualAction::p2_menu_up => {
+                                if shift(overlay, -1) {
+                                    play_change = true;
+                                }
+                            }
+                            VirtualAction::p1_down
+                            | VirtualAction::p1_menu_down
+                            | VirtualAction::p2_down
+                            | VirtualAction::p2_menu_down => {
+                                if shift(overlay, 1) {
+                                    play_change = true;
+                                }
+                            }
+                            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
+                                if shift(overlay, -page_delta) {
+                                    play_change = true;
+                                }
+                            }
+                            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
+                                if shift(overlay, page_delta) {
+                                    play_change = true;
+                                }
+                            }
+                            VirtualAction::p1_start | VirtualAction::p2_start => {
+                                if can_save(overlay) && overlay.yes_selected {
+                                    apply_changes = Some(collect_changes(overlay));
+                                }
+                                close_overlay = true;
+                                play_start = true;
+                            }
+                            VirtualAction::p1_back
+                            | VirtualAction::p2_back
+                            | VirtualAction::p1_select
+                            | VirtualAction::p2_select => {
+                                close_overlay = true;
+                                play_start = true;
+                            }
+                            _ => {}
                         }
                     }
-                    VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
-                        if shift(overlay, -page_delta) {
-                            play_change = true;
-                        }
-                    }
-                    VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
-                        if shift(overlay, page_delta) {
-                            play_change = true;
-                        }
-                    }
-                    VirtualAction::p1_left | VirtualAction::p2_left => {
-                        if can_save(overlay) && !overlay.yes_selected {
-                            overlay.yes_selected = true;
-                            play_change = true;
-                        }
-                    }
-                    VirtualAction::p1_right | VirtualAction::p2_right => {
-                        if can_save(overlay) && overlay.yes_selected {
-                            overlay.yes_selected = false;
-                            play_change = true;
-                        }
-                    }
-                    VirtualAction::p1_start | VirtualAction::p2_start => {
-                        if can_save(overlay) && overlay.yes_selected {
-                            apply_changes = Some(collect_changes(overlay));
-                        }
-                        close_overlay = true;
-                        play_start = true;
-                    }
-                    VirtualAction::p1_back
-                    | VirtualAction::p2_back
-                    | VirtualAction::p1_select
-                    | VirtualAction::p2_select => {
-                        close_overlay = true;
-                        play_start = true;
-                    }
-                    _ => {}
-                },
+                }
             }
         }
     }
@@ -954,6 +911,41 @@ fn collect_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
             })
         })
         .collect()
+}
+
+#[inline(always)]
+fn choose_review_answer(overlay: &mut OverlayStateData, yes: bool) -> bool {
+    if !can_save(overlay) || overlay.yes_selected == yes {
+        return false;
+    }
+    overlay.yes_selected = yes;
+    true
+}
+
+#[inline(always)]
+const fn review_choice_delta(action: VirtualAction, dedicated_menu_only: bool) -> Option<i8> {
+    if dedicated_menu_only && action.is_gameplay_arrow() {
+        return None;
+    }
+    match action {
+        VirtualAction::p1_left | VirtualAction::p2_left => Some(-1),
+        VirtualAction::p1_right | VirtualAction::p2_right => Some(1),
+        VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
+            if dedicated_menu_only {
+                Some(-1)
+            } else {
+                None
+            }
+        }
+        VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
+            if dedicated_menu_only {
+                Some(1)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
 }
 
 fn save_prompt(overlay: &OverlayStateData) -> String {
@@ -1156,14 +1148,12 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
             Ok(WorkerMsg::Finished) => {
                 overlay.phase = OverlayPhase::Review;
                 overlay.current_row = None;
-                overlay.three_key_focus = ThreeKeyFocus::Rows;
                 break;
             }
             Err(mpsc::TryRecvError::Empty) => break,
             Err(mpsc::TryRecvError::Disconnected) => {
                 overlay.phase = OverlayPhase::Review;
                 overlay.current_row = None;
-                overlay.three_key_focus = ThreeKeyFocus::Rows;
                 break;
             }
         }
@@ -1180,7 +1170,10 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
 
 #[cfg(test)]
 mod tests {
-    use super::{RowDisposition, RowPhase, RowState, result_text, row_disposition};
+    use super::{
+        RowDisposition, RowPhase, RowState, result_text, review_choice_delta, row_disposition,
+    };
+    use crate::engine::input::VirtualAction;
     use std::path::PathBuf;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
@@ -1208,5 +1201,33 @@ mod tests {
         let row = pack_row(12.5, 0.87);
         let text = result_text(&row, 0.80);
         assert!(text.contains("87% confidence"));
+    }
+
+    #[test]
+    fn pack_sync_review_uses_menu_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            review_choice_delta(VirtualAction::p1_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            review_choice_delta(VirtualAction::p1_menu_right, true),
+            Some(1)
+        );
+        assert_eq!(review_choice_delta(VirtualAction::p1_left, true), None);
+        assert_eq!(review_choice_delta(VirtualAction::p1_right, true), None);
+    }
+
+    #[test]
+    fn pack_sync_review_preserves_menu_lr_paging_without_dedicated_menu_mode() {
+        assert_eq!(
+            review_choice_delta(VirtualAction::p1_menu_left, false),
+            None
+        );
+        assert_eq!(
+            review_choice_delta(VirtualAction::p1_menu_right, false),
+            None
+        );
+        assert_eq!(review_choice_delta(VirtualAction::p1_left, false), Some(-1));
+        assert_eq!(review_choice_delta(VirtualAction::p1_right, false), Some(1));
     }
 }
