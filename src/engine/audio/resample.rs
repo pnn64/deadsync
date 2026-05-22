@@ -347,7 +347,12 @@ fn secs_to_frames(seconds: f64, sample_rate: u32) -> u64 {
 }
 
 #[inline]
-fn volume_for_frame(position: u64, full_volume_frame: u64, silence_frame: u64) -> f32 {
+fn sat_i64(value: u64) -> i64 {
+    value.min(i64::MAX as u64) as i64
+}
+
+#[inline]
+fn volume_for_frame(position: i64, full_volume_frame: i64, silence_frame: i64) -> f32 {
     if full_volume_frame == silence_frame {
         return 1.0;
     }
@@ -362,7 +367,7 @@ fn volume_for_frame(position: u64, full_volume_frame: u64, silence_frame: u64) -
     volume.clamp(0.0, 1.0) as f32
 }
 
-fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, fade: (u64, u64)) {
+fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, fade: (i64, i64)) {
     let (full_volume_frame, silence_frame) = fade;
     if samples.is_empty() || channels == 0 || full_volume_frame == silence_frame {
         return;
@@ -371,12 +376,10 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
     if frames == 0 {
         return;
     }
+    let start_frame = sat_i64(start_frame);
+    let end_frame = sat_i64(frames as u64).saturating_add(start_frame);
     let start_volume = volume_for_frame(start_frame, full_volume_frame, silence_frame);
-    let end_volume = volume_for_frame(
-        start_frame + frames as u64,
-        full_volume_frame,
-        silence_frame,
-    );
+    let end_volume = volume_for_frame(end_frame, full_volume_frame, silence_frame);
     if start_volume > 0.9999 && end_volume > 0.9999 {
         return;
     }
@@ -393,6 +396,30 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
             let scaled = f32::from(samples[idx]) * volume;
             samples[idx] = scaled.round().clamp(-32768.0, 32767.0) as i16;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_fade_envelope, volume_for_frame};
+
+    #[test]
+    fn fade_out_longer_than_clip_starts_near_silent() {
+        let clip_frames = 48i64;
+        let fade_frames = 72_000i64;
+        let start_volume = volume_for_frame(0, clip_frames - fade_frames, clip_frames);
+
+        assert!((start_volume - (clip_frames as f32 / fade_frames as f32)).abs() < 0.00001);
+    }
+
+    #[test]
+    fn fade_envelope_does_not_compress_long_fade_to_short_clip() {
+        let mut samples = [30_000i16; 48];
+
+        apply_fade_envelope(&mut samples, 1, 0, (-71_952, 48));
+
+        assert!(samples[0].abs() <= 25);
+        assert_eq!(samples[47], 0);
     }
 }
 
@@ -526,16 +553,16 @@ fn music_decoder_thread_loop(
         };
         let total_frames_target = frames_left_out;
         let fade_spec = if let Some(total) = total_frames_target {
-            let fade_out_frames = fade_out_frames.min(total);
             if fade_out_frames > 0 {
-                Some((total.saturating_sub(fade_out_frames), total))
+                let total = sat_i64(total);
+                Some((total.saturating_sub(sat_i64(fade_out_frames)), total))
             } else if fade_in_frames > 0 {
-                Some((fade_in_frames, 0))
+                Some((sat_i64(fade_in_frames), 0))
             } else {
                 None
             }
         } else if fade_in_frames > 0 {
-            Some((fade_in_frames, 0))
+            Some((sat_i64(fade_in_frames), 0))
         } else {
             None
         };

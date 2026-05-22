@@ -673,6 +673,22 @@ fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 
     (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
 }
 
+fn default_preview_start(song: &SongData, total_len: f64) -> f64 {
+    let at_beat_100 = sec_at_beat(song, 100.0);
+    if total_len <= 0.0 || at_beat_100 + DEFAULT_PREVIEW_LENGTH <= total_len {
+        return at_beat_100;
+    }
+
+    let last_beat = beat_at_sec(song, total_len);
+    let mut i_beat = (last_beat / 2.0).round();
+    if i_beat.is_finite() {
+        i_beat -= i_beat % 4.0;
+    } else {
+        i_beat = 0.0;
+    }
+    sec_at_beat(song, i_beat)
+}
+
 fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
     let path = song.music_path.clone()?;
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
@@ -683,30 +699,11 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
         song.total_length_seconds.max(0) as f64
     };
 
-    if !(length.is_sign_positive() && length.is_finite()) || length == 0.0 {
-        let at_beat_100 = sec_at_beat(song, 100.0);
-        start = if total_len > 0.0 && at_beat_100 + DEFAULT_PREVIEW_LENGTH > total_len {
-            let last_beat = beat_at_sec(song, total_len);
-            let mut i_beat = (last_beat / 2.0).round();
-            if i_beat.is_finite() {
-                i_beat -= i_beat % 4.0;
-            } else {
-                i_beat = 0.0;
-            }
-            sec_at_beat(song, i_beat)
-        } else {
-            at_beat_100
-        };
+    if !(length.is_finite() && length > 0.0) {
+        start = default_preview_start(song, total_len);
         length = DEFAULT_PREVIEW_LENGTH;
     } else if total_len > 0.0 && (start + length) > total_len {
-        let last_beat = beat_at_sec(song, total_len);
-        let mut i_beat = (last_beat / 2.0).round();
-        if i_beat.is_finite() {
-            i_beat -= i_beat % 4.0;
-        } else {
-            i_beat = 0.0;
-        }
-        start = sec_at_beat(song, i_beat);
+        start = default_preview_start(song, total_len);
     }
 
     if !start.is_finite() || start < 0.0 {
@@ -11301,6 +11298,22 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         })
+    }
+
+    #[test]
+    fn preview_cut_keeps_tiny_sample_length_after_start_fallback() {
+        let mut song = (*test_song("sync test")).clone();
+        song.music_path = Some(PathBuf::from("sync test.ogg"));
+        song.sample_start = Some(17.5);
+        song.sample_length = Some(0.001);
+        song.music_length_seconds = 17.500023;
+        song.total_length_seconds = 18;
+        song.normalized_bpms = "0.000=128.000".to_string();
+
+        let (_, cut) = super::compute_preview_cut(&song).unwrap();
+
+        assert!((cut.start_sec - 7.5).abs() <= 0.0001);
+        assert!((cut.length_sec - 0.001).abs() <= 0.000001);
     }
 
     fn test_entries() -> Vec<super::MusicWheelEntry> {
