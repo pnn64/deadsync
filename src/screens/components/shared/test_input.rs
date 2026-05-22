@@ -329,26 +329,28 @@ pub fn take_fsr_command(state: &mut State) -> Option<FsrCommand> {
 
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     use VirtualAction::{
-        p1_down, p1_left, p1_menu_left, p1_menu_right, p1_right, p1_select, p1_start, p1_up,
-        p2_down, p2_left, p2_menu_left, p2_menu_right, p2_right, p2_select, p2_start, p2_up,
+        p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up, p1_right,
+        p1_select, p1_start, p1_up, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right,
+        p2_menu_up, p2_right, p2_select, p2_start, p2_up,
     };
     match act {
-        p1_up | p1_down | p1_left | p1_right | p1_menu_left | p1_menu_right | p1_start
-        | p1_select => Some(PlayerSlot::P1),
-        p2_up | p2_down | p2_left | p2_right | p2_menu_left | p2_menu_right | p2_start
-        | p2_select => Some(PlayerSlot::P2),
+        p1_up | p1_down | p1_left | p1_right | p1_menu_up | p1_menu_down | p1_menu_left
+        | p1_menu_right | p1_start | p1_select => Some(PlayerSlot::P1),
+        p2_up | p2_down | p2_left | p2_right | p2_menu_up | p2_menu_down | p2_menu_left
+        | p2_menu_right | p2_start | p2_select => Some(PlayerSlot::P2),
         _ => None,
     }
 }
 
 const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton> {
     use VirtualAction::{
-        p1_down, p1_left, p1_menu_left, p1_menu_right, p1_right, p1_select, p1_start, p1_up,
-        p2_down, p2_left, p2_menu_left, p2_menu_right, p2_right, p2_select, p2_start, p2_up,
+        p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up, p1_right,
+        p1_select, p1_start, p1_up, p2_down, p2_left, p2_menu_down, p2_menu_left, p2_menu_right,
+        p2_menu_up, p2_right, p2_select, p2_start, p2_up,
     };
     match act {
-        p1_up | p2_up => Some(LogicalButton::Up),
-        p1_down | p2_down => Some(LogicalButton::Down),
+        p1_up | p1_menu_up | p2_up | p2_menu_up => Some(LogicalButton::Up),
+        p1_down | p1_menu_down | p2_down | p2_menu_down => Some(LogicalButton::Down),
         p1_left | p2_left => Some(LogicalButton::Left),
         p1_right | p2_right => Some(LogicalButton::Right),
         p1_menu_left | p2_menu_left => Some(LogicalButton::MenuLeft),
@@ -377,10 +379,31 @@ const fn fsr_ui_action(act: VirtualAction) -> Option<FsrUiAction> {
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => Some(FsrUiAction::NextSensor),
-        VirtualAction::p1_up | VirtualAction::p2_up => Some(FsrUiAction::RaiseThreshold),
-        VirtualAction::p1_down | VirtualAction::p2_down => Some(FsrUiAction::LowerThreshold),
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => Some(FsrUiAction::RaiseThreshold),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => Some(FsrUiAction::LowerThreshold),
         _ => None,
     }
+}
+
+#[inline(always)]
+const fn is_dedicated_fsr_action(act: VirtualAction) -> bool {
+    matches!(
+        act,
+        VirtualAction::p1_menu_up
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_menu_up
+            | VirtualAction::p2_menu_down
+            | VirtualAction::p2_menu_left
+            | VirtualAction::p2_menu_right
+    )
 }
 
 #[inline(always)]
@@ -430,25 +453,26 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) -> FsrEditResult 
     {
         state.buttons_held.insert((player, btn), ev.pressed);
     }
-    if !ev.pressed || state.fsr_view.is_none() || ev.source == InputSource::Gamepad {
+    let Some(action) = fsr_ui_action(ev.action) else {
+        return FsrEditResult::None;
+    };
+    if !ev.pressed
+        || state.fsr_view.is_none()
+        || (ev.source == InputSource::Gamepad && !is_dedicated_fsr_action(ev.action))
+    {
         return FsrEditResult::None;
     }
-    match fsr_ui_action(ev.action) {
-        Some(FsrUiAction::PrevSensor) => {
+    match action {
+        FsrUiAction::PrevSensor => {
             state.fsr_selected_bar = selected_fsr_bar(state).wrapping_sub(1) % FSR_BAR_COUNT;
             FsrEditResult::Selected
         }
-        Some(FsrUiAction::NextSensor) => {
+        FsrUiAction::NextSensor => {
             state.fsr_selected_bar = (selected_fsr_bar(state) + 1) % FSR_BAR_COUNT;
             FsrEditResult::Selected
         }
-        Some(FsrUiAction::RaiseThreshold) => {
-            adjust_fsr_threshold(state, i32::from(FSR_THRESHOLD_STEP))
-        }
-        Some(FsrUiAction::LowerThreshold) => {
-            adjust_fsr_threshold(state, -i32::from(FSR_THRESHOLD_STEP))
-        }
-        None => FsrEditResult::None,
+        FsrUiAction::RaiseThreshold => adjust_fsr_threshold(state, i32::from(FSR_THRESHOLD_STEP)),
+        FsrUiAction::LowerThreshold => adjust_fsr_threshold(state, -i32::from(FSR_THRESHOLD_STEP)),
     }
 }
 
@@ -1543,6 +1567,56 @@ mod tests {
             Some(FsrCommand {
                 sensor_index: 1,
                 threshold: 115,
+            })
+        );
+    }
+
+    #[test]
+    fn fsr_dedicated_menu_input_selects_and_edits_from_either_side() {
+        let mut state = State::default();
+        set_fsr_view(&mut state, Some(test_fsr_view()));
+
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p2_menu_right, InputSource::Gamepad),
+            ),
+            FsrEditResult::Selected
+        );
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p2_menu_up, InputSource::Gamepad),
+            ),
+            FsrEditResult::Threshold
+        );
+        assert_eq!(
+            take_fsr_command(&mut state),
+            Some(FsrCommand {
+                sensor_index: 1,
+                threshold: 115,
+            })
+        );
+
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p1_menu_left, InputSource::Gamepad),
+            ),
+            FsrEditResult::Selected
+        );
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p1_menu_down, InputSource::Gamepad),
+            ),
+            FsrEditResult::Threshold
+        );
+        assert_eq!(
+            take_fsr_command(&mut state),
+            Some(FsrCommand {
+                sensor_index: 0,
+                threshold: 95,
             })
         );
     }
