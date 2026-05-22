@@ -66,6 +66,7 @@ const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
+const AUTO_SUBMIT_GS_ICON_ZOOM: f32 = 0.2;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const SUBMIT_FOOTER_F5_LABEL: &str = "F5";
 const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
@@ -434,11 +435,11 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
     }
 }
 
-fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |miso_font| {
-            let mut w = font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+        asset_manager.with_font(font_key, |measure_font| {
+            let mut w = font::measure_line_width_logical(measure_font, text, all_fonts) as f32;
             if !w.is_finite() || w <= 0.0 {
                 w = 1.0;
             }
@@ -446,6 +447,10 @@ fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32
         });
     });
     out_w
+}
+
+fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+    measure_text_width(asset_manager, "miso", text, zoom)
 }
 
 fn submit_footer_lines(
@@ -4837,6 +4842,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 let banner_text = submit_record_text(banner);
                 let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
+                let banner_w = measure_text_width(
+                    asset_manager,
+                    banner_font,
+                    &banner_text,
+                    AUTO_SUBMIT_RECORD_TEXT_ZOOM,
+                );
+                actors.push(act!(sprite("GrooveStats.png"):
+                    align(1.0, 0.5):
+                    xy(x - banner_w * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    zoom(AUTO_SUBMIT_GS_ICON_ZOOM):
+                    z(121)
+                ));
                 actors.push(act!(text:
                     font(banner_font):
                     settext(banner_text):
