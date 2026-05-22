@@ -5889,6 +5889,28 @@ const fn steps_index_for_side(
     }
 }
 
+fn set_steps_index_for_side(
+    state: &mut State,
+    play_style: profile::PlayStyle,
+    side: profile::PlayerSide,
+    steps_index: usize,
+) {
+    if matches!(
+        (play_style, side),
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2)
+    ) {
+        state.p2_selected_steps_index = steps_index;
+        if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.p2_preferred_difficulty_index = steps_index;
+        }
+    } else {
+        state.selected_steps_index = steps_index;
+        if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.preferred_difficulty_index = steps_index;
+        }
+    }
+}
+
 #[inline(always)]
 fn selected_chart_hash_for_side(
     state: &State,
@@ -8507,11 +8529,16 @@ fn handle_pad_dir_p2(
                     .last_steps_nav_time_p2
                     .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
             {
-                let target_chart_type = profile::get_session_play_style().chart_type();
+                let play_style = profile::get_session_play_style();
+                let target_chart_type = play_style.chart_type();
                 let list_len = steps_len(song, target_chart_type);
-                let cur = state
-                    .p2_selected_steps_index
-                    .min(list_len.saturating_sub(1));
+                let cur = steps_index_for_side(
+                    play_style,
+                    profile::PlayerSide::P2,
+                    state.selected_steps_index,
+                    state.p2_selected_steps_index,
+                )
+                .min(list_len.saturating_sub(1));
 
                 let mut new_idx = None;
                 if is_up {
@@ -8531,11 +8558,8 @@ fn handle_pad_dir_p2(
                 }
 
                 if let Some(new_idx) = new_idx {
-                    state.p2_selected_steps_index = new_idx;
+                    set_steps_index_for_side(state, play_style, profile::PlayerSide::P2, new_idx);
                     state.step_artist_cycle_base = state.session_elapsed;
-                    if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
-                        state.p2_preferred_difficulty_index = new_idx;
-                    }
                     audio::play_sfx(if is_up {
                         "assets/sounds/easier.ogg"
                     } else {
@@ -12125,6 +12149,48 @@ mod tests {
             steps_index_for_side(profile::PlayStyle::Versus, profile::PlayerSide::P2, 3, 5),
             5
         );
+    }
+
+    #[test]
+    fn set_steps_index_for_side_updates_primary_slot_for_single_p2() {
+        let mut state = init_placeholder();
+        state.selected_steps_index = 1;
+        state.preferred_difficulty_index = 1;
+        state.p2_selected_steps_index = 3;
+        state.p2_preferred_difficulty_index = 3;
+
+        super::set_steps_index_for_side(
+            &mut state,
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P2,
+            4,
+        );
+
+        assert_eq!(state.selected_steps_index, 4);
+        assert_eq!(state.preferred_difficulty_index, 4);
+        assert_eq!(state.p2_selected_steps_index, 3);
+        assert_eq!(state.p2_preferred_difficulty_index, 3);
+    }
+
+    #[test]
+    fn set_steps_index_for_side_updates_p2_slot_for_versus_p2() {
+        let mut state = init_placeholder();
+        state.selected_steps_index = 1;
+        state.preferred_difficulty_index = 1;
+        state.p2_selected_steps_index = 3;
+        state.p2_preferred_difficulty_index = 3;
+
+        super::set_steps_index_for_side(
+            &mut state,
+            profile::PlayStyle::Versus,
+            profile::PlayerSide::P2,
+            4,
+        );
+
+        assert_eq!(state.selected_steps_index, 1);
+        assert_eq!(state.preferred_difficulty_index, 1);
+        assert_eq!(state.p2_selected_steps_index, 4);
+        assert_eq!(state.p2_preferred_difficulty_index, 4);
     }
 
     #[test]
