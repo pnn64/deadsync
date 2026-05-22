@@ -32,9 +32,9 @@ pub use self::theme::{
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicWheelStyle,
-    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -241,6 +241,7 @@ pub struct Config {
     pub null_or_die_full_spectrogram: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
+    pub select_music_step_artist_box_mode: SelectMusicStepArtistBoxMode,
     pub show_select_music_scorebox: bool,
     pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
     pub select_music_scorebox_cycle_itg: bool,
@@ -399,6 +400,7 @@ impl Default for Config {
             null_or_die_full_spectrogram: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
+            select_music_step_artist_box_mode: SelectMusicStepArtistBoxMode::Default,
             show_select_music_scorebox: true,
             select_music_scorebox_placement: SelectMusicScoreboxPlacement::Auto,
             select_music_scorebox_cycle_itg: true,

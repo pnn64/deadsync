@@ -966,6 +966,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::StepArtistBox,
+        cfg.select_music_step_artist_box_mode.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ChartInfo,
         select_music_chart_info_cursor_index(
             cfg.select_music_chart_info_peak_nps,

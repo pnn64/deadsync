@@ -32,7 +32,9 @@ fn resolve_target(path: &Path) -> PathBuf {
     if path.is_dir() {
         return path.to_path_buf();
     }
-    if path.is_file() && let Some(parent) = path.parent() {
+    if path.is_file()
+        && let Some(parent) = path.parent()
+    {
         return parent.to_path_buf();
     }
     path.to_path_buf()

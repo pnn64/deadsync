@@ -598,6 +598,10 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_select_music_pattern_info_mode(SelectMusicPatternInfoMode::from_choice(
                 new_index,
             ));
+        } else if row.id == SubRowId::StepArtistBox {
+            config::update_select_music_step_artist_box_mode(
+                SelectMusicStepArtistBoxMode::from_choice(new_index),
+            );
         } else if row.id == SubRowId::MusicPreviews {
             config::update_show_select_music_previews(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::PreviewMarker {

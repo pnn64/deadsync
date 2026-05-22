@@ -159,6 +159,16 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::StepArtistBox,
+        label: lookup_key("OptionsSelectMusic", "StepArtistBox"),
+        choices: &[
+            localized_choice("OptionsSelectMusic", "StepArtistBoxDefault"),
+            localized_choice("OptionsSelectMusic", "StepArtistBoxLegacy"),
+            localized_choice("OptionsSelectMusic", "StepArtistBoxExpanded"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ChartInfo,
         label: lookup_key("OptionsSelectMusic", "ChartInfo"),
         choices: &[
@@ -379,6 +389,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ShowPatternInfoHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmStepArtistBox,
+        name: lookup_key("OptionsSelectMusic", "StepArtistBox"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "StepArtistBoxHelp",
         ))],
     },
     Item {
@@ -657,6 +675,11 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
 impl ChoiceEnum for SelectMusicPatternInfoMode {
     const ALL: &'static [Self] = &[Self::Auto, Self::Tech, Self::Stamina];
     const DEFAULT: Self = Self::Auto;
+}
+
+impl ChoiceEnum for SelectMusicStepArtistBoxMode {
+    const ALL: &'static [Self] = &[Self::Default, Self::Legacy, Self::Expanded];
+    const DEFAULT: Self = Self::Default;
 }
 
 #[inline(always)]

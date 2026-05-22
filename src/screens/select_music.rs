@@ -9766,10 +9766,7 @@ fn maybe_refresh_select_music_leaderboard(
     *last_refreshed_hash = Some(chart_hash.to_string());
 }
 
-/// Selects the step artist display text for a chart, cycling through non-empty
-/// values of [step_artist, description, chart_name] every 2 seconds, matching
-/// Simply Love / ITGMania behavior.
-fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
+fn step_artist_values(chart: &ChartData) -> ([&str; 3], usize) {
     let candidates: [&str; 3] = [
         chart.step_artist.as_str(),
         chart.description.as_str(),
@@ -9783,6 +9780,14 @@ fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
             count += 1;
         }
     }
+    (non_empty, count)
+}
+
+/// Selects the step artist display text for a chart, cycling through non-empty
+/// values of [step_artist, description, chart_name] every 2 seconds, matching
+/// Simply Love / ITGMania behavior.
+fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
+    let (non_empty, count) = step_artist_values(chart);
     match count {
         0 => "",
         1 => non_empty[0],
@@ -9791,6 +9796,19 @@ fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
             non_empty[idx]
         }
     }
+}
+
+fn step_artist_expanded_text(chart: &ChartData) -> (Arc<str>, usize) {
+    let (values, count) = step_artist_values(chart);
+    if count == 0 {
+        return (cached_str_ref(""), 0);
+    }
+    let mut text = String::with_capacity(values.iter().take(count).map(|s| s.len() + 1).sum());
+    for value in values.iter().take(count) {
+        text.push_str(value);
+        text.push('\n');
+    }
+    (cached_str_ref(&text), count)
 }
 
 fn sl_select_music_bg_flash() -> Actor {
@@ -10307,15 +10325,32 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
 
-    let step_artist = immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed));
+    let step_artist_expanded = cfg
+        .select_music_step_artist_box_mode
+        .is_expanded(cfg.theme_flag)
+        && !is_versus;
+    let step_artist_layout = if step_artist_expanded {
+        step_artist_bar::StepArtistBarLayout::Expanded
+    } else {
+        step_artist_bar::StepArtistBarLayout::Legacy
+    };
+    let (step_artist, step_artist_lines) = if step_artist_expanded {
+        immediate_chart_p1
+            .map(step_artist_expanded_text)
+            .unwrap_or_else(|| (cached_str_ref(""), 0))
+    } else {
+        (
+            cached_str_ref(
+                immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed)),
+            ),
+            0,
+        )
+    };
     let (steps, jumps, holds, mines, hands, rolls, meter) =
         chart_panel_stats(immediate_chart_p1, entry_opt);
 
-    let step_artist_p2 = if let Some(c) = immediate_chart_p2 {
-        step_artist_cycle_text(c, cycle_elapsed)
-    } else {
-        ""
-    };
+    let step_artist_p2 =
+        cached_str_ref(immediate_chart_p2.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed)));
 
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
         chart_panel_stats(immediate_chart_p2, entry_opt);
@@ -10323,23 +10358,31 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     // Step Artist & Steps
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
     let steps_label = tr("SelectMusic", "StepsLabel");
-    let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
-        step_artist_bar::push(
-            &mut actors,
-            step_artist_bar::StepArtistBarParams {
-                x0,
-                center_y: y_cen,
-                accent_color: sel_col,
-                z_base: 120,
-                label_text: steps_label.clone().into(),
-                label_max_width: 40.0,
-                artist_text: cached_str_ref(step_artist).into(),
-                artist_x_offset: 75.0,
-                artist_max_width: 124.0,
-                artist_color: [0.0, 0.0, 0.0, 1.0],
-            },
-        );
-    };
+    let mut push_step_artist =
+        |y_cen: f32,
+         x0: f32,
+         sel_col: [f32; 4],
+         step_artist: Arc<str>,
+         line_count: usize,
+         layout: step_artist_bar::StepArtistBarLayout| {
+            step_artist_bar::push(
+                &mut actors,
+                step_artist_bar::StepArtistBarParams {
+                    x0,
+                    center_y: y_cen,
+                    layout,
+                    expanded_line_count: line_count,
+                    accent_color: sel_col,
+                    z_base: 120,
+                    label_text: steps_label.clone().into(),
+                    label_max_width: 40.0,
+                    artist_text: step_artist.into(),
+                    artist_x_offset: 75.0,
+                    artist_max_width: 124.0,
+                    artist_color: [0.0, 0.0, 0.0, 1.0],
+                },
+            );
+        };
 
     if is_versus {
         let x0_p1 = if is_wide() {
@@ -10347,23 +10390,45 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         } else {
             screen_center_x() - 345.5
         };
-        push_step_artist(base_y, x0_p1, sel_col_p1, step_artist);
+        push_step_artist(
+            base_y,
+            x0_p1,
+            sel_col_p1,
+            step_artist,
+            0,
+            step_artist_bar::StepArtistBarLayout::Legacy,
+        );
         push_step_artist(
             base_y + 88.0,
             screen_center_x() - 244.0,
             sel_col_p2,
             step_artist_p2,
+            0,
+            step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
-        let y_cen = base_y + if is_p2_single { 88.0 } else { 0.0 };
-        let step_artist_x0 = if is_p2_single {
+        let y_cen = if step_artist_expanded {
+            screen_center_y() - 18.0 + if is_p2_single { 88.0 } else { 0.0 }
+        } else {
+            base_y + if is_p2_single { 88.0 } else { 0.0 }
+        };
+        let step_artist_x0 = if is_p2_single && step_artist_expanded {
+            screen_center_x() - 260.0
+        } else if is_p2_single {
             screen_center_x() - 244.0
         } else if is_wide() {
             screen_center_x() - 355.5
         } else {
             screen_center_x() - 345.5
         };
-        push_step_artist(y_cen, step_artist_x0, sel_col_p1, step_artist);
+        push_step_artist(
+            y_cen,
+            step_artist_x0,
+            sel_col_p1,
+            step_artist,
+            step_artist_lines,
+            step_artist_layout,
+        );
     }
 
     // Density Graph
@@ -10491,7 +10556,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                     ));
                 }
             }
-            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
+            let peak_y = if step_artist_expanded { -50.0 } else { -9.0 };
+            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, peak_y): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
             graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)));
             graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)));
         }
@@ -10525,7 +10591,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 disp_chart_p2,
             ));
         } else {
-            let graph_cy = screen_center_y() + if is_p2_single { 111.0 } else { 23.0 };
+            let graph_cy = screen_center_y()
+                + if step_artist_expanded {
+                    if is_p2_single { 150.0 } else { 62.0 }
+                } else if is_p2_single {
+                    111.0
+                } else {
+                    23.0
+                };
             actors.push(build_breakdown_panel(
                 graph_cy,
                 is_p2_single,
@@ -10709,8 +10782,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     if !is_versus {
         let pat_cx = chart_info_cx;
-        let pat_cy = screen_center_y() + if is_p2_single { 23.0 } else { 111.0 };
-        actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, 64.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+        let pat_cy = screen_center_y()
+            + if step_artist_expanded {
+                if is_p2_single { 28.0 } else { 120.0 }
+            } else if is_p2_single {
+                23.0
+            } else {
+                111.0
+            };
+        let pat_h = if step_artist_expanded {
+            graph_h - 10.0
+        } else {
+            64.0
+        };
+        actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, pat_h): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
         if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
             let (
                 boxes,
@@ -10947,9 +11032,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 )
             };
 
-            let p_v_x = pat_cx - panel_w * 0.5 + 39.0;
-            let p_l_x = pat_cx - panel_w * 0.5 + 48.0;
+            let p_v_x = pat_cx - panel_w * 0.5 + if step_artist_expanded { 40.0 } else { 39.0 };
+            let p_l_x = pat_cx - panel_w * 0.5 + if step_artist_expanded { 50.0 } else { 48.0 };
             let p_base_y = pat_cy - 18.0;
+            let tech_col_spacing = if step_artist_expanded { 150.0 } else { 148.0 };
+            let tech_row_step = if step_artist_expanded { 17.0 } else { 19.0 };
+            let tech_value_zoom = if step_artist_expanded { 0.7 } else { 0.78 };
+            let tech_label_zoom = if step_artist_expanded { 0.8 } else { 0.78 };
             let items: [(Arc<str>, Arc<str>, u8, u8, Option<f32>); 6] = [
                 (cross, tr("PatternInfo", "Crossovers"), 0_u8, 0_u8, None),
                 (foot, tr("PatternInfo", "Footswitches"), 1_u8, 0_u8, None),
@@ -10966,14 +11055,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             ];
 
             for (val, lbl, c, r, mw) in items {
-                let y = p_base_y + r as f32 * 19.0;
-                let vx = p_v_x + c as f32 * 148.0;
-                let lx = p_l_x + c as f32 * 148.0;
+                let y = p_base_y + r as f32 * tech_row_step;
+                let vx = p_v_x + c as f32 * tech_col_spacing;
+                let lx = p_l_x + c as f32 * tech_col_spacing;
                 match mw {
-                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                 }
-                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(tech_label_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             }
         }
     }

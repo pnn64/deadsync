@@ -169,11 +169,11 @@ pub(in crate::screens::options) fn open_folder_for_row(id: SubRowId) {
         return;
     };
     crate::config::dirs::ensure_dirs_exist();
-    let is_file_row = matches!(
-        id,
-        SubRowId::FoldersLogFile | SubRowId::FoldersConfigFile
-    );
-    if !is_file_row && !path.exists() && let Err(e) = std::fs::create_dir_all(&path) {
+    let is_file_row = matches!(id, SubRowId::FoldersLogFile | SubRowId::FoldersConfigFile);
+    if !is_file_row
+        && !path.exists()
+        && let Err(e) = std::fs::create_dir_all(&path)
+    {
         log::warn!(
             "Failed to create folder before opening '{}': {e}",
             path.display()
@@ -253,11 +253,7 @@ fn try_shorthand(path: &std::path::Path) -> Option<String> {
     replace_prefix(path, &home, "~")
 }
 
-fn replace_prefix(
-    path: &std::path::Path,
-    prefix: &std::ffi::OsStr,
-    label: &str,
-) -> Option<String> {
+fn replace_prefix(path: &std::path::Path, prefix: &std::ffi::OsStr, label: &str) -> Option<String> {
     let prefix_path = std::path::Path::new(prefix);
     let rest = path.strip_prefix(prefix_path).ok()?;
     if rest.as_os_str().is_empty() {

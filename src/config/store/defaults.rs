@@ -207,6 +207,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SelectMusicPatternInfo",
         default.select_music_pattern_info_mode.as_str(),
     );
+    push_line(
+        content,
+        "SelectMusicStepArtistBox",
+        default.select_music_step_artist_box_mode.as_str(),
+    );
     push_bool(
         content,
         "SelectMusicScorebox",

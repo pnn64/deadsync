@@ -2413,6 +2413,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         step_artist_bar::StepArtistBarParams {
             x0: step_artist_x0,
             center_y: step_artist_y,
+            layout: step_artist_bar::StepArtistBarLayout::Legacy,
+            expanded_line_count: 0,
             accent_color: step_artist_col,
             z_base: 122,
             label_text: step_idx_text.into(),

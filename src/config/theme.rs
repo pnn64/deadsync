@@ -180,6 +180,56 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicStepArtistBoxMode {
+    Default,
+    Legacy,
+    Expanded,
+}
+
+impl SelectMusicStepArtistBoxMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Legacy => "Legacy",
+            Self::Expanded => "Expanded",
+        }
+    }
+
+    pub const fn is_expanded(self, theme: ThemeFlag) -> bool {
+        match self {
+            Self::Default => select_music_step_artist_default_expanded(theme),
+            Self::Legacy => false,
+            Self::Expanded => true,
+        }
+    }
+}
+
+const fn select_music_step_artist_default_expanded(theme: ThemeFlag) -> bool {
+    match theme {
+        ThemeFlag::SimplyLove => false,
+    }
+}
+
+impl FromStr for SelectMusicStepArtistBoxMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "default" | "theme" | "themedefault" => Ok(Self::Default),
+            "legacy" | "small" | "sl" | "simplylove" => Ok(Self::Legacy),
+            "expanded" | "large" | "arrowcloud" | "ac" => Ok(Self::Expanded),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicItlRankMode {
     None,
     Chart,
@@ -1063,5 +1113,26 @@ mod tests {
             SelectMusicSongSelectBgMode::from_str("Background"),
             Ok(SelectMusicSongSelectBgMode::Bg)
         );
+    }
+
+    #[test]
+    fn step_artist_box_mode_round_trips() {
+        for value in [
+            SelectMusicStepArtistBoxMode::Default,
+            SelectMusicStepArtistBoxMode::Legacy,
+            SelectMusicStepArtistBoxMode::Expanded,
+        ] {
+            assert_eq!(
+                SelectMusicStepArtistBoxMode::from_str(value.as_str()),
+                Ok(value)
+            );
+        }
+    }
+
+    #[test]
+    fn step_artist_box_default_tracks_theme() {
+        assert!(!SelectMusicStepArtistBoxMode::Default.is_expanded(ThemeFlag::SimplyLove));
+        assert!(!SelectMusicStepArtistBoxMode::Legacy.is_expanded(ThemeFlag::SimplyLove));
+        assert!(SelectMusicStepArtistBoxMode::Expanded.is_expanded(ThemeFlag::SimplyLove));
     }
 }

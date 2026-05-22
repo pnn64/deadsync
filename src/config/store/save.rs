@@ -270,6 +270,11 @@ fn push_saved_options(
         "SelectMusicPatternInfo",
         cfg.select_music_pattern_info_mode.as_str(),
     );
+    push_line(
+        content,
+        "SelectMusicStepArtistBox",
+        cfg.select_music_step_artist_box_mode.as_str(),
+    );
     push_bool(
         content,
         "SelectMusicScorebox",

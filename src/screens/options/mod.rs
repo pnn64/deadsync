@@ -6,7 +6,8 @@ use crate::config::{
     LogLevel, MachineBarColor, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
     NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VersionOverlaySide, VisualStyle, dirs,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SyncGraphMode,
+    VersionOverlaySide, VisualStyle, dirs,
 };
 use crate::engine::audio;
 use crate::engine::display::{self, MonitorSpec};

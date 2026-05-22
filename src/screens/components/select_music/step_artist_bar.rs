@@ -2,9 +2,17 @@ use crate::act;
 use crate::engine::present::actors::{Actor, TextContent};
 use crate::engine::space::screen_height;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepArtistBarLayout {
+    Legacy,
+    Expanded,
+}
+
 pub struct StepArtistBarParams {
     pub x0: f32,
     pub center_y: f32,
+    pub layout: StepArtistBarLayout,
+    pub expanded_line_count: usize,
     pub accent_color: [f32; 4],
     pub z_base: i16,
     pub label_text: TextContent,
@@ -16,38 +24,78 @@ pub struct StepArtistBarParams {
 }
 
 pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
-    let comp_h = screen_height() / 28.0;
     let z_text = p.z_base.saturating_add(1);
-    out.push(act!(quad:
-        align(0.5, 0.5):
-        xy(p.x0 + 113.0, p.center_y):
-        setsize(175.0, comp_h):
-        z(p.z_base):
-        diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
-    ));
-    out.push(act!(text:
-        font("miso"):
-        settext(p.label_text):
-        align(0.0, 0.5):
-        xy(p.x0 + 30.0, p.center_y):
-        zoom(0.8):
-        maxwidth(p.label_max_width):
-        z(z_text):
-        diffuse(0.0, 0.0, 0.0, 1.0)
-    ));
-    out.push(act!(text:
-        font("miso"):
-        settext(p.artist_text):
-        align(0.0, 0.5):
-        xy(p.x0 + p.artist_x_offset, p.center_y):
-        zoom(0.8):
-        maxwidth(p.artist_max_width):
-        z(z_text):
-        diffuse(
-            p.artist_color[0],
-            p.artist_color[1],
-            p.artist_color[2],
-            p.artist_color[3]
-        )
-    ));
+    match p.layout {
+        StepArtistBarLayout::Legacy => {
+            let comp_h = screen_height() / 28.0;
+            out.push(act!(quad:
+                align(0.5, 0.5):
+                xy(p.x0 + 113.0, p.center_y):
+                setsize(175.0, comp_h):
+                z(p.z_base):
+                diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
+            ));
+            out.push(act!(text:
+                font("miso"):
+                settext(p.label_text):
+                align(0.0, 0.5):
+                xy(p.x0 + 30.0, p.center_y):
+                zoom(0.8):
+                maxwidth(p.label_max_width):
+                z(z_text):
+                diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+            out.push(act!(text:
+                font("miso"):
+                settext(p.artist_text):
+                align(0.0, 0.5):
+                xy(p.x0 + p.artist_x_offset, p.center_y):
+                zoom(0.8):
+                maxwidth(p.artist_max_width):
+                z(z_text):
+                diffuse(
+                    p.artist_color[0],
+                    p.artist_color[1],
+                    p.artist_color[2],
+                    p.artist_color[3]
+                )
+            ));
+        }
+        StepArtistBarLayout::Expanded => {
+            let comp_h = screen_height() / 8.0;
+            let fade_bottom = match p.expanded_line_count {
+                1 => 0.8,
+                2 => 0.5,
+                _ => 0.0,
+            };
+            out.push(act!(quad:
+                align(0.5, 0.5):
+                xy(p.x0 + 120.0, p.center_y + 18.0):
+                setsize(190.0, comp_h):
+                fadebottom(fade_bottom):
+                z(p.z_base):
+                diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
+            ));
+            out.push(act!(text:
+                font("miso"):
+                settext(p.label_text):
+                align(0.0, 0.5):
+                xy(p.x0 + 30.0, p.center_y):
+                zoom(0.8):
+                maxwidth(p.label_max_width):
+                z(z_text):
+                diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+            out.push(act!(text:
+                font("miso"):
+                settext(p.artist_text):
+                align(0.0, 0.0):
+                xy(p.x0 + 70.0, p.center_y - 6.0):
+                zoom(0.8):
+                maxwidth(175.0):
+                z(z_text):
+                diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+        }
+    }
 }

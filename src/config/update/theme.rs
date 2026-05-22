@@ -231,6 +231,17 @@ pub fn update_select_music_pattern_info_mode(mode: SelectMusicPatternInfoMode) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_step_artist_box_mode(mode: SelectMusicStepArtistBoxMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_step_artist_box_mode == mode {
+            return;
+        }
+        cfg.select_music_step_artist_box_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_gameplay_timer(enabled: bool) {
     {
         let mut cfg = lock_config();

@@ -411,6 +411,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicPatternInfo")
         .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
         .unwrap_or(default.select_music_pattern_info_mode);
+    cfg.select_music_step_artist_box_mode = conf
+        .get("Options", "SelectMusicStepArtistBox")
+        .and_then(|v| SelectMusicStepArtistBoxMode::from_str(&v).ok())
+        .unwrap_or(default.select_music_step_artist_box_mode);
     cfg.show_select_music_scorebox = conf
         .get("Options", "SelectMusicScorebox")
         .and_then(|v| v.parse::<u8>().ok())

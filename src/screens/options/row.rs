@@ -108,6 +108,7 @@ pub enum SubRowId {
     NewPackBadge,
     FolderStats,
     ShowPatternInfo,
+    StepArtistBox,
     ChartInfo,
     MusicPreviews,
     PreviewMarker,
