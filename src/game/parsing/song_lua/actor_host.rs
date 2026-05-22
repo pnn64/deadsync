@@ -302,13 +302,18 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
     let child = if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
-        && name.eq_ignore_ascii_case("NoteField")
         && let Some(player_index) = player_index
     {
-        let style_name = parent
-            .get::<Option<String>>("__songlua_style_name")?
-            .unwrap_or_else(|| current_song_lua_style_name(lua));
-        create_note_field_actor(lua, player_index as usize, &style_name)?
+        if name.eq_ignore_ascii_case("NoteField") {
+            let style_name = parent
+                .get::<Option<String>>("__songlua_style_name")?
+                .unwrap_or_else(|| current_song_lua_style_name(lua));
+            create_note_field_actor(lua, player_index as usize, &style_name)?
+        } else if player_child_proxy_name(name).is_some() {
+            create_named_actor(lua, "Actor", name)?
+        } else {
+            create_dummy_actor(lua, "ChildActor")?
+        }
     } else if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
@@ -358,12 +363,13 @@ fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool
     if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
-        && name.eq_ignore_ascii_case("NoteField")
         && parent
             .get::<Option<i64>>("__songlua_player_index")?
             .is_some()
     {
-        return Ok(true);
+        return Ok(
+            name.eq_ignore_ascii_case("NoteField") || player_child_proxy_name(name).is_some()
+        );
     }
     if parent
         .get::<Option<String>>("__songlua_top_screen_child_name")?
@@ -377,6 +383,16 @@ fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool
             || name.eq_ignore_ascii_case("Header"));
     }
     Ok(false)
+}
+
+fn player_child_proxy_name(name: &str) -> Option<&'static str> {
+    if name.eq_ignore_ascii_case("Judgment") {
+        Some("Judgment")
+    } else if name.eq_ignore_ascii_case("Combo") {
+        Some("Combo")
+    } else {
+        None
+    }
 }
 
 fn create_named_actor(lua: &Lua, actor_type: &'static str, name: &str) -> mlua::Result<Table> {

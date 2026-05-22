@@ -9838,6 +9838,64 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_extracts_player_judgment_and_combo_proxy_targets() {
+    let song_dir = test_dir("player-judgment-combo-proxy");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{
+    Def.ActorProxy{
+        Name="judgment_proxy",
+        OnCommand=function(self)
+            local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            local target = player:GetChild("Judgment")
+            self:SetTarget(target)
+            target:visible(false)
+        end,
+    },
+    Def.ActorProxy{
+        Name="combo_proxy",
+        OnCommand=function(self)
+            local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            local target = player:GetChild("Combo")
+            if target:GetNumWrapperStates() == 0 then
+                target:AddWrapperState()
+            end
+            target:GetWrapperState(1):addy(9999)
+            self:SetTarget(target)
+            target:visible(false)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Judgment Combo Proxy"),
+    )
+    .unwrap();
+    assert!(compiled.overlays.iter().any(|overlay| {
+        matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Judgment { player_index: 0 }
+            }
+        )
+    }));
+    assert!(compiled.overlays.iter().any(|overlay| {
+        matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Combo { player_index: 0 }
+            }
+        )
+    }));
+}
+
+#[test]
 fn compile_song_lua_runs_cmd_queuecommand_builders() {
     let song_dir = test_dir("overlay-proxy-cmd");
     let entry = song_dir.join("default.lua");
@@ -11292,12 +11350,17 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
 
 #[test]
 fn compile_song_lua_supports_kenpo_sample_if_present() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]");
-    let entry = root.join("template/main.lua");
-    if !entry.is_file() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let Some(root) = [
+        manifest.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+        manifest.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
+        manifest.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+    ]
+    .into_iter()
+    .find(|root| root.join("template/main.lua").is_file()) else {
         return;
-    }
+    };
+    let entry = root.join("template/main.lua");
 
     let mut context = SongLuaCompileContext::new(&root, "KENPO SAITO");
     context.style_name = "double".to_string();
