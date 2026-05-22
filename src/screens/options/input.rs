@@ -718,6 +718,12 @@ fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
     )
 }
 
+fn selected_submenu_row_has_choices(state: &State, kind: SubmenuKind) -> Option<bool> {
+    let rows = submenu_rows(kind);
+    let row_idx = submenu_visible_row_to_actual(state, kind, state.sub_selected)?;
+    Some(!row_choices(state, kind, rows, row_idx).is_empty())
+}
+
 fn handle_dedicated_three_key_start_nav(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -736,6 +742,13 @@ fn handle_dedicated_three_key_start_nav(
         return ScreenAction::None;
     }
     if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
+        if repeated {
+            return ScreenAction::None;
+        }
+        clear_navigation_holds(state);
+        return activate_current_selection(state, asset_manager);
+    }
+    if selected_submenu_row_has_choices(state, kind) == Some(false) {
         if repeated {
             return ScreenAction::None;
         }
