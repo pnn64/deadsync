@@ -209,6 +209,12 @@ pub(super) fn submenu_visible_row_indices(
                 SubRowId::PackIniOffsets,
             )
             .is_some_and(yes_no_from_choice);
+            let show_random_background_mode = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::VideoBgs,
+            )
+            .is_some_and(yes_no_from_choice);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -219,6 +225,10 @@ pub(super) fn submenu_visible_row_indices(
                     } else if row.id == SubRowId::PreferredMode && !show_preferred_mode {
                         None
                     } else if row.id == SubRowId::DefaultSyncOffset && !show_default_sync_offset {
+                        None
+                    } else if row.id == SubRowId::RandomBackgroundMode
+                        && !show_random_background_mode
+                    {
                         None
                     } else {
                         Some(idx)

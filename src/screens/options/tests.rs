@@ -546,3 +546,34 @@ fn default_sync_offset_only_shows_when_pack_offsets_are_on() {
             .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::DefaultSyncOffset)
     );
 }
+
+#[test]
+fn random_movies_only_shows_when_video_bgs_are_on() {
+    let mut state = init();
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::VideoBgs,
+        yes_no_choice_index(false),
+    );
+    let visible = submenu_visible_row_indices(&state, SubmenuKind::Machine, MACHINE_OPTIONS_ROWS);
+    assert!(
+        !visible
+            .iter()
+            .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::RandomBackgroundMode)
+    );
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::VideoBgs,
+        yes_no_choice_index(true),
+    );
+    let visible = submenu_visible_row_indices(&state, SubmenuKind::Machine, MACHINE_OPTIONS_ROWS);
+    assert!(
+        visible
+            .iter()
+            .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::RandomBackgroundMode)
+    );
+}

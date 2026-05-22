@@ -219,12 +219,16 @@ pub(crate) fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
             | "tiff"
             | "mp4"
             | "avi"
+            | "f4v"
+            | "flv"
             | "m4v"
             | "mov"
+            | "ogv"
             | "webm"
             | "mkv"
             | "mpg"
             | "mpeg"
+            | "wmv"
     )
 }
 
@@ -235,7 +239,18 @@ pub(crate) fn is_dynamic_video_path(path: &Path) -> bool {
     };
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
+        "mp4"
+            | "avi"
+            | "f4v"
+            | "flv"
+            | "m4v"
+            | "mov"
+            | "ogv"
+            | "webm"
+            | "mkv"
+            | "mpg"
+            | "mpeg"
+            | "wmv"
     )
 }
 

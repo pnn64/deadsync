@@ -3654,6 +3654,7 @@ pub struct State {
     pub current_background_key: Option<Arc<str>>,
     pub background_path_dirty: bool,
     pub background_allow_video: bool,
+    pub background_changes: Vec<song::SongBackgroundChange>,
     pub next_background_change_ix: usize,
     pub background_texture_key: Arc<str>,
     pub foreground_texture_keys: Vec<Arc<str>>,
@@ -4983,7 +4984,6 @@ fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
     }
 
     let next_background_change_ix = state
-        .song
         .background_changes
         .iter()
         .take_while(|change| change.start_beat <= state.current_beat)
@@ -6243,8 +6243,13 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
-    let next_background_change_ix = song
-        .background_changes
+    let background_changes = crate::game::random_movies::build_background_changes(
+        &song,
+        &timing,
+        &gameplay_charts[0].timing_segments,
+        config.random_background_mode,
+    );
+    let next_background_change_ix = background_changes
         .iter()
         .take_while(|change| change.start_beat <= init_beat)
         .count();
@@ -6268,6 +6273,7 @@ pub fn init(
         current_background_key: None,
         background_path_dirty: true,
         background_allow_video: false,
+        background_changes,
         next_background_change_ix,
         charts,
         gameplay_charts,

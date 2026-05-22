@@ -80,6 +80,7 @@ pub enum SubRowId {
     DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
+    RandomBackgroundMode,
     VersionOverlay,
     VersionOverlaySide,
     // Gameplay Options

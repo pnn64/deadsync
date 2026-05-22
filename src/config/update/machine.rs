@@ -157,6 +157,17 @@ pub fn update_show_video_backgrounds(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_random_background_mode(mode: RandomBackgroundMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.random_background_mode == mode {
+            return;
+        }
+        cfg.random_background_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_write_current_screen(enabled: bool) {
     {
         let mut cfg = lock_config();

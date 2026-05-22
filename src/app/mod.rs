@@ -2407,13 +2407,13 @@ fn prewarm_gameplay_assets(
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
         let mut paths = Vec::with_capacity(
             1usize
-                .saturating_add(state.song.background_changes.len())
+                .saturating_add(state.background_changes.len())
                 .saturating_add(state.song.foreground_changes.len()),
         );
         if let Some(path) = state.song.background_path.as_ref() {
             paths.push(path);
         }
-        for change in &state.song.background_changes {
+        for change in &state.background_changes {
             let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
                 continue;
             };
@@ -2711,13 +2711,13 @@ fn prewarm_gameplay_text_layout_cache(
 fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
     let mut keys = Vec::with_capacity(
         1usize
-            .saturating_add(state.song.background_changes.len())
+            .saturating_add(state.background_changes.len())
             .saturating_add(state.song.foreground_changes.len()),
     );
     if let Some(path) = state.song.background_path.as_ref() {
         keys.push(path.to_string_lossy().into_owned());
     }
-    for change in &state.song.background_changes {
+    for change in &state.background_changes {
         let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
             continue;
         };
@@ -5508,7 +5508,8 @@ impl App {
     ) -> Option<PathBuf> {
         let path = state
             .song
-            .gameplay_background_path_for_change_ix(
+            .gameplay_background_path_for_changes(
+                &state.background_changes,
                 state.next_background_change_ix,
                 show_video_backgrounds,
             )
@@ -5543,7 +5544,7 @@ impl App {
                 return;
             };
             let mut background_changed = false;
-            while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+            while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
                 if gs.current_beat < change.start_beat {
                     break;
                 }

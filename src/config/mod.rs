@@ -30,10 +30,11 @@ pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
+    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
+    auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -176,6 +177,8 @@ pub struct Config {
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
+    /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
+    pub random_background_mode: RandomBackgroundMode,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Whether "Switch Profile" appears in the select music sort menu.
@@ -357,6 +360,7 @@ impl Default for Config {
             version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
             show_video_backgrounds: true,
+            random_background_mode: RandomBackgroundMode::Off,
             machine_show_select_profile: true,
             allow_switch_profile_in_menu: false,
             machine_show_select_color: true,

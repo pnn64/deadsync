@@ -55,6 +55,42 @@ impl FromStr for DefaultFailType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum RandomBackgroundMode {
+    #[default]
+    Off,
+    RandomMovies,
+}
+
+impl RandomBackgroundMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::RandomMovies => "RandomMovies",
+        }
+    }
+}
+
+impl FromStr for RandomBackgroundMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "none" | "false" | "0" => Ok(Self::Off),
+            "randommovies" | "randommovie" | "movies" | "movie" | "on" | "true" | "1" => {
+                Ok(Self::RandomMovies)
+            }
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum DefaultSyncOffset {
     #[default]
     Null,
@@ -913,6 +949,35 @@ mod tests {
         assert_eq!(
             MachineBarColor::Transparent.resolve(VisualStyle::Srpg9),
             MachineBarColor::Transparent
+        );
+    }
+
+    #[test]
+    fn random_background_mode_defaults_to_off() {
+        assert_eq!(RandomBackgroundMode::default(), RandomBackgroundMode::Off);
+    }
+
+    #[test]
+    fn random_background_mode_round_trips() {
+        assert_eq!(
+            RandomBackgroundMode::from_str(RandomBackgroundMode::Off.as_str()),
+            Ok(RandomBackgroundMode::Off)
+        );
+        assert_eq!(
+            RandomBackgroundMode::from_str(RandomBackgroundMode::RandomMovies.as_str()),
+            Ok(RandomBackgroundMode::RandomMovies)
+        );
+    }
+
+    #[test]
+    fn random_background_mode_accepts_common_aliases() {
+        assert_eq!(
+            RandomBackgroundMode::from_str("Random Movies"),
+            Ok(RandomBackgroundMode::RandomMovies)
+        );
+        assert_eq!(
+            RandomBackgroundMode::from_str("0"),
+            Ok(RandomBackgroundMode::Off)
         );
     }
 

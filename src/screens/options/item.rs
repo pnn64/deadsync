@@ -90,6 +90,7 @@ pub enum ItemId {
     MchDefaultSyncOffset,
     MchKeyboardFeatures,
     MchVideoBgs,
+    MchRandomBackgroundMode,
     MchVersionOverlay,
     MchVersionOverlaySide,
 
@@ -340,6 +341,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "PackIniOffsets")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "RandomMovies")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
         ],
     },

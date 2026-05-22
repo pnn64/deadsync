@@ -402,6 +402,9 @@ pub(super) fn apply_submenu_choice_delta(
             ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
+            SubRowId::RandomBackgroundMode => {
+                config::update_random_background_mode(RandomBackgroundMode::from_choice(new_index))
+            }
             SubRowId::VersionOverlay => config::update_show_version_overlay(enabled),
             SubRowId::VersionOverlaySide => {
                 config::update_version_overlay_side(VersionOverlaySide::from_choice(new_index))

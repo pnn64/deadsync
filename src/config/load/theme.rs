@@ -27,6 +27,10 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
         .get("Theme", "VideoBackgrounds")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.show_video_backgrounds);
+    cfg.random_background_mode = conf
+        .get("Theme", "RandomBackgroundMode")
+        .and_then(|v| RandomBackgroundMode::from_str(&v).ok())
+        .unwrap_or(default.random_background_mode);
     cfg.zmod_rating_box_text = conf
         .get("Theme", "ZmodRatingBoxText")
         .and_then(|v| parse_loose_bool_str(&v))

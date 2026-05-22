@@ -311,6 +311,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
     push_bool(content, "KeyboardFeatures", default.keyboard_features);
     push_line(content, "VisualStyle", default.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", default.show_video_backgrounds);
+    push_line(
+        content,
+        "RandomBackgroundMode",
+        default.random_background_mode.as_str(),
+    );
     push_bool(
         content,
         "MachineShowEvalSummary",
