@@ -1,5 +1,6 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
+use crate::game::judgment::{self, JudgeGrade};
 use crate::game::scores;
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
@@ -7,6 +8,33 @@ const LETTER_ZOOM: f32 = 0.85;
 
 const STAR_PULSE_PERIOD_S: f32 = 0.80;
 const STAR_PULSE_AMP: f32 = 0.06;
+const STAR_RAINBOW_DELAY_S: f32 = 2.0;
+const TAUNT_APPEAR_DELAY_S: f32 = 9.0;
+const AFFLUENT_FADE_S: f32 = 3.0;
+const AFFLUENT_SPIN_DELAY_S: f32 = 14.0;
+const GOLDSTAR_ANIM_DELAY_S: f32 = 2.0;
+const GOLDSTAR_ZOOM_OUT_S: f32 = 3.0;
+const GOLDSTAR_ZOOM_BACK_S: f32 = 1.0;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GradeStarTaunt {
+    excellent: u32,
+    great: u32,
+    decent: u32,
+    way_off: u32,
+    miss: u32,
+}
+
+#[inline(always)]
+pub fn grade_star_taunt_from_counts(counts: judgment::JudgeCounts) -> GradeStarTaunt {
+    GradeStarTaunt {
+        excellent: counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
+        great: counts[judgment::judge_grade_ix(JudgeGrade::Great)],
+        decent: counts[judgment::judge_grade_ix(JudgeGrade::Decent)],
+        way_off: counts[judgment::judge_grade_ix(JudgeGrade::WayOff)],
+        miss: counts[judgment::judge_grade_ix(JudgeGrade::Miss)],
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct EvalGradeParams {
@@ -15,6 +43,8 @@ pub struct EvalGradeParams {
     pub z: i16,
     pub zoom: f32,
     pub elapsed: f32,
+    pub taunt: GradeStarTaunt,
+    pub easter_eggs: bool,
 }
 
 impl Default for EvalGradeParams {
@@ -25,6 +55,8 @@ impl Default for EvalGradeParams {
             z: 0,
             zoom: DEFAULT_EVAL_ZOOM,
             elapsed: 0.0,
+            taunt: GradeStarTaunt::default(),
+            easter_eggs: true,
         }
     }
 }
@@ -317,21 +349,277 @@ fn spin_rot_deg(elapsed: f32, first_delay_s: f32, seed: u32) -> f32 {
 }
 
 #[inline(always)]
-fn star_actor(s: StarDef, p: EvalGradeParams) -> Actor {
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
+}
+
+#[inline(always)]
+fn one_w2_taunt(t: GradeStarTaunt) -> bool {
+    t.miss == 0 && t.way_off == 0 && t.decent == 0 && t.great == 0 && t.excellent == 1
+}
+
+#[inline(always)]
+fn one_w3_flag(t: GradeStarTaunt) -> bool {
+    t.miss == 0 && t.way_off == 0 && t.decent == 0 && t.great == 1
+}
+
+#[inline(always)]
+fn star_seed(s: StarDef) -> u32 {
+    if s.spin_seed != 0 {
+        s.spin_seed
+    } else {
+        mix_u32(s.dx.to_bits() ^ s.dy.to_bits().rotate_left(11) ^ s.zoom.to_bits().rotate_left(21))
+    }
+}
+
+#[inline(always)]
+fn unit_rand(seed: u32, salt: u32) -> f32 {
+    mix_u32(seed ^ salt) as f32 / u32::MAX as f32
+}
+
+#[inline(always)]
+fn rainbow_rgba(elapsed: f32, seed: u32) -> [f32; 4] {
+    let period = 2.0 + 2.0 * unit_rand(seed, 0xA11C_0DE1);
+    let pct = ((elapsed - STAR_RAINBOW_DELAY_S) / period).rem_euclid(1.0);
+    let between = ((pct + 0.25) * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+    let phase = between * std::f32::consts::TAU;
+    [
+        phase.cos() * 0.5 + 0.5,
+        (phase + std::f32::consts::TAU / 3.0).cos() * 0.5 + 0.5,
+        (phase + 2.0 * std::f32::consts::TAU / 3.0).cos() * 0.5 + 0.5,
+        1.0,
+    ]
+}
+
+#[inline(always)]
+fn accel(t: f32) -> f32 {
+    t * t
+}
+
+#[inline(always)]
+fn decel(t: f32) -> f32 {
+    1.0 - (1.0 - t) * (1.0 - t)
+}
+
+#[inline(always)]
+fn affluent_rot_deg(elapsed: f32, seed: u32) -> f32 {
+    let start = unit_rand(seed, 0xAFF1_0001) * 360.0;
+    if elapsed < AFFLUENT_SPIN_DELAY_S {
+        return start;
+    }
+
+    let half_s = 0.6 + 0.4 * unit_rand(seed, 0xAFF1_0002);
+    let cycle_s = half_s * 2.0;
+    let t = (elapsed - AFFLUENT_SPIN_DELAY_S).rem_euclid(cycle_s);
+    if t < half_s {
+        start - 180.0 * accel(t / half_s)
+    } else {
+        start - 180.0 - 180.0 * decel((t - half_s) / half_s)
+    }
+}
+
+#[inline(always)]
+fn goldstar_zoom(elapsed: f32) -> f32 {
+    let t = elapsed - GOLDSTAR_ANIM_DELAY_S;
+    if t <= 0.0 {
+        1.0
+    } else if t <= GOLDSTAR_ZOOM_OUT_S {
+        lerp(1.0, 5.0, t / GOLDSTAR_ZOOM_OUT_S)
+    } else if t <= GOLDSTAR_ZOOM_OUT_S + GOLDSTAR_ZOOM_BACK_S {
+        lerp(5.0, 1.6, (t - GOLDSTAR_ZOOM_OUT_S) / GOLDSTAR_ZOOM_BACK_S)
+    } else {
+        1.6
+    }
+}
+
+#[inline(always)]
+fn goldstar_wag_deg(elapsed: f32) -> f32 {
+    let t = elapsed - GOLDSTAR_ANIM_DELAY_S;
+    if t <= 0.0 {
+        0.0
+    } else {
+        ((t / 2.0).rem_euclid(1.0) * std::f32::consts::TAU).sin() * 20.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StarTransform {
+    x: f32,
+    y: f32,
+    sx: f32,
+    sy: f32,
+    rot: f32,
+}
+
+#[inline(always)]
+fn star_transform(s: StarDef, p: EvalGradeParams) -> StarTransform {
     let x = p.x + s.dx * p.zoom;
     let y = p.y + s.dy * p.zoom;
     let base = s.zoom * p.zoom;
     let (sx, sy) = pulse_scales(base, p.elapsed, s.pulse_offset, s.mag_x, s.mag_y);
     let rot = spin_rot_deg(p.elapsed, s.spin_delay_s, s.spin_seed);
+    StarTransform { x, y, sx, sy, rot }
+}
+
+#[inline(always)]
+fn child_xy(st: StarTransform, x: f32, y: f32) -> (f32, f32) {
+    let r = st.rot.to_radians();
+    let lx = x * st.sx;
+    let ly = y * st.sy;
+    (
+        st.x + lx * r.cos() - ly * r.sin(),
+        st.y + lx * r.sin() + ly * r.cos(),
+    )
+}
+
+#[inline(always)]
+fn base_star_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Actor {
+    let tint = if one_w2_taunt(p.taunt) && p.elapsed >= STAR_RAINBOW_DELAY_S {
+        rainbow_rgba(p.elapsed, seed)
+    } else {
+        [1.0, 1.0, 1.0, 1.0]
+    };
 
     act!(sprite("grades/star.png"):
         align(0.5, 0.5):
-        xy(x, y):
-        zoomx(sx):
-        zoomy(sy):
-        rotationz(rot):
-        z(p.z)
+        xy(st.x, st.y):
+        zoomx(st.sx):
+        zoomy(st.sy):
+        rotationz(st.rot):
+        z(p.z):
+        diffuse(tint[0], tint[1], tint[2], tint[3])
     )
+}
+
+#[inline(always)]
+fn mask_star_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
+    if !one_w2_taunt(p.taunt) || p.elapsed < TAUNT_APPEAR_DELAY_S {
+        return None;
+    }
+
+    Some(act!(sprite("grades/star.png"):
+        align(0.5, 0.5):
+        xy(st.x, st.y):
+        zoomx(st.sx):
+        zoomy(st.sy):
+        rotationz(st.rot):
+        z(p.z):
+        MaskSource()
+    ))
+}
+
+#[inline(always)]
+fn affluent_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Option<Actor> {
+    if !p.easter_eggs || !one_w2_taunt(p.taunt) || p.elapsed < TAUNT_APPEAR_DELAY_S {
+        return None;
+    }
+
+    let alpha = ((p.elapsed - TAUNT_APPEAR_DELAY_S) / AFFLUENT_FADE_S).clamp(0.0, 1.0) * 0.7;
+    let rot = st.rot + affluent_rot_deg(p.elapsed, seed);
+    let (x, y) = child_xy(st, 0.0, 10.0);
+    if p.elapsed >= TAUNT_APPEAR_DELAY_S + AFFLUENT_FADE_S {
+        Some(act!(sprite("grades/affluent.png"):
+            align(0.5, 0.5):
+            xy(x, y):
+            zoomx(st.sx * 1.2):
+            zoomy(st.sy * 1.2):
+            rotationz(rot):
+            z(p.z):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            MaskDest()
+        ))
+    } else {
+        Some(act!(sprite("grades/affluent.png"):
+            align(0.5, 0.5):
+            xy(x, y):
+            zoomx(st.sx * 1.2):
+            zoomy(st.sy * 1.2):
+            rotationz(rot):
+            z(p.z):
+            diffuse(1.0, 1.0, 1.0, alpha)
+        ))
+    }
+}
+
+#[inline(always)]
+fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
+    if !p.easter_eggs
+        || p.taunt.miss > 0
+        || p.taunt.way_off > 0
+        || p.taunt.decent > 0
+        || p.taunt.great > 1
+    {
+        return None;
+    }
+
+    let one_w2 = p.taunt.great == 0 && p.taunt.excellent == 1;
+    if one_w3_flag(p.taunt) {
+        return Some(act!(sprite("grades/goldstar (stretch).png"):
+            align(0.5, 0.5):
+            xy(st.x, st.y):
+            zoomx(st.sx):
+            zoomy(st.sy):
+            rotationz(st.rot):
+            z(p.z.saturating_add(1)):
+            diffuse(0.0, 0.0, 0.0, 1.0)
+        ));
+    }
+    if !one_w2 {
+        return None;
+    }
+
+    let zoom = goldstar_zoom(p.elapsed);
+    let wag = goldstar_wag_deg(p.elapsed);
+    if p.elapsed >= GOLDSTAR_ANIM_DELAY_S + GOLDSTAR_ZOOM_OUT_S + GOLDSTAR_ZOOM_BACK_S {
+        Some(act!(sprite("grades/goldstar (stretch).png"):
+            align(0.5, 0.5):
+            xy(st.x, st.y):
+            zoomx(st.sx * zoom):
+            zoomy(st.sy * zoom):
+            rotationz(st.rot + wag):
+            z(p.z.saturating_add(1)):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            texcoordvelocity(1.0, 0.0)
+        ))
+    } else if p.elapsed >= GOLDSTAR_ANIM_DELAY_S {
+        Some(act!(sprite("grades/goldstar (stretch).png"):
+            align(0.5, 0.5):
+            xy(st.x, st.y):
+            zoomx(st.sx * zoom):
+            zoomy(st.sy * zoom):
+            rotationz(st.rot + wag):
+            z(p.z.saturating_add(1)):
+            diffuse(1.0, 1.0, 1.0, 1.0)
+        ))
+    } else {
+        Some(act!(sprite("grades/goldstar (stretch).png"):
+            align(0.5, 0.5):
+            xy(st.x, st.y):
+            zoomx(st.sx):
+            zoomy(st.sy):
+            rotationz(st.rot):
+            z(p.z.saturating_add(1)):
+            diffuse(0.0, 0.0, 0.0, 1.0)
+        ))
+    }
+}
+
+#[inline(always)]
+fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
+    let st = star_transform(s, p);
+    let seed = star_seed(s);
+    let mut out = Vec::with_capacity(4);
+    out.push(base_star_actor(st, p, seed));
+    if let Some(actor) = mask_star_actor(st, p) {
+        out.push(actor);
+    }
+    if let Some(actor) = affluent_actor(st, p, seed) {
+        out.push(actor);
+    }
+    if let Some(actor) = goldstar_actor(st, p) {
+        out.push(actor);
+    }
+    out
 }
 
 #[inline(always)]
@@ -348,7 +636,11 @@ fn stars_for(grade: scores::Grade) -> Option<&'static [StarDef]> {
 
 pub fn actors(grade: scores::Grade, p: EvalGradeParams) -> Vec<Actor> {
     if let Some(stars) = stars_for(grade) {
-        return stars.iter().copied().map(|s| star_actor(s, p)).collect();
+        return stars
+            .iter()
+            .copied()
+            .flat_map(|s| star_actors(s, p))
+            .collect();
     }
 
     let tex = letter_tex(grade);
@@ -358,4 +650,112 @@ pub fn actors(grade: scores::Grade, p: EvalGradeParams) -> Vec<Actor> {
         zoom(p.zoom * LETTER_ZOOM):
         z(p.z)
     )]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn counts(
+        excellent: u32,
+        great: u32,
+        decent: u32,
+        way_off: u32,
+        miss: u32,
+    ) -> judgment::JudgeCounts {
+        let mut counts = [0; judgment::JUDGE_GRADE_COUNT];
+        counts[judgment::judge_grade_ix(JudgeGrade::Excellent)] = excellent;
+        counts[judgment::judge_grade_ix(JudgeGrade::Great)] = great;
+        counts[judgment::judge_grade_ix(JudgeGrade::Decent)] = decent;
+        counts[judgment::judge_grade_ix(JudgeGrade::WayOff)] = way_off;
+        counts[judgment::judge_grade_ix(JudgeGrade::Miss)] = miss;
+        counts
+    }
+
+    fn texture_count(actors: &[Actor], key: &str) -> usize {
+        actors
+            .iter()
+            .filter(|actor| match actor {
+                Actor::Sprite { source, .. } => source.texture_key() == Some(key),
+                _ => false,
+            })
+            .count()
+    }
+
+    fn first_tint(actors: &[Actor], key: &str) -> Option<[f32; 4]> {
+        actors.iter().find_map(|actor| match actor {
+            Actor::Sprite { source, tint, .. } if source.texture_key() == Some(key) => Some(*tint),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn exact_one_w2_adds_late_taunt_actors() {
+        let actors = actors(
+            scores::Grade::Tier04,
+            EvalGradeParams {
+                elapsed: 10.0,
+                taunt: grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(texture_count(&actors, "grades/star.png"), 2);
+        assert_eq!(texture_count(&actors, "grades/affluent.png"), 1);
+        assert_eq!(texture_count(&actors, "grades/goldstar (stretch).png"), 1);
+    }
+
+    #[test]
+    fn exact_one_w2_goldstar_starts_black() {
+        let actors = actors(
+            scores::Grade::Tier04,
+            EvalGradeParams {
+                elapsed: 1.0,
+                taunt: grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
+        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
+        assert_eq!(
+            first_tint(&actors, "grades/goldstar (stretch).png"),
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn one_w3_adds_black_flag_only() {
+        let actors = actors(
+            scores::Grade::Tier04,
+            EvalGradeParams {
+                elapsed: 10.0,
+                taunt: grade_star_taunt_from_counts(counts(7, 1, 0, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
+        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
+        assert_eq!(
+            first_tint(&actors, "grades/goldstar (stretch).png"),
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn worse_than_one_w3_gets_no_taunt() {
+        let actors = actors(
+            scores::Grade::Tier04,
+            EvalGradeParams {
+                elapsed: 10.0,
+                taunt: grade_star_taunt_from_counts(counts(1, 2, 0, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
+        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
+        assert_eq!(texture_count(&actors, "grades/goldstar (stretch).png"), 0);
+    }
 }

@@ -409,6 +409,7 @@ fn build_player_stats(
             z: 4,
             zoom: widescale(0.275, 0.3),
             elapsed,
+            ..Default::default()
         },
     ));
 

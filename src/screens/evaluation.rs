@@ -3895,6 +3895,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z: 101,
                     zoom: 0.4,
                     elapsed: state.session_elapsed,
+                    taunt: eval_grades::grade_star_taunt_from_counts(si.judgment_counts),
+                    ..Default::default()
                 },
             ));
 
