@@ -51,10 +51,10 @@ pub struct ActorViewOverride {
 }
 
 use crate::game::gameplay::{
-    self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
-    LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot, TRANSITION_IN_DURATION,
-    TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
+    self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
+    GameplayAction, GameplayExit, LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot,
+    TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
+    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
     handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
     update as gameplay_update,
 };
@@ -299,6 +299,7 @@ pub fn init(
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    course_display_timing: Option<CourseDisplayTiming>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     State::from_gameplay(gameplay_core::init(
@@ -316,6 +317,7 @@ pub fn init(
         lead_in_timing,
         course_display_carry,
         course_display_totals,
+        course_display_timing,
         combo_carry,
     ))
 }
@@ -2329,11 +2331,22 @@ fn song_lua_capture_new_actors(
     });
 }
 
-fn song_lua_shared_actor_source(actors: Vec<Actor>) -> Option<Vec<Arc<[Actor]>>> {
+fn song_lua_player_child_proxy_source(
+    actors: Vec<Actor>,
+    origin_x: f32,
+    origin_y: f32,
+) -> Option<Vec<Arc<[Actor]>>> {
     if actors.is_empty() {
         return None;
     }
-    Some(vec![Arc::from(actors)])
+    Some(vec![Arc::from(vec![Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [-origin_x, -origin_y],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: actors,
+        background: None,
+        z: 0,
+    }])])
 }
 
 fn song_lua_share_actor_source_in_place(actors: &mut Vec<Actor>) -> Option<Vec<Arc<[Actor]>>> {
@@ -6979,7 +6992,7 @@ pub fn push_actors(
                 .then(|| {
                     render_source_bundle(song_lua_shared_segment_actors(field_actors), Vec::new())
                 })
-                .and_then(song_lua_shared_actor_source);
+                .and_then(|actors| song_lua_player_child_proxy_source(actors, target_x, target_y));
             apply_song_lua_player_transform(
                 field_scratch,
                 hud_scratch,
@@ -7016,11 +7029,15 @@ pub fn push_actors(
                 judgment_actors
                     .map(song_lua_shared_segment_actors)
                     .map(|actors| render_source_bundle(Vec::new(), actors))
-                    .and_then(song_lua_shared_actor_source),
+                    .and_then(|actors| {
+                        song_lua_player_child_proxy_source(actors, target_x, target_y)
+                    }),
                 combo_actors
                     .map(song_lua_shared_segment_actors)
                     .map(|actors| render_source_bundle(Vec::new(), actors))
-                    .and_then(song_lua_shared_actor_source),
+                    .and_then(|actors| {
+                        song_lua_player_child_proxy_source(actors, target_x, target_y)
+                    }),
             ];
             (layout_center_x, player_source, proxy_sources)
         };
@@ -8662,6 +8679,41 @@ mod tests {
             }
             other => panic!("expected frame actor, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_player_child_proxy_source_is_player_local() {
+        let origin = [screen_center_x(), screen_center_y()];
+        let source =
+            song_lua_player_child_proxy_source(vec![test_source_actor()], origin[0], origin[1])
+                .expect("child proxy source should render");
+        let actor = song_lua_build_proxy_actor(
+            SongLuaOverlayState {
+                x: origin[0],
+                y: origin[1],
+                ..SongLuaOverlayState::default()
+            },
+            0,
+            source.as_slice(),
+            screen_width(),
+            screen_height(),
+        )
+        .expect("actor proxy should render with a source");
+
+        let Actor::Frame {
+            offset, children, ..
+        } = actor
+        else {
+            panic!("expected proxy frame");
+        };
+        assert_eq!(offset, origin);
+        let [Actor::SharedFrame { children, .. }] = children.as_slice() else {
+            panic!("expected shared source frame");
+        };
+        let [Actor::Frame { offset, .. }] = children.as_ref() else {
+            panic!("expected localized child source");
+        };
+        assert_eq!(*offset, [-origin[0], -origin[1]]);
     }
 
     #[test]

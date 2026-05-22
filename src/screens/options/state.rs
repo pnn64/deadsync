@@ -640,6 +640,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::RandomBackgroundMode,
+        cfg.random_background_mode.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::VersionOverlay,
         usize::from(cfg.show_version_overlay),
     );
@@ -900,6 +906,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::SongSelectBg,
+        cfg.select_music_song_select_bg_mode.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::SwitchProfile,
         yes_no_choice_index(cfg.allow_switch_profile_in_menu),
     );
@@ -938,6 +950,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::NewPackBadge,
         cfg.select_music_new_pack_mode.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::FolderStats,
+        yes_no_choice_index(cfg.show_select_music_folder_stats),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

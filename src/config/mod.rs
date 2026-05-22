@@ -30,10 +30,11 @@ pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicWheelStyle,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -158,7 +159,11 @@ pub struct Config {
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
+    /// Arrow Cloud SongSelectBG parity: show song/pack art behind wheel rows.
+    pub select_music_song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub select_music_new_pack_mode: NewPackMode,
+    /// Arrow Cloud FolderStats parity: pack clear summary box on Select Music.
+    pub show_select_music_folder_stats: bool,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
@@ -176,6 +181,8 @@ pub struct Config {
     pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
+    /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
+    pub random_background_mode: RandomBackgroundMode,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Whether "Switch Profile" appears in the select music sort menu.
@@ -348,7 +355,9 @@ impl Default for Config {
             select_music_itl_rank_mode: SelectMusicItlRankMode::None,
             select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
             select_music_wheel_style: SelectMusicWheelStyle::Itg,
+            select_music_song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
             select_music_new_pack_mode: NewPackMode::Disabled,
+            show_select_music_folder_stats: false,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
@@ -357,6 +366,7 @@ impl Default for Config {
             version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
             show_video_backgrounds: true,
+            random_background_mode: RandomBackgroundMode::Off,
             machine_show_select_profile: true,
             allow_switch_profile_in_menu: false,
             machine_show_select_color: true,

@@ -80,6 +80,7 @@ pub enum SubRowId {
     DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
+    RandomBackgroundMode,
     VersionOverlay,
     VersionOverlaySide,
     // Gameplay Options
@@ -97,6 +98,7 @@ pub enum SubRowId {
     ShowNativeLanguage,
     MusicWheelSpeed,
     MusicWheelStyle,
+    SongSelectBg,
     SwitchProfile,
     ShowCdTitles,
     ShowWheelGrades,
@@ -104,6 +106,7 @@ pub enum SubRowId {
     ItlRank,
     ItlWheelData,
     NewPackBadge,
+    FolderStats,
     ShowPatternInfo,
     ChartInfo,
     MusicPreviews,

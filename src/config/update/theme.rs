@@ -154,6 +154,17 @@ pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_song_select_bg_mode(mode: SelectMusicSongSelectBgMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_song_select_bg_mode == mode {
+            return;
+        }
+        cfg.select_music_song_select_bg_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
     {
         let mut cfg = lock_config();
@@ -161,6 +172,17 @@ pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
             return;
         }
         cfg.select_music_new_pack_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_folder_stats(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_folder_stats == enabled {
+            return;
+        }
+        cfg.show_select_music_folder_stats = enabled;
     }
     save_without_keymaps();
 }

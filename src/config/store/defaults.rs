@@ -174,8 +174,18 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_line(
         content,
+        "SongSelectBG",
+        default.select_music_song_select_bg_mode.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         default.select_music_new_pack_mode.as_str(),
+    );
+    push_bool(
+        content,
+        "SelectMusicFolderStats",
+        default.show_select_music_folder_stats,
     );
     push_bool(
         content,
@@ -311,6 +321,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
     push_bool(content, "KeyboardFeatures", default.keyboard_features);
     push_line(content, "VisualStyle", default.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", default.show_video_backgrounds);
+    push_line(
+        content,
+        "RandomBackgroundMode",
+        default.random_background_mode.as_str(),
+    );
     push_bool(
         content,
         "MachineShowEvalSummary",

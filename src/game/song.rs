@@ -149,7 +149,18 @@ impl SongData {
             .is_some_and(|ext| {
                 matches!(
                     ext.to_ascii_lowercase().as_str(),
-                    "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
+                    "mp4"
+                        | "avi"
+                        | "f4v"
+                        | "flv"
+                        | "m4v"
+                        | "mov"
+                        | "ogv"
+                        | "webm"
+                        | "mkv"
+                        | "mpg"
+                        | "mpeg"
+                        | "wmv"
                 )
             })
     }
@@ -337,11 +348,24 @@ impl SongData {
         next_background_change_ix: usize,
         allow_video: bool,
     ) -> Option<&PathBuf> {
+        self.gameplay_background_path_for_changes(
+            &self.background_changes,
+            next_background_change_ix,
+            allow_video,
+        )
+    }
+
+    pub fn gameplay_background_path_for_changes<'a>(
+        &'a self,
+        background_changes: &'a [SongBackgroundChange],
+        next_background_change_ix: usize,
+        allow_video: bool,
+    ) -> Option<&'a PathBuf> {
         let active_ix = next_background_change_ix
-            .min(self.background_changes.len())
+            .min(background_changes.len())
             .checked_sub(1);
         match active_ix
-            .and_then(|ix| self.background_changes.get(ix))
+            .and_then(|ix| background_changes.get(ix))
             .map(|change| &change.target)
         {
             Some(SongBackgroundChangeTarget::File(path)) => {

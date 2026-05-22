@@ -402,6 +402,9 @@ pub(super) fn apply_submenu_choice_delta(
             ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
+            SubRowId::RandomBackgroundMode => {
+                config::update_random_background_mode(RandomBackgroundMode::from_choice(new_index))
+            }
             SubRowId::VersionOverlay => config::update_show_version_overlay(enabled),
             SubRowId::VersionOverlaySide => {
                 config::update_version_overlay_side(VersionOverlaySide::from_choice(new_index))
@@ -567,6 +570,10 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         } else if row.id == SubRowId::MusicWheelStyle {
             config::update_select_music_wheel_style(SelectMusicWheelStyle::from_choice(new_index));
+        } else if row.id == SubRowId::SongSelectBg {
+            config::update_select_music_song_select_bg_mode(
+                SelectMusicSongSelectBgMode::from_choice(new_index),
+            );
         } else if row.id == SubRowId::SwitchProfile {
             config::update_allow_switch_profile_in_menu(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowCdTitles {
@@ -585,6 +592,8 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         } else if row.id == SubRowId::NewPackBadge {
             config::update_select_music_new_pack_mode(NewPackMode::from_choice(new_index));
+        } else if row.id == SubRowId::FolderStats {
+            config::update_show_select_music_folder_stats(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowPatternInfo {
             config::update_select_music_pattern_info_mode(SelectMusicPatternInfoMode::from_choice(
                 new_index,
@@ -718,6 +727,12 @@ fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
     )
 }
 
+fn selected_submenu_row_has_choices(state: &State, kind: SubmenuKind) -> Option<bool> {
+    let rows = submenu_rows(kind);
+    let row_idx = submenu_visible_row_to_actual(state, kind, state.sub_selected)?;
+    Some(!row_choices(state, kind, rows, row_idx).is_empty())
+}
+
 fn handle_dedicated_three_key_start_nav(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -736,6 +751,13 @@ fn handle_dedicated_three_key_start_nav(
         return ScreenAction::None;
     }
     if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
+        if repeated {
+            return ScreenAction::None;
+        }
+        clear_navigation_holds(state);
+        return activate_current_selection(state, asset_manager);
+    }
+    if selected_submenu_row_has_choices(state, kind) == Some(false) {
         if repeated {
             return ScreenAction::None;
         }

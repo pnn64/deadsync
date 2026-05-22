@@ -107,7 +107,9 @@ use self::controls::{next_tick_mode, tick_mode_status_line};
 use self::display::effective_ex_score_inputs;
 #[cfg(test)]
 use self::display::scored_hold_totals_with_carry;
-use self::display::{capture_failed_ex_score_inputs, record_display_window_counts};
+use self::display::{
+    capture_failed_ex_score_inputs, record_current_combo_window_count, record_display_window_counts,
+};
 pub use self::display::{
     display_carry_for_player, display_ex_score_percent, display_hard_ex_score_percent,
     display_itg_score_percent, display_judgment_count, display_live_timing_stats,
@@ -3275,6 +3277,7 @@ pub struct PlayerRuntime {
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: crate::game::timing::WindowCounts,
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
@@ -3324,19 +3327,34 @@ pub struct PlayerRuntime {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayCarry {
+    // ITGmania keeps the same lifemeter alive between nonstop course songs.
+    pub life: f32,
     pub judgment_counts: [u32; 6],
     pub scoring_counts: [u32; 6],
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: crate::game::timing::WindowCounts,
+    pub first_fc_attempt_broken: bool,
     // Canonical FA+ split (15ms) used for EX scoring/evaluation.
     pub window_counts: crate::game::timing::WindowCounts,
     // Canonical 10ms split used for H.EX scoring/evaluation.
     pub window_counts_10ms_blue: crate::game::timing::WindowCounts,
     // Display split used by gameplay counters (legacy 10ms or custom ms option).
     pub window_counts_display_blue: crate::game::timing::WindowCounts,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
     pub holds_held_for_score: u32,
     pub holds_let_go_for_score: u32,
     pub rolls_held_for_score: u32,
     pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayTiming {
+    pub elapsed_seconds: f32,
+    pub total_seconds: f32,
 }
 
 const DISPLAY_JUDGE_ORDER: [JudgeGrade; 6] = [
@@ -3385,6 +3403,7 @@ fn init_player_runtime() -> PlayerRuntime {
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,
+        current_combo_window_counts: crate::game::timing::WindowCounts::default(),
         first_fc_attempt_broken: false,
         judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
@@ -3425,6 +3444,42 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
         live_timing_stats: crate::game::timing::LiveTimingStats::default(),
+    }
+}
+
+#[inline(always)]
+fn apply_course_life_carry(player: &mut PlayerRuntime, course_carry: Option<CourseDisplayCarry>) {
+    let Some(carry) = course_carry else {
+        return;
+    };
+    if carry.life.is_finite() {
+        player.life = carry.life.clamp(0.0, 1.0);
+    }
+}
+
+#[inline(always)]
+fn apply_course_combo_carry(
+    player: &mut PlayerRuntime,
+    carry_combo_between_songs: bool,
+    replay_mode: bool,
+    combo_carry: u32,
+    course_carry: Option<CourseDisplayCarry>,
+) {
+    if carry_combo_between_songs && !replay_mode {
+        player.combo = combo_carry;
+        if let Some(carry) = course_carry {
+            if combo_carry > 0 {
+                player.full_combo_grade = carry.full_combo_grade;
+                player.current_combo_grade = carry.current_combo_grade;
+                player.current_combo_window_counts = carry.current_combo_window_counts;
+                player.first_fc_attempt_broken = carry.first_fc_attempt_broken;
+            } else {
+                player.first_fc_attempt_broken =
+                    carry.first_fc_attempt_broken || carry.full_combo_grade.is_some();
+            }
+        }
+    } else if course_carry.is_some() {
+        player.first_fc_attempt_broken = true;
     }
 }
 
@@ -3599,6 +3654,7 @@ pub struct State {
     pub current_background_key: Option<Arc<str>>,
     pub background_path_dirty: bool,
     pub background_allow_video: bool,
+    pub background_changes: Vec<song::SongBackgroundChange>,
     pub next_background_change_ix: usize,
     pub background_texture_key: Arc<str>,
     pub foreground_texture_keys: Vec<Arc<str>>,
@@ -3693,6 +3749,7 @@ pub struct State {
     replay_capture_enabled: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    pub course_display_timing: Option<CourseDisplayTiming>,
     pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
     pub live_window_counts_10ms_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
     pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
@@ -4927,7 +4984,6 @@ fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
     }
 
     let next_background_change_ix = state
-        .song
         .background_changes
         .iter()
         .take_while(|change| change.start_beat <= state.current_beat)
@@ -5234,6 +5290,7 @@ pub fn init(
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
@@ -6172,16 +6229,27 @@ pub fn init(
     let finalize_started = Instant::now();
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
-        if player_profiles[p].carry_combo_between_songs && !replay_mode {
-            players[p].combo = combo_carry[p];
-        }
+        let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
+        apply_course_life_carry(&mut players[p], course_carry);
+        apply_course_combo_carry(
+            &mut players[p],
+            player_profiles[p].carry_combo_between_songs,
+            replay_mode,
+            combo_carry[p],
+            course_carry,
+        );
         let life = players[p].life;
         players[p].life_history.push((init_music_time, life));
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
-    let next_background_change_ix = song
-        .background_changes
+    let background_changes = crate::game::random_movies::build_background_changes(
+        &song,
+        &timing,
+        &gameplay_charts[0].timing_segments,
+        config.random_background_mode,
+    );
+    let next_background_change_ix = background_changes
         .iter()
         .take_while(|change| change.start_beat <= init_beat)
         .count();
@@ -6205,6 +6273,7 @@ pub fn init(
         current_background_key: None,
         background_path_dirty: true,
         background_allow_video: false,
+        background_changes,
         next_background_change_ix,
         charts,
         gameplay_charts,
@@ -6290,6 +6359,7 @@ pub fn init(
         replay_capture_enabled,
         course_display_carry,
         course_display_totals,
+        course_display_timing,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
         live_window_counts_10ms_blue: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
         live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
@@ -6680,9 +6750,7 @@ const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
 
 #[inline(always)]
 fn clear_full_combo_state(p: &mut PlayerRuntime) {
-    if p.full_combo_grade.is_some() {
-        p.first_fc_attempt_broken = true;
-    }
+    p.first_fc_attempt_broken = true;
     p.full_combo_grade = None;
 }
 
@@ -6694,6 +6762,7 @@ fn break_combo_state(p: &mut PlayerRuntime, miss_combo_delta: u32) {
     }
     clear_full_combo_state(p);
     p.current_combo_grade = None;
+    p.current_combo_window_counts = crate::game::timing::WindowCounts::default();
 }
 
 #[inline(always)]
@@ -6991,7 +7060,7 @@ fn error_bar_register_tap(
     let show_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
     let show_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
     let show_fa_plus_window = prof.show_fa_plus_window;
-    let fa_plus_window_s = player_fa_plus_window_s(state, player);
+    let blue_fantastic_window_s = player_blue_window_ms(state, player) / 1000.0;
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
@@ -7013,7 +7082,7 @@ fn error_bar_register_tap(
 
     if show_text {
         let threshold_s = if show_fa_plus_window {
-            fa_plus_window_s
+            blue_fantastic_window_s
         } else {
             state.timing_profile.windows_s[0]
         };
@@ -8609,28 +8678,29 @@ mod tests {
         completed_row_flash_note_indices_and_judgment, count_rescore_tracks_on_row,
         crossed_mine_bounds_ns, crossed_mine_held_start_time,
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
-        enforce_max_simultaneous_notes, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        hit_mine, input_queue_cap, integrate_active_hold_to_time, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
-        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
-        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual,
-        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
-        trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, handle_input, hit_mine, input_queue_cap,
+        integrate_active_hold_to_time, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
+        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
+        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
+        score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
+        scored_hold_totals_with_carry, set_final_note_result, settle_completion_rows,
+        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_calories, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
+        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
+        trigger_note_receptor_feedback, trigger_receptor_step_pulse,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -8916,6 +8986,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             [0; MAX_PLAYERS],
         )
     }
@@ -9069,6 +9140,7 @@ return Def.ActorFrame{}
                                 None,
                                 None,
                                 Arc::from("TEST"),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -10323,6 +10395,54 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn error_bar_text_uses_10ms_blue_fantastic_threshold() {
+        let p1 = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            custom_fantastic_window: false,
+            error_bar_text: true,
+            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            ..profile::Profile::default()
+        };
+
+        let mut state = regression_state([p1, profile::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 8.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(8.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W0),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+        assert!(state.players[0].error_bar_text.is_none());
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 12.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W0),
+                miss_because_held: false,
+            },
+            1.1,
+        );
+
+        let text = state.players[0]
+            .error_bar_text
+            .expect("12ms should exceed Arrow Cloud's 10ms blue window");
+        assert_eq!(text.started_at, 4.0);
+        assert!(!text.early);
+    }
+
+    #[test]
     fn autosync_row_hits_use_music_time_offsets_at_rate() {
         let mut state =
             regression_state([profile::Profile::default(), profile::Profile::default()]);
@@ -10920,6 +11040,124 @@ return Def.ActorFrame{}
         assert_eq!(player.miss_combo, 0);
         assert_eq!(player.full_combo_grade, Some(JudgeGrade::Great));
         assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+    }
+
+    #[test]
+    fn course_combo_carry_restores_combo_color_state_when_combo_carries() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            full_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w0: 7,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 37, Some(carry));
+
+        assert_eq!(player.combo, 37);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_window_counts.w0, 7);
+        assert!(!player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn course_life_carry_restores_lifemeter_between_songs() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            life: 0.32,
+            ..Default::default()
+        };
+
+        super::apply_course_life_carry(&mut player, Some(carry));
+
+        assert!((player.life - 0.32).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_display_carry_captures_current_life() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.players[0].life = 0.32;
+
+        let carry = super::course_display_carry_from_state(&state);
+
+        assert!((carry[0].life - 0.32).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_combo_carry_keeps_prior_break_from_coloring_full_combo() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            current_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w1: 1,
+                ..Default::default()
+            },
+            first_fc_attempt_broken: true,
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 12, Some(carry));
+
+        assert_eq!(player.combo, 12);
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+        assert_eq!(player.current_combo_window_counts.w1, 1);
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+    }
+
+    #[test]
+    fn course_combo_carry_without_combo_disables_full_combo_reseed() {
+        let mut player = super::init_player_runtime();
+        let carry = super::CourseDisplayCarry {
+            full_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_grade: Some(JudgeGrade::Fantastic),
+            current_combo_window_counts: crate::game::timing::WindowCounts {
+                w0: 9,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        super::apply_course_combo_carry(&mut player, true, false, 0, Some(carry));
+
+        assert_eq!(player.combo, 0);
+        assert!(player.full_combo_grade.is_none());
+        assert!(player.current_combo_grade.is_none());
+        assert_eq!(player.current_combo_window_counts.w0, 0);
+        assert_eq!(player.current_combo_window_counts.w1, 0);
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+    }
+
+    #[test]
+    fn bad_first_row_breaks_full_combo_attempt() {
+        let mut player = super::init_player_runtime();
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Decent, 1, 1);
+
+        assert_eq!(player.combo, 0);
+        assert!(player.full_combo_grade.is_none());
+        assert!(player.current_combo_grade.is_none());
+        assert!(player.first_fc_attempt_broken);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Fantastic, 1, 0);
+
+        assert_eq!(player.combo, 1);
+        assert!(player.full_combo_grade.is_none());
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
     }
 
     #[test]

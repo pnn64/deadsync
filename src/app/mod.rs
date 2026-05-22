@@ -1724,8 +1724,31 @@ fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
     }
 }
 
+fn course_stage_music_seconds(stage: &CourseStageRuntime) -> f32 {
+    let seconds = stage.song.music_length_seconds;
+    if seconds.is_finite() {
+        seconds.max(0.0)
+    } else {
+        0.0
+    }
+}
+
 fn course_total_seconds(course: &CourseRunState) -> f32 {
     course.stages.iter().map(course_stage_seconds).sum()
+}
+
+fn course_display_timing_for_run(
+    course: &CourseRunState,
+) -> crate::game::gameplay::CourseDisplayTiming {
+    crate::game::gameplay::CourseDisplayTiming {
+        elapsed_seconds: course
+            .stages
+            .iter()
+            .take(course.next_stage_index)
+            .map(course_stage_music_seconds)
+            .sum(),
+        total_seconds: course.stages.iter().map(course_stage_music_seconds).sum(),
+    }
 }
 
 #[inline(always)]
@@ -2146,6 +2169,71 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
     Arc::<str>::from(parts.join(", "))
 }
 
+#[inline(always)]
+fn add_column_judgments(dst: &mut evaluation::ColumnJudgments, src: evaluation::ColumnJudgments) {
+    dst.w0 = dst.w0.saturating_add(src.w0);
+    dst.w1 = dst.w1.saturating_add(src.w1);
+    dst.w2 = dst.w2.saturating_add(src.w2);
+    dst.w3 = dst.w3.saturating_add(src.w3);
+    dst.w4 = dst.w4.saturating_add(src.w4);
+    dst.w5 = dst.w5.saturating_add(src.w5);
+    dst.miss = dst.miss.saturating_add(src.miss);
+    dst.early_w1 = dst.early_w1.saturating_add(src.early_w1);
+    dst.early_w2 = dst.early_w2.saturating_add(src.early_w2);
+    dst.early_w3 = dst.early_w3.saturating_add(src.early_w3);
+    dst.early_w4 = dst.early_w4.saturating_add(src.early_w4);
+    dst.early_w5 = dst.early_w5.saturating_add(src.early_w5);
+    dst.early_total_w0 = dst.early_total_w0.saturating_add(src.early_total_w0);
+    dst.early_total_w1 = dst.early_total_w1.saturating_add(src.early_total_w1);
+    dst.early_total_w2 = dst.early_total_w2.saturating_add(src.early_total_w2);
+    dst.early_total_w3 = dst.early_total_w3.saturating_add(src.early_total_w3);
+    dst.early_total_w4 = dst.early_total_w4.saturating_add(src.early_total_w4);
+    dst.early_total_w5 = dst.early_total_w5.saturating_add(src.early_total_w5);
+    dst.held_miss = dst.held_miss.saturating_add(src.held_miss);
+}
+
+fn merge_column_judgments(
+    dst: &mut Vec<evaluation::ColumnJudgments>,
+    src: &[evaluation::ColumnJudgments],
+) {
+    if dst.len() < src.len() {
+        dst.resize(src.len(), evaluation::ColumnJudgments::default());
+    }
+    for (dst, src) in dst.iter_mut().zip(src.iter().copied()) {
+        add_column_judgments(dst, src);
+    }
+}
+
+fn score_info_for_side(
+    score_info: &[Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS],
+    side: profile::PlayerSide,
+) -> Option<&evaluation::ScoreInfo> {
+    score_info.iter().flatten().find(|si| si.side == side)
+}
+
+fn apply_course_summary_column_judgments(
+    course_page: &mut evaluation::State,
+    song_pages: &[evaluation::State],
+) {
+    for summary in course_page.score_info.iter_mut().flatten() {
+        let mut columns = Vec::new();
+        let mut noteskin = None;
+        for page in song_pages {
+            let Some(song) = score_info_for_side(&page.score_info, summary.side) else {
+                continue;
+            };
+            merge_column_judgments(&mut columns, &song.column_judgments);
+            if noteskin.is_none() && song.noteskin.is_some() {
+                noteskin.clone_from(&song.noteskin);
+            }
+        }
+        summary.column_judgments = columns;
+        if summary.noteskin.is_none() {
+            summary.noteskin = noteskin;
+        }
+    }
+}
+
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     course_graph_stages: &[Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS],
@@ -2319,13 +2407,13 @@ fn prewarm_gameplay_assets(
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
         let mut paths = Vec::with_capacity(
             1usize
-                .saturating_add(state.song.background_changes.len())
+                .saturating_add(state.background_changes.len())
                 .saturating_add(state.song.foreground_changes.len()),
         );
         if let Some(path) = state.song.background_path.as_ref() {
             paths.push(path);
         }
-        for change in &state.song.background_changes {
+        for change in &state.background_changes {
             let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
                 continue;
             };
@@ -2623,13 +2711,13 @@ fn prewarm_gameplay_text_layout_cache(
 fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
     let mut keys = Vec::with_capacity(
         1usize
-            .saturating_add(state.song.background_changes.len())
+            .saturating_add(state.background_changes.len())
             .saturating_add(state.song.foreground_changes.len()),
     );
     if let Some(path) = state.song.background_path.as_ref() {
         keys.push(path.to_string_lossy().into_owned());
     }
-    for change in &state.song.background_changes {
+    for change in &state.background_changes {
         let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
             continue;
         };
@@ -2773,13 +2861,21 @@ fn quantize_sync_offset_seconds(v: f32) -> f32 {
 }
 
 #[inline(always)]
+fn sync_offset_delta_seconds(start: f32, new: f32) -> Option<f32> {
+    let delta = quantize_sync_offset_seconds(new) - quantize_sync_offset_seconds(start);
+    (delta.abs() >= 0.000_1_f32).then_some(delta)
+}
+
+#[inline(always)]
+fn sync_offset_target_seconds(start: f32, new: f32) -> Option<f32> {
+    sync_offset_delta_seconds(start, new).map(|_| quantize_sync_offset_seconds(new))
+}
+
+#[inline(always)]
 fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
     let start_q = quantize_sync_offset_seconds(start);
     let new_q = quantize_sync_offset_seconds(new);
-    let delta_q = new_q - start_q;
-    if delta_q.abs() < 0.000_1_f32 {
-        return None;
-    }
+    let delta_q = sync_offset_delta_seconds(start, new)?;
     let direction = if delta_q > 0.0 { "earlier" } else { "later" };
     Some(format!(
         "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
@@ -4187,6 +4283,10 @@ impl App {
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestCdTitle(path_opt) => vec![Command::SetCdTitle(path_opt)],
+            ScreenAction::RequestPackBanner(path_opt) => vec![Command::SetPackBanner(path_opt)],
+            ScreenAction::RequestWheelItemBackgrounds(paths) => {
+                vec![Command::SetWheelItemBackgrounds(paths)]
+            }
             ScreenAction::RequestDensityGraph { slot, chart_opt } => {
                 vec![Command::SetDensityGraph { slot, chart_opt }]
             }
@@ -4412,12 +4512,13 @@ impl App {
 
     #[inline(always)]
     fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
-        (gs.global_offset_seconds - gs.initial_global_offset_seconds).abs() > 0.000_001_f32
+        sync_offset_delta_seconds(gs.initial_global_offset_seconds, gs.global_offset_seconds)
+            .is_some()
     }
 
     #[inline(always)]
     fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
-        (gs.song_offset_seconds - gs.initial_song_offset_seconds).abs() > 0.000_001_f32
+        sync_offset_delta_seconds(gs.initial_song_offset_seconds, gs.song_offset_seconds).is_some()
     }
 
     #[inline(always)]
@@ -4547,14 +4648,17 @@ impl App {
         if save_changes {
             let mut song_offset_change: Option<(PathBuf, f32)> = None;
             if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                if Self::gameplay_global_offset_changed(gs) {
-                    config::update_global_offset(gs.global_offset_seconds);
+                if let Some(global_offset) = sync_offset_target_seconds(
+                    gs.initial_global_offset_seconds,
+                    gs.global_offset_seconds,
+                ) {
+                    config::update_global_offset(global_offset);
                 }
-                if Self::gameplay_song_offset_changed(gs) {
-                    song_offset_change = Some((
-                        gs.song.simfile_path.clone(),
-                        gs.song_offset_seconds - gs.initial_song_offset_seconds,
-                    ));
+                if let Some(delta) = sync_offset_delta_seconds(
+                    gs.initial_song_offset_seconds,
+                    gs.song_offset_seconds,
+                ) {
+                    song_offset_change = Some((gs.song.simfile_path.clone(), delta));
                 }
             }
             if let Some((simfile_path, delta)) = song_offset_change
@@ -4999,6 +5103,7 @@ impl App {
                         session_elapsed,
                         gameplay_elapsed,
                     );
+                    apply_course_summary_column_judgments(&mut course_page, &per_song_pages);
                     course_page.screen_elapsed = screen_elapsed;
                     self.state.screens.evaluation_state = course_page.clone();
 
@@ -5189,6 +5294,15 @@ impl App {
         }
         if screen == CurrentScreen::SelectMusic {
             self.apply_select_music_join(join_side);
+            // Per Simply-Love-SM5#741: when the Select Profile screen is on,
+            // prompt the late-joining player with the profile-select widget
+            // instead of silently leaving them as Guest.
+            if config::get().machine_show_select_profile {
+                crate::screens::select_music::open_late_join_profile_overlay(
+                    &mut self.state.screens.select_music_state,
+                    join_side,
+                );
+            }
         }
 
         crate::engine::audio::play_sfx("assets/sounds/start.ogg");
@@ -5407,7 +5521,8 @@ impl App {
     ) -> Option<PathBuf> {
         let path = state
             .song
-            .gameplay_background_path_for_change_ix(
+            .gameplay_background_path_for_changes(
+                &state.background_changes,
                 state.next_background_change_ix,
                 show_video_backgrounds,
             )
@@ -5442,7 +5557,7 @@ impl App {
                 return;
             };
             let mut background_changed = false;
-            while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+            while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
                 if gs.current_beat < change.start_beat {
                     break;
                 }
@@ -7520,6 +7635,7 @@ impl App {
                     }),
                     None,
                     None,
+                    None,
                     [0; crate::game::gameplay::MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
@@ -7589,6 +7705,12 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(|course| course.course_display_totals);
+            let course_display_timing = self
+                .state
+                .session
+                .course_run
+                .as_ref()
+                .map(course_display_timing_for_run);
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
@@ -7874,6 +7996,7 @@ impl App {
                     lead_in_timing,
                     course_display_carry,
                     course_display_totals,
+                    course_display_timing,
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
@@ -8911,6 +9034,20 @@ mod tests {
     }
 
     #[test]
+    fn sync_offset_change_uses_millisecond_quantization() {
+        assert_eq!(sync_offset_delta_seconds(-0.0421, -0.0424), None);
+        assert_eq!(sync_change_line("Global Offset", -0.0421, -0.0424), None);
+
+        let delta = sync_offset_delta_seconds(-0.0424, -0.0426).expect("changed by one ms");
+        assert!((delta + 0.001).abs() < f32::EPSILON);
+        assert_eq!(sync_offset_target_seconds(-0.0424, -0.0426), Some(-0.043));
+        assert_eq!(
+            sync_change_line("Global Offset", -0.0424, -0.0426).as_deref(),
+            Some("Global Offset from -0.042 to -0.043 (notes later)")
+        );
+    }
+
+    #[test]
     fn song_lua_video_paths_filter_and_dedupe_video_sprites() {
         let movie = PathBuf::from("badapple.AVI");
         let overlays = vec![
@@ -9254,6 +9391,113 @@ mod tests {
         assert!((song_page.score_percent - 1.0).abs() <= f64::EPSILON);
         assert!(!course_page.histogram.bins.is_empty());
         assert_eq!(course_page.scatter.len(), 1);
+    }
+
+    #[test]
+    fn course_summary_merges_column_judgments_from_song_pages() {
+        let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
+        let side = profile::PlayerSide::P2;
+        let mut course_score = std::array::from_fn(|_| None);
+        course_score[0] = Some(test_score_info(
+            song.clone(),
+            side,
+            "course",
+            ScrollSpeedSetting::default(),
+            1.0,
+        ));
+        let mut course_page = evaluation::init_from_score_info(course_score, 120.0);
+
+        let mut first = std::array::from_fn(|_| None);
+        let mut first_p2 = test_score_info(
+            song.clone(),
+            side,
+            "stage-a",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        first_p2.column_judgments = vec![
+            evaluation::ColumnJudgments {
+                w0: 1,
+                w1: 2,
+                early_w1: 1,
+                early_total_w0: 1,
+                held_miss: 1,
+                ..Default::default()
+            },
+            evaluation::ColumnJudgments {
+                w2: 3,
+                miss: 1,
+                early_w2: 2,
+                early_total_w2: 2,
+                ..Default::default()
+            },
+        ];
+        first[0] = Some(first_p2);
+        let mut ignored_p1 = test_score_info(
+            song.clone(),
+            profile::PlayerSide::P1,
+            "ignored",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        ignored_p1.column_judgments = vec![evaluation::ColumnJudgments {
+            w4: 1000,
+            ..Default::default()
+        }];
+        first[1] = Some(ignored_p1);
+        let first_page = evaluation::init_from_score_info(first, 60.0);
+
+        let mut second = std::array::from_fn(|_| None);
+        let mut second_p2 = test_score_info(
+            song.clone(),
+            side,
+            "stage-b",
+            ScrollSpeedSetting::default(),
+            1.0,
+        );
+        second_p2.column_judgments = vec![
+            evaluation::ColumnJudgments {
+                w0: 4,
+                w3: 5,
+                early_w3: 1,
+                early_total_w3: 1,
+                held_miss: 2,
+                ..Default::default()
+            },
+            evaluation::ColumnJudgments::default(),
+            evaluation::ColumnJudgments {
+                w5: 6,
+                early_w5: 3,
+                early_total_w5: 4,
+                ..Default::default()
+            },
+        ];
+        second[0] = Some(second_p2);
+        let second_page = evaluation::init_from_score_info(second, 60.0);
+
+        apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
+
+        let columns = &course_page.score_info[0]
+            .as_ref()
+            .expect("course summary score")
+            .column_judgments;
+        assert_eq!(columns.len(), 3);
+        assert_eq!(columns[0].w0, 5);
+        assert_eq!(columns[0].w1, 2);
+        assert_eq!(columns[0].w3, 5);
+        assert_eq!(columns[0].w4, 0);
+        assert_eq!(columns[0].early_w1, 1);
+        assert_eq!(columns[0].early_w3, 1);
+        assert_eq!(columns[0].early_total_w0, 1);
+        assert_eq!(columns[0].early_total_w3, 1);
+        assert_eq!(columns[0].held_miss, 3);
+        assert_eq!(columns[1].w2, 3);
+        assert_eq!(columns[1].miss, 1);
+        assert_eq!(columns[1].early_w2, 2);
+        assert_eq!(columns[1].early_total_w2, 2);
+        assert_eq!(columns[2].w5, 6);
+        assert_eq!(columns[2].early_w5, 3);
+        assert_eq!(columns[2].early_total_w5, 4);
     }
 
     #[test]

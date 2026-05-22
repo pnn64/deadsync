@@ -2466,6 +2466,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         show_music_wheel_lamps: true,
         itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
         itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+        song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+        expanded_pack_name: None,
         allow_online_fetch: false,
         new_pack_names: None,
         pack_sync_prefs: None,

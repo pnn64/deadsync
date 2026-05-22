@@ -187,6 +187,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::RandomBackgroundMode,
+        label: lookup_key("OptionsMachine", "RandomMovies"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("OptionsMachine", "RandomMovies"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::VersionOverlay,
         label: lookup_key("OptionsMachine", "VersionOverlay"),
         choices: &[
@@ -376,6 +385,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchRandomBackgroundMode,
+        name: lookup_key("OptionsMachine", "RandomMovies"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "RandomMoviesHelp",
+        ))],
+    },
+    Item {
         id: ItemId::MchVersionOverlay,
         name: lookup_key("OptionsMachine", "VersionOverlay"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -419,6 +436,11 @@ impl ChoiceEnum for MachineFont {
 impl ChoiceEnum for MachineBarColor {
     const ALL: &'static [Self] = &[Self::Default, Self::Colored, Self::Transparent];
     const DEFAULT: Self = Self::Default;
+}
+
+impl ChoiceEnum for RandomBackgroundMode {
+    const ALL: &'static [Self] = &[Self::Off, Self::RandomMovies];
+    const DEFAULT: Self = Self::Off;
 }
 
 impl ChoiceEnum for DefaultSyncOffset {

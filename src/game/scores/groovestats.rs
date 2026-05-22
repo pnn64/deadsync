@@ -52,8 +52,8 @@ struct GrooveStatsSubmitUiEntry {
 }
 
 static GROOVESTATS_SUBMIT_UI_STATUS: std::sync::LazyLock<
-    Mutex<[Option<GrooveStatsSubmitUiEntry>; 2]>,
-> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+    Mutex<[Vec<GrooveStatsSubmitUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
 static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
@@ -65,8 +65,8 @@ struct GrooveStatsSubmitEventUiEntry {
 }
 
 static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
-    Mutex<[Option<GrooveStatsSubmitEventUiEntry>; 2]>,
-> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+    Mutex<[Vec<GrooveStatsSubmitEventUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
 
 #[derive(Debug, Clone)]
 struct GrooveStatsSubmitRetryEntry {
@@ -113,9 +113,17 @@ const fn groovestats_status_is_auto_retryable(status: GrooveStatsSubmitUiStatus)
     matches!(status, GrooveStatsSubmitUiStatus::TimedOut)
 }
 
-static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<
-    Mutex<[Option<GrooveStatsSubmitRetryEntry>; 2]>,
-> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<Mutex<[Vec<GrooveStatsSubmitRetryEntry>; 2]>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
+
+const GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
+
+#[inline(always)]
+fn groovestats_trim_submit_retry_entries(entries: &mut Vec<GrooveStatsSubmitRetryEntry>) {
+    if entries.len() > GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE {
+        entries.drain(0..entries.len() - GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE);
+    }
+}
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -352,13 +360,7 @@ fn groovestats_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &st
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let slot = &mut state[submit_side_ix(side)];
-    if slot
-        .as_ref()
-        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        *slot = None;
-    }
+    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -368,13 +370,7 @@ fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let slot = &mut state[submit_side_ix(side)];
-    if slot
-        .as_ref()
-        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        *slot = None;
-    }
+    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -384,13 +380,7 @@ fn groovestats_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let slot = &mut state[submit_side_ix(side)];
-    if slot
-        .as_ref()
-        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        *slot = None;
-    }
+    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -404,12 +394,21 @@ fn groovestats_set_submit_ui_status(
     if hash.is_empty() {
         return;
     }
-    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[submit_side_ix(side)] =
-        Some(GrooveStatsSubmitUiEntry {
-            chart_hash: hash.to_string(),
-            token,
-            status,
-        });
+    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
+    let entries = &mut state[submit_side_ix(side)];
+    if let Some(entry) = entries
+        .iter_mut()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        entry.token = token;
+        entry.status = status;
+        return;
+    }
+    entries.push(GrooveStatsSubmitUiEntry {
+        chart_hash: hash.to_string(),
+        token,
+        status,
+    });
 }
 
 #[inline(always)]
@@ -419,11 +418,18 @@ fn groovestats_update_submit_ui_status_if_token(
     token: u64,
     status: GrooveStatsSubmitUiStatus,
 ) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let Some(entry) = state[submit_side_ix(side)].as_mut() else {
+    let Some(entry) = state[submit_side_ix(side)]
+        .iter_mut()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    else {
         return false;
     };
-    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+    if entry.token != token {
         return false;
     }
     entry.status = status;
@@ -436,13 +442,23 @@ fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, 
     if hash.is_empty() {
         return;
     }
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[submit_side_ix(side)] =
-        Some(GrooveStatsSubmitEventUiEntry {
-            chart_hash: hash.to_string(),
-            token,
-            itl_progress: None,
-            record_banner: None,
-        });
+    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
+    let entries = &mut state[submit_side_ix(side)];
+    if let Some(entry) = entries
+        .iter_mut()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        entry.token = token;
+        entry.itl_progress = None;
+        entry.record_banner = None;
+        return;
+    }
+    entries.push(GrooveStatsSubmitEventUiEntry {
+        chart_hash: hash.to_string(),
+        token,
+        itl_progress: None,
+        record_banner: None,
+    });
 }
 
 #[inline(always)]
@@ -453,11 +469,18 @@ fn groovestats_update_submit_event_ui_if_token(
     itl_progress: Option<ItlEventProgress>,
     record_banner: Option<GrooveStatsSubmitRecordBanner>,
 ) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let Some(entry) = state[submit_side_ix(side)].as_mut() else {
+    let Some(entry) = state[submit_side_ix(side)]
+        .iter_mut()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    else {
         return;
     };
-    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+    if entry.token != token {
         return;
     }
     entry.itl_progress = itl_progress;
@@ -486,7 +509,17 @@ fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
         return;
     }
     let side = entry.side;
-    GROOVESTATS_SUBMIT_RETRY.lock().unwrap()[submit_side_ix(side)] = Some(entry);
+    let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    let entries = &mut state[submit_side_ix(side)];
+    if let Some(stored) = entries
+        .iter_mut()
+        .find(|stored| stored.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *stored = entry;
+        return;
+    }
+    entries.push(entry);
+    groovestats_trim_submit_retry_entries(entries);
 }
 
 pub fn get_groovestats_submit_ui_status_for_side(
@@ -498,8 +531,8 @@ pub fn get_groovestats_submit_ui_status_for_side(
         return None;
     }
     GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[submit_side_ix(side)]
-        .as_ref()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .iter()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .map(|entry| entry.status)
 }
 
@@ -512,8 +545,8 @@ pub fn get_groovestats_submit_itl_progress_for_side(
         return None;
     }
     GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[submit_side_ix(side)]
-        .as_ref()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .iter()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.itl_progress.clone())
 }
 
@@ -526,8 +559,8 @@ pub fn get_groovestats_submit_record_banner_for_side(
         return None;
     }
     GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[submit_side_ix(side)]
-        .as_ref()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .iter()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.record_banner)
 }
 
@@ -569,6 +602,7 @@ fn groovestats_eval_state(
     music_rate: f32,
     autoplay_used: bool,
     is_course_mode: bool,
+    course_submit_allowed: bool,
 ) -> GrooveStatsEvalState {
     let chart_type = chart.chart_type.trim().to_ascii_lowercase();
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -588,7 +622,7 @@ fn groovestats_eval_state(
     let mut checks = [true; GROOVESTATS_REASON_COUNT];
     checks[0] = chart_type.starts_with("dance") || chart_type.starts_with("pump");
     checks[1] = !chart_type.contains("solo");
-    checks[2] = !is_course_mode;
+    checks[2] = !is_course_mode || course_submit_allowed;
     checks[3] = true;
     checks[4] = true;
     checks[5] = true;
@@ -708,6 +742,7 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.music_rate,
         gs.autoplay_used,
         gs.course_display_totals.is_some(),
+        crate::config::get().autosubmit_course_scores_individually,
     );
     if state.valid
         && gs.song.has_lua
@@ -757,7 +792,7 @@ fn groovestats_submit_invalid_reason(
     if song_has_lua && !lua_chart_submit_allowed(chart.short_hash.as_str()) {
         return Some("simfile relies on lua".to_string());
     }
-    groovestats_eval_state(chart, profile, music_rate, false, false)
+    groovestats_eval_state(chart, profile, music_rate, false, false, false)
         .reason_lines
         .into_iter()
         .next()
@@ -1340,9 +1375,9 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         );
         return;
     }
-    if gs.course_display_totals.is_some() {
+    if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
         debug!(
-            "Skipping {} submit: course mode is unsupported by the old submit API.",
+            "Skipping {} submit: course per-song autosubmit is disabled.",
             online::groovestats_service_name()
         );
         return;
@@ -1500,10 +1535,9 @@ fn retry_groovestats_submit_inner(
     }
     let entry = {
         let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let slot = &mut lock[submit_side_ix(side)];
-        let Some(stored) = slot
-            .as_mut()
-            .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        let Some(stored) = lock[submit_side_ix(side)]
+            .iter_mut()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         else {
             return false;
         };
@@ -1551,8 +1585,8 @@ fn groovestats_record_submit_failure(
 ) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
     let Some(entry) = lock[submit_side_ix(side)]
-        .as_mut()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
+        .iter_mut()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
     else {
         return;
     };
@@ -1569,28 +1603,30 @@ fn groovestats_record_submit_failure(
     entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
 }
 
-/// Resets all retry/backoff bookkeeping after a successful submit so the next
-/// failure (if any) starts from a fresh schedule. Called from the worker's
-/// success path when the status update was accepted.
+/// Clears retry/backoff bookkeeping after a successful submit. Called from the
+/// worker's success path when the status update was accepted.
 fn groovestats_record_submit_success(side: profile::PlayerSide, chart_hash: &str) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let Some(entry) = lock[submit_side_ix(side)]
-        .as_mut()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
-    else {
-        return;
-    };
-    entry.retry_attempt = 0;
-    entry.next_retry_at = None;
+    lock[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(chart_hash));
 }
 
 /// Returns the seconds remaining until the next retry is allowed (manual
 /// cooldown) or scheduled (auto). `Some(0)` means the gate has just elapsed
 /// or the auto-retry is due to fire on the next tick. `None` means no gate
 /// is currently armed (bare `F5 Retry`).
-pub fn groovestats_next_retry_remaining_secs(side: profile::PlayerSide) -> Option<u32> {
+pub fn groovestats_next_retry_remaining_secs(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
     let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let target = lock[submit_side_ix(side)].as_ref()?.next_retry_at?;
+    let target = lock[submit_side_ix(side)]
+        .iter()
+        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))?
+        .next_retry_at?;
     Some(crate::game::scores::duration_to_ceil_secs(
         target.saturating_duration_since(Instant::now()),
     ))
@@ -1600,19 +1636,26 @@ pub fn groovestats_next_retry_remaining_secs(side: profile::PlayerSide) -> Optio
 /// the tick driver (i.e., the current UI status is auto-retryable AND the
 /// auto-retry budget hasn't been exhausted). When false, any pending
 /// `next_retry_at` is acting purely as a manual F5 cooldown gate.
-pub fn groovestats_next_retry_is_auto(side: profile::PlayerSide) -> bool {
-    let (chart_hash, attempt) = {
+pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile::PlayerSide) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
+    let attempt = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let Some(entry) = lock[submit_side_ix(side)].as_ref() else {
+        let Some(entry) = lock[submit_side_ix(side)]
+            .iter()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        else {
             return false;
         };
-        (entry.chart_hash.clone(), entry.retry_attempt)
+        entry.retry_attempt
     };
     if attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
         return false;
     }
     matches!(
-        get_groovestats_submit_ui_status_for_side(&chart_hash, side),
+        get_groovestats_submit_ui_status_for_side(hash, side),
         Some(s) if groovestats_status_is_auto_retryable(s)
     )
 }
@@ -1629,7 +1672,7 @@ pub fn tick_groovestats_auto_retries() -> bool {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
         let now = Instant::now();
         lock.iter()
-            .flatten()
+            .flat_map(|entries| entries.iter())
             .filter_map(|entry| {
                 entry
                     .next_retry_at
@@ -1704,9 +1747,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn groovestats_payload_serializes_old_api_shape() {
-        let payload = GrooveStatsSubmitPlayerPayload {
+    fn sample_player_payload() -> GrooveStatsSubmitPlayerPayload {
+        GrooveStatsSubmitPlayerPayload {
             rate: 150,
             score: 9_975,
             judgment_counts: GrooveStatsJudgmentCounts {
@@ -1736,7 +1778,34 @@ mod tests {
             used_cmod: true,
             comment: "[DS], FA+, 99.50EX, 2w, 1m, C650".to_string(),
             player_options: "{\"SpeedModType\":2,\"SpeedMod\":650}".to_string(),
+        }
+    }
+
+    fn sample_retry_entry(hash: &str, side: profile::PlayerSide) -> GrooveStatsSubmitRetryEntry {
+        let slot = if side == profile::PlayerSide::P1 {
+            1
+        } else {
+            2
         };
+        GrooveStatsSubmitRetryEntry {
+            side,
+            slot,
+            chart_hash: hash.to_string(),
+            username: "PerfectTaste".to_string(),
+            profile_name: "PerfectTaste".to_string(),
+            profile_id: None,
+            itl_score_hundredths: None,
+            show_ex_score: true,
+            api_key: "test-api-key".to_string(),
+            payload: sample_player_payload(),
+            retry_attempt: 0,
+            next_retry_at: None,
+        }
+    }
+
+    #[test]
+    fn groovestats_payload_serializes_old_api_shape() {
+        let payload = sample_player_payload();
 
         let value = serde_json::to_value(&payload).expect("serialize GrooveStats submit payload");
         assert_eq!(value["rate"], json!(150));
@@ -1898,6 +1967,120 @@ mod tests {
             ),
             Some("simfile relies on lua".to_string())
         );
+    }
+
+    #[test]
+    fn groovestats_course_validity_follows_per_song_submit_setting() {
+        let chart = sample_chart("dance-single");
+        let profile = Profile::default();
+
+        assert!(!groovestats_eval_state(&chart, &profile, 1.0, false, true, false).valid);
+        assert!(groovestats_eval_state(&chart, &profile, 1.0, false, true, true).valid);
+    }
+
+    #[test]
+    fn groovestats_submit_ui_tracks_multiple_hashes_per_side() {
+        let side = profile::PlayerSide::P1;
+        let first = "gs-course-status-first";
+        let second = "gs-course-status-second";
+        groovestats_reset_submit_ui_status(side, first);
+        groovestats_reset_submit_ui_status(side, second);
+        groovestats_reset_submit_event_ui(side, first);
+        groovestats_reset_submit_event_ui(side, second);
+
+        groovestats_set_submit_ui_status(side, first, 11, GrooveStatsSubmitUiStatus::Submitting);
+        groovestats_set_submit_ui_status(side, second, 12, GrooveStatsSubmitUiStatus::Submitted);
+        groovestats_arm_submit_event_ui(side, first, 11);
+        groovestats_arm_submit_event_ui(side, second, 12);
+        groovestats_update_submit_event_ui_if_token(
+            side,
+            first,
+            11,
+            None,
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest),
+        );
+        groovestats_update_submit_event_ui_if_token(
+            side,
+            second,
+            12,
+            None,
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord),
+        );
+
+        assert_eq!(
+            get_groovestats_submit_ui_status_for_side(first, side),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert_eq!(
+            get_groovestats_submit_ui_status_for_side(second, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+        assert_eq!(
+            get_groovestats_submit_record_banner_for_side(first, side),
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest)
+        );
+        assert_eq!(
+            get_groovestats_submit_record_banner_for_side(second, side),
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord)
+        );
+        assert!(groovestats_update_submit_ui_status_if_token(
+            side,
+            first,
+            11,
+            GrooveStatsSubmitUiStatus::TimedOut,
+        ));
+        assert!(!groovestats_update_submit_ui_status_if_token(
+            side,
+            first,
+            12,
+            GrooveStatsSubmitUiStatus::Submitted,
+        ));
+        assert_eq!(
+            get_groovestats_submit_ui_status_for_side(first, side),
+            Some(GrooveStatsSubmitUiStatus::TimedOut)
+        );
+        assert_eq!(
+            get_groovestats_submit_ui_status_for_side(second, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+
+        groovestats_reset_submit_ui_status(side, first);
+        groovestats_reset_submit_ui_status(side, second);
+        groovestats_reset_submit_event_ui(side, first);
+        groovestats_reset_submit_event_ui(side, second);
+    }
+
+    #[test]
+    fn groovestats_submit_retry_tracks_multiple_hashes_per_side() {
+        let side = profile::PlayerSide::P1;
+        let first = "gs-course-retry-first";
+        let second = "gs-course-retry-second";
+        groovestats_reset_submit_ui_status(side, first);
+        groovestats_reset_submit_ui_status(side, second);
+        groovestats_reset_submit_retry(side, first);
+        groovestats_reset_submit_retry(side, second);
+
+        groovestats_store_submit_retry(sample_retry_entry(first, side));
+        groovestats_store_submit_retry(sample_retry_entry(second, side));
+        groovestats_set_submit_ui_status(side, first, 21, GrooveStatsSubmitUiStatus::TimedOut);
+        groovestats_set_submit_ui_status(side, second, 22, GrooveStatsSubmitUiStatus::NetworkError);
+
+        groovestats_record_submit_failure(side, first, GrooveStatsSubmitUiStatus::TimedOut);
+        groovestats_record_submit_failure(side, second, GrooveStatsSubmitUiStatus::NetworkError);
+
+        assert!(groovestats_next_retry_remaining_secs(first, side).is_some());
+        assert!(groovestats_next_retry_is_auto(first, side));
+        assert!(groovestats_next_retry_remaining_secs(second, side).is_some());
+        assert!(!groovestats_next_retry_is_auto(second, side));
+
+        groovestats_record_submit_success(side, first);
+        assert_eq!(groovestats_next_retry_remaining_secs(first, side), None);
+        assert!(groovestats_next_retry_remaining_secs(second, side).is_some());
+
+        groovestats_reset_submit_ui_status(side, first);
+        groovestats_reset_submit_ui_status(side, second);
+        groovestats_reset_submit_retry(side, first);
+        groovestats_reset_submit_retry(side, second);
     }
 
     #[test]

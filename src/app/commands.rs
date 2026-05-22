@@ -15,6 +15,7 @@ pub(super) enum Command {
     SetBanner(Option<PathBuf>),
     SetCdTitle(Option<PathBuf>),
     SetPackBanner(Option<PathBuf>),
+    SetWheelItemBackgrounds(Vec<PathBuf>),
     SetDensityGraph {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
@@ -61,6 +62,7 @@ impl App {
             Command::SetBanner(_)
                 | Command::SetCdTitle(_)
                 | Command::SetPackBanner(_)
+                | Command::SetWheelItemBackgrounds(_)
                 | Command::SetDensityGraph { .. }
                 | Command::SetDynamicBackground(_)
                 | Command::PlayMusic { .. }
@@ -74,6 +76,7 @@ impl App {
             Command::SetBanner(_) => "SetBanner",
             Command::SetCdTitle(_) => "SetCdTitle",
             Command::SetPackBanner(_) => "SetPackBanner",
+            Command::SetWheelItemBackgrounds(_) => "SetWheelItemBackgrounds",
             Command::SetDensityGraph { .. } => "SetDensityGraph",
             Command::FetchOnlineGrade(_) => "FetchOnlineGrade",
             Command::PlayMusic { .. } => "PlayMusic",
@@ -101,6 +104,7 @@ impl App {
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
             Command::SetCdTitle(path_opt) => self.apply_cdtitle(path_opt),
             Command::SetPackBanner(path_opt) => self.apply_pack_banner(path_opt),
+            Command::SetWheelItemBackgrounds(paths) => self.apply_wheel_item_backgrounds(paths),
             Command::SetDensityGraph { slot, chart_opt } => {
                 self.apply_density_graph(slot, chart_opt)
             }
@@ -207,6 +211,13 @@ impl App {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
                 .set_pack_banner(&mut self.asset_manager, backend, path_opt);
+        }
+    }
+
+    fn apply_wheel_item_backgrounds(&mut self, paths: Vec<PathBuf>) {
+        if let Some(backend) = self.backend.as_mut() {
+            self.dynamic_media
+                .set_wheel_item_backgrounds(&mut self.asset_manager, backend, paths);
         }
     }
 

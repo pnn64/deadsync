@@ -462,6 +462,42 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
     );
 }
 
+/// Configure the overlay for a late-join scenario: the existing player is
+/// pre-readied with their current profile, and only `joining_side` needs to
+/// pick a profile. Used when a second player presses Start mid-set on a
+/// screen with an embedded profile-select overlay.
+pub fn enter_late_join(state: &mut State, joining_side: profile::PlayerSide) {
+    match joining_side {
+        profile::PlayerSide::P1 => {
+            state.p1_joined = true;
+            state.p1_ready = false;
+            state.p1_join_pulse_t = 0.0;
+            state.p2_joined = true;
+            state.p2_ready = true;
+            state.p2_join_pulse_t = JOIN_PULSE_DURATION;
+        }
+        profile::PlayerSide::P2 => {
+            state.p1_joined = true;
+            state.p1_ready = true;
+            state.p1_join_pulse_t = JOIN_PULSE_DURATION;
+            state.p2_joined = true;
+            state.p2_ready = false;
+            state.p2_join_pulse_t = 0.0;
+        }
+    }
+
+    state.p1_preview_noteskin = preview_noteskin_for_choice(
+        &mut state.noteskin_cache,
+        &state.choices,
+        state.p1_selected_index,
+    );
+    state.p2_preview_noteskin = preview_noteskin_for_choice(
+        &mut state.noteskin_cache,
+        &state.choices,
+        state.p2_selected_index,
+    );
+}
+
 pub fn update(state: &mut State, dt: f32) {
     const BPM: f32 = 120.0;
     let dt = dt.max(0.0);

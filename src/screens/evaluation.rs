@@ -66,6 +66,7 @@ const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
+const AUTO_SUBMIT_GS_ICON_ZOOM: f32 = 0.2;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const SUBMIT_FOOTER_F5_LABEL: &str = "F5";
 const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
@@ -434,11 +435,11 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
     }
 }
 
-fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |miso_font| {
-            let mut w = font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+        asset_manager.with_font(font_key, |measure_font| {
+            let mut w = font::measure_line_width_logical(measure_font, text, all_fonts) as f32;
             if !w.is_finite() || w <= 0.0 {
                 w = 1.0;
             }
@@ -446,6 +447,10 @@ fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32
         });
     });
     out_w
+}
+
+fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+    measure_text_width(asset_manager, "miso", text, zoom)
 }
 
 fn submit_footer_lines(
@@ -909,7 +914,9 @@ fn course_graph_stripe_actors(
             xy(x, 0.0):
             setsize(w, graph_height):
             diffuse(STRIPE_RGBA[0], STRIPE_RGBA[1], STRIPE_RGBA[2], STRIPE_RGBA[3]):
-            z(2)
+            // The parent frame sits at z=2; keep local z at 0 so course
+            // stripes stay below the scatter mesh at z=3.
+            z(0)
         ));
     }
     actors
@@ -919,10 +926,12 @@ fn course_graph_stripe_actors(
 mod tests {
     use super::{
         CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
-        compute_column_judgments, course_graph_stage_spans, eval_grade_for_result, eval_pane_shift,
+        compute_column_judgments, course_graph_stage_spans, course_graph_stripe_actors,
+        eval_grade_for_result, eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate,
         stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
+    use crate::engine::present::actors::Actor;
     use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
@@ -988,6 +997,28 @@ mod tests {
         assert!((spans[1].1 - 300.0).abs() < 0.001);
         assert!((spans[2].0 - 400.0).abs() < 0.001);
         assert!((spans[2].1 - 100.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn course_graph_stripes_stay_below_scatter_mesh() {
+        let stages = [
+            test_course_graph_stage(10.0),
+            test_course_graph_stage(30.0),
+            test_course_graph_stage(10.0),
+        ];
+
+        let stripes = course_graph_stripe_actors(&stages, 500.0, 64.0);
+
+        assert_eq!(stripes.len(), 2);
+        for stripe in stripes {
+            let Actor::Sprite { z, .. } = stripe else {
+                panic!("course graph stripe should be a quad sprite");
+            };
+            assert_eq!(
+                z, 0,
+                "stripe quads are placed in a z=2 parent frame; local z must stay 0 so they do not draw over the z=3 scatter mesh"
+            );
+        }
     }
 
     fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
@@ -1603,6 +1634,16 @@ mod tests {
     }
 
     #[test]
+    fn eval_pane_skip_duplicate_advances_auto_switch_collision() {
+        let panes = eval_pane_cycle(false, false, true, false, false, false);
+
+        assert_eq!(
+            eval_pane_skip_duplicate(EvalPane::GrooveStats, EvalPane::GrooveStats, 1, &panes),
+            EvalPane::GrooveStatsEx
+        );
+    }
+
+    #[test]
     fn stage_in_stinger_uses_failed_text_for_disqualified_runs() {
         assert_eq!(
             stage_in_stinger_texture_key(false, true),
@@ -1729,7 +1770,7 @@ fn eval_has_test_input_pane() -> bool {
     crate::config::get().only_dedicated_menu_buttons
 }
 
-#[inline(always)]
+#[cfg(test)]
 fn eval_pane_shift(
     pane: EvalPane,
     dir: i32,
@@ -1739,20 +1780,37 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(
-        has_hard_ex,
-        has_qr,
-        has_gs,
-        has_itl,
-        has_arrowcloud,
-        eval_has_test_input_pane(),
-    );
+    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud, true);
+    eval_pane_shift_in_cycle(pane, dir, &panes)
+}
+
+#[inline(always)]
+fn eval_pane_shift_in_cycle(pane: EvalPane, dir: i32, panes: &[EvalPane]) -> EvalPane {
     let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
         return panes.first().copied().unwrap_or(EvalPane::Standard);
     };
     let step = if dir >= 0 { 1 } else { -1 };
     let next_idx = (cur_idx as i32 + step).rem_euclid(panes.len() as i32) as usize;
     panes[next_idx]
+}
+
+fn eval_pane_skip_duplicate(
+    pane: EvalPane,
+    other: EvalPane,
+    dir: i32,
+    panes: &[EvalPane],
+) -> EvalPane {
+    if panes.len() <= 1 {
+        return pane;
+    }
+    let mut next = pane;
+    for _ in 0..panes.len() {
+        if next != other {
+            return next;
+        }
+        next = eval_pane_shift_in_cycle(next, dir, panes);
+    }
+    next
 }
 
 #[inline(always)]
@@ -2089,6 +2147,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && passed
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
+                && (gs.course_display_totals.is_none()
+                    || cfg.autosubmit_course_scores_individually)
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
                 && !disqualified
@@ -2757,17 +2817,23 @@ pub fn update(state: &mut State, dt: f32) {
     sync_submit_record_sfx(state);
     scores::tick_groovestats_auto_retries();
     scores::tick_arrowcloud_auto_retries();
+    let play_style = profile::get_session_play_style();
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
             continue;
         }
-        let player_idx = if profile::get_session_play_style() == profile::PlayStyle::Versus {
+        let player_idx = if play_style == profile::PlayStyle::Versus {
             controller_idx
         } else {
             0
         };
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             continue;
+        };
+        let gs_side = if play_style == profile::PlayStyle::Versus {
+            [profile::PlayerSide::P1, profile::PlayerSide::P2][controller_idx]
+        } else {
+            profile::get_session_player_side()
         };
         if matches!(
             scores::get_groovestats_submit_ui_status_for_side(
@@ -2778,6 +2844,23 @@ pub fn update(state: &mut State, dt: f32) {
             Some(scores::GrooveStatsSubmitUiStatus::Submitted)
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
+            if play_style != profile::PlayStyle::Versus {
+                let panes = eval_pane_cycle(
+                    si.show_hard_ex_score,
+                    false,
+                    eval_has_gs_pane(state.allow_online_panes),
+                    eval_has_itl_pane(state.allow_online_panes, si),
+                    eval_has_arrowcloud_pane(state.allow_online_panes, gs_side),
+                    eval_has_test_input_pane(),
+                );
+                let other_idx = 1 - controller_idx;
+                state.active_pane[controller_idx] = eval_pane_skip_duplicate(
+                    state.active_pane[controller_idx],
+                    state.active_pane[other_idx],
+                    1,
+                    &panes,
+                );
+            }
         }
     }
 }
@@ -3430,30 +3513,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         let has_itl = eval_has_itl_pane(has_online_panes, si);
         let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
 
-        state.active_pane[controller_idx] = eval_pane_shift(
-            state.active_pane[controller_idx],
-            dir,
+        let panes = eval_pane_cycle(
             has_hard_ex,
             has_qr,
             has_gs,
             has_itl,
             has_arrowcloud,
+            eval_has_test_input_pane(),
         );
+        state.active_pane[controller_idx] =
+            eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
         // Don't allow duplicate panes in single/double.
         if play_style != profile::PlayStyle::Versus {
             let other_idx = 1 - controller_idx;
-            if state.active_pane[controller_idx] == state.active_pane[other_idx] {
-                state.active_pane[controller_idx] = eval_pane_shift(
-                    state.active_pane[controller_idx],
-                    dir,
-                    has_hard_ex,
-                    has_qr,
-                    has_gs,
-                    has_itl,
-                    has_arrowcloud,
-                );
-            }
+            state.active_pane[controller_idx] = eval_pane_skip_duplicate(
+                state.active_pane[controller_idx],
+                state.active_pane[other_idx],
+                dir,
+                &panes,
+            );
         }
         state.active_pane[controller_idx] != old_pane
     };
@@ -4809,6 +4888,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 let banner_text = submit_record_text(banner);
                 let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
+                let banner_w = measure_text_width(
+                    asset_manager,
+                    banner_font,
+                    &banner_text,
+                    AUTO_SUBMIT_RECORD_TEXT_ZOOM,
+                );
+                actors.push(act!(sprite("GrooveStats.png"):
+                    align(1.0, 0.5):
+                    xy(x - banner_w * 0.5, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    zoom(AUTO_SUBMIT_GS_ICON_ZOOM):
+                    z(100)
+                ));
                 actors.push(act!(text:
                     font(banner_font):
                     settext(banner_text):
@@ -4833,10 +4924,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 side,
             )
             .or(state.submit_arrowcloud_fallback[player_idx]);
-            let groovestats_next_retry = scores::groovestats_next_retry_remaining_secs(side);
-            let arrowcloud_next_retry = scores::arrowcloud_next_retry_remaining_secs(side);
-            let groovestats_next_retry_is_auto = scores::groovestats_next_retry_is_auto(side);
-            let arrowcloud_next_retry_is_auto = scores::arrowcloud_next_retry_is_auto(side);
+            let groovestats_next_retry =
+                scores::groovestats_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
+            let arrowcloud_next_retry =
+                scores::arrowcloud_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
+            let groovestats_next_retry_is_auto =
+                scores::groovestats_next_retry_is_auto(si.chart.short_hash.as_str(), side);
+            let arrowcloud_next_retry_is_auto =
+                scores::arrowcloud_next_retry_is_auto(si.chart.short_hash.as_str(), side);
             let lines = submit_footer_lines(
                 si.expected_groovestats_submit,
                 si.expected_arrowcloud_submit,

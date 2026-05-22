@@ -299,6 +299,54 @@ fn service_child_three_key_start_moves_down_one_row() {
 }
 
 #[test]
+fn online_scoring_three_key_start_opens_gs_options() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::OnlineScoring);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::OnlineScoring,
+        SubRowId::GsBsOptions,
+    );
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.pending_submenu_kind, Some(SubmenuKind::GrooveStats));
+    assert_eq!(
+        state.pending_submenu_parent_kind,
+        Some(SubmenuKind::OnlineScoring)
+    );
+    assert_eq!(
+        state.submenu_transition,
+        SubmenuTransition::FadeOutToSubmenu
+    );
+}
+
+#[test]
+fn online_scoring_three_key_start_opens_arrowcloud_options() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::OnlineScoring);
+    select_visible_row(
+        &mut state,
+        SubmenuKind::OnlineScoring,
+        SubRowId::ArrowCloudOptions,
+    );
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.pending_submenu_kind, Some(SubmenuKind::ArrowCloud));
+    assert_eq!(
+        state.pending_submenu_parent_kind,
+        Some(SubmenuKind::OnlineScoring)
+    );
+    assert_eq!(
+        state.submenu_transition,
+        SubmenuTransition::FadeOutToSubmenu
+    );
+}
+
+#[test]
 fn service_child_three_key_left_right_start_moves_up_one_row() {
     let asset_manager = AssetManager::new();
     let mut state = init();

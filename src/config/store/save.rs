@@ -237,8 +237,18 @@ fn push_saved_options(
     );
     push_line(
         content,
+        "SongSelectBG",
+        cfg.select_music_song_select_bg_mode.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         cfg.select_music_new_pack_mode.as_str(),
+    );
+    push_bool(
+        content,
+        "SelectMusicFolderStats",
+        cfg.show_select_music_folder_stats,
     );
     push_bool(
         content,
@@ -382,6 +392,11 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
     push_bool(content, "KeyboardFeatures", cfg.keyboard_features);
     push_line(content, "VisualStyle", cfg.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", cfg.show_video_backgrounds);
+    push_line(
+        content,
+        "RandomBackgroundMode",
+        cfg.random_background_mode.as_str(),
+    );
     push_bool(
         content,
         "MachineShowEvalSummary",

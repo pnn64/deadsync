@@ -55,6 +55,42 @@ impl FromStr for DefaultFailType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum RandomBackgroundMode {
+    #[default]
+    Off,
+    RandomMovies,
+}
+
+impl RandomBackgroundMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::RandomMovies => "RandomMovies",
+        }
+    }
+}
+
+impl FromStr for RandomBackgroundMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "none" | "false" | "0" => Ok(Self::Off),
+            "randommovies" | "randommovie" | "movies" | "movie" | "on" | "true" | "1" => {
+                Ok(Self::RandomMovies)
+            }
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum DefaultSyncOffset {
     #[default]
     Null,
@@ -210,6 +246,43 @@ impl FromStr for SelectMusicItlWheelMode {
             "off" | "disable" | "disabled" => Ok(Self::Off),
             "score" | "scores" => Ok(Self::Score),
             "pointsandscore" | "pointsscore" | "points" => Ok(Self::PointsAndScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicSongSelectBgMode {
+    #[default]
+    Off,
+    Banner,
+    Bg,
+}
+
+impl SelectMusicSongSelectBgMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Banner => "Banner",
+            Self::Bg => "BG",
+        }
+    }
+}
+
+impl FromStr for SelectMusicSongSelectBgMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "none" | "false" | "0" => Ok(Self::Off),
+            "banner" | "banners" => Ok(Self::Banner),
+            "bg" | "background" | "backgrounds" => Ok(Self::Bg),
             _ => Err(()),
         }
     }
@@ -917,6 +990,35 @@ mod tests {
     }
 
     #[test]
+    fn random_background_mode_defaults_to_off() {
+        assert_eq!(RandomBackgroundMode::default(), RandomBackgroundMode::Off);
+    }
+
+    #[test]
+    fn random_background_mode_round_trips() {
+        assert_eq!(
+            RandomBackgroundMode::from_str(RandomBackgroundMode::Off.as_str()),
+            Ok(RandomBackgroundMode::Off)
+        );
+        assert_eq!(
+            RandomBackgroundMode::from_str(RandomBackgroundMode::RandomMovies.as_str()),
+            Ok(RandomBackgroundMode::RandomMovies)
+        );
+    }
+
+    #[test]
+    fn random_background_mode_accepts_common_aliases() {
+        assert_eq!(
+            RandomBackgroundMode::from_str("Random Movies"),
+            Ok(RandomBackgroundMode::RandomMovies)
+        );
+        assert_eq!(
+            RandomBackgroundMode::from_str("0"),
+            Ok(RandomBackgroundMode::Off)
+        );
+    }
+
+    #[test]
     fn default_sync_offset_defaults_to_null() {
         assert_eq!(DefaultSyncOffset::default(), DefaultSyncOffset::Null);
     }
@@ -930,6 +1032,36 @@ mod tests {
         assert_eq!(
             DefaultSyncOffset::from_str(DefaultSyncOffset::Itg.as_str()),
             Ok(DefaultSyncOffset::Itg)
+        );
+    }
+
+    #[test]
+    fn song_select_bg_mode_defaults_to_off() {
+        assert_eq!(
+            SelectMusicSongSelectBgMode::default(),
+            SelectMusicSongSelectBgMode::Off
+        );
+    }
+
+    #[test]
+    fn song_select_bg_mode_round_trips() {
+        for value in [
+            SelectMusicSongSelectBgMode::Off,
+            SelectMusicSongSelectBgMode::Banner,
+            SelectMusicSongSelectBgMode::Bg,
+        ] {
+            assert_eq!(
+                SelectMusicSongSelectBgMode::from_str(value.as_str()),
+                Ok(value)
+            );
+        }
+    }
+
+    #[test]
+    fn song_select_bg_mode_accepts_background_alias() {
+        assert_eq!(
+            SelectMusicSongSelectBgMode::from_str("Background"),
+            Ok(SelectMusicSongSelectBgMode::Bg)
         );
     }
 }

@@ -6,6 +6,7 @@ pub mod note;
 pub mod online;
 pub mod parsing;
 pub mod profile;
+pub mod random_movies;
 pub mod scores;
 pub mod scroll;
 pub mod song;

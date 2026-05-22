@@ -2082,6 +2082,24 @@ fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
 }
 
 #[inline(always)]
+pub(crate) fn hold_indicator_column_offset(
+    column_xs: Option<&[i32]>,
+    column: usize,
+    num_cols: usize,
+    spacing_mult: f32,
+    field_zoom: f32,
+) -> f32 {
+    // ITGmania Player::Update positions HoldJudgment actors from
+    // ArrowEffects::GetXPos(), then applies fX *= (1 - Mini * 0.5).
+    // DeadSync's field_zoom is that same Mini-derived field scale.
+    if let Some(x) = column_xs.and_then(|xs| xs.get(column)) {
+        return *x as f32 * spacing_mult * field_zoom;
+    }
+    let center = (num_cols.saturating_sub(1) as f32) * 0.5;
+    (column as f32 - center) * TARGET_ARROW_PIXEL_SIZE * field_zoom
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -2901,7 +2919,11 @@ fn zmod_combo_quint_active(state: &State, player_idx: usize, profile: &profile::
     if !profile.show_fa_plus_window || player_idx >= state.num_players {
         return false;
     }
-    let counts = state.live_window_counts[player_idx];
+    let counts = if profile.combo_mode == profile::ComboMode::FullCombo {
+        crate::game::gameplay::display_window_counts(state, player_idx, None)
+    } else {
+        state.players[player_idx].current_combo_window_counts
+    };
     counts.w0 > 0
         && counts.w1 == 0
         && counts.w2 == 0
@@ -7785,9 +7807,8 @@ pub fn build_bundles(
             styles[style_count] = profile::ErrorBarStyle::Average;
             style_count += 1;
         }
-        let fa_plus_window_s = Some(crate::game::gameplay::player_fa_plus_window_s(
-            state, player_idx,
-        ));
+        let blue_fantastic_window_s =
+            Some(crate::game::gameplay::player_blue_window_ms(state, player_idx) / 1000.0);
 
         for style in styles.into_iter().take(style_count) {
             match style {
@@ -7802,7 +7823,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -7926,7 +7947,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -8019,7 +8040,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -8456,11 +8477,15 @@ pub fn build_bundles(
                 receptor_y_normal + HELD_MISS_OFFSET_FROM_RECEPTOR,
                 receptor_y_reverse - HELD_MISS_OFFSET_FROM_RECEPTOR,
             );
-            let column_offset = state.noteskin[player_idx]
-                .as_ref()
-                .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32 * spacing_mult)
-                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            let column_offset = hold_indicator_column_offset(
+                state.noteskin[player_idx]
+                    .as_ref()
+                    .map(|ns| ns.column_xs.as_slice()),
+                i,
+                num_cols,
+                spacing_mult,
+                field_zoom,
+            );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
                 xy(playfield_center_x + column_offset, y):
@@ -8507,14 +8532,18 @@ pub fn build_bundles(
                 receptor_y_normal + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
                 receptor_y_reverse - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
             );
-            let column_offset = state.noteskin[player_idx]
-                .as_ref()
-                .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32 * spacing_mult)
-                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            let column_offset = hold_indicator_column_offset(
+                state.noteskin[player_idx]
+                    .as_ref()
+                    .map(|ns| ns.column_xs.as_slice()),
+                i,
+                num_cols,
+                spacing_mult,
+                field_zoom,
+            );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
-                xy(judgment_x + column_offset, hold_judgment_y):
+                xy(playfield_center_x + column_offset, hold_judgment_y):
                 z(195):
                 setstate(frame_index):
                 zoom(zoom):
@@ -8577,16 +8606,16 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        hold_body_segment_budget, hold_draw_span, hold_explosion_active,
-        hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
-        note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
-        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
-        receptor_row_center, scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows,
-        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
-        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        error_bar_boundaries_s, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
+        hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_offset,
+        hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
+        hud_layout_ys, hud_y, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
+        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
+        note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
+        offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
+        push_transform_parts, receptor_row_center, scroll_receptor_y, song_lua_hides_note_window,
+        tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::assets;
     use crate::engine::gfx::BlendMode;
@@ -9517,6 +9546,30 @@ mod tests {
     }
 
     #[test]
+    fn hold_indicator_columns_scale_with_mini_field_zoom() {
+        let columns = [-96, -32, 32, 96];
+        let field_zoom_80_mini = 1.0 - 0.8 * 0.5;
+        const EPS: f32 = 1e-5;
+
+        assert!(
+            (hold_indicator_column_offset(Some(&columns), 0, 4, 1.0, field_zoom_80_mini) + 57.6)
+                .abs()
+                <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(Some(&columns), 3, 4, 1.0, field_zoom_80_mini) - 57.6)
+                .abs()
+                <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(None, 0, 4, 1.0, field_zoom_80_mini) + 57.6).abs() <= EPS
+        );
+        assert!(
+            (hold_indicator_column_offset(None, 3, 4, 1.0, field_zoom_80_mini) - 57.6).abs() <= EPS
+        );
+    }
+
+    #[test]
     fn hud_layout_offsets_apply_independently() {
         let profile = profile::Profile {
             error_bar_active_mask: profile::ERROR_BAR_BIT_MONOCHROME,
@@ -9684,6 +9737,21 @@ mod tests {
 
         assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
         assert_eq!(tap_judgment_rows(&profile, &white, 7), (1, None));
+    }
+
+    #[test]
+    fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
+        let windows = crate::game::timing::TimingProfile::default_itg_with_fa_plus().windows_s;
+        let (bounds, len) = error_bar_boundaries_s(
+            windows,
+            Some(crate::game::timing::FA_PLUS_W010_MS / 1000.0),
+            true,
+            profile::ErrorBarTrim::Fantastic,
+        );
+
+        assert_eq!(len, 2);
+        assert!((bounds[0] * 1000.0 - crate::game::timing::FA_PLUS_W010_MS).abs() <= 0.001);
+        assert!((bounds[1] - windows[0]).abs() <= 0.000001);
     }
 
     #[test]
