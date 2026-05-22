@@ -7807,9 +7807,8 @@ pub fn build_bundles(
             styles[style_count] = profile::ErrorBarStyle::Average;
             style_count += 1;
         }
-        let fa_plus_window_s = Some(crate::game::gameplay::player_fa_plus_window_s(
-            state, player_idx,
-        ));
+        let blue_fantastic_window_s =
+            Some(crate::game::gameplay::player_blue_window_ms(state, player_idx) / 1000.0);
 
         for style in styles.into_iter().take(style_count) {
             match style {
@@ -7824,7 +7823,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -7948,7 +7947,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -8041,7 +8040,7 @@ pub fn build_bundles(
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
                         state.timing_profile.windows_s,
-                        fa_plus_window_s,
+                        blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
                     );
@@ -8607,7 +8606,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        hold_body_segment_budget, hold_draw_span, hold_explosion_active,
+        error_bar_boundaries_s, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_offset,
         hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
         hud_layout_ys, hud_y, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
@@ -9738,6 +9737,21 @@ mod tests {
 
         assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
         assert_eq!(tap_judgment_rows(&profile, &white, 7), (1, None));
+    }
+
+    #[test]
+    fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
+        let windows = crate::game::timing::TimingProfile::default_itg_with_fa_plus().windows_s;
+        let (bounds, len) = error_bar_boundaries_s(
+            windows,
+            Some(crate::game::timing::FA_PLUS_W010_MS / 1000.0),
+            true,
+            profile::ErrorBarTrim::Fantastic,
+        );
+
+        assert_eq!(len, 2);
+        assert!((bounds[0] * 1000.0 - crate::game::timing::FA_PLUS_W010_MS).abs() <= 0.001);
+        assert!((bounds[1] - windows[0]).abs() <= 0.000001);
     }
 
     #[test]

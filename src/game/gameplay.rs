@@ -7054,7 +7054,7 @@ fn error_bar_register_tap(
     let show_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
     let show_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
     let show_fa_plus_window = prof.show_fa_plus_window;
-    let fa_plus_window_s = player_fa_plus_window_s(state, player);
+    let blue_fantastic_window_s = player_blue_window_ms(state, player) / 1000.0;
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
@@ -7076,7 +7076,7 @@ fn error_bar_register_tap(
 
     if show_text {
         let threshold_s = if show_fa_plus_window {
-            fa_plus_window_s
+            blue_fantastic_window_s
         } else {
             state.timing_profile.windows_s[0]
         };
@@ -8672,28 +8672,29 @@ mod tests {
         completed_row_flash_note_indices_and_judgment, count_rescore_tracks_on_row,
         crossed_mine_bounds_ns, crossed_mine_held_start_time,
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
-        enforce_max_simultaneous_notes, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        hit_mine, input_queue_cap, integrate_active_hold_to_time, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
-        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
-        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual,
-        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
-        trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, handle_input, hit_mine, input_queue_cap,
+        integrate_active_hold_to_time, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
+        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
+        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
+        score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
+        scored_hold_totals_with_carry, set_final_note_result, settle_completion_rows,
+        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_calories, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
+        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
+        trigger_note_receptor_feedback, trigger_receptor_step_pulse,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -10385,6 +10386,54 @@ return Def.ActorFrame{}
                 assert_eq!(last.started_at_screen_s, 12.0);
             },
         );
+    }
+
+    #[test]
+    fn error_bar_text_uses_10ms_blue_fantastic_threshold() {
+        let p1 = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            custom_fantastic_window: false,
+            error_bar_text: true,
+            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            ..profile::Profile::default()
+        };
+
+        let mut state = regression_state([p1, profile::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 8.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(8.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W0),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+        assert!(state.players[0].error_bar_text.is_none());
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 12.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W0),
+                miss_because_held: false,
+            },
+            1.1,
+        );
+
+        let text = state.players[0]
+            .error_bar_text
+            .expect("12ms should exceed Arrow Cloud's 10ms blue window");
+        assert_eq!(text.started_at, 4.0);
+        assert!(!text.early);
     }
 
     #[test]
