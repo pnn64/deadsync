@@ -940,6 +940,14 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             }
             continue;
         }
+        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+            arrowcloud_warn_submit_skip(
+                side,
+                chart_hash,
+                "course stage would have failed from normal life",
+            );
+            continue;
+        }
         let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
             arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;

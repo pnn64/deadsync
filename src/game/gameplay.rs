@@ -142,7 +142,11 @@ use self::judging::{
     effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
 };
 pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
-use self::life::{all_joined_players_failed, apply_life_change, is_player_dead, is_state_dead};
+pub use self::life::course_stage_life_submit_eligible;
+use self::life::{
+    all_joined_players_failed, apply_life_change, init_course_submit_life, is_player_dead,
+    is_state_dead,
+};
 #[cfg(test)]
 use self::note_result::{add_provisional_early_score, remove_provisional_early_score};
 use self::note_result::{register_provisional_early_result, set_final_note_result};
@@ -3271,6 +3275,26 @@ struct ExScoreInputs {
     mines_hit_for_score: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CourseSubmitLife {
+    life: f32,
+    combo_after_miss: u32,
+    is_failing: bool,
+    fail_time: Option<f32>,
+}
+
+impl CourseSubmitLife {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            life: 0.5,
+            combo_after_miss: 0,
+            is_failing: false,
+            fail_time: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
@@ -3306,6 +3330,7 @@ pub struct PlayerRuntime {
     pub mines_avoided: u32,
     hands_holding_count_for_stats: i32,
     failed_ex_score_inputs: Option<ExScoreInputs>,
+    course_submit_life: Option<CourseSubmitLife>,
 
     pub life_history: Vec<(f32, f32)>, // (time, life_value)
 
@@ -3429,6 +3454,7 @@ fn init_player_runtime() -> PlayerRuntime {
         mines_avoided: 0,
         hands_holding_count_for_stats: 0,
         failed_ex_score_inputs: None,
+        course_submit_life: None,
         life_history: Vec::with_capacity(10000),
         error_bar_mono_ticks: [None; 15],
         error_bar_mono_next: 0,
@@ -6228,7 +6254,11 @@ pub fn init(
 
     let finalize_started = Instant::now();
     let mut players = std::array::from_fn(|_| init_player_runtime());
+    let in_course_stage = course_display_totals.is_some();
     for p in 0..num_players {
+        if in_course_stage {
+            init_course_submit_life(&mut players[p]);
+        }
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
         apply_course_life_carry(&mut players[p], course_carry);
         apply_course_combo_carry(
@@ -11075,6 +11105,40 @@ return Def.ActorFrame{}
         super::apply_course_life_carry(&mut player, Some(carry));
 
         assert!((player.life - 0.32).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_submit_life_starts_at_normal_song_life() {
+        let mut player = super::init_player_runtime();
+        super::init_course_submit_life(&mut player);
+        let carry = super::CourseDisplayCarry {
+            life: 1.0,
+            ..Default::default()
+        };
+
+        super::apply_course_life_carry(&mut player, Some(carry));
+
+        let submit_life = player.course_submit_life.expect("course submit life");
+        assert!((player.life - 1.0).abs() <= f32::EPSILON);
+        assert!((submit_life.life - 0.5).abs() <= f32::EPSILON);
+        assert!(!submit_life.is_failing);
+    }
+
+    #[test]
+    fn course_submit_life_can_fail_while_course_life_survives() {
+        let mut player = super::init_player_runtime();
+        player.life = 1.0;
+        super::init_course_submit_life(&mut player);
+
+        super::apply_life_change(&mut player, 12.0, -0.6);
+
+        let submit_life = player.course_submit_life.expect("course submit life");
+        assert!((player.life - 0.4).abs() <= 0.000_001);
+        assert!(!player.is_failing);
+        assert_eq!(player.fail_time, None);
+        assert_eq!(submit_life.life, 0.0);
+        assert!(submit_life.is_failing);
+        assert_eq!(submit_life.fail_time, Some(12.0));
     }
 
     #[test]

@@ -2143,9 +2143,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             );
             let chart_hash = gs.charts[player_idx].short_hash.as_str();
             let lua_submit_allowed = scores::lua_submit_allowed(gs.song.has_lua, chart_hash);
+            let course_life_submit_eligible =
+                crate::game::gameplay::course_stage_life_submit_eligible(&gs, player_idx);
             let expected_groovestats_submit = cfg.enable_groovestats
                 && passed
                 && groovestats.valid
+                && course_life_submit_eligible
                 && prof.groovestats_is_pad_player
                 && (gs.course_display_totals.is_none()
                     || cfg.autosubmit_course_scores_individually)
@@ -2154,6 +2157,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && !disqualified
                 && (passed || (failed && cfg.submit_arrowcloud_fails))
                 && lua_submit_allowed
+                && course_life_submit_eligible
                 && (gs.course_display_totals.is_none()
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();

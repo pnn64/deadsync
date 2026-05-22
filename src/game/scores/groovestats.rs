@@ -777,6 +777,13 @@ pub fn groovestats_eval_state_from_gameplay(
             .push("Only passing scores are submitted.".to_string());
         return state;
     }
+    if state.valid && !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Course stage would have failed from normal life.".to_string());
+        return state;
+    }
     if state.valid && passed {
         state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
     }
@@ -1438,6 +1445,14 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
                 online::groovestats_service_name(),
                 side,
                 chart_hash
+            );
+            continue;
+        }
+        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+            groovestats_warn_submit_skip(
+                side,
+                chart_hash,
+                "course stage would have failed from normal life",
             );
             continue;
         }
