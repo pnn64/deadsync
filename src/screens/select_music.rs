@@ -80,11 +80,6 @@ const SYNC_SONG_TAP_STEP_SECONDS: f32 = 0.001;
 const SYNC_SONG_HOLD_INITIAL_DELAY: Duration = Duration::from_millis(250);
 const SYNC_SONG_HOLD_SFX_INTERVAL: Duration = Duration::from_millis(75);
 
-// While the analyzer is `Running` the heat-map sprite is hidden so users
-// don't see the partial fingerprint filling row by row. Once the phase
-// transitions away from Running the sprite eases in via tint alpha over
-// `SYNC_HEAT_REVEAL_DURATION` for a clean reveal.
-const SYNC_HEAT_REVEAL_DURATION: Duration = Duration::from_millis(420);
 // Beat rate is suppressed for the first ~half second of analysis so the
 // computed value isn't dominated by warm-up noise.
 const SYNC_BEAT_RATE_MIN_ELAPSED_SECS: f32 = 0.5;
@@ -5090,19 +5085,6 @@ fn set_sync_overlay_phase(overlay: &mut NullOrDieOverlayData, phase: NullOrDieOv
     }
 }
 
-fn sync_heat_reveal_alpha(overlay: &NullOrDieOverlayData) -> f32 {
-    if overlay.phase == NullOrDieOverlayPhase::Running {
-        return 0.0;
-    }
-    let elapsed = overlay.phase_changed_at.elapsed().as_secs_f32();
-    let duration = SYNC_HEAT_REVEAL_DURATION.as_secs_f32();
-    if duration <= 0.0 {
-        return 1.0;
-    }
-    let t = (elapsed / duration).clamp(0.0, 1.0);
-    1.0 - (1.0 - t).powi(2)
-}
-
 fn sync_beat_rate(overlay: &NullOrDieOverlayData) -> Option<u32> {
     if overlay.phase != NullOrDieOverlayPhase::Running {
         return None;
@@ -5276,15 +5258,14 @@ fn build_null_or_die_overlay(
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(SYNC_OVERLAY_Z + 4)
     ));
-    let heat_alpha = sync_heat_reveal_alpha(overlay);
-    if heat_alpha > 0.0 && sync_heat_source(overlay).is_some() {
+    if sync_heat_source(overlay).is_some() {
         actors.push(Actor::Sprite {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
             world_z: 0.0,
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             source: SpriteSource::TextureStatic(SYNC_HEAT_TEXTURE_KEY),
-            tint: [1.0, 1.0, 1.0, heat_alpha],
+            tint: [1.0, 1.0, 1.0, SYNC_HEAT_ALPHA],
             glow: [0.0, 0.0, 0.0, 0.0],
             z: SYNC_OVERLAY_Z + 4,
             cell: None,
@@ -11662,6 +11643,46 @@ mod tests {
         })
     }
 
+    fn test_running_sync_overlay() -> super::NullOrDieOverlayData {
+        let cols = 2;
+        let digest_rows = 2;
+        super::NullOrDieOverlayData {
+            simfile_path: PathBuf::from("song.ssc"),
+            song_title: "Sync Test".to_string(),
+            chart_label: "Hard".to_string(),
+            kernel_target: null_or_die::KernelTarget::Digest,
+            kernel_type: null_or_die::BiasKernel::Rising,
+            graph_mode: crate::config::SyncGraphMode::PostKernelFingerprint,
+            cols,
+            freq_rows: 0,
+            total_beats: digest_rows,
+            digest_rows,
+            times_ms: Vec::new(),
+            freq_domain: Vec::new(),
+            beat_digest: vec![0.1, 0.2, 0.3, 0.4],
+            digest_col_sums: Vec::new(),
+            post_rows: 0,
+            post_kernel: Vec::new(),
+            convolution: Vec::new(),
+            curve_mesh: None,
+            edge_discard: 2,
+            beats_processed: digest_rows,
+            preview_bias_ms: Some(0.0),
+            final_bias_ms: None,
+            final_confidence: None,
+            phase: super::NullOrDieOverlayPhase::Running,
+            phase_changed_at: Instant::now(),
+            error_text: None,
+            manual_delta_seconds: 0.0,
+            nav_held_dir: None,
+            nav_held_since: None,
+            nav_last_tick_at: None,
+            nav_last_sfx_at: None,
+            confirm_selection: None,
+            rx: None,
+        }
+    }
+
     fn test_song_in_pack(pack: &str, song_dir: &str, title: &str) -> Arc<SongData> {
         Arc::new(SongData {
             simfile_path: PathBuf::from(format!("/songs/{pack}/{song_dir}/song.ssc")),
@@ -12029,6 +12050,22 @@ mod tests {
         let warning = sync_low_confidence_warning(Some(0.73), 0.80).unwrap();
         assert!(warning.contains("73%"));
         assert!(warning.contains("80%"));
+    }
+
+    #[test]
+    fn sync_overlay_shows_streamed_heat_while_running() {
+        let overlay = test_running_sync_overlay();
+        let actors = super::build_null_or_die_overlay(&overlay, 0).unwrap();
+        let heat_alpha = actors.iter().find_map(|actor| match actor {
+            crate::engine::present::actors::Actor::Sprite { source, tint, .. }
+                if source.texture_key() == Some(super::SYNC_HEAT_TEXTURE_KEY) =>
+            {
+                Some(tint[3])
+            }
+            _ => None,
+        });
+
+        assert_eq!(heat_alpha, Some(super::SYNC_HEAT_ALPHA));
     }
 
     #[test]
