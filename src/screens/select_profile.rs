@@ -22,6 +22,11 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
+pub fn enter_late_join(state: &mut State, joining_side: crate::game::profile::PlayerSide) {
+    profile_boxes::enter_late_join(state, joining_side);
+}
+
+#[inline(always)]
 pub fn update(state: &mut State, dt: f32) {
     profile_boxes::update(state, dt);
 }
