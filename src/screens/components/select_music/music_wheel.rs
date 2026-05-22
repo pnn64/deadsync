@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    VisualStyle,
+    SelectMusicSongSelectBgMode, VisualStyle,
 };
 use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
@@ -13,9 +13,11 @@ use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
+use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // --- Colors ---
@@ -64,6 +66,93 @@ const STR_REF_CACHE_LIMIT: usize = 4096;
 const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
+
+#[inline(always)]
+fn path_texture_key(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+#[inline(always)]
+fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Option<&PathBuf> {
+    match mode {
+        SelectMusicSongSelectBgMode::Off => None,
+        SelectMusicSongSelectBgMode::Banner => {
+            song.banner_path.as_ref().or(song.background_path.as_ref())
+        }
+        SelectMusicSongSelectBgMode::Bg => {
+            song.background_path.as_ref().or(song.banner_path.as_ref())
+        }
+    }
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
+    if !paths.iter().any(|existing| existing.as_path() == path) {
+        paths.push(path.to_path_buf());
+    }
+}
+
+pub fn visible_song_select_bg_paths(
+    entries: &[MusicWheelEntry],
+    selected_index: usize,
+    position_offset_from_selection: f32,
+    mode: SelectMusicSongSelectBgMode,
+) -> Vec<PathBuf> {
+    if entries.is_empty() || mode == SelectMusicSongSelectBgMode::Off {
+        return Vec::new();
+    }
+
+    let mut paths = Vec::with_capacity(NUM_WHEEL_ITEMS_TO_DRAW);
+    let num_entries = entries.len();
+    for i_slot in 0..NUM_WHEEL_SLOTS {
+        let offset_from_center = i_slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
+        let offset_from_center_f = offset_from_center as f32 + position_offset_from_selection;
+        if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
+            continue;
+        }
+        let list_index = ((selected_index as isize + offset_from_center + num_entries as isize)
+            as usize)
+            % num_entries;
+        match entries.get(list_index) {
+            Some(MusicWheelEntry::PackHeader {
+                banner_path: Some(path),
+                ..
+            }) => push_unique_path(&mut paths, path),
+            Some(MusicWheelEntry::Song(song)) => {
+                if let Some(path) = song_select_bg_path(song, mode) {
+                    push_unique_path(&mut paths, path);
+                }
+            }
+            _ => {}
+        }
+    }
+    paths
+}
+
+fn song_select_bg_sprite(
+    path: &Path,
+    center_x: f32,
+    center_y: f32,
+    width: f32,
+    height: f32,
+    alpha: f32,
+    fade_left: f32,
+) -> Actor {
+    let key = path_texture_key(path);
+    let mut actor = act!(sprite(key.clone()):
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        setsize(width, height):
+        diffuse(1.0, 1.0, 1.0, alpha):
+        fadeleft(fade_left):
+        z(52)
+    );
+    if let Some(uv) = shared_banner::cover_uv(&key, width, height)
+        && let Actor::Sprite { uv_rect, .. } = &mut actor
+    {
+        *uv_rect = Some(uv);
+    }
+    actor
+}
 
 thread_local! {
     static ITL_RANK_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
@@ -350,6 +439,8 @@ pub struct MusicWheelParams<'a> {
     pub show_music_wheel_lamps: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
+    pub song_select_bg_mode: SelectMusicSongSelectBgMode,
+    pub expanded_pack_name: Option<&'a str>,
     pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
     pub pack_sync_prefs: Option<&'a HashMap<String, rssp::pack::SyncPref>>,
@@ -357,7 +448,7 @@ pub struct MusicWheelParams<'a> {
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 8 + 1);
+    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 9 + 1);
     let cfg = config::get();
     let translated_titles = cfg.translated_titles;
     let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
@@ -493,8 +584,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 MusicWheelEntry::PackHeader {
                     name,
                     original_index,
+                    banner_path,
                     song_count,
-                    ..
                 } => {
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
@@ -520,6 +611,27 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
                         z(52)
                     ));
+                    if p.song_select_bg_mode != SelectMusicSongSelectBgMode::Off
+                        && let Some(path) = banner_path.as_ref()
+                    {
+                        let alpha = if p
+                            .expanded_pack_name
+                            .is_some_and(|expanded| expanded == name.as_str())
+                        {
+                            0.5
+                        } else {
+                            0.1
+                        };
+                        actors.push(song_select_bg_sprite(
+                            path,
+                            highlight_left_world + half_highlight,
+                            y_center_item,
+                            highlight_w,
+                            item_h_full,
+                            alpha,
+                            0.1,
+                        ));
+                    }
                     actors.push(act!(text:
                         font("miso"):
                         settext(cached_str_ref(name.as_str())):
@@ -622,6 +734,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(song_box_color[0], song_box_color[1], song_box_color[2], song_box_color[3]):
                         z(52)
                     ));
+                    if let Some(path) = song_select_bg_path(info, p.song_select_bg_mode) {
+                        let art_w = (highlight_w - 50.0).max(1.0);
+                        actors.push(song_select_bg_sprite(
+                            path,
+                            highlight_left_world + highlight_w - art_w * 0.5,
+                            y_center_item,
+                            art_w,
+                            (item_h_full - 2.0).max(1.0),
+                            0.25,
+                            1.0,
+                        ));
+                    }
                     if song_pack_sync_style(info, p.pack_sync_prefs, p.default_sync_offset)
                         == Some(DefaultSyncOffset::Null)
                     {
@@ -1122,12 +1246,49 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 mod tests {
     use super::{
         choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
-        should_fetch_online_itl_score, steps_slot_for_side,
+        should_fetch_online_itl_score, song_select_bg_path, steps_slot_for_side,
+        visible_song_select_bg_paths,
     };
-    use crate::config::SelectMusicItlWheelMode;
+    use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
     use crate::engine::present::color;
     use crate::game::profile;
     use crate::game::scores::CachedItlScore;
+    use crate::game::song::SongData;
+    use crate::screens::select_music::MusicWheelEntry;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    fn song_with_art(banner_path: Option<&str>, background_path: Option<&str>) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from("songs/Test/song.ssc"),
+            title: "Song".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: banner_path.map(PathBuf::from),
+            background_path: background_path.map(PathBuf::from),
+            background_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        })
+    }
 
     #[test]
     fn choose_itl_wheel_score_prefers_online_tournament_score() {
@@ -1240,5 +1401,50 @@ mod tests {
         assert_eq!(itl_rank_color(51, true), color::JUDGMENT_RGBA[4]);
         assert_eq!(itl_rank_color(55, true), color::JUDGMENT_RGBA[4]);
         assert_eq!(itl_rank_color(56, true), color::JUDGMENT_RGBA[5]);
+    }
+
+    #[test]
+    fn song_select_bg_banner_mode_prefers_banner() {
+        let song = song_with_art(Some("banner.png"), Some("background.png"));
+        let path = song_select_bg_path(&song, SelectMusicSongSelectBgMode::Banner).unwrap();
+        assert_eq!(path.as_path(), PathBuf::from("banner.png").as_path());
+    }
+
+    #[test]
+    fn song_select_bg_bg_mode_prefers_background() {
+        let song = song_with_art(Some("banner.png"), Some("background.png"));
+        let path = song_select_bg_path(&song, SelectMusicSongSelectBgMode::Bg).unwrap();
+        assert_eq!(path.as_path(), PathBuf::from("background.png").as_path());
+    }
+
+    #[test]
+    fn song_select_bg_modes_fall_back_to_available_art() {
+        let song = song_with_art(Some("banner.png"), None);
+        let path = song_select_bg_path(&song, SelectMusicSongSelectBgMode::Bg).unwrap();
+        assert_eq!(path.as_path(), PathBuf::from("banner.png").as_path());
+
+        let song = song_with_art(None, Some("background.png"));
+        let path = song_select_bg_path(&song, SelectMusicSongSelectBgMode::Banner).unwrap();
+        assert_eq!(path.as_path(), PathBuf::from("background.png").as_path());
+    }
+
+    #[test]
+    fn visible_song_select_bg_paths_includes_pack_and_song_art_once() {
+        let entries = vec![
+            MusicWheelEntry::PackHeader {
+                name: "Pack".to_string(),
+                original_index: 0,
+                banner_path: Some(PathBuf::from("pack.png")),
+                song_count: 1,
+            },
+            MusicWheelEntry::Song(song_with_art(Some("song.png"), Some("background.png"))),
+        ];
+
+        let paths =
+            visible_song_select_bg_paths(&entries, 1, 0.0, SelectMusicSongSelectBgMode::Banner);
+
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&PathBuf::from("pack.png")));
+        assert!(paths.contains(&PathBuf::from("song.png")));
     }
 }

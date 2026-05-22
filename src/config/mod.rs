@@ -32,9 +32,9 @@ pub use self::theme::{
     LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicWheelStyle,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -159,6 +159,8 @@ pub struct Config {
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
+    /// Arrow Cloud SongSelectBG parity: show song/pack art behind wheel rows.
+    pub select_music_song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub select_music_new_pack_mode: NewPackMode,
     /// Arrow Cloud FolderStats parity: pack clear summary box on Select Music.
     pub show_select_music_folder_stats: bool,
@@ -353,6 +355,7 @@ impl Default for Config {
             select_music_itl_rank_mode: SelectMusicItlRankMode::None,
             select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
             select_music_wheel_style: SelectMusicWheelStyle::Itg,
+            select_music_song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
             select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_folder_stats: false,
             show_select_music_previews: true,

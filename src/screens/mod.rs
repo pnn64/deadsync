@@ -70,6 +70,7 @@ pub enum ScreenAction {
     RequestBanner(Option<PathBuf>),
     RequestCdTitle(Option<PathBuf>),
     RequestPackBanner(Option<PathBuf>),
+    RequestWheelItemBackgrounds(Vec<PathBuf>),
     RequestDensityGraph {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,

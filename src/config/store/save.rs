@@ -237,6 +237,11 @@ fn push_saved_options(
     );
     push_line(
         content,
+        "SongSelectBG",
+        cfg.select_music_song_select_bg_mode.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         cfg.select_music_new_pack_mode.as_str(),
     );

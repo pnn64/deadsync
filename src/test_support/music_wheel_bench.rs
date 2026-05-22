@@ -41,6 +41,8 @@ impl MusicWheelBenchFixture {
             show_music_wheel_lamps: false,
             itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+            song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+            expanded_pack_name: None,
             allow_online_fetch: false,
             new_pack_names: None,
             pack_sync_prefs: None,

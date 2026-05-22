@@ -382,6 +382,11 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicWheelStyle")
         .and_then(|v| SelectMusicWheelStyle::from_str(&v).ok())
         .unwrap_or(default.select_music_wheel_style);
+    cfg.select_music_song_select_bg_mode = conf
+        .get("Options", "SongSelectBG")
+        .or_else(|| conf.get("Options", "SelectMusicSongSelectBG"))
+        .and_then(|v| SelectMusicSongSelectBgMode::from_str(&v).ok())
+        .unwrap_or(default.select_music_song_select_bg_mode);
     cfg.select_music_new_pack_mode = conf
         .get("Options", "SelectMusicNewPackMode")
         .and_then(|v| NewPackMode::from_str(&v).ok())

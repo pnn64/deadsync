@@ -1128,6 +1128,7 @@ pub struct State {
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     last_requested_folder_stats_banner_path: Option<PathBuf>,
+    last_requested_wheel_item_bg_paths: Vec<PathBuf>,
     pub(crate) banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
@@ -3302,6 +3303,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
     state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_wheel_item_bg_paths.clear();
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -3536,6 +3538,7 @@ pub fn init() -> State {
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
+        last_requested_wheel_item_bg_paths: Vec::new(),
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -3722,6 +3725,7 @@ pub fn init_placeholder() -> State {
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         last_requested_folder_stats_banner_path: None,
+        last_requested_wheel_item_bg_paths: Vec::new(),
         banner_high_quality_requested: false,
         cdtitle_spin_elapsed: 0.0,
         cdtitle_anim_elapsed: 0.0,
@@ -4462,6 +4466,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
         state.last_requested_banner_path = None;
         state.last_requested_cdtitle_path = None;
         state.last_requested_folder_stats_banner_path = None;
+        state.last_requested_wheel_item_bg_paths.clear();
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
         state.last_requested_chart_hash = None;
@@ -4479,6 +4484,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
             state.last_requested_banner_path = None;
             state.last_requested_cdtitle_path = None;
             state.last_requested_folder_stats_banner_path = None;
+            state.last_requested_wheel_item_bg_paths.clear();
             state.cdtitle_spin_elapsed = 0.0;
             state.cdtitle_anim_elapsed = 0.0;
             state.last_requested_chart_hash = None;
@@ -4506,6 +4512,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
     state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_wheel_item_bg_paths.clear();
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -6517,6 +6524,7 @@ fn apply_remote_lobby_song_selection(
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
     state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_wheel_item_bg_paths.clear();
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
     state.last_requested_chart_hash = None;
@@ -9340,6 +9348,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     } else {
         None
     };
+    let new_wheel_item_bg_paths = music_wheel::visible_song_select_bg_paths(
+        &state.entries,
+        state.selected_index,
+        state.wheel_offset_from_selection,
+        cfg.select_music_song_select_bg_mode,
+    );
 
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path.clone_from(&new_banner);
@@ -9367,6 +9381,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             .last_requested_folder_stats_banner_path
             .clone_from(&new_folder_stats_banner);
         return ScreenAction::RequestPackBanner(new_folder_stats_banner);
+    }
+    if state.last_requested_wheel_item_bg_paths != new_wheel_item_bg_paths {
+        state
+            .last_requested_wheel_item_bg_paths
+            .clone_from(&new_wheel_item_bg_paths);
+        return ScreenAction::RequestWheelItemBackgrounds(new_wheel_item_bg_paths);
     }
 
     if overlays_block_delayed_updates {
@@ -9513,6 +9533,7 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
     state.last_requested_folder_stats_banner_path = None;
+    state.last_requested_wheel_item_bg_paths.clear();
     state.banner_high_quality_requested = false;
     state.cdtitle_spin_elapsed = 0.0;
     state.cdtitle_anim_elapsed = 0.0;
@@ -10999,6 +11020,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
         itl_rank_mode: cfg.select_music_itl_rank_mode,
         itl_wheel_mode: cfg.select_music_itl_wheel_mode,
+        song_select_bg_mode: cfg.select_music_song_select_bg_mode,
+        expanded_pack_name: state.expanded_pack_name.as_deref(),
         allow_online_fetch: allow_gs_fetch,
         new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
         pack_sync_prefs: cfg

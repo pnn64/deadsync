@@ -174,6 +174,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_line(
         content,
+        "SongSelectBG",
+        default.select_music_song_select_bg_mode.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         default.select_music_new_pack_mode.as_str(),
     );

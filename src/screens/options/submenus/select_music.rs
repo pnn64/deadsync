@@ -64,6 +64,16 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SongSelectBg,
+        label: lookup_key("OptionsSelectMusic", "SongSelectBG"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("OptionsSelectMusic", "SongSelectBgBanner"),
+            localized_choice("OptionsSelectMusic", "SongSelectBgBG"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SwitchProfile,
         label: lookup_key("OptionsSelectMusic", "SwitchProfile"),
         choices: &[
@@ -289,6 +299,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "MusicWheelStyleHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmSongSelectBg,
+        name: lookup_key("OptionsSelectMusic", "SongSelectBG"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "SongSelectBGHelp",
         ))],
     },
     Item {
@@ -750,6 +768,11 @@ impl ChoiceEnum for SelectMusicItlRankMode {
 impl ChoiceEnum for SelectMusicWheelStyle {
     const ALL: &'static [Self] = &[Self::Itg, Self::Iidx];
     const DEFAULT: Self = Self::Itg;
+}
+
+impl ChoiceEnum for SelectMusicSongSelectBgMode {
+    const ALL: &'static [Self] = &[Self::Off, Self::Banner, Self::Bg];
+    const DEFAULT: Self = Self::Off;
 }
 
 impl ChoiceEnum for NewPackMode {

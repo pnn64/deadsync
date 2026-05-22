@@ -69,6 +69,7 @@ pub(crate) struct DynamicMedia {
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
+    wheel_item_background_keys: HashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
     active_song_lua_videos: HashMap<String, video::Player>,
     failed_song_lua_video_keys: HashSet<String>,
@@ -93,6 +94,7 @@ impl DynamicMedia {
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
+            wheel_item_background_keys: HashSet::new(),
             current_dynamic_background: None,
             active_song_lua_videos: HashMap::new(),
             failed_song_lua_video_keys: HashSet::new(),
@@ -124,6 +126,7 @@ impl DynamicMedia {
             self.active_banner_videos
                 .len()
                 .saturating_add(self.dynamic_pack_banner_keys.len())
+                .saturating_add(self.wheel_item_background_keys.len())
                 .saturating_add(self.active_song_lua_videos.len())
                 .saturating_add(self.failed_song_lua_video_keys.len())
                 .saturating_add(self.current_profile_avatars.len())
@@ -141,6 +144,7 @@ impl DynamicMedia {
             keys.push(key);
         }
         keys.extend(self.dynamic_pack_banner_keys.drain());
+        keys.extend(self.wheel_item_background_keys.drain());
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(state.key);
         }
@@ -274,6 +278,32 @@ impl DynamicMedia {
             self.current_dynamic_pack_banner = None;
         } else if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
             self.dynamic_pack_banner_keys.remove(&key);
+            self.release_texture_key(assets, backend, key);
+        }
+    }
+
+    pub(crate) fn set_wheel_item_backgrounds(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        paths: Vec<PathBuf>,
+    ) {
+        let mut desired = HashSet::with_capacity(paths.len());
+        for path in paths {
+            let key = path.to_string_lossy().into_owned();
+            if desired.insert(key) {
+                media_cache::ensure_banner_texture(assets, backend, &path);
+            }
+        }
+
+        let old = std::mem::replace(&mut self.wheel_item_background_keys, desired);
+        let mut release_keys = Vec::with_capacity(old.len());
+        for key in old {
+            if !self.wheel_item_background_keys.contains(&key) {
+                release_keys.push(key);
+            }
+        }
+        for key in dynamic::dedupe_dynamic_keys(release_keys) {
             self.release_texture_key(assets, backend, key);
         }
     }
@@ -873,6 +903,7 @@ impl DynamicMedia {
                 .as_ref()
                 .is_some_and(|(owned, _)| owned == key)
             || self.dynamic_pack_banner_keys.contains(key)
+            || self.wheel_item_background_keys.contains(key)
             || self
                 .current_dynamic_background
                 .as_ref()

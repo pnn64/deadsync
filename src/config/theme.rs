@@ -251,6 +251,43 @@ impl FromStr for SelectMusicItlWheelMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicSongSelectBgMode {
+    #[default]
+    Off,
+    Banner,
+    Bg,
+}
+
+impl SelectMusicSongSelectBgMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Banner => "Banner",
+            Self::Bg => "BG",
+        }
+    }
+}
+
+impl FromStr for SelectMusicSongSelectBgMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "none" | "false" | "0" => Ok(Self::Off),
+            "banner" | "banners" => Ok(Self::Banner),
+            "bg" | "background" | "backgrounds" => Ok(Self::Bg),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicWheelStyle {
     Itg,
@@ -995,6 +1032,36 @@ mod tests {
         assert_eq!(
             DefaultSyncOffset::from_str(DefaultSyncOffset::Itg.as_str()),
             Ok(DefaultSyncOffset::Itg)
+        );
+    }
+
+    #[test]
+    fn song_select_bg_mode_defaults_to_off() {
+        assert_eq!(
+            SelectMusicSongSelectBgMode::default(),
+            SelectMusicSongSelectBgMode::Off
+        );
+    }
+
+    #[test]
+    fn song_select_bg_mode_round_trips() {
+        for value in [
+            SelectMusicSongSelectBgMode::Off,
+            SelectMusicSongSelectBgMode::Banner,
+            SelectMusicSongSelectBgMode::Bg,
+        ] {
+            assert_eq!(
+                SelectMusicSongSelectBgMode::from_str(value.as_str()),
+                Ok(value)
+            );
+        }
+    }
+
+    #[test]
+    fn song_select_bg_mode_accepts_background_alias() {
+        assert_eq!(
+            SelectMusicSongSelectBgMode::from_str("Background"),
+            Ok(SelectMusicSongSelectBgMode::Bg)
         );
     }
 }

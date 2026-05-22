@@ -4284,6 +4284,9 @@ impl App {
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestCdTitle(path_opt) => vec![Command::SetCdTitle(path_opt)],
             ScreenAction::RequestPackBanner(path_opt) => vec![Command::SetPackBanner(path_opt)],
+            ScreenAction::RequestWheelItemBackgrounds(paths) => {
+                vec![Command::SetWheelItemBackgrounds(paths)]
+            }
             ScreenAction::RequestDensityGraph { slot, chart_opt } => {
                 vec![Command::SetDensityGraph { slot, chart_opt }]
             }
