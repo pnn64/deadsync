@@ -60,6 +60,8 @@ mod reload;
 use reload::*;
 mod score_import;
 use score_import::*;
+mod arrowcloud_login;
+use arrowcloud_login::*;
 mod pack_sync;
 use pack_sync::*;
 mod layout;

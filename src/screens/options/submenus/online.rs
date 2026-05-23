@@ -67,6 +67,12 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::ArrowCloudLogin,
+        label: lookup_key("OptionsGrooveStats", "ArrowCloudLogin"),
+        choices: &[localized_choice("OptionsGrooveStats", "ArrowCloudLoginAction")],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
@@ -156,6 +162,14 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGrooveStatsHelp",
             "ArrowCloudSubmitFailsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::AcLogin,
+        name: lookup_key("OptionsGrooveStats", "ArrowCloudLogin"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ArrowCloudLoginHelp",
         ))],
     },
     Item {

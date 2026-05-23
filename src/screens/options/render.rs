@@ -426,6 +426,14 @@ pub fn get_actors(
         actors.extend(ui_actors);
         return actors;
     }
+    if let Some(ui) = &state.arrowcloud_login_ui {
+        let mut ui_actors = build_arrowcloud_login_overlay_actors(ui, state.active_color_index);
+        for actor in &mut ui_actors {
+            actor.mul_alpha(alpha_multiplier);
+        }
+        actors.extend(ui_actors);
+        return actors;
+    }
     if let Some(score_import) = &state.score_import_ui {
         let mut ui_actors =
             build_score_import_overlay_actors(score_import, state.active_color_index);

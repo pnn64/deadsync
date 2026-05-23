@@ -1269,6 +1269,18 @@ pub(super) fn activate_current_selection(
                         _ => {}
                     }
                 }
+            } else if matches!(kind, SubmenuKind::ArrowCloud) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ScreenAction::None;
+                };
+                if let Some(row) = rows.get(row_idx)
+                    && row.id == SubRowId::ArrowCloudLogin
+                {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    start_arrowcloud_login(state);
+                    return ScreenAction::None;
+                }
             } else if matches!(kind, SubmenuKind::ScoreImport) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
@@ -1354,6 +1366,45 @@ pub fn handle_input(
         return ScreenAction::None;
     }
     if state.reload_ui.is_some() {
+        return ScreenAction::None;
+    }
+    if let Some(ui) = state.arrowcloud_login_ui.as_ref() {
+        let three_key = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+        if login_overlay_is_terminal(ui) {
+            let dismiss = matches!(
+                three_key,
+                Some((
+                    _,
+                    screen_input::ThreeKeyMenuAction::Cancel
+                        | screen_input::ThreeKeyMenuAction::Confirm
+                )),
+            ) || (ev.pressed
+                && matches!(
+                    ev.action,
+                    VirtualAction::p1_back
+                        | VirtualAction::p2_back
+                        | VirtualAction::p1_start
+                        | VirtualAction::p2_start
+                ));
+            if dismiss {
+                clear_navigation_holds(state);
+                state.arrowcloud_login_ui = None;
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
+            return ScreenAction::None;
+        }
+        let cancel_requested = matches!(
+            three_key,
+            Some((_, screen_input::ThreeKeyMenuAction::Cancel))
+        ) || (ev.pressed
+            && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
+        if cancel_requested {
+            ui.cancel_requested.store(true, Ordering::Relaxed);
+            clear_navigation_holds(state);
+            state.arrowcloud_login_ui = None;
+            audio::play_sfx("assets/sounds/change.ogg");
+            log::info!("ArrowCloud QR login cancelled by user.");
+        }
         return ScreenAction::None;
     }
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);

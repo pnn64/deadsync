@@ -216,6 +216,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
         return None;
     }
+    if let Some(ui) = state.arrowcloud_login_ui.as_mut() {
+        poll_arrowcloud_login_ui(ui);
+        return None;
+    }
     if let Some(score_import) = state.score_import_ui.as_mut() {
         poll_score_import_ui(score_import, dt);
         // No auto-dismiss: once `done`, the overlay sits until the user

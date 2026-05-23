@@ -4043,6 +4043,16 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
     }
 }
 
+/// Update the active profile's ArrowCloud API key (in memory + on disk).
+/// No-op when the side has no local profile loaded (Guest).
+pub fn set_arrowcloud_api_key_for_side(side: PlayerSide, api_key: &str) {
+    {
+        let mut profiles = lock_profiles();
+        profiles[side_ix(side)].arrowcloud_api_key = api_key.to_string();
+    }
+    save_arrowcloud_ini_for_side(side);
+}
+
 fn load_for_side(side: PlayerSide) {
     let profile_id = {
         let session = lock_session();
