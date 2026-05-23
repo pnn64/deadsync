@@ -142,31 +142,63 @@ pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
 }
 
 // -----------------------------------------------------------------------------
-// Pixel ↔ SM-logical coordinate conversion
+// Position types: window-pixel vs. logical (top-left origin) space
 // -----------------------------------------------------------------------------
 
-/// Convert a window pixel position to logical SM coordinates (top-left origin,
-/// `0..screen_width()` × `0..screen_height()`). This matches the coordinate
-/// system that screen layout code uses (e.g. `screen_center_x()`).
-///
-/// The ortho projection (`ortho_for_window`) stretches the clamped logical
-/// space to fill the entire window, so conversion is a simple linear scale
-/// from pixel space to logical space.
-///
-/// Returns `None` if the cached window size is degenerate (zero in any
-/// dimension), which can happen briefly during init or minimize.
-#[inline]
-pub fn pixel_to_sm(px_x: f64, px_y: f64) -> Option<(f32, f32)> {
-    let (px_w, px_h) = current_window_px();
-    if px_w == 0 || px_h == 0 {
-        return None;
+/// A position in raw window pixels, matching winit's `PhysicalPosition<f64>`.
+/// Use this for anything coming directly off the window or a mouse device.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowPos {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl WindowPos {
+    #[inline]
+    pub const fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
     }
-    let m = CURRENT_METRICS.with(std::cell::Cell::get);
-    let sm_w = m.right - m.left;
-    let sm_h = m.top - m.bottom;
-    let nx = (px_x as f32) / (px_w as f32);
-    let ny = (px_y as f32) / (px_h as f32);
-    Some((nx * sm_w, ny * sm_h))
+
+    /// Project this window-pixel position into the logical SM-style coordinate
+    /// space used by screen layout code. Returns `None` when the cached
+    /// window size is degenerate (zero in any dimension) — that happens
+    /// briefly during init or minimize.
+    ///
+    /// The ortho projection (`ortho_for_window`) stretches the clamped
+    /// logical space to fill the entire window, so conversion is a simple
+    /// linear scale.
+    #[inline]
+    pub fn to_logical(self) -> Option<LogicalPos> {
+        let (px_w, px_h) = current_window_px();
+        if px_w == 0 || px_h == 0 {
+            return None;
+        }
+        let m = CURRENT_METRICS.with(std::cell::Cell::get);
+        let sm_w = m.right - m.left;
+        let sm_h = m.top - m.bottom;
+        let nx = (self.x as f32) / (px_w as f32);
+        let ny = (self.y as f32) / (px_h as f32);
+        Some(LogicalPos {
+            x: nx * sm_w,
+            y: ny * sm_h,
+        })
+    }
+}
+
+/// A position in the logical, top-left origin coordinate space that screen
+/// layout code uses (range `0..screen_width()` × `0..screen_height()`).
+/// This is the coordinate system `screen_center_x()` and friends produce.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LogicalPos {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl LogicalPos {
+    #[inline]
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
 }
 
 // -----------------------------------------------------------------------------

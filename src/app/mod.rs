@@ -1080,13 +1080,14 @@ pub struct ShellState {
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
-    /// Last known pointer position in SM-logical (top-left origin) coords.
+    /// Last known pointer position in logical (top-left origin) coords.
     /// `None` when the cursor is outside the window, the surface is
     /// inactive, or we haven't received a `CursorMoved` yet.
-    pointer_pos_sm: Option<(f32, f32)>,
+    pointer_pos_logical: Option<space::LogicalPos>,
     /// Last known raw pointer position in window pixels. Cached so we can
-    /// re-derive SM coords after a resize without waiting for the next move.
-    pointer_pos_px: Option<(f64, f64)>,
+    /// re-derive logical coords after a resize without waiting for the next
+    /// move.
+    pointer_pos_window: Option<space::WindowPos>,
 }
 
 /// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
@@ -1266,8 +1267,8 @@ impl ShellState {
             screenshot_request_side: None,
             screenshot_flash_started_at: None,
             screenshot_preview: None,
-            pointer_pos_sm: None,
-            pointer_pos_px: None,
+            pointer_pos_logical: None,
+            pointer_pos_window: None,
         }
     }
 
@@ -3434,25 +3435,26 @@ impl App {
         }
     }
 
-    /// Re-project the cached raw pointer pixel position to SM-logical coords.
+    /// Re-project the cached raw pointer pixel position to logical coords.
     /// Called whenever the window size or metrics change so that screens
-    /// querying `pointer_pos_sm` aren't using stale projections.
+    /// querying `pointer_pos_logical` aren't using stale projections.
     #[inline]
-    pub(super) fn refresh_pointer_sm_coords(&mut self) {
-        if let Some((px, py)) = self.state.shell.pointer_pos_px {
-            self.state.shell.pointer_pos_sm = space::pixel_to_sm(px, py);
+    pub(super) fn refresh_pointer_logical_coords(&mut self) {
+        if let Some(window_pos) = self.state.shell.pointer_pos_window {
+            self.state.shell.pointer_pos_logical = window_pos.to_logical();
         }
     }
 
     fn handle_pointer_moved(&mut self, px_x: f64, px_y: f64) {
-        let pos = space::pixel_to_sm(px_x, px_y);
-        self.state.shell.pointer_pos_px = Some((px_x, px_y));
-        self.state.shell.pointer_pos_sm = pos;
+        let window_pos = space::WindowPos::new(px_x, px_y);
+        let logical = window_pos.to_logical();
+        self.state.shell.pointer_pos_window = Some(window_pos);
+        self.state.shell.pointer_pos_logical = logical;
         if !config::get().enable_mouse_input {
             return;
         }
         let ev = input::PointerEvent {
-            pos,
+            pos: logical,
             kind: input::PointerKind::Move,
             timestamp: Instant::now(),
         };
@@ -3460,8 +3462,8 @@ impl App {
     }
 
     fn handle_pointer_left(&mut self) {
-        self.state.shell.pointer_pos_px = None;
-        self.state.shell.pointer_pos_sm = None;
+        self.state.shell.pointer_pos_window = None;
+        self.state.shell.pointer_pos_logical = None;
         if !config::get().enable_mouse_input {
             return;
         }
@@ -3495,7 +3497,7 @@ impl App {
             winit::event::ElementState::Released => input::PointerKind::Up(mb),
         };
         let ev = input::PointerEvent {
-            pos: self.state.shell.pointer_pos_sm,
+            pos: self.state.shell.pointer_pos_logical,
             kind,
             timestamp: Instant::now(),
         };
@@ -3518,7 +3520,7 @@ impl App {
             ),
         };
         let ev = input::PointerEvent {
-            pos: self.state.shell.pointer_pos_sm,
+            pos: self.state.shell.pointer_pos_logical,
             kind: input::PointerKind::Wheel { dx, dy },
             timestamp: Instant::now(),
         };
@@ -8792,7 +8794,7 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 self.sync_window_size(new_size);
-                self.refresh_pointer_sm_coords();
+                self.refresh_pointer_logical_coords();
                 if surface_changed && self.state.shell.surface_active {
                     self.request_redraw(&window, "surface_active");
                 }

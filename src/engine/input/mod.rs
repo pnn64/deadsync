@@ -1140,9 +1140,9 @@ pub enum PointerKind {
 
 #[derive(Clone, Copy, Debug)]
 pub struct PointerEvent {
-    /// Logical SM-space pointer position. `None` for `Leave`, or `Move`/`Wheel`
+    /// Logical pointer position. `None` for `Leave`, or for `Move`/`Wheel`
     /// events before the window has a valid surface size.
-    pub pos: Option<(f32, f32)>,
+    pub pos: Option<crate::engine::space::LogicalPos>,
     pub kind: PointerKind,
     pub timestamp: Instant,
 }
