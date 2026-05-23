@@ -643,6 +643,8 @@ pub(super) fn apply_submenu_choice_delta(
             crate::game::online::init();
         } else if row.id == SubRowId::ArrowCloudSubmitFails {
             config::update_submit_arrowcloud_fails(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::ArrowCloudQrLogin {
+            config::update_arrowcloud_qr_login_when(ArrowCloudQrLoginWhen::from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];

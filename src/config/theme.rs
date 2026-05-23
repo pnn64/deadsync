@@ -678,6 +678,49 @@ impl FromStr for MachinePreferredPlayMode {
     }
 }
 
+/// When to auto-show the ArrowCloud QR-login screen after the user picks
+/// a profile.  Mirrors Simply Love's `QRLogin` theme pref.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ArrowCloudQrLoginWhen {
+    /// Always show the login screen after Select Profile.
+    Always,
+    /// Show only when at least one joined Local player has no saved API
+    /// key.  Default.
+    #[default]
+    Sometimes,
+    /// Never auto-show; only the manual Options entry can launch it.
+    Disabled,
+}
+
+impl ArrowCloudQrLoginWhen {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "Always",
+            Self::Sometimes => "Sometimes",
+            Self::Disabled => "Disabled",
+        }
+    }
+}
+
+impl FromStr for ArrowCloudQrLoginWhen {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "always" => Ok(Self::Always),
+            "sometimes" => Ok(Self::Sometimes),
+            "disabled" | "never" | "off" | "no" => Ok(Self::Disabled),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /

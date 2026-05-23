@@ -33,6 +33,48 @@ const POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
 
 const ALL_SIDES: [profile::PlayerSide; 2] = [profile::PlayerSide::P1, profile::PlayerSide::P2];
 
+/// Returns `true` when the ArrowCloud QR-login screen should be
+/// auto-shown after Select Profile, given the current pref and live
+/// session state.  Mirrors Simply Love's `Branch.AfterSelectProfile`
+/// rule (`SL-Branches.lua:78-80`):
+///
+/// * `Always`    — always show, regardless of saved keys.
+/// * `Sometimes` — show iff at least one joined Local side has an empty
+///                 `arrowcloud_api_key`.  Guests and unjoined sides
+///                 don't count toward the "needs key" check (matches
+///                 SL's `for player in ivalues(GAMESTATE:GetHumanPlayers())`).
+/// * `Disabled`  — never auto-show.
+pub fn should_auto_show(when: crate::config::ArrowCloudQrLoginWhen) -> bool {
+    should_auto_show_with(when, any_joined_local_side_missing_key)
+}
+
+fn should_auto_show_with<F: FnOnce() -> bool>(
+    when: crate::config::ArrowCloudQrLoginWhen,
+    missing_key_probe: F,
+) -> bool {
+    use crate::config::ArrowCloudQrLoginWhen;
+    match when {
+        ArrowCloudQrLoginWhen::Disabled => false,
+        ArrowCloudQrLoginWhen::Always => true,
+        ArrowCloudQrLoginWhen::Sometimes => missing_key_probe(),
+    }
+}
+
+fn any_joined_local_side_missing_key() -> bool {
+    ALL_SIDES.iter().any(|side| {
+        if !profile::is_session_side_joined(*side) {
+            return false;
+        }
+        if profile::is_session_side_guest(*side) {
+            return false;
+        }
+        profile::get_for_side(*side)
+            .arrowcloud_api_key
+            .trim()
+            .is_empty()
+    })
+}
+
 #[inline]
 fn side_ix(side: profile::PlayerSide) -> usize {
     match side {
@@ -894,5 +936,25 @@ mod tests {
             }
             .is_workless()
         );
+    }
+
+    use crate::config::ArrowCloudQrLoginWhen;
+
+    #[test]
+    fn should_auto_show_disabled_is_always_false() {
+        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Disabled, || true));
+        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Disabled, || false));
+    }
+
+    #[test]
+    fn should_auto_show_always_is_always_true() {
+        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || true));
+        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || false));
+    }
+
+    #[test]
+    fn should_auto_show_sometimes_follows_missing_key_probe() {
+        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Sometimes, || true));
+        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Sometimes, || false));
     }
 }

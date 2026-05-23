@@ -67,6 +67,16 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::ArrowCloudQrLogin,
+        label: lookup_key("OptionsGrooveStats", "ArrowCloudQRLogin"),
+        choices: &[
+            localized_choice("OptionsGrooveStats", "ArrowCloudQRLoginAlways"),
+            localized_choice("OptionsGrooveStats", "ArrowCloudQRLoginSometimes"),
+            localized_choice("OptionsGrooveStats", "ArrowCloudQRLoginDisabled"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
@@ -159,6 +169,14 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::AcQrLogin,
+        name: lookup_key("OptionsGrooveStats", "ArrowCloudQRLogin"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ArrowCloudQRLoginHelp",
+        ))],
+    },
+    Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -202,3 +220,8 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
+
+impl ChoiceEnum for ArrowCloudQrLoginWhen {
+    const ALL: &'static [Self] = &[Self::Always, Self::Sometimes, Self::Disabled];
+    const DEFAULT: Self = Self::Sometimes;
+}
