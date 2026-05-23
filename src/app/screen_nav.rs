@@ -1,9 +1,8 @@
 use super::{
-    App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION, credits,
-    evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
+    credits, evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
-    test_lights,
+    test_lights, App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION,
 };
 use crate::assets::visual_styles;
 use crate::config;
@@ -150,6 +149,7 @@ impl App {
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target;
+        self.sync_gameplay_input_capture();
         write_current_screen_file(target);
         if prev != target {
             self.ui_text_layout_cache.clear();
@@ -417,6 +417,7 @@ impl App {
             duration,
             target,
         };
+        self.sync_gameplay_input_capture();
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
@@ -428,6 +429,7 @@ impl App {
             duration: out_duration,
             target,
         };
+        self.sync_gameplay_input_capture();
     }
 
     pub(super) fn handle_exit_action(&mut self) -> Vec<Command> {
@@ -496,6 +498,7 @@ impl App {
                 duration: in_duration,
             };
         }
+        self.sync_gameplay_input_capture();
         crate::engine::present::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
     }

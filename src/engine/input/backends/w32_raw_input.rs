@@ -1,39 +1,39 @@
 use super::{
-    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent, emit_dir_edges,
-    uuid_from_bytes,
+    emit_dir_edges, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId,
+    RawKeyboardEvent,
 };
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
-use std::collections::{HashMap, hash_map::Entry};
+use crate::engine::windows_rt::{boost_current_thread, current_host_nanos, ThreadRole};
+use std::collections::{hash_map::Entry, HashMap};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, Ordering};
 use std::time::Instant;
 
+use windows::core::PCWSTR;
 use windows::Win32::Devices::HumanInterfaceDevice::{
-    HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, HidP_GetCaps, HidP_GetSpecificValueCaps,
-    HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input, HidP_MaxUsageListLength,
+    HidP_GetCaps, HidP_GetSpecificValueCaps, HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps,
+    HidP_Input, HidP_MaxUsageListLength, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS,
     PHIDP_PREPARSED_DATA,
 };
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    MAPVK_VK_TO_VSC_EX, MapVirtualKeyW, VK_NUMLOCK, VK_SHIFT,
+    MapVirtualKeyW, MAPVK_VK_TO_VSC_EX, VK_NUMLOCK, VK_SHIFT,
 };
 use windows::Win32::UI::Input::{
-    GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, HRAWINPUT, RAWINPUTDEVICE,
-    RAWINPUTDEVICELIST, RAWINPUTHEADER, RAWKEYBOARD, RID_DEVICE_INFO, RID_DEVICE_INFO_HID,
-    RID_INPUT, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_NOLEGACY, RIDI_DEVICEINFO, RIDI_DEVICENAME,
-    RIDI_PREPARSEDDATA, RIM_TYPEHID, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
+    GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, RegisterRawInputDevices,
+    HRAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RAWKEYBOARD, RIDEV_DEVNOTIFY,
+    RIDEV_INPUTSINK, RIDEV_NOLEGACY, RIDI_DEVICEINFO, RIDI_DEVICENAME, RIDI_PREPARSEDDATA,
+    RID_DEVICE_INFO, RID_DEVICE_INFO_HID, RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostQuitMessage, RI_KEY_E0, RI_KEY_E1, RegisterClassExW,
-    SetWindowLongPtrW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY,
-    WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    WNDCLASSEXW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW,
+    PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, TranslateMessage, CREATESTRUCTW,
+    GWLP_USERDATA, HWND_MESSAGE, MSG, RI_KEY_E0, RI_KEY_E1, WINDOW_EX_STYLE, WINDOW_STYLE,
+    WM_CREATE, WM_DESTROY, WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
+    WM_SYSKEYUP, WNDCLASSEXW,
 };
-use windows::core::PCWSTR;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 
@@ -59,6 +59,10 @@ const WIN_SC_IGNORE_PRTSC_PREFIX: u16 = 0xe02a;
 static WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
 static RAW_INPUT_HWND: AtomicIsize = AtomicIsize::new(0);
+const KEYBOARD_CAPTURE_DISABLED: u8 = 0;
+const KEYBOARD_CAPTURE_ENABLED: u8 = 1;
+const KEYBOARD_CAPTURE_UNKNOWN: u8 = 2;
+static REGISTERED_KEYBOARD_CAPTURE: AtomicU8 = AtomicU8::new(KEYBOARD_CAPTURE_UNKNOWN);
 
 struct Dev {
     id: PadId,
@@ -127,6 +131,7 @@ fn emit_startup_complete(ctx: &mut Ctx) {
 #[cold]
 fn disable_backend(ctx: &mut Ctx, label: &str, err: windows::core::Error) {
     RAW_INPUT_HWND.store(0, Ordering::Release);
+    REGISTERED_KEYBOARD_CAPTURE.store(KEYBOARD_CAPTURE_UNKNOWN, Ordering::Release);
     log::warn!("Windows Raw Input {label} failed ({err}); backend disabled");
     emit_startup_complete(ctx);
 }
@@ -141,8 +146,31 @@ pub fn set_capture_enabled(enabled: bool) {
     CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
     let hwnd = HWND(RAW_INPUT_HWND.load(Ordering::Acquire) as *mut c_void);
     if !hwnd.0.is_null() {
-        register_keyboard(hwnd, enabled);
+        sync_keyboard_registration(hwnd);
     }
+}
+
+#[inline(always)]
+const fn keyboard_capture_state(enabled: bool) -> u8 {
+    if enabled {
+        KEYBOARD_CAPTURE_ENABLED
+    } else {
+        KEYBOARD_CAPTURE_DISABLED
+    }
+}
+
+#[inline(always)]
+fn sync_keyboard_registration(hwnd: HWND) -> bool {
+    let enabled = CAPTURE_ENABLED.load(Ordering::Relaxed);
+    let desired = keyboard_capture_state(enabled);
+    if REGISTERED_KEYBOARD_CAPTURE.load(Ordering::Acquire) == desired {
+        return true;
+    }
+    if register_keyboard(hwnd, enabled) {
+        REGISTERED_KEYBOARD_CAPTURE.store(desired, Ordering::Release);
+        return true;
+    }
+    false
 }
 
 #[inline(always)]
@@ -983,7 +1011,8 @@ fn run_inner(mut ctx: Box<Ctx>) {
         };
 
         RAW_INPUT_HWND.store(hwnd.0 as isize, Ordering::Release);
-        let _ = register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
+        REGISTERED_KEYBOARD_CAPTURE.store(KEYBOARD_CAPTURE_UNKNOWN, Ordering::Release);
+        let _ = sync_keyboard_registration(hwnd);
 
         if ctx.enable_pad {
             if register_controllers(hwnd) {
@@ -1003,6 +1032,7 @@ fn run_inner(mut ctx: Box<Ctx>) {
         }
 
         RAW_INPUT_HWND.store(0, Ordering::Release);
+        REGISTERED_KEYBOARD_CAPTURE.store(KEYBOARD_CAPTURE_UNKNOWN, Ordering::Release);
         std::mem::forget(ctx);
     }
 }
