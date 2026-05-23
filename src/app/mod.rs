@@ -3338,6 +3338,7 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
+    idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor,
     fsr_monitor: input::fsr::Monitor,
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
@@ -4036,6 +4037,7 @@ impl App {
             self.capture_pending_screenshot(redraw_started);
         }
         let frame_finished = Instant::now();
+        self.idle_inhibitor.ping(frame_finished);
         let frame_seconds = frame_finished.duration_since(prev_frame_end).as_secs_f32();
         self.state.shell.last_frame_end_time = frame_finished;
         self.chain_continuous_redraw(&window);
@@ -4121,6 +4123,7 @@ impl App {
             window: None,
             backend: None,
             backend_type,
+            idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),

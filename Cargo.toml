@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.207"
+version = "0.4.208"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -159,7 +159,7 @@ wgpu = { version = "29.0.3", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.186"
-xcb = { version = "1.7.0", features = ["randr"] }
+xcb = { version = "1.7.0", features = ["dpms", "randr", "xtest"] }
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 
 [target.'cfg(target_os = "freebsd")'.dependencies]

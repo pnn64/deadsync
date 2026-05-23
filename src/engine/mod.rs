@@ -2,6 +2,7 @@ pub mod audio;
 pub mod display;
 pub mod gfx;
 pub mod host_time;
+pub mod idle_inhibit;
 pub mod input;
 pub mod lights;
 pub mod logging;
