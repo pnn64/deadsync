@@ -249,6 +249,7 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         | CurrentScreen::Mappings
         | CurrentScreen::Input
         | CurrentScreen::SelectProfile
+        | CurrentScreen::ArrowCloudLogin
         | CurrentScreen::SelectColor
         | CurrentScreen::SelectStyle
         | CurrentScreen::SelectPlayMode
@@ -1163,6 +1164,7 @@ pub struct ScreensState {
     init_state: init::State,
     select_profile_state: select_profile::State,
     select_color_state: select_color::State,
+    arrowcloud_login_state: crate::screens::arrowcloud_login::State,
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
@@ -3050,6 +3052,9 @@ impl ScreensState {
         select_color_state.bg_from_index = color_index;
         select_color_state.bg_to_index = color_index;
 
+        let mut arrowcloud_login_state = crate::screens::arrowcloud_login::init();
+        arrowcloud_login_state.active_color_index = color_index;
+
         let mut select_music_state = select_music::init_placeholder();
         select_music_state.active_color_index = color_index;
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
@@ -3115,6 +3120,7 @@ impl ScreensState {
             init_state,
             select_profile_state,
             select_color_state,
+            arrowcloud_login_state,
             select_style_state,
             select_play_mode_state,
             profile_load_state,
@@ -3187,6 +3193,13 @@ impl ScreensState {
             }
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
+                (None, false)
+            }
+            CurrentScreen::ArrowCloudLogin => {
+                crate::screens::arrowcloud_login::update(
+                    &mut self.arrowcloud_login_state,
+                    delta_time,
+                );
                 (None, false)
             }
             CurrentScreen::SelectStyle => (
@@ -4270,9 +4283,21 @@ impl App {
                         self.handle_navigation_action(CurrentScreen::SelectMusic);
                     }
                 } else {
+                    // After profile selection, Simply Love optionally routes
+                    // through ScreenGrooveStatsLogin before SelectColor.
+                    // Mirror that here for ArrowCloud, gated by the
+                    // ArrowCloudQrLoginWhen pref.
+                    let cfg = crate::config::get();
+                    let next = if crate::screens::options::arrowcloud_login::should_auto_show(
+                        cfg.arrowcloud_qr_login_when,
+                    ) {
+                        CurrentScreen::ArrowCloudLogin
+                    } else {
+                        CurrentScreen::SelectColor
+                    };
                     // ProfileLoad asynchronously prepares SelectMusic/SelectCourse state;
                     // avoid redundant eager init here.
-                    self.handle_navigation_action(CurrentScreen::SelectColor);
+                    self.handle_navigation_action(next);
                 }
                 Vec::new()
             }
@@ -5416,6 +5441,10 @@ impl App {
                 &mut self.state.screens.select_color_state,
                 &ev,
             ),
+            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::handle_input(
+                &mut self.state.screens.arrowcloud_login_state,
+                &ev,
+            ),
             CurrentScreen::SelectStyle => crate::screens::select_style::handle_input(
                 &mut self.state.screens.select_style_state,
                 &ev,
@@ -5810,6 +5839,10 @@ impl App {
             ),
             CurrentScreen::SelectColor => select_color::get_actors(
                 &self.state.screens.select_color_state,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::get_actors(
+                &self.state.screens.arrowcloud_login_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::SelectStyle => {

@@ -18,6 +18,7 @@ pub mod practice;
 pub mod profile_load;
 pub mod sandbox;
 pub mod select_color;
+pub mod arrowcloud_login;
 pub mod select_course;
 pub mod select_mode;
 pub mod select_music;
@@ -115,6 +116,7 @@ pub enum Screen {
     Mappings,
     Input,
     SelectProfile,
+    ArrowCloudLogin,
     SelectColor,
     SelectStyle,
     SelectPlayMode,
@@ -144,6 +146,7 @@ impl Screen {
             Self::Mappings => "ScreenMapControllers",
             Self::Input => "ScreenTestInput",
             Self::SelectProfile => "ScreenSelectProfile",
+            Self::ArrowCloudLogin => "ScreenArrowCloudLogin",
             Self::SelectColor => "ScreenSelectColor",
             Self::SelectStyle => "ScreenSelectStyle",
             Self::SelectPlayMode => "ScreenSelectPlayMode",
