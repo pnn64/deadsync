@@ -3445,7 +3445,7 @@ impl App {
         }
     }
 
-    fn handle_pointer_moved(&mut self, px_x: f64, px_y: f64) {
+    fn handle_pointer_moved(&mut self, event_loop: &ActiveEventLoop, px_x: f64, px_y: f64) {
         let window_pos = space::WindowPos::new(px_x, px_y);
         let logical = window_pos.to_logical();
         self.state.shell.pointer_pos_window = Some(window_pos);
@@ -3458,10 +3458,10 @@ impl App {
             kind: input::PointerKind::Move,
             timestamp: Instant::now(),
         };
-        self.dispatch_pointer_event(&ev);
+        self.dispatch_pointer_event(event_loop, &ev);
     }
 
-    fn handle_pointer_left(&mut self) {
+    fn handle_pointer_left(&mut self, event_loop: &ActiveEventLoop) {
         self.state.shell.pointer_pos_window = None;
         self.state.shell.pointer_pos_logical = None;
         if !config::get().enable_mouse_input {
@@ -3472,11 +3472,12 @@ impl App {
             kind: input::PointerKind::Leave,
             timestamp: Instant::now(),
         };
-        self.dispatch_pointer_event(&ev);
+        self.dispatch_pointer_event(event_loop, &ev);
     }
 
     fn handle_pointer_button(
         &mut self,
+        event_loop: &ActiveEventLoop,
         state: winit::event::ElementState,
         button: winit::event::MouseButton,
     ) {
@@ -3501,10 +3502,14 @@ impl App {
             kind,
             timestamp: Instant::now(),
         };
-        self.dispatch_pointer_event(&ev);
+        self.dispatch_pointer_event(event_loop, &ev);
     }
 
-    fn handle_pointer_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+    fn handle_pointer_wheel(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        delta: winit::event::MouseScrollDelta,
+    ) {
         if !config::get().enable_mouse_input {
             return;
         }
@@ -3524,15 +3529,32 @@ impl App {
             kind: input::PointerKind::Wheel { dx, dy },
             timestamp: Instant::now(),
         };
-        self.dispatch_pointer_event(&ev);
+        self.dispatch_pointer_event(event_loop, &ev);
     }
 
     #[inline]
-    fn dispatch_pointer_event(&mut self, ev: &input::PointerEvent) {
+    fn dispatch_pointer_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: &input::PointerEvent,
+    ) {
         trace!(
             "pointer: kind={:?} pos={:?} screen={:?}",
             ev.kind, ev.pos, self.state.screens.current_screen
         );
+        // Pointer routing is opt-in per screen as the rollout proceeds.
+        let action = match self.state.screens.current_screen {
+            CurrentScreen::Menu => {
+                crate::screens::menu::handle_pointer(&mut self.state.screens.menu_state, ev)
+            }
+            _ => ScreenAction::None,
+        };
+        if matches!(action, ScreenAction::None) {
+            return;
+        }
+        if let Err(e) = self.handle_action(action, event_loop) {
+            error!("pointer dispatch failed: {e}");
+        }
     }
 
     #[inline(always)]
@@ -8831,16 +8853,16 @@ impl ApplicationHandler<UserEvent> for App {
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.handle_pointer_moved(position.x, position.y);
+                self.handle_pointer_moved(event_loop, position.x, position.y);
             }
             WindowEvent::CursorLeft { .. } => {
-                self.handle_pointer_left();
+                self.handle_pointer_left(event_loop);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                self.handle_pointer_button(state, button);
+                self.handle_pointer_button(event_loop, state, button);
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                self.handle_pointer_wheel(delta);
+                self.handle_pointer_wheel(event_loop, delta);
             }
             WindowEvent::RedrawRequested => {
                 let redraw_started = Instant::now();

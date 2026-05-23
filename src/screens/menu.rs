@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
-use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::{InputEvent, MouseButton, PointerEvent, PointerKind, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::game::course::get_course_cache;
@@ -14,6 +14,7 @@ use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
+use crate::screens::components::shared::hitbox::{HitRect, hit_test};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
@@ -108,6 +109,9 @@ pub struct State {
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
+    /// Index currently under the mouse pointer, or `None` if the cursor is
+    /// outside the menu rows (or mouse input is disabled).
+    hovered_index: Option<usize>,
 }
 
 pub fn init() -> State {
@@ -123,6 +127,7 @@ pub fn init() -> State {
         arrowcloud_text_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
+        hovered_index: None,
     }
 }
 
@@ -534,16 +539,60 @@ fn move_selection(state: &mut State, delta: isize) {
     crate::engine::audio::play_sfx("assets/sounds/change.ogg");
 }
 
+/// Update the selection without playing the change sfx. Used for pointer
+/// hover, which should follow the cursor silently rather than chirping on
+/// every pixel of movement.
+#[inline(always)]
+fn set_selection_silent(state: &mut State, index: usize) {
+    if index < OPTION_COUNT {
+        state.selected_index = index;
+    }
+}
+
 #[inline(always)]
 fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
+    start_index(state, state.selected_index, started_by_p2)
+}
+
+#[inline(always)]
+fn start_index(state: &mut State, index: usize, started_by_p2: bool) -> ScreenAction {
     crate::engine::audio::play_sfx("assets/sounds/start.ogg");
     state.started_by_p2 = started_by_p2;
-    match state.selected_index {
+    match index {
         0 => ScreenAction::Navigate(Screen::SelectProfile),
         1 => ScreenAction::Navigate(Screen::Options),
         2 => ScreenAction::Exit,
         _ => ScreenAction::None,
     }
+}
+
+/// Width of each menu-row hit target in logical units. Picked generously so
+/// users don't need pixel-perfect aim, while staying narrower than the
+/// 16:9 logical width (854) so it never reaches the screen edges.
+const MENU_HIT_WIDTH: f32 = 240.0;
+
+/// Compute the hit rectangles for the three main-menu rows. Mirrors the
+/// layout that `get_actors_with_alpha` uses to draw `menu_list`.
+fn menu_item_rects() -> [HitRect; OPTION_COUNT] {
+    let lp = LogoParams::default();
+    let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
+    let center_x = screen_center_x();
+    let mut rects = [HitRect {
+        min: crate::engine::space::LogicalPos::new(0.0, 0.0),
+        max: crate::engine::space::LogicalPos::new(0.0, 0.0),
+        id: 0,
+    }; OPTION_COUNT];
+    for i in 0..OPTION_COUNT {
+        let center_y = (i as f32).mul_add(MENU_ROW_SPACING, base_y);
+        rects[i] = HitRect::from_center(
+            center_x,
+            center_y,
+            MENU_HIT_WIDTH,
+            MENU_ROW_SPACING,
+            i as u32,
+        );
+    }
+    rects
 }
 
 #[inline(always)]
@@ -619,10 +668,57 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
+/// Pointer-driven navigation for the main menu.
+///
+/// * Hover moves the highlight silently to the row under the cursor.
+/// * Left-click on a row launches that row (same effect as `Start`).
+/// * Right-click anywhere is a `back` (exit) consistent with keyboard.
+pub fn handle_pointer(state: &mut State, ev: &PointerEvent) -> ScreenAction {
+    match ev.kind {
+        PointerKind::Move => {
+            if let Some(pos) = ev.pos {
+                let rects = menu_item_rects();
+                if let Some(id) = hit_test(&rects, pos) {
+                    let ix = id as usize;
+                    state.hovered_index = Some(ix);
+                    set_selection_silent(state, ix);
+                } else {
+                    state.hovered_index = None;
+                }
+            } else {
+                state.hovered_index = None;
+            }
+            ScreenAction::None
+        }
+        PointerKind::Leave => {
+            state.hovered_index = None;
+            ScreenAction::None
+        }
+        PointerKind::Down(MouseButton::Left) => {
+            let Some(pos) = ev.pos else {
+                return ScreenAction::None;
+            };
+            let rects = menu_item_rects();
+            match hit_test(&rects, pos) {
+                Some(id) => start_index(state, id as usize, false),
+                None => ScreenAction::None,
+            }
+        }
+        PointerKind::Down(MouseButton::Right) => ScreenAction::Exit,
+        _ => ScreenAction::None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::menu_nav_delta;
+    use super::{
+        MENU_BELOW_LOGO, MENU_HIT_WIDTH, MENU_ROW_SPACING, OPTION_COUNT, menu_item_rects,
+        menu_nav_delta,
+    };
     use crate::engine::input::VirtualAction;
+    use crate::engine::space::LogicalPos;
+    use crate::screens::components::menu::logo::LogoParams;
+    use crate::screens::components::shared::hitbox::hit_test;
 
     #[test]
     fn title_menu_left_and_up_move_previous() {
@@ -646,5 +742,39 @@ mod tests {
         assert_eq!(menu_nav_delta(VirtualAction::p2_menu_right), Some(1));
         assert_eq!(menu_nav_delta(VirtualAction::p2_down), Some(1));
         assert_eq!(menu_nav_delta(VirtualAction::p2_menu_down), Some(1));
+    }
+
+    #[test]
+    fn menu_item_rects_are_stacked_and_hit_test_per_row() {
+        // Pin the logical surface to a known 16:9 design size so
+        // screen_center_x() is stable across machines running the tests.
+        crate::engine::space::ortho_for_window(854, 480);
+        let rects = menu_item_rects();
+        let lp = LogoParams::default();
+        let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
+        let center_x = 0.5 * 854.0;
+        for (i, r) in rects.iter().enumerate() {
+            let expected_cy = (i as f32).mul_add(MENU_ROW_SPACING, base_y);
+            // Rect is centered on the row center.
+            assert!((0.5 * (r.min.x + r.max.x) - center_x).abs() < 1e-3);
+            assert!((0.5 * (r.min.y + r.max.y) - expected_cy).abs() < 1e-3);
+            assert!((r.max.x - r.min.x - MENU_HIT_WIDTH).abs() < 1e-3);
+            assert!((r.max.y - r.min.y - MENU_ROW_SPACING).abs() < 1e-3);
+            assert_eq!(r.id, i as u32);
+        }
+
+        // Centerpoint of each row hits its own id, and falls into a single
+        // unique row.
+        for i in 0..OPTION_COUNT {
+            let center_y = (i as f32).mul_add(MENU_ROW_SPACING, base_y);
+            assert_eq!(
+                hit_test(&rects, LogicalPos::new(center_x, center_y)),
+                Some(i as u32)
+            );
+        }
+
+        // Far outside the menu region returns no hit.
+        assert_eq!(hit_test(&rects, LogicalPos::new(0.0, 0.0)), None);
+        assert_eq!(hit_test(&rects, LogicalPos::new(center_x, base_y - 50.0)), None);
     }
 }
