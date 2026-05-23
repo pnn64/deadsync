@@ -169,6 +169,7 @@ pub enum ItemId {
     GsAutoPopulate,
     GsAutoDownloadUnlocks,
     GsSeparateUnlocks,
+    GsQrLogin,
 
     // ArrowCloud Options submenu
     AcEnable,

@@ -635,6 +635,8 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_auto_download_unlocks(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::SeparateUnlocksByPlayer {
             config::update_separate_unlocks_by_player(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::GrooveStatsQrLogin {
+            config::update_groovestats_qr_login_when(GrooveStatsQrLoginWhen::from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
