@@ -3527,8 +3527,6 @@ impl App {
         self.dispatch_pointer_event(&ev);
     }
 
-    /// Stub dispatch point for pointer events. For Phase 1 we only trace —
-    /// screen-level routing arrives in later phases per `plan.md`.
     #[inline]
     fn dispatch_pointer_event(&mut self, ev: &input::PointerEvent) {
         trace!(
