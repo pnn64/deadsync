@@ -1,0 +1,898 @@
+//! ArrowCloud QR device-login overlay — shared state machine and renderer.
+//!
+//! Mirrors Simply Love's `ScreenGrooveStatsLogin` design: one QR code
+//! per joined player, shown side by side
+//! (`BGAnimations/ScreenGrooveStatsLogin underlay/default.lua:117-165`).
+//! ArrowCloud's `device-login` API is poll-based rather than websocket,
+//! so each side gets its own independent worker thread that polls
+//! `device-login/poll` and writes the resulting key to its captured
+//! `PlayerSide` on consume.
+//!
+//! This module ships only the infrastructure — the multi-side state
+//! machine, the per-side worker, the slot renderer, and unit tests.
+//! Concrete entry points (post-Select-Profile auto-trigger, per-profile
+//! Link entry) live in follow-up PRs that wrap this module; until they
+//! land, callers are absent on purpose.
+#![allow(dead_code)]
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::online::arrowcloud as ac_online;
+use crate::game::profile;
+use crate::screens::components::shared::qr_code;
+
+const POLL_INTERVAL_MIN_S: f32 = 1.0;
+const POLL_INTERVAL_MAX_S: f32 = 10.0;
+const POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
+
+const ALL_SIDES: [profile::PlayerSide; 2] = [profile::PlayerSide::P1, profile::PlayerSide::P2];
+
+#[inline]
+fn side_ix(side: profile::PlayerSide) -> usize {
+    match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    }
+}
+
+#[inline]
+fn side_label(side: profile::PlayerSide) -> Arc<str> {
+    match side {
+        profile::PlayerSide::P1 => tr("ArrowCloudLogin", "Player1"),
+        profile::PlayerSide::P2 => tr("ArrowCloudLogin", "Player2"),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LoginMsg {
+    Started {
+        short_code: String,
+        verification_url: String,
+    },
+    StatusUpdate,
+    Consumed {
+        api_key: String,
+    },
+    Failed {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum SlotState {
+    /// Side is not joined to the session; the slot is hidden entirely.
+    NotJoined,
+    /// Side is joined but has no Local profile loaded — login is refused.
+    Guest,
+    /// Worker has been spawned, awaiting the `device-login/start` response.
+    Starting,
+    /// Worker has the short code + verification URL and is polling.
+    Pending {
+        short_code: String,
+        verification_url: String,
+    },
+    /// Server returned `consumed` and the API key was persisted.
+    Success,
+    /// Terminal failure for this side (network, expired, cancelled, etc.).
+    Failed { reason: String },
+}
+
+impl SlotState {
+    fn is_workless(&self) -> bool {
+        matches!(
+            self,
+            SlotState::NotJoined | SlotState::Guest | SlotState::Success | SlotState::Failed { .. }
+        )
+    }
+
+    fn is_visible(&self) -> bool {
+        !matches!(self, SlotState::NotJoined)
+    }
+}
+
+pub(crate) struct LoginSlot {
+    pub(crate) side: profile::PlayerSide,
+    pub(crate) state: SlotState,
+    /// Profile display name for this side (e.g. "Player 1", "Alice").
+    /// Shown as the panel header so the user sees exactly which profile
+    /// the key will land in.
+    pub(crate) display_name: String,
+    /// True iff this side already had a non-empty arrowcloud_api_key when
+    /// the overlay was opened.  Used to render a "Currently signed in"
+    /// badge so the user knows scanning will overwrite an existing key.
+    pub(crate) had_existing_key: bool,
+    pub(crate) rx: Option<std::sync::mpsc::Receiver<LoginMsg>>,
+}
+
+pub(crate) struct ArrowCloudLoginUiState {
+    pub(crate) slots: [LoginSlot; 2],
+    pub(crate) cancel: Arc<AtomicBool>,
+}
+
+impl Drop for ArrowCloudLoginUiState {
+    fn drop(&mut self) {
+        // Defensive: if the overlay is torn down without going through
+        // a cancel path, still signal workers to stop.
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Spawn ArrowCloud device-login workers — one per joined Local side —
+/// and return a fresh UI state ready to be rendered.
+pub fn create_arrowcloud_login_ui() -> ArrowCloudLoginUiState {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let slots = build_initial_slots(&cancel, |side, tx| {
+        let cancel_for_thread = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            run_login_session(
+                side,
+                tx,
+                cancel_for_thread,
+                ac_online::device_login_start,
+                ac_online::device_login_poll,
+            );
+        });
+    });
+    ArrowCloudLoginUiState { slots, cancel }
+}
+
+/// Decide which sides need a worker and build the slot array. `spawn`
+/// callback is invoked once per side that should start polling; tests
+/// inject a no-op or mock spawner.
+fn build_initial_slots<F>(_cancel: &Arc<AtomicBool>, mut spawn: F) -> [LoginSlot; 2]
+where
+    F: FnMut(profile::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
+{
+    let p1 = build_one_slot(profile::PlayerSide::P1, &mut spawn);
+    let p2 = build_one_slot(profile::PlayerSide::P2, &mut spawn);
+    [p1, p2]
+}
+
+fn build_one_slot<F>(side: profile::PlayerSide, spawn: &mut F) -> LoginSlot
+where
+    F: FnMut(profile::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
+{
+    if !profile::is_session_side_joined(side) {
+        return LoginSlot {
+            side,
+            state: SlotState::NotJoined,
+            display_name: String::new(),
+            had_existing_key: false,
+            rx: None,
+        };
+    }
+    if profile::is_session_side_guest(side) {
+        return LoginSlot {
+            side,
+            state: SlotState::Guest,
+            display_name: String::new(),
+            had_existing_key: false,
+            rx: None,
+        };
+    }
+    let p = profile::get_for_side(side);
+    let had_existing_key = !p.arrowcloud_api_key.trim().is_empty();
+
+    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
+    spawn(side, tx);
+    LoginSlot {
+        side,
+        state: SlotState::Starting,
+        display_name: p.display_name,
+        had_existing_key,
+        rx: Some(rx),
+    }
+}
+
+fn run_login_session<S, P>(
+    _side: profile::PlayerSide,
+    tx: std::sync::mpsc::Sender<LoginMsg>,
+    cancel: Arc<AtomicBool>,
+    start_fn: S,
+    poll_fn: P,
+) where
+    S: Fn(
+        &ac_online::DeviceLoginStartReq,
+    ) -> Result<ac_online::DeviceLoginStartResp, crate::engine::network::NetworkError>,
+    P: Fn(
+        &ac_online::DeviceLoginPollReq,
+    ) -> Result<ac_online::DeviceLoginPollResp, crate::engine::network::NetworkError>,
+{
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let req = ac_online::DeviceLoginStartReq {
+        machine_label: None,
+        client_version: Some(format!("deadsync {}", env!("CARGO_PKG_VERSION"))),
+        theme_version: None,
+    };
+    let start = match start_fn(&req) {
+        Ok(resp) => resp,
+        Err(err) => {
+            let _ = tx.send(LoginMsg::Failed {
+                reason: format!("{err}"),
+            });
+            return;
+        }
+    };
+
+    let mut interval_s = clamp_poll_interval(start.poll_interval_seconds);
+    let poll_req = ac_online::DeviceLoginPollReq {
+        session_id: start.session_id.clone(),
+        poll_token: start.poll_token.clone(),
+    };
+
+    if tx
+        .send(LoginMsg::Started {
+            short_code: start.short_code.clone(),
+            verification_url: start.verification_url.clone(),
+        })
+        .is_err()
+    {
+        return;
+    }
+
+    loop {
+        if !sleep_with_cancel(interval_s, &cancel) {
+            return;
+        }
+        match poll_fn(&poll_req) {
+            Ok(resp) => {
+                interval_s = clamp_poll_interval(resp.poll_interval_seconds);
+                match resp.status {
+                    ac_online::DeviceLoginStatus::Consumed => {
+                        let api_key = resp.api_key.unwrap_or_default();
+                        if api_key.trim().is_empty() {
+                            let _ = tx.send(LoginMsg::Failed {
+                                reason: "server returned empty api key".to_string(),
+                            });
+                        } else {
+                            let _ = tx.send(LoginMsg::Consumed { api_key });
+                        }
+                        return;
+                    }
+                    ac_online::DeviceLoginStatus::Cancelled
+                    | ac_online::DeviceLoginStatus::Expired => {
+                        let _ = tx.send(LoginMsg::Failed {
+                            reason: format!("{:?}", resp.status).to_lowercase(),
+                        });
+                        return;
+                    }
+                    ac_online::DeviceLoginStatus::Pending
+                    | ac_online::DeviceLoginStatus::Approved => {
+                        if tx.send(LoginMsg::StatusUpdate).is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                let _ = tx.send(LoginMsg::Failed {
+                    reason: format!("{err}"),
+                });
+                return;
+            }
+        }
+    }
+}
+
+fn clamp_poll_interval(seconds: Option<u64>) -> f32 {
+    let raw = seconds
+        .map(|s| s as f32)
+        .unwrap_or(POLL_INTERVAL_DEFAULT_S);
+    raw.clamp(POLL_INTERVAL_MIN_S, POLL_INTERVAL_MAX_S)
+}
+
+fn sleep_with_cancel(seconds: f32, cancel: &Arc<AtomicBool>) -> bool {
+    let total = std::time::Duration::from_millis((seconds * 1000.0).max(50.0) as u64);
+    let mut elapsed = std::time::Duration::ZERO;
+    let tick = std::time::Duration::from_millis(100);
+    while elapsed < total {
+        if cancel.load(Ordering::Relaxed) {
+            return false;
+        }
+        let chunk = tick.min(total - elapsed);
+        std::thread::sleep(chunk);
+        elapsed += chunk;
+    }
+    !cancel.load(Ordering::Relaxed)
+}
+
+/// Drain pending channel messages for every slot, updating slot state
+/// and (on success) persisting api keys into per-side profiles.
+pub(crate) fn poll_arrowcloud_login_ui(ui: &mut ArrowCloudLoginUiState) {
+    for slot in &mut ui.slots {
+        let mut msgs: Vec<LoginMsg> = Vec::new();
+        if let Some(rx) = slot.rx.as_ref() {
+            while let Ok(msg) = rx.try_recv() {
+                msgs.push(msg);
+            }
+        }
+        for msg in msgs {
+            apply_login_msg(slot, msg);
+        }
+    }
+}
+
+fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) {
+    match msg {
+        LoginMsg::Started {
+            short_code,
+            verification_url,
+        } => {
+            slot.state = SlotState::Pending {
+                short_code,
+                verification_url,
+            };
+        }
+        LoginMsg::StatusUpdate => {
+            // Approved-but-not-consumed renders identically to Pending —
+            // we only flip to Success once the key has been delivered.
+        }
+        LoginMsg::Consumed { api_key } => {
+            profile::set_arrowcloud_api_key_for_side(slot.side, &api_key);
+            ac_online::refresh_status();
+            // Refresh display_name in case profile state changed.
+            slot.display_name = profile::get_for_side(slot.side).display_name;
+            slot.state = SlotState::Success;
+            slot.rx = None;
+        }
+        LoginMsg::Failed { reason } => {
+            slot.state = SlotState::Failed { reason };
+            slot.rx = None;
+        }
+    }
+}
+
+/// `true` when every slot is in a state that needs no further work —
+/// i.e. it's safe to dismiss without silently dropping an in-flight
+/// session.
+pub(crate) fn login_overlay_is_terminal(ui: &ArrowCloudLoginUiState) -> bool {
+    ui.slots.iter().all(|s| s.state.is_workless())
+}
+
+pub(crate) fn build_arrowcloud_login_overlay_actors(
+    ui: &ArrowCloudLoginUiState,
+    active_color_index: i32,
+) -> Vec<Actor> {
+    let mut out: Vec<Actor> = Vec::with_capacity(24);
+
+    out.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.65):
+        z(300)
+    ));
+
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+    let visible_sides: Vec<profile::PlayerSide> = ALL_SIDES
+        .iter()
+        .copied()
+        .filter(|s| ui.slots[side_ix(*s)].state.is_visible())
+        .collect();
+
+    out.push(act!(text:
+        font("miso"):
+        settext(tr("ArrowCloudLogin", "Title").to_string()):
+        align(0.5, 0.5):
+        xy(cx, cy - 200.0):
+        zoom(1.05):
+        horizalign(center):
+        z(301)
+    ));
+
+    if visible_sides.is_empty() {
+        out.push(act!(text:
+            font("miso"):
+            settext(tr("ArrowCloudLogin", "NoPlayerJoined").to_string()):
+            align(0.5, 0.5):
+            xy(cx, cy):
+            zoom(0.95):
+            horizalign(center):
+            z(301)
+        ));
+        return out;
+    }
+
+    let two_up = visible_sides.len() > 1;
+    let panel_offset: f32 = if two_up { 200.0 } else { 0.0 };
+    let qr_size: f32 = if two_up { 150.0 } else { 200.0 };
+    for (i, side) in visible_sides.iter().enumerate() {
+        let slot = &ui.slots[side_ix(*side)];
+        let dx = if two_up && i == 0 {
+            -panel_offset
+        } else if two_up {
+            panel_offset
+        } else {
+            0.0
+        };
+        push_slot_panel(&mut out, slot, cx + dx, cy, qr_size, active_color_index);
+    }
+
+    let footer_key = if login_overlay_is_terminal(ui) {
+        "ContinueHint"
+    } else {
+        "SkipHint"
+    };
+    out.push(act!(text:
+        font("miso"):
+        settext(tr("ArrowCloudLogin", footer_key).to_string()):
+        align(0.5, 0.5):
+        xy(cx, cy + 200.0):
+        zoom(0.9):
+        horizalign(center):
+        z(301)
+    ));
+
+    out
+}
+
+fn push_slot_panel(
+    out: &mut Vec<Actor>,
+    slot: &LoginSlot,
+    panel_cx: f32,
+    panel_cy: f32,
+    qr_size: f32,
+    active_color_index: i32,
+) {
+    let fill = color::decorative_rgba(active_color_index);
+    let side_label_str = side_label(slot.side);
+
+    // Panel header — "Player 1 - <profile name>" so the user sees both
+    // which side the panel is for and exactly which profile's
+    // ArrowCloud.ini will receive the new key, on a single line.
+    let header_text = if slot.display_name.is_empty() {
+        side_label_str.to_string()
+    } else {
+        tr_fmt(
+            "ArrowCloudLogin",
+            "PanelHeader",
+            &[("side", side_label_str.as_ref()), ("name", &slot.display_name)],
+        )
+        .to_string()
+    };
+    out.push(act!(text:
+        font("miso"):
+        settext(header_text):
+        align(0.5, 0.5):
+        xy(panel_cx, panel_cy - 145.0):
+        zoom(0.95):
+        maxwidth(320.0):
+        horizalign(center):
+        z(301):
+        diffuse(fill[0], fill[1], fill[2], 1.0)
+    ));
+
+    match &slot.state {
+        SlotState::NotJoined => {}
+        SlotState::Guest => {
+            out.push(act!(text:
+                font("miso"):
+                settext(tr_fmt(
+                    "ArrowCloudLogin",
+                    "GuestHint",
+                    &[("side", side_label_str.as_ref())],
+                ).to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, panel_cy):
+                zoom(0.9):
+                maxwidth(260.0):
+                horizalign(center):
+                z(301):
+                diffuse(1.0, 0.85, 0.4, 1.0)
+            ));
+        }
+        SlotState::Starting => {
+            out.push(act!(text:
+                font("miso"):
+                settext(tr("ArrowCloudLogin", "Contacting").to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, panel_cy):
+                zoom(0.95):
+                horizalign(center):
+                z(301)
+            ));
+            push_status_badge(out, slot, panel_cx, panel_cy);
+        }
+        SlotState::Pending {
+            short_code,
+            verification_url,
+        } => {
+            let qr_actors = qr_code::build(qr_code::QrCodeParams {
+                content: verification_url,
+                center_x: panel_cx,
+                center_y: panel_cy,
+                size: qr_size,
+                border_modules: 2,
+                z: 301,
+            });
+            if qr_actors.is_empty() {
+                out.push(act!(text:
+                    font("miso"):
+                    settext(tr("ArrowCloudLogin", "QrUnavailable").to_string()):
+                    align(0.5, 0.5):
+                    xy(panel_cx, panel_cy):
+                    zoom(0.95):
+                    horizalign(center):
+                    z(301):
+                    diffuse(1.0, 0.3, 0.3, 1.0)
+                ));
+            } else {
+                out.extend(qr_actors);
+            }
+
+            let below_qr = panel_cy + qr_size * 0.5;
+            out.push(act!(text:
+                font("miso"):
+                settext(tr_fmt(
+                    "ArrowCloudLogin",
+                    "Code",
+                    &[("code", short_code.as_str())],
+                ).to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, below_qr + 20.0):
+                zoom(0.95):
+                horizalign(center):
+                z(301):
+                diffuse(fill[0], fill[1], fill[2], 1.0)
+            ));
+
+            out.push(act!(text:
+                font("miso"):
+                settext(verification_url.clone()):
+                align(0.5, 0.5):
+                xy(panel_cx, below_qr + 45.0):
+                zoom(0.7):
+                maxwidth(if qr_size >= 180.0 { 360.0 } else { 260.0 }):
+                horizalign(center):
+                z(301):
+                diffuse(0.85, 0.85, 0.85, 1.0)
+            ));
+
+            push_status_badge(out, slot, panel_cx, panel_cy - qr_size * 0.5);
+        }
+        SlotState::Success => {
+            out.push(act!(text:
+                font("miso"):
+                settext(tr("ArrowCloudLogin", "SignInComplete").to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, panel_cy):
+                zoom(1.0):
+                maxwidth(260.0):
+                horizalign(center):
+                z(301):
+                diffuse(0.4, 1.0, 0.5, 1.0)
+            ));
+            out.push(act!(text:
+                font("miso"):
+                settext(tr("ArrowCloudLogin", "KeySaved").to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, panel_cy + 26.0):
+                zoom(0.8):
+                maxwidth(260.0):
+                horizalign(center):
+                z(301):
+                diffuse(0.85, 0.85, 0.85, 1.0)
+            ));
+        }
+        SlotState::Failed { reason } => {
+            out.push(act!(text:
+                font("miso"):
+                settext(tr_fmt(
+                    "ArrowCloudLogin",
+                    "SignInFailed",
+                    &[("reason", reason.as_str())],
+                ).to_string()):
+                align(0.5, 0.5):
+                xy(panel_cx, panel_cy):
+                zoom(0.85):
+                maxwidth(260.0):
+                horizalign(center):
+                z(301):
+                diffuse(1.0, 0.4, 0.4, 1.0)
+            ));
+        }
+    }
+}
+
+/// Small "Currently signed in" badge shown above an in-flight QR when
+/// the side already has a saved API key.  Warns the user that scanning
+/// will overwrite it.
+fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badge_y: f32) {
+    if !slot.had_existing_key {
+        return;
+    }
+    out.push(act!(text:
+        font("miso"):
+        settext(tr("ArrowCloudLogin", "AlreadySignedInBadge").to_string()):
+        align(0.5, 0.5):
+        xy(panel_cx, badge_y - 18.0):
+        zoom(0.65):
+        maxwidth(280.0):
+        horizalign(center):
+        z(301):
+        diffuse(1.0, 0.85, 0.4, 1.0)
+    ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::network::NetworkError;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+
+    fn drain_msgs(rx: &mpsc::Receiver<LoginMsg>) -> Vec<LoginMsg> {
+        let mut out = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            out.push(msg);
+        }
+        out
+    }
+
+    fn make_start_ok() -> ac_online::DeviceLoginStartResp {
+        ac_online::DeviceLoginStartResp {
+            session_id: "sess-1".into(),
+            short_code: "ABCD2345".into(),
+            poll_token: "tok-1".into(),
+            poll_interval_seconds: Some(0),
+            verification_url: "https://arrowcloud.dance/device-login/sess-1".into(),
+        }
+    }
+
+    #[test]
+    fn clamp_poll_interval_uses_default_when_missing() {
+        assert!((clamp_poll_interval(None) - POLL_INTERVAL_DEFAULT_S).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn clamp_poll_interval_clamps_to_min() {
+        assert!((clamp_poll_interval(Some(0)) - POLL_INTERVAL_MIN_S).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn clamp_poll_interval_clamps_to_max() {
+        assert!((clamp_poll_interval(Some(9999)) - POLL_INTERVAL_MAX_S).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn worker_emits_started_then_consumed() {
+        let (tx, rx) = mpsc::channel::<LoginMsg>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let polls = Arc::new(Mutex::new(0u32));
+        let polls_clone = Arc::clone(&polls);
+
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+                Ok(start.clone())
+            };
+        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            let mut n = polls_clone.lock().unwrap();
+            *n += 1;
+            if *n == 1 {
+                Ok(ac_online::DeviceLoginPollResp {
+                    status: ac_online::DeviceLoginStatus::Pending,
+                    poll_interval_seconds: Some(0),
+                    api_key: None,
+                })
+            } else {
+                Ok(ac_online::DeviceLoginPollResp {
+                    status: ac_online::DeviceLoginStatus::Consumed,
+                    poll_interval_seconds: None,
+                    api_key: Some("AC-KEY-7".into()),
+                })
+            }
+        };
+
+        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
+
+        let msgs = drain_msgs(&rx);
+        assert!(matches!(msgs.first(), Some(LoginMsg::Started { .. })));
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, LoginMsg::StatusUpdate { .. }))
+        );
+        assert!(matches!(
+            msgs.last(),
+            Some(LoginMsg::Consumed { api_key }) if api_key == "AC-KEY-7"
+        ));
+        assert_eq!(*polls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn worker_reports_failure_on_expired() {
+        let (tx, rx) = mpsc::channel::<LoginMsg>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+                Ok(start.clone())
+            };
+        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(ac_online::DeviceLoginPollResp {
+                status: ac_online::DeviceLoginStatus::Expired,
+                poll_interval_seconds: None,
+                api_key: None,
+            })
+        };
+
+        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
+        let msgs = drain_msgs(&rx);
+        assert!(matches!(msgs.last(), Some(LoginMsg::Failed { reason }) if reason == "expired"));
+    }
+
+    #[test]
+    fn worker_reports_failure_when_start_errors() {
+        let (tx, rx) = mpsc::channel::<LoginMsg>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let start_fn = |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+            Err(NetworkError::Request("boom".into()))
+        };
+        let poll_fn = |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            unreachable!("poll should not be called when start fails")
+        };
+
+        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
+        let msgs = drain_msgs(&rx);
+        assert!(matches!(msgs.first(), Some(LoginMsg::Failed { .. })));
+        assert_eq!(msgs.len(), 1);
+    }
+
+    #[test]
+    fn worker_consumed_with_empty_key_is_failure() {
+        let (tx, rx) = mpsc::channel::<LoginMsg>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+                Ok(start.clone())
+            };
+        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(ac_online::DeviceLoginPollResp {
+                status: ac_online::DeviceLoginStatus::Consumed,
+                poll_interval_seconds: None,
+                api_key: Some("   ".into()),
+            })
+        };
+
+        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
+        let msgs = drain_msgs(&rx);
+        assert!(matches!(msgs.last(), Some(LoginMsg::Failed { .. })));
+    }
+
+    #[test]
+    fn sleep_with_cancel_returns_false_when_cancelled_mid_wait() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_for_thread = Arc::clone(&cancel);
+        let handle = std::thread::spawn(move || sleep_with_cancel(5.0, &cancel_for_thread));
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        cancel.store(true, Ordering::Relaxed);
+        assert!(!handle.join().unwrap());
+    }
+
+    fn slot(side: profile::PlayerSide, state: SlotState) -> LoginSlot {
+        LoginSlot {
+            side,
+            state,
+            display_name: String::new(),
+            had_existing_key: false,
+            rx: None,
+        }
+    }
+
+    #[test]
+    fn login_overlay_is_terminal_true_when_all_slots_workless() {
+        let ui = ArrowCloudLoginUiState {
+            cancel: Arc::new(AtomicBool::new(false)),
+            slots: [
+                slot(profile::PlayerSide::P1, SlotState::Success),
+                slot(profile::PlayerSide::P2, SlotState::NotJoined),
+            ],
+        };
+        assert!(login_overlay_is_terminal(&ui));
+    }
+
+    #[test]
+    fn login_overlay_is_terminal_false_when_any_slot_pending() {
+        let ui = ArrowCloudLoginUiState {
+            cancel: Arc::new(AtomicBool::new(false)),
+            slots: [
+                slot(profile::PlayerSide::P1, SlotState::Success),
+                slot(
+                    profile::PlayerSide::P2,
+                    SlotState::Pending {
+                        short_code: "X".into(),
+                        verification_url: "u".into(),
+                    },
+                ),
+            ],
+        };
+        assert!(!login_overlay_is_terminal(&ui));
+    }
+
+    #[test]
+    fn apply_started_message_moves_slot_to_pending() {
+        let mut s = slot(profile::PlayerSide::P1, SlotState::Starting);
+        apply_login_msg(
+            &mut s,
+            LoginMsg::Started {
+                short_code: "XYZ".into(),
+                verification_url: "https://example".into(),
+            },
+        );
+        assert!(matches!(
+            s.state,
+            SlotState::Pending { ref short_code, .. } if short_code == "XYZ"
+        ));
+    }
+
+    #[test]
+    fn apply_failed_message_clears_rx_and_records_reason() {
+        let (_tx, rx) = mpsc::channel::<LoginMsg>();
+        let mut s = LoginSlot {
+            side: profile::PlayerSide::P2,
+            state: SlotState::Pending {
+                short_code: "X".into(),
+                verification_url: "u".into(),
+            },
+            display_name: String::new(),
+            had_existing_key: false,
+            rx: Some(rx),
+        };
+        apply_login_msg(
+            &mut s,
+            LoginMsg::Failed {
+                reason: "boom".into(),
+            },
+        );
+        assert!(matches!(s.state, SlotState::Failed { ref reason } if reason == "boom"));
+        assert!(s.rx.is_none());
+    }
+
+    #[test]
+    fn drop_signals_cancel() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        {
+            let _ui = ArrowCloudLoginUiState {
+                cancel: Arc::clone(&cancel),
+                slots: [
+                    slot(profile::PlayerSide::P1, SlotState::Starting),
+                    slot(profile::PlayerSide::P2, SlotState::NotJoined),
+                ],
+            };
+            assert!(!cancel.load(Ordering::Relaxed));
+        }
+        assert!(cancel.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn slot_state_is_workless_classification() {
+        assert!(SlotState::NotJoined.is_workless());
+        assert!(SlotState::Guest.is_workless());
+        assert!(SlotState::Success.is_workless());
+        assert!(
+            SlotState::Failed {
+                reason: "x".into()
+            }
+            .is_workless()
+        );
+        assert!(!SlotState::Starting.is_workless());
+        assert!(
+            !SlotState::Pending {
+                short_code: "x".into(),
+                verification_url: "y".into()
+            }
+            .is_workless()
+        );
+    }
+}

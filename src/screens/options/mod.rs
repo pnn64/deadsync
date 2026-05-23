@@ -60,6 +60,7 @@ mod reload;
 use reload::*;
 mod score_import;
 use score_import::*;
+pub(crate) mod arrowcloud_login;
 mod pack_sync;
 use pack_sync::*;
 mod layout;
