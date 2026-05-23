@@ -4,32 +4,20 @@
 //! the desktop should not blank or power it down just because input is arriving
 //! through a raw device path.
 
-use std::time::Instant;
-
 #[cfg(all(unix, not(target_os = "macos")))]
 mod unix;
 
 #[derive(Default)]
 pub struct IdleInhibitor {
     #[cfg(all(unix, not(target_os = "macos")))]
-    inner: Option<unix::IdleInhibitor>,
+    _inner: Option<unix::IdleInhibitor>,
 }
 
 impl IdleInhibitor {
     pub fn acquire() -> Self {
         Self {
             #[cfg(all(unix, not(target_os = "macos")))]
-            inner: unix::IdleInhibitor::acquire(),
+            _inner: unix::IdleInhibitor::acquire(),
         }
-    }
-
-    pub fn ping(&mut self, now: Instant) {
-        #[cfg(all(unix, not(target_os = "macos")))]
-        if let Some(inner) = &mut self.inner {
-            inner.ping(now);
-        }
-
-        #[cfg(any(windows, target_os = "macos"))]
-        let _ = now;
     }
 }
