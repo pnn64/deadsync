@@ -355,6 +355,17 @@ pub fn update_submit_arrowcloud_fails(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_arrowcloud_qr_login_when(when: ArrowCloudQrLoginWhen) {
+    {
+        let mut cfg = lock_config();
+        if cfg.arrowcloud_qr_login_when == when {
+            return;
+        }
+        cfg.arrowcloud_qr_login_when = when;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_auto_download_unlocks(enabled: bool) {
     {
         let mut cfg = lock_config();

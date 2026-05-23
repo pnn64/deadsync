@@ -28,13 +28,14 @@ pub use self::runtime::{
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
-    AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
-    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
+    DefaultSyncOffset, GameFlag, LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor,
+    MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
+    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
+    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
+    auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -286,6 +287,9 @@ pub struct Config {
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
     pub submit_arrowcloud_fails: bool,
+    /// When to auto-show the ArrowCloud QR-login screen after Select
+    /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
+    pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
     pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
@@ -436,6 +440,7 @@ impl Default for Config {
             enable_boogiestats: false,
             enable_groovestats: false,
             submit_arrowcloud_fails: false,
+            arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             separate_unlocks_by_player: false,
             fastload: true,
             cachesongs: true,

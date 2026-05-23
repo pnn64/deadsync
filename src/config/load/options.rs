@@ -76,6 +76,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SubmitArrowCloudFails")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.submit_arrowcloud_fails, |v| v != 0);
+    cfg.arrowcloud_qr_login_when = conf
+        .get("Options", "ArrowCloudQrLoginWhen")
+        .and_then(|v| ArrowCloudQrLoginWhen::from_str(&v).ok())
+        .unwrap_or(default.arrowcloud_qr_login_when);
     cfg.separate_unlocks_by_player = conf
         .get("Options", "SeparateUnlocksByPlayer")
         .and_then(|v| v.parse::<u8>().ok())

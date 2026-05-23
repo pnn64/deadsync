@@ -173,6 +173,7 @@ pub enum ItemId {
     // ArrowCloud Options submenu
     AcEnable,
     AcSubmitFails,
+    AcQrLogin,
 
     // Online Scoring submenu (launcher)
     OsGsBsOptions,
