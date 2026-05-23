@@ -309,11 +309,3 @@ Attach `deadsync.log` to your GitHub issue or discussion. If the file is large, 
     And more broadly, everyone who has written themes, noteskins, tools, and simfiles for the
     community over the years. ❤️
 </p>
-
-<h3>Third-party assets</h3>
-<ul>
-    <li>
-        Mouse cursor artwork at <code>assets/graphics/cursor/source/cursor.png</code>:
-        <a href="https://www.flaticon.com/free-icons/cursor" title="cursor icons">Cursor icons created by zky.icon - Flaticon</a>.
-    </li>
-</ul>
