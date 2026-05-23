@@ -4147,6 +4147,21 @@ fn reset_exit_code_on_non_lr_press(state: &mut State, ev: &InputEvent) {
 }
 
 #[inline(always)]
+const fn direct_lr_blocked_by_dedicated_menu(
+    action: VirtualAction,
+    only_dedicated_menu_buttons: bool,
+) -> bool {
+    only_dedicated_menu_buttons
+        && matches!(
+            action,
+            VirtualAction::p1_left
+                | VirtualAction::p1_right
+                | VirtualAction::p2_left
+                | VirtualAction::p2_right
+        )
+}
+
+#[inline(always)]
 fn show_select_music_menu(state: &mut State) {
     state.select_music_menu = select_music_menu::State::Visible(select_music_menu::open());
     rebuild_select_music_menu(state);
@@ -8377,6 +8392,23 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     ScreenAction::None
 }
 
+fn collapse_expanded_pack(state: &mut State, pack: String) {
+    debug!("Up+Down combo: Collapsing pack '{}'.", pack);
+    rebuild_displayed_entries(state);
+    if let Some(new_sel) = state
+        .entries
+        .iter()
+        .position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack))
+    {
+        state.selected_index = new_sel;
+        state.prev_selected_index = new_sel;
+        state.time_since_selection_change = 0.0;
+        // Clear delayed chart-driven panels immediately on folder close.
+        state.displayed_chart_p1 = None;
+        state.displayed_chart_p2 = None;
+    }
+}
+
 pub fn handle_pad_dir(
     state: &mut State,
     side: profile::PlayerSide,
@@ -8445,8 +8477,8 @@ pub fn handle_pad_dir(
                 start_nav_hold(state, NavDirection::Left);
             }
             PadDir::Up | PadDir::Down => {
+                let is_up = matches!(dir, PadDir::Up);
                 if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-                    let is_up = matches!(dir, PadDir::Up);
                     let now = timestamp;
 
                     if state.last_steps_nav_dir_p1 == Some(dir)
@@ -8494,33 +8526,23 @@ pub fn handle_pad_dir(
                         state.last_steps_nav_dir_p1 = Some(dir);
                         state.last_steps_nav_time_p1 = Some(now);
                     }
+                }
 
-                    state.chord_mask_p1 |= chord_bit(dir);
-                    if is_up {
-                        state.p1_chord_up_pressed_at = Some(timestamp);
-                    } else {
-                        state.p1_chord_down_pressed_at = Some(timestamp);
-                    }
+                state.chord_mask_p1 |= chord_bit(dir);
+                if is_up {
+                    state.p1_chord_up_pressed_at = Some(timestamp);
+                } else {
+                    state.p1_chord_down_pressed_at = Some(timestamp);
+                }
 
-                    // Combo check
-                    if state.chord_mask_p1 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
-                        && chord_times_are_simultaneous(
-                            state.p1_chord_up_pressed_at,
-                            state.p1_chord_down_pressed_at,
-                        )
-                        && let Some(pack) = state.expanded_pack_name.take()
-                    {
-                        debug!("Up+Down combo: Collapsing pack '{}'.", pack);
-                        rebuild_displayed_entries(state);
-                        if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)) {
-                            state.selected_index = new_sel;
-                            state.prev_selected_index = new_sel;
-                            state.time_since_selection_change = 0.0;
-                            // Clear delayed chart-driven panels immediately on folder close.
-                            state.displayed_chart_p1 = None;
-                            state.displayed_chart_p2 = None;
-                        }
-                    }
+                if state.chord_mask_p1 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
+                    && chord_times_are_simultaneous(
+                        state.p1_chord_up_pressed_at,
+                        state.p1_chord_down_pressed_at,
+                    )
+                    && let Some(pack) = state.expanded_pack_name.take()
+                {
+                    collapse_expanded_pack(state, pack);
                 }
             }
         }
@@ -8581,8 +8603,8 @@ fn handle_pad_dir_p2(
         return ScreenAction::None;
     }
     if pressed {
+        let is_up = matches!(dir, PadDir::Up);
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            let is_up = matches!(dir, PadDir::Up);
             let now = timestamp;
 
             if state.last_steps_nav_dir_p2 == Some(dir)
@@ -8634,35 +8656,23 @@ fn handle_pad_dir_p2(
                 state.last_steps_nav_dir_p2 = Some(dir);
                 state.last_steps_nav_time_p2 = Some(now);
             }
+        }
 
-            state.chord_mask_p2 |= chord_bit(dir);
-            if is_up {
-                state.p2_chord_up_pressed_at = Some(timestamp);
-            } else {
-                state.p2_chord_down_pressed_at = Some(timestamp);
-            }
+        state.chord_mask_p2 |= chord_bit(dir);
+        if is_up {
+            state.p2_chord_up_pressed_at = Some(timestamp);
+        } else {
+            state.p2_chord_down_pressed_at = Some(timestamp);
+        }
 
-            // Combo check
-            if state.chord_mask_p2 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
-                && chord_times_are_simultaneous(
-                    state.p2_chord_up_pressed_at,
-                    state.p2_chord_down_pressed_at,
-                )
-                && let Some(pack) = state.expanded_pack_name.take()
-            {
-                debug!("Up+Down combo: Collapsing pack '{}'.", pack);
-                rebuild_displayed_entries(state);
-                if let Some(new_sel) = state.entries.iter().position(
-                    |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack),
-                ) {
-                    state.selected_index = new_sel;
-                    state.prev_selected_index = new_sel;
-                    state.time_since_selection_change = 0.0;
-                    // Clear delayed chart-driven panels immediately on folder close.
-                    state.displayed_chart_p1 = None;
-                    state.displayed_chart_p2 = None;
-                }
-            }
+        if state.chord_mask_p2 & (CHORD_UP | CHORD_DOWN) == (CHORD_UP | CHORD_DOWN)
+            && chord_times_are_simultaneous(
+                state.p2_chord_up_pressed_at,
+                state.p2_chord_down_pressed_at,
+            )
+            && let Some(pack) = state.expanded_pack_name.take()
+        {
+            collapse_expanded_pack(state, pack);
         }
     } else {
         match dir {
@@ -9003,10 +9013,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     reset_exit_code_on_non_lr_press(state, ev);
+    let only_dedicated_menu_buttons = config::get().only_dedicated_menu_buttons;
 
     let play_style = crate::game::profile::get_session_play_style();
     if play_style == crate::game::profile::PlayStyle::Versus {
         return match ev.action {
+            action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
+                ScreenAction::None
+            }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
                 profile::PlayerSide::P1,
@@ -9092,6 +9106,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match crate::game::profile::get_session_player_side() {
         crate::game::profile::PlayerSide::P2 => match ev.action {
+            action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
+                ScreenAction::None
+            }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
                 state,
                 profile::PlayerSide::P2,
@@ -9130,6 +9147,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             _ => ScreenAction::None,
         },
         crate::game::profile::PlayerSide::P1 => match ev.action {
+            action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
+                ScreenAction::None
+            }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
                 profile::PlayerSide::P1,
@@ -11766,7 +11786,7 @@ mod tests {
         steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::engine::input::{PadDir, RawKeyboardEvent};
+    use crate::engine::input::{PadDir, RawKeyboardEvent, VirtualAction};
     use crate::game::song::SongData;
     use crate::game::{profile, scores};
     use crate::screens::ScreenAction;
@@ -12163,6 +12183,62 @@ mod tests {
         ));
         assert_eq!(state.nav_key_held_direction, None);
         assert_eq!(state.menu_chord_mask, 0);
+    }
+
+    #[test]
+    fn up_down_chord_closes_expanded_pack_from_header() {
+        let mut state = init_placeholder();
+        state.all_entries = test_entries();
+        state.entries = build_displayed_entries(
+            &state.all_entries,
+            Some("Pack A"),
+            SelectMusicWheelStyle::Itg,
+        );
+        state.expanded_pack_name = Some("Pack A".to_string());
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+
+        let now = Instant::now();
+        super::handle_pad_dir(&mut state, profile::PlayerSide::P1, PadDir::Up, true, now);
+        super::handle_pad_dir(
+            &mut state,
+            profile::PlayerSide::P1,
+            PadDir::Down,
+            true,
+            now + Duration::from_millis(10),
+        );
+
+        assert_eq!(state.expanded_pack_name, None);
+        assert!(matches!(
+            state.entries.get(state.selected_index),
+            Some(super::MusicWheelEntry::PackHeader { name, .. }) if name == "Pack A"
+        ));
+        assert!(state.displayed_chart_p1.is_none());
+        assert!(state.displayed_chart_p2.is_none());
+    }
+
+    #[test]
+    fn only_dedicated_blocks_direct_lr_but_not_menu_lr_or_ud_codes() {
+        assert!(super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p1_left,
+            true
+        ));
+        assert!(super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p2_right,
+            true
+        ));
+        assert!(!super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p1_menu_left,
+            true
+        ));
+        assert!(!super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p1_up,
+            true
+        ));
+        assert!(!super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p1_left,
+            false
+        ));
     }
 
     #[test]

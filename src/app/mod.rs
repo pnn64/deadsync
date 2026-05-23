@@ -5359,12 +5359,9 @@ impl App {
         if config::get().only_dedicated_menu_buttons && ev.action.is_gameplay_arrow() {
             let allow_gameplay_arrow = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Input => true,
-                CurrentScreen::SelectMusic => {
-                    self.state
-                        .screens
-                        .select_music_state
-                        .test_input_overlay_visible
-                }
+                // SelectMusic keeps raw pad arrows as code-detector input
+                // in OnlyDedicated mode, but gates wheel navigation itself.
+                CurrentScreen::SelectMusic => true,
                 CurrentScreen::Evaluation => crate::screens::evaluation::test_input_pane_active(
                     &self.state.screens.evaluation_state,
                 ),
