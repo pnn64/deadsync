@@ -67,6 +67,13 @@ pub enum ScreenAction {
         p1: ActiveProfile,
         p2: ActiveProfile,
     },
+    /// Open the ArrowCloud QR-login screen scoped to a specific profile
+    /// (rather than P1/P2 session sides).  Dispatched from
+    /// Manage Local Profiles → per-profile menu → Link ArrowCloud.
+    LinkArrowCloud {
+        profile_id: String,
+        display_name: String,
+    },
     RequestScreenshot(Option<PlayerSide>),
     RequestBanner(Option<PathBuf>),
     RequestCdTitle(Option<PathBuf>),

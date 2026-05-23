@@ -4303,6 +4303,20 @@ impl App {
                 }
                 Vec::new()
             }
+            ScreenAction::LinkArrowCloud {
+                profile_id,
+                display_name,
+            } => {
+                self.state.screens.arrowcloud_login_state.active_color_index =
+                    self.state.screens.menu_state.active_color_index;
+                self.state.screens.arrowcloud_login_state.target_profile =
+                    Some(crate::screens::arrowcloud_login::ProfileTarget {
+                        id: profile_id,
+                        display_name,
+                    });
+                self.handle_navigation_action(CurrentScreen::ArrowCloudLogin);
+                Vec::new()
+            }
             ScreenAction::RequestScreenshot(side) => {
                 self.state.shell.screenshot_pending = true;
                 self.state.shell.screenshot_request_side = side;

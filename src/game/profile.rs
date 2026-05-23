@@ -4053,6 +4053,67 @@ pub fn set_arrowcloud_api_key_for_side(side: PlayerSide, api_key: &str) {
     save_arrowcloud_ini_for_side(side);
 }
 
+/// Write a new ArrowCloud API key for a profile identified by ID
+/// (independent of session sides).  Used by the Manage Local Profiles
+/// "Link ArrowCloud" flow where the user picks a profile that isn't
+/// necessarily joined on P1 or P2.  Also refreshes the in-memory copy
+/// on any session side currently loading that profile, so other screens
+/// see the new key immediately.
+pub fn set_arrowcloud_api_key_for_id(profile_id: &str, api_key: &str) {
+    // Update any session side currently bound to this profile id.
+    let matching_sides: Vec<PlayerSide> = {
+        let session = lock_session();
+        [PlayerSide::P1, PlayerSide::P2]
+            .iter()
+            .copied()
+            .filter(|side| {
+                matches!(
+                    &session.active_profiles[side_ix(*side)],
+                    ActiveProfile::Local { id } if id == profile_id
+                )
+            })
+            .collect()
+    };
+    if !matching_sides.is_empty() {
+        let mut profiles = lock_profiles();
+        for side in &matching_sides {
+            profiles[side_ix(*side)].arrowcloud_api_key = api_key.to_string();
+        }
+    }
+
+    // Persist directly to that profile's ArrowCloud.ini, even if the
+    // profile isn't loaded on any side right now.
+    let mut content = String::new();
+    content.push_str("[ArrowCloud]\n");
+    content.push_str(&format!("ApiKey={api_key}\n"));
+    content.push('\n');
+    let path = arrowcloud_ini_path(profile_id);
+    if let Err(e) = fs::write(&path, content) {
+        warn!("Failed to save {}: {}", path.display(), e);
+    }
+}
+
+/// Returns the saved ArrowCloud API key (from disk) for a profile
+/// identified by id, regardless of whether it's currently loaded on a
+/// session side.  Empty string if the profile has no key yet or the
+/// file is missing / malformed.
+pub fn get_arrowcloud_api_key_for_id(profile_id: &str) -> String {
+    let path = arrowcloud_ini_path(profile_id);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return String::new();
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("ApiKey=") {
+            return rest.trim().to_string();
+        }
+        if let Some(rest) = line.strip_prefix("ApiKey =") {
+            return rest.trim().to_string();
+        }
+    }
+    String::new()
+}
+
 fn load_for_side(side: PlayerSide) {
     let profile_id = {
         let session = lock_session();
