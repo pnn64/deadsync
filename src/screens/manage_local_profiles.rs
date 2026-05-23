@@ -106,6 +106,7 @@ enum ProfileMenuAction {
     SetP1,
     SetP2,
     LinkArrowCloud,
+    LinkGrooveStats,
     Rename,
     Delete,
 }
@@ -115,15 +116,17 @@ fn profile_menu_action_label(action: ProfileMenuAction) -> Arc<str> {
         ProfileMenuAction::SetP1 => tr("Profiles", "SetP1"),
         ProfileMenuAction::SetP2 => tr("Profiles", "SetP2"),
         ProfileMenuAction::LinkArrowCloud => tr("Profiles", "LinkArrowCloud"),
+        ProfileMenuAction::LinkGrooveStats => tr("Profiles", "LinkGrooveStats"),
         ProfileMenuAction::Rename => tr("Profiles", "Rename"),
         ProfileMenuAction::Delete => tr("Profiles", "Delete"),
     }
 }
 
-const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 5] = [
+const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 6] = [
     ProfileMenuAction::SetP1,
     ProfileMenuAction::SetP2,
     ProfileMenuAction::LinkArrowCloud,
+    ProfileMenuAction::LinkGrooveStats,
     ProfileMenuAction::Rename,
     ProfileMenuAction::Delete,
 ];
@@ -495,6 +498,14 @@ fn confirm_profile_menu(state: &mut State) -> ScreenAction {
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::LinkArrowCloud {
+                profile_id: menu.id.clone(),
+                display_name: menu.display_name.clone(),
+            }
+        }
+        ProfileMenuAction::LinkGrooveStats => {
+            cancel_profile_menu(state);
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::LinkGrooveStats {
                 profile_id: menu.id.clone(),
                 display_name: menu.display_name.clone(),
             }

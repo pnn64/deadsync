@@ -75,6 +75,11 @@ pub enum ScreenAction {
         profile_id: String,
         display_name: String,
     },
+    /// GrooveStats counterpart of `LinkArrowCloud`.
+    LinkGrooveStats {
+        profile_id: String,
+        display_name: String,
+    },
     RequestScreenshot(Option<PlayerSide>),
     RequestBanner(Option<PathBuf>),
     RequestCdTitle(Option<PathBuf>),

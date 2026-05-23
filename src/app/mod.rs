@@ -4333,6 +4333,20 @@ impl App {
                 self.handle_navigation_action(CurrentScreen::ArrowCloudLogin);
                 Vec::new()
             }
+            ScreenAction::LinkGrooveStats {
+                profile_id,
+                display_name,
+            } => {
+                self.state.screens.groovestats_login_state.active_color_index =
+                    self.state.screens.menu_state.active_color_index;
+                self.state.screens.groovestats_login_state.target_profile =
+                    Some(crate::screens::groovestats_login::ProfileTarget {
+                        id: profile_id,
+                        display_name,
+                    });
+                self.handle_navigation_action(CurrentScreen::GrooveStatsLogin);
+                Vec::new()
+            }
             ScreenAction::RequestScreenshot(side) => {
                 self.state.shell.screenshot_pending = true;
                 self.state.shell.screenshot_request_side = side;
