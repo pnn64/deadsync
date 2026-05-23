@@ -3549,18 +3549,25 @@ impl App {
             "pointer: kind={:?} pos={:?} screen={:?}",
             ev.kind, ev.pos, self.state.screens.current_screen
         );
-        // Update the cursor to match the hover state of whatever screen owns
-        // the pointer right now. Done before action dispatch so a click that
-        // navigates away still leaves the cursor in a consistent state.
-        self.update_cursor_for_pointer(ev);
 
-        // Pointer routing is opt-in per screen as the rollout proceeds.
-        let action = match self.state.screens.current_screen {
+        // Route the event to the active screen. The match arm produces
+        // both the action to dispatch *and* the cursor-hover state in a
+        // single step, so the cursor logic can't drift from the screen's
+        // own notion of "is the pointer over something interactive".
+        let (action, hovers_interactive) = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                crate::screens::menu::handle_pointer(&mut self.state.screens.menu_state, ev)
+                let s = &mut self.state.screens.menu_state;
+                let action = crate::screens::menu::handle_pointer(s, ev);
+                let hovers = crate::screens::menu::pointer_hovers_interactive(s);
+                (action, hovers)
             }
-            _ => ScreenAction::None,
+            _ => (ScreenAction::None, false),
         };
+
+        // Apply the cursor change first so a click that navigates away
+        // still leaves the cursor in a consistent state.
+        self.apply_cursor_for_pointer(ev, hovers_interactive);
+
         if matches!(action, ScreenAction::None) {
             return;
         }
@@ -3569,24 +3576,16 @@ impl App {
         }
     }
 
-    /// Decide whether the pointer is hovering an interactive region on the
-    /// current screen and swap to the hover cursor when it is. Falls back to
-    /// the default cursor for non-mouse-enabled screens and for misses.
-    fn update_cursor_for_pointer(&mut self, ev: &input::PointerEvent) {
-        // Respect the user's "hide mouse cursor" preference — we never want
-        // to override invisibility.
+    /// Decide which cursor variant to show based on this pointer event and
+    /// the hover-interactive flag reported by the active screen. Honours
+    /// the `hide_mouse_cursor` preference.
+    fn apply_cursor_for_pointer(&mut self, ev: &input::PointerEvent, hovers_interactive: bool) {
         if config::get().hide_mouse_cursor {
             return;
         }
-        let hovered = match ev.kind {
-            input::PointerKind::Leave => false,
-            _ => match (ev.pos, self.state.screens.current_screen) {
-                (Some(pos), CurrentScreen::Menu) => {
-                    crate::screens::menu::pointer_hits_item(pos)
-                }
-                _ => false,
-            },
-        };
+        // A Leave event always restores the default cursor, even if the
+        // screen reported a stale hover state.
+        let hovered = !matches!(ev.kind, input::PointerKind::Leave) && hovers_interactive;
         self.apply_cursor_hover(hovered);
     }
 

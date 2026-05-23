@@ -4,6 +4,7 @@ pub mod gs_scorebox;
 pub mod hitbox;
 pub mod loading_bar;
 pub mod lobby_hud;
+pub mod menu_pointer;
 pub mod mode_pads;
 pub mod noteskin_model;
 pub mod pad_display;

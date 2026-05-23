@@ -242,12 +242,12 @@ impl App {
         self.cursor_default = load_custom_cursor_from_asset(
             event_loop,
             "assets/graphics/cursor/cursor_default.png",
-            (3, 3),
+            (3, 2),
         );
         self.cursor_hover = load_custom_cursor_from_asset(
             event_loop,
             "assets/graphics/cursor/cursor_hover.png",
-            (3, 3),
+            (3, 2),
         );
         self.cursor_is_hover = false;
         if let Some(cursor) = self.cursor_default.clone()

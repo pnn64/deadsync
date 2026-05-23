@@ -21,7 +21,9 @@ import shutil
 from PIL import Image, ImageFilter
 
 SRC = "assets/graphics/cursor/source/cursor.png"
-SIZE = 48
+# Output dimensions of the cursor sprite. 43 = roughly 90% of the
+# original 48-pixel size; bump down for a smaller cursor, up for larger.
+SIZE = 43
 OUT_DIR = "assets/graphics/cursor"
 
 MAGENTA_FILL = (0xC1, 0x00, 0x6F)
