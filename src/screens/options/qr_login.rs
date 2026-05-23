@@ -97,11 +97,31 @@ fn side_ix(side: profile::PlayerSide) -> usize {
 }
 
 #[inline]
-fn side_label(side: profile::PlayerSide) -> Arc<str> {
+fn side_label(kind: BackendKind, side: profile::PlayerSide) -> Arc<str> {
+    let section = i18n_section(kind);
     match side {
-        profile::PlayerSide::P1 => tr("ArrowCloudLogin", "Player1"),
-        profile::PlayerSide::P2 => tr("ArrowCloudLogin", "Player2"),
+        profile::PlayerSide::P1 => tr(section, "Player1"),
+        profile::PlayerSide::P2 => tr(section, "Player2"),
     }
+}
+
+/// Translation section to read panel/title/footer strings out of.  Each
+/// backend has its own `[<...>Login]` block in en.ini.
+#[inline]
+fn i18n_section(kind: BackendKind) -> &'static str {
+    match kind {
+        BackendKind::ArrowCloud => "ArrowCloudLogin",
+        BackendKind::GrooveStats => "GrooveStatsLogin",
+    }
+}
+
+/// Top-level chrome (Title / NoPlayerJoined / footer) is service-wide,
+/// so it's keyed off the first slot's backend.  Slots within one UI are
+/// always the same kind (set at construction time), so any slot would
+/// give the same answer; this just avoids re-passing the kind around.
+#[inline]
+fn ui_section(ui: &QrLoginUiState) -> &'static str {
+    i18n_section(ui.slots[0].kind)
 }
 
 #[derive(Debug, Clone)]
@@ -546,10 +566,11 @@ pub(crate) fn build_qr_login_overlay_actors(
         .copied()
         .filter(|s| ui.slots[side_ix(*s)].state.is_visible())
         .collect();
+    let section = ui_section(ui);
 
     out.push(act!(text:
         font("miso"):
-        settext(tr("ArrowCloudLogin", "Title").to_string()):
+        settext(tr(section, "Title").to_string()):
         align(0.5, 0.5):
         xy(cx, cy - 200.0):
         zoom(1.05):
@@ -560,7 +581,7 @@ pub(crate) fn build_qr_login_overlay_actors(
     if visible_sides.is_empty() {
         out.push(act!(text:
             font("miso"):
-            settext(tr("ArrowCloudLogin", "NoPlayerJoined").to_string()):
+            settext(tr(section, "NoPlayerJoined").to_string()):
             align(0.5, 0.5):
             xy(cx, cy):
             zoom(0.95):
@@ -592,7 +613,7 @@ pub(crate) fn build_qr_login_overlay_actors(
     };
     out.push(act!(text:
         font("miso"):
-        settext(tr("ArrowCloudLogin", footer_key).to_string()):
+        settext(tr(section, footer_key).to_string()):
         align(0.5, 0.5):
         xy(cx, cy + 200.0):
         zoom(0.9):
@@ -612,16 +633,17 @@ fn push_slot_panel(
     active_color_index: i32,
 ) {
     let fill = color::decorative_rgba(active_color_index);
-    let side_label_str = side_label(slot.side);
+    let section = i18n_section(slot.kind);
+    let side_label_str = side_label(slot.kind, slot.side);
 
     // Panel header — "Player 1 - <profile name>" so the user sees both
     // which side the panel is for and exactly which profile's
-    // ArrowCloud.ini will receive the new key, on a single line.
+    // <service>.ini will receive the new key, on a single line.
     let header_text = if slot.display_name.is_empty() {
         side_label_str.to_string()
     } else {
         tr_fmt(
-            "ArrowCloudLogin",
+            section,
             "PanelHeader",
             &[
                 ("side", side_label_str.as_ref()),
@@ -648,7 +670,7 @@ fn push_slot_panel(
             out.push(act!(text:
                 font("miso"):
                 settext(tr_fmt(
-                    "ArrowCloudLogin",
+                    section,
                     "GuestHint",
                     &[("side", side_label_str.as_ref())],
                 ).to_string()):
@@ -664,7 +686,7 @@ fn push_slot_panel(
         SlotState::Starting => {
             out.push(act!(text:
                 font("miso"):
-                settext(tr("ArrowCloudLogin", "Contacting").to_string()):
+                settext(tr(section, "Contacting").to_string()):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(0.95):
@@ -688,7 +710,7 @@ fn push_slot_panel(
             if qr_actors.is_empty() {
                 out.push(act!(text:
                     font("miso"):
-                    settext(tr("ArrowCloudLogin", "QrUnavailable").to_string()):
+                    settext(tr(section, "QrUnavailable").to_string()):
                     align(0.5, 0.5):
                     xy(panel_cx, panel_cy):
                     zoom(0.95):
@@ -701,26 +723,34 @@ fn push_slot_panel(
             }
 
             let below_qr = panel_cy + qr_size * 0.5;
-            out.push(act!(text:
-                font("miso"):
-                settext(tr_fmt(
-                    "ArrowCloudLogin",
-                    "Code",
-                    &[("code", short_code.as_str())],
-                ).to_string()):
-                align(0.5, 0.5):
-                xy(panel_cx, below_qr + 20.0):
-                zoom(0.95):
-                horizalign(center):
-                z(301):
-                diffuse(fill[0], fill[1], fill[2], 1.0)
-            ));
+            // GrooveStats's QR-login flow doesn't ship a short code —
+            // the QR is the only verification factor.  Skip the "Code:"
+            // line and slide the URL up into its slot so the panel
+            // doesn't leave a "Code: " gap above the URL.
+            let has_short_code = !short_code.is_empty();
+            if has_short_code {
+                out.push(act!(text:
+                    font("miso"):
+                    settext(tr_fmt(
+                        section,
+                        "Code",
+                        &[("code", short_code.as_str())],
+                    ).to_string()):
+                    align(0.5, 0.5):
+                    xy(panel_cx, below_qr + 20.0):
+                    zoom(0.95):
+                    horizalign(center):
+                    z(301):
+                    diffuse(fill[0], fill[1], fill[2], 1.0)
+                ));
+            }
 
+            let url_y = if has_short_code { below_qr + 45.0 } else { below_qr + 25.0 };
             out.push(act!(text:
                 font("miso"):
                 settext(verification_url.clone()):
                 align(0.5, 0.5):
-                xy(panel_cx, below_qr + 45.0):
+                xy(panel_cx, url_y):
                 zoom(0.7):
                 maxwidth(if qr_size >= 180.0 { 360.0 } else { 260.0 }):
                 horizalign(center):
@@ -733,7 +763,7 @@ fn push_slot_panel(
         SlotState::Success => {
             out.push(act!(text:
                 font("miso"):
-                settext(tr("ArrowCloudLogin", "SignInComplete").to_string()):
+                settext(tr(section, "SignInComplete").to_string()):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy):
                 zoom(1.0):
@@ -744,7 +774,7 @@ fn push_slot_panel(
             ));
             out.push(act!(text:
                 font("miso"):
-                settext(tr("ArrowCloudLogin", "KeySaved").to_string()):
+                settext(tr(section, "KeySaved").to_string()):
                 align(0.5, 0.5):
                 xy(panel_cx, panel_cy + 26.0):
                 zoom(0.8):
@@ -758,7 +788,7 @@ fn push_slot_panel(
             out.push(act!(text:
                 font("miso"):
                 settext(tr_fmt(
-                    "ArrowCloudLogin",
+                    section,
                     "SignInFailed",
                     &[("reason", reason.as_str())],
                 ).to_string()):
@@ -783,7 +813,7 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
     }
     out.push(act!(text:
         font("miso"):
-        settext(tr("ArrowCloudLogin", "AlreadySignedInBadge").to_string()):
+        settext(tr(i18n_section(slot.kind), "AlreadySignedInBadge").to_string()):
         align(0.5, 0.5):
         xy(panel_cx, badge_y - 18.0):
         zoom(0.65):
