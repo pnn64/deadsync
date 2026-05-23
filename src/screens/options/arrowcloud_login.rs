@@ -142,6 +142,12 @@ pub(crate) struct LoginSlot {
     /// the overlay was opened.  Used to render a "Currently signed in"
     /// badge so the user knows scanning will overwrite an existing key.
     pub(crate) had_existing_key: bool,
+    /// Profile-scoped override.  When `Some`, `Consumed` writes the key
+    /// via `profile::set_arrowcloud_api_key_for_id` instead of the
+    /// session-side helper.  Used by the Manage Local Profiles "Link
+    /// ArrowCloud" entry, where the target profile is identified by id
+    /// and may not be loaded on any session side.
+    pub(crate) target_profile_id: Option<String>,
     pub(crate) rx: Option<std::sync::mpsc::Receiver<LoginMsg>>,
 }
 
@@ -177,6 +183,49 @@ pub fn create_arrowcloud_login_ui() -> ArrowCloudLoginUiState {
     ArrowCloudLoginUiState { slots, cancel }
 }
 
+/// Build a single-slot UI scoped to a specific profile (identified by
+/// id + display name) rather than the active session sides.  Used by
+/// the Manage Local Profiles "Link ArrowCloud" entry.
+pub fn create_arrowcloud_login_ui_for_profile(
+    profile_id: String,
+    display_name: String,
+) -> ArrowCloudLoginUiState {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let had_existing_key =
+        !profile::get_arrowcloud_api_key_for_id(&profile_id).trim().is_empty();
+    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
+    let cancel_for_thread = Arc::clone(&cancel);
+    std::thread::spawn(move || {
+        run_login_session(
+            profile::PlayerSide::P1, // unused when target_profile_id is Some
+            tx,
+            cancel_for_thread,
+            ac_online::device_login_start,
+            ac_online::device_login_poll,
+        );
+    });
+    let p1_slot = LoginSlot {
+        side: profile::PlayerSide::P1,
+        state: SlotState::Starting,
+        display_name,
+        had_existing_key,
+        target_profile_id: Some(profile_id),
+        rx: Some(rx),
+    };
+    let p2_slot = LoginSlot {
+        side: profile::PlayerSide::P2,
+        state: SlotState::NotJoined,
+        display_name: String::new(),
+        had_existing_key: false,
+        target_profile_id: None,
+        rx: None,
+    };
+    ArrowCloudLoginUiState {
+        slots: [p1_slot, p2_slot],
+        cancel,
+    }
+}
+
 /// Decide which sides need a worker and build the slot array. `spawn`
 /// callback is invoked once per side that should start polling; tests
 /// inject a no-op or mock spawner.
@@ -199,6 +248,7 @@ where
             state: SlotState::NotJoined,
             display_name: String::new(),
             had_existing_key: false,
+            target_profile_id: None,
             rx: None,
         };
     }
@@ -208,6 +258,7 @@ where
             state: SlotState::Guest,
             display_name: String::new(),
             had_existing_key: false,
+            target_profile_id: None,
             rx: None,
         };
     }
@@ -221,6 +272,7 @@ where
         state: SlotState::Starting,
         display_name: p.display_name,
         had_existing_key,
+        target_profile_id: None,
         rx: Some(rx),
     }
 }
@@ -372,10 +424,14 @@ fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) {
             // we only flip to Success once the key has been delivered.
         }
         LoginMsg::Consumed { api_key } => {
-            profile::set_arrowcloud_api_key_for_side(slot.side, &api_key);
+            if let Some(profile_id) = slot.target_profile_id.as_ref() {
+                profile::set_arrowcloud_api_key_for_id(profile_id, &api_key);
+            } else {
+                profile::set_arrowcloud_api_key_for_side(slot.side, &api_key);
+                // Refresh display_name in case profile state changed.
+                slot.display_name = profile::get_for_side(slot.side).display_name;
+            }
             ac_online::refresh_status();
-            // Refresh display_name in case profile state changed.
-            slot.display_name = profile::get_for_side(slot.side).display_name;
             slot.state = SlotState::Success;
             slot.rx = None;
         }
@@ -821,6 +877,7 @@ mod tests {
             state,
             display_name: String::new(),
             had_existing_key: false,
+            target_profile_id: None,
             rx: None,
         }
     }
@@ -882,6 +939,7 @@ mod tests {
             },
             display_name: String::new(),
             had_existing_key: false,
+            target_profile_id: None,
             rx: Some(rx),
         };
         apply_login_msg(

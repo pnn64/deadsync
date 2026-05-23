@@ -18,16 +18,29 @@ use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::arrowcloud_login::{
     ArrowCloudLoginUiState, build_arrowcloud_login_overlay_actors, create_arrowcloud_login_ui,
-    poll_arrowcloud_login_ui,
+    create_arrowcloud_login_ui_for_profile, poll_arrowcloud_login_ui,
 };
 use crate::screens::{Screen, ScreenAction};
 
 const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 
+/// Optional per-profile scoping carried into the screen from Manage
+/// Local Profiles' "Link ArrowCloud" entry.
+#[derive(Clone, Debug)]
+pub struct ProfileTarget {
+    pub id: String,
+    pub display_name: String,
+}
+
 pub struct State {
     pub active_color_index: i32,
     pub(crate) ui: Option<ArrowCloudLoginUiState>,
+    /// `Some` when entered via Manage Local Profiles → Link ArrowCloud,
+    /// scoping the screen to a single profile (rather than P1/P2 sides).
+    /// Cleared on dismiss so subsequent post-Select-Profile auto-flows
+    /// don't accidentally inherit it.
+    pub target_profile: Option<ProfileTarget>,
     /// Animated heart/style background, matching SelectProfile /
     /// SelectColor.  The overlay panel is rendered on top of this with
     /// the standard 0.65-alpha black dimmer.
@@ -41,16 +54,23 @@ pub fn init() -> State {
     State {
         active_color_index: crate::config::get().simply_love_color,
         ui: None,
+        target_profile: None,
         bg: visual_style_bg::State::new(),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
     }
 }
 
-/// Called every time the app enters this screen.  Spawns a fresh
-/// multi-side login UI (one worker per joined Local side) and discards
-/// any previous instance.
+/// Called every time the app enters this screen.  Spawns a fresh login
+/// UI — single-profile when `target_profile` is `Some`, multi-side
+/// otherwise — and discards any previous instance.
 pub fn on_enter(state: &mut State) {
-    state.ui = Some(create_arrowcloud_login_ui());
+    state.ui = Some(match state.target_profile.as_ref() {
+        Some(target) => create_arrowcloud_login_ui_for_profile(
+            target.id.clone(),
+            target.display_name.clone(),
+        ),
+        None => create_arrowcloud_login_ui(),
+    });
     state.menu_lr_chord = screen_input::MenuLrChordTracker::default();
 }
 
@@ -102,22 +122,35 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ev.action,
                 VirtualAction::p1_back | VirtualAction::p2_back
             ));
+    let from_profile_menu = state.target_profile.is_some();
     if is_start {
         if let Some(ui) = state.ui.as_ref() {
             ui.cancel.store(true, Ordering::Relaxed);
         }
         state.ui = None;
+        state.target_profile = None;
         crate::engine::audio::play_sfx("assets/sounds/start.ogg");
-        return ScreenAction::Navigate(Screen::SelectColor);
+        let next = if from_profile_menu {
+            Screen::ManageLocalProfiles
+        } else {
+            Screen::SelectColor
+        };
+        return ScreenAction::Navigate(next);
     }
     if is_back {
         if let Some(ui) = state.ui.as_ref() {
             ui.cancel.store(true, Ordering::Relaxed);
         }
         state.ui = None;
+        state.target_profile = None;
         crate::engine::audio::play_sfx("assets/sounds/change.ogg");
-        log::info!("ArrowCloud QR login cancelled — returning to title menu.");
-        return ScreenAction::Navigate(Screen::Menu);
+        let next = if from_profile_menu {
+            Screen::ManageLocalProfiles
+        } else {
+            Screen::Menu
+        };
+        log::info!("ArrowCloud QR login cancelled — returning to {next:?}.");
+        return ScreenAction::Navigate(next);
     }
     ScreenAction::None
 }
