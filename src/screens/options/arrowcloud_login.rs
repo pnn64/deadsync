@@ -7,13 +7,6 @@
 //! so each side gets its own independent worker thread that polls
 //! `device-login/poll` and writes the resulting key to its captured
 //! `PlayerSide` on consume.
-//!
-//! This module ships only the infrastructure — the multi-side state
-//! machine, the per-side worker, the slot renderer, and unit tests.
-//! Concrete entry points (post-Select-Profile auto-trigger, per-profile
-//! Link entry) live in follow-up PRs that wrap this module; until they
-//! land, callers are absent on purpose.
-#![allow(dead_code)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

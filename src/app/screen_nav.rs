@@ -166,6 +166,13 @@ impl App {
         if target_screen == CurrentScreen::SelectColor {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
+        if target_screen == CurrentScreen::ArrowCloudLogin {
+            self.state.screens.arrowcloud_login_state.active_color_index =
+                self.state.screens.menu_state.active_color_index;
+            crate::screens::arrowcloud_login::on_enter(
+                &mut self.state.screens.arrowcloud_login_state,
+            );
+        }
 
         let menu_music_enabled = config::get().menu_music;
         let target_menu_music = menu_music_enabled
@@ -458,6 +465,13 @@ impl App {
         if target == CurrentScreen::SelectColor {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
+        if target == CurrentScreen::ArrowCloudLogin {
+            self.state.screens.arrowcloud_login_state.active_color_index =
+                self.state.screens.menu_state.active_color_index;
+            crate::screens::arrowcloud_login::on_enter(
+                &mut self.state.screens.arrowcloud_login_state,
+            );
+        }
 
         let mut commands: Vec<Command> = Vec::new();
         commands.extend(self.handle_audio_and_profile_on_fade(prev, target));
@@ -501,6 +515,7 @@ impl App {
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
+            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::out_transition(),
             CurrentScreen::SelectStyle => select_style::out_transition(),
             CurrentScreen::SelectPlayMode => select_mode::out_transition(),
             CurrentScreen::ProfileLoad => profile_load::out_transition(),
@@ -541,6 +556,7 @@ impl App {
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
+            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::in_transition(),
             CurrentScreen::SelectStyle => select_style::in_transition(),
             CurrentScreen::SelectPlayMode => select_mode::in_transition(),
             CurrentScreen::ProfileLoad => profile_load::in_transition(),
