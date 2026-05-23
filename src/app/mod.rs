@@ -3819,7 +3819,7 @@ impl App {
         }
 
         self.sync_gameplay_background();
-        self.sync_theme_background_video();
+        self.sync_theme_background_video(total_elapsed);
         let actor_build_started = Instant::now();
         let (mut actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
@@ -5539,7 +5539,7 @@ impl App {
             return;
         }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let (desired_path, desired_key) = {
+        let (desired_path, desired_key, gameplay_time_sec) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -5570,6 +5570,7 @@ impl App {
             (
                 gs.current_background_path.clone(),
                 gs.current_background_key.clone(),
+                crate::game::gameplay::song_time_ns_to_seconds(gs.current_music_time_ns),
             )
         };
 
@@ -5580,6 +5581,7 @@ impl App {
                 desired_path.as_deref(),
                 desired_key.as_deref(),
                 show_video_backgrounds,
+                gameplay_time_sec,
             )
         });
         if let Some(key) = next_key {
@@ -5618,7 +5620,7 @@ impl App {
         }
     }
 
-    fn sync_theme_background_video(&mut self) {
+    fn sync_theme_background_video(&mut self, ui_time_sec: f32) {
         if matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
@@ -5638,9 +5640,9 @@ impl App {
             return;
         };
 
-        let key = self
-            .dynamic_media
-            .set_background(&mut self.asset_manager, backend, path);
+        let key =
+            self.dynamic_media
+                .set_background(&mut self.asset_manager, backend, path, ui_time_sec);
         let srpg9_key = if key == "__black" { None } else { Some(key) };
         crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(srpg9_key);
     }
@@ -7094,7 +7096,7 @@ impl App {
             }
             if let Some(backend) = self.backend.as_mut() {
                 self.dynamic_media
-                    .set_background(&mut self.asset_manager, backend, None);
+                    .set_background(&mut self.asset_manager, backend, None, 0.0);
             }
         }
 

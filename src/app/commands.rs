@@ -309,10 +309,27 @@ impl App {
 
     pub(super) fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
+            let video_started_at_sec = self
+                .state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .map(|state| {
+                    crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+                })
+                .or_else(|| {
+                    self.state.screens.practice_state.as_ref().map(|state| {
+                        crate::game::gameplay::song_time_ns_to_seconds(
+                            state.gameplay.current_music_time_ns,
+                        )
+                    })
+                })
+                .unwrap_or(0.0);
             let key = self.dynamic_media.set_background(
                 &mut self.asset_manager,
                 backend,
                 path_opt.clone(),
+                video_started_at_sec,
             );
             let key = Arc::<str>::from(key);
             let path_key = path_opt

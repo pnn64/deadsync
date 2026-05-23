@@ -58,6 +58,7 @@ struct DynamicBackgroundState {
     key: String,
     path: PathBuf,
     video: Option<video::Player>,
+    video_started_at_sec: f32,
 }
 
 pub(crate) struct DynamicMedia {
@@ -440,6 +441,7 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
+        video_started_at_sec: f32,
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
 
@@ -488,6 +490,7 @@ impl DynamicMedia {
                     key: key.clone(),
                     path,
                     video,
+                    video_started_at_sec: video_started_at_sec.max(0.0),
                 });
                 return key;
             }
@@ -511,6 +514,7 @@ impl DynamicMedia {
                                     key: key.clone(),
                                     path,
                                     video: Some(video.player),
+                                    video_started_at_sec: video_started_at_sec.max(0.0),
                                 });
                                 return key;
                             }
@@ -545,6 +549,7 @@ impl DynamicMedia {
                                 key: key.clone(),
                                 path,
                                 video: None,
+                                video_started_at_sec: video_started_at_sec.max(0.0),
                             });
                             return key;
                         }
@@ -588,6 +593,7 @@ impl DynamicMedia {
                         key: key.clone(),
                         path,
                         video: None,
+                        video_started_at_sec: video_started_at_sec.max(0.0),
                     });
                     key
                 }
@@ -611,6 +617,7 @@ impl DynamicMedia {
         desired_path: Option<&Path>,
         desired_key: Option<&str>,
         animate_video: bool,
+        gameplay_time_sec: f32,
     ) -> Option<String> {
         const FALLBACK_KEY: &str = "__black";
 
@@ -631,7 +638,7 @@ impl DynamicMedia {
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
 
         if wants_video {
-            self.drain_gameplay_background_preps(desired_key);
+            self.drain_gameplay_background_preps(desired_key, gameplay_time_sec);
         } else {
             self.reset_pending_gameplay_background();
         }
@@ -677,6 +684,7 @@ impl DynamicMedia {
                 key: desired_key.to_owned(),
                 path: path.to_path_buf(),
                 video: None,
+                video_started_at_sec: gameplay_time_sec.max(0.0),
             });
             if wants_video
                 && !self.pending_gameplay_background_preps.contains(desired_key)
@@ -864,6 +872,7 @@ impl DynamicMedia {
             && !assets.has_pending_texture_upload(&state.key)
         {
             let play_time = gameplay_time_sec.unwrap_or(ui_time_sec).max(0.0);
+            let play_time = background_video_play_time(play_time, state.video_started_at_sec);
             if let Some(frame) = video.take_due_frame(play_time) {
                 assets.queue_texture_upload(state.key.clone(), frame);
             }
@@ -1067,7 +1076,7 @@ impl DynamicMedia {
         }
     }
 
-    fn drain_gameplay_background_preps(&mut self, desired_key: &str) {
+    fn drain_gameplay_background_preps(&mut self, desired_key: &str, gameplay_time_sec: f32) {
         while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
             match result {
                 GameplayBackgroundPrepResult::Ready(prepared) => {
@@ -1081,11 +1090,13 @@ impl DynamicMedia {
                         && state.path == prepared.path
                     {
                         state.video = Some(prepared.player);
+                        state.video_started_at_sec = gameplay_time_sec.max(0.0);
                     } else {
                         self.current_dynamic_background = Some(DynamicBackgroundState {
                             key: prepared.key,
                             path: prepared.path,
                             video: Some(prepared.player),
+                            video_started_at_sec: gameplay_time_sec.max(0.0),
                         });
                     }
                 }
@@ -1164,6 +1175,11 @@ fn prepare_gameplay_background(key: String, path: PathBuf) -> GameplayBackground
     }
 }
 
+#[inline(always)]
+fn background_video_play_time(gameplay_time_sec: f32, started_at_sec: f32) -> f32 {
+    (gameplay_time_sec - started_at_sec).max(0.0)
+}
+
 impl Default for DynamicMedia {
     fn default() -> Self {
         Self::new()
@@ -1173,6 +1189,12 @@ impl Default for DynamicMedia {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gameplay_background_video_uses_local_play_time() {
+        assert_eq!(background_video_play_time(12.5, 10.0), 2.5);
+        assert_eq!(background_video_play_time(9.0, 10.0), 0.0);
+    }
 
     #[test]
     fn shared_dynamic_key_stays_until_last_owner_releases_it() {
@@ -1190,6 +1212,7 @@ mod tests {
             key: key.clone(),
             path,
             video: None,
+            video_started_at_sec: 0.0,
         });
 
         media.current_dynamic_banner = None;
