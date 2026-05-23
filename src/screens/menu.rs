@@ -668,6 +668,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
+/// Returns true if `pos` (logical coords) falls on one of the main-menu
+/// rows. Used by the app to swap the cursor to its hover variant — kept as
+/// a thin wrapper so the cursor logic doesn't have to reach into private
+/// menu layout details.
+pub fn pointer_hits_item(pos: crate::engine::space::LogicalPos) -> bool {
+    hit_test(&menu_item_rects(), pos).is_some()
+}
+
 /// Pointer-driven navigation for the main menu.
 ///
 /// * Hover moves the highlight silently to the row under the cursor.

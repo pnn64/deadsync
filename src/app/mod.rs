@@ -3361,6 +3361,13 @@ pub struct App {
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
+    /// Lazily-created custom cursors. `None` if the asset PNGs were missing
+    /// or the platform refused to create them.
+    cursor_default: Option<winit::window::CustomCursor>,
+    cursor_hover: Option<winit::window::CustomCursor>,
+    /// Whether the cursor is currently the hover variant. Used to avoid
+    /// re-calling `set_cursor` on every mouse-move frame.
+    cursor_is_hover: bool,
 }
 
 impl App {
@@ -3542,6 +3549,11 @@ impl App {
             "pointer: kind={:?} pos={:?} screen={:?}",
             ev.kind, ev.pos, self.state.screens.current_screen
         );
+        // Update the cursor to match the hover state of whatever screen owns
+        // the pointer right now. Done before action dispatch so a click that
+        // navigates away still leaves the cursor in a consistent state.
+        self.update_cursor_for_pointer(ev);
+
         // Pointer routing is opt-in per screen as the rollout proceeds.
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
@@ -3554,6 +3566,48 @@ impl App {
         }
         if let Err(e) = self.handle_action(action, event_loop) {
             error!("pointer dispatch failed: {e}");
+        }
+    }
+
+    /// Decide whether the pointer is hovering an interactive region on the
+    /// current screen and swap to the hover cursor when it is. Falls back to
+    /// the default cursor for non-mouse-enabled screens and for misses.
+    fn update_cursor_for_pointer(&mut self, ev: &input::PointerEvent) {
+        // Respect the user's "hide mouse cursor" preference — we never want
+        // to override invisibility.
+        if config::get().hide_mouse_cursor {
+            return;
+        }
+        let hovered = match ev.kind {
+            input::PointerKind::Leave => false,
+            _ => match (ev.pos, self.state.screens.current_screen) {
+                (Some(pos), CurrentScreen::Menu) => {
+                    crate::screens::menu::pointer_hits_item(pos)
+                }
+                _ => false,
+            },
+        };
+        self.apply_cursor_hover(hovered);
+    }
+
+    /// Apply the cached default/hover cursor to the window if the variant
+    /// changed since the last call. Cheap no-op when both cursors are absent
+    /// (e.g. asset load failed) or when the state is unchanged.
+    fn apply_cursor_hover(&mut self, hovered: bool) {
+        if hovered == self.cursor_is_hover {
+            return;
+        }
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
+        let cursor = if hovered {
+            self.cursor_hover.clone()
+        } else {
+            self.cursor_default.clone()
+        };
+        if let Some(cursor) = cursor {
+            window.set_cursor(cursor);
+            self.cursor_is_hover = hovered;
         }
     }
 
@@ -4272,6 +4326,9 @@ impl App {
             state,
             software_renderer_threads,
             gfx_debug_enabled,
+            cursor_default: None,
+            cursor_hover: None,
+            cursor_is_hover: false,
         }
     }
 
@@ -4618,6 +4675,18 @@ impl App {
             ScreenAction::UpdateMouseCursorHidden(hidden) => {
                 if let Some(window) = &self.window {
                     window.set_cursor_visible(!hidden);
+                    // Re-assert the themed cursor when re-showing it; the
+                    // OS resets to its default while invisible.
+                    if !hidden {
+                        let cursor = if self.cursor_is_hover {
+                            self.cursor_hover.clone()
+                        } else {
+                            self.cursor_default.clone()
+                        };
+                        if let Some(cursor) = cursor {
+                            window.set_cursor(cursor);
+                        }
+                    }
                 }
                 config::update_hide_mouse_cursor(hidden);
                 options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);

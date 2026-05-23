@@ -87,6 +87,29 @@ fn request_window_size(window: &Window, backend_type: BackendType, width: u32, h
     let _ = window.request_inner_size(size);
 }
 
+fn load_custom_cursor_from_asset(
+    event_loop: &ActiveEventLoop,
+    rel_path: &str,
+    hotspot: (u16, u16),
+) -> Option<winit::window::CustomCursor> {
+    let dirs = dirs::app_dirs();
+    let resolved = dirs.resolve_asset_path(rel_path);
+    let img = image::open(&resolved)
+        .map_err(|e| {
+            log::warn!("custom cursor load failed for {}: {}", resolved.display(), e);
+        })
+        .ok()?;
+    let rgba = img.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    let width = u16::try_from(width).ok()?;
+    let height = u16::try_from(height).ok()?;
+    let source =
+        winit::window::CustomCursor::from_rgba(rgba.into_raw(), width, height, hotspot.0, hotspot.1)
+            .map_err(|e| log::warn!("custom cursor build failed ({}): {}", rel_path, e))
+            .ok()?;
+    Some(event_loop.create_custom_cursor(source))
+}
+
 fn load_window_icon() -> Option<Icon> {
     const WINDOW_ICON_PATHS: [&str; 2] = [
         "assets/graphics/icon/icon-256.png",
@@ -212,6 +235,26 @@ impl App {
         // Re-assert the opaque hint so compositors do not apply alpha-based blending.
         window.set_transparent(false);
         window.set_cursor_visible(!config::get().hide_mouse_cursor);
+        // Custom cursor theming: load default + hover variants once so we can
+        // swap them cheaply during pointer dispatch. The hotspot sits at
+        // the upper-left tip of the navigate shape so clicks register at
+        // the visual point.
+        self.cursor_default = load_custom_cursor_from_asset(
+            event_loop,
+            "assets/graphics/cursor/cursor_default.png",
+            (3, 3),
+        );
+        self.cursor_hover = load_custom_cursor_from_asset(
+            event_loop,
+            "assets/graphics/cursor/cursor_hover.png",
+            (3, 3),
+        );
+        self.cursor_is_hover = false;
+        if let Some(cursor) = self.cursor_default.clone()
+            && !config::get().hide_mouse_cursor
+        {
+            window.set_cursor(cursor);
+        }
         let high_dpi = config::get().high_dpi;
         let sz = window_render_size(&window, self.backend_type);
         self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
