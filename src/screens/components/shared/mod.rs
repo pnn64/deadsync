@@ -1,6 +1,7 @@
 pub mod banner;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
+pub mod hitbox;
 pub mod loading_bar;
 pub mod lobby_hud;
 pub mod mode_pads;

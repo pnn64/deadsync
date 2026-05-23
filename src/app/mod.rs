@@ -1080,6 +1080,13 @@ pub struct ShellState {
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
+    /// Last known pointer position in SM-logical (top-left origin) coords.
+    /// `None` when the cursor is outside the window, the surface is
+    /// inactive, or we haven't received a `CursorMoved` yet.
+    pointer_pos_sm: Option<(f32, f32)>,
+    /// Last known raw pointer position in window pixels. Cached so we can
+    /// re-derive SM coords after a resize without waiting for the next move.
+    pointer_pos_px: Option<(f64, f64)>,
 }
 
 /// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
@@ -1259,6 +1266,8 @@ impl ShellState {
             screenshot_request_side: None,
             screenshot_flash_started_at: None,
             screenshot_preview: None,
+            pointer_pos_sm: None,
+            pointer_pos_px: None,
         }
     }
 
@@ -3423,6 +3432,107 @@ impl App {
         } else if let Some(w) = window {
             self.request_redraw(w, "focus");
         }
+    }
+
+    /// Re-project the cached raw pointer pixel position to SM-logical coords.
+    /// Called whenever the window size or metrics change so that screens
+    /// querying `pointer_pos_sm` aren't using stale projections.
+    #[inline]
+    pub(super) fn refresh_pointer_sm_coords(&mut self) {
+        if let Some((px, py)) = self.state.shell.pointer_pos_px {
+            self.state.shell.pointer_pos_sm = space::pixel_to_sm(px, py);
+        }
+    }
+
+    fn handle_pointer_moved(&mut self, px_x: f64, px_y: f64) {
+        let pos = space::pixel_to_sm(px_x, px_y);
+        self.state.shell.pointer_pos_px = Some((px_x, px_y));
+        self.state.shell.pointer_pos_sm = pos;
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let ev = input::PointerEvent {
+            pos,
+            kind: input::PointerKind::Move,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(&ev);
+    }
+
+    fn handle_pointer_left(&mut self) {
+        self.state.shell.pointer_pos_px = None;
+        self.state.shell.pointer_pos_sm = None;
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let ev = input::PointerEvent {
+            pos: None,
+            kind: input::PointerKind::Leave,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(&ev);
+    }
+
+    fn handle_pointer_button(
+        &mut self,
+        state: winit::event::ElementState,
+        button: winit::event::MouseButton,
+    ) {
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let mb = match button {
+            winit::event::MouseButton::Left => input::MouseButton::Left,
+            winit::event::MouseButton::Right => input::MouseButton::Right,
+            winit::event::MouseButton::Middle => input::MouseButton::Middle,
+            winit::event::MouseButton::Other(code) => input::MouseButton::Other(code),
+            // Back/Forward are not currently mapped to anything; treat as Other.
+            winit::event::MouseButton::Back => input::MouseButton::Other(u16::MAX - 1),
+            winit::event::MouseButton::Forward => input::MouseButton::Other(u16::MAX),
+        };
+        let kind = match state {
+            winit::event::ElementState::Pressed => input::PointerKind::Down(mb),
+            winit::event::ElementState::Released => input::PointerKind::Up(mb),
+        };
+        let ev = input::PointerEvent {
+            pos: self.state.shell.pointer_pos_sm,
+            kind,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(&ev);
+    }
+
+    fn handle_pointer_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        // Normalize line + pixel delta sources to "logical lines". One pixel
+        // line on most platforms is ~20 device pixels; this keeps wheel
+        // behaviour consistent across touchpads and discrete wheels.
+        const PIXEL_PER_LINE: f32 = 20.0;
+        let (dx, dy) = match delta {
+            winit::event::MouseScrollDelta::LineDelta(dx, dy) => (dx, dy),
+            winit::event::MouseScrollDelta::PixelDelta(p) => (
+                (p.x as f32) / PIXEL_PER_LINE,
+                (p.y as f32) / PIXEL_PER_LINE,
+            ),
+        };
+        let ev = input::PointerEvent {
+            pos: self.state.shell.pointer_pos_sm,
+            kind: input::PointerKind::Wheel { dx, dy },
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(&ev);
+    }
+
+    /// Stub dispatch point for pointer events. For Phase 1 we only trace —
+    /// screen-level routing arrives in later phases per `plan.md`.
+    #[inline]
+    fn dispatch_pointer_event(&mut self, ev: &input::PointerEvent) {
+        trace!(
+            "pointer: kind={:?} pos={:?} screen={:?}",
+            ev.kind, ev.pos, self.state.screens.current_screen
+        );
     }
 
     #[inline(always)]
@@ -8682,6 +8792,7 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 self.sync_window_size(new_size);
+                self.refresh_pointer_sm_coords();
                 if surface_changed && self.state.shell.surface_active {
                     self.request_redraw(&window, "surface_active");
                 }
@@ -8718,6 +8829,18 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.handle_pointer_moved(position.x, position.y);
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.handle_pointer_left();
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.handle_pointer_button(state, button);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.handle_pointer_wheel(delta);
             }
             WindowEvent::RedrawRequested => {
                 let redraw_started = Instant::now();

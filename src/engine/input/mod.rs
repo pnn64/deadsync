@@ -396,6 +396,8 @@ impl Lane {
 pub enum InputSource {
     Keyboard,
     Gamepad,
+    /// Synthesized from a window-level mouse interaction.
+    Mouse,
 }
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
@@ -1106,6 +1108,43 @@ fn input_event(
 #[inline(always)]
 const fn action_bit(action: VirtualAction) -> u32 {
     1u32 << (action.ix() as u32)
+}
+
+/* ------------------------------ Pointer (mouse) events ------------------------------ */
+
+/// Physical mouse button distinguished by the pointer event stream.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Other(u16),
+}
+
+/// What happened on the pointer this tick. Position is in SM logical
+/// (top-left origin) coordinates, or `None` when the cursor is outside the
+/// window or its position is otherwise unknown.
+#[derive(Clone, Copy, Debug)]
+pub enum PointerKind {
+    /// The pointer moved (or first entered) the window.
+    Move,
+    /// A button transitioned to pressed.
+    Down(MouseButton),
+    /// A button transitioned to released.
+    Up(MouseButton),
+    /// The pointer left the window.
+    Leave,
+    /// A scroll-wheel notch in logical lines (positive = up / away from user).
+    Wheel { dx: f32, dy: f32 },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PointerEvent {
+    /// Logical SM-space pointer position. `None` for `Leave`, or `Move`/`Wheel`
+    /// events before the window has a valid surface size.
+    pub pos: Option<(f32, f32)>,
+    pub kind: PointerKind,
+    pub timestamp: Instant,
 }
 
 #[inline(always)]

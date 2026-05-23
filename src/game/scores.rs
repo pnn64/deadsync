@@ -2131,6 +2131,9 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
         let source = match e.source {
             InputSource::Keyboard => 0,
             InputSource::Gamepad => 1,
+            // Mouse never produces gameplay lane edges (notes are key/pad/gamepad).
+            // Encode as 0 so replays don't fail if a stray edge ever leaks in.
+            InputSource::Mouse => 0,
         };
         out.push(LocalReplayEdgeV1 {
             event_music_time_ns: e.event_music_time_ns,

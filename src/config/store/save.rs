@@ -358,6 +358,7 @@ fn push_saved_options(
         "OnlyDedicatedMenuButtons",
         cfg.only_dedicated_menu_buttons,
     );
+    push_bool(content, "EnableMouseInput", cfg.enable_mouse_input);
     push_line(content, "DisplayMonitor", cfg.display_monitor);
     push_line(content, "SongParsingThreads", cfg.song_parsing_threads);
     push_line(
