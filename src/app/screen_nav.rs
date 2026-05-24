@@ -1,8 +1,9 @@
 use super::{
-    credits, evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
+    App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION, credits,
+    evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
-    test_lights, App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION,
+    test_lights,
 };
 use crate::assets::visual_styles;
 use crate::config;

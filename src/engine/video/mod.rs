@@ -70,6 +70,15 @@ impl Player {
         latest
     }
 
+    pub fn retire_async(self) {
+        if let Err(e) = thread::Builder::new()
+            .name("video-retire".to_owned())
+            .spawn(move || drop(self))
+        {
+            warn!("Failed to spawn video retirement worker: {e}");
+        }
+    }
+
     fn stop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Ok(mut child_slot) = self.child.lock()
