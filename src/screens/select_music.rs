@@ -3861,6 +3861,10 @@ fn clear_preview(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
+    #[cfg(test)]
+    if !audio::is_initialized() {
+        return;
+    }
     audio::stop_music();
 }
 
@@ -3932,6 +3936,24 @@ fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, l
         state.currently_playing_preview_start_sec = None;
         state.currently_playing_preview_length_sec = None;
         audio::stop_music();
+    }
+}
+
+#[inline(always)]
+fn clear_stale_preview(
+    state: &mut State,
+    selected_song: Option<&Arc<SongData>>,
+    previews_ready: bool,
+) {
+    let should_clear = {
+        let Some(current_path) = state.currently_playing_preview_path.as_ref() else {
+            return;
+        };
+        let selected_path = selected_song.and_then(|song| song.music_path.as_ref());
+        !previews_ready || selected_path != Some(current_path)
+    };
+    if should_clear {
+        clear_preview(state);
     }
 }
 
@@ -9428,6 +9450,13 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     } else {
         None
     };
+    clear_stale_preview(
+        state,
+        selected_song.as_ref(),
+        cfg.show_select_music_previews
+            && !state.preview_music_muted
+            && allow_gs_fetch_for_selection(state),
+    );
     let new_folder_stats_banner = if cfg.show_select_music_folder_stats {
         selected_group_header_for_folder_stats(state).and_then(|(_, path)| path)
     } else {
@@ -11961,6 +11990,28 @@ mod tests {
 
         assert!((cut.start_sec - 7.5).abs() <= 0.0001);
         assert!((cut.length_sec - 0.001).abs() <= 0.000001);
+    }
+
+    #[test]
+    fn update_clears_stale_preview_before_asset_request() {
+        let mut state = init_placeholder();
+        let mut song = (*test_song("new song")).clone();
+        song.music_path = Some(PathBuf::from("new.ogg"));
+        song.banner_path = Some(PathBuf::from("new-banner.png"));
+        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+        state.nav_key_held_direction = Some(super::NavDirection::Right);
+        state.currently_playing_preview_path = Some(PathBuf::from("old.ogg"));
+        state.currently_playing_preview_start_sec = Some(1.0);
+        state.currently_playing_preview_length_sec = Some(10.0);
+
+        let action = super::update(&mut state, 0.016);
+
+        assert!(matches!(action, ScreenAction::RequestBanner(Some(_))));
+        assert_eq!(state.currently_playing_preview_path, None);
+        assert_eq!(state.currently_playing_preview_start_sec, None);
+        assert_eq!(state.currently_playing_preview_length_sec, None);
     }
 
     fn test_entries() -> Vec<super::MusicWheelEntry> {
