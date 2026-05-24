@@ -3,6 +3,7 @@ use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_fr
 use crate::engine::host_time::now_nanos;
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::os::fd::AsRawFd;
@@ -460,15 +461,21 @@ fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
     next_id: &mut u32,
+    id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) {
     if !is_hidraw_path(&path) || devs.iter().any(|dev| dev.path == path) {
         return;
     }
-    let id = PadId(*next_id);
+    let uuid = uuid_from_bytes(path.as_bytes());
+    let existing_id = id_by_uuid.get(&uuid).copied();
+    let id = existing_id.unwrap_or(PadId(*next_id));
     if let Some(dev) = open_dev(path, id, initial, emit_sys) {
-        *next_id = next_id.saturating_add(1);
+        if existing_id.is_none() {
+            id_by_uuid.insert(dev.uuid, id);
+            *next_id = next_id.saturating_add(1);
+        }
         devs.push(dev);
     }
 }
@@ -616,10 +623,11 @@ pub fn run(
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
     let mut next_id = 0u32;
+    let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
     let hidraw_paths = scan_hidraw_paths();
     let hidraw_count = hidraw_paths.len();
     for path in hidraw_paths {
-        add_dev_if_new(path, &mut devs, &mut next_id, true, emit_sys);
+        add_dev_if_new(path, &mut devs, &mut next_id, &mut id_by_uuid, true, emit_sys);
     }
     if devs.is_empty() {
         let _ = watch;
@@ -746,7 +754,14 @@ pub fn run(
         for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
-                    add_dev_if_new(path, &mut devs, &mut next_id, false, emit_sys)
+                    add_dev_if_new(
+                        path,
+                        &mut devs,
+                        &mut next_id,
+                        &mut id_by_uuid,
+                        false,
+                        emit_sys,
+                    )
                 }
                 DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }

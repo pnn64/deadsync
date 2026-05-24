@@ -4,6 +4,7 @@ use super::{
 };
 use crate::engine::input::RawKeyboardEvent;
 use log::{debug, warn};
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
@@ -512,6 +513,7 @@ fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
     next_id: &mut u32,
+    id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) {
@@ -524,9 +526,14 @@ fn add_dev_if_new(
     if spec.class != DevClass::Pad {
         return;
     };
-    let id = PadId(*next_id);
+    let uuid = uuid_from_bytes(spec.path.as_bytes());
+    let existing_id = id_by_uuid.get(&uuid).copied();
+    let id = existing_id.unwrap_or(PadId(*next_id));
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
-        *next_id = next_id.saturating_add(1);
+        if existing_id.is_none() {
+            id_by_uuid.insert(dev.uuid, id);
+            *next_id = next_id.saturating_add(1);
+        }
         devs.push(dev);
     }
 }
@@ -590,13 +597,16 @@ fn run_inner(
     let mut devs = Vec::new();
     let mut key_devs = Vec::new();
     let mut next_id = 0u32;
+    let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
     let (startup_specs, startup_stats) = scan_event_specs();
     for spec in startup_specs {
         let path = spec.path.clone();
         match spec.class {
             DevClass::Pad => {
+                let uuid = uuid_from_bytes(spec.path.as_bytes());
                 let id = PadId(next_id);
                 if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
+                    id_by_uuid.insert(uuid, id);
                     next_id = next_id.saturating_add(1);
                     devs.push(dev);
                 } else {
@@ -842,7 +852,14 @@ fn run_inner(
         for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
-                    add_dev_if_new(path.clone(), &mut devs, &mut next_id, false, &mut emit_sys);
+                    add_dev_if_new(
+                        path.clone(),
+                        &mut devs,
+                        &mut next_id,
+                        &mut id_by_uuid,
+                        false,
+                        &mut emit_sys,
+                    );
                     if scan_keyboards {
                         add_key_dev_if_new(path, &mut key_devs, false);
                     }
