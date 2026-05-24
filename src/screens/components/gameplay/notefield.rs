@@ -1792,6 +1792,12 @@ fn bumpy_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
 }
 
 #[inline(always)]
+fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
+    // ITGmania ArrowEffects::NeedZBuffer checks global Bumpy but not BumpyN.
+    signed_effect_active(visual.bumpy)
+}
+
+#[inline(always)]
 fn tiny_zoom_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
     let tiny = visual.tiny + visual.tiny_cols.get(local_col).copied().unwrap_or(0.0);
     if tiny.abs() <= f32::EPSILON || !tiny.is_finite() {
@@ -5305,7 +5311,7 @@ pub fn build_bundles(
             let mut body_head_row: Option<[[f32; 3]; 2]> = None;
             let mut body_tail_row: Option<[[f32; 3]; 2]> = None;
             let col_bumpy = bumpy_for_col(&visual, local_col);
-            let hold_depth_test = col_bumpy.abs() > f32::EPSILON;
+            let hold_depth_test = hold_body_needs_z_buffer(&visual);
             let use_legacy_hold_sprites = col_bumpy.abs() <= f32::EPSILON
                 && !signed_effect_active(visual.drunk)
                 && !signed_effect_active(visual.tornado)
@@ -8606,9 +8612,10 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        error_bar_boundaries_s, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
-        hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_offset,
-        hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
+        error_bar_boundaries_s, hold_body_needs_z_buffer, hold_body_segment_budget,
+        hold_draw_span, hold_explosion_active, hold_explosion_slot_for_col, hold_head_render_flags,
+        hold_indicator_column_offset, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
+        hold_tail_cap_bounds,
         hud_layout_ys, hud_y, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
         let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
@@ -9253,6 +9260,15 @@ mod tests {
     fn bumpy_period_changes_wave_length_like_itg() {
         let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
         assert!((z - 40.0).abs() <= 1e-4);
+    }
+
+    #[test]
+    fn hold_z_buffer_ignores_column_bumpy_like_itg() {
+        let mut visual = VisualEffects::default();
+        visual.bumpy_cols[2] = 3.5;
+        assert!(!hold_body_needs_z_buffer(&visual));
+        visual.bumpy = 1.0;
+        assert!(hold_body_needs_z_buffer(&visual));
     }
 
     #[test]
