@@ -63,7 +63,7 @@ struct OutputDeviceProbe {
     freebsd_dsp_path: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SfxLane {
     Effect,
     Screen,
@@ -1192,9 +1192,31 @@ fn i16_to_f32(sample: i16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
+        CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap, QueuedSfx,
+        SfxLane, enqueue_sfx_with_dedupe, i16_to_f32, mix_active_sfx_into,
         stream_position_frames_from_window,
     };
+    use std::sync::Arc;
+
+    fn peak_sample(samples: usize) -> Arc<[i16]> {
+        Arc::from(vec![i16::MAX; samples].into_boxed_slice())
+    }
+
+    fn effect(sample: &Arc<[i16]>) -> QueuedSfx {
+        QueuedSfx {
+            data: Arc::clone(sample),
+            lane: SfxLane::Effect,
+            stop_generation: 0,
+        }
+    }
+
+    fn assist_tick(sample: &Arc<[i16]>) -> QueuedSfx {
+        QueuedSfx {
+            data: Arc::clone(sample),
+            lane: SfxLane::AssistTick,
+            stop_generation: 0,
+        }
+    }
 
     #[test]
     fn playback_pos_map_extrapolates_past_last_segment() {
@@ -1258,6 +1280,176 @@ mod tests {
         );
 
         assert!((frames - 96.0).abs() <= 1e-6, "frames={frames}");
+    }
+
+    /// Demonstrates the underlying bug: without per-path dedup, firing
+    /// the same sample many times (as Tab acceleration does for
+    /// `change.ogg`) stacks voices and the mix exceeds 1.0, which hard
+    /// clips at the final i16 conversion.
+    #[test]
+    fn uncoalesced_voice_stacking_blows_past_unit_amplitude() {
+        let sample = peak_sample(64);
+        let mut active: Vec<(Arc<[i16]>, usize, SfxLane, u64)> = (0..8)
+            .map(|_| (Arc::clone(&sample), 0, SfxLane::Effect, 0))
+            .collect();
+        let mut mix = vec![0.0_f32; 64];
+
+        let mixed = mix_active_sfx_into(&mut active, &mut mix, 1.0, 1.0);
+
+        assert!(mixed);
+        let per_voice = i16_to_f32(i16::MAX);
+        assert!(
+            mix[0] > 6.0,
+            "8 stacked voices should sum to ~{}, got {}",
+            8.0 * per_voice,
+            mix[0]
+        );
+    }
+
+    /// The fix: enqueuing the same Effect-lane sample many times keeps
+    /// exactly one voice active and does not restart it, so the
+    /// existing voice plays through to its natural decay.
+    #[test]
+    fn enqueue_drops_effect_lane_duplicates() {
+        let sample = peak_sample(64);
+        let mut active = Vec::new();
+
+        for _ in 0..32 {
+            enqueue_sfx_with_dedupe(&mut active, effect(&sample), 32);
+        }
+
+        assert_eq!(
+            active.len(),
+            1,
+            "Effect lane must coalesce to a single voice per sample"
+        );
+        assert_eq!(
+            active[0].1, 0,
+            "duplicate enqueues must not restart the in-flight voice"
+        );
+    }
+
+    /// Duplicates arriving while a voice is mid-flight must not rewind
+    /// the cursor; restarting it on every Tab tick (~30 Hz) replays
+    /// the sample's attack continuously and is perceived as loud even
+    /// when no individual mix sample exceeds 1.0.
+    #[test]
+    fn enqueue_does_not_rewind_effect_voice_cursor() {
+        let sample = peak_sample(1000);
+        let mut active = vec![(Arc::clone(&sample), 250, SfxLane::Effect, 0)];
+
+        enqueue_sfx_with_dedupe(&mut active, effect(&sample), 32);
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].1, 250, "Effect duplicate must not rewind cursor");
+    }
+
+    /// `Screen` lane sounds (post-evaluation, transitions, ...) also
+    /// dedup to avoid the same stacking and restart-thrash that
+    /// affects the Effect lane.
+    #[test]
+    fn enqueue_drops_screen_lane_duplicates() {
+        let sample = peak_sample(64);
+        let mut active = Vec::new();
+
+        for _ in 0..10 {
+            enqueue_sfx_with_dedupe(
+                &mut active,
+                QueuedSfx {
+                    data: Arc::clone(&sample),
+                    lane: SfxLane::Screen,
+                    stop_generation: 0,
+                },
+                32,
+            );
+        }
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].2, SfxLane::Screen);
+    }
+
+    /// `AssistTick` is gameplay-critical and must remain audible on
+    /// every beat even when notes are dense, so it does *not* dedup.
+    /// New ticks add another voice (up to `max_active`).
+    #[test]
+    fn enqueue_does_not_dedupe_assist_tick_lane() {
+        let sample = peak_sample(8);
+        let mut active = Vec::new();
+
+        for _ in 0..4 {
+            enqueue_sfx_with_dedupe(&mut active, assist_tick(&sample), 32);
+        }
+
+        assert_eq!(
+            active.len(),
+            4,
+            "AssistTick lane must not coalesce - every beat needs to click"
+        );
+    }
+
+    /// `max_active` still bounds how many distinct Effect-lane samples
+    /// can be queued so we never grow the voice list unboundedly even
+    /// when many *different* sounds fire.
+    #[test]
+    fn enqueue_respects_max_active_for_distinct_samples() {
+        let mut active = Vec::new();
+        let samples: Vec<Arc<[i16]>> = (0..10).map(|_| peak_sample(8)).collect();
+        let max_active = 4;
+
+        for sample in &samples {
+            enqueue_sfx_with_dedupe(&mut active, effect(sample), max_active);
+        }
+
+        assert_eq!(active.len(), max_active);
+    }
+
+    /// End-to-end: 30 rapid Effect-lane plays of the same sample (the
+    /// scenario the issue reports for Tab acceleration) must result in
+    /// a mix whose absolute amplitude never exceeds the single-voice
+    /// amplitude.
+    #[test]
+    fn rapid_effect_plays_stay_within_unit_amplitude() {
+        let sample = peak_sample(256);
+        let mut active = Vec::new();
+
+        for _ in 0..30 {
+            enqueue_sfx_with_dedupe(&mut active, effect(&sample), 32);
+        }
+
+        let mut mix = vec![0.0_f32; 256];
+        let mixed = mix_active_sfx_into(&mut active, &mut mix, 1.0, 1.0);
+
+        assert!(mixed);
+        let per_voice = i16_to_f32(i16::MAX);
+        for (idx, s) in mix.iter().enumerate() {
+            assert!(
+                s.abs() <= per_voice + 1e-6,
+                "sample {idx} ({s}) exceeds single-voice peak {per_voice}"
+            );
+        }
+    }
+
+    /// Once an Effect-lane voice plays through to completion, the next
+    /// arrival of the same sample must succeed - otherwise menu sounds
+    /// would silently drop after the first scroll.
+    #[test]
+    fn finished_effect_voice_allows_replay() {
+        let sample = peak_sample(8);
+        let mut active = Vec::new();
+
+        enqueue_sfx_with_dedupe(&mut active, effect(&sample), 32);
+        let mut mix = vec![0.0_f32; 16];
+        mix_active_sfx_into(&mut active, &mut mix, 1.0, 1.0);
+
+        assert!(
+            active.is_empty(),
+            "voice should have finished and been removed"
+        );
+
+        enqueue_sfx_with_dedupe(&mut active, effect(&sample), 32);
+
+        assert_eq!(active.len(), 1, "replay after completion should succeed");
+        assert_eq!(active[0].1, 0);
     }
 }
 
@@ -1767,6 +1959,80 @@ struct RenderState {
     music_gain_snap_seen: u64,
 }
 
+/// Adds a freshly received SFX to the active voice list, applying a
+/// per-lane deduplication policy:
+///
+/// - `SfxLane::Effect` and `SfxLane::Screen` (menu / screen sounds):
+///   if the same sample (matched by `Arc::ptr_eq`, reliable because
+///   `sfx_cache` returns one `Arc` per path) is already playing on
+///   that lane, drop the new request and let the existing voice play
+///   through its natural decay. Without this, Tab acceleration in
+///   menus fires `play_sfx("change.ogg")` tens of times per second:
+///   stacking voices hard-clips at the i16 conversion, and the
+///   previous "restart cursor" mitigation just re-triggered the
+///   sample's attack every ~33 ms which still sounded loud.
+///
+/// - `SfxLane::AssistTick` (gameplay): no dedup. Dense notes need
+///   every tick to be audible, and the original sample is short
+///   enough that stacking is not a practical concern.
+///
+/// Voices whose `stop_generation` no longer matches the lane's
+/// current stop generation are dropped via the existing `sfx_is_stale`
+/// gate. Stale active voices are excluded from dedup matching so a
+/// to-be-removed Screen voice doesn't suppress a legitimate new play.
+fn enqueue_sfx_with_dedupe(
+    active: &mut Vec<(Arc<[i16]>, usize, SfxLane, u64)>,
+    new_sfx: QueuedSfx,
+    max_active: usize,
+) {
+    if sfx_is_stale(new_sfx.lane, new_sfx.stop_generation) {
+        return;
+    }
+    if matches!(new_sfx.lane, SfxLane::Effect | SfxLane::Screen)
+        && active.iter().any(|(data, _, lane, stop_gen)| {
+            *lane == new_sfx.lane
+                && !sfx_is_stale(*lane, *stop_gen)
+                && Arc::ptr_eq(data, &new_sfx.data)
+        })
+    {
+        return;
+    }
+    if active.len() < max_active {
+        active.push((new_sfx.data, 0, new_sfx.lane, new_sfx.stop_generation));
+    }
+}
+
+/// Mixes every active SFX voice into `mix_f32`, advancing each voice's
+/// cursor by the number of samples consumed and removing voices that
+/// have played to completion or been invalidated by a screen-lane stop
+/// generation bump. Returns `true` iff at least one voice contributed
+/// samples.
+fn mix_active_sfx_into(
+    active: &mut Vec<(Arc<[i16]>, usize, SfxLane, u64)>,
+    mix_f32: &mut [f32],
+    sfx_vol: f32,
+    assist_tick_vol: f32,
+) -> bool {
+    let mut mixed = false;
+    active.retain_mut(|(data, cursor, lane, stop_generation)| {
+        if sfx_is_stale(*lane, *stop_generation) {
+            return false;
+        }
+        let n = data.len().saturating_sub(*cursor).min(mix_f32.len());
+        mixed |= n > 0;
+        let lane_vol = match *lane {
+            SfxLane::Effect | SfxLane::Screen => sfx_vol,
+            SfxLane::AssistTick => assist_tick_vol,
+        };
+        for i in 0..n {
+            mix_f32[i] += i16_to_f32(data[*cursor + i]) * lane_vol;
+        }
+        *cursor += n;
+        *cursor < data.len()
+    });
+    mixed
+}
+
 /// Number of device frames over which the music gain ramps when the
 /// target changes. 4000 frames ≈ 83 ms at 48 kHz and ≈ 91 ms at 44.1 kHz —
 /// fast enough to feel instantaneous, slow enough to eliminate the
@@ -1882,33 +2148,15 @@ impl RenderState {
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
-            if !sfx_is_stale(new_sfx.lane, new_sfx.stop_generation)
-                && self.active_sfx.len() < MAX_ACTIVE_SFX
-            {
-                self.active_sfx
-                    .push((new_sfx.data, 0, new_sfx.lane, new_sfx.stop_generation));
-            }
+            enqueue_sfx_with_dedupe(&mut self.active_sfx, new_sfx, MAX_ACTIVE_SFX);
         }
 
-        let mut mixed_sfx = false;
-        self.active_sfx
-            .retain_mut(|(data, cursor, lane, stop_generation)| {
-                if sfx_is_stale(*lane, *stop_generation) {
-                    return false;
-                }
-                let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
-                mixed_sfx |= n > 0;
-                let lane_vol = match *lane {
-                    SfxLane::Effect | SfxLane::Screen => sfx_vol,
-                    SfxLane::AssistTick => assist_tick_vol,
-                };
-                for i in 0..n {
-                    let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
-                    self.mix_f32[i] += sfx_sample_f32;
-                }
-                *cursor += n;
-                *cursor < data.len()
-            });
+        let mixed_sfx = mix_active_sfx_into(
+            &mut self.active_sfx,
+            &mut self.mix_f32,
+            sfx_vol,
+            assist_tick_vol,
+        );
 
         (popped, mixed_sfx)
     }
