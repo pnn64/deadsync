@@ -298,6 +298,71 @@ pub fn refresh_density_graph_meshes(state: &mut State) {
     }
 }
 
+fn push_density_graph_at(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    player_idx: usize,
+    x0: f32,
+    y0: f32,
+) {
+    if player_idx >= state.num_players {
+        return;
+    }
+
+    const BG_RGB: [f32; 3] = [
+        30.0 / 255.0, // 0x1E
+        40.0 / 255.0, // 0x28
+        47.0 / 255.0, // 0x2F
+    ];
+
+    let graph_w = state.density_graph_graph_w;
+    let graph_h = state.density_graph_graph_h;
+    if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 {
+        return;
+    }
+
+    let bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
+        0.5
+    } else {
+        1.0
+    };
+
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(x0, y0):
+        zoomto(graph_w, graph_h):
+        diffuse(BG_RGB[0], BG_RGB[1], BG_RGB[2], bg_alpha):
+        z(59)
+    ));
+
+    if let Some(mesh) = &state.density_graph.mesh[player_idx]
+        && !mesh.is_empty()
+    {
+        actors.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [x0, y0],
+            size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+            vertices: mesh.clone(),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 60,
+        });
+    }
+
+    if let Some(mesh) = &state.density_graph.life_mesh[player_idx]
+        && !mesh.is_empty()
+    {
+        actors.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [x0, y0],
+            size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+            vertices: mesh.clone(),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 61,
+        });
+    }
+}
+
 #[inline(always)]
 fn cached_padded_num(count: u32, digits: usize) -> Arc<str> {
     let digits = digits.clamp(1, u8::MAX as usize) as u8;
@@ -1492,6 +1557,10 @@ pub fn push_double_step_stats(
         );
     }
 
+    // DensityGraph.lua (double): graph ActorFrame xy(260, 40), with width
+    // calculated as 95% of the side pane in gameplay init.
+    push_density_graph_at(actors, state, 0, pane_cx + 260.0, pane_cy + 40.0);
+
     // Peak NPS text (DensityGraph.lua drives this in SL).
     {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
@@ -2516,57 +2585,12 @@ fn build_side_pane(
 
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
     if wide {
-        const BG_RGB: [f32; 3] = [
-            30.0 / 255.0, // 0x1E
-            40.0 / 255.0, // 0x28
-            47.0 / 255.0, // 0x2F
-        ];
-
         let graph_h = state.density_graph_graph_h;
         let graph_w = state.density_graph_graph_w;
         if graph_w > 0.0_f32 && graph_h > 0.0_f32 {
             let x0 = layout.sidepane_center_x - graph_w * 0.5;
             let y0 = layout.sidepane_center_y + 55.0;
-            let bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
-                0.5
-            } else {
-                1.0
-            };
-
-            actors.push(act!(quad:
-                align(0.0, 0.0): xy(x0, y0):
-                zoomto(graph_w, graph_h):
-                diffuse(BG_RGB[0], BG_RGB[1], BG_RGB[2], bg_alpha):
-                z(59)
-            ));
-
-            if let Some(mesh) = &state.density_graph.mesh[player_idx]
-                && !mesh.is_empty()
-            {
-                actors.push(Actor::Mesh {
-                    align: [0.0, 0.0],
-                    offset: [x0, y0],
-                    size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
-                    vertices: mesh.clone(),
-                    visible: true,
-                    blend: BlendMode::Alpha,
-                    z: 60,
-                });
-            }
-
-            if let Some(mesh) = &state.density_graph.life_mesh[player_idx]
-                && !mesh.is_empty()
-            {
-                actors.push(Actor::Mesh {
-                    align: [0.0, 0.0],
-                    offset: [x0, y0],
-                    size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
-                    vertices: mesh.clone(),
-                    visible: true,
-                    blend: BlendMode::Alpha,
-                    z: 61,
-                });
-            }
+            push_density_graph_at(actors, state, player_idx, x0, y0);
         }
     }
 

@@ -5301,6 +5301,41 @@ fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
     (width - 30.0_f32).max(0.0_f32)
 }
 
+fn step_stats_density_graph_width(
+    play_style: profile::PlayStyle,
+    cols_per_player: usize,
+    num_players: usize,
+    screen_w: f32,
+    screen_h: f32,
+    wide: bool,
+    center_1player_notefield: bool,
+) -> f32 {
+    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
+    let note_field_is_centered = match play_style {
+        profile::PlayStyle::Double => true,
+        profile::PlayStyle::Single => num_players == 1 && center_1player_notefield,
+        profile::PlayStyle::Versus => false,
+    };
+
+    let mut sidepane_width = screen_w * 0.5_f32;
+    if !is_ultrawide && note_field_is_centered && wide {
+        let nf_width = step_stats_notefield_width(cols_per_player)
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
+        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
+    }
+    if is_ultrawide && num_players > 1 {
+        sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);
+    }
+
+    // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
+    // to 95% of the side pane and positions it in the right dark pane.
+    if play_style == profile::PlayStyle::Double {
+        return (sidepane_width * 0.95_f32).max(1.0_f32);
+    }
+    sidepane_width.round().max(1.0_f32)
+}
+
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -6157,27 +6192,21 @@ pub fn init(
     let density_graph_enabled = wide && wants_step_stats;
     let sw = screen_width();
     let sh = screen_height().max(1.0_f32);
-    let is_ultrawide = sw / sh > (21.0_f32 / 9.0_f32);
-    let note_field_is_centered = num_players == 1
-        && play_style == profile::PlayStyle::Single
-        && config.center_1player_notefield;
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {
         0.0_f32
     };
     let density_graph_graph_w = if density_graph_enabled {
-        let mut sidepane_width = sw * 0.5_f32;
-        if !is_ultrawide && note_field_is_centered && wide {
-            let nf_width = step_stats_notefield_width(cols_per_player)
-                .unwrap_or(256.0_f32)
-                .max(1.0_f32);
-            sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
-        }
-        if is_ultrawide && num_players > 1 {
-            sidepane_width = (sw * 0.2_f32).max(1.0_f32);
-        }
-        sidepane_width.round().max(1.0_f32)
+        step_stats_density_graph_width(
+            play_style,
+            cols_per_player,
+            num_players,
+            sw,
+            sh,
+            wide,
+            config.center_1player_notefield,
+        )
     } else {
         0.0_f32
     };
@@ -8725,12 +8754,12 @@ mod tests {
         score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
         scored_hold_totals_with_carry, set_final_note_result, settle_completion_rows,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_calories, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
-        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
-        trigger_note_receptor_feedback, trigger_receptor_step_pulse,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        stage_music_cut, start_active_hold, step_calories, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual,
+        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
+        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
+        trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -8756,6 +8785,21 @@ mod tests {
         assert_eq!(step_stats_notefield_width(4), Some(256.0));
         assert_eq!(step_stats_notefield_width(8), Some(512.0));
         assert_eq!(step_stats_notefield_width(0), None);
+    }
+
+    #[test]
+    fn step_stats_density_graph_width_matches_sl_double() {
+        let width = step_stats_density_graph_width(
+            profile::PlayStyle::Double,
+            8,
+            1,
+            854.0,
+            480.0,
+            true,
+            false,
+        );
+        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
+        assert!((width - expected).abs() <= 0.000_1);
     }
 
     struct SessionRestore {
