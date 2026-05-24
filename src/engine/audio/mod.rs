@@ -63,7 +63,7 @@ struct OutputDeviceProbe {
     freebsd_dsp_path: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SfxLane {
     Effect,
     AssistTick,
@@ -1851,7 +1851,13 @@ impl RenderState {
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
-            if self.active_sfx.len() < MAX_ACTIVE_SFX {
+            if let Some(existing) = self
+                .active_sfx
+                .iter_mut()
+                .find(|(data, _, lane)| *lane == new_sfx.lane && Arc::ptr_eq(data, &new_sfx.data))
+            {
+                existing.1 = 0;
+            } else if self.active_sfx.len() < MAX_ACTIVE_SFX {
                 self.active_sfx.push((new_sfx.data, 0, new_sfx.lane));
             }
         }
