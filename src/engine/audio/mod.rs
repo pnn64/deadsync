@@ -66,6 +66,7 @@ struct OutputDeviceProbe {
 #[derive(Clone, Copy, Debug)]
 enum SfxLane {
     Effect,
+    Screen,
     AssistTick,
 }
 
@@ -73,6 +74,7 @@ enum SfxLane {
 struct QueuedSfx {
     data: Arc<[i16]>,
     lane: SfxLane,
+    stop_generation: u64,
 }
 
 // Commands to the audio engine
@@ -598,6 +600,7 @@ static MUSIC_TARGET_GAIN_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 // rather than ramping across the boundary.
 static MUSIC_GAIN_SNAP_GEN: AtomicU64 = AtomicU64::new(0);
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
+static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
 
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
@@ -984,9 +987,19 @@ pub fn play_sfx(path: &str) {
     play_sfx_on_lane(path, SfxLane::Effect);
 }
 
+/// Plays a screen-owned sound effect that can be stopped on screen exit.
+pub fn play_screen_sfx(path: &str) {
+    play_sfx_on_lane(path, SfxLane::Screen);
+}
+
 /// Plays a sound effect only if it was already preloaded.
 pub fn play_preloaded_sfx(path: &str) {
     play_preloaded_sfx_on_lane(path, SfxLane::Effect);
+}
+
+/// Stops active and queued screen-owned sound effects.
+pub fn stop_screen_sfx() {
+    SCREEN_SFX_STOP_GEN.fetch_add(1, Ordering::AcqRel);
 }
 
 /// Plays a gameplay assist tick that uses its own volume lane.
@@ -997,6 +1010,7 @@ pub fn play_assist_tick(path: &str) {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane: SfxLane::AssistTick,
+            stop_generation: 0,
         });
         return;
     }
@@ -1011,10 +1025,25 @@ pub fn play_preloaded_assist_tick(path: &str) {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane: SfxLane::AssistTick,
+            stop_generation: 0,
         });
         return;
     }
     play_preloaded_sfx_on_lane(path, SfxLane::AssistTick);
+}
+
+#[inline(always)]
+fn sfx_stop_generation(lane: SfxLane) -> u64 {
+    match lane {
+        SfxLane::Screen => SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
+        SfxLane::Effect | SfxLane::AssistTick => 0,
+    }
+}
+
+#[inline(always)]
+fn sfx_is_stale(lane: SfxLane, stop_generation: u64) -> bool {
+    matches!(lane, SfxLane::Screen)
+        && stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire)
 }
 
 fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
@@ -1028,6 +1057,7 @@ fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane,
+            stop_generation: sfx_stop_generation(lane),
         });
         return true;
     }
@@ -1069,6 +1099,7 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
     let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
         data: sound_data,
         lane,
+        stop_generation: sfx_stop_generation(lane),
     });
 }
 
@@ -1721,7 +1752,7 @@ struct RenderState {
     device_channels: usize,
     mix_i16: Vec<i16>,
     mix_f32: Vec<f32>,
-    active_sfx: Vec<(Arc<[i16]>, usize, SfxLane)>,
+    active_sfx: Vec<(Arc<[i16]>, usize, SfxLane, u64)>,
     queued_music_map: Arc<internal::SpscRingMusicSeg>,
     played_music_map: Arc<internal::SpscRingMusicSeg>,
     active_music_map: Option<MusicMapSeg>,
@@ -1851,26 +1882,33 @@ impl RenderState {
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
-            if self.active_sfx.len() < MAX_ACTIVE_SFX {
-                self.active_sfx.push((new_sfx.data, 0, new_sfx.lane));
+            if !sfx_is_stale(new_sfx.lane, new_sfx.stop_generation)
+                && self.active_sfx.len() < MAX_ACTIVE_SFX
+            {
+                self.active_sfx
+                    .push((new_sfx.data, 0, new_sfx.lane, new_sfx.stop_generation));
             }
         }
 
         let mut mixed_sfx = false;
-        self.active_sfx.retain_mut(|(data, cursor, lane)| {
-            let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
-            mixed_sfx |= n > 0;
-            let lane_vol = match *lane {
-                SfxLane::Effect => sfx_vol,
-                SfxLane::AssistTick => assist_tick_vol,
-            };
-            for i in 0..n {
-                let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
-                self.mix_f32[i] += sfx_sample_f32;
-            }
-            *cursor += n;
-            *cursor < data.len()
-        });
+        self.active_sfx
+            .retain_mut(|(data, cursor, lane, stop_generation)| {
+                if sfx_is_stale(*lane, *stop_generation) {
+                    return false;
+                }
+                let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
+                mixed_sfx |= n > 0;
+                let lane_vol = match *lane {
+                    SfxLane::Effect | SfxLane::Screen => sfx_vol,
+                    SfxLane::AssistTick => assist_tick_vol,
+                };
+                for i in 0..n {
+                    let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
+                    self.mix_f32[i] += sfx_sample_f32;
+                }
+                *cursor += n;
+                *cursor < data.len()
+            });
 
         (popped, mixed_sfx)
     }

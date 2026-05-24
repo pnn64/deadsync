@@ -5100,7 +5100,7 @@ impl App {
         } else {
             "assets/sounds/evaluation_pass"
         };
-        crate::engine::audio::folder::play_random_sfx(folder);
+        crate::engine::audio::folder::play_random_screen_sfx(folder);
 
         if self
             .state
@@ -7103,6 +7103,10 @@ impl App {
         let keep_preview = (prev == CurrentScreen::SelectMusic
             && target == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
+
+        if prev == CurrentScreen::Evaluation && target != CurrentScreen::Evaluation {
+            crate::engine::audio::stop_screen_sfx();
+        }
 
         if target_menu_music {
             if !prev_menu_music {

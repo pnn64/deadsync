@@ -423,6 +423,11 @@ impl App {
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
         debug!("Starting global fade out to screen: {target:?}");
+        if self.state.screens.current_screen == CurrentScreen::Evaluation
+            && target != CurrentScreen::Evaluation
+        {
+            crate::engine::audio::stop_screen_sfx();
+        }
         let (_, out_duration) =
             self.get_out_transition_for_screen(self.state.screens.current_screen);
         self.state.shell.transition = TransitionState::FadingOut {

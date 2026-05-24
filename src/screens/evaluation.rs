@@ -2730,7 +2730,7 @@ fn sync_submit_record_sfx(state: &mut State) {
         | scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
         scores::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
     };
-    crate::engine::audio::folder::play_random_sfx(folder);
+    crate::engine::audio::folder::play_random_screen_sfx(folder);
     state.submit_record_sfx_played = true;
 }
 

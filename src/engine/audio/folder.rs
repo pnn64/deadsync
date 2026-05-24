@@ -141,19 +141,28 @@ pub fn pick_indexed_in(dir: &Path, index: u32, fallback_name: &str) -> Option<Pa
     None
 }
 
-/// Plays a random `.ogg` from `rel_dir` via [`super::play_sfx`]. No-op when
-/// the [`config::Config::custom_sounds_enabled`] flag is off or the folder
-/// is empty.
-pub fn play_random_sfx(rel_dir: &str) {
+fn play_random_sfx_with(rel_dir: &str, play: fn(&str)) {
     if !enabled() {
         return;
     }
     if let Some(path) = random_sfx_in(rel_dir) {
         let path_str = path.to_string_lossy().into_owned();
-        super::play_sfx(&path_str);
+        play(&path_str);
     } else {
         debug!("No custom SFX picked for {rel_dir}");
     }
+}
+
+/// Plays a random `.ogg` from `rel_dir` via [`super::play_sfx`]. No-op when
+/// the [`config::Config::custom_sounds_enabled`] flag is off or the folder
+/// is empty.
+pub fn play_random_sfx(rel_dir: &str) {
+    play_random_sfx_with(rel_dir, super::play_sfx);
+}
+
+/// Plays a random `.ogg` from `rel_dir` as screen-owned SFX.
+pub fn play_random_screen_sfx(rel_dir: &str) {
+    play_random_sfx_with(rel_dir, super::play_screen_sfx);
 }
 
 /// Plays the indexed `.ogg` (or fallback) from `rel_dir` via [`super::play_sfx`].
