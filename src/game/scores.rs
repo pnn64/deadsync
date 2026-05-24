@@ -61,7 +61,10 @@ pub(crate) use submit_status::{
 
 // Lua charts stay blocked from online submit unless their effects have been
 // verified closely enough to match ITGmania for scoring purposes.
-const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 1] = ["d5bd4dd7224f68ff"];
+const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 2] = [
+    "d5bd4dd7224f68ff",
+    "c9e45c5e534f058d",
+];
 
 pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
     let hash = chart_hash.trim();
@@ -5549,13 +5552,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lua_chart_submit_allowlist_matches_spooky_hash() {
+    fn lua_chart_submit_allowlist_matches_known_hashes() {
         assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
+        assert!(lua_chart_submit_allowed("c9e45c5e534f058d"));
         assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
         assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
         assert!(lua_submit_allowed(true, "d5bd4dd7224f68ff"));
+        assert!(lua_submit_allowed(true, "c9e45c5e534f058d"));
     }
 
     #[test]
