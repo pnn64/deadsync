@@ -61,10 +61,7 @@ pub(crate) use submit_status::{
 
 // Lua charts stay blocked from online submit unless their effects have been
 // verified closely enough to match ITGmania for scoring purposes.
-const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 2] = [
-    "d5bd4dd7224f68ff",
-    "c9e45c5e534f058d",
-];
+const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 2] = ["d5bd4dd7224f68ff", "c9e45c5e534f058d"];
 
 pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
     let hash = chart_hash.trim();

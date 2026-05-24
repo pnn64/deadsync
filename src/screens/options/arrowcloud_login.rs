@@ -191,8 +191,9 @@ pub fn create_arrowcloud_login_ui_for_profile(
     display_name: String,
 ) -> ArrowCloudLoginUiState {
     let cancel = Arc::new(AtomicBool::new(false));
-    let had_existing_key =
-        !profile::get_arrowcloud_api_key_for_id(&profile_id).trim().is_empty();
+    let had_existing_key = !profile::get_arrowcloud_api_key_for_id(&profile_id)
+        .trim()
+        .is_empty();
     let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
     let cancel_for_thread = Arc::clone(&cancel);
     std::thread::spawn(move || {
@@ -371,9 +372,7 @@ fn run_login_session<S, P>(
 }
 
 fn clamp_poll_interval(seconds: Option<u64>) -> f32 {
-    let raw = seconds
-        .map(|s| s as f32)
-        .unwrap_or(POLL_INTERVAL_DEFAULT_S);
+    let raw = seconds.map(|s| s as f32).unwrap_or(POLL_INTERVAL_DEFAULT_S);
     raw.clamp(POLL_INTERVAL_MIN_S, POLL_INTERVAL_MAX_S)
 }
 
@@ -547,7 +546,10 @@ fn push_slot_panel(
         tr_fmt(
             "ArrowCloudLogin",
             "PanelHeader",
-            &[("side", side_label_str.as_ref()), ("name", &slot.display_name)],
+            &[
+                ("side", side_label_str.as_ref()),
+                ("name", &slot.display_name),
+            ],
         )
         .to_string()
     };
@@ -763,10 +765,9 @@ mod tests {
         let polls_clone = Arc::clone(&polls);
 
         let start = make_start_ok();
-        let start_fn =
-            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
-                Ok(start.clone())
-            };
+        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+            Ok(start.clone())
+        };
         let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
             let mut n = polls_clone.lock().unwrap();
             *n += 1;
@@ -805,10 +806,9 @@ mod tests {
         let (tx, rx) = mpsc::channel::<LoginMsg>();
         let cancel = Arc::new(AtomicBool::new(false));
         let start = make_start_ok();
-        let start_fn =
-            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
-                Ok(start.clone())
-            };
+        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+            Ok(start.clone())
+        };
         let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
             Ok(ac_online::DeviceLoginPollResp {
                 status: ac_online::DeviceLoginStatus::Expired,
@@ -844,10 +844,9 @@ mod tests {
         let (tx, rx) = mpsc::channel::<LoginMsg>();
         let cancel = Arc::new(AtomicBool::new(false));
         let start = make_start_ok();
-        let start_fn =
-            move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
-                Ok(start.clone())
-            };
+        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+            Ok(start.clone())
+        };
         let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
             Ok(ac_online::DeviceLoginPollResp {
                 status: ac_online::DeviceLoginStatus::Consumed,
@@ -973,12 +972,7 @@ mod tests {
         assert!(SlotState::NotJoined.is_workless());
         assert!(SlotState::Guest.is_workless());
         assert!(SlotState::Success.is_workless());
-        assert!(
-            SlotState::Failed {
-                reason: "x".into()
-            }
-            .is_workless()
-        );
+        assert!(SlotState::Failed { reason: "x".into() }.is_workless());
         assert!(!SlotState::Starting.is_workless());
         assert!(
             !SlotState::Pending {
@@ -993,19 +987,35 @@ mod tests {
 
     #[test]
     fn should_auto_show_disabled_is_always_false() {
-        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Disabled, || true));
-        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Disabled, || false));
+        assert!(!should_auto_show_with(
+            ArrowCloudQrLoginWhen::Disabled,
+            || true
+        ));
+        assert!(!should_auto_show_with(
+            ArrowCloudQrLoginWhen::Disabled,
+            || false
+        ));
     }
 
     #[test]
     fn should_auto_show_always_is_always_true() {
-        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || true));
-        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || false));
+        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || {
+            true
+        }));
+        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || {
+            false
+        }));
     }
 
     #[test]
     fn should_auto_show_sometimes_follows_missing_key_probe() {
-        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Sometimes, || true));
-        assert!(!should_auto_show_with(ArrowCloudQrLoginWhen::Sometimes, || false));
+        assert!(should_auto_show_with(
+            ArrowCloudQrLoginWhen::Sometimes,
+            || true
+        ));
+        assert!(!should_auto_show_with(
+            ArrowCloudQrLoginWhen::Sometimes,
+            || false
+        ));
     }
 }

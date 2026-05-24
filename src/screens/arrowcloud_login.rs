@@ -65,10 +65,9 @@ pub fn init() -> State {
 /// otherwise — and discards any previous instance.
 pub fn on_enter(state: &mut State) {
     state.ui = Some(match state.target_profile.as_ref() {
-        Some(target) => create_arrowcloud_login_ui_for_profile(
-            target.id.clone(),
-            target.display_name.clone(),
-        ),
+        Some(target) => {
+            create_arrowcloud_login_ui_for_profile(target.id.clone(), target.display_name.clone())
+        }
         None => create_arrowcloud_login_ui(),
     });
     state.menu_lr_chord = screen_input::MenuLrChordTracker::default();
@@ -117,11 +116,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     | VirtualAction::p2_select
             ));
     let is_back = is_three_key_cancel
-        || (ev.pressed
-            && matches!(
-                ev.action,
-                VirtualAction::p1_back | VirtualAction::p2_back
-            ));
+        || (ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
     let from_profile_menu = state.target_profile.is_some();
     if is_start {
         if let Some(ui) = state.ui.as_ref() {

@@ -1,39 +1,39 @@
 use super::{
-    emit_dir_edges, uuid_from_bytes, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId,
-    RawKeyboardEvent,
+    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent, emit_dir_edges,
+    uuid_from_bytes,
 };
-use crate::engine::windows_rt::{boost_current_thread, current_host_nanos, ThreadRole};
-use std::collections::{hash_map::Entry, HashMap};
+use crate::engine::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
+use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, Ordering};
 use std::time::Instant;
 
-use windows::core::PCWSTR;
 use windows::Win32::Devices::HumanInterfaceDevice::{
-    HidP_GetCaps, HidP_GetSpecificValueCaps, HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps,
-    HidP_Input, HidP_MaxUsageListLength, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS,
+    HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, HidP_GetCaps, HidP_GetSpecificValueCaps,
+    HidP_GetUsageValue, HidP_GetUsages, HidP_GetValueCaps, HidP_Input, HidP_MaxUsageListLength,
     PHIDP_PREPARSED_DATA,
 };
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    MapVirtualKeyW, MAPVK_VK_TO_VSC_EX, VK_NUMLOCK, VK_SHIFT,
+    MAPVK_VK_TO_VSC_EX, MapVirtualKeyW, VK_NUMLOCK, VK_SHIFT,
 };
 use windows::Win32::UI::Input::{
-    GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, RegisterRawInputDevices,
-    HRAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST, RAWINPUTHEADER, RAWKEYBOARD, RIDEV_DEVNOTIFY,
-    RIDEV_INPUTSINK, RIDEV_NOLEGACY, RIDI_DEVICEINFO, RIDI_DEVICENAME, RIDI_PREPARSEDDATA,
-    RID_DEVICE_INFO, RID_DEVICE_INFO_HID, RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD,
+    GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, HRAWINPUT, RAWINPUTDEVICE,
+    RAWINPUTDEVICELIST, RAWINPUTHEADER, RAWKEYBOARD, RID_DEVICE_INFO, RID_DEVICE_INFO_HID,
+    RID_INPUT, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_NOLEGACY, RIDI_DEVICEINFO, RIDI_DEVICENAME,
+    RIDI_PREPARSEDDATA, RIM_TYPEHID, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW,
-    PostQuitMessage, RegisterClassExW, SetWindowLongPtrW, TranslateMessage, CREATESTRUCTW,
-    GWLP_USERDATA, HWND_MESSAGE, MSG, RI_KEY_E0, RI_KEY_E1, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_CREATE, WM_DESTROY, WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
-    WM_SYSKEYUP, WNDCLASSEXW,
+    CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
+    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostQuitMessage, RI_KEY_E0, RI_KEY_E1, RegisterClassExW,
+    SetWindowLongPtrW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY,
+    WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WNDCLASSEXW,
 };
+use windows::core::PCWSTR;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 

@@ -1,3 +1,4 @@
+pub mod arrowcloud_login;
 pub mod components;
 pub mod credits;
 pub mod evaluation;
@@ -18,7 +19,6 @@ pub mod practice;
 pub mod profile_load;
 pub mod sandbox;
 pub mod select_color;
-pub mod arrowcloud_login;
 pub mod select_course;
 pub mod select_mode;
 pub mod select_music;

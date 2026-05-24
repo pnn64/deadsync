@@ -130,13 +130,14 @@ fn judgment_tilt_rotation_deg(profile: &profile::Profile, judgment: &Judgment) -
 const Z_RECEPTOR: i32 = 100;
 const Z_HOLD_BODY: i32 = 110;
 const Z_HOLD_CAP: i32 = 110;
+const Z_HOLD_GLOW: i32 = 111;
 // ITG draws GhostArrowRow after columns; keep hold/roll ghost arrows above note lanes.
 const Z_HOLD_EXPLOSION: i32 = 145;
 // ITG's Explosion actor declares hold/roll children before tap judgments, so taps render on top.
 const Z_TAP_EXPLOSION: i32 = 150;
 // ITG NoteField draws ReceptorArrowRow before column renderers, so receptor
 // press glow must stay under hold bodies instead of cutting through them.
-const Z_HOLD_GLOW: i32 = 105;
+const Z_RECEPTOR_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
@@ -1476,6 +1477,36 @@ fn note_glow(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: AppearanceE
 }
 
 #[inline(always)]
+fn note_actor_alpha(
+    y_no_reverse: f32,
+    elapsed: f32,
+    mini: f32,
+    appearance: AppearanceEffects,
+) -> f32 {
+    if note_alpha(y_no_reverse, elapsed, mini, appearance) > 0.5 {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
+fn itg_actor_glow_alpha(alpha: f32) -> f32 {
+    if alpha.is_finite() {
+        alpha.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
+fn hold_alpha_needs_rows(appearance: AppearanceEffects) -> bool {
+    appearance.hidden > f32::EPSILON
+        || appearance.sudden > f32::EPSILON
+        || appearance.random_vanish > f32::EPSILON
+}
+
+#[inline(always)]
 fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
     let num_cols = col_offsets.len();
     if num_cols == 0 {
@@ -1760,6 +1791,34 @@ fn hold_strip_actor(
 }
 
 #[inline(always)]
+fn hold_strip_glow_actor(
+    texture: Arc<str>,
+    vertices: Arc<[TexturedMeshVertex]>,
+    depth_test: bool,
+    z: i16,
+) -> Actor {
+    Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint: [1.0, 1.0, 1.0, 0.0],
+        glow: [1.0, 1.0, 1.0, 1.0],
+        vertices,
+        geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    }
+}
+
+#[inline(always)]
 fn mod_divisor(value: f32) -> f32 {
     if value.abs() > 0.001 {
         value
@@ -1893,7 +1952,8 @@ fn push_note_glow_actor(
     spec: NoteGlowDraw<'_>,
     model_cache: &mut ModelMeshCache,
 ) {
-    if spec.alpha <= f32::EPSILON {
+    let glow_alpha = itg_actor_glow_alpha(spec.alpha);
+    if glow_alpha <= f32::EPSILON {
         return;
     }
     if !spec.prefer_sprite
@@ -1912,7 +1972,7 @@ fn push_note_glow_actor(
     {
         let mut glow_actor = glow_actor;
         if let Actor::TexturedMesh { glow, .. } = &mut glow_actor {
-            *glow = [1.0, 1.0, 1.0, spec.alpha];
+            *glow = [1.0, 1.0, 1.0, glow_alpha];
         }
         actors.push(actor_with_world_z(glow_actor, spec.world_z));
         return;
@@ -1928,7 +1988,7 @@ fn push_note_glow_actor(
                 rotationz(spec.sprite_rotation_z):
                 customtexturerect(spec.uv[0], spec.uv[1], spec.uv[2], spec.uv[3]):
                 diffuse(1.0, 1.0, 1.0, 0.0):
-                glow(1.0, 1.0, 1.0, spec.alpha):
+                glow(1.0, 1.0, 1.0, glow_alpha):
                 blend(add):
                 z(spec.z as i32)
             ),
@@ -1944,7 +2004,7 @@ fn push_note_glow_actor(
                 rotationz(spec.sprite_rotation_z):
                 customtexturerect(spec.uv[0], spec.uv[1], spec.uv[2], spec.uv[3]):
                 diffuse(1.0, 1.0, 1.0, 0.0):
-                glow(1.0, 1.0, 1.0, spec.alpha):
+                glow(1.0, 1.0, 1.0, glow_alpha):
                 blend(normal):
                 z(spec.z as i32)
             ),
@@ -4183,9 +4243,9 @@ pub fn build_bundles(
                 };
                 (y_pos - receptor_y_lane - tipsy_y_for_col(local_col)) / dir
             };
-        let alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
+        let actor_alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
             let adjusted = adjusted_travel_offset(travel_offset);
-            note_alpha(
+            note_actor_alpha(
                 adjusted + tipsy_y_for_col(local_col),
                 elapsed_screen,
                 mini,
@@ -4849,7 +4909,7 @@ pub fn build_bundles(
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
                                 blend(add):
-                                z(Z_HOLD_GLOW)
+                                z(Z_RECEPTOR_GLOW)
                             ));
                         } else {
                             actors.push(act!(sprite(glow_slot.texture_key_handle()):
@@ -4863,7 +4923,7 @@ pub fn build_bundles(
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
                                 blend(normal):
-                                z(Z_HOLD_GLOW)
+                                z(Z_RECEPTOR_GLOW)
                             ));
                         }
                     }
@@ -5404,7 +5464,8 @@ pub fn build_bundles(
                             visible_bottom_distance / segment_height + phase_offset;
                         let mut emitted = 0;
 
-                        if use_legacy_hold_sprites && allow_legacy_sprites {
+                        let hold_alpha_rows = hold_alpha_needs_rows(appearance);
+                        if use_legacy_hold_sprites && allow_legacy_sprites && !hold_alpha_rows {
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments
                             {
@@ -5459,19 +5520,19 @@ pub fn build_bundles(
                                     dir,
                                     segment_center_screen,
                                 );
-                                let segment_alpha = note_alpha(
+                                let segment_alpha = note_actor_alpha(
                                     segment_center_travel + tipsy_y_for_col(local_col),
                                     elapsed_screen,
                                     mini,
                                     appearance,
                                 );
-                                let segment_glow = note_glow(
+                                let segment_glow = itg_actor_glow_alpha(note_glow(
                                     segment_center_travel + tipsy_y_for_col(local_col),
                                     elapsed_screen,
                                     mini,
                                     appearance,
-                                );
-                                if segment_alpha > f32::EPSILON {
+                                ));
+                                if segment_alpha > f32::EPSILON || segment_glow > f32::EPSILON {
                                     let segment_center_x = lane_center_x_from_adjusted_travel(
                                         local_col,
                                         segment_center_travel,
@@ -5484,27 +5545,29 @@ pub fn build_bundles(
                                         None => segment_bottom,
                                         Some(v) => v.max(segment_bottom),
                                     });
-                                    actors.push(actor_with_world_z(
-                                        act!(sprite(body_slot.texture_key_handle()):
-                                            align(0.5, 0.5):
-                                            xy(segment_center_x, segment_center_screen):
-                                            setsize(body_width, segment_size):
-                                            rotationy(note_rotation_y):
-                                            rotationz(0.0):
-                                            customtexturerect(u0, v0, u1, v1):
-                                            diffuse(
-                                                hold_diffuse[0],
-                                                hold_diffuse[1],
-                                                hold_diffuse[2],
-                                                hold_diffuse[3] * segment_alpha
-                                            ):
-                                            z(Z_HOLD_BODY)
-                                        ),
-                                        world_z_for_adjusted_travel(
-                                            local_col,
-                                            segment_center_travel,
-                                        ),
-                                    ));
+                                    if segment_alpha > f32::EPSILON {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(body_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(segment_center_x, segment_center_screen):
+                                                setsize(body_width, segment_size):
+                                                rotationy(note_rotation_y):
+                                                rotationz(0.0):
+                                                customtexturerect(u0, v0, u1, v1):
+                                                diffuse(
+                                                    hold_diffuse[0],
+                                                    hold_diffuse[1],
+                                                    hold_diffuse[2],
+                                                    hold_diffuse[3] * segment_alpha
+                                                ):
+                                                z(Z_HOLD_BODY)
+                                            ),
+                                            world_z_for_adjusted_travel(
+                                                local_col,
+                                                segment_center_travel,
+                                            ),
+                                        ));
+                                    }
                                     if segment_glow > f32::EPSILON {
                                         actors.push(actor_with_world_z(
                                             act!(sprite(body_slot.texture_key_handle()):
@@ -5514,7 +5577,8 @@ pub fn build_bundles(
                                                 rotationy(note_rotation_y):
                                                 rotationz(0.0):
                                                 customtexturerect(u0, v0, u1, v1):
-                                                diffuse(1.0, 1.0, 1.0, segment_glow):
+                                                diffuse(1.0, 1.0, 1.0, 0.0):
+                                                glow(1.0, 1.0, 1.0, segment_glow):
                                                 z(Z_HOLD_GLOW)
                                             ),
                                             world_z_for_adjusted_travel(
@@ -5604,19 +5668,19 @@ pub fn build_bundles(
                                         dir,
                                         slice_center_screen,
                                     );
-                                    let slice_alpha = note_alpha(
+                                    let slice_alpha = note_actor_alpha(
                                         slice_center_travel + tipsy_y_for_col(local_col),
                                         elapsed_screen,
                                         mini,
                                         appearance,
                                     );
-                                    let slice_glow = note_glow(
+                                    let slice_glow = itg_actor_glow_alpha(note_glow(
                                         slice_center_travel + tipsy_y_for_col(local_col),
                                         elapsed_screen,
                                         mini,
                                         appearance,
-                                    );
-                                    if slice_alpha <= f32::EPSILON {
+                                    ));
+                                    if slice_alpha <= f32::EPSILON && slice_glow <= f32::EPSILON {
                                         prev_body_row = None;
                                         slice_top = slice_bottom;
                                         continue;
@@ -5663,30 +5727,30 @@ pub fn build_bundles(
                                     });
 
                                     if use_body_mesh {
-                                        let top_alpha = note_alpha(
+                                        let top_alpha = note_actor_alpha(
                                             slice_top_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
                                             mini,
                                             appearance,
                                         );
-                                        let bottom_alpha = note_alpha(
+                                        let bottom_alpha = note_actor_alpha(
                                             slice_bottom_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
                                             mini,
                                             appearance,
                                         );
-                                        let top_glow = note_glow(
+                                        let top_glow = itg_actor_glow_alpha(note_glow(
                                             slice_top_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
                                             mini,
                                             appearance,
-                                        );
-                                        let bottom_glow = note_glow(
+                                        ));
+                                        let bottom_glow = itg_actor_glow_alpha(note_glow(
                                             slice_bottom_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
                                             mini,
                                             appearance,
-                                        );
+                                        ));
                                         let slice_forward = [
                                             slice_bottom_x - slice_top_x,
                                             slice_bottom - slice_top,
@@ -5752,11 +5816,13 @@ pub fn build_bundles(
                                                 hold_diffuse[3] * bottom_alpha,
                                             ],
                                         );
-                                        let mesh_vertices = body_mesh_vertices
-                                            .get_or_insert_with(|| Vec::with_capacity(96));
-                                        mesh_vertices.extend_from_slice(&hold_strip_quad(
-                                            top_row, bottom_row,
-                                        ));
+                                        if top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON {
+                                            let mesh_vertices = body_mesh_vertices
+                                                .get_or_insert_with(|| Vec::with_capacity(96));
+                                            mesh_vertices.extend_from_slice(&hold_strip_quad(
+                                                top_row, bottom_row,
+                                            ));
+                                        }
                                         if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
                                             let top_glow_row = hold_strip_row_from_positions(
                                                 top_row[0].pos,
@@ -5786,24 +5852,26 @@ pub fn build_bundles(
                                         prev_body_row =
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
                                     } else {
-                                        actors.push(actor_with_world_z(
-                                            act!(sprite(body_slot.texture_key_handle()):
-                                                align(0.5, 0.5):
-                                                xy(slice_center[0], slice_center[1]):
-                                                setsize(body_width, slice_height):
-                                                rotationy(note_rotation_y):
-                                                rotationz(slice_rotation):
-                                                customtexturerect(u0, slice_v0, u1, slice_v1):
-                                                diffuse(
-                                                    hold_diffuse[0],
-                                                    hold_diffuse[1],
-                                                    hold_diffuse[2],
-                                                    hold_diffuse[3] * slice_alpha
-                                                ):
-                                                z(Z_HOLD_BODY)
-                                            ),
-                                            slice_world_z,
-                                        ));
+                                        if slice_alpha > f32::EPSILON {
+                                            actors.push(actor_with_world_z(
+                                                act!(sprite(body_slot.texture_key_handle()):
+                                                    align(0.5, 0.5):
+                                                    xy(slice_center[0], slice_center[1]):
+                                                    setsize(body_width, slice_height):
+                                                    rotationy(note_rotation_y):
+                                                    rotationz(slice_rotation):
+                                                    customtexturerect(u0, slice_v0, u1, slice_v1):
+                                                    diffuse(
+                                                        hold_diffuse[0],
+                                                        hold_diffuse[1],
+                                                        hold_diffuse[2],
+                                                        hold_diffuse[3] * slice_alpha
+                                                    ):
+                                                    z(Z_HOLD_BODY)
+                                                ),
+                                                slice_world_z,
+                                            ));
+                                        }
                                         if slice_glow > f32::EPSILON {
                                             actors.push(actor_with_world_z(
                                                 act!(sprite(body_slot.texture_key_handle()):
@@ -5813,7 +5881,8 @@ pub fn build_bundles(
                                                     rotationy(note_rotation_y):
                                                     rotationz(slice_rotation):
                                                     customtexturerect(u0, slice_v0, u1, slice_v1):
-                                                    diffuse(1.0, 1.0, 1.0, slice_glow):
+                                                    diffuse(1.0, 1.0, 1.0, 0.0):
+                                                    glow(1.0, 1.0, 1.0, slice_glow):
                                                     z(Z_HOLD_GLOW)
                                                 ),
                                                 slice_world_z,
@@ -5841,10 +5910,9 @@ pub fn build_bundles(
                             if let Some(vertices) = body_glow_vertices
                                 && !vertices.is_empty()
                             {
-                                actors.push(hold_strip_actor(
+                                actors.push(hold_strip_glow_actor(
                                     body_slot.texture_key_shared(),
                                     Arc::from(vertices),
-                                    BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
@@ -5905,19 +5973,19 @@ pub fn build_bundles(
                             dir,
                             cap_center,
                         );
-                        let cap_alpha = note_alpha(
+                        let cap_alpha = note_actor_alpha(
                             cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
                         );
-                        let cap_glow = note_glow(
+                        let cap_glow = itg_actor_glow_alpha(note_glow(
                             cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
-                        );
-                        if cap_alpha <= f32::EPSILON {
+                        ));
+                        if cap_alpha <= f32::EPSILON && cap_glow <= f32::EPSILON {
                             return;
                         }
                         let cap_top_travel =
@@ -5941,30 +6009,30 @@ pub fn build_bundles(
                             && cap_slot.model.is_none()
                             && !hold_y_rotation_active;
                         if use_top_cap_mesh {
-                            let top_alpha = note_alpha(
+                            let top_alpha = note_actor_alpha(
                                 cap_top_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
                             );
-                            let bottom_alpha = note_alpha(
+                            let bottom_alpha = note_actor_alpha(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
                             );
-                            let top_glow = note_glow(
+                            let top_glow = itg_actor_glow_alpha(note_glow(
                                 cap_top_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
-                            );
-                            let bottom_glow = note_glow(
+                            ));
+                            let bottom_glow = itg_actor_glow_alpha(note_glow(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
-                            );
+                            ));
                             let cap_forward = [cap_bottom_x - cap_top_x, cap_bottom - cap_top];
                             let top_half_width =
                                 hold_arrow_px_for_adjusted_travel(cap_top_travel) * 0.5;
@@ -6020,13 +6088,15 @@ pub fn build_bundles(
                                     ],
                                 )
                             };
-                            actors.push(hold_strip_actor(
-                                cap_slot.texture_key_shared(),
-                                Arc::new(hold_strip_quad(top_row, bottom_row)),
-                                BlendMode::Alpha,
-                                hold_depth_test,
-                                Z_HOLD_CAP as i16,
-                            ));
+                            if top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON {
+                                actors.push(hold_strip_actor(
+                                    cap_slot.texture_key_shared(),
+                                    Arc::new(hold_strip_quad(top_row, bottom_row)),
+                                    BlendMode::Alpha,
+                                    hold_depth_test,
+                                    Z_HOLD_CAP as i16,
+                                ));
+                            }
                             if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
                                 let top_glow_row = hold_strip_row_from_positions(
                                     top_row[0].pos,
@@ -6044,10 +6114,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                actors.push(hold_strip_actor(
+                                actors.push(hold_strip_glow_actor(
                                     cap_slot.texture_key_shared(),
                                     Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
-                                    BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
@@ -6057,24 +6126,26 @@ pub fn build_bundles(
                                 world_z_for_adjusted_travel(local_col, cap_center_travel);
                             let cap_rotation = cap_path_rotation
                                 + top_cap_rotation_deg(lane_reverse, body_flipped);
-                            actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_handle()):
-                                    align(0.5, 0.5):
-                                    xy(cap_center_xy[0], cap_center_xy[1]):
-                                    setsize(cap_width, cap_draw_height):
-                                    customtexturerect(u0, v0, u1, v1):
-                                    diffuse(
-                                        hold_diffuse[0],
-                                        hold_diffuse[1],
-                                        hold_diffuse[2],
-                                        hold_diffuse[3] * cap_alpha
-                                    ):
-                                    rotationy(note_rotation_y):
-                                    rotationz(cap_rotation):
-                                    z(Z_HOLD_CAP)
-                                ),
-                                cap_world_z,
-                            ));
+                            if cap_alpha > f32::EPSILON {
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(cap_slot.texture_key_handle()):
+                                        align(0.5, 0.5):
+                                        xy(cap_center_xy[0], cap_center_xy[1]):
+                                        setsize(cap_width, cap_draw_height):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(
+                                            hold_diffuse[0],
+                                            hold_diffuse[1],
+                                            hold_diffuse[2],
+                                            hold_diffuse[3] * cap_alpha
+                                        ):
+                                        rotationy(note_rotation_y):
+                                        rotationz(cap_rotation):
+                                        z(Z_HOLD_CAP)
+                                    ),
+                                    cap_world_z,
+                                ));
+                            }
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
                                     act!(sprite(cap_slot.texture_key_handle()):
@@ -6082,7 +6153,8 @@ pub fn build_bundles(
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
                                         customtexturerect(u0, v0, u1, v1):
-                                        diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        diffuse(1.0, 1.0, 1.0, 0.0):
+                                        glow(1.0, 1.0, 1.0, cap_glow):
                                         rotationy(note_rotation_y):
                                         rotationz(cap_rotation):
                                         z(Z_HOLD_GLOW)
@@ -6164,19 +6236,19 @@ pub fn build_bundles(
                             dir,
                             cap_center,
                         );
-                        let cap_alpha = note_alpha(
+                        let cap_alpha = note_actor_alpha(
                             cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
                         );
-                        let cap_glow = note_glow(
+                        let cap_glow = itg_actor_glow_alpha(note_glow(
                             cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
-                        );
-                        if cap_alpha <= f32::EPSILON {
+                        ));
+                        if cap_alpha <= f32::EPSILON && cap_glow <= f32::EPSILON {
                             return;
                         }
                         let cap_top_travel = adjusted_travel_from_screen_y(
@@ -6205,30 +6277,30 @@ pub fn build_bundles(
                             && !lane_reverse
                             && !hold_y_rotation_active;
                         if use_bottom_cap_mesh {
-                            let top_alpha = note_alpha(
+                            let top_alpha = note_actor_alpha(
                                 cap_top_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
                             );
-                            let bottom_alpha = note_alpha(
+                            let bottom_alpha = note_actor_alpha(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
                             );
-                            let top_glow = note_glow(
+                            let top_glow = itg_actor_glow_alpha(note_glow(
                                 cap_top_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
-                            );
-                            let bottom_glow = note_glow(
+                            ));
+                            let bottom_glow = itg_actor_glow_alpha(note_glow(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
                                 appearance,
-                            );
+                            ));
                             let cap_forward = [cap_bottom_x - cap_top_x, draw_bottom - draw_top];
                             let top_half_width =
                                 hold_arrow_px_for_adjusted_travel(cap_top_travel) * 0.5;
@@ -6281,13 +6353,15 @@ pub fn build_bundles(
                                     hold_diffuse[3] * bottom_alpha,
                                 ],
                             );
-                            actors.push(hold_strip_actor(
-                                cap_slot.texture_key_shared(),
-                                Arc::new(hold_strip_quad(top_row, bottom_row)),
-                                BlendMode::Alpha,
-                                hold_depth_test,
-                                Z_HOLD_CAP as i16,
-                            ));
+                            if top_alpha > f32::EPSILON || bottom_alpha > f32::EPSILON {
+                                actors.push(hold_strip_actor(
+                                    cap_slot.texture_key_shared(),
+                                    Arc::new(hold_strip_quad(top_row, bottom_row)),
+                                    BlendMode::Alpha,
+                                    hold_depth_test,
+                                    Z_HOLD_CAP as i16,
+                                ));
+                            }
                             if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
                                 let top_glow_row = hold_strip_row_from_positions(
                                     top_row[0].pos,
@@ -6305,10 +6379,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                actors.push(hold_strip_actor(
+                                actors.push(hold_strip_glow_actor(
                                     cap_slot.texture_key_shared(),
                                     Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
-                                    BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
@@ -6316,24 +6389,26 @@ pub fn build_bundles(
                         } else {
                             let cap_world_z =
                                 world_z_for_adjusted_travel(local_col, cap_center_travel);
-                            actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_handle()):
-                                    align(0.5, 0.5):
-                                    xy(cap_center_xy[0], cap_center_xy[1]):
-                                    setsize(cap_width, cap_draw_height):
-                                    customtexturerect(u0, v0, u1, v1):
-                                    diffuse(
-                                        hold_diffuse[0],
-                                        hold_diffuse[1],
-                                        hold_diffuse[2],
-                                        hold_diffuse[3] * cap_alpha
-                                    ):
-                                    rotationy(note_rotation_y):
-                                    rotationz(cap_rotation):
-                                    z(Z_HOLD_CAP)
-                                ),
-                                cap_world_z,
-                            ));
+                            if cap_alpha > f32::EPSILON {
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(cap_slot.texture_key_handle()):
+                                        align(0.5, 0.5):
+                                        xy(cap_center_xy[0], cap_center_xy[1]):
+                                        setsize(cap_width, cap_draw_height):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(
+                                            hold_diffuse[0],
+                                            hold_diffuse[1],
+                                            hold_diffuse[2],
+                                            hold_diffuse[3] * cap_alpha
+                                        ):
+                                        rotationy(note_rotation_y):
+                                        rotationz(cap_rotation):
+                                        z(Z_HOLD_CAP)
+                                    ),
+                                    cap_world_z,
+                                ));
+                            }
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
                                     act!(sprite(cap_slot.texture_key_handle()):
@@ -6341,7 +6416,8 @@ pub fn build_bundles(
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
                                         customtexturerect(u0, v0, u1, v1):
-                                        diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        diffuse(1.0, 1.0, 1.0, 0.0):
+                                        glow(1.0, 1.0, 1.0, cap_glow):
                                         rotationy(note_rotation_y):
                                         rotationz(cap_rotation):
                                         z(Z_HOLD_GLOW)
@@ -6360,7 +6436,7 @@ pub fn build_bundles(
                 && head_draw_delta >= -draw_distance_after_targets
                 && head_draw_delta <= draw_distance_before_targets
             {
-                let head_alpha = alpha_for_travel(local_col, head_anchor_travel);
+                let head_alpha = actor_alpha_for_travel(local_col, head_anchor_travel);
                 let head_glow = glow_for_travel(local_col, head_anchor_travel);
                 if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
                     return;
@@ -6821,7 +6897,7 @@ pub fn build_bundles(
                     {
                         return;
                     }
-                    let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
+                    let note_alpha = actor_alpha_for_travel(col_idx, raw_travel_offset);
                     let note_glow = if matches!(note.note_type, NoteType::Mine) {
                         0.0
                     } else {
@@ -8608,16 +8684,17 @@ pub fn build_bundles(
 mod tests {
     use super::{
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
-        actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
-        append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
-        bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
-        confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        error_bar_boundaries_s, hold_body_needs_z_buffer, hold_body_segment_budget,
-        hold_draw_span, hold_explosion_active, hold_explosion_slot_for_col, hold_head_render_flags,
-        hold_indicator_column_offset, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds,
-        hud_layout_ys, hud_y, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
-        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
+        Z_RECEPTOR_GLOW, Z_TAP_NOTE, actual_grade_points_with_provisional,
+        add_provisional_early_bad_counts_to_ex_score, append_mini_part, append_perspective_parts,
+        append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
+        clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
+        disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
+        hold_alpha_needs_rows, hold_body_needs_z_buffer, hold_body_segment_budget, hold_draw_span,
+        hold_explosion_active, hold_explosion_slot_for_col, hold_head_render_flags,
+        hold_indicator_column_offset, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
+        judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
         offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
         push_transform_parts, receptor_row_center, scroll_receptor_y, song_lua_hides_note_window,
@@ -8956,7 +9033,13 @@ mod tests {
     #[test]
     fn receptor_glow_draws_under_hold_body() {
         assert!(Z_RECEPTOR < Z_HOLD_BODY);
-        assert!(Z_HOLD_GLOW < Z_HOLD_BODY);
+        assert!(Z_RECEPTOR_GLOW < Z_HOLD_BODY);
+    }
+
+    #[test]
+    fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
+        assert!(Z_HOLD_BODY < Z_HOLD_GLOW);
+        assert!(Z_HOLD_GLOW < Z_TAP_NOTE);
     }
 
     #[test]
@@ -9189,6 +9272,59 @@ mod tests {
     }
 
     #[test]
+    fn note_actor_alpha_matches_itg_visibility_gate() {
+        let half_visible = note_actor_alpha(
+            100.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                stealth: 0.5,
+                ..AppearanceEffects::default()
+            },
+        );
+        let mostly_visible = note_actor_alpha(
+            100.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                stealth: 0.25,
+                ..AppearanceEffects::default()
+            },
+        );
+        assert_eq!(half_visible, 0.0);
+        assert_eq!(mostly_visible, 1.0);
+    }
+
+    #[test]
+    fn note_actor_glow_clamps_like_itg_vertex_color() {
+        assert_eq!(itg_actor_glow_alpha(1.3), 1.0);
+        assert_eq!(itg_actor_glow_alpha(0.65), 0.65);
+        assert_eq!(itg_actor_glow_alpha(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn hold_alpha_rows_enable_for_y_varying_appearance_effects() {
+        assert!(!hold_alpha_needs_rows(AppearanceEffects::default()));
+        assert!(hold_alpha_needs_rows(AppearanceEffects {
+            hidden: 1.0,
+            ..AppearanceEffects::default()
+        }));
+        assert!(hold_alpha_needs_rows(AppearanceEffects {
+            sudden: 1.0,
+            ..AppearanceEffects::default()
+        }));
+        assert!(hold_alpha_needs_rows(AppearanceEffects {
+            random_vanish: 1.0,
+            ..AppearanceEffects::default()
+        }));
+        assert!(!hold_alpha_needs_rows(AppearanceEffects {
+            blink: 1.0,
+            stealth: 1.0,
+            ..AppearanceEffects::default()
+        }));
+    }
+
+    #[test]
     fn sudden_offset_shifts_fade_band_like_itg() {
         let base = note_alpha(
             180.0,
@@ -9320,6 +9456,25 @@ mod tests {
         assert!(matches!(
             actor,
             Actor::TexturedMesh {
+                depth_test: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn hold_strip_glow_actor_uses_texture_mask_pass() {
+        let actor = hold_strip_glow_actor(
+            Arc::from("hold.png"),
+            Arc::from([]),
+            true,
+            Z_HOLD_GLOW as i16,
+        );
+        assert!(matches!(
+            actor,
+            Actor::TexturedMesh {
+                tint: [1.0, 1.0, 1.0, 0.0],
+                glow: [1.0, 1.0, 1.0, 1.0],
                 depth_test: true,
                 ..
             }
