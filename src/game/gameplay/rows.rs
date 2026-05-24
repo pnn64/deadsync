@@ -46,7 +46,6 @@ pub(super) fn finalize_row_judgment(
     apply_autosync_for_row_hits(state, row_entry_index);
     let final_grade = final_judgment.grade;
     state.row_entries[row_entry_index].final_outcome = Some(FinalizedRowOutcome { final_grade });
-    record_display_window_counts(state, player, &final_judgment);
     timing::record_live_timing_stats(
         &mut state.players[player].live_timing_stats,
         &final_judgment,
@@ -59,6 +58,7 @@ pub(super) fn finalize_row_judgment(
         }
         return;
     }
+    record_display_window_counts(state, player, &final_judgment);
     let show_final_visual = !suppress_final_early_bad_visual;
     let current_music_time = current_music_time_s(state);
     {

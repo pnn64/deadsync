@@ -11454,6 +11454,43 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn autoplay_rows_do_not_record_ex_counts() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let row_index = 48usize;
+        state.notes = vec![test_note(0, row_index, NoteType::Tap)];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_entry_ranges = [(0, 1), (0, 0)];
+        state.note_row_entry_indices = vec![0];
+        state.autoplay_enabled = true;
+
+        set_final_note_result(
+            &mut state,
+            0,
+            0,
+            Judgment {
+                time_error_ms: 0.0,
+                time_error_music_ns: 0,
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W0),
+                miss_because_held: false,
+            },
+        );
+        finalize_row_judgment(&mut state, 0, row_index, 0, false);
+
+        assert_eq!(state.live_window_counts[0].w0, 0);
+        assert_eq!(super::display_ex_score_percent(&state, 0), 0.0);
+        assert_eq!(super::display_itg_score_percent(&state, 0), 0.0);
+        assert!(state.players[0].last_judgment.is_some());
+    }
+
+    #[test]
     fn missed_holds_and_rolls_are_not_scored_for_dance_or_pump() {
         assert!(!score_missed_holds_and_rolls("dance-single"));
         assert!(!score_missed_holds_and_rolls("pump-single"));

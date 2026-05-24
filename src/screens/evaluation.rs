@@ -2181,38 +2181,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 score_percent,
             );
 
-            // Per-window counts for the FA+ pane should always reflect all tap
-            // judgments that occurred (including after failure), matching the
-            // standard pane's judgment_counts semantics.
-            let window_counts = timing_stats::compute_window_counts(notes);
-            let window_counts_10ms = timing_stats::compute_window_counts_10ms_blue(notes);
-
-            // Parameter retained for parity with Simply Love helpers; currently unused.
-            let mines_disabled = false;
-            let ex_score_percent = judgment::calculate_ex_score_from_notes(
-                notes,
-                note_times,
-                hold_end_times,
-                gs.total_steps[player_idx],
-                gs.holds_total[player_idx],
-                gs.rolls_total[player_idx],
-                gs.mines_total[player_idx],
-                p.fail_time
-                    .map(crate::game::gameplay::song_time_ns_from_seconds),
-                mines_disabled,
+            // Per-window counts for the FA+ pane should reflect tracked
+            // gameplay counts. These continue after failure but skip live
+            // autoplay, matching Simply Love's JudgmentMessage guards.
+            let window_counts = crate::game::gameplay::display_window_counts(&gs, player_idx, None);
+            let window_counts_10ms = crate::game::gameplay::display_window_counts(
+                &gs,
+                player_idx,
+                Some(crate::game::timing::FA_PLUS_W010_MS),
             );
-            let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
-                notes,
-                note_times,
-                hold_end_times,
-                gs.total_steps[player_idx],
-                gs.holds_total[player_idx],
-                gs.rolls_total[player_idx],
-                gs.mines_total[player_idx],
-                p.fail_time
-                    .map(crate::game::gameplay::song_time_ns_from_seconds),
-                mines_disabled,
-            );
+            let ex_data = crate::game::gameplay::display_scored_ex_score_data(&gs, player_idx);
+            let ex_score_percent = judgment::ex_score_percent(&ex_data);
+            let hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
 
             // Quint comes from the achieved result, not whether FA+ is displayed.
             grade = scores::promote_quint_grade(grade, ex_score_percent);
