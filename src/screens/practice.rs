@@ -554,6 +554,7 @@ fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverr
         force_center_1player: true,
         receptor_y: Some(practice_edit_cursor_y()),
         edit_beat_bars: true,
+        hide_combo: true,
         ..gameplay_screen::NotefieldViewOverride::default()
     }
 }

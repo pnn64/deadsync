@@ -1008,6 +1008,7 @@ pub struct ViewOverride {
     pub receptor_y: Option<f32>,
     pub edit_beat_bars: bool,
     pub hide_display_mods: bool,
+    pub hide_combo: bool,
 }
 
 pub struct BuiltNotefield {
@@ -3931,7 +3932,11 @@ pub fn build_bundles(
         } else {
             0
         }
-        + if profile.hide_combo { 0 } else { 2 }
+        + if profile.hide_combo || view.hide_combo {
+            0
+        } else {
+            2
+        }
         + if error_bar_mask.contains(profile::ErrorBarMask::TEXT) {
             1
         } else {
@@ -7685,11 +7690,8 @@ pub fn build_bundles(
 
     let combo_capture_start = hud_actors.len();
     // Combo Milestone Explosions (100 / 1000 combo)
-    if !blind_active
-        && !profile.hide_combo
-        && !profile.hide_combo_explosions
-        && !p.combo_milestones.is_empty()
-    {
+    let show_combo = !view.hide_combo && !blind_active && !profile.hide_combo;
+    if show_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
         let player_color = color::decorative_rgba(state.player_color_index);
@@ -7778,7 +7780,7 @@ pub fn build_bundles(
         }
     }
     // Combo
-    if !blind_active && !profile.hide_combo {
+    if show_combo {
         let combo_y = zmod_layout.combo_y;
         let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
