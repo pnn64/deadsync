@@ -42,6 +42,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
+use std::time::Instant;
 use twox_hash::XxHash64;
 
 // --- CONSTANTS ---
@@ -1382,6 +1383,11 @@ fn apply_accel_y(
 #[inline(always)]
 fn signed_effect_active(value: f32) -> bool {
     value.is_finite() && value.abs() > f32::EPSILON
+}
+
+#[inline(always)]
+fn arrow_effect_game_time_seconds() -> f32 {
+    crate::engine::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
 }
 
 #[inline(always)]
@@ -3994,6 +4000,9 @@ pub fn build_bundles(
     });
 
     let elapsed_screen = state.total_elapsed_in_screen;
+    // ITG's default ArrowEffects timer is RageTimer::GetTimeSinceStart, not
+    // music time or time since entering gameplay.
+    let arrow_effect_time = arrow_effect_game_time_seconds();
     let accel = effective_accel_effects_for_player(state, player_idx);
     let visual = effective_visual_effects_for_player(state, player_idx);
     let appearance = effective_appearance_effects_for_player(state, player_idx);
@@ -4206,7 +4215,7 @@ pub fn build_bundles(
         };
         let (note_start, note_end) = state.note_ranges[player_idx];
         let tipsy_y_for_col = |local_col: usize| -> f32 {
-            tipsy_y_extra(local_col, elapsed_screen, visual) + move_y_extra(visual, local_col)
+            tipsy_y_extra(local_col, arrow_effect_time, visual) + move_y_extra(visual, local_col)
         };
         let lane_y_from_travel =
             |local_col: usize, receptor_y_lane: f32, dir: f32, travel_offset: f32| -> f32 {
@@ -4219,7 +4228,7 @@ pub fn build_bundles(
                 + note_x_offset(
                     local_col,
                     adjusted_travel_offset(travel_offset),
-                    elapsed_screen,
+                    arrow_effect_time,
                     beat_push,
                     visual,
                     &col_offsets[..num_cols],
@@ -4232,7 +4241,7 @@ pub fn build_bundles(
                 + note_x_offset(
                     local_col,
                     adjusted_travel,
-                    elapsed_screen,
+                    arrow_effect_time,
                     beat_push,
                     visual,
                     &col_offsets[..num_cols],
@@ -4648,7 +4657,7 @@ pub fn build_bundles(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                elapsed_screen,
+                arrow_effect_time,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -4961,7 +4970,7 @@ pub fn build_bundles(
                     playfield_center_x,
                     i,
                     receptor_y_lane,
-                    elapsed_screen,
+                    arrow_effect_time,
                     beat_push,
                     visual,
                     &col_offsets[..num_cols],
@@ -5072,7 +5081,7 @@ pub fn build_bundles(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                elapsed_screen,
+                arrow_effect_time,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -5191,7 +5200,7 @@ pub fn build_bundles(
                 playfield_center_x,
                 local_col,
                 lane_receptor_y,
-                elapsed_screen,
+                arrow_effect_time,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
