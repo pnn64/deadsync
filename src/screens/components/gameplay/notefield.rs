@@ -4116,28 +4116,34 @@ pub fn build_bundles(
         // Precompute per-frame values used for converting beat/time to Y positions
         let display_speed_percent =
             timing.get_speed_multiplier_ns(state.current_beat_visible[player_idx], current_time_ns);
-        let (rate, cmod_pps_opt, curr_disp_beat, beatmod_multiplier) = match scroll_speed {
-            ScrollSpeedSetting::CMod(c_bpm) => {
-                let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                    state.music_rate
-                } else {
-                    1.0
-                };
-                (rate, Some(pps), 0.0, 0.0)
-            }
-            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                let curr_disp = timing.get_displayed_beat(state.current_beat_visible[player_idx]);
-                let player_multiplier =
-                    scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
-                let final_multiplier = player_multiplier * display_speed_percent;
-                (1.0, None, curr_disp, final_multiplier)
-            }
-        };
+        let (rate, cmod_bps_opt, curr_disp_beat, beatmod_multiplier, post_accel_scale) =
+            match scroll_speed {
+                ScrollSpeedSetting::CMod(c_bpm) => {
+                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                        state.music_rate
+                    } else {
+                        1.0
+                    };
+                    (rate, Some(c_bpm / 60.0), 0.0, 0.0, field_zoom)
+                }
+                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                    let curr_disp =
+                        timing.get_displayed_beat(state.current_beat_visible[player_idx]);
+                    let player_multiplier =
+                        scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                    (
+                        1.0,
+                        None,
+                        curr_disp,
+                        display_speed_percent,
+                        field_zoom * player_multiplier,
+                    )
+                }
+            };
         let travel_offset_for_time_ns = |note_time_ns: SongTimeNs| -> f32 {
-            let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+            let bps_chart = cmod_bps_opt.expect("cmod bps computed");
             let time_diff_real = song_time_ns_delta_seconds(note_time_ns, current_time_ns) / rate;
-            time_diff_real * pps_chart
+            time_diff_real * bps_chart * ScrollSpeedSetting::ARROW_SPACING
         };
         let raw_travel_offset_for_beat = |beat: f32| -> f32 {
             match scroll_speed {
@@ -4148,7 +4154,6 @@ pub fn build_bundles(
                     let note_disp_beat = timing.get_displayed_beat(beat);
                     (note_disp_beat - curr_disp_beat)
                         * ScrollSpeedSetting::ARROW_SPACING
-                        * field_zoom
                         * beatmod_multiplier
                 }
             }
@@ -4178,7 +4183,7 @@ pub fn build_bundles(
                         current_beat,
                         effect_height,
                         accel,
-                    )
+                    ) * post_accel_scale
                 },
             );
             let last_beat_to_draw = find_last_displayed_beat(
@@ -4187,13 +4192,14 @@ pub fn build_bundles(
                 display_speed_percent,
                 accel.boomerang > f32::EPSILON,
                 |beat| {
-                    apply_accel_y_with_peak(
+                    let (y, before_peak) = apply_accel_y_with_peak(
                         raw_travel_offset_for_beat(beat),
                         elapsed_screen,
                         current_beat,
                         effect_height,
                         accel,
-                    )
+                    );
+                    (y * post_accel_scale, before_peak)
                 },
             );
             first_beat_to_draw
@@ -4211,7 +4217,7 @@ pub fn build_bundles(
                 current_beat,
                 effect_height,
                 accel,
-            )
+            ) * post_accel_scale
         };
         let (note_start, note_end) = state.note_ranges[player_idx];
         let tipsy_y_for_col = |local_col: usize| -> f32 {
@@ -8868,6 +8874,25 @@ mod tests {
             |note_index| visited.push(note_index),
         );
         assert_eq!(visited, vec![0, 1]);
+    }
+
+    #[test]
+    fn brake_applies_before_scroll_multiplier_like_itg() {
+        let accel = AccelEffects {
+            brake: 1.0,
+            ..Default::default()
+        };
+        let effect_height = super::field_effect_height(0.0);
+        let raw_y = crate::game::scroll::ScrollSpeedSetting::ARROW_SPACING;
+        let scroll_speed = 2.0;
+        let itg_order =
+            super::apply_accel_y(raw_y, 0.0, 0.0, effect_height, accel) * scroll_speed;
+        let pre_scaled_order =
+            super::apply_accel_y(raw_y * scroll_speed, 0.0, 0.0, effect_height, accel);
+        let expected_itg_order = raw_y * (raw_y / effect_height) * scroll_speed;
+
+        assert!(itg_order < pre_scaled_order);
+        assert!((itg_order - expected_itg_order).abs() <= 0.001);
     }
 
     #[test]
