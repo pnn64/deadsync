@@ -1112,6 +1112,12 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
 }
 
 #[inline(always)]
+fn scale_effect_size(logical_size: [f32; 2], field_zoom: f32, effect_zoom: f32) -> [f32; 2] {
+    let zoom = field_zoom * effect_zoom;
+    [logical_size[0] * zoom, logical_size[1] * zoom]
+}
+
+#[inline(always)]
 fn hold_explosion_slot_for_col(
     explosion_ns: Option<&Noteskin>,
     col: usize,
@@ -4063,14 +4069,14 @@ pub fn build_bundles(
             scale_sprite(slot.size())
         };
         let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] { slot.logical_size() };
-        let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
-            [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
+        let scale_explosion = |logical_size: [f32; 2], effect_zoom: f32| -> [f32; 2] {
+            scale_effect_size(logical_size, field_zoom, effect_zoom)
         };
-        let scale_hold_explosion = |slot: &SpriteSlot| -> [f32; 2] {
+        let scale_hold_explosion = |slot: &SpriteSlot, effect_zoom: f32| -> [f32; 2] {
             // Match ITG ghost arrow behavior: hold/roll explosions use actor asset size
             // (including double-res handling) instead of being normalized to arrow size.
             let logical = logical_slot_size(slot);
-            [logical[0] * field_zoom, logical[1] * field_zoom]
+            scale_effect_size(logical, field_zoom, effect_zoom)
         };
         let current_time_ns = state.current_music_time_visible_ns[player_idx];
         let current_time = song_time_ns_to_seconds(current_time_ns);
@@ -4657,11 +4663,11 @@ pub fn build_bundles(
             } else {
                 1.0
             };
+            let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
             if !receptor_hidden_by_song_lua
                 && !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
             {
-                let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
                 let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_reverse = receptor_ns
                     .receptor_off_reverse
@@ -4680,10 +4686,11 @@ pub fn build_bundles(
                 // ITG Sprite::SetTexture uses source-frame dimensions for draw size,
                 // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
                 // dance/default) instead of being normalized to arrow height.
-                let base_receptor_size = scale_explosion(logical_slot_size(receptor_slot));
+                let base_receptor_size =
+                    scale_explosion(logical_slot_size(receptor_slot), receptor_effect_zoom);
                 let receptor_size = [
-                    base_receptor_size[0] * receptor_effect_zoom * receptor_draw.zoom[0],
-                    base_receptor_size[1] * receptor_effect_zoom * receptor_draw.zoom[1],
+                    base_receptor_size[0] * receptor_draw.zoom[0],
+                    base_receptor_size[1] * receptor_draw.zoom[1],
                 ];
                 let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_draw.tint[3] * receptor_alpha;
@@ -4750,7 +4757,7 @@ pub fn build_bundles(
                 );
                 let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
-                let base_size = scale_hold_explosion(hold_slot);
+                let base_size = scale_hold_explosion(hold_slot, receptor_effect_zoom);
                 let hold_size = [
                     base_size[0] * draw.zoom[0].max(0.0),
                     base_size[1] * draw.zoom[1].max(0.0),
@@ -4867,7 +4874,8 @@ pub fn build_bundles(
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
                     let glow_draw =
                         glow_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
-                    let base_glow_size = scale_explosion(logical_slot_size(glow_slot));
+                    let base_glow_size =
+                        scale_explosion(logical_slot_size(glow_slot), receptor_effect_zoom);
                     let behavior = receptor_ns.receptor_glow_behavior;
                     let glow_reverse = receptor_ns
                         .receptor_glow_reverse
@@ -4881,11 +4889,12 @@ pub fn build_bundles(
                     let height = base_glow_size[1] * zoom * glow_draw.zoom[1];
                     if glow_draw.visible && width > f32::EPSILON && height > f32::EPSILON {
                         let [sin_r, cos_r] = glow_slot.base_rot_sin_cos();
+                        let offset_scale = field_zoom * receptor_effect_zoom;
                         let offset = [
-                            glow_draw.pos[0] * field_zoom * cos_r
-                                - glow_draw.pos[1] * field_zoom * sin_r,
-                            glow_draw.pos[0] * field_zoom * sin_r
-                                + glow_draw.pos[1] * field_zoom * cos_r,
+                            glow_draw.pos[0] * offset_scale * cos_r
+                                - glow_draw.pos[1] * offset_scale * sin_r,
+                            glow_draw.pos[0] * offset_scale * sin_r
+                                + glow_draw.pos[1] * offset_scale * cos_r,
                         ];
                         let center = [
                             receptor_center[0] + offset[0],
@@ -4960,6 +4969,7 @@ pub fn build_bundles(
                     &tornado_bounds[..num_cols],
                 );
                 let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
+                let explosion_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
                 for layer in explosion.layers.iter() {
                     let anim_time = active.elapsed;
                     let slot = &layer.slot;
@@ -4970,7 +4980,7 @@ pub fn build_bundles(
                     };
                     let frame = slot.frame_index(anim_time, beat_for_anim);
                     let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-                    let size = scale_explosion(logical_slot_size(slot));
+                    let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                     let explosion_visual = layer.animation.state_at(active.elapsed);
                     if !explosion_visual.visible {
                         continue;
@@ -5069,6 +5079,7 @@ pub fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
+            let explosion_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
             for layer in explosion.layers.iter() {
                 let slot = &layer.slot;
                 let explosion_visual = layer.animation.state_at(active.elapsed);
@@ -5077,7 +5088,7 @@ pub fn build_bundles(
                 }
                 let frame = slot.frame_index(active.elapsed, current_beat);
                 let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-                let size = scale_explosion(logical_slot_size(slot));
+                let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if layer.animation.blend_add {
@@ -8697,9 +8708,10 @@ mod tests {
         maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
         offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
-        push_transform_parts, receptor_row_center, scroll_receptor_y, song_lua_hides_note_window,
-        tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
-        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        push_transform_parts, receptor_row_center, scale_effect_size, scroll_receptor_y,
+        song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
+        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        zmod_subtractive_counter_state,
     };
     use crate::assets;
     use crate::engine::gfx::BlendMode;
@@ -9498,6 +9510,16 @@ mod tests {
             ..VisualEffects::default()
         };
         assert!((arrow_effect_zoom(&visual, 0, 0.0) - 0.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn ghost_explosion_size_uses_arrow_effect_zoom() {
+        let mut visual = VisualEffects::default();
+        visual.tiny = -1.0;
+        let base = scale_effect_size([64.0, 64.0], 1.25, 1.0);
+        let scaled = scale_effect_size([64.0, 64.0], 1.25, arrow_effect_zoom(&visual, 0, 0.0));
+        assert!((scaled[0] - base[0] * 2.0).abs() <= 1e-6);
+        assert!((scaled[1] - base[1] * 2.0).abs() <= 1e-6);
     }
 
     #[test]
