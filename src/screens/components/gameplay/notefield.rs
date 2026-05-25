@@ -50,8 +50,7 @@ use twox_hash::XxHash64;
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
 const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love metrics for hold judgments
-const HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR: f32 =
-    HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER - RECEPTOR_Y_OFFSET_FROM_CENTER;
+const HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 90.0;
 const TAP_JUDGMENT_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback JudgmentTransformCommand
 const COMBO_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback ComboTransformCommand (non-centered)
 const COLUMN_CUE_Y_OFFSET: f32 = 80.0;
@@ -66,7 +65,8 @@ const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
     HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
 const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
     HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
-const HELD_MISS_OFFSET_FROM_RECEPTOR: f32 = 60.0;
+const HELD_MISS_Y_OFFSET_FROM_CENTER: f32 = -50.0;
+const HELD_MISS_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 110.0;
 const ERROR_BAR_JUDGMENT_HEIGHT: f32 = 40.0; // SL: judgmentHeight in SL-Layout.lua
 const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.0; // SL: top/bottom +/-25px
 
@@ -1573,6 +1573,27 @@ fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
 }
 
 #[inline(always)]
+fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
+    (local_col as f32 - num_cols.saturating_sub(1) as f32 * 0.5) * ScrollSpeedSetting::ARROW_SPACING
+}
+
+#[inline(always)]
+fn fill_lane_col_offsets(
+    out: &mut [f32],
+    column_xs: Option<&[i32]>,
+    num_cols: usize,
+    spacing_mult: f32,
+    field_zoom: f32,
+) {
+    for (i, col_offset) in out.iter_mut().take(num_cols).enumerate() {
+        let col_x = column_xs
+            .and_then(|xs| xs.get(i))
+            .map_or_else(|| default_column_x(i, num_cols), |x| *x as f32);
+        *col_offset = col_x * spacing_mult * field_zoom;
+    }
+}
+
+#[inline(always)]
 fn note_x_extra(
     local_col: usize,
     y: f32,
@@ -1687,6 +1708,47 @@ fn receptor_row_center(
             + tipsy_y_extra(local_col, elapsed, visual)
             + move_y_extra(visual, local_col),
     ]
+}
+
+#[inline(always)]
+fn hold_indicator_column_x(
+    playfield_center_x: f32,
+    local_col: usize,
+    elapsed: f32,
+    beat_factor: f32,
+    visual: VisualEffects,
+    col_offsets: &[f32],
+    invert_distances: &[f32],
+    tornado_bounds: &[TornadoBounds],
+) -> f32 {
+    playfield_center_x
+        + note_x_offset(
+            local_col,
+            0.0,
+            elapsed,
+            beat_factor,
+            visual,
+            col_offsets,
+            invert_distances,
+            tornado_bounds,
+        )
+}
+
+#[inline(always)]
+fn player_metric_y(
+    center_y: f32,
+    notefield_offset_y: f32,
+    reverse_percent: f32,
+    normal_offset: f32,
+    reverse_offset: f32,
+) -> f32 {
+    sm_scale(
+        reverse_percent,
+        0.0,
+        1.0,
+        center_y + normal_offset + notefield_offset_y,
+        center_y + reverse_offset + notefield_offset_y,
+    )
 }
 
 #[inline(always)]
@@ -2157,24 +2219,6 @@ fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
     let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
     let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
     (zoom, zoom)
-}
-
-#[inline(always)]
-pub(crate) fn hold_indicator_column_offset(
-    column_xs: Option<&[i32]>,
-    column: usize,
-    num_cols: usize,
-    spacing_mult: f32,
-    field_zoom: f32,
-) -> f32 {
-    // ITGmania Player::Update positions HoldJudgment actors from
-    // ArrowEffects::GetXPos(), then applies fX *= (1 - Mini * 0.5).
-    // DeadSync's field_zoom is that same Mini-derived field scale.
-    if let Some(x) = column_xs.and_then(|xs| xs.get(column)) {
-        return *x as f32 * spacing_mult * field_zoom;
-    }
-    let center = (num_cols.saturating_sub(1) as f32) * 0.5;
-    (column as f32 - center) * TARGET_ARROW_PIXEL_SIZE * field_zoom
 }
 
 #[inline(always)]
@@ -4102,9 +4146,13 @@ pub fn build_bundles(
         let flat_tap_face_rotation_y = 0.0_f32;
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
-        for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
-            *col_offset = ns.column_xs[i] as f32 * spacing_mult * field_zoom;
-        }
+        fill_lane_col_offsets(
+            &mut col_offsets,
+            Some(ns.column_xs.as_slice()),
+            num_cols,
+            spacing_mult,
+            field_zoom,
+        );
         let mut invert_distances = [0.0_f32; MAX_COLS];
         compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
         let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
@@ -8555,6 +8603,27 @@ pub fn build_bundles(
             }
         }
     }
+    let indicator_beat_push = beat_factor(state.current_beat_visible[player_idx]);
+    let mut indicator_col_offsets = [0.0_f32; MAX_COLS];
+    fill_lane_col_offsets(
+        &mut indicator_col_offsets,
+        state.noteskin[player_idx]
+            .as_ref()
+            .map(|ns| ns.column_xs.as_slice()),
+        num_cols,
+        spacing_mult,
+        field_zoom,
+    );
+    let mut indicator_invert_distances = [0.0_f32; MAX_COLS];
+    compute_invert_distances(
+        &indicator_col_offsets[..num_cols],
+        &mut indicator_invert_distances[..num_cols],
+    );
+    let mut indicator_tornado_bounds = [TornadoBounds::default(); MAX_COLS];
+    compute_tornado_bounds(
+        &indicator_col_offsets[..num_cols],
+        &mut indicator_tornado_bounds[..num_cols],
+    );
     if !blind_active && let Some(texture) = held_miss_texture {
         let texture_scale = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
             0.5
@@ -8578,25 +8647,26 @@ pub fn build_bundles(
             if zoom_x <= f32::EPSILON || zoom_y <= f32::EPSILON {
                 continue;
             }
-            let y = sm_scale(
+            let y = player_metric_y(
+                screen_center_y(),
+                notefield_offset_y,
                 column_reverse_percent[i],
-                0.0,
-                1.0,
-                receptor_y_normal + HELD_MISS_OFFSET_FROM_RECEPTOR,
-                receptor_y_reverse - HELD_MISS_OFFSET_FROM_RECEPTOR,
+                HELD_MISS_Y_OFFSET_FROM_CENTER,
+                HELD_MISS_Y_REVERSE_OFFSET_FROM_CENTER,
             );
-            let column_offset = hold_indicator_column_offset(
-                state.noteskin[player_idx]
-                    .as_ref()
-                    .map(|ns| ns.column_xs.as_slice()),
+            let x = hold_indicator_column_x(
+                playfield_center_x,
                 i,
-                num_cols,
-                spacing_mult,
-                field_zoom,
+                arrow_effect_time,
+                indicator_beat_push,
+                visual,
+                &indicator_col_offsets[..num_cols],
+                &indicator_invert_distances[..num_cols],
+                &indicator_tornado_bounds[..num_cols],
             );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
-                xy(playfield_center_x + column_offset, y):
+                xy(x, y):
                 z(196):
                 setstate(0):
                 zoomx(zoom_x):
@@ -8633,25 +8703,26 @@ pub fn build_bundles(
             HoldResult::Missed => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
-            let hold_judgment_y = sm_scale(
+            let hold_judgment_y = player_metric_y(
+                screen_center_y(),
+                notefield_offset_y,
                 column_reverse_percent[i],
-                0.0,
-                1.0,
-                receptor_y_normal + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
-                receptor_y_reverse - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
+                HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER,
+                HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER,
             );
-            let column_offset = hold_indicator_column_offset(
-                state.noteskin[player_idx]
-                    .as_ref()
-                    .map(|ns| ns.column_xs.as_slice()),
+            let x = hold_indicator_column_x(
+                playfield_center_x,
                 i,
-                num_cols,
-                spacing_mult,
-                field_zoom,
+                arrow_effect_time,
+                indicator_beat_push,
+                visual,
+                &indicator_col_offsets[..num_cols],
+                &indicator_invert_distances[..num_cols],
+                &indicator_tornado_bounds[..num_cols],
             );
             hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
-                xy(playfield_center_x + column_offset, hold_judgment_y):
+                xy(x, hold_judgment_y):
                 z(195):
                 setstate(frame_index):
                 zoom(zoom):
@@ -8717,15 +8788,15 @@ mod tests {
         disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
         hold_alpha_needs_rows, hold_body_needs_z_buffer, hold_body_segment_budget, hold_draw_span,
         hold_explosion_active, hold_explosion_slot_for_col, hold_head_render_flags,
-        hold_indicator_column_offset, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_indicator_column_x, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
         hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
         judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
-        offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
-        push_transform_parts, receptor_row_center, scale_effect_size, scroll_receptor_y,
-        song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
-        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        offset_center, player_metric_y, predictive_itg_percents, pulse_inner_zoom,
+        pulse_zoom_for_y, push_transform_parts, receptor_row_center, scale_effect_size,
+        scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
+        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
         zmod_subtractive_counter_state,
     };
     use crate::assets;
@@ -9772,27 +9843,77 @@ mod tests {
     }
 
     #[test]
-    fn hold_indicator_columns_scale_with_mini_field_zoom() {
-        let columns = [-96, -32, 32, 96];
+    fn hold_indicator_columns_use_receptor_lane_x() {
+        let playfield_center_x = 123.0;
+        let columns = [-96.0, -32.0, 32.0, 96.0];
         let field_zoom_80_mini = 1.0 - 0.8 * 0.5;
+        let col_offsets = columns.map(|x| x * field_zoom_80_mini);
+        let invert_distances = [0.0; 4];
+        let tornado_bounds = [TornadoBounds::default(); 4];
         const EPS: f32 = 1e-5;
 
         assert!(
-            (hold_indicator_column_offset(Some(&columns), 0, 4, 1.0, field_zoom_80_mini) + 57.6)
+            (hold_indicator_column_x(
+                playfield_center_x,
+                0,
+                0.0,
+                0.0,
+                VisualEffects::default(),
+                &col_offsets,
+                &invert_distances,
+                &tornado_bounds,
+            ) - (playfield_center_x - 57.6))
                 .abs()
                 <= EPS
         );
         assert!(
-            (hold_indicator_column_offset(Some(&columns), 3, 4, 1.0, field_zoom_80_mini) - 57.6)
+            (hold_indicator_column_x(
+                playfield_center_x,
+                3,
+                0.0,
+                0.0,
+                VisualEffects::default(),
+                &col_offsets,
+                &invert_distances,
+                &tornado_bounds,
+            ) - (playfield_center_x + 57.6))
                 .abs()
                 <= EPS
         );
+
+        let flipped = VisualEffects {
+            flip: 1.0,
+            ..VisualEffects::default()
+        };
         assert!(
-            (hold_indicator_column_offset(None, 0, 4, 1.0, field_zoom_80_mini) + 57.6).abs() <= EPS
+            (hold_indicator_column_x(
+                playfield_center_x,
+                0,
+                0.0,
+                0.0,
+                flipped,
+                &col_offsets,
+                &invert_distances,
+                &tornado_bounds,
+            ) - (playfield_center_x + 57.6))
+                .abs()
+                <= EPS
         );
-        assert!(
-            (hold_indicator_column_offset(None, 3, 4, 1.0, field_zoom_80_mini) - 57.6).abs() <= EPS
-        );
+    }
+
+    #[test]
+    fn player_metric_y_applies_notefield_offset_after_reverse_mix() {
+        const EPS: f32 = 1e-5;
+        let center_y = 240.0;
+        let offset_y = -22.0;
+
+        let standard = player_metric_y(center_y, offset_y, 0.0, -90.0, 90.0);
+        let reverse = player_metric_y(center_y, offset_y, 1.0, -90.0, 90.0);
+        let split = player_metric_y(center_y, offset_y, 0.5, -90.0, 90.0);
+
+        assert!((standard - 128.0).abs() <= EPS);
+        assert!((reverse - 308.0).abs() <= EPS);
+        assert!((split - 218.0).abs() <= EPS);
     }
 
     #[test]

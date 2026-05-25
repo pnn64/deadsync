@@ -691,10 +691,15 @@ fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f32) -
 }
 
 #[inline(always)]
+fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
+    cut_start_sec.is_finite() && cut_start_sec > 0.0
+}
+
+#[inline(always)]
 fn seed_music_stream_clock(cut: Cut, rate: f32) {
     MUSIC_CLOCK_CUT_START_BITS.store(cut.start_sec.to_bits(), Ordering::Relaxed);
     MUSIC_CLOCK_RATE_BITS.store(normalized_music_rate(rate).to_bits(), Ordering::Relaxed);
-    MUSIC_CLOCK_SEEDED.store(true, Ordering::Release);
+    MUSIC_CLOCK_SEEDED.store(music_clock_seed_enabled(cut.start_sec), Ordering::Release);
 }
 
 #[inline(always)]
@@ -1259,7 +1264,7 @@ fn i16_to_f32(sample: i16) -> f32 {
 mod tests {
     use super::{
         CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
-        fallback_music_position, stream_position_frames_from_window,
+        fallback_music_position, music_clock_seed_enabled, stream_position_frames_from_window,
     };
 
     #[test]
@@ -1279,6 +1284,14 @@ mod tests {
         assert!((lead_slope - 1.0).abs() <= 0.000_01);
         assert!((song_music_sec - 0.5).abs() <= 0.000_01);
         assert!((song_slope - 2.0).abs() <= 0.000_01);
+    }
+
+    #[test]
+    fn music_clock_seed_is_only_for_positive_cuts() {
+        assert!(music_clock_seed_enabled(0.001));
+        assert!(!music_clock_seed_enabled(0.0));
+        assert!(!music_clock_seed_enabled(-1.0));
+        assert!(!music_clock_seed_enabled(f64::NAN));
     }
 
     #[test]
