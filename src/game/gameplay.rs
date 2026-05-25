@@ -68,8 +68,9 @@ pub(crate) use self::attacks::song_lua_ease_factor;
 use self::attacks::song_lua_ease_window_value;
 use self::attacks::{
     AttackMaskWindow, SongLuaEaseMaskWindow, apply_chart_attacks_transforms,
-    base_appearance_effects, build_attack_mask_windows_for_player, build_song_lua_runtime_windows,
-    effective_visual_mask_for_player, player_changes_chart, refresh_active_attack_masks,
+    base_appearance_effects, begin_outro_attack_clear, build_attack_mask_windows_for_player,
+    build_song_lua_runtime_windows, effective_visual_mask_for_player, player_changes_chart,
+    refresh_active_attack_masks,
 };
 pub use self::attacks::{
     SongLuaOverlayEaseWindowRuntime, SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
@@ -967,15 +968,6 @@ fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat:
             && beat + EPS >= window.start_beat
             && beat <= window.end_beat + EPS
     })
-}
-
-#[inline(always)]
-fn trigger_note_receptor_feedback(state: &mut State, player: usize, column: usize, beat: f32) {
-    if song_lua_hides_note_visual(state, player, column, beat) {
-        trigger_receptor_step_pulse(state, column);
-    } else {
-        trigger_receptor_glow_pulse(state, column);
-    }
 }
 
 #[inline(always)]
@@ -2759,6 +2751,7 @@ fn compute_end_times_ns(
     note_time_cache_ns: &[SongTimeNs],
     hold_end_time_cache_ns: &[Option<SongTimeNs>],
     rate: f32,
+    audio_end_time_ns: SongTimeNs,
 ) -> (SongTimeNs, SongTimeNs) {
     let mut last_judgable_time_ns = 0;
     let mut last_relevant_time_ns = 0;
@@ -2780,8 +2773,19 @@ fn compute_end_times_ns(
     let max_step_distance_ns = max_step_distance_ns(&timing_profile, rate);
     (
         last_judgable_time_ns.saturating_add(max_step_distance_ns),
-        last_relevant_time_ns.saturating_add(max_step_distance_ns),
+        last_relevant_time_ns
+            .saturating_add(max_step_distance_ns)
+            .max(audio_end_time_ns),
     )
+}
+
+#[inline(always)]
+fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
+    if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
+        song_time_ns_from_seconds(song.music_length_seconds)
+    } else {
+        0
+    }
 }
 
 #[inline(always)]
@@ -3715,6 +3719,7 @@ pub struct State {
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
     pub notes_end_time_ns: SongTimeNs,
     pub music_end_time_ns: SongTimeNs,
+    audio_end_time_ns: SongTimeNs,
     pub music_rate: f32,
     pub play_mine_sounds: bool,
     pub default_fail_type: DefaultFailType,
@@ -3818,6 +3823,8 @@ pub struct State {
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
     active_attack_accel: [AccelOverrides; MAX_PLAYERS],
     active_attack_visual: [VisualOverrides; MAX_PLAYERS],
+    attacks_cleared_for_outro: bool,
+    outro_attack_visual: [VisualOverrides; MAX_PLAYERS],
     attack_current_appearance: [AppearanceEffects; MAX_PLAYERS],
     attack_target_appearance: [AppearanceEffects; MAX_PLAYERS],
     attack_speed_appearance: [AppearanceEffects; MAX_PLAYERS],
@@ -5097,6 +5104,7 @@ pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
         &state.note_time_cache_ns,
         &state.hold_end_time_cache_ns,
         normalized,
+        state.audio_end_time_ns,
     );
     state.notes_end_time_ns = notes_end_time_ns;
     state.music_end_time_ns = music_end_time_ns;
@@ -5918,8 +5926,14 @@ pub fn init(
     let player_judgment_timing = std::array::from_fn(|player| {
         build_player_judgment_timing(timing_profile, &player_profiles[player], rate)
     });
-    let (notes_end_time_ns, music_end_time_ns) =
-        compute_end_times_ns(&notes, &note_time_cache_ns, &hold_end_time_cache_ns, rate);
+    let audio_end_time_ns = song_audio_end_time_ns(&song);
+    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+        &notes,
+        &note_time_cache_ns,
+        &hold_end_time_cache_ns,
+        rate,
+        audio_end_time_ns,
+    );
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
     for (player, player_profile) in player_profiles.iter().enumerate().take(num_players) {
@@ -6365,6 +6379,7 @@ pub fn init(
         hold_end_time_cache_ns,
         notes_end_time_ns,
         music_end_time_ns,
+        audio_end_time_ns,
         music_rate: rate,
         play_mine_sounds: config.mine_hit_sound,
         default_fail_type: config.default_fail_type,
@@ -6459,6 +6474,8 @@ pub fn init(
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
         active_attack_accel: [AccelOverrides::default(); MAX_PLAYERS],
         active_attack_visual: [VisualOverrides::default(); MAX_PLAYERS],
+        attacks_cleared_for_outro: false,
+        outro_attack_visual: [VisualOverrides::default(); MAX_PLAYERS],
         attack_current_appearance: base_attack_appearance,
         attack_target_appearance: base_attack_appearance,
         attack_speed_appearance: [AppearanceEffects::approach_speeds(); MAX_PLAYERS],
@@ -7599,8 +7616,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            let note_beat = state.notes[note_index].beat;
-            trigger_note_receptor_feedback(state, player, note_col, note_beat);
+            trigger_receptor_step_pulse(state, note_col);
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
                 && matches!(
                     state.notes[note_index].note_type,
@@ -7692,8 +7708,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            let note_beat = state.notes[idx].beat;
-            trigger_note_receptor_feedback(state, player, note_col, note_beat);
+            trigger_receptor_step_pulse(state, note_col);
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
                 && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
             {
@@ -7889,7 +7904,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     );
 
     trigger_completed_row_tap_explosions(state, player, note_row_index);
-    trigger_note_receptor_feedback(state, player, note_col, note_beat);
+    trigger_receptor_step_pulse(state, note_col);
     true
 }
 
@@ -8586,6 +8601,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         }
         debug!("Music end time reached. Transitioning to evaluation.");
         state.song_completed_naturally = true;
+        begin_outro_attack_clear(state);
         finalize_completed_mines(state);
         finalize_update_trace(
             state,
@@ -8731,16 +8747,17 @@ mod tests {
         apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
         apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
         apply_time_based_tap_misses, autoplay_random_offset_music_ns_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
-        collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_judgment, count_rescore_tracks_on_row,
-        crossed_mine_bounds_ns, crossed_mine_held_start_time,
-        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
+        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        crossed_mine_held_start_time, effective_appearance_effects_for_player,
+        effective_player_global_offset_seconds, effective_visual_effects_for_player,
         enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
         finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, handle_input, hit_mine, input_queue_cap,
-        integrate_active_hold_to_time, lane_edge_judges_lift, lane_edge_judges_tap,
+        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
         lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
         lane_press_started, lane_release_finished, late_note_resolution_window_ns,
         live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
@@ -8757,9 +8774,9 @@ mod tests {
         stage_music_cut, start_active_hold, step_calories, step_stats_density_graph_width,
         step_stats_notefield_width, suppress_final_bad_rescore_visual,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
-        trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        trigger_completed_row_tap_explosions, trigger_receptor_step_pulse,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -10664,8 +10681,6 @@ return Def.ActorFrame{}
         });
 
         trigger_completed_row_tap_explosions(&mut state, 0, row_index);
-        let beat = state.notes[0].beat;
-        trigger_note_receptor_feedback(&mut state, 0, column, beat);
 
         assert!(state.tap_explosions[column].is_none());
         assert!(state.receptor_bop_timers[column] > 0.0);
@@ -10673,6 +10688,33 @@ return Def.ActorFrame{}
             assert!(state.receptor_glow_press_timers[column] > 0.0);
             assert_eq!(state.receptor_glow_timers[column], 0.0);
         }
+    }
+
+    #[test]
+    fn visible_tap_hit_steps_receptor_with_core_flash() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let row_index = 48usize;
+        let column = 1usize;
+        let note_time = song_time_ns_from_seconds(1.0);
+        state.notes = vec![test_note(column, row_index, NoteType::Tap)];
+        state.note_time_cache_ns = vec![note_time];
+        state.lane_note_indices[column].push(0);
+        state.lane_note_row_indices[column].push(0);
+        state.note_row_entry_indices = vec![0];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_entry_ranges = [(0, 1), (0, 0)];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+
+        assert!(judge_a_tap(&mut state, column, note_time));
+        assert!(state.tap_explosions[column].is_some());
+        assert!(state.receptor_bop_timers[column] > 0.0);
     }
 
     #[test]
@@ -11073,6 +11115,25 @@ return Def.ActorFrame{}
             (song_time_ns_to_seconds(max_step_distance_ns(&timing_profile, 1.5)) - 0.52725).abs()
                 <= 1e-6
         );
+    }
+
+    #[test]
+    fn music_end_time_waits_for_audio_tail() {
+        let notes = vec![test_note(0, ROWS_PER_BEAT as usize * 2, NoteType::Tap)];
+        let note_time_cache_ns = vec![song_time_ns_from_seconds(2.0)];
+        let hold_end_time_cache_ns = vec![None];
+        let audio_end_time_ns = song_time_ns_from_seconds(10.0);
+
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &notes,
+            &note_time_cache_ns,
+            &hold_end_time_cache_ns,
+            1.0,
+            audio_end_time_ns,
+        );
+
+        assert!(notes_end_time_ns < audio_end_time_ns);
+        assert_eq!(music_end_time_ns, audio_end_time_ns);
     }
 
     #[test]
@@ -11720,6 +11781,30 @@ return Def.ActorFrame{}
         let late = effective_appearance_effects_for_player(&state, 0);
         assert!(late.sudden_offset > mid.sudden_offset);
         assert!(late.sudden_offset < 1.5);
+    }
+
+    #[test]
+    fn outro_attack_clear_phases_out_song_lua_visual_mods() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.active_attack_visual[0].confusion_offset = Some(-12.56);
+        state.active_attack_visual[0].tipsy = Some(0.75);
+
+        begin_outro_attack_clear(&mut state);
+        refresh_active_attack_masks(&mut state, 0.5);
+
+        let visual = effective_visual_effects_for_player(&state, 0);
+        assert!(visual.confusion_offset > -12.56);
+        assert!(visual.confusion_offset < -12.0);
+        assert!(visual.tipsy > 0.0);
+        assert!(visual.tipsy < 0.75);
+
+        refresh_active_attack_masks(&mut state, 20.0);
+
+        let cleared = effective_visual_effects_for_player(&state, 0);
+        assert!(cleared.confusion_offset.abs() <= 0.0001);
+        assert!(cleared.tipsy.abs() <= 0.0001);
+        assert!(state.active_attack_visual[0].confusion_offset.is_none());
+        assert!(state.active_attack_visual[0].tipsy.is_none());
     }
 
     #[test]
@@ -13331,6 +13416,7 @@ return Def.ActorFrame{}
         let mut state =
             regression_state([profile::Profile::default(), profile::Profile::default()]);
         let baseline_great_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
+        let baseline_notes_end = state.notes_end_time_ns;
         let baseline_music_end = state.music_end_time_ns;
 
         assert!(super::set_music_rate(&mut state, 1.5));
@@ -13345,12 +13431,13 @@ return Def.ActorFrame{}
             baseline_great_ns,
         );
         assert!(
-            state.music_end_time_ns > baseline_music_end,
-            "music-rate=1.5 should also widen the late-resolution slack on the music end time \
+            state.notes_end_time_ns > baseline_notes_end,
+            "music-rate=1.5 should also widen the late-resolution slack on the note end time \
              ({} vs {})",
-            state.music_end_time_ns,
-            baseline_music_end,
+            state.notes_end_time_ns,
+            baseline_notes_end,
         );
+        assert_eq!(state.music_end_time_ns, baseline_music_end);
 
         // Calling with the same rate is a no-op.
         assert!(!super::set_music_rate(&mut state, 1.5));

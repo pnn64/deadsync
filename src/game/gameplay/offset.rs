@@ -64,6 +64,7 @@ pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
         &state.note_time_cache_ns,
         &state.hold_end_time_cache_ns,
         state.music_rate,
+        state.audio_end_time_ns,
     );
     state.notes_end_time_ns = notes_end_time_ns;
     state.music_end_time_ns = music_end_time_ns;

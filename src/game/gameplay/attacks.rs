@@ -3627,6 +3627,159 @@ fn approach_appearance_effects(
     );
 }
 
+const OUTRO_ATTACK_CLEAR_RATE: f32 = 1.0;
+const OUTRO_ATTACK_CLEAR_EPSILON: f32 = 0.0001;
+
+#[inline(always)]
+pub(super) fn begin_outro_attack_clear(state: &mut State) {
+    if state.attacks_cleared_for_outro {
+        return;
+    }
+    state.attacks_cleared_for_outro = true;
+    for player in 0..state.num_players {
+        state.outro_attack_visual[player] = state.active_attack_visual[player];
+    }
+}
+
+#[inline(always)]
+fn approach_optional_visual(value: &mut Option<f32>, target: f32, step: f32) {
+    let Some(current) = value.as_mut() else {
+        return;
+    };
+    super::approach_f32(current, target, step);
+    if (*current - target).abs() <= OUTRO_ATTACK_CLEAR_EPSILON {
+        *value = None;
+    }
+}
+
+#[inline(always)]
+fn approach_optional_visual_cols(
+    values: &mut [Option<f32>; MAX_COLS],
+    targets: [f32; MAX_COLS],
+    step: f32,
+) {
+    for (value, target) in values.iter_mut().zip(targets) {
+        approach_optional_visual(value, target, step);
+    }
+}
+
+fn approach_visual_overrides_to_base(
+    visual: &mut VisualOverrides,
+    base: VisualEffects,
+    delta_time: f32,
+) {
+    let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
+    approach_optional_visual(&mut visual.drunk, base.drunk, step);
+    approach_optional_visual(&mut visual.dizzy, base.dizzy, step);
+    approach_optional_visual(&mut visual.confusion, base.confusion, step);
+    approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
+    approach_optional_visual_cols(
+        &mut visual.confusion_offset_cols,
+        base.confusion_offset_cols,
+        step,
+    );
+    approach_optional_visual(&mut visual.flip, base.flip, step);
+    approach_optional_visual(&mut visual.invert, base.invert, step);
+    approach_optional_visual(&mut visual.tornado, base.tornado, step);
+    approach_optional_visual(&mut visual.tipsy, base.tipsy, step);
+    approach_optional_visual(&mut visual.tiny, base.tiny, step);
+    approach_optional_visual(&mut visual.bumpy, base.bumpy, step);
+    approach_optional_visual(&mut visual.bumpy_offset, base.bumpy_offset, step);
+    approach_optional_visual(&mut visual.bumpy_period, base.bumpy_period, step);
+    approach_optional_visual_cols(&mut visual.bumpy_cols, base.bumpy_cols, step);
+    approach_optional_visual_cols(&mut visual.tiny_cols, base.tiny_cols, step);
+    approach_optional_visual_cols(&mut visual.move_x_cols, base.move_x_cols, step);
+    approach_optional_visual_cols(&mut visual.move_y_cols, base.move_y_cols, step);
+    approach_optional_visual(&mut visual.pulse_inner, base.pulse_inner, step);
+    approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
+    approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
+    approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
+    approach_optional_visual(&mut visual.beat, base.beat, step);
+}
+
+#[inline(always)]
+fn base_visual_effects(profile: &profile::Profile) -> VisualEffects {
+    VisualEffects::from_mask(profile.visual_effects_active_mask.bits())
+}
+
+#[inline(always)]
+fn apply_song_lua_player_transform_target(
+    target: SongLuaEaseMaskTarget,
+    value: f32,
+    player_x: &mut Option<f32>,
+    player_y: &mut Option<f32>,
+    player_z: &mut Option<f32>,
+    player_rotation_x: &mut Option<f32>,
+    player_rotation_z: &mut Option<f32>,
+    player_rotation_y: &mut Option<f32>,
+    player_skew_x: &mut Option<f32>,
+    player_skew_y: &mut Option<f32>,
+    player_zoom_x: &mut Option<f32>,
+    player_zoom_y: &mut Option<f32>,
+    player_zoom_z: &mut Option<f32>,
+    player_confusion_y_offset: &mut Option<f32>,
+) {
+    if !value.is_finite() {
+        return;
+    }
+    match target {
+        SongLuaEaseMaskTarget::PlayerX => *player_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerY => *player_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZ => *player_z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationX => *player_rotation_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoom => {
+            *player_zoom_x = Some(value);
+            *player_zoom_y = Some(value);
+            *player_zoom_z = Some(value);
+        }
+        SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),
+        SongLuaEaseMaskTarget::ConfusionYOffsetY => *player_confusion_y_offset = Some(value),
+        _ => {}
+    }
+}
+
+#[inline(always)]
+fn store_song_lua_player_transforms(
+    state: &mut State,
+    player: usize,
+    player_x: Option<f32>,
+    player_y: Option<f32>,
+    player_z: Option<f32>,
+    player_rotation_x: Option<f32>,
+    player_rotation_z: Option<f32>,
+    player_rotation_y: Option<f32>,
+    player_skew_x: Option<f32>,
+    player_skew_y: Option<f32>,
+    player_zoom_x: Option<f32>,
+    player_zoom_y: Option<f32>,
+    player_zoom_z: Option<f32>,
+    player_confusion_y_offset: Option<f32>,
+) {
+    state.song_lua_player_x[player] = player_x.filter(|v| v.is_finite());
+    state.song_lua_player_y[player] = player_y.filter(|v| v.is_finite());
+    state.song_lua_player_z[player] = player_z.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_rotation_x[player] =
+        player_rotation_x.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_rotation_z[player] =
+        player_rotation_z.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_rotation_y[player] =
+        player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_skew_x[player] = player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_skew_y[player] = player_skew_y.filter(|v| v.is_finite()).unwrap_or(0.0);
+    state.song_lua_player_zoom_x[player] = player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
+    state.song_lua_player_zoom_y[player] = player_zoom_y.filter(|v| v.is_finite()).unwrap_or(1.0);
+    state.song_lua_player_zoom_z[player] = player_zoom_z.filter(|v| v.is_finite()).unwrap_or(1.0);
+    state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
+        .filter(|v| v.is_finite())
+        .unwrap_or(0.0);
+}
+
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
@@ -3654,7 +3807,10 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut player_zoom_z = None;
         let mut player_confusion_y_offset = None;
         for window in &state.attack_mask_windows[player] {
-            if now >= window.start_second && now < window.end_second {
+            if !state.attacks_cleared_for_outro
+                && now >= window.start_second
+                && now < window.end_second
+            {
                 if window.clear_all {
                     clear_all = true;
                     accel = AccelOverrides::default();
@@ -3819,6 +3975,59 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
             delta_time,
         );
         let mut appearance = state.attack_current_appearance[player];
+        if state.attacks_cleared_for_outro {
+            for window in &state.song_lua_ease_windows[player] {
+                if let Some(value) = song_lua_ease_window_value(window, now) {
+                    apply_song_lua_player_transform_target(
+                        window.target,
+                        value,
+                        &mut player_x,
+                        &mut player_y,
+                        &mut player_z,
+                        &mut player_rotation_x,
+                        &mut player_rotation_z,
+                        &mut player_rotation_y,
+                        &mut player_skew_x,
+                        &mut player_skew_y,
+                        &mut player_zoom_x,
+                        &mut player_zoom_y,
+                        &mut player_zoom_z,
+                        &mut player_confusion_y_offset,
+                    );
+                }
+            }
+            let base_visual = base_visual_effects(&state.player_profiles[player]);
+            let mut visual = state.outro_attack_visual[player];
+            approach_visual_overrides_to_base(&mut visual, base_visual, delta_time);
+            state.outro_attack_visual[player] = visual;
+            state.active_attack_clear_all[player] = false;
+            state.active_attack_chart[player] = ChartAttackEffects::default();
+            state.active_attack_accel[player] = AccelOverrides::default();
+            state.active_attack_visual[player] = visual;
+            state.active_attack_appearance[player] = appearance;
+            state.active_attack_visibility[player] = VisibilityOverrides::default();
+            state.active_attack_scroll[player] = ScrollOverrides::default();
+            state.active_attack_perspective[player] = PerspectiveOverrides::default();
+            state.active_attack_scroll_speed[player] = None;
+            state.active_attack_mini_percent[player] = None;
+            store_song_lua_player_transforms(
+                state,
+                player,
+                player_x,
+                player_y,
+                player_z,
+                player_rotation_x,
+                player_rotation_z,
+                player_rotation_y,
+                player_skew_x,
+                player_skew_y,
+                player_zoom_x,
+                player_zoom_y,
+                player_zoom_z,
+                player_confusion_y_offset,
+            );
+            continue;
+        }
         for window in &state.song_lua_ease_windows[player] {
             if let Some(value) = song_lua_ease_window_value(window, now) {
                 song_lua_apply_eased_target(
@@ -3860,28 +4069,22 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         state.active_attack_perspective[player] = perspective;
         state.active_attack_scroll_speed[player] = scroll_speed;
         state.active_attack_mini_percent[player] = mini_percent;
-        state.song_lua_player_x[player] = player_x.filter(|v| v.is_finite());
-        state.song_lua_player_y[player] = player_y.filter(|v| v.is_finite());
-        state.song_lua_player_z[player] = player_z.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_rotation_x[player] =
-            player_rotation_x.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_rotation_z[player] =
-            player_rotation_z.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_rotation_y[player] =
-            player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_skew_x[player] =
-            player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_skew_y[player] =
-            player_skew_y.filter(|v| v.is_finite()).unwrap_or(0.0);
-        state.song_lua_player_zoom_x[player] =
-            player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
-        state.song_lua_player_zoom_y[player] =
-            player_zoom_y.filter(|v| v.is_finite()).unwrap_or(1.0);
-        state.song_lua_player_zoom_z[player] =
-            player_zoom_z.filter(|v| v.is_finite()).unwrap_or(1.0);
-        state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
-            .filter(|v| v.is_finite())
-            .unwrap_or(0.0);
+        store_song_lua_player_transforms(
+            state,
+            player,
+            player_x,
+            player_y,
+            player_z,
+            player_rotation_x,
+            player_rotation_z,
+            player_rotation_y,
+            player_skew_x,
+            player_skew_y,
+            player_zoom_x,
+            player_zoom_y,
+            player_zoom_z,
+            player_confusion_y_offset,
+        );
     }
 }
 

@@ -8885,8 +8885,7 @@ mod tests {
         let effect_height = super::field_effect_height(0.0);
         let raw_y = crate::game::scroll::ScrollSpeedSetting::ARROW_SPACING;
         let scroll_speed = 2.0;
-        let itg_order =
-            super::apply_accel_y(raw_y, 0.0, 0.0, effect_height, accel) * scroll_speed;
+        let itg_order = super::apply_accel_y(raw_y, 0.0, 0.0, effect_height, accel) * scroll_speed;
         let pre_scaled_order =
             super::apply_accel_y(raw_y * scroll_speed, 0.0, 0.0, effect_height, accel);
         let expected_itg_order = raw_y * (raw_y / effect_height) * scroll_speed;
