@@ -585,6 +585,12 @@ static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
 static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
+// Song-time fallback for the current/pending music stream. The precise
+// packet map is published by the audio callback, but gameplay can query the
+// clock before the first mapped packet has been consumed.
+static MUSIC_CLOCK_SEEDED: AtomicBool = AtomicBool::new(false);
+static MUSIC_CLOCK_CUT_START_BITS: AtomicU64 = AtomicU64::new(0.0f64.to_bits());
+static MUSIC_CLOCK_RATE_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 // Per-play monotonic id used to associate asynchronous ReplayGain results
 // with the track that requested them. `set_music_replaygain_if_matches` is
 // a no-op if the id no longer matches the active track, preventing a stale
@@ -647,6 +653,65 @@ fn music_nanos_from_seconds(seconds: f64) -> i64 {
     }
     let nanos = (seconds * NANOS_PER_SECOND).round();
     nanos.clamp(i64::MIN as f64, i64::MAX as f64) as i64
+}
+
+#[inline(always)]
+fn normalized_music_rate(rate: f32) -> f32 {
+    if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f32) -> (f32, f32) {
+    let rate = normalized_music_rate(rate);
+    let stream_seconds = if stream_seconds.is_finite() {
+        stream_seconds.max(0.0)
+    } else {
+        0.0
+    };
+    let cut_start_sec = if cut_start_sec.is_finite() {
+        cut_start_sec
+    } else {
+        0.0
+    };
+    if cut_start_sec < 0.0 {
+        let lead_in = (-cut_start_sec) as f32;
+        if stream_seconds < lead_in {
+            return ((cut_start_sec + f64::from(stream_seconds)) as f32, 1.0);
+        }
+        return ((stream_seconds - lead_in) * rate, rate);
+    }
+    (
+        (cut_start_sec + f64::from(stream_seconds * rate)) as f32,
+        rate,
+    )
+}
+
+#[inline(always)]
+fn seed_music_stream_clock(cut: Cut, rate: f32) {
+    MUSIC_CLOCK_CUT_START_BITS.store(cut.start_sec.to_bits(), Ordering::Relaxed);
+    MUSIC_CLOCK_RATE_BITS.store(normalized_music_rate(rate).to_bits(), Ordering::Relaxed);
+    MUSIC_CLOCK_SEEDED.store(true, Ordering::Release);
+}
+
+#[inline(always)]
+fn clear_music_stream_clock_seed() {
+    MUSIC_CLOCK_CUT_START_BITS.store(0.0f64.to_bits(), Ordering::Relaxed);
+    MUSIC_CLOCK_RATE_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
+    MUSIC_CLOCK_SEEDED.store(false, Ordering::Release);
+}
+
+#[inline(always)]
+fn seeded_music_position(stream_seconds: f32) -> Option<(f32, f32)> {
+    if !MUSIC_CLOCK_SEEDED.load(Ordering::Acquire) {
+        return None;
+    }
+    let cut_start_sec = f64::from_bits(MUSIC_CLOCK_CUT_START_BITS.load(Ordering::Relaxed));
+    let rate = f32::from_bits(MUSIC_CLOCK_RATE_BITS.load(Ordering::Relaxed));
+    Some(fallback_music_position(stream_seconds, cut_start_sec, rate))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1154,6 +1219,7 @@ fn reset_music_stream_clock() {
     MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
     MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
     MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
+    clear_music_stream_clock_seed();
     clear_music_pos_map();
 }
 
@@ -1193,8 +1259,27 @@ fn i16_to_f32(sample: i16) -> f32 {
 mod tests {
     use super::{
         CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
-        stream_position_frames_from_window,
+        fallback_music_position, stream_position_frames_from_window,
     };
+
+    #[test]
+    fn fallback_music_position_uses_positive_cut_origin() {
+        let (music_sec, slope) = fallback_music_position(0.25, 37.5, 1.5);
+
+        assert!((music_sec - 37.875).abs() <= 0.000_01);
+        assert!((slope - 1.5).abs() <= 0.000_01);
+    }
+
+    #[test]
+    fn fallback_music_position_keeps_negative_lead_in_unscaled() {
+        let (lead_music_sec, lead_slope) = fallback_music_position(0.75, -1.0, 2.0);
+        let (song_music_sec, song_slope) = fallback_music_position(1.25, -1.0, 2.0);
+
+        assert!((lead_music_sec - -0.25).abs() <= 0.000_01);
+        assert!((lead_slope - 1.0).abs() <= 0.000_01);
+        assert!((song_music_sec - 0.5).abs() <= 0.000_01);
+        assert!((song_slope - 2.0).abs() <= 0.000_01);
+    }
 
     #[test]
     fn playback_pos_map_extrapolates_past_last_segment() {
@@ -1458,12 +1543,9 @@ fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f
 
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
-    let rate = if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    };
+    let rate = normalized_music_rate(rate);
     reset_music_stream_clock();
+    seed_music_stream_clock(cut, rate);
 
     // Resolve a per-play track id and decide on the initial ReplayGain
     // value. If the user has the experimental ReplayGain setting on, and we
@@ -1526,11 +1608,8 @@ pub fn stop_music() {
 
 /// Adjusts the playback rate for the current music stream, if any.
 pub fn set_music_rate(rate: f32) {
-    let rate = if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    };
+    let rate = normalized_music_rate(rate);
+    MUSIC_CLOCK_RATE_BITS.store(rate.to_bits(), Ordering::Relaxed);
     let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
 }
 
@@ -1558,7 +1637,10 @@ fn music_stream_clock_snapshot_at_nanos(
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
         match lookup_music_position(stream_frames, sample_rate) {
             Some((music_seconds, slope)) => (music_seconds, slope, true),
-            None => (stream_seconds, 1.0, false),
+            None => match seeded_music_position(stream_seconds) {
+                Some((music_seconds, slope)) => (music_seconds, slope, true),
+                None => (stream_seconds, 1.0, false),
+            },
         };
     MusicStreamClockSnapshot {
         stream_seconds,
@@ -1583,6 +1665,17 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     let sample_rate = ENGINE.device_sample_rate.max(1);
     let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
     if !has_started {
+        if let Some((music_seconds, slope)) = seeded_music_position(0.0) {
+            return MusicStreamClockSnapshot {
+                stream_seconds: 0.0,
+                music_seconds,
+                music_nanos: music_nanos_from_seconds(f64::from(music_seconds)),
+                music_seconds_per_second: slope,
+                has_music_mapping: true,
+                valid_at: Instant::now(),
+                valid_at_host_nanos: 0,
+            };
+        }
         return MusicStreamClockSnapshot {
             stream_seconds: 0.0,
             music_seconds: 0.0,

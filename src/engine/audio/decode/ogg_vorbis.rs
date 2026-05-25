@@ -8,6 +8,7 @@ use std::path::Path;
 const OGG_PAGE_HEADER_LEN: usize = 27;
 const OGG_SCAN_CHUNK_BYTES: usize = 64 * 1024;
 const OGG_SERIAL_OFFSET: usize = 14;
+const OGG_SEEK_ATTEMPTS: usize = 6;
 
 #[derive(Clone, Copy)]
 struct VorbisStreamInfo {
@@ -38,6 +39,7 @@ enum Inner {
 pub(crate) struct Reader {
     inner: Inner,
     channels: usize,
+    sample_rate_hz: u32,
     blocksize_1: u8,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
@@ -93,6 +95,7 @@ fn opened_from_inner(inner: Inner) -> Result<OpenFile, Box<dyn std::error::Error
         reader: Reader {
             inner,
             channels,
+            sample_rate_hz,
             blocksize_1,
             pending: None,
             cursor_frames: 0,
@@ -134,11 +137,48 @@ impl Reader {
         // state (PreviousWindowRight) is fully primed by the time we
         // reach `target_frame`.  After `seek_absgp_pg` the first
         // decoded packet is a warmup that produces 0 output frames;
-        // if the target falls inside that warmup gap the audio we
-        // deliver would start late.  A preroll of one maximum block
-        // guarantees the gap is behind us.
-        let preroll_frames = 1u64 << self.blocksize_1;
-        let seek_pos = target_frame.saturating_sub(preroll_frames);
+        // if the target falls inside that warmup gap the audio starts late.
+        // Retry farther back when page-granular seeking leaves the first
+        // decoded packet after the requested target.
+        let max_block_frames = 1u64 << self.blocksize_1;
+        let mut preroll_frames = max_block_frames
+            .saturating_mul(2)
+            .max(u64::from(self.sample_rate_hz) / 8)
+            .max(1);
+        let max_preroll_frames = u64::from(self.sample_rate_hz)
+            .saturating_mul(2)
+            .max(preroll_frames);
+
+        for _ in 0..OGG_SEEK_ATTEMPTS {
+            let seek_pos = target_frame.saturating_sub(preroll_frames);
+            if self.seek_frame_from(target_frame, seek_pos, false)? {
+                return Ok(());
+            }
+            if seek_pos == 0 {
+                break;
+            }
+            preroll_frames = preroll_frames
+                .saturating_mul(2)
+                .min(max_preroll_frames)
+                .max(preroll_frames.saturating_add(max_block_frames));
+        }
+
+        let seek_pos = target_frame.saturating_sub(max_preroll_frames.min(target_frame));
+        self.seek_frame_from(target_frame, seek_pos, true)?;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub(crate) const fn current_frame(&self) -> u64 {
+        self.cursor_frames
+    }
+
+    fn seek_frame_from(
+        &mut self,
+        target_frame: u64,
+        seek_pos: u64,
+        allow_late_start: bool,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         self.seek_absgp_pg(seek_pos)?;
         self.pending = None;
 
@@ -153,7 +193,7 @@ impl Reader {
         loop {
             let Some(pkt) = self.read_packet()? else {
                 self.cursor_frames = target_frame;
-                return Ok(());
+                return Ok(true);
             };
             stashed.push(pkt);
             if let Some(absgp) = self.last_absgp() {
@@ -183,14 +223,17 @@ impl Reader {
                 continue; // Skip warmup packets with no decoded audio.
             }
             if pkt_start >= target_frame {
-                // This packet is entirely at or past the target — stash it
+                if pkt_start > target_frame && !allow_late_start {
+                    return Ok(false);
+                }
+                // This packet is entirely at or past the target; stash it
                 // for the next read_dec_packet_itl call.
                 self.pending = Some(stashed.into_iter().nth(i).unwrap());
-                self.cursor_frames = target_frame;
-                return Ok(());
+                self.cursor_frames = pkt_start;
+                return Ok(true);
             }
             if pkt_start + pkt_frames > target_frame {
-                // Target is within this packet — trim leading samples.
+                // Target is within this packet; trim leading samples.
                 let skip = (target_frame - pkt_start) as usize;
                 let drop_samples = skip * self.channels;
                 let pkt = &stashed[i];
@@ -198,19 +241,22 @@ impl Reader {
                     self.pending = Some(pkt[drop_samples..].to_vec());
                 }
                 self.cursor_frames = target_frame;
-                return Ok(());
+                return Ok(true);
             }
             self.cursor_frames = pkt_start + pkt_frames;
         }
 
-        // Target is beyond this page — continue reading forward.
+        // Target is beyond this page; continue reading forward.
         // From here, lewton's cur_absgp is calibrated and increments
         // correctly with each decoded packet.
         while self.cursor_frames < target_frame {
             let Some(pkt) = self.read_packet()? else {
-                return Ok(());
+                return Ok(true);
             };
             let pkt_frames = (pkt.len() / self.channels) as u64;
+            if pkt_frames == 0 {
+                continue;
+            }
             let remaining = (target_frame - self.cursor_frames) as usize;
             if remaining < pkt_frames as usize {
                 let drop_samples = remaining * self.channels;
@@ -218,12 +264,12 @@ impl Reader {
                     self.pending = Some(pkt[drop_samples..].to_vec());
                 }
                 self.cursor_frames = target_frame;
-                return Ok(());
+                return Ok(true);
             }
             self.cursor_frames += pkt_frames;
         }
 
-        Ok(())
+        Ok(true)
     }
 
     #[inline(always)]
@@ -423,4 +469,66 @@ fn find_last_chunk_granule(chunk: &[u8], serial: u32) -> Option<u64> {
 #[inline(always)]
 fn has_ogg_page_header(chunk: &[u8], at: usize) -> bool {
     &chunk[at..at + 4] == b"OggS" && chunk[at + 4] == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Reader, open_file};
+    use std::path::PathBuf;
+
+    const SEEK_COMPARE_FRAMES: usize = 4096;
+
+    fn fixture_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/music/credits.ogg")
+    }
+
+    fn read_frames(reader: &mut Reader, frames: usize) -> Vec<i16> {
+        let mut packet = Vec::new();
+        let channels = reader.channels;
+        let mut out = Vec::with_capacity(frames * channels);
+        while out.len() < frames * channels {
+            let more = reader
+                .read_dec_packet_into(&mut packet)
+                .expect("decode packet");
+            if !more {
+                break;
+            }
+            out.extend_from_slice(&packet);
+        }
+        out.truncate(frames * channels);
+        out
+    }
+
+    #[test]
+    fn seek_matches_linear_decode_after_warmup() {
+        let path = fixture_path();
+        if !path.exists() {
+            return;
+        }
+        let opened = open_file(&path).expect("open fixture");
+        let channels = opened.channels;
+        let sample_rate = opened.sample_rate_hz as usize;
+        let targets = [
+            sample_rate * 2 + sample_rate / 17,
+            sample_rate * 3 + sample_rate / 7,
+            sample_rate * 5 + sample_rate / 3,
+        ];
+
+        for target in targets {
+            let mut full = open_file(&path).expect("open full fixture").reader;
+            let expected = read_frames(&mut full, target + SEEK_COMPARE_FRAMES);
+            if expected.len() < (target + SEEK_COMPARE_FRAMES) * channels {
+                continue;
+            }
+            let expected =
+                expected[target * channels..(target + SEEK_COMPARE_FRAMES) * channels].to_vec();
+
+            let mut seeked = open_file(&path).expect("open seek fixture").reader;
+            seeked.seek_frame(target as u64).expect("seek fixture");
+            assert_eq!(seeked.current_frame(), target as u64);
+            let actual = read_frames(&mut seeked, SEEK_COMPARE_FRAMES);
+
+            assert_eq!(actual, expected, "seek target frame {target}");
+        }
+    }
 }

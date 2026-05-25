@@ -130,6 +130,11 @@ impl<R: std::io::Read> Reader<R> {
     }
 
     #[inline(always)]
+    pub(crate) const fn current_frame(&self) -> u64 {
+        self.cursor_frames
+    }
+
+    #[inline(always)]
     fn validate_frame(
         &self,
         frame: &Frame,

@@ -48,6 +48,16 @@ impl Reader {
             Self::Wav(reader) => reader.seek_frame(frame),
         }
     }
+
+    pub(crate) fn current_frame(&self) -> u64 {
+        match self {
+            Self::Flac(reader) => reader.current_frame(),
+            Self::Mp3(reader) => reader.current_frame(),
+            Self::Ogg(reader) => reader.current_frame(),
+            Self::Opus(reader) => reader.current_frame(),
+            Self::Wav(reader) => reader.current_frame(),
+        }
+    }
 }
 
 #[inline(always)]

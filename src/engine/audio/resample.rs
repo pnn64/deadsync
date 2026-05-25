@@ -347,6 +347,29 @@ fn secs_to_frames(seconds: f64, sample_rate: u32) -> u64 {
 }
 
 #[inline]
+fn seek_preroll_in_frames(seek_ok: bool, start_frame: u64, seek_start_frame: u64) -> u64 {
+    if seek_ok {
+        start_frame.saturating_sub(seek_start_frame)
+    } else {
+        0
+    }
+}
+
+#[inline]
+fn music_output_start_sec(
+    seek_ok: bool,
+    seek_start_frame: u64,
+    cut_start_sec: f64,
+    sample_rate_hz: u32,
+) -> f64 {
+    if seek_ok {
+        seek_start_frame as f64 / f64::from(sample_rate_hz.max(1))
+    } else {
+        cut_start_sec.max(0.0)
+    }
+}
+
+#[inline]
 fn sat_i64(value: u64) -> i64 {
     value.min(i64::MAX as u64) as i64
 }
@@ -401,7 +424,9 @@ fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, f
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_fade_envelope, volume_for_frame};
+    use super::{
+        apply_fade_envelope, music_output_start_sec, seek_preroll_in_frames, volume_for_frame,
+    };
 
     #[test]
     fn fade_out_longer_than_clip_starts_near_silent() {
@@ -420,6 +445,20 @@ mod tests {
 
         assert!(samples[0].abs() <= 25);
         assert_eq!(samples[47], 0);
+    }
+
+    #[test]
+    fn seeked_map_starts_at_decoder_frame() {
+        let sec = music_output_start_sec(true, 44_092, 1.0, 44_100);
+
+        assert!((sec - (44_092.0 / 44_100.0)).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn preroll_drop_uses_actual_seek_distance() {
+        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_092), 8);
+        assert_eq!(seek_preroll_in_frames(true, 44_100, 44_120), 0);
+        assert_eq!(seek_preroll_in_frames(false, 44_100, 0), 0);
     }
 }
 
@@ -522,10 +561,14 @@ fn music_decoder_thread_loop(
         // false preview failures.
         let bypass_seek = is_ogg_stream && start_floor < u64::from(in_hz);
         let mut seek_ok = false;
+        let mut seek_start_frame = 0u64;
         if start_floor > 0 && !bypass_seek {
             let seek_frame = start_floor.saturating_sub(internal::PREROLL_IN_FRAMES);
             match reader.seek_frame(seek_frame) {
-                Ok(()) => seek_ok = true,
+                Ok(()) => {
+                    seek_ok = true;
+                    seek_start_frame = reader.current_frame();
+                }
                 Err(e) => {
                     warn!(
                         "Music seek failed for {path:?} at frame {seek_frame}; restarting from start: {e}"
@@ -538,8 +581,9 @@ fn music_decoder_thread_loop(
             }
         }
 
-        let mut preroll_out_frames: u64 = if seek_ok && start_floor > 0 {
-            (internal::PREROLL_IN_FRAMES as f64 * ratio).ceil() as u64
+        let preroll_in_frames = seek_preroll_in_frames(seek_ok, start_floor, seek_start_frame);
+        let mut preroll_out_frames: u64 = if preroll_in_frames > 0 {
+            (preroll_in_frames as f64 * ratio).ceil() as u64
         } else {
             0
         };
@@ -568,7 +612,8 @@ fn music_decoder_thread_loop(
         };
 
         let mut frames_emitted_total: u64 = 0;
-        let mut next_music_output_sec = cut.start_sec.max(0.0);
+        let mut next_music_output_sec =
+            music_output_start_sec(seek_ok, seek_start_frame, cut.start_sec, in_hz);
 
         #[inline(always)]
         fn cap_out_frames(

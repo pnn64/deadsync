@@ -123,6 +123,11 @@ impl Reader {
     }
 
     #[inline(always)]
+    pub(crate) const fn current_frame(&self) -> u64 {
+        self.cursor_frames
+    }
+
+    #[inline(always)]
     fn take_packet_into(
         &mut self,
         out: &mut Vec<i16>,

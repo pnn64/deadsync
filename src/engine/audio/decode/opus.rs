@@ -176,6 +176,11 @@ impl Reader {
         self.seek_frame_linear(target_frame)
     }
 
+    #[inline(always)]
+    pub(crate) const fn current_frame(&self) -> u64 {
+        self.cursor_frames
+    }
+
     fn decode_next_packet_into(
         &mut self,
         out: &mut Vec<i16>,
