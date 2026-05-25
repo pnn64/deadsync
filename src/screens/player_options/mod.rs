@@ -14,7 +14,7 @@ use crate::game::parsing::noteskin::{
 use crate::game::song::SongData;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
-    self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+    self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;

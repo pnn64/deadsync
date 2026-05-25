@@ -25,27 +25,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let p1_card = player_card_info(crate::game::profile::PlayerSide::P1);
-    let p2_card = player_card_info(crate::game::profile::PlayerSide::P2);
-
-    let insert_card = tr("Common", "InsertCard");
-    let press_start = tr("Common", "PressStart");
-
-    let (footer_left, left_avatar) = footer_for_card(&p1_card, &insert_card, &press_start);
-    let (footer_right, right_avatar) = footer_for_card(&p2_card, &insert_card, &press_start);
-    let event_mode = tr("Common", "EventMode");
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: &event_mode,
-        title_placement: ScreenBarTitlePlacement::Center,
-        position: ScreenBarPosition::Bottom,
-        transparent: false,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
     // zmod ScreenPlayerOptions overlay/default.lua speed helper parity.
     let speed_mod_y = 48.0;
     let speed_mod_zoom = 0.5_f32;
@@ -468,53 +447,6 @@ pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) ->
         return 0.0;
     }
     if player_idx == P2 { 1.0 } else { -1.0 }
-}
-
-/// Resolved profile + session flags for one side, used by `get_actors`
-/// to populate the screen footer.
-pub(super) struct PlayerCardInfo {
-    profile: crate::game::profile::Profile,
-    joined: bool,
-    guest: bool,
-}
-
-pub(super) fn player_card_info(side: crate::game::profile::PlayerSide) -> PlayerCardInfo {
-    PlayerCardInfo {
-        profile: crate::game::profile::get_for_side(side),
-        joined: crate::game::profile::is_session_side_joined(side),
-        guest: crate::game::profile::is_session_side_guest(side),
-    }
-}
-
-/// Compute the footer text and optional avatar for one player side.
-///
-/// Lifetimes: the returned text borrows from either the player's
-/// `display_name` (via `card`), or from the localized `insert_card` /
-/// `press_start` strings, all of which the caller keeps alive on the
-/// stack. The optional avatar borrows the texture key directly from
-/// the profile.
-pub(super) fn footer_for_card<'a>(
-    card: &'a PlayerCardInfo,
-    insert_card: &'a str,
-    press_start: &'a str,
-) -> (Option<&'a str>, Option<AvatarParams<'a>>) {
-    if !card.joined {
-        return (Some(press_start), None);
-    }
-    let text = if card.guest {
-        insert_card
-    } else {
-        card.profile.display_name.as_str()
-    };
-    let avatar = if card.guest {
-        None
-    } else {
-        card.profile
-            .avatar_texture_key
-            .as_deref()
-            .map(|texture_key| AvatarParams { texture_key })
-    };
-    (Some(text), avatar)
 }
 
 /// Resolve the texture key for a player's currently-selected choice
