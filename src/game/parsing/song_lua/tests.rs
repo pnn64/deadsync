@@ -11510,6 +11510,24 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
         assert_eq!(overlay.initial_state.blend, SongLuaOverlayBlendMode::Add);
         assert_eq!(overlay.initial_state.effect_magnitude, [0.0; 3]);
     }
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny")
+            && (ease.start - 26.5).abs() <= 0.001
+            && (ease.limit - 1.5).abs() <= 0.001
+            && (ease.to + 200.0).abs() <= 0.001
+    }));
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "flip")
+            && (ease.start - 26.5).abs() <= 0.001
+            && (ease.limit - 1.5).abs() <= 0.001
+            && (ease.to - 50.0).abs() <= 0.001
+    }));
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "dark")
+            && (ease.start - 28.0).abs() <= 0.001
+            && (ease.limit - 0.1).abs() <= 0.001
+            && (ease.to - 100.0).abs() <= 0.001
+    }));
 }
 
 #[test]

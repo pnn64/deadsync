@@ -2354,6 +2354,41 @@ pub(super) fn read_update_function_tables(
     Ok(out)
 }
 
+pub(super) fn read_update_function_nested_tables(
+    lua: &Lua,
+    root: &Value,
+    names: &[&str],
+) -> Result<Vec<Table>, String> {
+    let Value::Table(root) = root else {
+        return Ok(Vec::new());
+    };
+    let globals = lua.globals();
+    let Some(debug) = globals
+        .get::<Option<Table>>("debug")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(getupvalue) = debug
+        .get::<Option<Function>>("getupvalue")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut seen_tables = HashSet::new();
+    let mut seen_functions = HashSet::new();
+    read_update_function_nested_tables_for_table(
+        root,
+        &getupvalue,
+        names,
+        &mut seen_tables,
+        &mut seen_functions,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
 pub(super) fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindow>, String> {
     let globals = lua.globals();
     let mut out = Vec::new();
@@ -3077,6 +3112,42 @@ fn read_update_function_tables_for_table(
     Ok(())
 }
 
+fn read_update_function_nested_tables_for_table(
+    actor: &Table,
+    getupvalue: &Function,
+    names: &[&str],
+    seen_tables: &mut HashSet<usize>,
+    seen_functions: &mut HashSet<usize>,
+    out: &mut Vec<Table>,
+) -> Result<(), String> {
+    if let Some(update) = actor
+        .get::<Option<Function>>("__songlua_update_function")
+        .map_err(|err| err.to_string())?
+    {
+        out.extend(nested_function_named_tables(
+            getupvalue,
+            &update,
+            names,
+            seen_tables,
+            seen_functions,
+        )?);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        read_update_function_nested_tables_for_table(
+            &child,
+            getupvalue,
+            names,
+            seen_tables,
+            seen_functions,
+            out,
+        )?;
+    }
+    Ok(())
+}
+
 fn update_function_named_tables(
     getupvalue: &Function,
     function: &Function,
@@ -3100,6 +3171,43 @@ fn update_function_named_tables(
         };
         if seen_tables.insert(table.to_pointer() as usize) {
             out.push(table);
+        }
+    }
+    Ok(out)
+}
+
+fn nested_function_named_tables(
+    getupvalue: &Function,
+    function: &Function,
+    names: &[&str],
+    seen_tables: &mut HashSet<usize>,
+    seen_functions: &mut HashSet<usize>,
+) -> Result<Vec<Table>, String> {
+    if !seen_functions.insert(function.to_pointer() as usize) {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for index in 1..=function.info().num_upvalues {
+        let (name, value): (Value, Value) = getupvalue
+            .call((function.clone(), i64::from(index)))
+            .map_err(|err| err.to_string())?;
+        if let Value::String(name) = &name {
+            let name = name.to_str().map_err(|err| err.to_string())?;
+            if names.iter().any(|candidate| name.as_ref() == *candidate)
+                && let Value::Table(table) = &value
+                && seen_tables.insert(table.to_pointer() as usize)
+            {
+                out.push(table.clone());
+            }
+        }
+        if let Value::Function(child) = value {
+            out.extend(nested_function_named_tables(
+                getupvalue,
+                &child,
+                names,
+                seen_tables,
+                seen_functions,
+            )?);
         }
     }
     Ok(out)

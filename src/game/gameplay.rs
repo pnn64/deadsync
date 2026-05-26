@@ -12445,6 +12445,98 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn kenpo_flash_mods_reach_runtime_masks_if_present() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let Some(root) = [
+            manifest.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+            manifest.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
+            manifest.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+        ]
+        .into_iter()
+        .find(|root| root.join("template/main.lua").is_file()) else {
+            return;
+        };
+        let entry = root.join("template/main.lua");
+        let mut context =
+            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
+        context.style_name = "double".to_string();
+        context.players = [
+            crate::game::parsing::song_lua::SongLuaPlayerContext {
+                enabled: true,
+                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
+                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
+                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
+            },
+            crate::game::parsing::song_lua::SongLuaPlayerContext {
+                enabled: false,
+                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
+                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
+                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
+            },
+        ];
+        let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(ref name)
+                    if name == "tiny"
+            ) && (window.start - 26.5).abs() <= 0.001
+                && (window.to + 200.0).abs() <= 0.001
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(ref name)
+                    if name == "flip"
+            ) && (window.start - 26.5).abs() <= 0.001
+                && (window.to - 50.0).abs() <= 0.001
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(ref name)
+                    if name == "dark"
+            ) && (window.start - 28.0).abs() <= 0.001
+                && (window.to - 100.0).abs() <= 0.001
+        }));
+
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 180.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(40 * 48));
+        let constants =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+        assert_eq!(unsupported, 0);
+
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.attack_mask_windows[0] = constants;
+        state.song_lua_ease_windows[0] = windows;
+
+        state.current_music_time_visible[0] = timing.get_time_for_beat(27.25);
+        refresh_active_attack_masks(&mut state, 0.0);
+        let pre_flash_visual = effective_visual_effects_for_player(&state, 0);
+        assert!((pre_flash_visual.tiny + 1.0).abs() <= 0.000_1);
+        assert!((pre_flash_visual.flip - 0.25).abs() <= 0.000_1);
+
+        state.current_music_time_visible[0] = timing.get_time_for_beat(29.0);
+        refresh_active_attack_masks(&mut state, 0.0);
+        let hidden_visibility = effective_visibility_effects_for_player(&state, 0);
+        let reset_visual = effective_visual_effects_for_player(&state, 0);
+        assert!((hidden_visibility.dark - 1.0).abs() <= 0.000_1);
+        assert!(reset_visual.tiny.abs() <= 0.000_1);
+        assert!(reset_visual.flip.abs() <= 0.000_1);
+
+        state.current_music_time_visible[0] = timing.get_time_for_beat(31.0);
+        refresh_active_attack_masks(&mut state, 0.0);
+        let fading_visibility = effective_visibility_effects_for_player(&state, 0);
+        assert!((fading_visibility.dark - 0.5).abs() <= 0.000_1);
+    }
+
+    #[test]
     fn song_lua_column_offsets_persist_until_next_column_offset() {
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
