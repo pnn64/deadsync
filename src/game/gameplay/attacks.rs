@@ -45,7 +45,7 @@ struct ChartAttackWindow {
 #[derive(Clone, Copy, Debug)]
 pub(super) struct AttackMaskWindow {
     pub(super) start_second: f32,
-    pub(super) end_second: f32,
+    pub(super) sustain_end_second: f32,
     pub(super) clear_all: bool,
     pub(super) chart: ChartAttackEffects,
     pub(super) accel: AccelOverrides,
@@ -785,7 +785,7 @@ pub(super) fn build_attack_mask_windows_for_player(
         }
         windows.push(AttackMaskWindow {
             start_second,
-            end_second,
+            sustain_end_second: end_second,
             clear_all: mods.clear_all,
             chart: ChartAttackEffects {
                 insert_mask: mods.insert_mask,
@@ -922,7 +922,7 @@ fn build_song_lua_constant_window(
     }
     Some(AttackMaskWindow {
         start_second,
-        end_second,
+        sustain_end_second: f32::MAX,
         clear_all: mods.clear_all,
         chart: ChartAttackEffects::default(),
         accel: mods.accel,
@@ -4075,7 +4075,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         for window in &state.attack_mask_windows[player] {
             if !state.attacks_cleared_for_outro
                 && now >= window.start_second
-                && now < window.end_second
+                && now < window.sustain_end_second
             {
                 if window.clear_all {
                     clear_all = true;

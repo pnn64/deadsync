@@ -2120,10 +2120,10 @@ fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usiz
 
 #[inline(always)]
 fn dizzy_rotation_deg(note_beat: f32, song_beat: f32, visual: VisualEffects) -> f32 {
-    if visual.dizzy <= f32::EPSILON {
+    if visual.dizzy.abs() <= f32::EPSILON {
         return 0.0;
     }
-    let dizzy = ((note_beat - song_beat) * visual.dizzy).rem_euclid(std::f32::consts::TAU);
+    let dizzy = ((note_beat - song_beat) * visual.dizzy) % std::f32::consts::TAU;
     dizzy * (180.0 / std::f32::consts::PI)
 }
 
@@ -2136,7 +2136,7 @@ fn calc_note_rotation_z(
     local_col: usize,
 ) -> f32 {
     let mut r = confusion_rotation_deg(song_beat, visual, local_col);
-    if visual.dizzy > f32::EPSILON && !is_hold_head {
+    if visual.dizzy.abs() > f32::EPSILON && !is_hold_head {
         r += itg_actor_rotation_z(dizzy_rotation_deg(note_beat, song_beat, visual));
     }
     r
@@ -9812,8 +9812,22 @@ mod tests {
             ..VisualEffects::default()
         };
         let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false, 0);
-        let itg_expected = ((6.75 - 3.5) * visual.dizzy).rem_euclid(std::f32::consts::TAU)
-            * (180.0 / std::f32::consts::PI);
+        let itg_expected =
+            ((6.75 - 3.5) * visual.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
+        assert!((rotation + itg_expected).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn negative_dizzy_rotates_notes_like_itgmania() {
+        let visual = VisualEffects {
+            dizzy: -0.5,
+            ..VisualEffects::default()
+        };
+        let rotation = calc_note_rotation_z(visual, 70.0, 68.0, false, 0);
+        let itg_expected =
+            ((70.0 - 68.0) * visual.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
+
+        assert!(rotation.abs() > 1.0);
         assert!((rotation + itg_expected).abs() <= 1e-6);
     }
 

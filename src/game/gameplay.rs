@@ -11789,6 +11789,24 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn chart_attack_runtime_mods_stop_after_len() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
+            Some("TIME=0.000:LEN=1.000:MODS=50% drunk"),
+            profile::AttackMode::On,
+            0,
+            0x1234,
+            10.0,
+        );
+
+        state.current_music_time_visible[0] = 2.0;
+        refresh_active_attack_masks(&mut state, 0.0);
+
+        let visual = effective_visual_effects_for_player(&state, 0);
+        assert!(visual.drunk.abs() <= 0.000_1);
+    }
+
+    #[test]
     fn outro_attack_clear_phases_out_song_lua_visual_mods() {
         let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
         state.active_attack_visual[0].confusion_offset = Some(-12.56);
@@ -12198,6 +12216,91 @@ return Def.ActorFrame{}
                 .is_some_and(|value| (value + 3.5).abs() <= 0.000_1)
         );
         assert!(super::song_lua_ease_window_value(&windows[0], 4.25).is_none());
+    }
+
+    #[test]
+    fn song_lua_constant_mods_persist_after_attack_window() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            beat_mods: vec![crate::game::parsing::song_lua::SongLuaModWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 1.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                mods: "*100 314 confusionoffset".to_string(),
+                player: Some(1),
+            }],
+            ..Default::default()
+        };
+        state.attack_mask_windows[0] =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        state.current_music_time_visible[0] = 2.0;
+        refresh_active_attack_masks(&mut state, 0.0);
+
+        let visual = effective_visual_effects_for_player(&state, 0);
+        assert!((visual.confusion_offset - 3.14).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn riddle_beat_70_confusion_offset_reaches_visual_state_if_present() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let Some(root) = [
+            manifest.join("../lua-songs/Riddle"),
+            manifest.join("songs/lua-songs/Riddle"),
+        ]
+        .into_iter()
+        .find(|root| root.join("lua/default.lua").is_file()) else {
+            return;
+        };
+        let entry = root.join("lua/default.lua");
+        let mut context =
+            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "Riddle");
+        context.style_name = "double".to_string();
+        context.players = [
+            crate::game::parsing::song_lua::SongLuaPlayerContext {
+                enabled: true,
+                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
+                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
+                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
+            },
+            crate::game::parsing::song_lua::SongLuaPlayerContext {
+                enabled: false,
+                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
+                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
+                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
+            },
+        ];
+        let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.beat_mods.iter().any(|window| {
+            (window.start - 70.5).abs() <= 0.001 && window.mods.contains("80% confusionoffset")
+        }));
+
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 128.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.036, 0.0, &timing_segments, &test_row_to_beat(72 * 48));
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.attack_mask_windows[0] =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        state.current_music_time_visible[0] = timing.get_time_for_beat(70.75);
+        refresh_active_attack_masks(&mut state, 0.0);
+        let tilted = effective_visual_effects_for_player(&state, 0);
+        assert!((tilted.confusion_offset - 0.8).abs() <= 0.000_1);
+
+        state.current_music_time_visible[0] = timing.get_time_for_beat(71.25);
+        refresh_active_attack_masks(&mut state, 0.0);
+        let reset = effective_visual_effects_for_player(&state, 0);
+        assert!(reset.confusion_offset.abs() <= 0.000_1);
     }
 
     #[test]
