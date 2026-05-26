@@ -924,7 +924,7 @@ fn build_song_lua_constant_window(
     })
 }
 
-fn build_song_lua_constant_windows_for_player(
+pub(super) fn build_song_lua_constant_windows_for_player(
     compiled: &CompiledSongLua,
     timing_player: &TimingData,
     player: usize,
@@ -1689,7 +1689,115 @@ fn append_song_lua_ease_targets(
     true
 }
 
-fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow]) {
+#[inline(always)]
+fn song_lua_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
+    matches!(
+        target,
+        SongLuaEaseMaskTarget::PlayerX
+            | SongLuaEaseMaskTarget::PlayerY
+            | SongLuaEaseMaskTarget::PlayerZ
+            | SongLuaEaseMaskTarget::PlayerRotationX
+            | SongLuaEaseMaskTarget::PlayerRotationZ
+            | SongLuaEaseMaskTarget::PlayerRotationY
+            | SongLuaEaseMaskTarget::PlayerSkewX
+            | SongLuaEaseMaskTarget::PlayerSkewY
+            | SongLuaEaseMaskTarget::PlayerZoom
+            | SongLuaEaseMaskTarget::PlayerZoomX
+            | SongLuaEaseMaskTarget::PlayerZoomY
+            | SongLuaEaseMaskTarget::PlayerZoomZ
+            | SongLuaEaseMaskTarget::ConfusionYOffsetY
+    )
+}
+
+#[inline(always)]
+fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseMaskTarget) -> bool {
+    if window.clear_all && !song_lua_player_transform_target(target) {
+        return true;
+    }
+    match target {
+        SongLuaEaseMaskTarget::AccelBoost => window.accel.boost.is_some(),
+        SongLuaEaseMaskTarget::AccelBrake => window.accel.brake.is_some(),
+        SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
+        SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
+        SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
+        SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
+            .visual
+            .confusion_offset_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualFlip => window.visual.flip.is_some(),
+        SongLuaEaseMaskTarget::VisualInvert => window.visual.invert.is_some(),
+        SongLuaEaseMaskTarget::VisualTornado => window.visual.tornado.is_some(),
+        SongLuaEaseMaskTarget::VisualTipsy => window.visual.tipsy.is_some(),
+        SongLuaEaseMaskTarget::VisualTiny => window.visual.tiny.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpy => window.visual.bumpy.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyOffset => window.visual.bumpy_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyPeriod => window.visual.bumpy_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => window
+            .visual
+            .bumpy_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualTinyColumn(col) => window
+            .visual
+            .tiny_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => window
+            .visual
+            .move_x_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => window
+            .visual
+            .move_y_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualPulseInner => window.visual.pulse_inner.is_some(),
+        SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
+        SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
+        SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
+        SongLuaEaseMaskTarget::AppearanceHidden => window.appearance.hidden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
+        SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
+        SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
+        SongLuaEaseMaskTarget::VisibilityDark => window.visibility.dark.is_some(),
+        SongLuaEaseMaskTarget::VisibilityBlind => window.visibility.blind.is_some(),
+        SongLuaEaseMaskTarget::VisibilityCover => window.visibility.cover.is_some(),
+        SongLuaEaseMaskTarget::ScrollReverse => window.scroll.reverse.is_some(),
+        SongLuaEaseMaskTarget::ScrollSplit => window.scroll.split.is_some(),
+        SongLuaEaseMaskTarget::ScrollAlternate => window.scroll.alternate.is_some(),
+        SongLuaEaseMaskTarget::ScrollCross => window.scroll.cross.is_some(),
+        SongLuaEaseMaskTarget::ScrollCentered => window.scroll.centered.is_some(),
+        SongLuaEaseMaskTarget::PerspectiveTilt => window.perspective.tilt.is_some(),
+        SongLuaEaseMaskTarget::PerspectiveSkew => window.perspective.skew.is_some(),
+        SongLuaEaseMaskTarget::ScrollSpeedX
+        | SongLuaEaseMaskTarget::ScrollSpeedC
+        | SongLuaEaseMaskTarget::ScrollSpeedM => window.scroll_speed.is_some(),
+        SongLuaEaseMaskTarget::MiniPercent => window.mini_percent.is_some(),
+        SongLuaEaseMaskTarget::PlayerX
+        | SongLuaEaseMaskTarget::PlayerY
+        | SongLuaEaseMaskTarget::PlayerZ
+        | SongLuaEaseMaskTarget::PlayerRotationX
+        | SongLuaEaseMaskTarget::PlayerRotationZ
+        | SongLuaEaseMaskTarget::PlayerRotationY
+        | SongLuaEaseMaskTarget::PlayerSkewX
+        | SongLuaEaseMaskTarget::PlayerSkewY
+        | SongLuaEaseMaskTarget::PlayerZoom
+        | SongLuaEaseMaskTarget::PlayerZoomX
+        | SongLuaEaseMaskTarget::PlayerZoomY
+        | SongLuaEaseMaskTarget::PlayerZoomZ
+        | SongLuaEaseMaskTarget::ConfusionYOffsetY => false,
+    }
+}
+
+fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow], constants: &[AttackMaskWindow]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     for i in 0..out.len() {
@@ -1719,8 +1827,26 @@ fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow]) {
                     None => start,
                 })
             });
+        let constant_cutoff = constants
+            .iter()
+            .filter_map(|constant| {
+                if !constant.start_second.is_finite()
+                    || constant.start_second + SAME_TICK_EPSILON < window.end_second
+                    || !song_lua_constant_sets_target(constant, window.target)
+                {
+                    None
+                } else {
+                    Some(constant.start_second)
+                }
+            })
+            .fold(cutoff_second, |acc, start| {
+                Some(match acc {
+                    Some(current) => current.min(start),
+                    None => start,
+                })
+            });
         out[i].sustain_end_second =
-            cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
+            constant_cutoff.map_or(default_end, |cutoff| default_end.min(cutoff));
     }
 }
 
@@ -1729,6 +1855,7 @@ pub(super) fn build_song_lua_ease_windows_for_player(
     timing_player: &TimingData,
     player: usize,
     global_offset_seconds: f32,
+    constant_windows: &[AttackMaskWindow],
 ) -> (Vec<SongLuaEaseMaskWindow>, usize) {
     let mut out = Vec::new();
     let mut unsupported_targets = 0usize;
@@ -1914,7 +2041,7 @@ pub(super) fn build_song_lua_ease_windows_for_player(
             SongLuaEaseTarget::Function => {}
         }
     }
-    song_lua_extend_ease_tails(&mut out);
+    song_lua_extend_ease_tails(&mut out, constant_windows);
     (out, unsupported_targets)
 }
 
@@ -2643,6 +2770,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 timing_players[player].as_ref(),
                 player,
                 player_global_offset_seconds,
+                &constant_windows[player],
             );
             unsupported_targets += player_unsupported_targets;
             total_constant += constant_windows[player].len();

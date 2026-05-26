@@ -8054,10 +8054,8 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if select_music_menu_blocks_gameplay_arrow(
-        ev.action,
-        config::get().only_dedicated_menu_buttons,
-    ) {
+    if select_music_menu_blocks_gameplay_arrow(ev.action, config::get().only_dedicated_menu_buttons)
+    {
         return ScreenAction::None;
     }
 

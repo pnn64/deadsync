@@ -4,19 +4,19 @@ use super::*;
 pub(super) mod tests {
     use super::super::panes;
     use super::{
-        compute_row_window, count_visible_rows, handle_arcade_start_event, handle_nav_event,
-        handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
-        init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
-        on_start_press, player_option_column_x, repeat_held_arcade_start, row_f_pos_for_index,
-        row_visibility, session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
-        update, BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding,
-        CursorInit, CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask,
-        GameplayExtrasMoreMask, HideMask, NavDirection, NumericBinding, NumericInit,
-        PlayerOptionMasks, Row, RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType,
-        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY, P1, P2,
+        BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding, CursorInit,
+        CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
+        NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
+        RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
+        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
+        init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
+        judgment_tilt_options_visible, on_start_press, player_option_column_x,
+        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
-    use crate::assets::i18n::{lookup_key, LookupKey};
     use crate::assets::AssetManager;
+    use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::{self, BackgroundFilter, PlayStyle, PlayerSide, Profile};
     use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::{Screen, ScreenAction};
@@ -968,14 +968,16 @@ pub(super) mod tests {
         assert!(second_row > first_row);
 
         on_start_press(&mut state, P1);
-        assert!(repeat_held_arcade_start(
-            &mut state,
-            &asset_manager,
-            active,
-            P1,
-            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
-        )
-        .is_none());
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert!(state.pane().selected_row[P1] > second_row);
     }
 
@@ -1001,14 +1003,16 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = last_row;
 
         on_start_press(&mut state, P1);
-        assert!(repeat_held_arcade_start(
-            &mut state,
-            &asset_manager,
-            active,
-            P1,
-            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
-        )
-        .is_none());
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert_eq!(state.pane().selected_row[P1], last_row);
     }
 

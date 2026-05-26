@@ -83,8 +83,9 @@ pub use self::attacks::{
 };
 #[cfg(test)]
 use self::attacks::{
-    build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows, parse_attack_mods,
-    parse_song_lua_runtime_mods, turn_option_bits,
+    build_song_lua_constant_windows_for_player, build_song_lua_ease_windows_for_player,
+    build_song_lua_overlay_ease_windows, parse_attack_mods, parse_song_lua_runtime_mods,
+    turn_option_bits,
 };
 #[cfg(test)]
 use self::autoplay::live_autoplay_enabled_from_flags;
@@ -12120,7 +12121,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 4);
@@ -12144,6 +12145,55 @@ return Def.ActorFrame{}
             super::song_lua_ease_window_value(&windows[3], 7.0)
                 .is_some_and(|value| value.abs() <= 0.000_1)
         );
+    }
+
+    #[test]
+    fn song_lua_constant_mod_cuts_prior_ease_tail() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![crate::game::parsing::song_lua::SongLuaEaseWindow {
+                player: Some(1),
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 4.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod("flip".to_string()),
+                from: 0.0,
+                to: -400.0,
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            beat_mods: vec![crate::game::parsing::song_lua::SongLuaModWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 4.0,
+                limit: 1.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                mods: "*100 0 flip".to_string(),
+                player: Some(1),
+            }],
+            ..Default::default()
+        };
+
+        let constants =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+
+        assert_eq!(unsupported, 0);
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].sustain_end_second, 4.0);
+        assert!(
+            super::song_lua_ease_window_value(&windows[0], 3.5)
+                .is_some_and(|value| (value + 3.5).abs() <= 0.000_1)
+        );
+        assert!(super::song_lua_ease_window_value(&windows[0], 4.25).is_none());
     }
 
     #[test]
@@ -12259,7 +12309,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 7);
@@ -12356,7 +12406,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 1);
