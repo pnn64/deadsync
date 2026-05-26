@@ -12499,18 +12499,62 @@ return Def.ActorFrame{}
             ) && (window.start - 28.0).abs() <= 0.001
                 && (window.to - 100.0).abs() <= 0.001
         }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(ref name)
+                    if name == "skewx"
+            ) && (window.start - 166.0).abs() <= 0.001
+                && (window.to.abs() - 3.0).abs() <= 0.001
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(ref name)
+                    if name == "skewx"
+            ) && (window.start - 182.0).abs() <= 0.001
+                && (window.to.abs() - 3.0).abs() <= 0.001
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(
+                window.target,
+                crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerRotationX
+            ) && (window.start - 189.0).abs() <= 0.001
+                && (window.to - 20.0).abs() <= 0.001
+        }));
 
         let timing_segments = TimingSegments {
-            bpms: vec![(0.0, 180.0)],
+            bpms: vec![(0.0, 77.0)],
             ..TimingSegments::default()
         };
         let timing =
-            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(40 * 48));
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(200 * 48));
         let constants =
             super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
         assert_eq!(unsupported, 0);
+        assert!(windows.iter().any(|window| {
+            matches!(
+                window.target,
+                super::attacks::SongLuaEaseMaskTarget::PlayerSkewX
+            ) && (window.start_second - timing.get_time_for_beat(166.0)).abs() <= 0.001
+                && (window.to.abs() - 0.03).abs() <= 0.000_1
+        }));
+        assert!(windows.iter().any(|window| {
+            matches!(
+                window.target,
+                super::attacks::SongLuaEaseMaskTarget::PlayerSkewX
+            ) && (window.start_second - timing.get_time_for_beat(182.0)).abs() <= 0.001
+                && (window.to.abs() - 0.03).abs() <= 0.000_1
+        }));
+        assert!(windows.iter().any(|window| {
+            matches!(
+                window.target,
+                super::attacks::SongLuaEaseMaskTarget::PlayerRotationX
+            ) && (window.start_second - timing.get_time_for_beat(189.0)).abs() <= 0.001
+                && (window.to - 20.0).abs() <= 0.000_1
+        }));
 
         let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
         state.attack_mask_windows[0] = constants;
@@ -12759,6 +12803,69 @@ return Def.ActorFrame{}
             super::song_lua_ease_window_value(&windows[6], 9.0)
                 .is_some_and(|value| (value - 1.125).abs() <= 0.000_1)
         );
+    }
+
+    #[test]
+    fn song_lua_skew_mod_eases_scale_to_player_skews() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 1.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "skewx".to_string(),
+                    ),
+                    from: 0.0,
+                    to: 3.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 1.0,
+                    limit: 1.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "skewy".to_string(),
+                    ),
+                    from: 0.0,
+                    to: -4.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+
+        assert_eq!(unsupported, 0);
+        assert_eq!(windows.len(), 2);
+        assert!(matches!(
+            windows[0].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerSkewX
+        ));
+        assert!(matches!(
+            windows[1].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerSkewY
+        ));
+        assert!((windows[0].to - 0.03).abs() <= 0.000_1);
+        assert!((windows[1].to + 0.04).abs() <= 0.000_1);
     }
 
     #[test]

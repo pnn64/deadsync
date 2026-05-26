@@ -10312,6 +10312,7 @@ xero = {}
 local eases = {}
 local nodes = {}
 local target = nil
+local wagger = nil
 
 local function schedule_ease(self)
     table.insert(eases, self)
@@ -10351,6 +10352,16 @@ return Def.ActorFrame{
         end,
     },
     Def.Quad{
+        Name='Wagger',
+        OnCommand=function(self)
+            wagger = self
+            xero.definemod {'wagy', function(a)
+                wagger:wag():effectmagnitude(0,a,0):effectperiod(1):effectclock('bgm')
+            end}
+            xero.ease {8, 1, ease.linear, 20, 'wagy'}
+        end,
+    },
+    Def.Quad{
         InitCommand=function(self)
             self:SetUpdateFunction(update)
         end,
@@ -10370,6 +10381,11 @@ return Def.ActorFrame{
         .iter()
         .position(|overlay| overlay.name.as_deref() == Some("Flash"))
         .expect("test flash actor should compile");
+    let wagger_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("Wagger"))
+        .expect("test wag actor should compile");
     assert!(compiled.eases.iter().all(
         |ease| !matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "flashalpha")
     ));
@@ -10386,6 +10402,19 @@ return Def.ActorFrame{
                 .to
                 .diffuse
                 .is_some_and(|color| (color[3] - 1.0).abs() <= 0.001)
+    }));
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == wagger_index
+            && (ease.start - 8.0).abs() <= 0.001
+            && (ease.limit - 1.0).abs() <= 0.001
+            && ease.easing.as_deref() == Some("linear")
+            && ease.to.effect_mode == Some(EffectMode::Wag)
+            && ease
+                .to
+                .effect_magnitude
+                .is_some_and(|value| value == [0.0, 20.0, 0.0])
+            && ease.to.effect_clock == Some(EffectClock::Beat)
+            && ease.to.effect_period.is_some_and(|value| value == 1.0)
     }));
 }
 
@@ -11581,6 +11610,11 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
         .iter()
         .position(|overlay| overlay.name.as_deref() == Some("BlackFadeSprite"))
         .expect("KENPO sample should compile the black fade quad");
+    let pp1_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("PP[1]"))
+        .expect("KENPO sample should compile the player proxy actor");
     assert!(proxy_index < white_flash_index);
     assert!(white_flash_index < black_fade_index);
     assert_eq!(
@@ -11656,6 +11690,36 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             && (ease.start - 28.0).abs() <= 0.001
             && (ease.limit - 0.1).abs() <= 0.001
             && (ease.to - 100.0).abs() <= 0.001
+    }));
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "skewx")
+            && (ease.start - 166.0).abs() <= 0.001
+            && (ease.limit - 0.125).abs() <= 0.001
+            && (ease.to.abs() - 3.0).abs() <= 0.001
+    }));
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "skewx")
+            && (ease.start - 182.0).abs() <= 0.001
+            && (ease.limit - 0.125).abs() <= 0.001
+            && (ease.to.abs() - 3.0).abs() <= 0.001
+    }));
+    assert!(compiled.eases.iter().any(|ease| {
+        matches!(ease.target, SongLuaEaseTarget::PlayerRotationX)
+            && (ease.start - 189.0).abs() <= 0.001
+            && (ease.limit - 1.0).abs() <= 0.001
+            && (ease.to - 20.0).abs() <= 0.001
+    }));
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == pp1_index
+            && (ease.start - 189.0).abs() <= 0.001
+            && (ease.limit - 1.0).abs() <= 0.001
+            && ease.to.effect_mode == Some(EffectMode::Wag)
+            && ease
+                .to
+                .effect_magnitude
+                .is_some_and(|value| value == [0.0, 20.0, 0.0])
+            && ease.to.effect_clock == Some(EffectClock::Beat)
+            && ease.to.effect_period.is_some_and(|value| value == 1.0)
     }));
 }
 

@@ -2384,6 +2384,15 @@ fn song_lua_shared_segment_actors(segments: Vec<Arc<[Actor]>>) -> Vec<Actor> {
     actors
 }
 
+fn song_lua_owned_segment_actors(segments: Vec<Arc<[Actor]>>) -> Vec<Actor> {
+    let mut actors = Vec::new();
+    for segment in segments {
+        actors.reserve(segment.len());
+        actors.extend(segment.iter().cloned());
+    }
+    actors
+}
+
 #[inline(always)]
 fn song_lua_proxy_source<'a>(
     target: &SongLuaProxyTarget,
@@ -7419,7 +7428,7 @@ pub fn push_actors(
             let note_field_source = requests
                 .note_field
                 .then(|| {
-                    render_source_bundle(song_lua_shared_segment_actors(field_actors), Vec::new())
+                    render_source_bundle(song_lua_owned_segment_actors(field_actors), Vec::new())
                 })
                 .and_then(|actors| song_lua_player_child_proxy_source(actors, target_x, target_y));
             apply_song_lua_player_transform(
@@ -8863,6 +8872,47 @@ mod tests {
         let point = test_transform_point(skew_y_matrix, [20.0, 0.0]);
         assert!((point[0] - 20.0).abs() <= 0.000_1);
         assert!((point[1] + 10.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_note_field_proxy_source_preserves_camera_transform() {
+        let segments = vec![Arc::<[Actor]>::from(vec![
+            Actor::CameraPush {
+                view_proj: Matrix4::IDENTITY,
+            },
+            test_source_actor(),
+            Actor::CameraPop,
+        ])];
+        let mut field = song_lua_owned_segment_actors(segments);
+        let mut hud = Vec::new();
+        let mut out = Vec::new();
+
+        apply_song_lua_player_transform(
+            &mut field,
+            &mut hud,
+            &mut out,
+            0,
+            [1.0; 4],
+            None,
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.5,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+
+        let Some(Actor::CameraPush { view_proj }) = out.first() else {
+            panic!("expected transformed notefield camera");
+        };
+        let point = test_transform_point(*view_proj, [0.0, -20.0]);
+        assert!((point[0] - 10.0).abs() <= 0.000_1);
+        assert!((point[1] + 20.0).abs() <= 0.000_1);
     }
 
     fn test_joined_lobby(
