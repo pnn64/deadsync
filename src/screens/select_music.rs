@@ -8054,6 +8054,13 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if select_music_menu_blocks_gameplay_arrow(
+        ev.action,
+        config::get().only_dedicated_menu_buttons,
+    ) {
+        return ScreenAction::None;
+    }
+
     let dir = overlay_nav_dir(ev.action);
     if let Some(dir) = dir {
         if !ev.pressed {
@@ -8118,6 +8125,14 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
             ScreenAction::None
         }
     }
+}
+
+#[inline(always)]
+const fn select_music_menu_blocks_gameplay_arrow(
+    action: VirtualAction,
+    only_dedicated_menu_buttons: bool,
+) -> bool {
+    only_dedicated_menu_buttons && action.is_gameplay_arrow()
 }
 
 fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
@@ -12287,6 +12302,26 @@ mod tests {
             true
         ));
         assert!(!super::direct_lr_blocked_by_dedicated_menu(
+            VirtualAction::p1_left,
+            false
+        ));
+    }
+
+    #[test]
+    fn only_dedicated_blocks_gameplay_arrows_in_select_music_menu() {
+        assert!(super::select_music_menu_blocks_gameplay_arrow(
+            VirtualAction::p1_left,
+            true
+        ));
+        assert!(super::select_music_menu_blocks_gameplay_arrow(
+            VirtualAction::p2_down,
+            true
+        ));
+        assert!(!super::select_music_menu_blocks_gameplay_arrow(
+            VirtualAction::p1_menu_left,
+            true
+        ));
+        assert!(!super::select_music_menu_blocks_gameplay_arrow(
             VirtualAction::p1_left,
             false
         ));
