@@ -2389,6 +2389,52 @@ pub(super) fn read_update_function_nested_tables(
     Ok(out)
 }
 
+pub(super) fn read_global_function_nested_tables(
+    lua: &Lua,
+    table_name: &str,
+    function_names: &[&str],
+    names: &[&str],
+) -> Result<Vec<Table>, String> {
+    let globals = lua.globals();
+    let Some(source) = globals
+        .get::<Option<Table>>(table_name)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(debug) = globals
+        .get::<Option<Table>>("debug")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(getupvalue) = debug
+        .get::<Option<Function>>("getupvalue")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut seen_tables = HashSet::new();
+    let mut seen_functions = HashSet::new();
+    for function_name in function_names {
+        let Some(function) = source
+            .get::<Option<Function>>(*function_name)
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        out.extend(nested_function_named_tables(
+            &getupvalue,
+            &function,
+            names,
+            &mut seen_tables,
+            &mut seen_functions,
+        )?);
+    }
+    Ok(out)
+}
+
 pub(super) fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindow>, String> {
     let globals = lua.globals();
     let mut out = Vec::new();

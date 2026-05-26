@@ -10302,6 +10302,94 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_extracts_xero_aux_overlay_node_eases() {
+    let song_dir = test_dir("xero-aux-overlay-node");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+xero = {}
+local eases = {}
+local nodes = {}
+local target = nil
+
+local function schedule_ease(self)
+    table.insert(eases, self)
+end
+
+local function node(self)
+    table.insert(nodes, {{self[1]}, {}, self[2]})
+end
+
+local function definemod(self)
+    node(self)
+end
+
+local function export(fn, name)
+    local function inner(self)
+        fn(self)
+        return inner
+    end
+    xero[name] = inner
+end
+
+export(schedule_ease, 'ease')
+export(definemod, 'definemod')
+
+local function update(self)
+    if eases[0] then self:x(0) end
+end
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name='Flash',
+        OnCommand=function(self)
+            target = self
+            self:diffuse(1,1,1,1):diffusealpha(0)
+            xero.definemod {'flashalpha', function(a) target:diffusealpha(a) end}
+            xero.ease {4, 1, ease.outQuad, 1, 'flashalpha'}
+        end,
+    },
+    Def.Quad{
+        InitCommand=function(self)
+            self:SetUpdateFunction(update)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Xero Aux Overlay Node"),
+    )
+    .unwrap();
+    let flash_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("Flash"))
+        .expect("test flash actor should compile");
+    assert!(compiled.eases.iter().all(
+        |ease| !matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "flashalpha")
+    ));
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == flash_index
+            && (ease.start - 4.0).abs() <= 0.001
+            && (ease.limit - 1.0).abs() <= 0.001
+            && ease.easing.as_deref() == Some("outQuad")
+            && ease
+                .from
+                .diffuse
+                .is_some_and(|color| (color[3] - 0.0).abs() <= 0.001)
+            && ease
+                .to
+                .diffuse
+                .is_some_and(|color| (color[3] - 1.0).abs() <= 0.001)
+    }));
+}
+
+#[test]
 fn compile_song_lua_reads_table_color_calls_for_overlays() {
     let song_dir = test_dir("overlay-table-colors");
     let entry = song_dir.join("default.lua");
@@ -11475,8 +11563,49 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
     ];
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.info.unsupported_function_eases, 0);
     assert!(compiled.hidden_players[0] || compiled.hidden_players[1]);
     assert!(!compiled.player_actors[0].initial_state.visible);
+    let proxy_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("ProxyOverlay"))
+        .expect("KENPO sample should compile the overlay proxy");
+    let white_flash_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("WhiteFlashSprite"))
+        .expect("KENPO sample should compile the white flash quad");
+    let black_fade_index = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("BlackFadeSprite"))
+        .expect("KENPO sample should compile the black fade quad");
+    assert!(proxy_index < white_flash_index);
+    assert!(white_flash_index < black_fade_index);
+    assert_eq!(
+        compiled.overlays[white_flash_index].initial_state.size,
+        Some([1920.0, 1440.0])
+    );
+    let has_white_flash_ease =
+        |start: f32, limit: f32, from_alpha: f32, to_alpha: f32, easing: &str| {
+            compiled.overlay_eases.iter().any(|ease| {
+                ease.overlay_index == white_flash_index
+                    && (ease.start - start).abs() <= 0.001
+                    && (ease.limit - limit).abs() <= 0.001
+                    && ease.easing.as_deref() == Some(easing)
+                    && ease
+                        .from
+                        .diffuse
+                        .is_some_and(|color| (color[3] - from_alpha).abs() <= 0.001)
+                    && ease
+                        .to
+                        .diffuse
+                        .is_some_and(|color| (color[3] - to_alpha).abs() <= 0.001)
+            })
+        };
+    assert!(has_white_flash_ease(27.0, 1.0, 0.0, 1.0, "linear"));
+    assert!(has_white_flash_ease(28.0, 0.5, 1.0, 0.0, "outExpo"));
     let bg_quad = compiled
         .overlays
         .iter()

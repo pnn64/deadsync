@@ -2559,7 +2559,7 @@ fn song_lua_build_proxy_actor(
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Fill, SizeSpec::Fill],
-            children: Arc::clone(segment),
+            children: song_lua_proxy_source_segment(segment),
             background: None,
             z: 0,
             tint: state.diffuse,
@@ -2577,6 +2577,317 @@ fn song_lua_build_proxy_actor(
         background: None,
         z,
     })
+}
+
+fn song_lua_proxy_source_segment(segment: &Arc<[Actor]>) -> Arc<[Actor]> {
+    if !segment.iter().any(song_lua_proxy_actor_has_z) {
+        return Arc::clone(segment);
+    }
+    Arc::from(song_lua_proxy_local_children(segment.iter().cloned()))
+}
+
+fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
+    match actor {
+        Actor::Sprite { z, .. }
+        | Actor::Text { z, .. }
+        | Actor::Mesh { z, .. }
+        | Actor::TexturedMesh { z, .. } => *z != 0,
+        Actor::Frame { z, children, .. } => {
+            *z != 0 || children.iter().any(song_lua_proxy_actor_has_z)
+        }
+        Actor::SharedFrame { z, children, .. } => {
+            *z != 0 || children.iter().any(song_lua_proxy_actor_has_z)
+        }
+        Actor::Camera { children, .. } => children.iter().any(song_lua_proxy_actor_has_z),
+        Actor::Shadow { child, .. } => song_lua_proxy_actor_has_z(child),
+        Actor::CameraPush { .. } | Actor::CameraPop => false,
+    }
+}
+
+fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
+    match actor {
+        Actor::Sprite { z, .. }
+        | Actor::Text { z, .. }
+        | Actor::Mesh { z, .. }
+        | Actor::TexturedMesh { z, .. }
+        | Actor::Frame { z, .. }
+        | Actor::SharedFrame { z, .. } => *z,
+        Actor::Shadow { child, .. } => song_lua_proxy_actor_z(child),
+        Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
+    }
+}
+
+fn song_lua_proxy_local_children(children: impl Iterator<Item = Actor>) -> Vec<Actor> {
+    let mut children = children.collect::<Vec<_>>();
+    if children
+        .iter()
+        .any(|actor| matches!(actor, Actor::CameraPush { .. } | Actor::CameraPop))
+    {
+        return song_lua_proxy_local_children_with_camera_scopes(children);
+    }
+    children.sort_by_key(song_lua_proxy_actor_z);
+    children
+        .into_iter()
+        .map(song_lua_proxy_local_actor)
+        .collect()
+}
+
+fn song_lua_proxy_local_children_with_camera_scopes(children: Vec<Actor>) -> Vec<Actor> {
+    let mut out = Vec::with_capacity(children.len());
+    let mut run = Vec::new();
+    for actor in children {
+        if matches!(actor, Actor::CameraPush { .. } | Actor::CameraPop) {
+            out.extend(song_lua_proxy_local_children(run.drain(..)));
+            out.push(song_lua_proxy_local_actor(actor));
+        } else {
+            run.push(actor);
+        }
+    }
+    out.extend(song_lua_proxy_local_children(run.drain(..)));
+    out
+}
+
+fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
+    match actor {
+        Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint,
+            glow,
+            cell,
+            grid,
+            uv_rect,
+            visible,
+            flip_x,
+            flip_y,
+            cropleft,
+            cropright,
+            croptop,
+            cropbottom,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
+            blend,
+            mask_source,
+            mask_dest,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+            local_offset,
+            local_offset_rot_sin_cos,
+            texcoordvelocity,
+            animate,
+            state_delay,
+            scale,
+            shadow_len,
+            shadow_color,
+            effect,
+            ..
+        } => Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint,
+            glow,
+            z: 0,
+            cell,
+            grid,
+            uv_rect,
+            visible,
+            flip_x,
+            flip_y,
+            cropleft,
+            cropright,
+            croptop,
+            cropbottom,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
+            blend,
+            mask_source,
+            mask_dest,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+            local_offset,
+            local_offset_rot_sin_cos,
+            texcoordvelocity,
+            animate,
+            state_delay,
+            scale,
+            shadow_len,
+            shadow_color,
+            effect,
+        },
+        Actor::Text {
+            align,
+            offset,
+            local_transform,
+            color,
+            stroke_color,
+            glow,
+            font,
+            content,
+            attributes,
+            align_text,
+            scale,
+            fit_width,
+            fit_height,
+            line_spacing,
+            wrap_width_pixels,
+            max_width,
+            max_height,
+            max_w_pre_zoom,
+            max_h_pre_zoom,
+            jitter,
+            distortion,
+            clip,
+            mask_dest,
+            blend,
+            shadow_len,
+            shadow_color,
+            effect,
+            ..
+        } => Actor::Text {
+            align,
+            offset,
+            local_transform,
+            color,
+            stroke_color,
+            glow,
+            font,
+            content,
+            attributes,
+            align_text,
+            z: 0,
+            scale,
+            fit_width,
+            fit_height,
+            line_spacing,
+            wrap_width_pixels,
+            max_width,
+            max_height,
+            max_w_pre_zoom,
+            max_h_pre_zoom,
+            jitter,
+            distortion,
+            clip,
+            mask_dest,
+            blend,
+            shadow_len,
+            shadow_color,
+            effect,
+        },
+        Actor::Mesh {
+            align,
+            offset,
+            size,
+            vertices,
+            visible,
+            blend,
+            ..
+        } => Actor::Mesh {
+            align,
+            offset,
+            size,
+            vertices,
+            visible,
+            blend,
+            z: 0,
+        },
+        Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            ..
+        } => Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            local_transform,
+            texture,
+            tint,
+            glow,
+            vertices,
+            geom_cache_key,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            depth_test,
+            visible,
+            blend,
+            z: 0,
+        },
+        Actor::Frame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            ..
+        } => Actor::Frame {
+            align,
+            offset,
+            size,
+            children: song_lua_proxy_local_children(children.into_iter()),
+            background,
+            z: 0,
+        },
+        Actor::SharedFrame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            tint,
+            blend,
+            ..
+        } => Actor::SharedFrame {
+            align,
+            offset,
+            size,
+            children: song_lua_proxy_source_segment(&children),
+            background,
+            z: 0,
+            tint,
+            blend,
+        },
+        Actor::Camera {
+            view_proj,
+            children,
+        } => Actor::Camera {
+            view_proj,
+            children: song_lua_proxy_local_children(children.into_iter()),
+        },
+        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
+        Actor::CameraPop => Actor::CameraPop,
+        Actor::Shadow { len, color, child } => Actor::Shadow {
+            len,
+            color,
+            child: Box::new(song_lua_proxy_local_actor(*child)),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -8811,6 +9122,161 @@ mod tests {
             }
             other => panic!("expected frame actor, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_actor_proxy_keeps_source_z_inside_proxy_layer() {
+        let source = vec![Arc::<[Actor]>::from(vec![Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: vec![Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: Vec::new(),
+                background: None,
+                z: 96,
+            }],
+            background: None,
+            z: 83,
+        }])];
+        let actor = song_lua_build_proxy_actor(
+            SongLuaOverlayState::default(),
+            1234,
+            source.as_slice(),
+            640.0,
+            480.0,
+        )
+        .expect("actor proxy should render with a source");
+
+        let Actor::Frame { z, children, .. } = actor else {
+            panic!("expected proxy frame");
+        };
+        assert_eq!(z, 1234);
+        let [Actor::SharedFrame { z, children, .. }] = children.as_slice() else {
+            panic!("expected one shared proxy source");
+        };
+        assert_eq!(*z, 0);
+        let [Actor::Frame { z, children, .. }] = children.as_ref() else {
+            panic!("expected local source frame");
+        };
+        assert_eq!(*z, 0);
+        let [Actor::Frame { z, .. }] = children.as_slice() else {
+            panic!("expected local source child frame");
+        };
+        assert_eq!(*z, 0);
+    }
+
+    #[test]
+    fn song_lua_actor_proxy_preserves_source_z_order_locally() {
+        let mut low = test_source_actor();
+        let mut high = test_source_actor();
+        if let Actor::Frame { z, .. } = &mut low {
+            *z = -20;
+        }
+        if let Actor::Frame { offset, z, .. } = &mut high {
+            *offset = [99.0, 0.0];
+            *z = 20;
+        }
+        let source = vec![Arc::<[Actor]>::from(vec![high, low])];
+        let actor = song_lua_build_proxy_actor(
+            SongLuaOverlayState::default(),
+            1234,
+            source.as_slice(),
+            640.0,
+            480.0,
+        )
+        .expect("actor proxy should render with a source");
+
+        let Actor::Frame { children, .. } = actor else {
+            panic!("expected proxy frame");
+        };
+        let [Actor::SharedFrame { children, .. }] = children.as_slice() else {
+            panic!("expected one shared proxy source");
+        };
+        let [
+            Actor::Frame {
+                offset: first_offset,
+                ..
+            },
+            Actor::Frame {
+                offset: second_offset,
+                z,
+                ..
+            },
+        ] = children.as_ref()
+        else {
+            panic!("expected sorted local source frames");
+        };
+        assert_eq!(*first_offset, [0.0, 0.0]);
+        assert_eq!(*second_offset, [99.0, 0.0]);
+        assert_eq!(*z, 0);
+        assert_eq!(
+            children
+                .iter()
+                .map(|actor| match actor {
+                    Actor::Frame { z, .. } => *z,
+                    other => panic!("expected source frame, got {other:?}"),
+                })
+                .collect::<Vec<_>>(),
+            [0, 0]
+        );
+    }
+
+    #[test]
+    fn song_lua_actor_proxy_keeps_camera_scope_around_sorted_source() {
+        let mut low = test_source_actor();
+        let mut high = test_source_actor();
+        if let Actor::Frame { z, .. } = &mut low {
+            *z = -20;
+        }
+        if let Actor::Frame { offset, z, .. } = &mut high {
+            *offset = [99.0, 0.0];
+            *z = 20;
+        }
+        let source = vec![Arc::<[Actor]>::from(vec![
+            Actor::CameraPush {
+                view_proj: Matrix4::IDENTITY,
+            },
+            high,
+            low,
+            Actor::CameraPop,
+        ])];
+        let actor = song_lua_build_proxy_actor(
+            SongLuaOverlayState::default(),
+            1234,
+            source.as_slice(),
+            640.0,
+            480.0,
+        )
+        .expect("actor proxy should render with a source");
+
+        let Actor::Frame { children, .. } = actor else {
+            panic!("expected proxy frame");
+        };
+        let [Actor::SharedFrame { children, .. }] = children.as_slice() else {
+            panic!("expected one shared proxy source");
+        };
+        let [
+            Actor::CameraPush { .. },
+            Actor::Frame {
+                offset: first_offset,
+                ..
+            },
+            Actor::Frame {
+                offset: second_offset,
+                z,
+                ..
+            },
+            Actor::CameraPop,
+        ] = children.as_ref()
+        else {
+            panic!("expected sorted actors inside original camera scope");
+        };
+        assert_eq!(*first_offset, [0.0, 0.0]);
+        assert_eq!(*second_offset, [99.0, 0.0]);
+        assert_eq!(*z, 0);
     }
 
     #[test]
