@@ -9,6 +9,7 @@ pub mod pane_percentage;
 pub mod pane_qr;
 pub mod pane_stats;
 pub mod pane_timing;
+pub mod pane_timing_arrows;
 mod utils;
 
 pub(crate) use utils::pane_origin_x as test_input_pane_origin_x;
@@ -26,3 +27,4 @@ pub(crate) use pane_percentage::build_pane_percentage_display;
 pub use pane_qr::build_gs_qr_pane;
 pub(crate) use pane_stats::build_stats_pane;
 pub use pane_timing::build_timing_pane;
+pub use pane_timing_arrows::build_timing_arrows_pane;

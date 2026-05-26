@@ -45,6 +45,7 @@ pub struct PlayerStageSummary {
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
     pub timing: TimingStats,
+    pub arrow_timing: crate::game::timing::ArrowTimingStats,
     pub scatter: Vec<ScatterPoint>,
     pub scatter_worst_window_ms: f32,
     pub histogram: HistogramMs,
