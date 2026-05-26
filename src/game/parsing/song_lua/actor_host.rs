@@ -6078,6 +6078,10 @@ pub(super) fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlu
     if candidate.exists() {
         return Ok(candidate);
     }
+    // GetSongDir can be process-relative for AdditionalSongFolders entries.
+    if raw.exists() {
+        return Ok(raw.to_path_buf());
+    }
     Err(mlua::Error::external(format!(
         "script '{}' not found relative to '{}'",
         path,

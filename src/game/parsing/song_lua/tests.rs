@@ -11533,6 +11533,35 @@ fn compile_song_lua_supports_godspeed_sample_if_present() {
 }
 
 #[test]
+fn compile_song_lua_loadfile_accepts_existing_song_dir_relative_path() {
+    let root =
+        PathBuf::from("target").join(format!("song-lua-relative-loadfile-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("lua")).unwrap();
+    fs::write(
+        root.join("lua/default.lua"),
+        r#"
+local path = GAMESTATE:GetCurrentSong():GetSongDir() .. "lua/"
+loadfile(path .. "helper.lua")()
+return Def.ActorFrame {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("lua/helper.lua"),
+        "relative_loadfile_helper_ran = true\n",
+    )
+    .unwrap();
+
+    let entry = root.join("lua/default.lua");
+    compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&root, "Relative Loadfile"),
+    )
+    .expect("loadfile should accept an existing relative path from GetSongDir");
+}
+
+#[test]
 fn compile_song_lua_supports_generated_runtime_modchart() {
     let root = test_dir("generated-runtime-modchart");
     let entry = root.join("default.lua");
