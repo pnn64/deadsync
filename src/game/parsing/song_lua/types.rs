@@ -210,6 +210,22 @@ pub struct SongLuaNoteHideWindow {
     pub end_beat: f32,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaColumnOffsetWindow {
+    pub unit: SongLuaTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaSpanMode,
+    pub player: usize,
+    pub column: usize,
+    pub from_y: f32,
+    pub to_y: f32,
+    pub easing: Option<String>,
+    pub sustain: Option<f32>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CompiledSongLua {
     pub entry_path: PathBuf,
@@ -226,5 +242,6 @@ pub struct CompiledSongLua {
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
     pub note_hides: Vec<SongLuaNoteHideWindow>,
+    pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
     pub info: SongLuaCompileInfo,
 }

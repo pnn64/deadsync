@@ -73,7 +73,8 @@ use self::attacks::{
     refresh_active_attack_masks,
 };
 pub use self::attacks::{
-    SongLuaOverlayEaseWindowRuntime, SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
+    SongLuaColumnOffsetWindowRuntime, SongLuaOverlayEaseWindowRuntime,
+    SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
     active_chart_attack_effects_for_player, effective_accel_effects_for_player,
     effective_appearance_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
@@ -83,9 +84,9 @@ pub use self::attacks::{
 };
 #[cfg(test)]
 use self::attacks::{
-    build_song_lua_constant_windows_for_player, build_song_lua_ease_windows_for_player,
-    build_song_lua_overlay_ease_windows, parse_attack_mods, parse_song_lua_runtime_mods,
-    turn_option_bits,
+    build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
+    build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows, parse_attack_mods,
+    parse_song_lua_runtime_mods, turn_option_bits,
 };
 #[cfg(test)]
 use self::autoplay::live_autoplay_enabled_from_flags;
@@ -3805,6 +3806,7 @@ pub struct State {
     pub song_lua_song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
+    pub song_lua_column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     pub song_lua_sound_paths: Vec<PathBuf>,
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
@@ -6053,6 +6055,7 @@ pub fn init(
         song_lua_song_foreground_events,
         song_lua_hidden_players,
         song_lua_note_hides,
+        song_lua_column_offsets,
         song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
@@ -6456,6 +6459,7 @@ pub fn init(
         song_lua_song_foreground_events,
         song_lua_hidden_players,
         song_lua_note_hides,
+        song_lua_column_offsets,
         song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
@@ -12194,6 +12198,56 @@ return Def.ActorFrame{}
                 .is_some_and(|value| (value + 3.5).abs() <= 0.000_1)
         );
         assert!(super::song_lua_ease_window_value(&windows[0], 4.25).is_none());
+    }
+
+    #[test]
+    fn song_lua_column_offsets_persist_until_next_column_offset() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            column_offsets: vec![
+                crate::game::parsing::song_lua::SongLuaColumnOffsetWindow {
+                    player: 0,
+                    column: 2,
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 0.5,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    from_y: 33.75,
+                    to_y: 0.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaColumnOffsetWindow {
+                    player: 0,
+                    column: 2,
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 2.0,
+                    limit: 0.5,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    from_y: 0.0,
+                    to_y: 33.75,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let windows =
+            super::build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        assert_eq!(windows.len(), 2);
+        assert_eq!(windows[0].sustain_end_second, 2.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
     }
 
     #[test]

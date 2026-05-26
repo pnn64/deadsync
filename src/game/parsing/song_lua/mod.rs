@@ -25,9 +25,9 @@ mod util;
 
 use self::actor_host::{
     actor_overlay_initial_state, actor_tree_has_update_functions, broadcast_song_lua_message,
-    compile_function_action, compile_overlay_function_ease, create_arrow_effects_table,
-    create_dummy_actor, create_top_screen_table, execute_script_file, install_def,
-    install_file_loaders, probe_function_ease_target, read_note_column_zoom_hides,
+    compile_function_action, compile_note_column_pos_function_ease, compile_overlay_function_ease,
+    create_arrow_effects_table, create_dummy_actor, create_top_screen_table, execute_script_file,
+    install_def, install_file_loaders, probe_function_ease_target, read_note_column_zoom_hides,
     read_overlay_actors, read_tracked_compile_actors, read_update_function_actions,
     read_update_function_tables, reset_overlay_capture_tables, reset_tracked_capture_tables,
     run_actor_draw_functions, run_actor_init_commands, run_actor_startup_commands,
@@ -75,9 +75,10 @@ use self::song_tables::{
     format_song_options_text, set_string_method,
 };
 pub use self::types::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaCompileInfo,
-    SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaNoteHideWindow, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
+    SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
+    SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaPlayerContext,
+    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
 };
 use self::util::{
     SONG_LUA_EASING_NAME_KEY, create_owned_string_array, create_string_array, ease_window_cmp,
@@ -745,7 +746,7 @@ pub fn compile_song_lua(
             SongLuaTimeUnit::Beat,
         )?);
         push_song_lua_stage_time(&mut stage_times, "prefix_mods", &mut stage_started);
-        let (eases, overlay_eases, info) = read_eases(
+        let (eases, overlay_eases, column_offsets, info) = read_eases(
             &lua,
             prefix_globals
                 .get::<Option<Table>>("ease")
@@ -756,6 +757,7 @@ pub fn compile_song_lua(
         )?;
         out.eases.extend(eases);
         out.overlay_eases.extend(overlay_eases);
+        out.column_offsets.extend(column_offsets);
         merge_compile_info(&mut out.info, info);
         push_song_lua_stage_time(&mut stage_times, "prefix_eases", &mut stage_started);
         read_actions(
@@ -794,7 +796,7 @@ pub fn compile_song_lua(
             .extend(read_mod_windows(Some(table), SongLuaTimeUnit::Second)?);
     }
     push_song_lua_stage_time(&mut stage_times, "global_mods", &mut stage_started);
-    let (global_eases, global_overlay_eases, global_info) = read_eases(
+    let (global_eases, global_overlay_eases, global_column_offsets, global_info) = read_eases(
         &lua,
         globals
             .get::<Option<Table>>("mods_ease")
@@ -805,6 +807,7 @@ pub fn compile_song_lua(
     )?;
     out.eases.extend(global_eases);
     out.overlay_eases.extend(global_overlay_eases);
+    out.column_offsets.extend(global_column_offsets);
     merge_compile_info(&mut out.info, global_info);
     push_song_lua_stage_time(&mut stage_times, "global_eases", &mut stage_started);
     read_actions(
@@ -2943,15 +2946,22 @@ fn read_eases(
     (
         Vec<SongLuaEaseWindow>,
         Vec<SongLuaOverlayEase>,
+        Vec<SongLuaColumnOffsetWindow>,
         SongLuaCompileInfo,
     ),
     String,
 > {
     let Some(table) = table else {
-        return Ok((Vec::new(), Vec::new(), SongLuaCompileInfo::default()));
+        return Ok((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            SongLuaCompileInfo::default(),
+        ));
     };
     let mut out = Vec::new();
     let mut overlay_eases = Vec::new();
+    let mut column_offsets = Vec::new();
     let mut info = SongLuaCompileInfo::default();
     let trace_started = Instant::now();
     let mut entry_count = 0usize;
@@ -3012,6 +3022,31 @@ fn read_eases(
             ),
             Value::Function(function) => {
                 function_targets += 1;
+                match compile_note_column_pos_function_ease(
+                    lua,
+                    &function,
+                    unit,
+                    start,
+                    limit,
+                    span_mode,
+                    from,
+                    to,
+                    easing.clone(),
+                    sustain,
+                    opt1,
+                    opt2,
+                ) {
+                    Ok(compiled) if !compiled.is_empty() => {
+                        column_offsets.extend(compiled);
+                        continue;
+                    }
+                    Ok(_) => {}
+                    Err(err) => {
+                        debug!(
+                            "Skipping song lua note-column position function ease capture: {err}"
+                        );
+                    }
+                }
                 let probe_started = Instant::now();
                 let (probed_target, probe_methods, probe_actor_ptrs) =
                     probe_function_ease_target(lua, &function).map_err(|err| err.to_string())?;
@@ -3102,7 +3137,7 @@ fn read_eases(
             info.unsupported_function_eases,
         );
     }
-    Ok((out, overlay_eases, info))
+    Ok((out, overlay_eases, column_offsets, info))
 }
 
 fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntry>, String> {

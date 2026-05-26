@@ -780,8 +780,8 @@ fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
     let handler = lua.create_table()?;
     let spline = create_cubic_spline_table(lua)?;
     handler.set("__songlua_spline", spline.clone())?;
-    handler.set("__songlua_spline_mode", "NoteColumnSplineMode_Offset")?;
-    handler.set("__songlua_subtract_song_beat", false)?;
+    handler.set("__songlua_spline_mode", "NoteColumnSplineMode_Disabled")?;
+    handler.set("__songlua_subtract_song_beat", true)?;
     handler.set("__songlua_receptor_t", 0.0_f32)?;
     handler.set("__songlua_beats_per_t", 1.0_f32)?;
     handler.set(
@@ -2630,6 +2630,344 @@ fn push_note_hide_window(
         start_beat,
         end_beat,
     });
+}
+
+struct NoteColumnHandlerSnapshot {
+    handler: Table,
+    spline: Table,
+    mode: Value,
+    subtract_song_beat: Value,
+    receptor_t: Value,
+    beats_per_t: Value,
+    spline_size: Value,
+    spline_points: Value,
+}
+
+struct NoteFieldColumnSnapshot {
+    player_actor: Table,
+    note_field: Option<Table>,
+    columns: Option<Table>,
+    handlers: Vec<NoteColumnHandlerSnapshot>,
+}
+
+#[derive(Clone, Copy)]
+struct NoteColumnPosSample {
+    player: usize,
+    column: usize,
+    y: f32,
+}
+
+pub(super) fn compile_note_column_pos_function_ease(
+    lua: &Lua,
+    function: &Function,
+    unit: SongLuaTimeUnit,
+    start: f32,
+    limit: f32,
+    span_mode: SongLuaSpanMode,
+    from: f32,
+    to: f32,
+    easing: Option<String>,
+    sustain: Option<f32>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> Result<Vec<SongLuaColumnOffsetWindow>, String> {
+    let start_beat = start;
+    let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
+    let from_samples = capture_note_column_pos_samples(lua, function, from, start_beat)?;
+    let to_samples = capture_note_column_pos_samples(lua, function, to, end_beat)?;
+    if from_samples.is_empty() && to_samples.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut keys = Vec::<(usize, usize)>::new();
+    for sample in from_samples.iter().chain(to_samples.iter()) {
+        let key = (sample.player, sample.column);
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.sort_unstable();
+
+    let mut out = Vec::new();
+    for (player, column) in keys {
+        let from_y = note_column_sample_y(&from_samples, player, column);
+        let to_y = note_column_sample_y(&to_samples, player, column);
+        if from_y.abs() <= f32::EPSILON && to_y.abs() <= f32::EPSILON {
+            continue;
+        }
+        out.push(SongLuaColumnOffsetWindow {
+            unit,
+            start,
+            limit,
+            span_mode,
+            player,
+            column,
+            from_y,
+            to_y,
+            easing: easing.clone(),
+            sustain,
+            opt1,
+            opt2,
+        });
+    }
+    Ok(out)
+}
+
+fn capture_note_column_pos_samples(
+    lua: &Lua,
+    function: &Function,
+    value: f32,
+    song_beat: f32,
+) -> Result<Vec<NoteColumnPosSample>, String> {
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
+    let snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
+    let result = function.call::<Value>(value);
+    let samples = read_note_column_pos_samples(lua);
+    restore_note_field_columns(lua, snapshot).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    result.map_err(|err| err.to_string())?;
+    samples
+}
+
+fn note_column_sample_y(samples: &[NoteColumnPosSample], player: usize, column: usize) -> f32 {
+    samples
+        .iter()
+        .find(|sample| sample.player == player && sample.column == column)
+        .map_or(0.0, |sample| sample.y)
+}
+
+fn snapshot_note_field_columns(lua: &Lua) -> mlua::Result<Vec<NoteFieldColumnSnapshot>> {
+    let mut out = Vec::new();
+    let globals = lua.globals();
+    for player in 0..LUA_PLAYERS {
+        let key = if player == 0 {
+            "__songlua_top_screen_player_1"
+        } else {
+            "__songlua_top_screen_player_2"
+        };
+        let Some(player_actor) = globals.get::<Option<Table>>(key)? else {
+            continue;
+        };
+        let note_field =
+            actor_named_children(lua, &player_actor)?.get::<Option<Table>>("NoteField")?;
+        let columns = match &note_field {
+            Some(note_field) => note_field.get::<Option<Table>>("__songlua_note_columns")?,
+            None => None,
+        };
+        let handlers = match &columns {
+            Some(columns) => snapshot_note_column_handlers(lua, columns)?,
+            None => Vec::new(),
+        };
+        out.push(NoteFieldColumnSnapshot {
+            player_actor,
+            note_field,
+            columns,
+            handlers,
+        });
+    }
+    Ok(out)
+}
+
+fn snapshot_note_column_handlers(
+    lua: &Lua,
+    columns: &Table,
+) -> mlua::Result<Vec<NoteColumnHandlerSnapshot>> {
+    let mut out = Vec::new();
+    for column in columns.sequence_values::<Table>() {
+        let column = column?;
+        for key in [
+            "__songlua_pos_handler",
+            "__songlua_rot_handler",
+            "__songlua_zoom_handler",
+        ] {
+            let Some(handler) = column.get::<Option<Table>>(key)? else {
+                continue;
+            };
+            let Some(spline) = handler.get::<Option<Table>>("__songlua_spline")? else {
+                continue;
+            };
+            out.push(NoteColumnHandlerSnapshot {
+                mode: clone_lua_value(lua, handler.get::<Value>("__songlua_spline_mode")?)?,
+                subtract_song_beat: clone_lua_value(
+                    lua,
+                    handler.get::<Value>("__songlua_subtract_song_beat")?,
+                )?,
+                receptor_t: clone_lua_value(lua, handler.get::<Value>("__songlua_receptor_t")?)?,
+                beats_per_t: clone_lua_value(lua, handler.get::<Value>("__songlua_beats_per_t")?)?,
+                spline_size: clone_lua_value(lua, spline.get::<Value>("__songlua_spline_size")?)?,
+                spline_points: clone_lua_value(
+                    lua,
+                    spline.get::<Value>("__songlua_spline_points")?,
+                )?,
+                handler,
+                spline,
+            });
+        }
+    }
+    Ok(out)
+}
+
+fn restore_note_field_columns(
+    lua: &Lua,
+    snapshots: Vec<NoteFieldColumnSnapshot>,
+) -> mlua::Result<()> {
+    for snapshot in snapshots {
+        match snapshot.note_field {
+            Some(note_field) => {
+                actor_children(lua, &snapshot.player_actor)?
+                    .set("NoteField", note_field.clone())?;
+                match snapshot.columns {
+                    Some(columns) => note_field.set("__songlua_note_columns", columns.clone())?,
+                    None => note_field.set("__songlua_note_columns", Value::Nil)?,
+                }
+            }
+            None => {
+                actor_children(lua, &snapshot.player_actor)?.set("NoteField", Value::Nil)?;
+            }
+        }
+        for handler in snapshot.handlers {
+            handler.handler.set("__songlua_spline_mode", handler.mode)?;
+            handler
+                .handler
+                .set("__songlua_subtract_song_beat", handler.subtract_song_beat)?;
+            handler
+                .handler
+                .set("__songlua_receptor_t", handler.receptor_t)?;
+            handler
+                .handler
+                .set("__songlua_beats_per_t", handler.beats_per_t)?;
+            handler
+                .spline
+                .set("__songlua_spline_size", handler.spline_size)?;
+            handler
+                .spline
+                .set("__songlua_spline_points", handler.spline_points)?;
+        }
+    }
+    Ok(())
+}
+
+fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
+    let globals = lua.globals();
+    let mut out = Vec::new();
+    for player in 0..LUA_PLAYERS {
+        let key = if player == 0 {
+            "__songlua_top_screen_player_1"
+        } else {
+            "__songlua_top_screen_player_2"
+        };
+        let Some(player_actor) = globals.get::<Option<Table>>(key)? else {
+            continue;
+        };
+        let Some(note_field) =
+            actor_named_children(lua, &player_actor)?.get::<Option<Table>>("NoteField")?
+        else {
+            continue;
+        };
+        out.push(note_field);
+    }
+    Ok(out)
+}
+
+fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<NoteColumnPosSample>, String> {
+    let mut out = Vec::new();
+    for note_field in note_field_tables(lua).map_err(|err| err.to_string())? {
+        let Some(columns) = note_field
+            .get::<Option<Table>>("__songlua_note_columns")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        for column in columns.sequence_values::<Table>() {
+            let column = column.map_err(|err| err.to_string())?;
+            let Some(player) = column
+                .get::<Option<i64>>("__songlua_player_index")
+                .map_err(|err| err.to_string())?
+                .and_then(|value| usize::try_from(value).ok())
+            else {
+                continue;
+            };
+            let Some(local_col) = column
+                .get::<Option<i64>>("__songlua_column_index")
+                .map_err(|err| err.to_string())?
+                .and_then(|value| usize::try_from(value).ok())
+            else {
+                continue;
+            };
+            let Some(y) = note_column_pos_offset_y(&column)? else {
+                continue;
+            };
+            out.push(NoteColumnPosSample {
+                player,
+                column: local_col,
+                y,
+            });
+        }
+    }
+    Ok(out)
+}
+
+fn note_column_pos_offset_y(column: &Table) -> Result<Option<f32>, String> {
+    const EPS: f32 = 0.001;
+    let Some(handler) = column
+        .get::<Option<Table>>("__songlua_pos_handler")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mode = handler
+        .get::<Option<String>>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
+        return Ok(Some(0.0));
+    }
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
+        return Ok(None);
+    }
+    let Some(spline) = handler
+        .get::<Option<Table>>("__songlua_spline")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let size = spline
+        .get::<Option<i64>>("__songlua_spline_size")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(0);
+    if size == 0 {
+        return Ok(Some(0.0));
+    }
+    let points = spline
+        .get::<Table>("__songlua_spline_points")
+        .map_err(|err| err.to_string())?;
+    let mut y = None::<f32>;
+    for index in 1..=size {
+        let Some(point) = points
+            .raw_get::<Option<Table>>(index)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        let x = point.raw_get::<Value>(1).ok().and_then(read_f32);
+        let point_y = point.raw_get::<Value>(2).ok().and_then(read_f32);
+        let (Some(x), Some(point_y)) = (x, point_y) else {
+            return Ok(None);
+        };
+        if !x.is_finite() || !point_y.is_finite() || x.abs() > EPS {
+            return Ok(None);
+        }
+        if let Some(y) = y {
+            if (point_y - y).abs() > EPS {
+                return Ok(None);
+            }
+        } else {
+            y = Some(point_y);
+        }
+    }
+    Ok(y)
 }
 
 fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {

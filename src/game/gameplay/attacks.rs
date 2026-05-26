@@ -2,8 +2,8 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::note::Note;
 use crate::game::parsing::song_lua::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
+    SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
     SongLuaNoteHideWindow, SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
     SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
     compile_song_lua,
@@ -90,6 +90,19 @@ pub struct SongLuaOverlayEaseWindowRuntime {
 pub struct SongLuaOverlayMessageRuntime {
     pub event_second: f32,
     pub command_index: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongLuaColumnOffsetWindowRuntime {
+    pub column: usize,
+    pub start_second: f32,
+    pub end_second: f32,
+    pub sustain_end_second: f32,
+    pub from_y: f32,
+    pub to_y: f32,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -2045,6 +2058,112 @@ pub(super) fn build_song_lua_ease_windows_for_player(
     (out, unsupported_targets)
 }
 
+fn song_lua_column_sustain_end_second(
+    window: &SongLuaColumnOffsetWindow,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+    end_second: f32,
+) -> f32 {
+    let Some(sustain) = window.sustain else {
+        return end_second;
+    };
+    let sustain_value = match window.span_mode {
+        SongLuaSpanMode::Len => {
+            song_lua_end_value(window.start, window.limit, window.span_mode) + sustain
+        }
+        SongLuaSpanMode::End => sustain,
+    };
+    let sustain_end_second = song_lua_time_to_second(
+        window.unit,
+        sustain_value,
+        timing_player,
+        global_offset_seconds,
+    );
+    if sustain_end_second.is_finite() && sustain_end_second > end_second {
+        sustain_end_second
+    } else {
+        end_second
+    }
+}
+
+fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    for i in 0..out.len() {
+        let window = &out[i];
+        let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+            window.sustain_end_second
+        } else {
+            f32::MAX
+        };
+        let cutoff_second = out
+            .iter()
+            .enumerate()
+            .filter_map(|(j, other)| {
+                if i == j
+                    || other.column != window.column
+                    || !other.start_second.is_finite()
+                    || other.start_second <= window.start_second + SAME_TICK_EPSILON
+                {
+                    None
+                } else {
+                    Some(other.start_second)
+                }
+            })
+            .fold(None::<f32>, |acc, start| {
+                Some(match acc {
+                    Some(current) => current.min(start),
+                    None => start,
+                })
+            });
+        out[i].sustain_end_second =
+            cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
+    }
+}
+
+pub(super) fn build_song_lua_column_offset_windows_for_player(
+    compiled: &CompiledSongLua,
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+) -> Vec<SongLuaColumnOffsetWindowRuntime> {
+    let mut out = Vec::new();
+    for window in &compiled.column_offsets {
+        if window.player != player {
+            continue;
+        }
+        let Some((start_second, end_second)) = song_lua_window_seconds(
+            window.unit,
+            window.start,
+            window.limit,
+            window.span_mode,
+            timing_player,
+            global_offset_seconds,
+        ) else {
+            continue;
+        };
+        let sustain_end_second = song_lua_column_sustain_end_second(
+            window,
+            timing_player,
+            global_offset_seconds,
+            end_second,
+        );
+        out.push(SongLuaColumnOffsetWindowRuntime {
+            column: window.column,
+            start_second,
+            end_second,
+            sustain_end_second,
+            from_y: window.from_y,
+            to_y: window.to_y,
+            easing: window.easing.clone(),
+            opt1: window.opt1,
+            opt2: window.opt2,
+        });
+    }
+    song_lua_extend_column_offset_tails(&mut out);
+    out
+}
+
 #[cfg(test)]
 pub(super) fn build_song_lua_overlay_ease_windows(
     compiled: &CompiledSongLua,
@@ -2584,6 +2703,7 @@ pub(super) fn build_song_lua_runtime_windows(
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
     [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
+    [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     Vec<PathBuf>,
     f32,
     f32,
@@ -2634,6 +2754,8 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut hidden_players = [false; MAX_PLAYERS];
     let mut note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
+    let mut column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
     let mut sound_paths = Vec::new();
     let screen_width = screen_width();
     let screen_height = screen_height();
@@ -2662,6 +2784,7 @@ pub(super) fn build_song_lua_runtime_windows(
             song_foreground_events,
             hidden_players,
             note_hides,
+            column_offsets,
             sound_paths,
             screen_width,
             screen_height,
@@ -2707,6 +2830,7 @@ pub(super) fn build_song_lua_runtime_windows(
                     song_foreground_events,
                     hidden_players,
                     note_hides,
+                    column_offsets,
                     sound_paths,
                     screen_width,
                     screen_height,
@@ -2756,6 +2880,7 @@ pub(super) fn build_song_lua_runtime_windows(
         let mut unsupported_targets = 0usize;
         let mut total_constant = 0usize;
         let mut total_eases = 0usize;
+        let mut total_column_offsets = 0usize;
         for player in 0..num_players {
             let player_global_offset_seconds =
                 machine_global_offset_seconds + player_global_offset_shift_seconds[player];
@@ -2776,11 +2901,19 @@ pub(super) fn build_song_lua_runtime_windows(
             total_constant += constant_windows[player].len();
             total_eases += player_eases.len();
             ease_windows[player] = player_eases;
+            column_offsets[player] = build_song_lua_column_offset_windows_for_player(
+                &compiled,
+                timing_players[player].as_ref(),
+                player,
+                player_global_offset_seconds,
+            );
+            total_column_offsets += column_offsets[player].len();
         }
 
         let runtime_ms = runtime_started.elapsed().as_secs_f64() * 1000.0;
         if total_constant > 0
             || total_eases > 0
+            || total_column_offsets > 0
             || !overlays.is_empty()
             || !overlay_eases.is_empty()
             || !compiled.messages.is_empty()
@@ -2792,10 +2925,11 @@ pub(super) fn build_song_lua_runtime_windows(
             || unsupported_targets > 0
         {
             info!(
-                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, sound_assets={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}, compile_ms={compile_ms:.3}, runtime_ms={runtime_ms:.3}).",
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, column_offsets={}, overlay_eases={}, overlays={}, messages={}, sound_assets={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}, compile_ms={compile_ms:.3}, runtime_ms={runtime_ms:.3}).",
                 song.title,
                 total_constant,
                 total_eases,
+                total_column_offsets,
                 overlay_eases.len(),
                 overlays.len(),
                 compiled.messages.len(),
@@ -2814,6 +2948,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 &hidden_players,
                 total_constant,
                 total_eases,
+                total_column_offsets,
                 unsupported_targets,
             );
         }
@@ -2893,6 +3028,7 @@ pub(super) fn build_song_lua_runtime_windows(
         song_foreground_events,
         hidden_players,
         note_hides,
+        column_offsets,
         sound_paths,
         out_screen_width,
         out_screen_height,
@@ -2907,10 +3043,11 @@ fn log_song_lua_runtime_debug(
     hidden_players: &[bool; MAX_PLAYERS],
     total_constant: usize,
     total_eases: usize,
+    total_column_offsets: usize,
     unsupported_targets: usize,
 ) {
     debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} column_offsets={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
@@ -2918,6 +3055,7 @@ fn log_song_lua_runtime_debug(
         hidden_players,
         total_constant,
         total_eases,
+        total_column_offsets,
         overlay_eases.len(),
         compiled.overlays.len(),
         messages.len(),

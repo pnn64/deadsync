@@ -7976,6 +7976,56 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_captures_column_position_function_eases() {
+    let song_dir = test_dir("column-position-function-eases");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local function bounce_col(v)
+    local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+    local ca = nf:GetColumnActors()[2]
+    local ph = ca:GetPosHandler()
+    ph:SetSplineMode("NoteColumnSplineMode_Offset")
+    ph:SetBeatsPerT(10)
+    local spline = ph:GetSpline()
+    spline:SetSize(2)
+    spline:SetPoint(1, {0, v, 0})
+    spline:SetPoint(2, {0, v, 0.001})
+    spline:Solve()
+end
+
+mods_ease = {
+    {4, 0.5, 33.75, 0, bounce_col, "len", ease.outSine},
+}
+
+return Def.ActorFrame{}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Column Position Function Eases"),
+    )
+    .unwrap();
+
+    assert_eq!(compiled.info.unsupported_function_eases, 0);
+    assert!(compiled.eases.is_empty());
+    assert_eq!(compiled.column_offsets.len(), 1);
+    let window = &compiled.column_offsets[0];
+    assert_eq!(window.player, 0);
+    assert_eq!(window.column, 1);
+    assert_eq!(window.unit, SongLuaTimeUnit::Beat);
+    assert_eq!(window.span_mode, SongLuaSpanMode::Len);
+    assert_eq!(window.start, 4.0);
+    assert_eq!(window.limit, 0.5);
+    assert!((window.from_y - 33.75).abs() <= 0.001);
+    assert!(window.to_y.abs() <= 0.001);
+    assert_eq!(window.easing.as_deref(), Some("outSine"));
+}
+
+#[test]
 fn compile_song_lua_supports_double_style_notefield_columns() {
     let song_dir = test_dir("double-style-notefield-columns");
     let entry = song_dir.join("default.lua");
@@ -11187,6 +11237,51 @@ fn compile_song_lua_supports_cosmic_railroad_sample_if_present() {
     );
     assert_eq!(compiled.info.unsupported_function_eases, 0);
     assert_eq!(compiled.info.unsupported_function_actions, 0);
+}
+
+#[test]
+fn compile_song_lua_captures_riddle_column_bounces_if_present() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("songs/lua-songs/Riddle");
+    let entry = root.join("lua/default.lua");
+    if !entry.is_file() {
+        return;
+    }
+
+    let mut context = SongLuaCompileContext::new(&root, "Riddle");
+    context.style_name = "double".to_string();
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: false,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(1.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert!(!compiled.column_offsets.is_empty());
+    assert!(compiled.column_offsets.iter().any(|window| {
+        window.player == 0
+            && window.column == 7
+            && (window.from_y - 33.75).abs() <= 0.001
+            && window.to_y.abs() <= 0.001
+            && window.easing.as_deref() == Some("outSine")
+    }));
+    assert!(
+        compiled
+            .column_offsets
+            .iter()
+            .any(|window| window.player == 0
+                && window.column == 6
+                && window.from_y.abs() <= 0.001
+                && (window.to_y - 33.75).abs() <= 0.001)
+    );
 }
 
 #[test]

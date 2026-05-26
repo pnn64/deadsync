@@ -11,7 +11,8 @@ use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
     HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION, VisualEffects,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, SongLuaColumnOffsetWindowRuntime,
+    TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
     active_chart_attack_effects_for_player, active_hold_is_engaged,
@@ -20,7 +21,7 @@ use crate::game::gameplay::{
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
     effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
     effective_visual_effects_for_player, receptor_glow_visual_for_col, row_hides_completed_note,
-    scroll_receptor_y,
+    scroll_receptor_y, song_lua_ease_factor,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
@@ -3851,6 +3852,40 @@ fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32
 }
 
 #[inline(always)]
+fn song_lua_column_offset_window_value(
+    window: &SongLuaColumnOffsetWindowRuntime,
+    now: f32,
+) -> Option<f32> {
+    const EPS: f32 = 1.0e-4;
+    if now + EPS < window.start_second || now > window.sustain_end_second + EPS {
+        return None;
+    }
+    if now + EPS >= window.end_second {
+        return Some(window.to_y);
+    }
+    let duration = window.end_second - window.start_second;
+    if duration <= EPS {
+        return Some(window.to_y);
+    }
+    let t = ((now - window.start_second) / duration).clamp(0.0, 1.0);
+    let factor = song_lua_ease_factor(window.easing.as_deref(), t, window.opt1, window.opt2);
+    Some(window.from_y + (window.to_y - window.from_y) * factor)
+}
+
+fn song_lua_column_y_offset(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    local_col: usize,
+    now: f32,
+) -> f32 {
+    windows
+        .iter()
+        .filter(|window| window.column == local_col)
+        .filter_map(|window| song_lua_column_offset_window_value(window, now))
+        .last()
+        .unwrap_or(0.0)
+}
+
+#[inline(always)]
 const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
     // ITG hides mines once they have received any final mine judgment, not
     // only after a hit explosion.
@@ -4035,7 +4070,7 @@ pub fn build_bundles(
         }
         state.column_scroll_dirs[col_start + i]
     });
-    let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
+    let base_column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return receptor_y_normal;
         }
@@ -4046,6 +4081,17 @@ pub fn build_bundles(
             receptor_y_reverse,
             receptor_y_centered,
         )
+    });
+    let current_time_ns = state.current_music_time_visible_ns[player_idx];
+    let current_time = song_time_ns_to_seconds(current_time_ns);
+    let current_beat = state.current_beat_visible[player_idx];
+    let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
+        if i >= num_cols {
+            return base_column_receptor_ys[i];
+        }
+        base_column_receptor_ys[i]
+            + song_lua_column_y_offset(&state.song_lua_column_offsets[player_idx], i, current_time)
+                * field_zoom
     });
 
     let elapsed_screen = state.total_elapsed_in_screen;
@@ -4136,9 +4182,6 @@ pub fn build_bundles(
             let logical = logical_slot_size(slot);
             scale_effect_size(logical, field_zoom, effect_zoom)
         };
-        let current_time_ns = state.current_music_time_visible_ns[player_idx];
-        let current_time = song_time_ns_to_seconds(current_time_ns);
-        let current_beat = state.current_beat_visible[player_idx];
         // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
         // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
         let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns);
@@ -8805,7 +8848,8 @@ mod tests {
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
     use crate::game::gameplay::{
-        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat, VisualEffects,
+        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
+        SongLuaColumnOffsetWindowRuntime, VisualEffects,
     };
     use crate::game::judgment::{
         ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
@@ -9173,6 +9217,29 @@ mod tests {
         assert!(song_lua_hides_note_window(&windows, 2, 44.0));
         assert!(!song_lua_hides_note_window(&windows, 1, 42.0));
         assert!(!song_lua_hides_note_window(&windows, 2, 44.01));
+    }
+
+    #[test]
+    fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
+        let windows = [SongLuaColumnOffsetWindowRuntime {
+            column: 2,
+            start_second: 1.0,
+            end_second: 1.5,
+            sustain_end_second: 3.0,
+            from_y: 33.75,
+            to_y: 0.0,
+            easing: Some("linear".to_string()),
+            opt1: None,
+            opt2: None,
+        }];
+
+        assert!(
+            super::song_lua_column_offset_window_value(&windows[0], 1.25)
+                .is_some_and(|value| (value - 16.875).abs() <= 0.001)
+        );
+        assert!(super::song_lua_column_y_offset(&windows, 2, 2.0).abs() <= 0.001);
+        assert_eq!(super::song_lua_column_y_offset(&windows, 1, 2.0), 0.0);
+        assert_eq!(super::song_lua_column_y_offset(&windows, 2, 3.01), 0.0);
     }
 
     #[test]
