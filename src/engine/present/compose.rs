@@ -2290,7 +2290,7 @@ fn build_actor_recursive<'a>(
                     is_solid,
                     texture_name,
                     texture_key_ptr,
-                    *glow,
+                    mul_rgba(*glow, style.tint),
                     *uv_rect,
                     chosen_cell,
                     chosen_grid,
@@ -2362,7 +2362,7 @@ fn build_actor_recursive<'a>(
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::Mesh {
                     transform,
-                    tint: [1.0; 4],
+                    tint: style.tint,
                     vertices: Arc::clone(vertices),
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
@@ -2422,7 +2422,7 @@ fn build_actor_recursive<'a>(
                 object_type: renderer::ObjectType::TexturedMesh {
                     instance: renderer::TexturedMeshInstanceRaw::new(
                         transform,
-                        *tint,
+                        mul_rgba(*tint, style.tint),
                         *uv_scale,
                         *uv_offset,
                         *uv_tex_shift,
@@ -2454,7 +2454,7 @@ fn build_actor_recursive<'a>(
                     object_type: renderer::ObjectType::TexturedMesh {
                         instance: renderer::TexturedMeshInstanceRaw::new(
                             transform,
-                            *glow,
+                            mul_rgba(*glow, style.tint),
                             *uv_scale,
                             *uv_offset,
                             *uv_tex_shift,
@@ -4360,7 +4360,9 @@ mod tests {
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
         SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
-    use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
+    use crate::engine::present::actors::{
+        Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
+    };
     use crate::engine::present::font::{Font, Glyph};
     use crate::engine::space::Metrics;
     use glam::Mat4 as Matrix4;
@@ -5196,6 +5198,166 @@ mod tests {
             }
             _ => panic!("expected textured-mesh objects"),
         }
+    }
+
+    #[test]
+    fn shared_frame_tint_modulates_mesh() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let mesh = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            vertices: Arc::from(vec![MeshVertex {
+                pos: [0.0, 0.0],
+                color: [0.8, 0.6, 0.4, 0.5],
+            }]),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+        let actors = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from(vec![mesh]),
+            background: None,
+            z: 0,
+            tint: [0.5, 0.25, 0.1, 0.5],
+            blend: None,
+        }];
+        let fonts = HashMap::new();
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        let ObjectType::Mesh { tint, .. } = &render.objects[0].object_type else {
+            panic!("expected mesh object");
+        };
+        assert_eq!(*tint, [0.5, 0.25, 0.1, 0.5]);
+    }
+
+    #[test]
+    fn shared_frame_tint_modulates_textured_mesh() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let mesh = Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            local_transform: Matrix4::IDENTITY,
+            texture: Arc::from("mesh"),
+            tint: [0.8, 0.6, 0.4, 0.5],
+            glow: [0.5, 0.25, 1.0, 0.4],
+            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+            depth_test: false,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+        let actors = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from(vec![mesh]),
+            background: None,
+            z: 0,
+            tint: [0.5, 0.25, 0.1, 0.5],
+            blend: None,
+        }];
+        let fonts = HashMap::new();
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 2);
+        let ObjectType::TexturedMesh { instance: base, .. } = &render.objects[0].object_type else {
+            panic!("expected base textured mesh");
+        };
+        let ObjectType::TexturedMesh { instance: glow, .. } = &render.objects[1].object_type else {
+            panic!("expected glow textured mesh");
+        };
+        assert_eq!(base.tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(glow.tint, [0.25, 0.0625, 0.1, 0.2]);
+    }
+
+    #[test]
+    fn shared_frame_tint_modulates_sprite_glow() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let sprite = Actor::Sprite {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(10.0), SizeSpec::Px(10.0)],
+            source: SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 0.5],
+            glow: [0.5, 0.25, 1.0, 0.4],
+            z: 0,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.0],
+            effect: Default::default(),
+        };
+        let actors = [Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::from(vec![sprite]),
+            background: None,
+            z: 0,
+            tint: [0.5, 0.25, 0.1, 0.5],
+            blend: None,
+        }];
+        let fonts = HashMap::new();
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 2);
+        let ObjectType::Sprite(index) = render.objects[1].object_type else {
+            panic!("expected glow sprite object");
+        };
+        assert_eq!(
+            render.sprite_instances[index as usize].tint,
+            [0.25, 0.0625, 0.1, 0.2]
+        );
     }
 
     #[test]

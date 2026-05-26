@@ -3042,7 +3042,7 @@ fn song_lua_player_layer_z(
 
 fn song_lua_style_capture_actor(
     actor: Actor,
-    tint: [f32; 4],
+    capture_tint: [f32; 4],
     blend: Option<BlendMode>,
     z_shift: i16,
 ) -> Actor {
@@ -3091,8 +3091,8 @@ fn song_lua_style_capture_actor(
             world_z,
             size,
             source,
-            tint: song_lua_capture_tint(actor_tint, tint),
-            glow,
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
+            glow: song_lua_capture_tint(glow, capture_tint),
             z: song_lua_add_z(z, z_shift),
             cell,
             grid,
@@ -3121,7 +3121,7 @@ fn song_lua_style_capture_actor(
             state_delay,
             scale,
             shadow_len,
-            shadow_color: song_lua_capture_tint(shadow_color, tint),
+            shadow_color: song_lua_capture_tint(shadow_color, capture_tint),
             effect,
         },
         Actor::Text {
@@ -3157,9 +3157,9 @@ fn song_lua_style_capture_actor(
             align,
             offset,
             local_transform,
-            color: song_lua_capture_tint(color, tint),
-            stroke_color: stroke_color.map(|color| song_lua_capture_tint(color, tint)),
-            glow,
+            color: song_lua_capture_tint(color, capture_tint),
+            stroke_color: stroke_color.map(|color| song_lua_capture_tint(color, capture_tint)),
+            glow: song_lua_capture_tint(glow, capture_tint),
             font,
             content,
             attributes,
@@ -3180,7 +3180,7 @@ fn song_lua_style_capture_actor(
             mask_dest,
             blend: blend.unwrap_or(actor_blend),
             shadow_len,
-            shadow_color: song_lua_capture_tint(shadow_color, tint),
+            shadow_color: song_lua_capture_tint(shadow_color, capture_tint),
             effect,
         },
         Actor::Mesh {
@@ -3191,15 +3191,32 @@ fn song_lua_style_capture_actor(
             visible,
             blend: actor_blend,
             z,
-        } => Actor::Mesh {
-            align,
-            offset,
-            size,
-            vertices,
-            visible,
-            blend: blend.unwrap_or(actor_blend),
-            z: song_lua_add_z(z, z_shift),
-        },
+        } => {
+            let vertices = if capture_tint == [1.0; 4] {
+                vertices
+            } else {
+                Arc::from(
+                    vertices
+                        .iter()
+                        .copied()
+                        .map(|mut vertex| {
+                            vertex.color = song_lua_capture_tint(vertex.color, capture_tint);
+                            vertex
+                        })
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                )
+            };
+            Actor::Mesh {
+                align,
+                offset,
+                size,
+                vertices,
+                visible,
+                blend: blend.unwrap_or(actor_blend),
+                z: song_lua_add_z(z, z_shift),
+            }
+        }
         Actor::TexturedMesh {
             align,
             offset,
@@ -3207,7 +3224,7 @@ fn song_lua_style_capture_actor(
             size,
             local_transform,
             texture,
-            tint,
+            tint: actor_tint,
             glow,
             vertices,
             geom_cache_key,
@@ -3225,8 +3242,8 @@ fn song_lua_style_capture_actor(
             size,
             local_transform,
             texture,
-            tint,
-            glow,
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
+            glow: song_lua_capture_tint(glow, capture_tint),
             vertices,
             geom_cache_key,
             uv_scale,
@@ -3250,7 +3267,7 @@ fn song_lua_style_capture_actor(
             size,
             children: children
                 .into_iter()
-                .map(|child| song_lua_style_capture_actor(child, tint, blend, z_shift))
+                .map(|child| song_lua_style_capture_actor(child, capture_tint, blend, z_shift))
                 .collect(),
             background,
             z: song_lua_add_z(z, z_shift),
@@ -3271,7 +3288,7 @@ fn song_lua_style_capture_actor(
             children,
             background,
             z: song_lua_add_z(z, z_shift),
-            tint: song_lua_capture_tint(actor_tint, tint),
+            tint: song_lua_capture_tint(actor_tint, capture_tint),
             blend: blend.or(actor_blend),
         },
         Actor::Camera {
@@ -3281,15 +3298,20 @@ fn song_lua_style_capture_actor(
             view_proj,
             children: children
                 .into_iter()
-                .map(|child| song_lua_style_capture_actor(child, tint, blend, z_shift))
+                .map(|child| song_lua_style_capture_actor(child, capture_tint, blend, z_shift))
                 .collect(),
         },
         Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
         Actor::CameraPop => Actor::CameraPop,
         Actor::Shadow { len, color, child } => Actor::Shadow {
             len,
-            color: song_lua_capture_tint(color, tint),
-            child: Box::new(song_lua_style_capture_actor(*child, tint, blend, z_shift)),
+            color: song_lua_capture_tint(color, capture_tint),
+            child: Box::new(song_lua_style_capture_actor(
+                *child,
+                capture_tint,
+                blend,
+                z_shift,
+            )),
         },
     }
 }
@@ -3339,6 +3361,92 @@ fn song_lua_capture_channel_offset(
         Some(name) if name.ends_with('B') => [x, y],
         _ => [0.0, 0.0],
     }
+}
+
+fn song_lua_rgb_aft_channel(state: SongLuaOverlayState) -> Option<usize> {
+    const EPS: f32 = 0.0001;
+    if !state.visible
+        || state.diffuse[3] <= f32::EPSILON
+        || state.blend != SongLuaOverlayBlendMode::Add
+        || (state.vibrate && state.effect_magnitude.iter().any(|value| value.abs() > EPS))
+    {
+        return None;
+    }
+    let [r, g, b, _] = state.diffuse;
+    if r >= 1.0 - EPS && g.abs() <= EPS && b.abs() <= EPS {
+        Some(0)
+    } else if g >= 1.0 - EPS && r.abs() <= EPS && b.abs() <= EPS {
+        Some(1)
+    } else if b >= 1.0 - EPS && r.abs() <= EPS && g.abs() <= EPS {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+fn song_lua_rgb_aft_norm_state(mut state: SongLuaOverlayState) -> SongLuaOverlayState {
+    state.diffuse = [1.0, 1.0, 1.0, state.diffuse[3]];
+    state
+}
+
+fn song_lua_rgb_aft_group_for(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    draw_order: &[usize],
+    index: usize,
+) -> Option<(usize, [usize; 3])> {
+    let overlay = overlays.get(index)?;
+    let SongLuaOverlayKind::AftSprite { capture_name } = &overlay.kind else {
+        return None;
+    };
+    let state = overlay_states.get(index).copied().unwrap_or_default();
+    let channel = song_lua_rgb_aft_channel(state)?;
+    let norm = song_lua_rgb_aft_norm_state(state);
+    let mut group = [usize::MAX; 3];
+    group[channel] = index;
+    for (idx, candidate) in overlays.iter().enumerate() {
+        if idx == index {
+            continue;
+        }
+        let SongLuaOverlayKind::AftSprite {
+            capture_name: candidate_capture,
+        } = &candidate.kind
+        else {
+            continue;
+        };
+        if !candidate_capture.eq_ignore_ascii_case(capture_name) {
+            continue;
+        }
+        let candidate_state = overlay_states.get(idx).copied().unwrap_or_default();
+        let Some(candidate_channel) = song_lua_rgb_aft_channel(candidate_state) else {
+            continue;
+        };
+        if song_lua_rgb_aft_norm_state(candidate_state) != norm {
+            continue;
+        }
+        if group[candidate_channel] != usize::MAX {
+            return None;
+        }
+        group[candidate_channel] = idx;
+    }
+    if group.contains(&usize::MAX) {
+        return None;
+    }
+    let leader = draw_order
+        .iter()
+        .copied()
+        .find(|idx| group.contains(idx))
+        .unwrap_or(index);
+    Some((leader, group))
+}
+
+fn song_lua_combined_rgb_aft_state(mut state: SongLuaOverlayState) -> SongLuaOverlayState {
+    // ITGmania blends the finished AFT texture, not each captured actor.
+    // Three aligned R/G/B additive sprites reconstruct that texture exactly,
+    // so the render-target approximation should keep child blend modes intact.
+    state.diffuse = [1.0, 1.0, 1.0, state.diffuse[3]];
+    state.blend = SongLuaOverlayBlendMode::Alpha;
+    state
 }
 
 fn song_lua_build_capture_actor(
@@ -6497,6 +6605,16 @@ fn push_song_lua_layer_actors(
                     .map(one_song_lua_actor)
             }
             SongLuaOverlayKind::AftSprite { capture_name } => {
+                let overlay_state = if let Some((leader, _)) =
+                    song_lua_rgb_aft_group_for(overlays, overlay_states, order_scratch, idx)
+                {
+                    if leader != idx {
+                        continue;
+                    }
+                    song_lua_combined_rgb_aft_state(overlay_state)
+                } else {
+                    overlay_state
+                };
                 if let Some(capture_index) =
                     song_lua_overlay_capture_index_by_name(overlays, capture_name)
                 {
@@ -8267,6 +8385,20 @@ mod tests {
         }
     }
 
+    fn test_rgb_aft_overlay(
+        name: &str,
+        capture_name: &str,
+        diffuse: [f32; 4],
+    ) -> SongLuaOverlayActor {
+        let mut overlay = test_aft_overlay(capture_name, true);
+        overlay.name = Some(name.to_string());
+        overlay.initial_state.x = screen_width() * 0.5;
+        overlay.initial_state.y = screen_height() * 0.5;
+        overlay.initial_state.diffuse = diffuse;
+        overlay.initial_state.blend = SongLuaOverlayBlendMode::Add;
+        overlay
+    }
+
     fn test_source_actor() -> Actor {
         Actor::Frame {
             align: [0.0, 0.0],
@@ -8679,6 +8811,359 @@ mod tests {
             }
             other => panic!("expected frame actor, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_capture_style_tints_sprite_glow() {
+        let actor = Actor::Sprite {
+            align: [0.5, 0.5],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(16.0), SizeSpec::Px(16.0)],
+            source: SpriteSource::Solid,
+            tint: [0.8, 0.6, 0.4, 0.5],
+            glow: [0.5, 0.25, 1.0, 0.4],
+            z: 2,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.2, 0.4, 0.6, 0.5],
+            effect: EffectState::default(),
+        };
+
+        let styled =
+            song_lua_style_capture_actor(actor, [0.5, 0.25, 0.1, 0.5], Some(BlendMode::Add), 7);
+
+        let Actor::Sprite {
+            tint,
+            glow,
+            shadow_color,
+            blend,
+            z,
+            ..
+        } = styled
+        else {
+            panic!("expected sprite actor");
+        };
+        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(glow, [0.25, 0.0625, 0.1, 0.2]);
+        assert_eq!(shadow_color, [0.1, 0.1, 0.060000002, 0.25]);
+        assert_eq!(blend, BlendMode::Add);
+        assert_eq!(z, 9);
+    }
+
+    #[test]
+    fn song_lua_capture_style_tints_mesh_vertices() {
+        let actor = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            vertices: Arc::from(vec![MeshVertex {
+                pos: [0.0, 0.0],
+                color: [0.8, 0.6, 0.4, 0.5],
+            }]),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 3,
+        };
+
+        let styled = song_lua_style_capture_actor(actor, [0.5, 0.25, 0.1, 0.5], None, 4);
+
+        let Actor::Mesh {
+            vertices, blend, z, ..
+        } = styled
+        else {
+            panic!("expected mesh actor");
+        };
+        assert_eq!(vertices[0].color, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(blend, BlendMode::Alpha);
+        assert_eq!(z, 7);
+    }
+
+    #[test]
+    fn song_lua_capture_style_tints_textured_mesh() {
+        let actor = Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
+            local_transform: Matrix4::IDENTITY,
+            texture: Arc::from("mesh"),
+            tint: [0.8, 0.6, 0.4, 0.5],
+            glow: [0.5, 0.25, 1.0, 0.4],
+            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+            depth_test: false,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 3,
+        };
+
+        let styled = song_lua_style_capture_actor(actor, [0.5, 0.25, 0.1, 0.5], None, 4);
+
+        let Actor::TexturedMesh {
+            tint,
+            glow,
+            blend,
+            z,
+            ..
+        } = styled
+        else {
+            panic!("expected textured mesh actor");
+        };
+        assert_eq!(tint, [0.4, 0.15, 0.040000003, 0.25]);
+        assert_eq!(glow, [0.25, 0.0625, 0.1, 0.2]);
+        assert_eq!(blend, BlendMode::Alpha);
+        assert_eq!(z, 7);
+    }
+
+    #[test]
+    fn song_lua_coincident_rgb_aft_uses_one_internal_blend_capture() {
+        let overlays = vec![
+            test_capture_overlay("CaptureAFT"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]),
+            test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]),
+            test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut out = Vec::new();
+        let mut order_scratch = Vec::new();
+        let mut capture_states = Vec::new();
+        let mut capture_order_scratch = Vec::new();
+
+        push_song_lua_layer_actors(
+            &mut out,
+            &overlays,
+            &mut order_cache,
+            &overlay_states,
+            &overlay_states,
+            SongLuaOverlayState::default(),
+            &proxy_sources,
+            &AssetManager::new(),
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+            &mut order_scratch,
+            &mut capture_states,
+            &mut capture_order_scratch,
+        );
+
+        assert_eq!(out.len(), 1);
+        let Actor::Frame { children, .. } = &out[0] else {
+            panic!("expected combined AFT frame");
+        };
+        let [Actor::Frame { children, .. }] = children.as_slice() else {
+            panic!("expected captured proxy frame");
+        };
+        let [Actor::SharedFrame { blend, tint, .. }] = children.as_slice() else {
+            panic!("expected captured source frame");
+        };
+        assert_eq!(*blend, Some(BlendMode::Alpha));
+        assert_eq!(*tint, [1.0; 4]);
+    }
+
+    #[test]
+    fn song_lua_rgb_aft_keeps_split_channels_when_vibrating() {
+        let mut red = test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]);
+        red.initial_state.vibrate = true;
+        red.initial_state.effect_magnitude = [10.0, 10.0, 10.0];
+        let overlays = vec![
+            test_capture_overlay("CaptureAFT"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            red,
+            test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]),
+            test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut out = Vec::new();
+        let mut order_scratch = Vec::new();
+        let mut capture_states = Vec::new();
+        let mut capture_order_scratch = Vec::new();
+
+        push_song_lua_layer_actors(
+            &mut out,
+            &overlays,
+            &mut order_cache,
+            &overlay_states,
+            &overlay_states,
+            SongLuaOverlayState::default(),
+            &proxy_sources,
+            &AssetManager::new(),
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+            &mut order_scratch,
+            &mut capture_states,
+            &mut capture_order_scratch,
+        );
+
+        assert_eq!(out.len(), 3);
+    }
+
+    #[test]
+    fn song_lua_rgb_aft_keeps_zero_magnitude_vibrate_combined() {
+        let mut red = test_rgb_aft_overlay("AFTSpriteR", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]);
+        red.initial_state.vibrate = true;
+        let mut green = test_rgb_aft_overlay("AFTSpriteG", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]);
+        green.initial_state.vibrate = true;
+        let mut blue = test_rgb_aft_overlay("AFTSpriteB", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]);
+        blue.initial_state.vibrate = true;
+        let overlays = vec![
+            test_capture_overlay("CaptureAFT"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+            red,
+            green,
+            blue,
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let source = vec![Arc::<[Actor]>::from(vec![test_source_actor()])];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut out = Vec::new();
+        let mut order_scratch = Vec::new();
+        let mut capture_states = Vec::new();
+        let mut capture_order_scratch = Vec::new();
+
+        push_song_lua_layer_actors(
+            &mut out,
+            &overlays,
+            &mut order_cache,
+            &overlay_states,
+            &overlay_states,
+            SongLuaOverlayState::default(),
+            &proxy_sources,
+            &AssetManager::new(),
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+            &mut order_scratch,
+            &mut capture_states,
+            &mut capture_order_scratch,
+        );
+
+        assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn song_lua_kenpo_rgb_aft_initial_state_combines_if_present() {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let Some(root) = [
+            manifest.join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+            manifest.join("songs/ITL Online 2026/[11] KENPO SAITO (DX) [Scrypts]"),
+            manifest.join("songs/lua-songs/[11] KENPO SAITO (DX) [Scrypts]"),
+        ]
+        .into_iter()
+        .find(|root| root.join("template/main.lua").is_file()) else {
+            return;
+        };
+        let entry = root.join("template/main.lua");
+        let mut context =
+            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
+        context.style_name = "double".to_string();
+        let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
+        let states = compiled
+            .overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let mut order_cache = song_lua_overlay_order_cache_from(&compiled.overlays, &[]);
+        let mut order = Vec::new();
+        song_lua_overlay_order_into(
+            &compiled.overlays,
+            &states,
+            &mut order_cache,
+            None,
+            &mut order,
+        );
+        let red_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("AFTSpriteR"))
+            .expect("KENPO sample should compile AFTSpriteR");
+
+        let Some((leader, group)) =
+            song_lua_rgb_aft_group_for(&compiled.overlays, &states, &order, red_index)
+        else {
+            panic!("KENPO initial RGB AFT state should combine before rgbsplit");
+        };
+
+        assert!(group.contains(&leader));
     }
 
     #[test]

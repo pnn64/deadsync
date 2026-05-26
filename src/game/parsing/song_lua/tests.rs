@@ -11476,6 +11476,14 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(compiled.hidden_players[0] || compiled.hidden_players[1]);
+    assert!(!compiled.player_actors[0].initial_state.visible);
+    let bg_quad = compiled
+        .overlays
+        .iter()
+        .find(|overlay| overlay.name.as_deref() == Some("BGQuad"))
+        .expect("KENPO sample should compile the black AFT backing quad");
+    assert_eq!(bg_quad.initial_state.diffuse, [0.0, 0.0, 0.0, 1.0]);
+    assert!(bg_quad.initial_state.size.is_some());
     assert!(
         compiled
             .overlays
@@ -11488,6 +11496,20 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             .iter()
             .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
     );
+    for (name, diffuse) in [
+        ("AFTSpriteR", [1.0, 0.0, 0.0, 1.0]),
+        ("AFTSpriteG", [0.0, 1.0, 0.0, 1.0]),
+        ("AFTSpriteB", [0.0, 0.0, 1.0, 1.0]),
+    ] {
+        let overlay = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("KENPO sample should compile {name}"));
+        assert_eq!(overlay.initial_state.diffuse, diffuse);
+        assert_eq!(overlay.initial_state.blend, SongLuaOverlayBlendMode::Add);
+        assert_eq!(overlay.initial_state.effect_magnitude, [0.0; 3]);
+    }
 }
 
 #[test]
