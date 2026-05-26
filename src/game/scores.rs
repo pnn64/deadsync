@@ -61,11 +61,12 @@ pub(crate) use submit_status::{
 
 // Lua charts stay blocked from online submit unless their effects have been
 // verified closely enough to match ITGmania for scoring purposes.
-const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 4] = [
+const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 5] = [
     "d5bd4dd7224f68ff", // Spooky (SM)
     "c9e45c5e534f058d", // media offline (SM)
     "596b42ed8317d9b8", // Godspeed (SX)
     "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
+    "a147dd828cd08fc7", // Riddle (DX)
 ];
 
 pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
@@ -5559,6 +5560,7 @@ mod tests {
         assert!(lua_chart_submit_allowed("c9e45c5e534f058d"));
         assert!(lua_chart_submit_allowed("596b42ed8317d9b8"));
         assert!(lua_chart_submit_allowed("3926ec3e5f1aaede"));
+        assert!(lua_chart_submit_allowed("a147dd828cd08fc7"));
         assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
@@ -5567,6 +5569,7 @@ mod tests {
         assert!(lua_submit_allowed(true, "c9e45c5e534f058d"));
         assert!(lua_submit_allowed(true, "596b42ed8317d9b8"));
         assert!(lua_submit_allowed(true, "3926ec3e5f1aaede"));
+        assert!(lua_submit_allowed(true, "a147dd828cd08fc7"));
     }
 
     #[test]
