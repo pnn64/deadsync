@@ -45,18 +45,23 @@ struct ChartAttackWindow {
 #[derive(Clone, Copy, Debug)]
 pub(super) struct AttackMaskWindow {
     pub(super) start_second: f32,
+    pub(super) end_second: f32,
     pub(super) sustain_end_second: f32,
+    pub(super) persist_after_end: bool,
     pub(super) clear_all: bool,
     pub(super) chart: ChartAttackEffects,
     pub(super) accel: AccelOverrides,
     pub(super) visual: VisualOverrides,
+    pub(super) visual_speed: VisualOverrides,
     pub(super) appearance: AppearanceOverrides,
     pub(super) appearance_speed: AppearanceOverrides,
     pub(super) visibility: VisibilityOverrides,
     pub(super) scroll: ScrollOverrides,
+    pub(super) scroll_approach_speed: ScrollOverrides,
     pub(super) perspective: PerspectiveOverrides,
     pub(super) scroll_speed: Option<ScrollSpeedSetting>,
     pub(super) mini_percent: Option<f32>,
+    pub(super) mini_speed: Option<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -198,13 +203,16 @@ pub(super) struct ParsedAttackMods {
     pub(super) clear_all: bool,
     pub(super) accel: AccelOverrides,
     pub(super) visual: VisualOverrides,
+    pub(super) visual_speed: VisualOverrides,
     pub(super) appearance: AppearanceOverrides,
     pub(super) appearance_speed: AppearanceOverrides,
     pub(super) visibility: VisibilityOverrides,
     pub(super) scroll: ScrollOverrides,
+    pub(super) scroll_approach_speed: ScrollOverrides,
     pub(super) perspective: PerspectiveOverrides,
     pub(super) scroll_speed: Option<ScrollSpeedSetting>,
     pub(super) mini_percent: Option<f32>,
+    pub(super) mini_speed: Option<f32>,
 }
 
 impl Default for ParsedAttackMods {
@@ -217,13 +225,16 @@ impl Default for ParsedAttackMods {
             clear_all: false,
             accel: AccelOverrides::default(),
             visual: VisualOverrides::default(),
+            visual_speed: VisualOverrides::default(),
             appearance: AppearanceOverrides::default(),
             appearance_speed: AppearanceOverrides::default(),
             visibility: VisibilityOverrides::default(),
             scroll: ScrollOverrides::default(),
+            scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
             scroll_speed: None,
             mini_percent: None,
+            mini_speed: None,
         }
     }
 }
@@ -419,6 +430,19 @@ fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
     parse_attack_percent_prefix(token)
 }
 
+#[inline(always)]
+fn set_approached_mod(
+    value: &mut Option<f32>,
+    value_speed: &mut Option<f32>,
+    target: Option<f32>,
+    approach_speed: f32,
+) {
+    *value = target;
+    if target.is_some() {
+        *value_speed = Some(approach_speed.max(0.0));
+    }
+}
+
 fn apply_runtime_mod(
     out: &mut ParsedAttackMods,
     key: &str,
@@ -426,23 +450,48 @@ fn apply_runtime_mod(
     approach_speed: f32,
 ) {
     if let Some(col) = mod_column_suffix(key, "bumpy") {
-        out.visual.bumpy_cols[col] = attack_level(percent_value);
+        set_approached_mod(
+            &mut out.visual.bumpy_cols[col],
+            &mut out.visual_speed.bumpy_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
         return;
     }
     if let Some(col) = mod_column_suffix(key, "tiny") {
-        out.visual.tiny_cols[col] = attack_level(percent_value);
+        set_approached_mod(
+            &mut out.visual.tiny_cols[col],
+            &mut out.visual_speed.tiny_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
         return;
     }
     if let Some(col) = mod_column_suffix(key, "movex") {
-        out.visual.move_x_cols[col] = attack_level(percent_value);
+        set_approached_mod(
+            &mut out.visual.move_x_cols[col],
+            &mut out.visual_speed.move_x_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
         return;
     }
     if let Some(col) = mod_column_suffix(key, "movey") {
-        out.visual.move_y_cols[col] = attack_level(percent_value);
+        set_approached_mod(
+            &mut out.visual.move_y_cols[col],
+            &mut out.visual_speed.move_y_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
         return;
     }
     if let Some(col) = mod_column_suffix(key, "confusionoffset") {
-        out.visual.confusion_offset_cols[col] = attack_level(percent_value);
+        set_approached_mod(
+            &mut out.visual.confusion_offset_cols[col],
+            &mut out.visual_speed.confusion_offset_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
         return;
     }
 
@@ -476,37 +525,148 @@ fn apply_runtime_mod(
         "shuffle" => out.turn_option = profile::TurnOption::Shuffle,
         "supershuffle" | "blender" => out.turn_option = profile::TurnOption::Blender,
         "hypershuffle" => out.turn_option = profile::TurnOption::Random,
-        "reverse" => out.scroll.reverse = attack_level(percent_value),
-        "split" => out.scroll.split = attack_level(percent_value),
-        "alternate" => out.scroll.alternate = attack_level(percent_value),
-        "cross" => out.scroll.cross = attack_level(percent_value),
-        "centered" => out.scroll.centered = attack_level(percent_value),
+        "reverse" => set_approached_mod(
+            &mut out.scroll.reverse,
+            &mut out.scroll_approach_speed.reverse,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "split" => set_approached_mod(
+            &mut out.scroll.split,
+            &mut out.scroll_approach_speed.split,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "alternate" => set_approached_mod(
+            &mut out.scroll.alternate,
+            &mut out.scroll_approach_speed.alternate,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "cross" => set_approached_mod(
+            &mut out.scroll.cross,
+            &mut out.scroll_approach_speed.cross,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "centered" => set_approached_mod(
+            &mut out.scroll.centered,
+            &mut out.scroll_approach_speed.centered,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "boost" => out.accel.boost = attack_level(percent_value),
         "brake" => out.accel.brake = attack_level(percent_value),
         "wave" => out.accel.wave = attack_level(percent_value),
         "expand" => out.accel.expand = attack_level(percent_value),
         "boomerang" => out.accel.boomerang = attack_level(percent_value),
-        "drunk" => out.visual.drunk = attack_level(percent_value),
-        "dizzy" => out.visual.dizzy = attack_level(percent_value),
-        "confusion" => out.visual.confusion = attack_level(percent_value),
-        "confusionoffset" => out.visual.confusion_offset = attack_level(percent_value),
-        "flip" => out.visual.flip = attack_level(percent_value),
-        "invert" => out.visual.invert = attack_level(percent_value),
-        "tornado" => out.visual.tornado = attack_level(percent_value),
-        "tipsy" => out.visual.tipsy = attack_level(percent_value),
-        "bumpy" => out.visual.bumpy = attack_level(percent_value),
-        "bumpyoffset" => out.visual.bumpy_offset = attack_level(percent_value),
-        "bumpyperiod" => out.visual.bumpy_period = attack_level(percent_value),
-        "pulseinner" => out.visual.pulse_inner = attack_level(percent_value),
-        "pulseouter" => out.visual.pulse_outer = attack_level(percent_value),
-        "pulseperiod" => out.visual.pulse_period = attack_level(percent_value),
-        "pulseoffset" => out.visual.pulse_offset = attack_level(percent_value),
-        "beat" => out.visual.beat = attack_level(percent_value),
-        "tiny" => out.visual.tiny = attack_level(percent_value),
+        "drunk" => set_approached_mod(
+            &mut out.visual.drunk,
+            &mut out.visual_speed.drunk,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "dizzy" => set_approached_mod(
+            &mut out.visual.dizzy,
+            &mut out.visual_speed.dizzy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusion" => set_approached_mod(
+            &mut out.visual.confusion,
+            &mut out.visual_speed.confusion,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusionoffset" => set_approached_mod(
+            &mut out.visual.confusion_offset,
+            &mut out.visual_speed.confusion_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "flip" => set_approached_mod(
+            &mut out.visual.flip,
+            &mut out.visual_speed.flip,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "invert" => set_approached_mod(
+            &mut out.visual.invert,
+            &mut out.visual_speed.invert,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornado" => set_approached_mod(
+            &mut out.visual.tornado,
+            &mut out.visual_speed.tornado,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tipsy" => set_approached_mod(
+            &mut out.visual.tipsy,
+            &mut out.visual_speed.tipsy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpy" => set_approached_mod(
+            &mut out.visual.bumpy,
+            &mut out.visual_speed.bumpy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyoffset" => set_approached_mod(
+            &mut out.visual.bumpy_offset,
+            &mut out.visual_speed.bumpy_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyperiod" => set_approached_mod(
+            &mut out.visual.bumpy_period,
+            &mut out.visual_speed.bumpy_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseinner" => set_approached_mod(
+            &mut out.visual.pulse_inner,
+            &mut out.visual_speed.pulse_inner,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseouter" => set_approached_mod(
+            &mut out.visual.pulse_outer,
+            &mut out.visual_speed.pulse_outer,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseperiod" => set_approached_mod(
+            &mut out.visual.pulse_period,
+            &mut out.visual_speed.pulse_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseoffset" => set_approached_mod(
+            &mut out.visual.pulse_offset,
+            &mut out.visual_speed.pulse_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beat" => set_approached_mod(
+            &mut out.visual.beat,
+            &mut out.visual_speed.beat,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tiny" => set_approached_mod(
+            &mut out.visual.tiny,
+            &mut out.visual_speed.tiny,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "mini" => {
             let mini = percent_value.unwrap_or(100.0);
             if mini.is_finite() {
                 out.mini_percent = Some(mini);
+                out.mini_speed = Some(approach_speed.max(0.0));
             }
         }
         "hidden" => {
@@ -785,7 +945,9 @@ pub(super) fn build_attack_mask_windows_for_player(
         }
         windows.push(AttackMaskWindow {
             start_second,
+            end_second,
             sustain_end_second: end_second,
+            persist_after_end: false,
             clear_all: mods.clear_all,
             chart: ChartAttackEffects {
                 insert_mask: mods.insert_mask,
@@ -795,13 +957,16 @@ pub(super) fn build_attack_mask_windows_for_player(
             },
             accel: mods.accel,
             visual: mods.visual,
+            visual_speed: mods.visual_speed,
             appearance: mods.appearance,
             appearance_speed: mods.appearance_speed,
             visibility: mods.visibility,
             scroll: mods.scroll,
+            scroll_approach_speed: mods.scroll_approach_speed,
             perspective: mods.perspective,
             scroll_speed: mods.scroll_speed,
             mini_percent: mods.mini_percent,
+            mini_speed: mods.mini_speed,
         });
     }
     windows
@@ -922,18 +1087,23 @@ fn build_song_lua_constant_window(
     }
     Some(AttackMaskWindow {
         start_second,
+        end_second,
         sustain_end_second: f32::MAX,
+        persist_after_end: true,
         clear_all: mods.clear_all,
         chart: ChartAttackEffects::default(),
         accel: mods.accel,
         visual: mods.visual,
+        visual_speed: mods.visual_speed,
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
         scroll: mods.scroll,
+        scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
+        mini_speed: mods.mini_speed,
     })
 }
 
@@ -3964,6 +4134,292 @@ fn approach_visual_overrides_to_base(
 }
 
 #[inline(always)]
+fn approach_attack_value(
+    current: &mut Option<f32>,
+    target: Option<f32>,
+    base: f32,
+    speed: Option<f32>,
+    delta_time: f32,
+    unit_scale: f32,
+) {
+    let Some(target) = target.filter(|value| value.is_finite()) else {
+        *current = None;
+        return;
+    };
+    if delta_time <= f32::EPSILON {
+        *current = Some(target);
+        return;
+    }
+    let Some(speed) = speed.filter(|value| value.is_finite()) else {
+        *current = Some(target);
+        return;
+    };
+    let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
+    if step <= f32::EPSILON {
+        return;
+    }
+    let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
+    super::approach_f32(&mut value, target, step);
+    *current = Some(value);
+}
+
+#[inline(always)]
+fn approach_attack_cols(
+    current: &mut [Option<f32>; MAX_COLS],
+    target: [Option<f32>; MAX_COLS],
+    base: [f32; MAX_COLS],
+    speed: [Option<f32>; MAX_COLS],
+    delta_time: f32,
+) {
+    for (((current, target), base), speed) in current.iter_mut().zip(target).zip(base).zip(speed) {
+        approach_attack_value(current, target, base, speed, delta_time, 1.0);
+    }
+}
+
+fn approach_visual_overrides_to_target(
+    current: &mut VisualOverrides,
+    target: VisualOverrides,
+    speed: VisualOverrides,
+    base: VisualEffects,
+    delta_time: f32,
+) {
+    approach_attack_value(
+        &mut current.drunk,
+        target.drunk,
+        base.drunk,
+        speed.drunk,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.dizzy,
+        target.dizzy,
+        base.dizzy,
+        speed.dizzy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion,
+        target.confusion,
+        base.confusion,
+        speed.confusion,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_offset,
+        target.confusion_offset,
+        base.confusion_offset,
+        speed.confusion_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_cols(
+        &mut current.confusion_offset_cols,
+        target.confusion_offset_cols,
+        base.confusion_offset_cols,
+        speed.confusion_offset_cols,
+        delta_time,
+    );
+    approach_attack_value(
+        &mut current.flip,
+        target.flip,
+        base.flip,
+        speed.flip,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.invert,
+        target.invert,
+        base.invert,
+        speed.invert,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado,
+        target.tornado,
+        base.tornado,
+        speed.tornado,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tipsy,
+        target.tipsy,
+        base.tipsy,
+        speed.tipsy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tiny,
+        target.tiny,
+        base.tiny,
+        speed.tiny,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy,
+        target.bumpy,
+        base.bumpy,
+        speed.bumpy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_offset,
+        target.bumpy_offset,
+        base.bumpy_offset,
+        speed.bumpy_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_period,
+        target.bumpy_period,
+        base.bumpy_period,
+        speed.bumpy_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_cols(
+        &mut current.bumpy_cols,
+        target.bumpy_cols,
+        base.bumpy_cols,
+        speed.bumpy_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.tiny_cols,
+        target.tiny_cols,
+        base.tiny_cols,
+        speed.tiny_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.move_x_cols,
+        target.move_x_cols,
+        base.move_x_cols,
+        speed.move_x_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.move_y_cols,
+        target.move_y_cols,
+        base.move_y_cols,
+        speed.move_y_cols,
+        delta_time,
+    );
+    approach_attack_value(
+        &mut current.pulse_inner,
+        target.pulse_inner,
+        base.pulse_inner,
+        speed.pulse_inner,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_outer,
+        target.pulse_outer,
+        base.pulse_outer,
+        speed.pulse_outer,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_period,
+        target.pulse_period,
+        base.pulse_period,
+        speed.pulse_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_offset,
+        target.pulse_offset,
+        base.pulse_offset,
+        speed.pulse_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat,
+        target.beat,
+        base.beat,
+        speed.beat,
+        delta_time,
+        1.0,
+    );
+}
+
+fn approach_scroll_overrides_to_target(
+    current: &mut ScrollOverrides,
+    target: ScrollOverrides,
+    speed: ScrollOverrides,
+    base: ScrollEffects,
+    delta_time: f32,
+) {
+    approach_attack_value(
+        &mut current.reverse,
+        target.reverse,
+        base.reverse,
+        speed.reverse,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.split,
+        target.split,
+        base.split,
+        speed.split,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.alternate,
+        target.alternate,
+        base.alternate,
+        speed.alternate,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.cross,
+        target.cross,
+        base.cross,
+        speed.cross,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.centered,
+        target.centered,
+        base.centered,
+        speed.centered,
+        delta_time,
+        1.0,
+    );
+}
+
+#[inline(always)]
+fn approach_mini_percent_to_target(
+    current: &mut Option<f32>,
+    target: Option<f32>,
+    base: f32,
+    speed: Option<f32>,
+    delta_time: f32,
+) {
+    approach_attack_value(current, target, base, speed, delta_time, 100.0);
+    if let Some(value) = current.as_mut() {
+        *value = value.clamp(-100.0, 150.0);
+    }
+}
+
+#[inline(always)]
 fn base_visual_effects(profile: &profile::Profile) -> VisualEffects {
     VisualEffects::from_mask(profile.visual_effects_active_mask.bits())
 }
@@ -4046,20 +4502,118 @@ fn store_song_lua_player_transforms(
         .unwrap_or(0.0);
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct AttackActiveTargets {
+    clear_all: bool,
+    visual: VisualOverrides,
+    scroll: ScrollOverrides,
+    mini_percent: bool,
+}
+
+#[inline(always)]
+fn mark_visual_target(targets: &mut Option<f32>, value: Option<f32>) {
+    if value.is_some() {
+        *targets = Some(0.0);
+    }
+}
+
+fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
+    mark_visual_target(&mut targets.drunk, visual.drunk);
+    mark_visual_target(&mut targets.dizzy, visual.dizzy);
+    mark_visual_target(&mut targets.confusion, visual.confusion);
+    mark_visual_target(&mut targets.confusion_offset, visual.confusion_offset);
+    for (target, value) in targets
+        .confusion_offset_cols
+        .iter_mut()
+        .zip(visual.confusion_offset_cols)
+    {
+        mark_visual_target(target, value);
+    }
+    mark_visual_target(&mut targets.flip, visual.flip);
+    mark_visual_target(&mut targets.invert, visual.invert);
+    mark_visual_target(&mut targets.tornado, visual.tornado);
+    mark_visual_target(&mut targets.tipsy, visual.tipsy);
+    mark_visual_target(&mut targets.tiny, visual.tiny);
+    mark_visual_target(&mut targets.bumpy, visual.bumpy);
+    mark_visual_target(&mut targets.bumpy_offset, visual.bumpy_offset);
+    mark_visual_target(&mut targets.bumpy_period, visual.bumpy_period);
+    for (target, value) in targets.bumpy_cols.iter_mut().zip(visual.bumpy_cols) {
+        mark_visual_target(target, value);
+    }
+    for (target, value) in targets.tiny_cols.iter_mut().zip(visual.tiny_cols) {
+        mark_visual_target(target, value);
+    }
+    for (target, value) in targets.move_x_cols.iter_mut().zip(visual.move_x_cols) {
+        mark_visual_target(target, value);
+    }
+    for (target, value) in targets.move_y_cols.iter_mut().zip(visual.move_y_cols) {
+        mark_visual_target(target, value);
+    }
+    mark_visual_target(&mut targets.pulse_inner, visual.pulse_inner);
+    mark_visual_target(&mut targets.pulse_outer, visual.pulse_outer);
+    mark_visual_target(&mut targets.pulse_period, visual.pulse_period);
+    mark_visual_target(&mut targets.pulse_offset, visual.pulse_offset);
+    mark_visual_target(&mut targets.beat, visual.beat);
+}
+
+fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
+    mark_visual_target(&mut targets.reverse, scroll.reverse);
+    mark_visual_target(&mut targets.split, scroll.split);
+    mark_visual_target(&mut targets.alternate, scroll.alternate);
+    mark_visual_target(&mut targets.cross, scroll.cross);
+    mark_visual_target(&mut targets.centered, scroll.centered);
+}
+
+fn collect_active_attack_targets(windows: &[AttackMaskWindow], now: f32) -> AttackActiveTargets {
+    let mut targets = AttackActiveTargets::default();
+    for window in windows {
+        if now < window.start_second || now >= window.end_second {
+            continue;
+        }
+        if window.clear_all {
+            targets.clear_all = true;
+        }
+        mark_visual_targets(&mut targets.visual, window.visual);
+        mark_scroll_targets(&mut targets.scroll, window.scroll);
+        if window.mini_percent.is_some() {
+            targets.mini_percent = true;
+        }
+    }
+    targets
+}
+
+#[inline(always)]
+fn persisted_target_allowed(
+    persisted: bool,
+    active_clear_all: bool,
+    active_target: Option<f32>,
+) -> bool {
+    !persisted || (!active_clear_all && active_target.is_none())
+}
+
+#[inline(always)]
+fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
+    !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
+}
+
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
+        let active_targets = collect_active_attack_targets(&state.attack_mask_windows[player], now);
         let mut clear_all = false;
         let mut chart = ChartAttackEffects::default();
         let mut accel = AccelOverrides::default();
         let mut visual = VisualOverrides::default();
+        let mut visual_speed = VisualOverrides::default();
         let mut appearance_target = base_appearance_effects(&state.player_profiles[player]);
         let mut appearance_speed = AppearanceEffects::approach_speeds();
         let mut visibility = VisibilityOverrides::default();
         let mut scroll = ScrollOverrides::default();
+        let mut scroll_approach_speed = ScrollOverrides::default();
         let mut perspective = PerspectiveOverrides::default();
         let mut scroll_speed = None;
         let mut mini_percent = None;
+        let mut mini_speed = None;
         let mut player_x = None;
         let mut player_y = None;
         let mut player_z = None;
@@ -4073,21 +4627,26 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut player_zoom_z = None;
         let mut player_confusion_y_offset = None;
         for window in &state.attack_mask_windows[player] {
+            let persisted = window.persist_after_end && now >= window.end_second;
             if !state.attacks_cleared_for_outro
                 && now >= window.start_second
                 && now < window.sustain_end_second
+                && (now < window.end_second || persisted)
             {
                 if window.clear_all {
                     clear_all = true;
                     accel = AccelOverrides::default();
                     visual = VisualOverrides::default();
+                    visual_speed = VisualOverrides::default();
                     appearance_target = AppearanceEffects::default();
                     appearance_speed = AppearanceEffects::approach_speeds();
                     visibility = VisibilityOverrides::default();
                     scroll = ScrollOverrides::default();
+                    scroll_approach_speed = ScrollOverrides::default();
                     perspective = PerspectiveOverrides::default();
                     scroll_speed = None;
                     mini_percent = None;
+                    mini_speed = None;
                 }
                 chart.insert_mask |= window.chart.insert_mask;
                 chart.remove_mask |= window.chart.remove_mask;
@@ -4108,85 +4667,236 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.accel.boomerang {
                     accel.boomerang = Some(v);
                 }
-                if let Some(v) = window.visual.drunk {
-                    visual.drunk = Some(v);
-                }
-                if let Some(v) = window.visual.dizzy {
-                    visual.dizzy = Some(v);
-                }
-                if let Some(v) = window.visual.confusion {
-                    visual.confusion = Some(v);
-                }
-                if let Some(v) = window.visual.confusion_offset {
-                    visual.confusion_offset = Some(v);
-                }
-                for (dst, src) in visual
-                    .confusion_offset_cols
-                    .iter_mut()
-                    .zip(window.visual.confusion_offset_cols)
+                if let Some(v) = window.visual.drunk
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.drunk,
+                    )
                 {
-                    if src.is_some() {
-                        *dst = src;
+                    visual.drunk = Some(v);
+                    visual_speed.drunk = window.visual_speed.drunk;
+                }
+                if let Some(v) = window.visual.dizzy
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.dizzy,
+                    )
+                {
+                    visual.dizzy = Some(v);
+                    visual_speed.dizzy = window.visual_speed.dizzy;
+                }
+                if let Some(v) = window.visual.confusion
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.confusion,
+                    )
+                {
+                    visual.confusion = Some(v);
+                    visual_speed.confusion = window.visual_speed.confusion;
+                }
+                if let Some(v) = window.visual.confusion_offset
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.confusion_offset,
+                    )
+                {
+                    visual.confusion_offset = Some(v);
+                    visual_speed.confusion_offset = window.visual_speed.confusion_offset;
+                }
+                for col in 0..MAX_COLS {
+                    if let Some(src) = window.visual.confusion_offset_cols[col]
+                        && persisted_target_allowed(
+                            persisted,
+                            active_targets.clear_all,
+                            active_targets.visual.confusion_offset_cols[col],
+                        )
+                    {
+                        visual.confusion_offset_cols[col] = Some(src);
+                        visual_speed.confusion_offset_cols[col] =
+                            window.visual_speed.confusion_offset_cols[col];
                     }
                 }
-                if let Some(v) = window.visual.flip {
+                if let Some(v) = window.visual.flip
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.flip,
+                    )
+                {
                     visual.flip = Some(v);
+                    visual_speed.flip = window.visual_speed.flip;
                 }
-                if let Some(v) = window.visual.invert {
+                if let Some(v) = window.visual.invert
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.invert,
+                    )
+                {
                     visual.invert = Some(v);
+                    visual_speed.invert = window.visual_speed.invert;
                 }
-                if let Some(v) = window.visual.tornado {
+                if let Some(v) = window.visual.tornado
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.tornado,
+                    )
+                {
                     visual.tornado = Some(v);
+                    visual_speed.tornado = window.visual_speed.tornado;
                 }
-                if let Some(v) = window.visual.tipsy {
+                if let Some(v) = window.visual.tipsy
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.tipsy,
+                    )
+                {
                     visual.tipsy = Some(v);
+                    visual_speed.tipsy = window.visual_speed.tipsy;
                 }
-                if let Some(v) = window.visual.tiny {
+                if let Some(v) = window.visual.tiny
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.tiny,
+                    )
+                {
                     visual.tiny = Some(v);
+                    visual_speed.tiny = window.visual_speed.tiny;
                 }
-                if let Some(v) = window.visual.bumpy {
+                if let Some(v) = window.visual.bumpy
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.bumpy,
+                    )
+                {
                     visual.bumpy = Some(v);
+                    visual_speed.bumpy = window.visual_speed.bumpy;
                 }
-                if let Some(v) = window.visual.bumpy_offset {
+                if let Some(v) = window.visual.bumpy_offset
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.bumpy_offset,
+                    )
+                {
                     visual.bumpy_offset = Some(v);
+                    visual_speed.bumpy_offset = window.visual_speed.bumpy_offset;
                 }
-                if let Some(v) = window.visual.bumpy_period {
+                if let Some(v) = window.visual.bumpy_period
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.bumpy_period,
+                    )
+                {
                     visual.bumpy_period = Some(v);
+                    visual_speed.bumpy_period = window.visual_speed.bumpy_period;
                 }
-                for (dst, src) in visual.bumpy_cols.iter_mut().zip(window.visual.bumpy_cols) {
-                    if src.is_some() {
-                        *dst = src;
+                for col in 0..MAX_COLS {
+                    if let Some(src) = window.visual.bumpy_cols[col]
+                        && persisted_target_allowed(
+                            persisted,
+                            active_targets.clear_all,
+                            active_targets.visual.bumpy_cols[col],
+                        )
+                    {
+                        visual.bumpy_cols[col] = Some(src);
+                        visual_speed.bumpy_cols[col] = window.visual_speed.bumpy_cols[col];
                     }
                 }
-                for (dst, src) in visual.tiny_cols.iter_mut().zip(window.visual.tiny_cols) {
-                    if src.is_some() {
-                        *dst = src;
+                for col in 0..MAX_COLS {
+                    if let Some(src) = window.visual.tiny_cols[col]
+                        && persisted_target_allowed(
+                            persisted,
+                            active_targets.clear_all,
+                            active_targets.visual.tiny_cols[col],
+                        )
+                    {
+                        visual.tiny_cols[col] = Some(src);
+                        visual_speed.tiny_cols[col] = window.visual_speed.tiny_cols[col];
                     }
                 }
-                for (dst, src) in visual.move_x_cols.iter_mut().zip(window.visual.move_x_cols) {
-                    if src.is_some() {
-                        *dst = src;
+                for col in 0..MAX_COLS {
+                    if let Some(src) = window.visual.move_x_cols[col]
+                        && persisted_target_allowed(
+                            persisted,
+                            active_targets.clear_all,
+                            active_targets.visual.move_x_cols[col],
+                        )
+                    {
+                        visual.move_x_cols[col] = Some(src);
+                        visual_speed.move_x_cols[col] = window.visual_speed.move_x_cols[col];
                     }
                 }
-                for (dst, src) in visual.move_y_cols.iter_mut().zip(window.visual.move_y_cols) {
-                    if src.is_some() {
-                        *dst = src;
+                for col in 0..MAX_COLS {
+                    if let Some(src) = window.visual.move_y_cols[col]
+                        && persisted_target_allowed(
+                            persisted,
+                            active_targets.clear_all,
+                            active_targets.visual.move_y_cols[col],
+                        )
+                    {
+                        visual.move_y_cols[col] = Some(src);
+                        visual_speed.move_y_cols[col] = window.visual_speed.move_y_cols[col];
                     }
                 }
-                if let Some(v) = window.visual.pulse_inner {
+                if let Some(v) = window.visual.pulse_inner
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.pulse_inner,
+                    )
+                {
                     visual.pulse_inner = Some(v);
+                    visual_speed.pulse_inner = window.visual_speed.pulse_inner;
                 }
-                if let Some(v) = window.visual.pulse_outer {
+                if let Some(v) = window.visual.pulse_outer
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.pulse_outer,
+                    )
+                {
                     visual.pulse_outer = Some(v);
+                    visual_speed.pulse_outer = window.visual_speed.pulse_outer;
                 }
-                if let Some(v) = window.visual.pulse_period {
+                if let Some(v) = window.visual.pulse_period
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.pulse_period,
+                    )
+                {
                     visual.pulse_period = Some(v);
+                    visual_speed.pulse_period = window.visual_speed.pulse_period;
                 }
-                if let Some(v) = window.visual.pulse_offset {
+                if let Some(v) = window.visual.pulse_offset
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.pulse_offset,
+                    )
+                {
                     visual.pulse_offset = Some(v);
+                    visual_speed.pulse_offset = window.visual_speed.pulse_offset;
                 }
-                if let Some(v) = window.visual.beat {
+                if let Some(v) = window.visual.beat
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.visual.beat,
+                    )
+                {
                     visual.beat = Some(v);
+                    visual_speed.beat = window.visual_speed.beat;
                 }
                 apply_appearance_target(
                     &mut appearance_target,
@@ -4203,20 +4913,55 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.visibility.cover {
                     visibility.cover = Some(v);
                 }
-                if let Some(v) = window.scroll.reverse {
+                if let Some(v) = window.scroll.reverse
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.scroll.reverse,
+                    )
+                {
                     scroll.reverse = Some(v);
+                    scroll_approach_speed.reverse = window.scroll_approach_speed.reverse;
                 }
-                if let Some(v) = window.scroll.split {
+                if let Some(v) = window.scroll.split
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.scroll.split,
+                    )
+                {
                     scroll.split = Some(v);
+                    scroll_approach_speed.split = window.scroll_approach_speed.split;
                 }
-                if let Some(v) = window.scroll.alternate {
+                if let Some(v) = window.scroll.alternate
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.scroll.alternate,
+                    )
+                {
                     scroll.alternate = Some(v);
+                    scroll_approach_speed.alternate = window.scroll_approach_speed.alternate;
                 }
-                if let Some(v) = window.scroll.cross {
+                if let Some(v) = window.scroll.cross
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.scroll.cross,
+                    )
+                {
                     scroll.cross = Some(v);
+                    scroll_approach_speed.cross = window.scroll_approach_speed.cross;
                 }
-                if let Some(v) = window.scroll.centered {
+                if let Some(v) = window.scroll.centered
+                    && persisted_target_allowed(
+                        persisted,
+                        active_targets.clear_all,
+                        active_targets.scroll.centered,
+                    )
+                {
                     scroll.centered = Some(v);
+                    scroll_approach_speed.centered = window.scroll_approach_speed.centered;
                 }
                 if let Some(v) = window.perspective.tilt {
                     perspective.tilt = Some(v);
@@ -4227,8 +4972,11 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(speed) = window.scroll_speed {
                     scroll_speed = Some(speed);
                 }
-                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
+                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite())
+                    && persisted_mini_allowed(persisted, active_targets)
+                {
                     mini_percent = Some(mini.clamp(-100.0, 150.0));
+                    mini_speed = window.mini_speed;
                 }
             }
         }
@@ -4294,6 +5042,51 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
             );
             continue;
         }
+        let base_visual = if clear_all {
+            VisualEffects::default()
+        } else {
+            base_visual_effects(&state.player_profiles[player])
+        };
+        let mut visual_current = state.active_attack_visual[player];
+        approach_visual_overrides_to_target(
+            &mut visual_current,
+            visual,
+            visual_speed,
+            base_visual,
+            delta_time,
+        );
+        visual = visual_current;
+
+        let base_scroll = if clear_all {
+            ScrollEffects::default()
+        } else {
+            ScrollEffects::from_option(state.player_profiles[player].scroll_option)
+        };
+        let mut scroll_current = state.active_attack_scroll[player];
+        approach_scroll_overrides_to_target(
+            &mut scroll_current,
+            scroll,
+            scroll_approach_speed,
+            base_scroll,
+            delta_time,
+        );
+        scroll = scroll_current;
+
+        let base_mini_percent = if clear_all {
+            0.0
+        } else {
+            state.player_profiles[player].mini_percent as f32
+        };
+        let mut mini_current = state.active_attack_mini_percent[player];
+        approach_mini_percent_to_target(
+            &mut mini_current,
+            mini_percent,
+            base_mini_percent,
+            mini_speed,
+            delta_time,
+        );
+        mini_percent = mini_current;
+
         for window in &state.song_lua_ease_windows[player] {
             if let Some(value) = song_lua_ease_window_value(window, now) {
                 song_lua_apply_eased_target(

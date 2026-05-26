@@ -8758,7 +8758,8 @@ mod tests {
         completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
         compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
         crossed_mine_held_start_time, effective_appearance_effects_for_player,
-        effective_player_global_offset_seconds, effective_visual_effects_for_player,
+        effective_mini_percent_for_player, effective_player_global_offset_seconds,
+        effective_scroll_effects_for_player, effective_visual_effects_for_player,
         enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
         finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, handle_input, hit_mine, input_queue_cap,
@@ -12246,6 +12247,102 @@ return Def.ActorFrame{}
 
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.confusion_offset - 3.14).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_constant_visual_scroll_and_mini_mods_approach() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            beat_mods: vec![crate::game::parsing::song_lua::SongLuaModWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 3.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                mods: "*10 50% flip, *10 10% reverse, *10 -100% mini".to_string(),
+                player: Some(1),
+            }],
+            ..Default::default()
+        };
+        state.attack_mask_windows[0] =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        state.current_music_time_visible[0] = 0.016;
+        refresh_active_attack_masks(&mut state, 0.016);
+        let visual = effective_visual_effects_for_player(&state, 0);
+        let scroll = effective_scroll_effects_for_player(&state, 0);
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!(visual.flip > 0.0);
+        assert!(visual.flip < 0.5);
+        assert!((scroll.reverse - 0.1).abs() <= 0.000_1);
+        assert!(mini < 0.0);
+        assert!(mini > -100.0);
+
+        state.current_music_time_visible[0] = 1.016;
+        refresh_active_attack_masks(&mut state, 1.0);
+        let visual = effective_visual_effects_for_player(&state, 0);
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!((visual.flip - 0.5).abs() <= 0.000_1);
+        assert!((mini + 100.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_active_reset_overrides_ended_constant_mods() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            beat_mods: vec![
+                crate::game::parsing::song_lua::SongLuaModWindow {
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 9999.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::End,
+                    mods: "*1000 no invert, *1000 no flip".to_string(),
+                    player: Some(1),
+                },
+                crate::game::parsing::song_lua::SongLuaModWindow {
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.25,
+                    limit: 0.25,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    mods: "*1000 invert".to_string(),
+                    player: Some(1),
+                },
+                crate::game::parsing::song_lua::SongLuaModWindow {
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.5,
+                    limit: 0.25,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    mods: "*1000 flip".to_string(),
+                    player: Some(1),
+                },
+            ],
+            ..Default::default()
+        };
+        state.attack_mask_windows[0] =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        state.current_music_time_visible[0] = 0.6;
+        refresh_active_attack_masks(&mut state, 0.0);
+        let visual = effective_visual_effects_for_player(&state, 0);
+        assert!((visual.flip - 1.0).abs() <= 0.000_1);
+        assert!(visual.invert.abs() <= 0.000_1);
+
+        state.current_music_time_visible[0] = 1.1;
+        refresh_active_attack_masks(&mut state, 0.0);
+        let reset = effective_visual_effects_for_player(&state, 0);
+        assert!(reset.flip.abs() <= 0.000_1);
+        assert!(reset.invert.abs() <= 0.000_1);
     }
 
     #[test]
