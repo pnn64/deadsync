@@ -5019,7 +5019,10 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
             state.active_attack_accel[player] = AccelOverrides::default();
             state.active_attack_visual[player] = visual;
             state.active_attack_appearance[player] = appearance;
-            state.active_attack_visibility[player] = VisibilityOverrides::default();
+            // ITGmania does not clear receptor visibility for the gameplay
+            // out fade. Keep the last active Dark/Blind/Cover values so
+            // Riddle's final 100% Dark state remains hidden, while the rest of
+            // this branch still lets player-transform outro eases keep moving.
             state.active_attack_scroll[player] = ScrollOverrides::default();
             state.active_attack_perspective[player] = PerspectiveOverrides::default();
             state.active_attack_scroll_speed[player] = None;

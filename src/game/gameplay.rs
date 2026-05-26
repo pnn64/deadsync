@@ -8759,17 +8759,18 @@ mod tests {
         compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
         crossed_mine_held_start_time, effective_appearance_effects_for_player,
         effective_mini_percent_for_player, effective_player_global_offset_seconds,
-        effective_scroll_effects_for_player, effective_visual_effects_for_player,
-        enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time_ns, handle_input, hit_mine, input_queue_cap,
-        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
-        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
-        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
+        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
+        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
+        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
+        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
+        max_grade_points, max_step_distance_ns, mine_window_bounds_ns,
+        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
         refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
@@ -11812,23 +11813,66 @@ return Def.ActorFrame{}
         let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
         state.active_attack_visual[0].confusion_offset = Some(-12.56);
         state.active_attack_visual[0].tipsy = Some(0.75);
+        state.active_attack_visibility[0].dark = Some(1.0);
 
         begin_outro_attack_clear(&mut state);
         refresh_active_attack_masks(&mut state, 0.5);
 
         let visual = effective_visual_effects_for_player(&state, 0);
+        let visibility = effective_visibility_effects_for_player(&state, 0);
         assert!(visual.confusion_offset > -12.56);
         assert!(visual.confusion_offset < -12.0);
         assert!(visual.tipsy > 0.0);
         assert!(visual.tipsy < 0.75);
+        assert!((visibility.dark - 1.0).abs() <= 0.0001);
 
         refresh_active_attack_masks(&mut state, 20.0);
 
         let cleared = effective_visual_effects_for_player(&state, 0);
+        let visibility = effective_visibility_effects_for_player(&state, 0);
         assert!(cleared.confusion_offset.abs() <= 0.0001);
         assert!(cleared.tipsy.abs() <= 0.0001);
         assert!(state.active_attack_visual[0].confusion_offset.is_none());
         assert!(state.active_attack_visual[0].tipsy.is_none());
+        assert!((visibility.dark - 1.0).abs() <= 0.0001);
+    }
+
+    #[test]
+    fn outro_attack_clear_keeps_player_rotationz_eases_alive() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![crate::game::parsing::song_lua::SongLuaEaseWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 1.0,
+                limit: 1.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                from: 0.0,
+                to: 5.0,
+                target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerRotationZ,
+                easing: Some("linear".to_string()),
+                player: Some(1),
+                sustain: Some(4.0),
+                opt1: None,
+                opt2: None,
+            }],
+            ..Default::default()
+        };
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        assert_eq!(unsupported, 0);
+        state.song_lua_ease_windows[0] = windows;
+        state.current_music_time_visible[0] = 2.5;
+
+        begin_outro_attack_clear(&mut state);
+        refresh_active_attack_masks(&mut state, 0.0);
+
+        assert!((state.song_lua_player_rotation_z[0] - 5.0).abs() <= 0.0001);
     }
 
     #[test]
