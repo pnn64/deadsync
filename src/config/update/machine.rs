@@ -366,6 +366,17 @@ pub fn update_arrowcloud_qr_login_when(when: ArrowCloudQrLoginWhen) {
     save_without_keymaps();
 }
 
+pub fn update_groovestats_qr_login_when(when: GrooveStatsQrLoginWhen) {
+    {
+        let mut cfg = lock_config();
+        if cfg.groovestats_qr_login_when == when {
+            return;
+        }
+        cfg.groovestats_qr_login_when = when;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_auto_download_unlocks(enabled: bool) {
     {
         let mut cfg = lock_config();

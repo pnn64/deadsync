@@ -148,6 +148,11 @@ fn push_saved_options(
         "ArrowCloudQrLoginWhen",
         cfg.arrowcloud_qr_login_when.as_str(),
     );
+    push_line(
+        content,
+        "GrooveStatsQrLoginWhen",
+        cfg.groovestats_qr_login_when.as_str(),
+    );
     push_bool(content, "FastLoad", cfg.fastload);
     push_line(content, "FullscreenType", cfg.fullscreen_type.as_str());
     push_line(content, "Game", cfg.game_flag.as_str());

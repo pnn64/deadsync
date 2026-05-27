@@ -721,6 +721,51 @@ impl FromStr for ArrowCloudQrLoginWhen {
     }
 }
 
+/// When to auto-show the GrooveStats QR-login screen after the user picks
+/// a profile.  Mirrors Simply Love's `QRLogin` theme pref — same wire
+/// values and same default as the ArrowCloud variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GrooveStatsQrLoginWhen {
+    /// Always show the login screen after Select Profile.
+    Always,
+    /// Show only when at least one joined Local player has no saved
+    /// GrooveStats API key.  Default.
+    #[default]
+    Sometimes,
+    /// Never auto-show; only the manual Options entry / Manage Local
+    /// Profiles "Link GrooveStats" action can launch it.
+    Disabled,
+}
+
+impl GrooveStatsQrLoginWhen {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "Always",
+            Self::Sometimes => "Sometimes",
+            Self::Disabled => "Disabled",
+        }
+    }
+}
+
+impl FromStr for GrooveStatsQrLoginWhen {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "always" => Ok(Self::Always),
+            "sometimes" => Ok(Self::Sometimes),
+            "disabled" | "never" | "off" | "no" => Ok(Self::Disabled),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /

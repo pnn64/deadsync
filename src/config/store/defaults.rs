@@ -73,6 +73,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "ArrowCloudQrLoginWhen",
         default.arrowcloud_qr_login_when.as_str(),
     );
+    push_line(
+        content,
+        "GrooveStatsQrLoginWhen",
+        default.groovestats_qr_login_when.as_str(),
+    );
     push_bool(content, "FastLoad", default.fastload);
     push_line(content, "FullscreenType", default.fullscreen_type.as_str());
     push_line(content, "Game", default.game_flag.as_str());

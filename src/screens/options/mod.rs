@@ -3,11 +3,11 @@ use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, DisplayMode,
-    FullscreenType, LogLevel, MachineBarColor, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni,
-    SyncGraphMode, VersionOverlaySide, VisualStyle, dirs,
+    FullscreenType, GrooveStatsQrLoginWhen, LogLevel, MachineBarColor, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VersionOverlaySide, VisualStyle, dirs,
 };
 use crate::engine::audio;
 use crate::engine::display::{self, MonitorSpec};

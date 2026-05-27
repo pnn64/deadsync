@@ -136,6 +136,7 @@ pub enum SubRowId {
     AutoPopulateScores,
     AutoDownloadUnlocks,
     SeparateUnlocksByPlayer,
+    GrooveStatsQrLogin,
     // ArrowCloud Options
     EnableArrowCloud,
     ArrowCloudSubmitFails,

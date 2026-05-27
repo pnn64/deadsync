@@ -1080,6 +1080,12 @@ pub fn init() -> State {
         SubRowId::ArrowCloudQrLogin,
         cfg.arrowcloud_qr_login_when.choice_index(),
     );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
+        GROOVESTATS_OPTIONS_ROWS,
+        SubRowId::GrooveStatsQrLogin,
+        cfg.groovestats_qr_login_when.choice_index(),
+    );
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
     set_choice_by_id(

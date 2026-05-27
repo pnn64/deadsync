@@ -55,6 +55,24 @@ fn should_auto_show_with<F: FnOnce() -> bool>(
     }
 }
 
+/// GrooveStats counterpart of [`should_auto_show`].  Same three-branch
+/// rule, reading the GrooveStats per-side key for the `Sometimes` probe.
+pub fn should_auto_show_groovestats(when: crate::config::GrooveStatsQrLoginWhen) -> bool {
+    should_auto_show_groovestats_with(when, any_joined_local_side_missing_gs_key)
+}
+
+fn should_auto_show_groovestats_with<F: FnOnce() -> bool>(
+    when: crate::config::GrooveStatsQrLoginWhen,
+    missing_key_probe: F,
+) -> bool {
+    use crate::config::GrooveStatsQrLoginWhen;
+    match when {
+        GrooveStatsQrLoginWhen::Disabled => false,
+        GrooveStatsQrLoginWhen::Always => true,
+        GrooveStatsQrLoginWhen::Sometimes => missing_key_probe(),
+    }
+}
+
 fn any_joined_local_side_missing_key() -> bool {
     ALL_SIDES.iter().any(|side| {
         if !profile::is_session_side_joined(*side) {
@@ -1051,10 +1069,9 @@ fn gs_side_byte(side: profile::PlayerSide) -> u8 {
     }
 }
 
-/// Probe for `should_auto_show_groovestats(Sometimes)` — wired up by the
-/// pref/screen follow-up PRs.  Mirrors `any_joined_local_side_missing_key`
-/// but reads the GrooveStats key off each side's loaded profile.
-#[allow(dead_code)]
+/// Probe for `should_auto_show_groovestats(Sometimes)`.  Mirrors
+/// `any_joined_local_side_missing_key` but reads the GrooveStats key
+/// off each side's loaded profile.
 pub(crate) fn any_joined_local_side_missing_gs_key() -> bool {
     ALL_SIDES.iter().any(|side| {
         if !profile::is_session_side_joined(*side) {
@@ -1339,6 +1356,7 @@ mod tests {
     }
 
     use crate::config::ArrowCloudQrLoginWhen;
+    use crate::config::GrooveStatsQrLoginWhen;
 
     #[test]
     fn should_auto_show_disabled_is_always_false() {
@@ -1370,6 +1388,34 @@ mod tests {
         ));
         assert!(!should_auto_show_with(
             ArrowCloudQrLoginWhen::Sometimes,
+            || false
+        ));
+    }
+
+    #[test]
+    fn should_auto_show_groovestats_disabled_is_always_false() {
+        assert!(!should_auto_show_groovestats_with(
+            GrooveStatsQrLoginWhen::Disabled,
+            || true
+        ));
+    }
+
+    #[test]
+    fn should_auto_show_groovestats_always_is_always_true() {
+        assert!(should_auto_show_groovestats_with(
+            GrooveStatsQrLoginWhen::Always,
+            || false
+        ));
+    }
+
+    #[test]
+    fn should_auto_show_groovestats_sometimes_follows_probe() {
+        assert!(should_auto_show_groovestats_with(
+            GrooveStatsQrLoginWhen::Sometimes,
+            || true
+        ));
+        assert!(!should_auto_show_groovestats_with(
+            GrooveStatsQrLoginWhen::Sometimes,
             || false
         ));
     }

@@ -80,6 +80,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "ArrowCloudQrLoginWhen")
         .and_then(|v| ArrowCloudQrLoginWhen::from_str(&v).ok())
         .unwrap_or(default.arrowcloud_qr_login_when);
+    cfg.groovestats_qr_login_when = conf
+        .get("Options", "GrooveStatsQrLoginWhen")
+        .and_then(|v| GrooveStatsQrLoginWhen::from_str(&v).ok())
+        .unwrap_or(default.groovestats_qr_login_when);
     cfg.separate_unlocks_by_player = conf
         .get("Options", "SeparateUnlocksByPlayer")
         .and_then(|v| v.parse::<u8>().ok())
