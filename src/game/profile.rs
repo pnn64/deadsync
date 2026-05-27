@@ -4552,6 +4552,87 @@ pub fn get_arrowcloud_api_key_for_id(profile_id: &str) -> String {
     String::new()
 }
 
+/// Update the active profile's GrooveStats credentials (API key,
+/// username, and `IsPadPlayer=true` — Simply Love parity, see
+/// `BGAnimations/ScreenGrooveStatsLogin underlay/default.lua:46`) for
+/// the given session side, persisting to its `GrooveStats.ini` on disk.
+/// No-op when the side has no local profile loaded (Guest).
+pub fn set_groovestats_credentials_for_side(side: PlayerSide, api_key: &str, username: &str) {
+    {
+        let mut profiles = lock_profiles();
+        let p = &mut profiles[side_ix(side)];
+        p.groovestats_api_key = api_key.to_string();
+        p.groovestats_username = username.to_string();
+        p.groovestats_is_pad_player = true;
+    }
+    save_groovestats_ini_for_side(side);
+}
+
+/// Write new GrooveStats credentials for a profile identified by ID
+/// (independent of session sides).  Used by the Manage Local Profiles
+/// "Link GrooveStats" flow.  Also refreshes the in-memory copy on any
+/// session side currently bound to that profile id.
+pub fn set_groovestats_credentials_for_id(profile_id: &str, api_key: &str, username: &str) {
+    let matching_sides: Vec<PlayerSide> = {
+        let session = lock_session();
+        [PlayerSide::P1, PlayerSide::P2]
+            .iter()
+            .copied()
+            .filter(|side| {
+                matches!(
+                    &session.active_profiles[side_ix(*side)],
+                    ActiveProfile::Local { id } if id == profile_id
+                )
+            })
+            .collect()
+    };
+    if !matching_sides.is_empty() {
+        let mut profiles = lock_profiles();
+        for side in &matching_sides {
+            let p = &mut profiles[side_ix(*side)];
+            p.groovestats_api_key = api_key.to_string();
+            p.groovestats_username = username.to_string();
+            p.groovestats_is_pad_player = true;
+        }
+    }
+
+    // Persist directly to that profile's GrooveStats.ini, even if the
+    // profile isn't loaded on any side right now.
+    let mut content = String::new();
+    content.push_str("[GrooveStats]\n");
+    content.push_str(&format!("ApiKey={api_key}\n"));
+    content.push_str("IsPadPlayer=1\n");
+    content.push_str(&format!("Username={username}\n"));
+    content.push('\n');
+    let path = groovestats_ini_path(profile_id);
+    if let Err(e) = fs::write(&path, content) {
+        warn!("Failed to save {}: {}", path.display(), e);
+    }
+}
+
+/// Returns the saved GrooveStats API key (from disk) for a profile
+/// identified by id, regardless of whether it's currently loaded on a
+/// session side.  `None` if the profile has no key yet or the file is
+/// missing / malformed; `Some` always wraps a non-empty trimmed key.
+pub fn get_groovestats_api_key_for_id(profile_id: &str) -> Option<String> {
+    let path = groovestats_ini_path(profile_id);
+    let text = fs::read_to_string(&path).ok()?;
+    for line in text.lines() {
+        let line = line.trim();
+        let rest = line
+            .strip_prefix("ApiKey=")
+            .or_else(|| line.strip_prefix("ApiKey ="));
+        if let Some(rest) = rest {
+            let key = rest.trim();
+            if key.is_empty() {
+                return None;
+            }
+            return Some(key.to_string());
+        }
+    }
+    None
+}
+
 fn load_for_side(side: PlayerSide) {
     let profile_id = {
         let session = lock_session();
