@@ -51,6 +51,37 @@ pub fn update_last_played_for_side(
     save_profile_ini_for_side(side);
 }
 
+pub fn update_last_played_course_for_side(
+    side: PlayerSide,
+    style: PlayStyle,
+    course_path: &Path,
+    difficulty_name: Option<&str>,
+) {
+    if session_side_is_guest(side) {
+        return;
+    }
+    let new_path = Some(course_path.to_string_lossy().into_owned());
+    let new_difficulty = difficulty_name.map(str::to_string);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        let last_played = profile.last_played_course_mut(style);
+        let mut changed = false;
+        if last_played.course_path != new_path {
+            last_played.course_path = new_path;
+            changed = true;
+        }
+        if last_played.difficulty_name != new_difficulty {
+            last_played.difficulty_name = new_difficulty;
+            changed = true;
+        }
+        if !changed {
+            return;
+        }
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn add_stage_calories_for_side(side: PlayerSide, calories_burned: f32) {
     if session_side_is_guest(side) {
         return;

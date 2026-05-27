@@ -4819,6 +4819,34 @@ impl App {
         }
     }
 
+    fn update_last_played_course(&self, course_path: &Path, difficulty_name: &str) {
+        let play_style = profile::get_session_play_style();
+        match play_style {
+            profile::PlayStyle::Versus => {
+                profile::update_last_played_course_for_side(
+                    profile::PlayerSide::P1,
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+                profile::update_last_played_course_for_side(
+                    profile::PlayerSide::P2,
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+            }
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                profile::update_last_played_course_for_side(
+                    profile::get_session_player_side(),
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+            }
+        }
+    }
+
     fn start_course_run_from_selected(&mut self) -> bool {
         let Some(selection) =
             select_course::selected_course_plan(&self.state.screens.select_course_state)
@@ -4826,13 +4854,15 @@ impl App {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
         };
-        self.state.session.last_course_wheel_path = Some(selection.path.clone());
-        self.state.session.last_course_wheel_difficulty_name =
-            Some(selection.course_difficulty_name.clone());
+        let course_path = selection.path.clone();
+        let course_difficulty_name = selection.course_difficulty_name.clone();
         let Some(course_run) = build_course_run_from_selection(selection) else {
             warn!("Unable to start course run: failed to resolve course stages.");
             return false;
         };
+        self.state.session.last_course_wheel_path = Some(course_path.clone());
+        self.state.session.last_course_wheel_difficulty_name = Some(course_difficulty_name.clone());
+        self.update_last_played_course(course_path.as_path(), course_difficulty_name.as_str());
         self.state.session.course_run = Some(course_run);
         self.state.session.course_eval_pages.clear();
         self.state.session.course_eval_page_index = 0;
