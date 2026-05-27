@@ -338,6 +338,11 @@ fn push_saved_options(
     push_bool(content, "ShowStats", cfg.show_stats_mode != 0);
     push_line(content, "ShowStatsMode", cfg.show_stats_mode.min(3));
     push_bool(content, "SmoothHistogram", cfg.smooth_histogram);
+    push_bool(
+        content,
+        "ShadeScatterplotJudgments",
+        cfg.shade_scatterplot_judgments,
+    );
     push_line(
         content,
         "InputDebounceTime",

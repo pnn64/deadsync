@@ -275,6 +275,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_bool(content, "ShowStats", default.show_stats_mode != 0);
     push_line(content, "ShowStatsMode", default.show_stats_mode.min(3));
     push_bool(content, "SmoothHistogram", default.smooth_histogram);
+    push_bool(
+        content,
+        "ShadeScatterplotJudgments",
+        default.shade_scatterplot_judgments,
+    );
     push_line(
         content,
         "InputDebounceTime",

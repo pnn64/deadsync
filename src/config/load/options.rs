@@ -485,6 +485,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmoothHistogram")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.smooth_histogram, |v| v != 0);
+    cfg.shade_scatterplot_judgments = conf
+        .get("Options", "ShadeScatterplotJudgments")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.shade_scatterplot_judgments, |v| v != 0);
     cfg.input_debounce_seconds = conf
         .get("Options", "InputDebounceTime")
         .map(|v| v.trim().to_string())
