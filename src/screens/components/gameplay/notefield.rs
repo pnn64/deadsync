@@ -96,6 +96,8 @@ const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
+const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
+const ERROR_BAR_LONG_AVG_TICK_EXTRA_H: f32 = 65.0;
 const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
 const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
 const TEXT_CACHE_LIMIT: usize = 8192;
@@ -8377,6 +8379,41 @@ pub fn build_bundles(
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(error_bar_line_z)
                         ));
+                        }
+
+                        if p.error_bar_long_avg_visible
+                            && let Some(long_tick) = p.error_bar_long_avg_tick
+                        {
+                            let alpha = error_bar_tick_alpha(
+                                elapsed_screen - long_tick.started_at,
+                                ERROR_BAR_TICK_DUR_COLORFUL,
+                                profile.error_bar_multi_tick,
+                            );
+                            if alpha > 0.0 {
+                                let intensity = crate::game::profile::clamp_long_error_bar_intensity(
+                                    profile.long_error_bar_intensity,
+                                );
+                                let scaled_offset = if max_offset_s.is_finite()
+                                    && max_offset_s > 0.0
+                                {
+                                    (long_tick.offset_s * intensity)
+                                        .clamp(-max_offset_s, max_offset_s)
+                                } else {
+                                    long_tick.offset_s * intensity
+                                };
+                                let x = scaled_offset * wscale;
+                                if x.is_finite() {
+                                    let long_tick_h = ERROR_BAR_HEIGHT_AVERAGE
+                                        + 4.0
+                                        + ERROR_BAR_LONG_AVG_TICK_EXTRA_H;
+                                    hud_actors.push(act!(quad:
+                                        align(0.5, 0.5): xy(error_bar_x + x, average_bar_y):
+                                        zoomto(ERROR_BAR_TICK_WIDTH, long_tick_h):
+                                        diffuse(ERROR_BAR_LONG_AVG_TICK_RGBA[0], ERROR_BAR_LONG_AVG_TICK_RGBA[1], ERROR_BAR_LONG_AVG_TICK_RGBA[2], alpha):
+                                        z(error_bar_line_z)
+                                    ));
+                                }
+                            }
                         }
                     }
                 }

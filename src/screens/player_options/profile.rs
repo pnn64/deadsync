@@ -127,6 +127,70 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
 }
 
 #[inline(always)]
+pub(super) fn fmt_long_error_bar_intensity(value: f32) -> String {
+    format!("{value:.2}x")
+}
+
+pub(super) fn long_error_bar_intensity_choices() -> Vec<String> {
+    let count = ((LONG_ERROR_BAR_INTENSITY_MAX - LONG_ERROR_BAR_INTENSITY_MIN)
+        / LONG_ERROR_BAR_INTENSITY_STEP)
+        .round() as usize
+        + 1;
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        out.push(fmt_long_error_bar_intensity(
+            LONG_ERROR_BAR_INTENSITY_MIN + i as f32 * LONG_ERROR_BAR_INTENSITY_STEP,
+        ));
+    }
+    out
+}
+
+#[inline(always)]
+pub(super) fn fmt_long_error_bar_threshold_ms(ms: u32) -> String {
+    format!("{ms}ms")
+}
+
+pub(super) fn long_error_bar_threshold_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity(
+        (LONG_ERROR_BAR_THRESHOLD_MS_MAX - LONG_ERROR_BAR_THRESHOLD_MS_MIN + 1) as usize,
+    );
+    for ms in LONG_ERROR_BAR_THRESHOLD_MS_MIN..=LONG_ERROR_BAR_THRESHOLD_MS_MAX {
+        out.push(fmt_long_error_bar_threshold_ms(ms));
+    }
+    out
+}
+
+#[inline(always)]
+pub(super) fn fmt_long_error_bar_min_samples(n: u32) -> String {
+    format!("{n}")
+}
+
+pub(super) fn long_error_bar_min_samples_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity(
+        (LONG_ERROR_BAR_MIN_SAMPLES_MAX - LONG_ERROR_BAR_MIN_SAMPLES_MIN + 1) as usize,
+    );
+    for n in LONG_ERROR_BAR_MIN_SAMPLES_MIN..=LONG_ERROR_BAR_MIN_SAMPLES_MAX {
+        out.push(fmt_long_error_bar_min_samples(n));
+    }
+    out
+}
+
+#[inline(always)]
+pub(super) fn fmt_long_error_bar_buffer_cap(n: u32) -> String {
+    format!("{n}")
+}
+
+pub(super) fn long_error_bar_buffer_cap_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity(
+        (LONG_ERROR_BAR_BUFFER_CAP_MAX - LONG_ERROR_BAR_BUFFER_CAP_MIN + 1) as usize,
+    );
+    for n in LONG_ERROR_BAR_BUFFER_CAP_MIN..=LONG_ERROR_BAR_BUFFER_CAP_MAX {
+        out.push(fmt_long_error_bar_buffer_cap(n));
+    }
+    out
+}
+
+#[inline(always)]
 pub(super) fn fmt_tilt_threshold_ms(ms: u32) -> String {
     format!("{ms}ms")
 }

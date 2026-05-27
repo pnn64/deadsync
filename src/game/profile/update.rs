@@ -1006,6 +1006,70 @@ pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_long_error_bar_enabled_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.long_error_bar_enabled == enabled {
+            return;
+        }
+        profile.long_error_bar_enabled = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_long_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {
+    let normalized = super::clamp_long_error_bar_intensity(intensity);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if (profile.long_error_bar_intensity - normalized).abs() < 1e-6 {
+            return;
+        }
+        profile.long_error_bar_intensity = normalized;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_long_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
+    let normalized = super::clamp_long_error_bar_threshold_ms(ms);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.long_error_bar_threshold_ms == normalized {
+            return;
+        }
+        profile.long_error_bar_threshold_ms = normalized;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
+    let normalized = super::clamp_long_error_bar_min_samples(n);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.long_error_bar_min_samples == normalized {
+            return;
+        }
+        profile.long_error_bar_min_samples = normalized;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_long_error_bar_buffer_cap_for_side(side: PlayerSide, n: u32) {
+    let normalized = super::clamp_long_error_bar_buffer_cap(n);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.long_error_bar_buffer_cap == normalized {
+            return;
+        }
+        profile.long_error_bar_buffer_cap = normalized;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisualizations) {
     {
         let mut profiles = lock_profiles();

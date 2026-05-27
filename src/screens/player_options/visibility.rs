@@ -7,6 +7,7 @@ pub(super) struct RowVisibility {
     pub(super) show_judgment_tilt_options: bool,
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
+    pub(super) show_long_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
     pub(super) show_density_graph_background: bool,
     pub(super) show_target_score: bool,
@@ -40,8 +41,16 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
+        || id == RowId::LongErrorBar
     {
         return visibility.show_error_bar_children;
+    }
+    if id == RowId::LongErrorBarIntensity
+        || id == RowId::LongErrorBarThreshold
+        || id == RowId::LongErrorBarMinSamples
+        || id == RowId::LongErrorBarBufferCap
+    {
+        return visibility.show_error_bar_children && visibility.show_long_error_bar_children;
     }
     if id == RowId::CustomBlueFantasticWindowMs {
         return visibility.show_custom_fantastic_window_ms;
@@ -97,6 +106,11 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
+        || id == RowId::LongErrorBar
+        || id == RowId::LongErrorBarIntensity
+        || id == RowId::LongErrorBarThreshold
+        || id == RowId::LongErrorBarMinSamples
+        || id == RowId::LongErrorBarBufferCap
     {
         return Some(RowId::ErrorBar);
     }
@@ -199,6 +213,25 @@ pub(super) fn combo_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_SLOT
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         // "None" is always the last choice for font/texture rows.
         if choice_idx != max_choice {
+            return true;
+        }
+    }
+    !any_active
+}
+
+pub(super) fn long_error_bar_children_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    let Some(row) = row_map.get(RowId::LongErrorBar) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx != 0 {
             return true;
         }
     }
@@ -405,6 +438,7 @@ pub(super) fn row_visibility(
         show_judgment_tilt_options: judgment_tilt_options_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
+        show_long_error_bar_children: long_error_bar_children_visible(row_map, active),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
         show_density_graph_background: density_graph_background_visible(row_map, active),
         show_target_score: target_score_visible(row_map, active),

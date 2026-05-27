@@ -222,6 +222,53 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::LongErrorBarIntensity) {
+        let stepped =
+            crate::game::profile::clamp_long_error_bar_intensity(profile.long_error_bar_intensity);
+        let needle = fmt_long_error_bar_intensity(stepped);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::LongErrorBarThreshold) {
+        let ms = crate::game::profile::clamp_long_error_bar_threshold_ms(
+            profile.long_error_bar_threshold_ms,
+        );
+        let needle = fmt_long_error_bar_threshold_ms(ms);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::LongErrorBarMinSamples) {
+        let n = crate::game::profile::clamp_long_error_bar_min_samples(
+            profile.long_error_bar_min_samples,
+        );
+        let needle = fmt_long_error_bar_min_samples(n);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::LongErrorBarBufferCap) {
+        let n = crate::game::profile::clamp_long_error_bar_buffer_cap(
+            profile.long_error_bar_buffer_cap,
+        );
+        let needle = fmt_long_error_bar_buffer_cap(n);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMinThreshold) {
         let threshold =
             crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
