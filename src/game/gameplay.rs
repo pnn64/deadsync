@@ -7192,6 +7192,7 @@ fn error_bar_register_tap(
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
+    let short_avg_enabled = prof.short_average_error_bar_enabled;
     let long_avg_enabled = prof.long_error_bar_enabled;
     let long_avg_threshold_s =
         profile::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
@@ -7307,46 +7308,49 @@ fn error_bar_register_tap(
     }
 
     if show_average {
-        let avg = error_bar_average_offset_s(
-            &mut p.error_bar_avg_samples,
-            tap_music_time_s,
-            offset_s,
-            average_interval_ms,
-        );
-        let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-            avg.clamp(-max_offset_s, max_offset_s)
-        } else {
-            avg
-        };
-        error_bar_push_tick(
-            &mut p.error_bar_avg_ticks,
-            &mut p.error_bar_avg_next,
-            error_bar_multi_tick,
-            ErrorBarTick {
-                started_at: now,
-                offset_s: avg_clamped,
-                window,
-            },
-        );
-        p.error_bar_avg_bar_started_at = Some(now);
+        if short_avg_enabled {
+            let avg = error_bar_average_offset_s(
+                &mut p.error_bar_avg_samples,
+                tap_music_time_s,
+                offset_s,
+                average_interval_ms,
+            );
+            let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                avg.clamp(-max_offset_s, max_offset_s)
+            } else {
+                avg
+            };
+            error_bar_push_tick(
+                &mut p.error_bar_avg_ticks,
+                &mut p.error_bar_avg_next,
+                error_bar_multi_tick,
+                ErrorBarTick {
+                    started_at: now,
+                    offset_s: avg_clamped,
+                    window,
+                },
+            );
+            p.error_bar_avg_bar_started_at = Some(now);
+        }
 
-        let (long_mean, long_len) = error_bar_long_term_offset_s(
-            &mut p.error_bar_long_avg_samples,
-            &mut p.error_bar_long_avg_total,
-            tap_music_time_s,
-            offset_s,
-            long_avg_buffer_cap,
-        );
-        if long_avg_enabled
-            && long_len >= long_avg_min_samples
-            && long_mean.abs() >= long_avg_threshold_s
-        {
-            p.error_bar_long_avg_tick = Some(ErrorBarTick {
-                started_at: now,
-                offset_s: long_mean,
-                window,
-            });
-            p.error_bar_long_avg_visible = true;
+        if long_avg_enabled {
+            let (long_mean, long_len) = error_bar_long_term_offset_s(
+                &mut p.error_bar_long_avg_samples,
+                &mut p.error_bar_long_avg_total,
+                tap_music_time_s,
+                offset_s,
+                long_avg_buffer_cap,
+            );
+            if long_len >= long_avg_min_samples && long_mean.abs() >= long_avg_threshold_s {
+                p.error_bar_long_avg_tick = Some(ErrorBarTick {
+                    started_at: now,
+                    offset_s: long_mean,
+                    window,
+                });
+                p.error_bar_long_avg_visible = true;
+            } else {
+                p.error_bar_long_avg_visible = false;
+            }
         } else {
             p.error_bar_long_avg_visible = false;
         }
@@ -10633,6 +10637,44 @@ return Def.ActorFrame{}
             .expect("12ms should exceed Arrow Cloud's 10ms blue window");
         assert_eq!(text.started_at, 4.0);
         assert!(!text.early);
+    }
+
+    #[test]
+    fn average_error_bar_can_show_long_term_only() {
+        let p1 = profile::Profile {
+            error_bar_active_mask: profile::ERROR_BAR_BIT_AVERAGE,
+            short_average_error_bar_enabled: false,
+            long_error_bar_enabled: true,
+            long_error_bar_threshold_ms: 1,
+            long_error_bar_min_samples: 4,
+            ..profile::Profile::default()
+        };
+        let mut state = regression_state([p1, profile::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        for i in 0..4 {
+            error_bar_register_tap(
+                &mut state,
+                0,
+                &Judgment {
+                    time_error_ms: 10.0,
+                    time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(10.0, 1.0),
+                    grade: JudgeGrade::Fantastic,
+                    window: Some(TimingWindow::W1),
+                    miss_because_held: false,
+                },
+                i as f32 * 0.1,
+            );
+        }
+
+        let player = &state.players[0];
+        assert!(player.error_bar_avg_bar_started_at.is_none());
+        assert!(player.error_bar_avg_ticks.iter().all(Option::is_none));
+        assert!(player.error_bar_long_avg_visible);
+        let long_tick = player
+            .error_bar_long_avg_tick
+            .expect("long-only Average should still emit the blue tick");
+        assert!((long_tick.offset_s - 0.010).abs() <= 1e-6);
     }
 
     #[test]

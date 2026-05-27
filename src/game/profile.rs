@@ -641,6 +641,14 @@ fn parse_groovestats_is_pad_player(value: Option<String>, default: bool) -> bool
         .map_or(default, |v| v == 1)
 }
 
+fn parse_profile_bool(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
 #[inline(always)]
 fn arrowcloud_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("arrowcloud.ini")
@@ -919,6 +927,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.error_bar_multi_tick)
     ));
     content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
+    content.push_str(&format!(
+        "ShortAverageErrorBar={}\n",
+        i32::from(options.short_average_error_bar_enabled)
+    ));
     content.push_str(&format!(
         "AverageErrorBarIntensity={:.2}\n",
         clamp_average_error_bar_intensity(options.average_error_bar_intensity)
@@ -1351,6 +1363,16 @@ fn load_player_options(
         .get(section, "ErrorBarTrim")
         .and_then(|s| ErrorBarTrim::from_str(&s).ok())
         .unwrap_or(options.error_bar_trim);
+    options.short_average_error_bar_enabled = profile_conf
+        .get(section, "ShortAverageErrorBar")
+        .and_then(|s| parse_profile_bool(&s))
+        .or_else(|| {
+            profile_conf
+                .get(section, "LongAvgTickOnly")
+                .and_then(|s| parse_profile_bool(&s))
+                .map(|long_only| !long_only)
+        })
+        .unwrap_or(options.short_average_error_bar_enabled);
     options.average_error_bar_intensity = profile_conf
         .get(section, "AverageErrorBarIntensity")
         .or_else(|| profile_conf.get(section, "HighlightZoom"))
@@ -3104,6 +3126,7 @@ pub struct PlayerOptionsData {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub short_average_error_bar_enabled: bool,
     pub average_error_bar_intensity: f32,
     pub average_error_bar_interval_ms: u32,
     pub long_error_bar_enabled: bool,
@@ -3214,6 +3237,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
+        short_average_error_bar_enabled: true,
         average_error_bar_intensity: AVERAGE_ERROR_BAR_INTENSITY_DEFAULT,
         average_error_bar_interval_ms: AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT,
         long_error_bar_enabled: true,
@@ -3377,6 +3401,7 @@ pub struct Profile {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub short_average_error_bar_enabled: bool,
     pub average_error_bar_intensity: f32,
     pub average_error_bar_interval_ms: u32,
     pub long_error_bar_enabled: bool,
@@ -3555,6 +3580,7 @@ impl Default for Profile {
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
+            short_average_error_bar_enabled: player_options.short_average_error_bar_enabled,
             average_error_bar_intensity: player_options.average_error_bar_intensity,
             average_error_bar_interval_ms: player_options.average_error_bar_interval_ms,
             long_error_bar_enabled: player_options.long_error_bar_enabled,
@@ -3736,6 +3762,7 @@ impl Profile {
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
+            short_average_error_bar_enabled: self.short_average_error_bar_enabled,
             average_error_bar_intensity: self.average_error_bar_intensity,
             average_error_bar_interval_ms: self.average_error_bar_interval_ms,
             long_error_bar_enabled: self.long_error_bar_enabled,
@@ -3848,6 +3875,7 @@ impl Profile {
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
+        self.short_average_error_bar_enabled = options.short_average_error_bar_enabled;
         self.average_error_bar_intensity = options.average_error_bar_intensity;
         self.average_error_bar_interval_ms = options.average_error_bar_interval_ms;
         self.long_error_bar_enabled = options.long_error_bar_enabled;

@@ -45,7 +45,6 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
-        || id == RowId::LongErrorBar
     {
         return visibility.show_error_bar_children;
     }
@@ -54,9 +53,15 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
         || id == RowId::LongErrorBarMinSamples
         || id == RowId::LongErrorBarBufferCap
     {
-        return visibility.show_error_bar_children && visibility.show_long_error_bar_children;
+        return visibility.show_error_bar_children
+            && visibility.show_average_error_bar_children
+            && visibility.show_long_error_bar_children;
     }
-    if id == RowId::AverageErrorBarIntensity || id == RowId::AverageErrorBarInterval {
+    if id == RowId::ShortAverageErrorBar
+        || id == RowId::LongErrorBar
+        || id == RowId::AverageErrorBarIntensity
+        || id == RowId::AverageErrorBarInterval
+    {
         return visibility.show_error_bar_children && visibility.show_average_error_bar_children;
     }
     if id == RowId::CustomBlueFantasticWindowMs {
@@ -122,6 +127,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
+        || id == RowId::ShortAverageErrorBar
         || id == RowId::LongErrorBar
         || id == RowId::AverageErrorBarIntensity
         || id == RowId::AverageErrorBarInterval

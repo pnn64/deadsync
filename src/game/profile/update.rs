@@ -1086,6 +1086,18 @@ pub fn update_average_error_bar_intensity_for_side(side: PlayerSide, intensity: 
     save_profile_ini_for_side(side);
 }
 
+pub fn update_short_average_error_bar_enabled_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.short_average_error_bar_enabled == enabled {
+            return;
+        }
+        profile.short_average_error_bar_enabled = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_average_error_bar_interval_ms_for_side(side: PlayerSide, ms: u32) {
     let normalized = super::clamp_average_error_bar_interval_ms(ms);
     {

@@ -8395,7 +8395,11 @@ pub fn build_bundles(
                             (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
                         })
                         .unwrap_or(false);
-                    if bar_visible && wscale.is_finite() && wscale > 0.0 {
+                    if profile.short_average_error_bar_enabled
+                        && bar_visible
+                        && wscale.is_finite()
+                        && wscale > 0.0
+                    {
                         let tick_h =
                             ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
                         let multi_tick = profile.error_bar_multi_tick;
