@@ -4337,8 +4337,10 @@ impl App {
                 profile_id,
                 display_name,
             } => {
-                self.state.screens.groovestats_login_state.active_color_index =
-                    self.state.screens.menu_state.active_color_index;
+                self.state
+                    .screens
+                    .groovestats_login_state
+                    .active_color_index = self.state.screens.menu_state.active_color_index;
                 self.state.screens.groovestats_login_state.target_profile =
                     Some(crate::screens::groovestats_login::ProfileTarget {
                         id: profile_id,

@@ -29,13 +29,13 @@ pub use self::runtime::{
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
-    DefaultSyncOffset, GameFlag, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS,
-    MachineBarColor, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    DefaultSyncOffset, GameFlag, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
+    MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 

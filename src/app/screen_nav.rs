@@ -175,8 +175,10 @@ impl App {
             );
         }
         if target_screen == CurrentScreen::GrooveStatsLogin {
-            self.state.screens.groovestats_login_state.active_color_index =
-                self.state.screens.menu_state.active_color_index;
+            self.state
+                .screens
+                .groovestats_login_state
+                .active_color_index = self.state.screens.menu_state.active_color_index;
             crate::screens::groovestats_login::on_enter(
                 &mut self.state.screens.groovestats_login_state,
             );
@@ -488,8 +490,10 @@ impl App {
             );
         }
         if target == CurrentScreen::GrooveStatsLogin {
-            self.state.screens.groovestats_login_state.active_color_index =
-                self.state.screens.menu_state.active_color_index;
+            self.state
+                .screens
+                .groovestats_login_state
+                .active_color_index = self.state.screens.menu_state.active_color_index;
             crate::screens::groovestats_login::on_enter(
                 &mut self.state.screens.groovestats_login_state,
             );

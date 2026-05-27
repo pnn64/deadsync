@@ -484,6 +484,17 @@ fn edit_bar_scroll_speed(
     .max(0.0)
 }
 
+#[inline(always)]
+fn beat_scroll_travel(
+    note_displayed_beat: f32,
+    current_displayed_beat: f32,
+    displayed_speed_percent: f32,
+) -> f32 {
+    (note_displayed_beat - current_displayed_beat)
+        * ScrollSpeedSetting::ARROW_SPACING
+        * displayed_speed_percent
+}
+
 fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
     ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
 }
@@ -4292,9 +4303,7 @@ pub fn build_bundles(
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp_beat = timing.get_displayed_beat(beat);
-                    (note_disp_beat - curr_disp_beat)
-                        * ScrollSpeedSetting::ARROW_SPACING
-                        * beatmod_multiplier
+                    beat_scroll_travel(note_disp_beat, curr_disp_beat, beatmod_multiplier)
                 }
             }
         };
@@ -4443,19 +4452,7 @@ pub fn build_bundles(
         // downwards lanes anchor to the reverse row.
         let compute_lane_y_dynamic =
             |local_col: usize, beat: f32, receptor_y_lane: f32, dir: f32| -> f32 {
-                let travel_offset = match scroll_speed {
-                    ScrollSpeedSetting::CMod(_) => {
-                        travel_offset_for_time_ns(timing.get_time_for_beat_ns(beat))
-                    }
-                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                        let note_disp_beat = timing.get_displayed_beat(beat);
-                        let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        beat_diff_disp
-                            * ScrollSpeedSetting::ARROW_SPACING
-                            * field_zoom
-                            * beatmod_multiplier
-                    }
-                };
+                let travel_offset = raw_travel_offset_for_beat(beat);
                 lane_y_from_travel(local_col, receptor_y_lane, dir, travel_offset)
             };
         // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha).
@@ -9106,6 +9103,25 @@ mod tests {
 
         assert!(itg_order < pre_scaled_order);
         assert!((itg_order - expected_itg_order).abs() <= 0.001);
+    }
+
+    #[test]
+    fn beat_measure_travel_applies_mini_once_like_notes() {
+        let raw = super::beat_scroll_travel(12.0, 8.0, 1.25);
+        let field_zoom = 0.75;
+        let player_speed = 5.0;
+        let expected = (12.0 - 8.0) * crate::game::scroll::ScrollSpeedSetting::ARROW_SPACING * 1.25;
+
+        assert!((raw - expected).abs() <= 0.001);
+
+        let note_y = raw * field_zoom * player_speed;
+        let old_measure_y = raw * field_zoom * field_zoom * player_speed;
+
+        assert!((note_y - expected * field_zoom * player_speed).abs() <= 0.001);
+        assert!(
+            (note_y - old_measure_y).abs() > 100.0,
+            "double-applying field zoom would drift measure lines away from notes"
+        );
     }
 
     #[test]
