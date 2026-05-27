@@ -8426,16 +8426,11 @@ impl App {
                     );
                 }
                 CurrentScreen::EvaluationSummary => {
-                    // Returning from the Set Summary overlay: keep the existing
-                    // wheel state (selected song, sort, scroll, etc.) intact so
-                    // the user lands back exactly where they left off. Just
-                    // refresh derived data without re-initializing.
                     select_music::trigger_immediate_refresh(
                         &mut self.state.screens.select_music_state,
                     );
                 }
                 CurrentScreen::ProfileLoad => {
-                    // SelectMusic state is prepared asynchronously while ProfileLoad is displayed.
                     select_music::trigger_immediate_refresh(
                         &mut self.state.screens.select_music_state,
                     );
@@ -8612,9 +8607,6 @@ impl App {
 
             match prev {
                 CurrentScreen::ProfileLoad | CurrentScreen::EvaluationSummary => {
-                    // ProfileLoad prepares state asynchronously; EvaluationSummary
-                    // is the Set Summary overlay, so in both cases preserve the
-                    // existing course wheel state and just refresh derived data.
                     select_course::trigger_immediate_refresh(
                         &mut self.state.screens.select_course_state,
                     );
