@@ -96,6 +96,7 @@ fn bench_score_info() -> ScoreInfo {
             stddev_ms: 13.2,
             max_abs_ms: 42.5,
         },
+        arrow_timing: Default::default(),
         scatter: Vec::new(),
         scatter_worst_window_ms: 180.0,
         histogram: HistogramMs::default(),

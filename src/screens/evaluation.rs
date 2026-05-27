@@ -554,6 +554,8 @@ pub struct ScoreInfo {
     pub mines_total: u32,
     // Aggregate timing stats for non-miss tap judgments
     pub timing: timing_stats::TimingStats,
+    // Per-arrow / per-foot timing breakdown for the Timing Arrows pane.
+    pub arrow_timing: timing_stats::ArrowTimingStats,
     // Prepared scatter plot points (time, offset), like Simply Love
     pub scatter: Vec<timing_stats::ScatterPoint>,
     // Worst window used to scale scatter (at least W2), like Simply Love ScatterPlot.lua
@@ -1635,7 +1637,7 @@ mod tests {
 
     #[test]
     fn eval_pane_skip_duplicate_advances_auto_switch_collision() {
-        let panes = eval_pane_cycle(false, false, true, false, false, false);
+        let panes = eval_pane_cycle(false, false, true, false, false, false, false);
 
         assert_eq!(
             eval_pane_skip_duplicate(EvalPane::GrooveStats, EvalPane::GrooveStats, 1, &panes),
@@ -1683,6 +1685,7 @@ pub(crate) enum EvalPane {
     Timing,
     TimingEx,
     TimingHardEx,
+    TimingArrows,
     TestInput,
 }
 
@@ -1729,8 +1732,9 @@ fn eval_pane_cycle(
     has_itl: bool,
     has_arrowcloud: bool,
     has_test_input: bool,
+    has_arrow_timing: bool,
 ) -> Vec<EvalPane> {
-    let mut panes = Vec::with_capacity(13);
+    let mut panes = Vec::with_capacity(14);
     panes.push(EvalPane::Standard);
     panes.push(EvalPane::FaPlus);
     if has_hard_ex {
@@ -1756,6 +1760,9 @@ fn eval_pane_cycle(
     if has_hard_ex {
         panes.push(EvalPane::TimingHardEx);
     }
+    if has_arrow_timing {
+        panes.push(EvalPane::TimingArrows);
+    }
     if has_test_input {
         panes.push(EvalPane::TestInput);
     }
@@ -1770,6 +1777,13 @@ fn eval_has_test_input_pane() -> bool {
     crate::config::get().only_dedicated_menu_buttons
 }
 
+#[inline(always)]
+fn eval_has_arrow_timing_pane(score_info: &ScoreInfo) -> bool {
+    // The per-arrow timing pane is only meaningful on 4-panel (singles) charts,
+    // where ←/↓/↑/→ map cleanly onto the four columns shown in the table.
+    score_info.arrow_timing.per_column.len() == 4
+}
+
 #[cfg(test)]
 fn eval_pane_shift(
     pane: EvalPane,
@@ -1780,7 +1794,7 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud, true);
+    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud, true, false);
     eval_pane_shift_in_cycle(pane, dir, &panes)
 }
 
@@ -2001,6 +2015,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
+            let arrow_timing =
+                timing_stats::compute_arrow_timing_stats(notes, col_offset, cols_per_player);
             // Prepare scatter points and histogram bins
             let scatter = timing_stats::build_scatter_points(
                 notes,
@@ -2237,6 +2253,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 mines_avoided: p.mines_avoided,
                 mines_total: gs.mines_total[player_idx],
                 timing: stats,
+                arrow_timing,
                 scatter,
                 scatter_worst_window_ms,
                 histogram,
@@ -2836,6 +2853,7 @@ pub fn update(state: &mut State, dt: f32) {
                     eval_has_itl_pane(state.allow_online_panes, si),
                     eval_has_arrowcloud_pane(state.allow_online_panes, gs_side),
                     eval_has_test_input_pane(),
+                    eval_has_arrow_timing_pane(si),
                 );
                 let other_idx = 1 - controller_idx;
                 state.active_pane[controller_idx] = eval_pane_skip_duplicate(
@@ -3504,6 +3522,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             has_itl,
             has_arrowcloud,
             eval_has_test_input_pane(),
+            eval_has_arrow_timing_pane(si),
         );
         state.active_pane[controller_idx] =
             eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
@@ -4284,6 +4303,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     controller,
                     crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                 )),
+                EvalPane::TimingArrows => {
+                    actors.extend(eval_panes::build_timing_arrows_pane(
+                        si,
+                        controller,
+                        state.screen_elapsed,
+                    ));
+                }
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
                     controller,

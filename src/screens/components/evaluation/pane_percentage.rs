@@ -78,6 +78,7 @@ pub(crate) fn build_pane_percentage_display(
         EvalPane::Timing => {}
         EvalPane::TimingEx => {}
         EvalPane::TimingHardEx => {}
+        EvalPane::TimingArrows => {}
         EvalPane::MachineRecords => {}
         EvalPane::QrCode => {}
         EvalPane::GrooveStats => {}

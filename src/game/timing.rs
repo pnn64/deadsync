@@ -1468,6 +1468,169 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
     }
 }
 
+/// Per-column / per-foot breakdown of timing offsets, used by the
+/// per-arrow timing pane on the evaluation screen.
+///
+/// `per_column` has one entry per column on the player's pad (e.g. 4 for
+/// dance-single). `left_foot` / `right_foot` are computed using the same
+/// alternation heuristic as [`build_scatter_points`]: a step on the
+/// outermost-left column forces the left foot, a step on the
+/// outermost-right column forces the right foot, and anything else flips
+/// the foot from the previous row. Chord notes share the row's
+/// alternated foot.
+#[derive(Clone, Debug, Default)]
+pub struct ArrowTimingStats {
+    pub per_column: Vec<ArrowTimingBucket>,
+    pub left_foot: ArrowTimingBucket,
+    pub right_foot: ArrowTimingBucket,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct ArrowTimingBucket {
+    pub count: u32,
+    pub stats: TimingStats,
+}
+
+#[derive(Copy, Clone, Default)]
+struct StatsAccum {
+    count: u32,
+    sum_ms: f32,
+    sum_abs_ms: f32,
+    sum_sq_diff_ms: f32,
+    max_abs_ms: f32,
+    mean_ms: f32, // running mean (Welford) for stable variance accumulation
+}
+
+impl StatsAccum {
+    #[inline(always)]
+    fn add(&mut self, e_ms: f32) {
+        self.count = self.count.saturating_add(1);
+        let n = self.count as f32;
+        self.sum_ms += e_ms;
+        self.sum_abs_ms += e_ms.abs();
+        let abs = e_ms.abs();
+        if abs > self.max_abs_ms {
+            self.max_abs_ms = abs;
+        }
+        // Welford's online variance: maintains numerical stability and lets
+        // us emit per-bucket stats without making a second pass over notes.
+        let delta = e_ms - self.mean_ms;
+        self.mean_ms += delta / n;
+        let delta2 = e_ms - self.mean_ms;
+        self.sum_sq_diff_ms += delta * delta2;
+    }
+
+    #[inline(always)]
+    fn finish(self) -> ArrowTimingBucket {
+        if self.count == 0 {
+            return ArrowTimingBucket::default();
+        }
+        let n = self.count as f32;
+        let mean_ms = self.sum_ms / n;
+        let mean_abs_ms = self.sum_abs_ms / n;
+        let variance = (self.sum_sq_diff_ms / n).max(0.0);
+        ArrowTimingBucket {
+            count: self.count,
+            stats: TimingStats {
+                mean_abs_ms,
+                mean_ms,
+                stddev_ms: variance.sqrt(),
+                max_abs_ms: self.max_abs_ms,
+            },
+        }
+    }
+}
+
+#[inline(always)]
+pub fn compute_arrow_timing_stats(
+    notes: &[Note],
+    col_offset: usize,
+    cols_per_player: usize,
+) -> ArrowTimingStats {
+    let mut per_column: Vec<StatsAccum> = vec![StatsAccum::default(); cols_per_player];
+    let mut left = StatsAccum::default();
+    let mut right = StatsAccum::default();
+
+    let mut foot_left = false;
+    let mut idx = 0usize;
+    let len = notes.len();
+    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
+
+    while idx < len {
+        let row_index = notes[idx].row_index;
+        let row_start = idx;
+        row_judgments.clear();
+
+        // Direction code mirrors `build_scatter_points`: 1 = leftmost column,
+        // `cols_per_player` = rightmost column, anything else is a chord.
+        let mut direction_code: u32 = 0;
+        while idx < len && notes[idx].row_index == row_index {
+            let note = &notes[idx];
+            if !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+            {
+                if let Some(j) = note.result.as_ref() {
+                    row_judgments.push(j);
+                }
+                if let Some(code) = local_direction_code(note, col_offset, cols_per_player) {
+                    direction_code = direction_code.saturating_add(code as u32);
+                }
+            }
+            idx += 1;
+        }
+
+        // Alternation must mirror `build_scatter_points` exactly, even for
+        // rows whose final judgment is a Miss, so foot assignments stay in
+        // sync with the per-arrow scatter plot.
+        let leftmost = 1u32;
+        let rightmost = cols_per_player as u32;
+        if direction_code == leftmost {
+            foot_left = true;
+        } else if direction_code == rightmost {
+            foot_left = false;
+        } else if direction_code > 0 {
+            foot_left = !foot_left;
+        }
+
+        let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) else {
+            continue;
+        };
+        if j.grade == JudgeGrade::Miss {
+            continue;
+        }
+
+        let e = j.time_error_ms;
+
+        // Per-column: each judgeable tap note in the row gets attributed
+        // to its own column, but they all share the row's aggregated
+        // offset, so chord arrows count once per arrow.
+        let foot_bucket = if foot_left { &mut left } else { &mut right };
+        for n in &notes[row_start..idx] {
+            if n.is_fake
+                || !n.can_be_judged
+                || matches!(n.note_type, NoteType::Mine)
+                || n.result.is_none()
+            {
+                continue;
+            }
+            if let Some(code) = local_direction_code(n, col_offset, cols_per_player) {
+                let col = (code as usize).saturating_sub(1);
+                if col < cols_per_player {
+                    per_column[col].add(e);
+                    foot_bucket.add(e);
+                }
+            }
+        }
+    }
+
+    ArrowTimingStats {
+        per_column: per_column.into_iter().map(StatsAccum::finish).collect(),
+        left_foot: left.finish(),
+        right_foot: right.finish(),
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ScatterPoint {
     pub time_sec: f32,
@@ -1916,6 +2079,70 @@ mod tests {
         assert!((stats.mean_abs_ms - 10.0).abs() < 0.0001);
         assert!((stats.max_abs_ms - 10.0).abs() < 0.0001);
         assert!(stats.stddev_ms.abs() < 0.0001);
+    }
+
+    #[test]
+    fn arrow_timing_stats_bucket_per_column_and_skip_misses() {
+        let notes = vec![
+            test_note(10, 0, JudgeGrade::Fantastic, -4.0),
+            test_note(11, 1, JudgeGrade::Excellent, 8.0),
+            test_note(12, 2, JudgeGrade::Great, -2.0),
+            test_note(13, 3, JudgeGrade::Decent, 16.0),
+            // Miss should be excluded from per-column stats even though it
+            // still participates in the foot alternation.
+            test_note(14, 0, JudgeGrade::Miss, 0.0),
+            test_note(15, 0, JudgeGrade::Fantastic, 4.0),
+        ];
+
+        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        assert_eq!(stats.per_column.len(), 4);
+        assert_eq!(stats.per_column[0].count, 2);
+        assert!((stats.per_column[0].stats.mean_ms - 0.0).abs() < 0.0001);
+        assert!((stats.per_column[0].stats.mean_abs_ms - 4.0).abs() < 0.0001);
+        assert!((stats.per_column[0].stats.max_abs_ms - 4.0).abs() < 0.0001);
+        assert_eq!(stats.per_column[1].count, 1);
+        assert!((stats.per_column[1].stats.mean_ms - 8.0).abs() < 0.0001);
+        assert_eq!(stats.per_column[2].count, 1);
+        assert_eq!(stats.per_column[3].count, 1);
+    }
+
+    #[test]
+    fn arrow_timing_stats_attribute_chord_rows_to_alternated_foot() {
+        // Row 0: left column forces foot = left.
+        // Row 1: chord on up+down -> alternates -> right.
+        // Row 2: right column forces foot = right.
+        // Row 3: chord on down+up -> alternates -> left.
+        let notes = vec![
+            test_note(0, 0, JudgeGrade::Fantastic, 1.0),
+            test_note(1, 1, JudgeGrade::Fantastic, 2.0),
+            test_note(1, 2, JudgeGrade::Fantastic, 2.0),
+            test_note(2, 3, JudgeGrade::Fantastic, 3.0),
+            test_note(3, 1, JudgeGrade::Fantastic, 4.0),
+            test_note(3, 2, JudgeGrade::Fantastic, 4.0),
+        ];
+
+        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        // Left foot: row 0 (col 0) + chord row 3 contributes both arrows.
+        assert_eq!(stats.left_foot.count, 3);
+        // Right foot: chord row 1 (both arrows) + row 2 (col 3).
+        assert_eq!(stats.right_foot.count, 3);
+        // Total per-column count should equal left + right.
+        let per_col_total: u32 = stats.per_column.iter().map(|b| b.count).sum();
+        assert_eq!(per_col_total, stats.left_foot.count + stats.right_foot.count);
+    }
+
+    #[test]
+    fn arrow_timing_stats_miss_still_flips_foot() {
+        // Miss on col 1 should still alternate the foot (matches scatter plot).
+        let notes = vec![
+            test_note(0, 0, JudgeGrade::Fantastic, 0.0), // forces left
+            test_note(1, 1, JudgeGrade::Miss, 0.0),      // alternates -> right (excluded from stats)
+            test_note(2, 2, JudgeGrade::Fantastic, 5.0), // alternates -> left
+        ];
+
+        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        assert_eq!(stats.left_foot.count, 2);
+        assert_eq!(stats.right_foot.count, 0);
     }
 
     #[test]
