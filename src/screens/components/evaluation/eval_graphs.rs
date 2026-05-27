@@ -187,6 +187,88 @@ fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [
     });
 }
 
+pub fn build_scatter_background_mesh(
+    graph_width: f32,
+    graph_height: f32,
+    worst_window_ms: f32,
+    scale: ScatterPlotScale,
+) -> Vec<MeshVertex> {
+    let w = graph_width.max(0.0);
+    let h = graph_height.max(0.0);
+    if w <= 0.0 || h <= 0.0 {
+        return Vec::new();
+    }
+
+    // Use the same display-window cap the scatter mesh uses so the bands and
+    // the plotted points share the same vertical mapping.
+    let worst = match scale {
+        ScatterPlotScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
+        _ => worst_window_ms,
+    }
+    .max(1.0);
+
+    let timing_windows_ms = crate::game::timing::effective_windows_ms();
+    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w010 = crate::game::timing::FA_PLUS_W010_MS;
+
+    // (outer_ms, color) ordered innermost to outermost. The inner edge of
+    // each band is the outer edge of the previous band (0 for the first).
+    let bands: &[(f32, [f32; 4])] = match scale {
+        ScatterPlotScale::Itg => &[
+            (timing_windows_ms[0], color::JUDGMENT_RGBA[0]),
+            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
+            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
+            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
+            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+        ],
+        ScatterPlotScale::Ex => &[
+            (w0, color::JUDGMENT_RGBA[0]),
+            (timing_windows_ms[0], color::JUDGMENT_FA_PLUS_WHITE_RGBA),
+            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
+            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
+            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
+            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+        ],
+        ScatterPlotScale::HardEx => &[
+            (w010, color::HARD_EX_SCORE_RGBA),
+            (w0, color::JUDGMENT_RGBA[0]),
+            (timing_windows_ms[0], color::JUDGMENT_FA_PLUS_WHITE_RGBA),
+            (timing_windows_ms[1], color::JUDGMENT_RGBA[1]),
+            (timing_windows_ms[2], color::JUDGMENT_RGBA[2]),
+            (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
+            (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
+        ],
+        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => return Vec::new(),
+    };
+
+    // Matches Simply Love's `diffusealpha(0.1)` on its judgment-region quads.
+    const BAND_ALPHA: f32 = 0.1;
+
+    let mut out: Vec<MeshVertex> = Vec::with_capacity(bands.len() * 12);
+    let half = h * 0.5;
+    let mut inner_ms: f32 = 0.0;
+    for &(outer_ms, c) in bands {
+        let outer = outer_ms.min(worst);
+        if outer <= inner_ms {
+            continue;
+        }
+        let inner_frac = (inner_ms / worst).clamp(0.0, 1.0);
+        let outer_frac = (outer / worst).clamp(0.0, 1.0);
+        let band_h = (outer_frac - inner_frac) * half;
+        let top_y = (1.0 - outer_frac) * half;
+        let bot_y = half + inner_frac * half;
+        let col = [c[0], c[1], c[2], BAND_ALPHA];
+        push_quad(&mut out, 0.0, top_y, w, band_h, col);
+        push_quad(&mut out, 0.0, bot_y, w, band_h, col);
+        inner_ms = outer;
+        if outer_ms >= worst {
+            break;
+        }
+    }
+
+    out
+}
+
 pub fn build_scatter_mesh(
     scatter: &[ScatterPoint],
     first_second: f32,

@@ -295,6 +295,11 @@ pub struct Config {
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// Tint the evaluation scatterplot background in horizontal bands matching
+    /// the active scoring scale's judgment timing windows. Mirrors the
+    /// Simply-Love-SM5-8ms judgment-region shading; off by default to preserve
+    /// the existing solid background.
+    pub shade_scatterplot_judgments: bool,
     /// Conditions for auto-screenshotting the Evaluation screen.
     pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
@@ -445,6 +450,7 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            shade_scatterplot_judgments: false,
             auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
             arcade_options_navigation: false,
