@@ -1997,6 +1997,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             window_counts: counts,
             window_counts_10ms: counts_10ms,
             timing: crate::game::timing::timing_stats_from_offsets(timing_offsets_ms),
+            arrow_timing: crate::game::timing::ArrowTimingStats::default(),
             scatter,
             scatter_worst_window_ms: scatter_worst_window_ms.max(45.0),
             histogram: crate::game::timing::merge_histograms_ms(histograms.as_slice()),
@@ -2094,6 +2095,7 @@ fn score_info_from_stage(
         mines_avoided: player.mines_avoided,
         mines_total: player.mines_total,
         timing: player.timing,
+        arrow_timing: player.arrow_timing.clone(),
         scatter: player.scatter.clone(),
         scatter_worst_window_ms: player.scatter_worst_window_ms,
         histogram: player.histogram.clone(),
@@ -2811,6 +2813,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         window_counts: si.window_counts,
         window_counts_10ms: si.window_counts_10ms,
         timing: si.timing,
+        arrow_timing: si.arrow_timing.clone(),
         scatter: si.scatter.clone(),
         scatter_worst_window_ms: si.scatter_worst_window_ms,
         histogram: si.histogram.clone(),
@@ -4819,6 +4822,34 @@ impl App {
         }
     }
 
+    fn update_last_played_course(&self, course_path: &Path, difficulty_name: &str) {
+        let play_style = profile::get_session_play_style();
+        match play_style {
+            profile::PlayStyle::Versus => {
+                profile::update_last_played_course_for_side(
+                    profile::PlayerSide::P1,
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+                profile::update_last_played_course_for_side(
+                    profile::PlayerSide::P2,
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+            }
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                profile::update_last_played_course_for_side(
+                    profile::get_session_player_side(),
+                    play_style,
+                    course_path,
+                    Some(difficulty_name),
+                );
+            }
+        }
+    }
+
     fn start_course_run_from_selected(&mut self) -> bool {
         let Some(selection) =
             select_course::selected_course_plan(&self.state.screens.select_course_state)
@@ -4826,13 +4857,15 @@ impl App {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
         };
-        self.state.session.last_course_wheel_path = Some(selection.path.clone());
-        self.state.session.last_course_wheel_difficulty_name =
-            Some(selection.course_difficulty_name.clone());
+        let course_path = selection.path.clone();
+        let course_difficulty_name = selection.course_difficulty_name.clone();
         let Some(course_run) = build_course_run_from_selection(selection) else {
             warn!("Unable to start course run: failed to resolve course stages.");
             return false;
         };
+        self.state.session.last_course_wheel_path = Some(course_path.clone());
+        self.state.session.last_course_wheel_difficulty_name = Some(course_difficulty_name.clone());
+        self.update_last_played_course(course_path.as_path(), course_difficulty_name.as_str());
         self.state.session.course_run = Some(course_run);
         self.state.session.course_eval_pages.clear();
         self.state.session.course_eval_page_index = 0;
@@ -9228,6 +9261,7 @@ mod tests {
             mines_avoided: 0,
             mines_total: 0,
             timing: crate::game::timing::TimingStats::default(),
+            arrow_timing: Default::default(),
             scatter: Vec::new(),
             scatter_worst_window_ms: 45.0,
             histogram: crate::game::timing::HistogramMs::default(),
@@ -9321,6 +9355,7 @@ mod tests {
                 stddev_ms: 0.0,
                 max_abs_ms: 10.0,
             },
+            arrow_timing: Default::default(),
             scatter: vec![crate::game::timing::ScatterPoint {
                 time_sec: 12.0,
                 offset_ms: Some(10.0),

@@ -1494,6 +1494,37 @@ fn write_last_played(content: &mut String, section: &str, last_played: &LastPlay
 }
 
 #[inline(always)]
+fn load_last_played_course(profile_conf: &SimpleIni, section: &str) -> Option<LastPlayedCourse> {
+    let has_any = profile_conf
+        .get_section(section)
+        .is_some_and(|s| !s.is_empty());
+    if !has_any {
+        return None;
+    }
+
+    Some(LastPlayedCourse {
+        course_path: parse_last_played_value(profile_conf.get(section, "CoursePath")),
+        difficulty_name: parse_last_played_value(profile_conf.get(section, "DifficultyName")),
+    })
+}
+
+#[inline(always)]
+fn write_last_played_course(content: &mut String, section: &str, last_played: &LastPlayedCourse) {
+    content.push_str(&format!("[{section}]\n"));
+    if let Some(path) = &last_played.course_path {
+        content.push_str(&format!("CoursePath={path}\n"));
+    } else {
+        content.push_str("CoursePath=\n");
+    }
+    if let Some(name) = &last_played.difficulty_name {
+        content.push_str(&format!("DifficultyName={name}\n"));
+    } else {
+        content.push_str("DifficultyName=\n");
+    }
+    content.push('\n');
+}
+
+#[inline(always)]
 fn profile_stats_tmp_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("stats.bin.tmp")
 }
@@ -3128,6 +3159,8 @@ pub struct Profile {
     // Singles is shared by Single and Versus. Double uses its own entry.
     pub last_played_singles: LastPlayed,
     pub last_played_doubles: LastPlayed,
+    pub last_played_course_singles: LastPlayedCourse,
+    pub last_played_course_doubles: LastPlayedCourse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3146,6 +3179,12 @@ impl Default for LastPlayed {
             difficulty_index: 2,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LastPlayedCourse {
+    pub course_path: Option<String>,
+    pub difficulty_name: Option<String>,
 }
 
 impl Default for Profile {
@@ -3272,6 +3311,8 @@ impl Default for Profile {
             player_options_doubles: player_options,
             last_played_singles: LastPlayed::default(),
             last_played_doubles: LastPlayed::default(),
+            last_played_course_singles: LastPlayedCourse::default(),
+            last_played_course_doubles: LastPlayedCourse::default(),
         }
     }
 }
@@ -3586,6 +3627,22 @@ impl Profile {
         match style {
             PlayStyle::Single | PlayStyle::Versus => &mut self.last_played_singles,
             PlayStyle::Double => &mut self.last_played_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn last_played_course(&self, style: PlayStyle) -> &LastPlayedCourse {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.last_played_course_singles,
+            PlayStyle::Double => &self.last_played_course_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn last_played_course_mut(&mut self, style: PlayStyle) -> &mut LastPlayedCourse {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.last_played_course_singles,
+            PlayStyle::Double => &mut self.last_played_course_doubles,
         }
     }
 }
@@ -4000,6 +4057,16 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         "LastPlayedDoubles",
         &profile.last_played_doubles,
     );
+    write_last_played_course(
+        &mut content,
+        "LastPlayedCourseSingles",
+        &profile.last_played_course_singles,
+    );
+    write_last_played_course(
+        &mut content,
+        "LastPlayedCourseDoubles",
+        &profile.last_played_course_doubles,
+    );
 
     content.push_str("[Stats]\n");
     content.push_str(&format!(
@@ -4355,6 +4422,14 @@ fn load_for_side(side: PlayerSide) {
                 )
             })
             .unwrap_or_else(|| default_profile.last_played_doubles.clone());
+            profile.last_played_course_singles =
+                load_last_played_course(&profile_conf, "LastPlayedCourseSingles")
+                    .or_else(|| load_last_played_course(&profile_conf, "LastPlayedCourse"))
+                    .unwrap_or_else(|| default_profile.last_played_course_singles.clone());
+            profile.last_played_course_doubles =
+                load_last_played_course(&profile_conf, "LastPlayedCourseDoubles")
+                    .or_else(|| load_last_played_course(&profile_conf, "LastPlayedCourse"))
+                    .unwrap_or_else(|| default_profile.last_played_course_doubles.clone());
 
             profile.weight_pounds = profile_conf
                 .get("Editable", "WeightPounds")
@@ -5378,6 +5453,27 @@ mod tests {
         assert_eq!(profile.last_played(PlayStyle::Single), &singles);
         assert_eq!(profile.last_played(PlayStyle::Versus), &singles);
         assert_eq!(profile.last_played(PlayStyle::Double), &doubles);
+    }
+
+    #[test]
+    fn last_played_course_uses_singles_for_single_and_versus() {
+        let singles = LastPlayedCourse {
+            course_path: Some("Courses/Single.crs".to_string()),
+            difficulty_name: Some("Hard".to_string()),
+        };
+        let doubles = LastPlayedCourse {
+            course_path: Some("Courses/Double.crs".to_string()),
+            difficulty_name: Some("Challenge".to_string()),
+        };
+        let profile = Profile {
+            last_played_course_singles: singles.clone(),
+            last_played_course_doubles: doubles.clone(),
+            ..Profile::default()
+        };
+
+        assert_eq!(profile.last_played_course(PlayStyle::Single), &singles);
+        assert_eq!(profile.last_played_course(PlayStyle::Versus), &singles);
+        assert_eq!(profile.last_played_course(PlayStyle::Double), &doubles);
     }
 
     #[test]

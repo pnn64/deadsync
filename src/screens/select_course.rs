@@ -1181,6 +1181,19 @@ fn selected_banner_path(state: &State) -> Option<PathBuf> {
     }
 }
 
+fn restore_last_course(state: &mut State) {
+    let profile_data = profile::get();
+    let last_played = profile_data.last_played_course(profile::get_session_play_style());
+    let Some(path) = last_played.course_path.as_deref() else {
+        return;
+    };
+    restore_selection_for_course(
+        state,
+        Path::new(path),
+        last_played.difficulty_name.as_deref(),
+    );
+}
+
 pub fn init() -> State {
     let init = build_init_data();
     let mut state = State {
@@ -1213,6 +1226,7 @@ pub fn init() -> State {
         three_key_focus: ThreeKeyFocus::Wheel,
     };
     rebuild_displayed_entries(&mut state);
+    restore_last_course(&mut state);
     state
 }
 
