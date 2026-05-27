@@ -4293,7 +4293,7 @@ impl App {
                     // Mirror that here for ArrowCloud, gated by the
                     // ArrowCloudQrLoginWhen pref.
                     let cfg = crate::config::get();
-                    let next = if crate::screens::options::arrowcloud_login::should_auto_show(
+                    let next = if crate::screens::options::qr_login::should_auto_show(
                         cfg.arrowcloud_qr_login_when,
                     ) {
                         CurrentScreen::ArrowCloudLogin

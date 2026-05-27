@@ -8,7 +8,7 @@
 //!
 //! The visual state machine + per-side worker is shared with future
 //! entry points; both render the same overlay actors via
-//! [`build_arrowcloud_login_overlay_actors`].
+//! [`build_qr_login_overlay_actors`].
 
 use std::sync::atomic::Ordering;
 
@@ -16,9 +16,9 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::options::arrowcloud_login::{
-    ArrowCloudLoginUiState, build_arrowcloud_login_overlay_actors, create_arrowcloud_login_ui,
-    create_arrowcloud_login_ui_for_profile, poll_arrowcloud_login_ui,
+use crate::screens::options::qr_login::{
+    QrLoginUiState, build_qr_login_overlay_actors, create_arrowcloud_login_ui,
+    create_arrowcloud_login_ui_for_profile, poll_qr_login_ui,
 };
 use crate::screens::{Screen, ScreenAction};
 
@@ -35,7 +35,7 @@ pub struct ProfileTarget {
 
 pub struct State {
     pub active_color_index: i32,
-    pub(crate) ui: Option<ArrowCloudLoginUiState>,
+    pub(crate) ui: Option<QrLoginUiState>,
     /// `Some` when entered via Manage Local Profiles → Link ArrowCloud,
     /// scoping the screen to a single profile (rather than P1/P2 sides).
     /// Cleared on dismiss so subsequent post-Select-Profile auto-flows
@@ -83,7 +83,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 pub fn update(state: &mut State, _dt: f32) {
     if let Some(ui) = state.ui.as_mut() {
-        poll_arrowcloud_login_ui(ui);
+        poll_qr_login_ui(ui);
     }
 }
 
@@ -161,7 +161,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     }));
 
     if let Some(ui) = state.ui.as_ref() {
-        let mut ui_actors = build_arrowcloud_login_overlay_actors(ui, state.active_color_index);
+        let mut ui_actors = build_qr_login_overlay_actors(ui, state.active_color_index);
         for actor in &mut ui_actors {
             actor.mul_alpha(alpha_multiplier);
         }
