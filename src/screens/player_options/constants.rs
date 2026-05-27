@@ -94,7 +94,7 @@ pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 use crate::game::profile::{
     AttackMode, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim, HideLightType,
     LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType,
-    Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    Perspective, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).
@@ -155,6 +155,13 @@ pub(super) const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
     DataVisualizations::None,
     DataVisualizations::TargetScoreGraph,
     DataVisualizations::StepStatistics,
+];
+
+pub(super) const SCATTERPLOT_MAX_WINDOW_VARIANTS: [ScatterplotMaxWindow; 4] = [
+    ScatterplotMaxWindow::Off,
+    ScatterplotMaxWindow::Fantastic,
+    ScatterplotMaxWindow::Excellent,
+    ScatterplotMaxWindow::Great,
 ];
 
 pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [

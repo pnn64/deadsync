@@ -71,6 +71,7 @@ pub enum RowId {
     RescoreEarlyHits,
     EarlyDecentWayOffOptions,
     ResultsExtras,
+    ScatterplotMaxWindow,
     TimingWindows,
     FAPlusOptions,
     FAPlusWindowOptions,
