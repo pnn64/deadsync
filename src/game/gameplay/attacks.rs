@@ -5157,6 +5157,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 );
             }
         }
+        state.attack_current_appearance[player] = appearance;
         if let Some(mini) = mini_percent.filter(|v| v.is_finite()) {
             mini_percent = Some(mini.clamp(-100.0, 150.0));
         }

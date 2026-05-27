@@ -12492,13 +12492,20 @@ return Def.ActorFrame{}
 
         state.attack_mask_windows[0] = constants;
         state.song_lua_ease_windows[0] = windows;
-        state.current_music_time_visible[0] = 5.0;
+        state.current_music_time_visible[0] = 5.99;
         refresh_active_attack_masks(&mut state, 0.0);
-        assert!(effective_appearance_effects_for_player(&state, 0).stealth > 0.0);
+        let eased_stealth = effective_appearance_effects_for_player(&state, 0).stealth;
+        assert!(eased_stealth > 0.4);
         assert!(effective_visual_effects_for_player(&state, 0).pulse_outer > 0.0);
 
+        state.current_music_time_visible[0] = 6.016;
+        refresh_active_attack_masks(&mut state, 0.026);
+        let fading_stealth = effective_appearance_effects_for_player(&state, 0).stealth;
+        assert!(fading_stealth > 0.0);
+        assert!(fading_stealth < eased_stealth);
+
         state.current_music_time_visible[0] = 7.0;
-        refresh_active_attack_masks(&mut state, 2.0);
+        refresh_active_attack_masks(&mut state, 0.984);
         assert!(
             effective_appearance_effects_for_player(&state, 0)
                 .stealth
