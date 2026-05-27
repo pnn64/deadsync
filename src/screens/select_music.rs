@@ -5898,6 +5898,27 @@ fn refresh_after_reload(state: &mut State) {
     *state = refreshed;
 }
 
+fn refresh_after_style_switch(state: &mut State) {
+    let sort_mode = state.sort_mode;
+    let active_playlist_id = state.active_playlist_id.clone();
+    let active_color_index = state.active_color_index;
+    let session_elapsed = state.session_elapsed;
+    let gameplay_elapsed = state.gameplay_elapsed;
+
+    let mut refreshed = init();
+    refreshed.active_color_index = active_color_index;
+    refreshed.active_playlist_id = active_playlist_id;
+    refreshed.session_elapsed = session_elapsed;
+    refreshed.gameplay_elapsed = gameplay_elapsed;
+
+    if sort_mode != WheelSortMode::Group {
+        apply_wheel_sort(&mut refreshed, sort_mode);
+    }
+
+    trigger_immediate_refresh(&mut refreshed);
+    *state = refreshed;
+}
+
 fn select_music_menu_move(state: &mut State, delta: isize) -> bool {
     if !move_select_music_menu(state, delta) {
         return false;
@@ -7944,7 +7965,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) 
     }
     profile::set_session_player_side(side);
     profile::set_session_play_style(new_style);
-    refresh_after_reload(state);
+    refresh_after_style_switch(state);
     state.selection_animation_timer = 0.0;
     crate::engine::present::runtime::clear_all();
 }
