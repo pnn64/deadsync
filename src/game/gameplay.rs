@@ -6622,7 +6622,7 @@ const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
         JudgeGrade::Great => Some("W3"),
         JudgeGrade::Decent => Some("W4"),
         JudgeGrade::WayOff => Some("W5"),
-        JudgeGrade::Miss => None,
+        JudgeGrade::Miss => Some("Miss"),
     }
 }
 
@@ -8837,8 +8837,8 @@ mod tests {
         effective_scroll_effects_for_player, effective_visibility_effects_for_player,
         effective_visual_effects_for_player, enforce_max_simultaneous_notes,
         error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
+        handle_input, hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
         lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
         lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
         lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
@@ -10814,6 +10814,11 @@ return Def.ActorFrame{}
         let mut disabled = regression_state([profile, profile::Profile::default()]);
         trigger_tap_explosion(&mut disabled, column, JudgeGrade::Great);
         assert!(disabled.tap_explosions[column].is_none());
+    }
+
+    #[test]
+    fn miss_grade_maps_to_miss_tap_explosion_window() {
+        assert_eq!(grade_to_window(JudgeGrade::Miss), Some("Miss"));
     }
 
     #[test]

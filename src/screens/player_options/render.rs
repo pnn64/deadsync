@@ -440,6 +440,28 @@ pub(super) fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
+fn tap_explosion_choice_mask(mask: crate::game::profile::TapExplosionMask) -> u16 {
+    [
+        crate::game::profile::TapExplosionMask::FANTASTIC,
+        crate::game::profile::TapExplosionMask::EXCELLENT,
+        crate::game::profile::TapExplosionMask::GREAT,
+        crate::game::profile::TapExplosionMask::DECENT,
+        crate::game::profile::TapExplosionMask::WAY_OFF,
+        crate::game::profile::TapExplosionMask::MISS,
+        crate::game::profile::TapExplosionMask::HELD,
+        crate::game::profile::TapExplosionMask::HOLDING,
+    ]
+    .into_iter()
+    .enumerate()
+    .fold(0u16, |bits, (i, flag)| {
+        if mask.contains(flag) {
+            bits | (1u16 << i)
+        } else {
+            bits
+        }
+    })
+}
+
 /// Simply Love / Arrow Cloud offset stacked P1/P2 cursors by one pixel.
 #[inline(always)]
 pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
@@ -510,7 +532,9 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
             .bits()
             .into(),
         EarlyDecentWayOffOptions => state.option_masks[player_idx].early_dw.bits().into(),
-        TapExplosionOptions => state.option_masks[player_idx].tap_explosion.bits().into(),
+        TapExplosionOptions => {
+            tap_explosion_choice_mask(state.option_masks[player_idx].tap_explosion)
+        }
         _ => return None,
     })
 }

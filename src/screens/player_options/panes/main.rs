@@ -1,5 +1,5 @@
 use super::super::choice;
-use super::super::row::{index_binding, simple_bitmask_binding};
+use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
 
@@ -314,14 +314,42 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
     },
 };
 
-const TAP_EXPLOSION_OPTIONS: BitmaskBinding = simple_bitmask_binding!(
-    mask = gp::TapExplosionMask,
-    bits = u8,
-    state_field = tap_explosion,
-    profile_field = tap_explosion_active_mask,
-    persist = gp::update_tap_explosion_mask_for_side,
-    width = 6,
-);
+const TAP_EXPLOSION_OPTION_BITS: &[u32] = &[
+    gp::TapExplosionMask::FANTASTIC.bits() as u32,
+    gp::TapExplosionMask::EXCELLENT.bits() as u32,
+    gp::TapExplosionMask::GREAT.bits() as u32,
+    gp::TapExplosionMask::DECENT.bits() as u32,
+    gp::TapExplosionMask::WAY_OFF.bits() as u32,
+    gp::TapExplosionMask::MISS.bits() as u32,
+    gp::TapExplosionMask::HELD.bits() as u32,
+    gp::TapExplosionMask::HOLDING.bits() as u32,
+];
+
+const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        from_profile: |p| p.tap_explosion_active_mask.bits() as u32,
+        get_active: |m| m.tap_explosion.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "TapExplosionMask init bits exceed storage width",
+            );
+            m.tap_explosion = gp::TapExplosionMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            p.tap_explosion_active_mask = gp::TapExplosionMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, p| {
+            gp::update_tap_explosion_mask_for_side(s, p.tap_explosion_active_mask);
+        },
+        bit_mapping: BitMapping::Explicit(TAP_EXPLOSION_OPTION_BITS),
+        sync_visibility: false,
+    },
+};
 
 const MUSIC_RATE: CustomBinding = CustomBinding {
     apply: |state, _player_idx, row_id, delta, _wrap| {
@@ -624,7 +652,9 @@ fn push_tap_explosion_options_row(b: &mut RowBuilder) {
             tr("PlayerOptions", "TapExplosionOptionsGreats").to_string(),
             tr("PlayerOptions", "TapExplosionOptionsDecents").to_string(),
             tr("PlayerOptions", "TapExplosionOptionsWayOffs").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsMisses").to_string(),
             tr("PlayerOptions", "TapExplosionOptionsHelds").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsHolding").to_string(),
         ],
     ));
 }

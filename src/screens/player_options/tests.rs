@@ -100,13 +100,13 @@ pub(super) mod tests {
 
     /// Stub writeback for synthetic test bindings whose tests only exercise
     /// the init contract (`apply_profile_defaults`). The toggle path is
-    /// never invoked so `project`/`persist`/`bit_mapping` semantics are
-    /// irrelevant; we just need a value-typed `BitmaskWriteback` to fit
-    /// into `BitmaskBinding::Generic`.
+    /// never invoked, so `project`/`persist` semantics are irrelevant; the
+    /// mapping still needs to cover the test rows so FirstActiveBit cursor
+    /// init can resolve active choices.
     const TEST_WRITEBACK: BitmaskWriteback = BitmaskWriteback {
         project: |_, _, _| {},
         persist_for_side: |_, _| {},
-        bit_mapping: BitMapping::Sequential { width: 0 },
+        bit_mapping: BitMapping::Sequential { width: 32 },
         sync_visibility: false,
     };
 
@@ -596,7 +596,9 @@ pub(super) mod tests {
                     "Greats",
                     "Decents",
                     "Way Offs",
-                    "Helds",
+                    "Misses",
+                    "Held",
+                    "Holding",
                 ],
                 [0, 0],
             ),

@@ -539,8 +539,12 @@ bitflags! {
         const DECENT    = 1 << 3;
         const WAY_OFF   = 1 << 4;
         const HELD      = 1 << 5;
+        const MISS      = 1 << 6;
+        const HOLDING   = 1 << 7;
     }
 }
+
+const TAP_EXPLOSION_MASK_VERSION: u8 = 2;
 
 #[inline(always)]
 fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
@@ -550,9 +554,19 @@ fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
         "W3" => Some(TapExplosionMask::GREAT),
         "W4" => Some(TapExplosionMask::DECENT),
         "W5" => Some(TapExplosionMask::WAY_OFF),
+        "Miss" => Some(TapExplosionMask::MISS),
         "Held" => Some(TapExplosionMask::HELD),
         _ => None,
     }
+}
+
+#[inline(always)]
+fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
+    let mut mask = TapExplosionMask::from_bits_truncate(bits);
+    if version < TAP_EXPLOSION_MASK_VERSION {
+        mask.insert(TapExplosionMask::MISS | TapExplosionMask::HOLDING);
+    }
+    mask
 }
 
 // --- Profile Data ---
@@ -937,6 +951,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "TapExplosionMask={}\n",
         options.tap_explosion_active_mask.bits()
     ));
+    content.push_str(&format!(
+        "TapExplosionMaskVersion={}\n",
+        TAP_EXPLOSION_MASK_VERSION
+    ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
     content.push_str(&format!("Spacing={}\n", options.spacing_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
@@ -1023,10 +1041,14 @@ fn load_player_options(
     options.tap_explosion_noteskin = profile_conf
         .get(section, "TapExplosionSkin")
         .and_then(|s| NoteSkin::from_str(&s).ok());
+    let tap_explosion_mask_version = profile_conf
+        .get(section, "TapExplosionMaskVersion")
+        .and_then(|s| s.parse::<u8>().ok())
+        .unwrap_or(1);
     options.tap_explosion_active_mask = profile_conf
         .get(section, "TapExplosionMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(TapExplosionMask::from_bits_truncate)
+        .map(|bits| normalize_tap_explosion_mask(bits, tap_explosion_mask_version))
         .unwrap_or(options.tap_explosion_active_mask);
     options.mini_percent = profile_conf
         .get(section, "MiniPercent")
@@ -5345,7 +5367,7 @@ mod tests {
         LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP, LastPlayed, LastPlayedCourse,
         NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TapExplosionMask,
         TimingWindowsOption, clamp_long_error_bar_intensity, initials_from_name,
-        parse_groovestats_is_pad_player, sanitize_player_initials,
+        normalize_tap_explosion_mask, parse_groovestats_is_pad_player, sanitize_player_initials,
     };
     use std::str::FromStr;
 
@@ -5678,6 +5700,34 @@ mod tests {
     }
 
     #[test]
+    fn tap_explosion_mask_migrates_new_bits_from_old_profiles() {
+        let old_all = TapExplosionMask::FANTASTIC
+            | TapExplosionMask::EXCELLENT
+            | TapExplosionMask::GREAT
+            | TapExplosionMask::DECENT
+            | TapExplosionMask::WAY_OFF
+            | TapExplosionMask::HELD;
+
+        assert_eq!(
+            normalize_tap_explosion_mask(old_all.bits(), 1),
+            TapExplosionMask::all()
+        );
+        assert_eq!(normalize_tap_explosion_mask(old_all.bits(), 2), old_all);
+    }
+
+    #[test]
+    fn tap_explosion_miss_window_uses_miss_mask() {
+        let mut profile = Profile::default();
+        assert!(profile.tap_explosion_window_enabled("Miss"));
+
+        profile
+            .tap_explosion_active_mask
+            .remove(TapExplosionMask::MISS);
+        assert!(!profile.tap_explosion_window_enabled("Miss"));
+        assert!(profile.tap_explosion_window_enabled("Held"));
+    }
+
+    #[test]
     fn persisted_row_mask_bit_layouts_are_stable() {
         use super::{
             AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
@@ -5757,7 +5807,9 @@ mod tests {
         assert_eq!(TapExplosionMask::DECENT.bits(), 1 << 3);
         assert_eq!(TapExplosionMask::WAY_OFF.bits(), 1 << 4);
         assert_eq!(TapExplosionMask::HELD.bits(), 1 << 5);
-        assert_eq!(TapExplosionMask::all().bits(), 0b0011_1111);
+        assert_eq!(TapExplosionMask::MISS.bits(), 1 << 6);
+        assert_eq!(TapExplosionMask::HOLDING.bits(), 1 << 7);
+        assert_eq!(TapExplosionMask::all().bits(), 0xFF);
     }
 
     #[test]

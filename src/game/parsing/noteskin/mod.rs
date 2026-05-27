@@ -3186,7 +3186,7 @@ fn itg_tap_explosion_map_compiled(
     }
 
     let mut tap_explosions = HashMap::new();
-    for window in ["W1", "W2", "W3", "W4", "W5", "Held"] {
+    for window in ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"] {
         let key = format!("{}command", window.to_ascii_lowercase());
         for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
             if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {

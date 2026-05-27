@@ -3633,6 +3633,13 @@ fn hold_explosion_active(
 }
 
 #[inline(always)]
+fn hold_explosion_enabled(profile: &profile::Profile) -> bool {
+    profile
+        .tap_explosion_active_mask
+        .contains(profile::TapExplosionMask::HOLDING)
+}
+
+#[inline(always)]
 fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_beat: f32) -> f32 {
     // ITG updates and renders from one song position. deadsync keeps separate
     // gameplay and display clocks, so a dropped hold head must never render
@@ -4848,7 +4855,7 @@ pub fn build_bundles(
                     ));
                 }
             }
-            let hold_slot = if receptor_hidden_by_song_lua {
+            let hold_slot = if receptor_hidden_by_song_lua || !hold_explosion_enabled(profile) {
                 None
             } else {
                 state.active_holds[col].as_ref().and_then(|active| {
@@ -8885,13 +8892,13 @@ mod tests {
         clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
         disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
         hold_alpha_needs_rows, hold_body_needs_z_buffer, hold_body_segment_budget, hold_draw_span,
-        hold_explosion_active, hold_explosion_slot_for_col, hold_head_render_flags,
-        hold_indicator_column_x, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
-        judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
-        note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
-        offset_center, player_metric_y, predictive_itg_percents, pulse_inner_zoom,
+        hold_explosion_active, hold_explosion_enabled, hold_explosion_slot_for_col,
+        hold_head_render_flags, hold_indicator_column_x, hold_segment_pose, hold_strip_actor,
+        hold_strip_glow_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
+        itg_actor_glow_alpha, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
+        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
+        note_actor_alpha, note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy,
+        note_x_extra, offset_center, player_metric_y, predictive_itg_percents, pulse_inner_zoom,
         pulse_zoom_for_y, push_transform_parts, receptor_row_center, scale_effect_size,
         scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
         tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
@@ -9159,6 +9166,28 @@ mod tests {
         assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
         assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
         assert!(!hold_explosion_active(None, 100.0, 100.0));
+    }
+
+    #[test]
+    fn hold_explosion_option_uses_holding_mask() {
+        let enabled = profile::Profile::default();
+        assert!(hold_explosion_enabled(&enabled));
+
+        let mut disabled = profile::Profile::default();
+        disabled
+            .tap_explosion_active_mask
+            .remove(profile::TapExplosionMask::HOLDING);
+
+        assert!(!hold_explosion_enabled(&disabled));
+
+        disabled
+            .tap_explosion_active_mask
+            .insert(profile::TapExplosionMask::HOLDING);
+        disabled
+            .tap_explosion_active_mask
+            .remove(profile::TapExplosionMask::HELD);
+
+        assert!(hold_explosion_enabled(&disabled));
     }
 
     #[test]

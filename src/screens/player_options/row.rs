@@ -350,7 +350,12 @@ impl BitmaskInit {
     /// Compute the cursor index for a row of `choices_len` choices given
     /// its currently-active bits (as `u32`).
     #[inline]
-    pub fn init_cursor_index(&self, active_bits: u32, choices_len: usize) -> usize {
+    pub fn init_cursor_index(
+        &self,
+        active_bits: u32,
+        choices_len: usize,
+        bit_mapping: BitMapping,
+    ) -> usize {
         match self.cursor {
             CursorInit::Fixed(idx) => idx,
             CursorInit::FirstActiveBit => {
@@ -358,7 +363,11 @@ impl BitmaskInit {
                     0
                 } else {
                     (0..choices_len)
-                        .find(|i| (active_bits & (1u32 << *i as u32)) != 0)
+                        .find(|i| {
+                            bit_mapping
+                                .bit_for_choice(*i)
+                                .is_some_and(|bit| (active_bits & bit) != 0)
+                        })
                         .unwrap_or(0)
                 }
             }
@@ -381,13 +390,12 @@ pub fn init_bitmask_row_from_binding(
     masks: &mut PlayerOptionMasks,
     player_idx: usize,
 ) -> bool {
-    let Some(init) = binding.init() else {
-        return false;
-    };
+    let BitmaskBinding::Generic { init, writeback } = binding;
     let bits = (init.from_profile)(profile);
     (init.set_active)(masks, bits);
     let stored = (init.get_active)(masks);
-    row.selected_choice_index[player_idx] = init.init_cursor_index(stored, row.choices.len());
+    row.selected_choice_index[player_idx] =
+        init.init_cursor_index(stored, row.choices.len(), writeback.bit_mapping);
     true
 }
 
