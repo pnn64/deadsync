@@ -8399,6 +8399,9 @@ pub fn build_bundles(
                         let tick_h =
                             ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
                         let multi_tick = profile.error_bar_multi_tick;
+                        let intensity = crate::game::profile::clamp_average_error_bar_intensity(
+                            profile.average_error_bar_intensity,
+                        );
                         for tick_opt in &p.error_bar_avg_ticks {
                             let Some(tick) = tick_opt else {
                                 continue;
@@ -8411,7 +8414,9 @@ pub fn build_bundles(
                             if alpha <= 0.0 {
                                 continue;
                             }
-                            let x = tick.offset_s * wscale;
+                            let scaled_offset =
+                                (tick.offset_s * intensity).clamp(-max_offset_s, max_offset_s);
+                            let x = scaled_offset * wscale;
                             if !x.is_finite() {
                                 continue;
                             }

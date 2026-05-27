@@ -283,6 +283,52 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn average_error_bar_intensity_shows_only_for_average_error_bar() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::ErrorBar,
+                lookup_key("PlayerOptions", "ErrorBar"),
+                &["Colorful", "Average"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::AverageErrorBarIntensity,
+                lookup_key("PlayerOptions", "AverageErrorBarIntensity"),
+                &["1.00x", "1.25x"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    error_bar: ErrorBarMask::COLORFUL,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    error_bar: ErrorBarMask::AVERAGE,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn live_timing_stats_options_hide_until_parent_toggle_active() {
         ensure_i18n();
         let row_map = test_row_map(vec![
@@ -2457,6 +2503,7 @@ pub(super) mod tests {
         p.custom_fantastic_window = true;
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
+        p.average_error_bar_intensity = 1.5;
 
         let profile = state.player_profiles[P1].clone();
         let noteskin_names = super::discover_noteskin_names();
@@ -2573,6 +2620,7 @@ pub(super) mod tests {
 
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
+        assert_choice_at_cursor(&row_map, RowId::AverageErrorBarIntensity, "1.50x");
     }
 
     fn assert_choice_at_cursor(row_map: &RowMap, id: RowId, expected: &str) {

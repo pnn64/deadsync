@@ -127,6 +127,25 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
 }
 
 #[inline(always)]
+pub(super) fn fmt_average_error_bar_intensity(value: f32) -> String {
+    format!("{value:.2}x")
+}
+
+pub(super) fn average_error_bar_intensity_choices() -> Vec<String> {
+    let count = ((AVERAGE_ERROR_BAR_INTENSITY_MAX - AVERAGE_ERROR_BAR_INTENSITY_MIN)
+        / AVERAGE_ERROR_BAR_INTENSITY_STEP)
+        .round() as usize
+        + 1;
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        out.push(fmt_average_error_bar_intensity(
+            AVERAGE_ERROR_BAR_INTENSITY_MIN + i as f32 * AVERAGE_ERROR_BAR_INTENSITY_STEP,
+        ));
+    }
+    out
+}
+
+#[inline(always)]
 pub(super) fn fmt_long_error_bar_intensity(value: f32) -> String {
     format!("{value:.2}x")
 }

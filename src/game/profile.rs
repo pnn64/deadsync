@@ -51,6 +51,11 @@ pub const LONG_ERROR_BAR_INTENSITY_MAX: f32 = 2.0;
 pub const LONG_ERROR_BAR_INTENSITY_STEP: f32 = 0.25;
 pub const LONG_ERROR_BAR_INTENSITY_DEFAULT: f32 = 2.0;
 
+pub const AVERAGE_ERROR_BAR_INTENSITY_MIN: f32 = 1.0;
+pub const AVERAGE_ERROR_BAR_INTENSITY_MAX: f32 = 2.0;
+pub const AVERAGE_ERROR_BAR_INTENSITY_STEP: f32 = 0.25;
+pub const AVERAGE_ERROR_BAR_INTENSITY_DEFAULT: f32 = 1.0;
+
 pub const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 = 1;
 pub const LONG_ERROR_BAR_THRESHOLD_MS_MAX: u32 = 15;
 pub const LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 4;
@@ -105,6 +110,23 @@ pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
     let steps = ((clamped - LONG_ERROR_BAR_INTENSITY_MIN) / LONG_ERROR_BAR_INTENSITY_STEP).round();
     (LONG_ERROR_BAR_INTENSITY_MIN + steps * LONG_ERROR_BAR_INTENSITY_STEP)
         .clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX)
+}
+
+#[inline]
+pub fn clamp_average_error_bar_intensity(value: f32) -> f32 {
+    if !value.is_finite() {
+        return AVERAGE_ERROR_BAR_INTENSITY_DEFAULT;
+    }
+    let clamped = value.clamp(
+        AVERAGE_ERROR_BAR_INTENSITY_MIN,
+        AVERAGE_ERROR_BAR_INTENSITY_MAX,
+    );
+    let steps =
+        ((clamped - AVERAGE_ERROR_BAR_INTENSITY_MIN) / AVERAGE_ERROR_BAR_INTENSITY_STEP).round();
+    (AVERAGE_ERROR_BAR_INTENSITY_MIN + steps * AVERAGE_ERROR_BAR_INTENSITY_STEP).clamp(
+        AVERAGE_ERROR_BAR_INTENSITY_MIN,
+        AVERAGE_ERROR_BAR_INTENSITY_MAX,
+    )
 }
 
 /// Min/max for the per-player NoteField horizontal offset.
@@ -878,6 +900,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     ));
     content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
     content.push_str(&format!(
+        "AverageErrorBarIntensity={:.2}\n",
+        clamp_average_error_bar_intensity(options.average_error_bar_intensity)
+    ));
+    content.push_str(&format!(
         "LongErrorBar={}\n",
         i32::from(options.long_error_bar_enabled)
     ));
@@ -1301,6 +1327,12 @@ fn load_player_options(
         .get(section, "ErrorBarTrim")
         .and_then(|s| ErrorBarTrim::from_str(&s).ok())
         .unwrap_or(options.error_bar_trim);
+    options.average_error_bar_intensity = profile_conf
+        .get(section, "AverageErrorBarIntensity")
+        .or_else(|| profile_conf.get(section, "HighlightZoom"))
+        .and_then(|s| s.trim().trim_end_matches('x').trim().parse::<f32>().ok())
+        .map(clamp_average_error_bar_intensity)
+        .unwrap_or(options.average_error_bar_intensity);
     options.long_error_bar_enabled = profile_conf
         .get(section, "LongErrorBar")
         .and_then(|s| s.trim().parse::<i32>().ok())
@@ -3036,6 +3068,7 @@ pub struct PlayerOptionsData {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub average_error_bar_intensity: f32,
     pub long_error_bar_enabled: bool,
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
@@ -3144,6 +3177,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
+        average_error_bar_intensity: AVERAGE_ERROR_BAR_INTENSITY_DEFAULT,
         long_error_bar_enabled: true,
         long_error_bar_intensity: LONG_ERROR_BAR_INTENSITY_DEFAULT,
         long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
@@ -3305,6 +3339,7 @@ pub struct Profile {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub average_error_bar_intensity: f32,
     pub long_error_bar_enabled: bool,
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
@@ -3481,6 +3516,7 @@ impl Default for Profile {
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
+            average_error_bar_intensity: player_options.average_error_bar_intensity,
             long_error_bar_enabled: player_options.long_error_bar_enabled,
             long_error_bar_intensity: player_options.long_error_bar_intensity,
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
@@ -3660,6 +3696,7 @@ impl Profile {
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
+            average_error_bar_intensity: self.average_error_bar_intensity,
             long_error_bar_enabled: self.long_error_bar_enabled,
             long_error_bar_intensity: self.long_error_bar_intensity,
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
@@ -3770,6 +3807,7 @@ impl Profile {
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
+        self.average_error_bar_intensity = options.average_error_bar_intensity;
         self.long_error_bar_enabled = options.long_error_bar_enabled;
         self.long_error_bar_intensity = options.long_error_bar_intensity;
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
@@ -5543,13 +5581,14 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS,
-        LONG_ERROR_BAR_INTENSITY_DEFAULT, LONG_ERROR_BAR_INTENSITY_MAX,
-        LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP, LastPlayed, LastPlayedCourse,
-        MiniIndicatorColor, MiniIndicatorSize, NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle,
-        Profile, TapExplosionMask, TimingWindowsOption, clamp_long_error_bar_intensity,
-        initials_from_name, normalize_tap_explosion_mask, parse_groovestats_is_pad_player,
-        sanitize_player_initials,
+        AVERAGE_ERROR_BAR_INTENSITY_DEFAULT, AVERAGE_ERROR_BAR_INTENSITY_MAX,
+        AVERAGE_ERROR_BAR_INTENSITY_MIN, AVERAGE_ERROR_BAR_INTENSITY_STEP, BackgroundFilter,
+        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LONG_ERROR_BAR_INTENSITY_DEFAULT,
+        LONG_ERROR_BAR_INTENSITY_MAX, LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP,
+        LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorSize, NoteSkin,
+        PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TapExplosionMask, TimingWindowsOption,
+        clamp_average_error_bar_intensity, clamp_long_error_bar_intensity, initials_from_name,
+        normalize_tap_explosion_mask, parse_groovestats_is_pad_player, sanitize_player_initials,
     };
     use std::str::FromStr;
 
@@ -5580,6 +5619,44 @@ mod tests {
         assert!((clamp_long_error_bar_intensity(1.95) - 2.00).abs() < 1e-6);
         let count = ((LONG_ERROR_BAR_INTENSITY_MAX - LONG_ERROR_BAR_INTENSITY_MIN)
             / LONG_ERROR_BAR_INTENSITY_STEP)
+            .round() as usize
+            + 1;
+        assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn average_error_bar_intensity_clamps_to_supported_range() {
+        assert!((AVERAGE_ERROR_BAR_INTENSITY_DEFAULT - 1.0).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(1.0) - 1.0).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(2.0) - 2.0).abs() < 1e-6);
+        assert!(
+            (clamp_average_error_bar_intensity(0.0) - AVERAGE_ERROR_BAR_INTENSITY_MIN).abs() < 1e-6
+        );
+        assert!(
+            (clamp_average_error_bar_intensity(5.0) - AVERAGE_ERROR_BAR_INTENSITY_MAX).abs() < 1e-6
+        );
+        assert!(
+            (clamp_average_error_bar_intensity(f32::NAN) - AVERAGE_ERROR_BAR_INTENSITY_DEFAULT)
+                .abs()
+                < 1e-6
+        );
+        assert!(
+            (clamp_average_error_bar_intensity(f32::INFINITY)
+                - AVERAGE_ERROR_BAR_INTENSITY_DEFAULT)
+                .abs()
+                < 1e-6
+        );
+    }
+
+    #[test]
+    fn average_error_bar_intensity_snaps_to_quarter_step_grid() {
+        assert!((clamp_average_error_bar_intensity(1.10) - 1.00).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(1.13) - 1.25).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(1.40) - 1.50).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(1.75) - 1.75).abs() < 1e-6);
+        assert!((clamp_average_error_bar_intensity(1.95) - 2.00).abs() < 1e-6);
+        let count = ((AVERAGE_ERROR_BAR_INTENSITY_MAX - AVERAGE_ERROR_BAR_INTENSITY_MIN)
+            / AVERAGE_ERROR_BAR_INTENSITY_STEP)
             .round() as usize
             + 1;
         assert_eq!(count, 5);
