@@ -6,10 +6,9 @@
 //! The state machine, panel renderer, slot bookkeeping, and cancellation
 //! plumbing are all backend-agnostic; the per-service worker that drives
 //! the channel and the per-service persistence/QR-URL choice are selected
-//! via [`BackendKind`].  ArrowCloud's `device-login` API is poll-based
-//! and lives in this module today; GrooveStats (WebSocket-driven) is
-//! added in a follow-up commit by extending the same `BackendKind` match
-//! arms.
+//! via [`BackendKind`].  ArrowCloud's `device-login` API is poll-based;
+//! GrooveStats's flow is WebSocket-driven.  Both live in this module
+//! and dispatch through the same `BackendKind` match arms.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -108,19 +107,14 @@ pub(crate) enum LoginMsg {
 }
 
 /// Which online service this overlay is talking to.  Used to dispatch
-/// `Consumed` to the right `profile::set_*` helper and (in a follow-up
-/// commit) to choose the per-service QR URL builder and panel header
-/// label.  We keep this as a plain enum rather than a backend trait —
-/// every per-service branch is reached via `match` on this kind.
+/// `Consumed` to the right `profile::set_*` helper, the per-service QR
+/// URL builder, and the panel header label.  We keep this as a plain
+/// enum rather than a backend trait — every per-service branch is
+/// reached via `match` on this kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BackendKind {
     ArrowCloud,
-    /// GrooveStats QR-login (WebSocket-driven).  Wired up in the
-    /// `groovestats_login` follow-up commit; the `Consumed` arm in
-    /// `apply_login_msg` already dispatches on this variant so the
-    /// follow-up only needs to add the worker and the per-side/per-id
-    /// `profile::set_groovestats_credentials_*` calls.
-    #[allow(dead_code)]
+    /// GrooveStats QR-login (WebSocket-driven).
     GrooveStats,
 }
 
@@ -782,6 +776,300 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
     ));
 }
 
+/* -------------------- GrooveStats backend -------------------- */
+//
+// GrooveStats's QR-login flow is not poll-based like ArrowCloud — it
+// hangs a single WebSocket on `ws://qrlogin.groovestats.com:3000`, sends
+// the session UUID once, and listens for `apiKey` events keyed by side
+// (1 = P1, 2 = P2).  One websocket handles both sides for the whole
+// screen; the worker just routes each `apiKey` push to the matching
+// per-slot sender.  Mirrors Simply Love's
+// `ScreenGrooveStatsLogin underlay/default.lua`.
+
+const GROOVESTATS_QR_LOGIN_WS_URL: &str = "ws://qrlogin.groovestats.com:3000";
+const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com/qrlogin.php";
+const GROOVESTATS_WS_READ_TIMEOUT_MS: u64 = 100;
+
+/// 32-character uppercase hex string mirroring SL's
+/// `CRYPTMAN:GenerateRandomUUID():gsub("-",""):upper()`.  Stable across
+/// the lifetime of one overlay so the server can correlate an `apiKey`
+/// push back to the right machine.
+#[allow(dead_code)]
+pub(crate) fn generate_qr_uuid() -> String {
+    use rand::Rng;
+    let mut bytes = [0u8; 16];
+    rand::rng().fill_bytes(&mut bytes);
+    let mut out = String::with_capacity(32);
+    for b in bytes {
+        out.push_str(&format!("{:02X}", b));
+    }
+    out
+}
+
+#[allow(dead_code)]
+pub(crate) fn groovestats_qr_url(uuid: &str, side: u8) -> String {
+    format!("{GROOVESTATS_QR_BASE_URL}?UUID={uuid}&SIDE={side}")
+}
+
+/// Parsed envelope from the GrooveStats QR-login server.  Mirrors
+/// SL's `data.uuid / data.apiKey / data.username / data.side` payload.
+#[derive(serde::Deserialize, Debug)]
+struct GrooveStatsWsEnvelope {
+    event: String,
+    #[serde(default)]
+    data: Option<GrooveStatsApiKeyPayload>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsApiKeyPayload {
+    #[serde(default)]
+    uuid: Option<String>,
+    #[serde(default)]
+    api_key: Option<String>,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    side: Option<u8>,
+}
+
+/// Decide what to dispatch when a raw text frame arrives off the ws.
+/// Pure function so it can be unit-tested without a live socket.
+#[derive(Debug, PartialEq, Eq)]
+enum GrooveStatsWsEffect {
+    Ignore,
+    DeliverApiKey {
+        side: u8,
+        api_key: String,
+        username: String,
+    },
+}
+
+#[allow(dead_code)]
+fn classify_ws_message(text: &str, expected_uuid: &str) -> GrooveStatsWsEffect {
+    let Ok(env) = serde_json::from_str::<GrooveStatsWsEnvelope>(text) else {
+        return GrooveStatsWsEffect::Ignore;
+    };
+    if env.event != "apiKey" {
+        return GrooveStatsWsEffect::Ignore;
+    }
+    let Some(data) = env.data else {
+        return GrooveStatsWsEffect::Ignore;
+    };
+    if data.uuid.as_deref() != Some(expected_uuid) {
+        return GrooveStatsWsEffect::Ignore;
+    }
+    let api_key = data.api_key.unwrap_or_default();
+    if api_key.trim().is_empty() {
+        return GrooveStatsWsEffect::Ignore;
+    }
+    let side = match data.side {
+        Some(1) | Some(2) => data.side.unwrap(),
+        _ => return GrooveStatsWsEffect::Ignore,
+    };
+    GrooveStatsWsEffect::DeliverApiKey {
+        side,
+        api_key,
+        username: data.username.unwrap_or_default(),
+    }
+}
+
+/// WebSocket worker: opens one connection for the whole overlay,
+/// announces the UUID, then routes each incoming `apiKey` push to the
+/// per-side sender.  Exits on cancel, server close, or send error.
+#[allow(dead_code)]
+fn run_groovestats_session(
+    uuid: String,
+    p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
+    p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
+    cancel: Arc<AtomicBool>,
+) {
+    use tungstenite::Message;
+    use tungstenite::stream::MaybeTlsStream;
+
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let mut socket = match tungstenite::connect(GROOVESTATS_QR_LOGIN_WS_URL) {
+        Ok((sock, _resp)) => sock,
+        Err(err) => {
+            let reason = format!("{err}");
+            if let Some(tx) = &p1_tx {
+                let _ = tx.send(LoginMsg::Failed {
+                    reason: reason.clone(),
+                });
+            }
+            if let Some(tx) = &p2_tx {
+                let _ = tx.send(LoginMsg::Failed { reason });
+            }
+            return;
+        }
+    };
+
+    // Plaintext ws://; the maybe-tls stream is the plain branch.  Set a
+    // short read timeout so the loop can poll the cancel flag.
+    if let MaybeTlsStream::Plain(tcp) = socket.get_mut() {
+        let _ = tcp.set_read_timeout(Some(std::time::Duration::from_millis(
+            GROOVESTATS_WS_READ_TIMEOUT_MS,
+        )));
+    }
+
+    // Announce the UUID once Open.
+    let hello = serde_json::json!({ "event": "uuid", "data": { "uuid": &uuid } });
+    if socket.send(Message::Text(hello.to_string().into())).is_err() {
+        return;
+    }
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = socket.close(None);
+            return;
+        }
+        match socket.read() {
+            Ok(Message::Text(text)) => {
+                let effect = classify_ws_message(&text, &uuid);
+                if let GrooveStatsWsEffect::DeliverApiKey {
+                    side,
+                    api_key,
+                    username,
+                } = effect
+                {
+                    let tx = match side {
+                        1 => p1_tx.as_ref(),
+                        2 => p2_tx.as_ref(),
+                        _ => None,
+                    };
+                    if let Some(tx) = tx {
+                        let _ = tx.send(LoginMsg::Consumed {
+                            api_key,
+                            username: Some(username),
+                        });
+                    }
+                }
+            }
+            Ok(Message::Close(_)) => {
+                let _ = socket.close(None);
+                return;
+            }
+            Ok(_) => {} // ping/pong/binary frames ignored
+            Err(tungstenite::Error::Io(io)) if matches!(
+                io.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut,
+            ) => {
+                // Read-timeout — loop back so we can re-check the cancel flag.
+            }
+            Err(_) => {
+                let _ = socket.close(None);
+                return;
+            }
+        }
+    }
+}
+
+/// Spawn GrooveStats QR-login workers for every joined Local side
+/// (single shared WebSocket) and return a fresh UI ready to be rendered.
+#[allow(dead_code)]
+pub fn create_groovestats_login_ui() -> QrLoginUiState {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let uuid = generate_qr_uuid();
+    let mut p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
+    let mut p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
+    let slots = build_initial_slots(&cancel, BackendKind::GrooveStats, |side, tx| {
+        // SL's GrooveStats flow doesn't roundtrip a `start` request — the
+        // QR URL is fully known up front — so push the slot straight to
+        // Pending with the per-side URL embedded.
+        let _ = tx.send(LoginMsg::Started {
+            short_code: String::new(),
+            verification_url: groovestats_qr_url(&uuid, gs_side_byte(side)),
+        });
+        match side {
+            profile::PlayerSide::P1 => p1_tx = Some(tx),
+            profile::PlayerSide::P2 => p2_tx = Some(tx),
+        }
+    });
+    if p1_tx.is_some() || p2_tx.is_some() {
+        let cancel_for_thread = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            run_groovestats_session(uuid, p1_tx, p2_tx, cancel_for_thread);
+        });
+    }
+    QrLoginUiState { slots, cancel }
+}
+
+/// Single-slot GrooveStats QR-login UI scoped to a specific profile
+/// (Manage Local Profiles "Link GrooveStats" entry).
+#[allow(dead_code)]
+pub fn create_groovestats_login_ui_for_profile(
+    profile_id: String,
+    display_name: String,
+) -> QrLoginUiState {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let uuid = generate_qr_uuid();
+    let had_existing_key = profile::get_groovestats_api_key_for_id(&profile_id).is_some();
+    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
+    // Push the QR URL straight away — no server roundtrip required.
+    let _ = tx.send(LoginMsg::Started {
+        short_code: String::new(),
+        verification_url: groovestats_qr_url(&uuid, 1),
+    });
+    let cancel_for_thread = Arc::clone(&cancel);
+    let tx_for_thread = tx.clone();
+    std::thread::spawn(move || {
+        run_groovestats_session(uuid, Some(tx_for_thread), None, cancel_for_thread);
+    });
+    drop(tx);
+    let p1_slot = LoginSlot {
+        side: profile::PlayerSide::P1,
+        state: SlotState::Starting,
+        kind: BackendKind::GrooveStats,
+        display_name,
+        had_existing_key,
+        target_profile_id: Some(profile_id),
+        rx: Some(rx),
+    };
+    let p2_slot = LoginSlot {
+        side: profile::PlayerSide::P2,
+        state: SlotState::NotJoined,
+        kind: BackendKind::GrooveStats,
+        display_name: String::new(),
+        had_existing_key: false,
+        target_profile_id: None,
+        rx: None,
+    };
+    QrLoginUiState {
+        slots: [p1_slot, p2_slot],
+        cancel,
+    }
+}
+
+#[inline]
+fn gs_side_byte(side: profile::PlayerSide) -> u8 {
+    match side {
+        profile::PlayerSide::P1 => 1,
+        profile::PlayerSide::P2 => 2,
+    }
+}
+
+/// Probe for `should_auto_show_groovestats(Sometimes)` — wired up by the
+/// pref/screen follow-up PRs.  Mirrors `any_joined_local_side_missing_key`
+/// but reads the GrooveStats key off each side's loaded profile.
+#[allow(dead_code)]
+pub(crate) fn any_joined_local_side_missing_gs_key() -> bool {
+    ALL_SIDES.iter().any(|side| {
+        if !profile::is_session_side_joined(*side) {
+            return false;
+        }
+        if profile::is_session_side_guest(*side) {
+            return false;
+        }
+        profile::get_for_side(*side)
+            .groovestats_api_key
+            .trim()
+            .is_empty()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1084,5 +1372,139 @@ mod tests {
             ArrowCloudQrLoginWhen::Sometimes,
             || false
         ));
+    }
+
+
+    /* -------------------- GrooveStats backend -------------------- */
+
+    #[test]
+    fn generate_qr_uuid_is_32_uppercase_hex() {
+        let id = generate_qr_uuid();
+        assert_eq!(id.len(), 32);
+        assert!(
+            id.chars()
+                .all(|c| c.is_ascii_digit() || ('A'..='F').contains(&c)),
+            "uuid contained a non-hex-uppercase char: {id}"
+        );
+    }
+
+    #[test]
+    fn generate_qr_uuid_returns_distinct_values() {
+        let a = generate_qr_uuid();
+        let b = generate_qr_uuid();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn groovestats_qr_url_format_matches_simply_love() {
+        assert_eq!(
+            groovestats_qr_url("ABCDEF", 1),
+            "https://www.groovestats.com/qrlogin.php?UUID=ABCDEF&SIDE=1"
+        );
+        assert_eq!(
+            groovestats_qr_url("DEADBEEF", 2),
+            "https://www.groovestats.com/qrlogin.php?UUID=DEADBEEF&SIDE=2"
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_routes_matching_uuid() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"GS-1","username":"alice","side":1}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::DeliverApiKey {
+                side: 1,
+                api_key: "GS-1".into(),
+                username: "alice".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_ignores_mismatched_uuid() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"OTHER","apiKey":"GS-1","side":1}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_ignores_non_apikey_events() {
+        let payload = r#"{"event":"hello","data":{"uuid":"ABC"}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_ignores_empty_api_key() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"   ","side":1}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_ignores_unknown_side() {
+        let payload =
+            r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":7}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_defaults_missing_username_to_empty() {
+        let payload =
+            r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":2}}"#;
+        assert_eq!(
+            classify_ws_message(payload, "ABC"),
+            GrooveStatsWsEffect::DeliverApiKey {
+                side: 2,
+                api_key: "k".into(),
+                username: String::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn classify_ws_message_ignores_malformed_json() {
+        assert_eq!(
+            classify_ws_message("not json", "ABC"),
+            GrooveStatsWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn apply_consumed_with_username_passes_through_for_groovestats_slot() {
+        // We can't actually persist (no profile storage in tests), but
+        // apply_login_msg should at least transition state and clear rx
+        // without panicking, regardless of slot.kind.
+        let (_tx, rx) = mpsc::channel::<LoginMsg>();
+        let mut s = LoginSlot {
+            side: profile::PlayerSide::P1,
+            state: SlotState::Pending {
+                short_code: String::new(),
+                verification_url: "u".into(),
+            },
+            kind: BackendKind::GrooveStats,
+            display_name: "Alice".into(),
+            had_existing_key: false,
+            target_profile_id: Some("alice-id".into()),
+            rx: Some(rx),
+        };
+        apply_login_msg(
+            &mut s,
+            LoginMsg::Consumed {
+                api_key: "GS-KEY".into(),
+                username: Some("alice".into()),
+            },
+        );
+        assert!(matches!(s.state, SlotState::Success));
+        assert!(s.rx.is_none());
     }
 }
