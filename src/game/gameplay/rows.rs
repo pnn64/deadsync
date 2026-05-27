@@ -55,6 +55,7 @@ pub(super) fn finalize_row_judgment(
     if scoring_blocked {
         if !suppress_final_early_bad_visual {
             set_last_judgment(state, player, final_judgment);
+            error_bar_register_tap(state, player, &final_judgment, current_music_time_s(state));
         }
         return;
     }
