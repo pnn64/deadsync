@@ -2763,6 +2763,33 @@ const fn evaluation_summary_return_to(
     }
 }
 
+/// How to (re)hydrate `select_music_state` when entering `SelectMusic` from
+/// another screen. Extracted as a classifier so the dispatch is testable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SelectMusicEntryMode {
+    SyncFromPlayerOptions,
+    ResetPreviewAfterGameplay,
+    /// Returning from the Set Summary (EvaluationSummary) overlay: keep the
+    /// wheel position, sort, and selections so the user lands back exactly
+    /// where they left off.
+    PreserveAfterSummaryOverlay,
+    RefreshAfterProfileLoad,
+    Reinitialize,
+}
+
+#[inline(always)]
+const fn select_music_entry_mode(prev: CurrentScreen) -> SelectMusicEntryMode {
+    match prev {
+        CurrentScreen::PlayerOptions => SelectMusicEntryMode::SyncFromPlayerOptions,
+        CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation => {
+            SelectMusicEntryMode::ResetPreviewAfterGameplay
+        }
+        CurrentScreen::EvaluationSummary => SelectMusicEntryMode::PreserveAfterSummaryOverlay,
+        CurrentScreen::ProfileLoad => SelectMusicEntryMode::RefreshAfterProfileLoad,
+        _ => SelectMusicEntryMode::Reinitialize,
+    }
+}
+
 fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::StageSummary> {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
@@ -8338,8 +8365,8 @@ impl App {
                 debug!("Session timer started.");
             }
 
-            match prev {
-                CurrentScreen::PlayerOptions => {
+            match select_music_entry_mode(prev) {
+                SelectMusicEntryMode::SyncFromPlayerOptions => {
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state
                         .screens
@@ -8420,18 +8447,27 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation => {
+                SelectMusicEntryMode::ResetPreviewAfterGameplay => {
                     select_music::reset_preview_after_gameplay(
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                CurrentScreen::ProfileLoad => {
+                SelectMusicEntryMode::PreserveAfterSummaryOverlay => {
+                    // Returning from the Set Summary overlay: keep the existing
+                    // wheel state (selected song, sort, scroll, etc.) intact so
+                    // the user lands back exactly where they left off. Just
+                    // refresh derived data without re-initializing.
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
+                }
+                SelectMusicEntryMode::RefreshAfterProfileLoad => {
                     // SelectMusic state is prepared asynchronously while ProfileLoad is displayed.
                     select_music::trigger_immediate_refresh(
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                _ => {
+                SelectMusicEntryMode::Reinitialize => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
                     self.state.screens.select_music_state = select_music::init();
@@ -8602,7 +8638,10 @@ impl App {
             }
 
             match prev {
-                CurrentScreen::ProfileLoad => {
+                CurrentScreen::ProfileLoad | CurrentScreen::EvaluationSummary => {
+                    // ProfileLoad prepares state asynchronously; EvaluationSummary
+                    // is the Set Summary overlay, so in both cases preserve the
+                    // existing course wheel state and just refresh derived data.
                     select_course::trigger_immediate_refresh(
                         &mut self.state.screens.select_course_state,
                     );
@@ -9734,6 +9773,45 @@ mod tests {
         assert_eq!(
             evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
+        );
+    }
+
+    #[test]
+    fn select_music_entry_from_evaluation_summary_preserves_wheel() {
+        // Returning from the Set Summary overlay (EvaluationSummary) into the
+        // song wheel must NOT re-initialize select_music_state; otherwise the
+        // user's selected song / sort / scroll position would be lost.
+        assert_eq!(
+            select_music_entry_mode(CurrentScreen::EvaluationSummary),
+            SelectMusicEntryMode::PreserveAfterSummaryOverlay,
+        );
+    }
+
+    #[test]
+    fn select_music_entry_modes_for_known_prevs() {
+        assert_eq!(
+            select_music_entry_mode(CurrentScreen::PlayerOptions),
+            SelectMusicEntryMode::SyncFromPlayerOptions,
+        );
+        for screen in [
+            CurrentScreen::Gameplay,
+            CurrentScreen::Practice,
+            CurrentScreen::Evaluation,
+        ] {
+            assert_eq!(
+                select_music_entry_mode(screen),
+                SelectMusicEntryMode::ResetPreviewAfterGameplay,
+                "unexpected mode for {screen:?}",
+            );
+        }
+        assert_eq!(
+            select_music_entry_mode(CurrentScreen::ProfileLoad),
+            SelectMusicEntryMode::RefreshAfterProfileLoad,
+        );
+        // Any other origin (e.g. Menu, Title) re-initializes the wheel.
+        assert_eq!(
+            select_music_entry_mode(CurrentScreen::Menu),
+            SelectMusicEntryMode::Reinitialize,
         );
     }
 
