@@ -7978,7 +7978,8 @@ pub fn push_actors(
             let full_title = state.song_full_title.clone();
             actors.push(act!(text:
                 font("miso"): settext(full_title): align(0.5, 0.5): xy(box_cx, box_cy):
-                zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(93)
+                zoom(0.8): shadowlength(0.6): maxwidth(screen_width() / 2.5 - 10.0):
+                horizalign(center): z(93)
             ));
         }
         // --- Life Meter ---

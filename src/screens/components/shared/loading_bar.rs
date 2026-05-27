@@ -71,6 +71,7 @@ pub fn build(params: LoadingBarParams) -> Actor {
         align(0.5, 0.5):
         xy(width * 0.5, height * 0.5):
         zoom(params.text_zoom):
+        shadowlength(0.6):
         maxwidth(text_max_w):
         diffuse(
             params.text_rgba[0],
