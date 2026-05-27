@@ -6,6 +6,7 @@ pub mod evaluation_summary;
 pub(crate) mod favorite_code;
 pub mod gameover;
 pub mod gameplay;
+pub mod groovestats_login;
 pub mod init;
 pub mod initials;
 pub mod input;
@@ -123,6 +124,7 @@ pub enum Screen {
     Mappings,
     Input,
     SelectProfile,
+    GrooveStatsLogin,
     ArrowCloudLogin,
     SelectColor,
     SelectStyle,
@@ -153,6 +155,7 @@ impl Screen {
             Self::Mappings => "ScreenMapControllers",
             Self::Input => "ScreenTestInput",
             Self::SelectProfile => "ScreenSelectProfile",
+            Self::GrooveStatsLogin => "ScreenGrooveStatsLogin",
             Self::ArrowCloudLogin => "ScreenArrowCloudLogin",
             Self::SelectColor => "ScreenSelectColor",
             Self::SelectStyle => "ScreenSelectStyle",

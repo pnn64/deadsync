@@ -250,6 +250,7 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         | CurrentScreen::Input
         | CurrentScreen::SelectProfile
         | CurrentScreen::ArrowCloudLogin
+        | CurrentScreen::GrooveStatsLogin
         | CurrentScreen::SelectColor
         | CurrentScreen::SelectStyle
         | CurrentScreen::SelectPlayMode
@@ -1165,6 +1166,7 @@ pub struct ScreensState {
     select_profile_state: select_profile::State,
     select_color_state: select_color::State,
     arrowcloud_login_state: crate::screens::arrowcloud_login::State,
+    groovestats_login_state: crate::screens::groovestats_login::State,
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
@@ -3058,6 +3060,9 @@ impl ScreensState {
         let mut arrowcloud_login_state = crate::screens::arrowcloud_login::init();
         arrowcloud_login_state.active_color_index = color_index;
 
+        let mut groovestats_login_state = crate::screens::groovestats_login::init();
+        groovestats_login_state.active_color_index = color_index;
+
         let mut select_music_state = select_music::init_placeholder();
         select_music_state.active_color_index = color_index;
         select_music_state.preferred_difficulty_index = preferred_difficulty_index;
@@ -3124,6 +3129,7 @@ impl ScreensState {
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
+            groovestats_login_state,
             select_style_state,
             select_play_mode_state,
             profile_load_state,
@@ -3201,6 +3207,13 @@ impl ScreensState {
             CurrentScreen::ArrowCloudLogin => {
                 crate::screens::arrowcloud_login::update(
                     &mut self.arrowcloud_login_state,
+                    delta_time,
+                );
+                (None, false)
+            }
+            CurrentScreen::GrooveStatsLogin => {
+                crate::screens::groovestats_login::update(
+                    &mut self.groovestats_login_state,
                     delta_time,
                 );
                 (None, false)
@@ -4288,12 +4301,12 @@ impl App {
                         self.handle_navigation_action(CurrentScreen::SelectMusic);
                     }
                 } else {
-                    // After profile selection, Simply Love optionally routes
-                    // through ScreenGrooveStatsLogin before SelectColor.
-                    // Mirror that here for ArrowCloud, gated by the
-                    // ArrowCloudQrLoginWhen pref.
                     let cfg = crate::config::get();
-                    let next = if crate::screens::options::qr_login::should_auto_show(
+                    let next = if crate::screens::options::qr_login::should_auto_show_groovestats(
+                        cfg.groovestats_qr_login_when,
+                    ) {
+                        CurrentScreen::GrooveStatsLogin
+                    } else if crate::screens::options::qr_login::should_auto_show(
                         cfg.arrowcloud_qr_login_when,
                     ) {
                         CurrentScreen::ArrowCloudLogin
@@ -5494,6 +5507,10 @@ impl App {
                 &mut self.state.screens.arrowcloud_login_state,
                 &ev,
             ),
+            CurrentScreen::GrooveStatsLogin => crate::screens::groovestats_login::handle_input(
+                &mut self.state.screens.groovestats_login_state,
+                &ev,
+            ),
             CurrentScreen::SelectStyle => crate::screens::select_style::handle_input(
                 &mut self.state.screens.select_style_state,
                 &ev,
@@ -5894,6 +5911,10 @@ impl App {
             ),
             CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::get_actors(
                 &self.state.screens.arrowcloud_login_state,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::GrooveStatsLogin => crate::screens::groovestats_login::get_actors(
+                &self.state.screens.groovestats_login_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::SelectStyle => {
