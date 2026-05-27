@@ -528,6 +528,267 @@ const STEPCHART: CustomBinding = CustomBinding {
     },
 };
 
+fn push_mini_row(b: &mut RowBuilder) {
+    b.push(Row::custom(
+        RowId::Mini,
+        lookup_key("PlayerOptions", "Mini"),
+        lookup_key("PlayerOptionsHelp", "MiniHelp"),
+        MINI,
+        (gp::MINI_PERCENT_MIN..=gp::MINI_PERCENT_MAX)
+            .map(|v| format!("{v}%"))
+            .collect(),
+    ));
+}
+
+fn push_spacing_row(b: &mut RowBuilder) {
+    b.push(Row::numeric(
+        RowId::Spacing,
+        lookup_key("PlayerOptions", "Spacing"),
+        lookup_key("PlayerOptionsHelp", "SpacingHelp"),
+        SPACING,
+        (SPACING_PERCENT_MIN..=SPACING_PERCENT_MAX)
+            .map(|v| format!("{v}%"))
+            .collect(),
+    ));
+}
+
+fn push_perspective_row(b: &mut RowBuilder) {
+    b.push(Row::cycle(
+        RowId::Perspective,
+        lookup_key("PlayerOptions", "Perspective"),
+        lookup_key("PlayerOptionsHelp", "PerspectiveHelp"),
+        CycleBinding::Index(PERSPECTIVE),
+        vec![
+            tr("PlayerOptions", "PerspectiveOverhead").to_string(),
+            tr("PlayerOptions", "PerspectiveHallway").to_string(),
+            tr("PlayerOptions", "PerspectiveDistant").to_string(),
+            tr("PlayerOptions", "PerspectiveIncoming").to_string(),
+            tr("PlayerOptions", "PerspectiveSpace").to_string(),
+        ],
+    ));
+}
+
+fn push_noteskin_row(b: &mut RowBuilder, noteskin_names: &[String]) {
+    b.push(Row::custom(
+        RowId::NoteSkin,
+        lookup_key("PlayerOptions", "NoteSkin"),
+        lookup_key("PlayerOptionsHelp", "NoteSkinHelp"),
+        NOTE_SKIN,
+        if noteskin_names.is_empty() {
+            vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
+        } else {
+            noteskin_names.to_vec()
+        },
+    ));
+}
+
+fn push_mineskin_row(b: &mut RowBuilder, noteskin_names: &[String]) {
+    b.push(Row::custom(
+        RowId::MineSkin,
+        lookup_key("PlayerOptions", "MineSkin"),
+        lookup_key("PlayerOptionsHelp", "MineSkinHelp"),
+        MINE_SKIN,
+        build_noteskin_override_choices(noteskin_names),
+    ));
+}
+
+fn push_receptorskin_row(b: &mut RowBuilder, noteskin_names: &[String]) {
+    b.push(Row::custom(
+        RowId::ReceptorSkin,
+        lookup_key("PlayerOptions", "ReceptorSkin"),
+        lookup_key("PlayerOptionsHelp", "ReceptorSkinHelp"),
+        RECEPTOR_SKIN,
+        build_noteskin_override_choices(noteskin_names),
+    ));
+}
+
+fn push_tap_explosion_skin_row(b: &mut RowBuilder, noteskin_names: &[String]) {
+    b.push(Row::custom(
+        RowId::TapExplosionSkin,
+        lookup_key("PlayerOptions", "TapExplosionSkin"),
+        lookup_key("PlayerOptionsHelp", "TapExplosionSkinHelp"),
+        TAP_EXPLOSION_SKIN,
+        build_tap_explosion_noteskin_choices(noteskin_names),
+    ));
+}
+
+fn push_tap_explosion_options_row(b: &mut RowBuilder) {
+    b.push(Row::bitmask(
+        RowId::TapExplosionOptions,
+        lookup_key("PlayerOptions", "TapExplosionOptions"),
+        lookup_key("PlayerOptionsHelp", "TapExplosionOptionsHelp"),
+        TAP_EXPLOSION_OPTIONS,
+        vec![
+            tr("PlayerOptions", "TapExplosionOptionsFantastics").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsExcellents").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsGreats").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsDecents").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsWayOffs").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsHelds").to_string(),
+        ],
+    ));
+}
+
+fn push_judgment_font_row(b: &mut RowBuilder) {
+    b.push(Row::custom(
+        RowId::JudgmentFont,
+        lookup_key("PlayerOptions", "JudgmentFont"),
+        lookup_key("PlayerOptionsHelp", "JudgmentFontHelp"),
+        JUDGMENT_FONT,
+        assets::judgment_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+    ));
+}
+
+fn push_judgment_offset_rows(b: &mut RowBuilder) {
+    b.push(
+        Row::numeric(
+            RowId::JudgmentOffsetX,
+            lookup_key("PlayerOptions", "JudgmentOffsetX"),
+            lookup_key("PlayerOptionsHelp", "JudgmentOffsetXHelp"),
+            JUDGMENT_OFFSET_X,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+    b.push(
+        Row::numeric(
+            RowId::JudgmentOffsetY,
+            lookup_key("PlayerOptions", "JudgmentOffsetY"),
+            lookup_key("PlayerOptionsHelp", "JudgmentOffsetYHelp"),
+            JUDGMENT_OFFSET_Y,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+}
+
+fn push_combo_font_row(b: &mut RowBuilder) {
+    b.push(Row::cycle(
+        RowId::ComboFont,
+        lookup_key("PlayerOptions", "ComboFont"),
+        lookup_key("PlayerOptionsHelp", "ComboFontHelp"),
+        CycleBinding::Index(COMBO_FONT),
+        vec![
+            tr("PlayerOptions", "ComboFontWendy").to_string(),
+            tr("PlayerOptions", "ComboFontArialRounded").to_string(),
+            tr("PlayerOptions", "ComboFontAsap").to_string(),
+            tr("PlayerOptions", "ComboFontBebasNeue").to_string(),
+            tr("PlayerOptions", "ComboFontSourceCode").to_string(),
+            tr("PlayerOptions", "ComboFontWork").to_string(),
+            tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
+            tr("PlayerOptions", "ComboFontMega").to_string(),
+            tr("PlayerOptions", "ComboFontNone").to_string(),
+        ],
+    ));
+}
+
+fn push_combo_offset_rows(b: &mut RowBuilder) {
+    b.push(
+        Row::numeric(
+            RowId::ComboOffsetX,
+            lookup_key("PlayerOptions", "ComboOffsetX"),
+            lookup_key("PlayerOptionsHelp", "ComboOffsetXHelp"),
+            COMBO_OFFSET_X,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+    b.push(
+        Row::numeric(
+            RowId::ComboOffsetY,
+            lookup_key("PlayerOptions", "ComboOffsetY"),
+            lookup_key("PlayerOptionsHelp", "ComboOffsetYHelp"),
+            COMBO_OFFSET_Y,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+}
+
+fn push_hold_judgment_row(b: &mut RowBuilder) {
+    b.push(Row::custom(
+        RowId::HoldJudgment,
+        lookup_key("PlayerOptions", "HoldJudgment"),
+        lookup_key("PlayerOptionsHelp", "HoldJudgmentHelp"),
+        HOLD_JUDGMENT,
+        assets::hold_judgment_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+    ));
+}
+
+fn push_held_graphic_row(b: &mut RowBuilder) {
+    b.push(Row::custom(
+        RowId::HeldGraphic,
+        lookup_key("PlayerOptions", "HeldGraphic"),
+        lookup_key("PlayerOptionsHelp", "HeldGraphicHelp"),
+        HELD_GRAPHIC,
+        assets::held_miss_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+    ));
+}
+
+fn push_background_filter_row(b: &mut RowBuilder) {
+    b.push(
+        Row::numeric(
+            RowId::BackgroundFilter,
+            lookup_key("PlayerOptions", "BackgroundFilter"),
+            lookup_key("PlayerOptionsHelp", "BackgroundFilterHelp"),
+            BACKGROUND_FILTER,
+            (0..=gp::BackgroundFilter::MAX_PERCENT)
+                .map(|v| format!("{v}%"))
+                .collect(),
+        )
+        .with_initial_choice_index(gp::BackgroundFilter::DEFAULT.percent() as usize),
+    );
+}
+
+fn push_notefield_offset_rows(b: &mut RowBuilder) {
+    b.push(Row::numeric(
+        RowId::NoteFieldOffsetX,
+        lookup_key("PlayerOptions", "NoteFieldOffsetX"),
+        lookup_key("PlayerOptionsHelp", "NoteFieldOffsetXHelp"),
+        NOTEFIELD_OFFSET_X,
+        (gp::NOTE_FIELD_OFFSET_X_MIN..=gp::NOTE_FIELD_OFFSET_X_MAX)
+            .map(|v| v.to_string())
+            .collect(),
+    ));
+    b.push(Row::numeric(
+        RowId::NoteFieldOffsetY,
+        lookup_key("PlayerOptions", "NoteFieldOffsetY"),
+        lookup_key("PlayerOptionsHelp", "NoteFieldOffsetYHelp"),
+        NOTEFIELD_OFFSET_Y,
+        (gp::NOTE_FIELD_OFFSET_Y_MIN..=gp::NOTE_FIELD_OFFSET_Y_MAX)
+            .map(|v| v.to_string())
+            .collect(),
+    ));
+}
+
+pub(super) fn push_display_modifier_rows(b: &mut RowBuilder, noteskin_names: &[String]) {
+    push_mini_row(b);
+    push_spacing_row(b);
+    push_perspective_row(b);
+    push_noteskin_row(b, noteskin_names);
+    push_mineskin_row(b, noteskin_names);
+    push_receptorskin_row(b, noteskin_names);
+    push_tap_explosion_skin_row(b, noteskin_names);
+    push_tap_explosion_options_row(b);
+    push_judgment_font_row(b);
+    push_judgment_offset_rows(b);
+    push_combo_font_row(b);
+    push_combo_offset_rows(b);
+    push_hold_judgment_row(b);
+    push_held_graphic_row(b);
+    push_background_filter_row(b);
+    push_notefield_offset_rows(b);
+}
+
 pub(super) fn build_main_rows(
     song: &SongData,
     speed_mod: &SpeedMod,
@@ -650,200 +911,14 @@ pub(super) fn build_main_rows(
         SPEED_MOD,
         vec![speed_mod_value_str], // Display only the current value
     ));
-    b.push(Row::custom(
-        RowId::Mini,
-        lookup_key("PlayerOptions", "Mini"),
-        lookup_key("PlayerOptionsHelp", "MiniHelp"),
-        MINI,
-        (gp::MINI_PERCENT_MIN..=gp::MINI_PERCENT_MAX)
-            .map(|v| format!("{v}%"))
-            .collect(),
-    ));
-    b.push(Row::numeric(
-        RowId::Spacing,
-        lookup_key("PlayerOptions", "Spacing"),
-        lookup_key("PlayerOptionsHelp", "SpacingHelp"),
-        SPACING,
-        (SPACING_PERCENT_MIN..=SPACING_PERCENT_MAX)
-            .map(|v| format!("{v}%"))
-            .collect(),
-    ));
-    b.push(Row::cycle(
-        RowId::Perspective,
-        lookup_key("PlayerOptions", "Perspective"),
-        lookup_key("PlayerOptionsHelp", "PerspectiveHelp"),
-        CycleBinding::Index(PERSPECTIVE),
-        vec![
-            tr("PlayerOptions", "PerspectiveOverhead").to_string(),
-            tr("PlayerOptions", "PerspectiveHallway").to_string(),
-            tr("PlayerOptions", "PerspectiveDistant").to_string(),
-            tr("PlayerOptions", "PerspectiveIncoming").to_string(),
-            tr("PlayerOptions", "PerspectiveSpace").to_string(),
-        ],
-    ));
-    b.push(Row::custom(
-        RowId::NoteSkin,
-        lookup_key("PlayerOptions", "NoteSkin"),
-        lookup_key("PlayerOptionsHelp", "NoteSkinHelp"),
-        NOTE_SKIN,
-        if noteskin_names.is_empty() {
-            vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
-        } else {
-            noteskin_names.to_vec()
-        },
-    ));
-    b.push(Row::custom(
-        RowId::MineSkin,
-        lookup_key("PlayerOptions", "MineSkin"),
-        lookup_key("PlayerOptionsHelp", "MineSkinHelp"),
-        MINE_SKIN,
-        build_noteskin_override_choices(noteskin_names),
-    ));
-    b.push(Row::custom(
-        RowId::ReceptorSkin,
-        lookup_key("PlayerOptions", "ReceptorSkin"),
-        lookup_key("PlayerOptionsHelp", "ReceptorSkinHelp"),
-        RECEPTOR_SKIN,
-        build_noteskin_override_choices(noteskin_names),
-    ));
-    b.push(Row::custom(
-        RowId::TapExplosionSkin,
-        lookup_key("PlayerOptions", "TapExplosionSkin"),
-        lookup_key("PlayerOptionsHelp", "TapExplosionSkinHelp"),
-        TAP_EXPLOSION_SKIN,
-        build_tap_explosion_noteskin_choices(noteskin_names),
-    ));
-    b.push(Row::bitmask(
-        RowId::TapExplosionOptions,
-        lookup_key("PlayerOptions", "TapExplosionOptions"),
-        lookup_key("PlayerOptionsHelp", "TapExplosionOptionsHelp"),
-        TAP_EXPLOSION_OPTIONS,
-        vec![
-            tr("PlayerOptions", "TapExplosionOptionsFantastics").to_string(),
-            tr("PlayerOptions", "TapExplosionOptionsExcellents").to_string(),
-            tr("PlayerOptions", "TapExplosionOptionsGreats").to_string(),
-            tr("PlayerOptions", "TapExplosionOptionsDecents").to_string(),
-            tr("PlayerOptions", "TapExplosionOptionsWayOffs").to_string(),
-            tr("PlayerOptions", "TapExplosionOptionsHelds").to_string(),
-        ],
-    ));
-    b.push(Row::custom(
-        RowId::JudgmentFont,
-        lookup_key("PlayerOptions", "JudgmentFont"),
-        lookup_key("PlayerOptionsHelp", "JudgmentFontHelp"),
-        JUDGMENT_FONT,
-        assets::judgment_texture_choices()
-            .iter()
-            .map(|choice| choice.label.clone())
-            .collect(),
-    ));
-    b.push(
-        Row::numeric(
-            RowId::JudgmentOffsetX,
-            lookup_key("PlayerOptions", "JudgmentOffsetX"),
-            lookup_key("PlayerOptionsHelp", "JudgmentOffsetXHelp"),
-            JUDGMENT_OFFSET_X,
-            hud_offset_choices(),
-        )
-        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
-    );
-    b.push(
-        Row::numeric(
-            RowId::JudgmentOffsetY,
-            lookup_key("PlayerOptions", "JudgmentOffsetY"),
-            lookup_key("PlayerOptionsHelp", "JudgmentOffsetYHelp"),
-            JUDGMENT_OFFSET_Y,
-            hud_offset_choices(),
-        )
-        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
-    );
-    b.push(Row::cycle(
-        RowId::ComboFont,
-        lookup_key("PlayerOptions", "ComboFont"),
-        lookup_key("PlayerOptionsHelp", "ComboFontHelp"),
-        CycleBinding::Index(COMBO_FONT),
-        vec![
-            tr("PlayerOptions", "ComboFontWendy").to_string(),
-            tr("PlayerOptions", "ComboFontArialRounded").to_string(),
-            tr("PlayerOptions", "ComboFontAsap").to_string(),
-            tr("PlayerOptions", "ComboFontBebasNeue").to_string(),
-            tr("PlayerOptions", "ComboFontSourceCode").to_string(),
-            tr("PlayerOptions", "ComboFontWork").to_string(),
-            tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
-            tr("PlayerOptions", "ComboFontMega").to_string(),
-            tr("PlayerOptions", "ComboFontNone").to_string(),
-        ],
-    ));
-    b.push(
-        Row::numeric(
-            RowId::ComboOffsetX,
-            lookup_key("PlayerOptions", "ComboOffsetX"),
-            lookup_key("PlayerOptionsHelp", "ComboOffsetXHelp"),
-            COMBO_OFFSET_X,
-            hud_offset_choices(),
-        )
-        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
-    );
-    b.push(
-        Row::numeric(
-            RowId::ComboOffsetY,
-            lookup_key("PlayerOptions", "ComboOffsetY"),
-            lookup_key("PlayerOptionsHelp", "ComboOffsetYHelp"),
-            COMBO_OFFSET_Y,
-            hud_offset_choices(),
-        )
-        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
-    );
-    b.push(Row::custom(
-        RowId::HoldJudgment,
-        lookup_key("PlayerOptions", "HoldJudgment"),
-        lookup_key("PlayerOptionsHelp", "HoldJudgmentHelp"),
-        HOLD_JUDGMENT,
-        assets::hold_judgment_texture_choices()
-            .iter()
-            .map(|choice| choice.label.clone())
-            .collect(),
-    ));
-    b.push(Row::custom(
-        RowId::HeldGraphic,
-        lookup_key("PlayerOptions", "HeldGraphic"),
-        lookup_key("PlayerOptionsHelp", "HeldGraphicHelp"),
-        HELD_GRAPHIC,
-        assets::held_miss_texture_choices()
-            .iter()
-            .map(|choice| choice.label.clone())
-            .collect(),
-    ));
-    b.push(
-        Row::numeric(
-            RowId::BackgroundFilter,
-            lookup_key("PlayerOptions", "BackgroundFilter"),
-            lookup_key("PlayerOptionsHelp", "BackgroundFilterHelp"),
-            BACKGROUND_FILTER,
-            (0..=gp::BackgroundFilter::MAX_PERCENT)
-                .map(|v| format!("{v}%"))
-                .collect(),
-        )
-        .with_initial_choice_index(gp::BackgroundFilter::DEFAULT.percent() as usize),
-    );
-    b.push(Row::numeric(
-        RowId::NoteFieldOffsetX,
-        lookup_key("PlayerOptions", "NoteFieldOffsetX"),
-        lookup_key("PlayerOptionsHelp", "NoteFieldOffsetXHelp"),
-        NOTEFIELD_OFFSET_X,
-        (gp::NOTE_FIELD_OFFSET_X_MIN..=gp::NOTE_FIELD_OFFSET_X_MAX)
-            .map(|v| v.to_string())
-            .collect(),
-    ));
-    b.push(Row::numeric(
-        RowId::NoteFieldOffsetY,
-        lookup_key("PlayerOptions", "NoteFieldOffsetY"),
-        lookup_key("PlayerOptionsHelp", "NoteFieldOffsetYHelp"),
-        NOTEFIELD_OFFSET_Y,
-        (gp::NOTE_FIELD_OFFSET_Y_MIN..=gp::NOTE_FIELD_OFFSET_Y_MAX)
-            .map(|v| v.to_string())
-            .collect(),
-    ));
+    push_mini_row(&mut b);
+    push_perspective_row(&mut b);
+    push_noteskin_row(&mut b, noteskin_names);
+    push_judgment_font_row(&mut b);
+    push_combo_font_row(&mut b);
+    push_hold_judgment_row(&mut b);
+    push_held_graphic_row(&mut b);
+    push_background_filter_row(&mut b);
     b.push(
         Row::numeric(
             RowId::VisualDelay,

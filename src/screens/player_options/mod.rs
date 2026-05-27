@@ -124,6 +124,17 @@ pub fn init(
         return_screen,
         fixed_stepchart.as_ref(),
     );
+    let mut display_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Display,
+        &noteskin_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
     let mut advanced_row_map = build_rows(
         &song,
         &speed_mod_p1,
@@ -156,6 +167,18 @@ pub fn init(
     let mut p2_masks = PlayerOptionMasks::default();
     apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1, &mut p1_masks);
     apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2, &mut p2_masks);
+    apply_profile_defaults(
+        &mut display_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut display_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
     apply_profile_defaults(
         &mut advanced_row_map,
         &player_profiles[P1],
@@ -234,6 +257,7 @@ pub fn init(
     );
     let mut panes = [
         PaneState::new(main_row_map),
+        PaneState::new(display_row_map),
         PaneState::new(advanced_row_map),
         PaneState::new(uncommon_row_map),
     ];

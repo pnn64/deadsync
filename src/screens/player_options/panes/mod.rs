@@ -1,9 +1,11 @@
 use super::*;
 
 mod advanced;
+mod display;
 mod main;
 mod uncommon;
 use advanced::*;
+use display::*;
 use main::*;
 use uncommon::*;
 
@@ -40,6 +42,14 @@ pub(super) fn what_comes_next_choices(pane: OptionsPane, return_screen: Screen) 
         OptionsPane::Main => vec![
             tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
+            tr("PlayerOptions", "WhatComesNextDisplayModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
+        ],
+        OptionsPane::Display => vec![
+            tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
+            choose_different,
+            tr("PlayerOptions", "WhatComesNextMainModifiers").to_string(),
             tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
             tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
         ],
@@ -47,12 +57,14 @@ pub(super) fn what_comes_next_choices(pane: OptionsPane, return_screen: Screen) 
             tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
             tr("PlayerOptions", "WhatComesNextMainModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextDisplayModifiers").to_string(),
             tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
         ],
         OptionsPane::Uncommon => vec![
             tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
             tr("PlayerOptions", "WhatComesNextMainModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextDisplayModifiers").to_string(),
             tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
         ],
     }
@@ -80,6 +92,7 @@ pub(super) fn build_rows(
             return_screen,
             fixed_stepchart,
         ),
+        OptionsPane::Display => build_display_rows(noteskin_names, return_screen),
         OptionsPane::Advanced => build_advanced_rows(return_screen),
         OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }
@@ -111,7 +124,7 @@ fn find_noteskin_choice_index(
 
 /// Initialize per-row cursor positions from `profile` and accumulate any
 /// bitmask state into `masks`. Production calls this once per (pane, player)
-/// pair, passing the same `&mut PlayerOptionMasks` for both pane calls of a
+/// pair, passing the same `&mut PlayerOptionMasks` for all pane calls of a
 /// given player so per-pane mask writes accumulate without needing a merge
 /// step. Each `BitmaskBinding` writes a disjoint mask field, and the derived
 /// pass is a pure function of `profile`, so multiple invocations are safe.

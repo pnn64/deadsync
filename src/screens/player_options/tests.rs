@@ -1758,6 +1758,7 @@ pub(super) mod tests {
         let noteskin_names = super::discover_noteskin_names();
         [
             super::OptionsPane::Main,
+            super::OptionsPane::Display,
             super::OptionsPane::Advanced,
             super::OptionsPane::Uncommon,
         ]
@@ -1777,6 +1778,87 @@ pub(super) mod tests {
             (pane, map)
         })
         .collect()
+    }
+
+    #[test]
+    fn display_pane_owns_display_rows_and_main_keeps_shared_rows() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+        let maps = build_all_pane_row_maps(&state);
+        let row_map_for = |pane| {
+            maps.iter()
+                .find(|(p, _)| *p == pane)
+                .map(|(_, map)| map)
+                .unwrap()
+        };
+        let main = row_map_for(super::OptionsPane::Main);
+        let display = row_map_for(super::OptionsPane::Display);
+
+        for id in [
+            RowId::Mini,
+            RowId::Perspective,
+            RowId::NoteSkin,
+            RowId::JudgmentFont,
+            RowId::ComboFont,
+            RowId::HoldJudgment,
+            RowId::HeldGraphic,
+            RowId::BackgroundFilter,
+        ] {
+            assert!(main.get(id).is_some(), "{id:?} should remain in Main");
+            assert!(display.get(id).is_some(), "{id:?} should be in Display");
+        }
+
+        for id in [
+            RowId::Spacing,
+            RowId::MineSkin,
+            RowId::ReceptorSkin,
+            RowId::TapExplosionSkin,
+            RowId::TapExplosionOptions,
+            RowId::JudgmentOffsetX,
+            RowId::JudgmentOffsetY,
+            RowId::ComboOffsetX,
+            RowId::ComboOffsetY,
+            RowId::NoteFieldOffsetX,
+            RowId::NoteFieldOffsetY,
+        ] {
+            assert!(main.get(id).is_none(), "{id:?} should move out of Main");
+            assert!(display.get(id).is_some(), "{id:?} should be in Display");
+        }
+    }
+
+    #[test]
+    fn main_what_comes_next_lists_display_before_advanced() {
+        ensure_i18n();
+        let choices = panes::what_comes_next_choices(super::OptionsPane::Main, Screen::SelectMusic);
+        assert_eq!(
+            choices,
+            vec![
+                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
+                crate::assets::i18n::tr("PlayerOptions", "ChooseDifferentSong").to_string(),
+                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextDisplayModifiers")
+                    .to_string(),
+                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextAdvancedModifiers")
+                    .to_string(),
+                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextUncommonModifiers")
+                    .to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn pane_switch_refreshes_shared_row_defaults() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        state.player_profiles[P1].mini_percent = 37;
+        state.panes[super::OptionsPane::Display.index()]
+            .row_map
+            .get_mut(RowId::Mini)
+            .unwrap()
+            .selected_choice_index[P1] = 0;
+
+        super::apply_pane(&mut state, super::OptionsPane::Display);
+
+        assert_choice_at_cursor(&state.pane().row_map, RowId::Mini, "37%");
     }
 
     #[test]
@@ -2117,19 +2199,12 @@ pub(super) mod tests {
         p.perspective = profile::Perspective::Distant;
         p.combo_font = profile::ComboFont::Wendy;
         p.background_filter = profile::BackgroundFilter::from_i32(42);
-        p.spacing_percent = 95;
-        p.judgment_offset_x = -25;
-        p.judgment_offset_y = 30;
-        p.combo_offset_x = 12;
-        p.combo_offset_y = -8;
-        p.note_field_offset_x = 17;
-        p.note_field_offset_y = -22;
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
 
         let profile = state.player_profiles[P1].clone();
         let noteskin_names = super::discover_noteskin_names();
-        let mut row_map = super::build_rows(
+        let mut main_row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
             state.chart_steps_index,
@@ -2141,9 +2216,62 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
 
         // Cycle rows: assert the selected variant matches the profile value.
+        assert_variant_at_cursor(
+            &main_row_map,
+            RowId::Perspective,
+            &super::PERSPECTIVE_VARIANTS,
+            profile.perspective,
+        );
+        assert_variant_at_cursor(
+            &main_row_map,
+            RowId::ComboFont,
+            &super::COMBO_FONT_VARIANTS,
+            profile.combo_font,
+        );
+
+        // Numeric rows: assert the choice string at the cursor matches the
+        // formatted profile value (the same lookup the dispatcher does).
+        assert_choice_at_cursor(&main_row_map, RowId::BackgroundFilter, "42%");
+        assert_choice_at_cursor(&main_row_map, RowId::VisualDelay, "35ms");
+        assert_choice_at_cursor(&main_row_map, RowId::GlobalOffsetShift, "-45ms");
+    }
+
+    #[test]
+    fn apply_profile_defaults_initializes_display_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.perspective = profile::Perspective::Distant;
+        p.combo_font = profile::ComboFont::Wendy;
+        p.background_filter = profile::BackgroundFilter::from_i32(42);
+        p.spacing_percent = 95;
+        p.judgment_offset_x = -25;
+        p.judgment_offset_y = 30;
+        p.combo_offset_x = 12;
+        p.combo_offset_y = -8;
+        p.note_field_offset_x = 17;
+        p.note_field_offset_y = -22;
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Display,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
         assert_variant_at_cursor(
             &row_map,
             RowId::Perspective,
@@ -2157,8 +2285,6 @@ pub(super) mod tests {
             profile.combo_font,
         );
 
-        // Numeric rows: assert the choice string at the cursor matches the
-        // formatted profile value (the same lookup the dispatcher does).
         assert_choice_at_cursor(&row_map, RowId::BackgroundFilter, "42%");
         assert_choice_at_cursor(&row_map, RowId::Spacing, "95%");
         assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetX, "-25");
@@ -2167,8 +2293,6 @@ pub(super) mod tests {
         assert_choice_at_cursor(&row_map, RowId::ComboOffsetY, "-8");
         assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "17");
         assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetY, "-22");
-        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "35ms");
-        assert_choice_at_cursor(&row_map, RowId::GlobalOffsetShift, "-45ms");
     }
 
     /// Numeric values outside the row's choice range (clamped by the binding's
@@ -2189,7 +2313,7 @@ pub(super) mod tests {
 
         let profile = state.player_profiles[P1].clone();
         let noteskin_names = super::discover_noteskin_names();
-        let mut row_map = super::build_rows(
+        let mut main_row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
             state.chart_steps_index,
@@ -2200,18 +2324,30 @@ pub(super) mod tests {
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
+        let mut display_row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Display,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
         let mut masks = PlayerOptionMasks::default();
-        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut display_row_map, &profile, P1, &mut masks);
 
         assert_choice_at_cursor(
-            &row_map,
+            &display_row_map,
             RowId::JudgmentOffsetX,
             &HUD_OFFSET_MAX.to_string(),
         );
-        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "0");
-        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "-100ms");
+        assert_choice_at_cursor(&display_row_map, RowId::NoteFieldOffsetX, "0");
+        assert_choice_at_cursor(&main_row_map, RowId::VisualDelay, "-100ms");
         assert_choice_at_cursor(
-            &row_map,
+            &display_row_map,
             RowId::Spacing,
             &format!("{}%", super::SPACING_PERCENT_MAX),
         );

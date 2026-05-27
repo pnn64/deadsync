@@ -304,11 +304,10 @@ pub fn apply_choice_delta(
 
 pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     // Row_maps are pre-built at init() and live in `State::panes`, so a
-    // pane switch does not rebuild rows or recompute masks (masks are kept up
-    // to date incrementally by toggle handlers). Switching is now a structural
-    // operation: change the active pane, reset the destination pane's cursor
-    // to the top, and recompute its row tweens for the new layout.
+    // pane switch does not rebuild rows. Shared rows are refreshed from the
+    // current profiles so duplicate rows stay in sync across panes.
     state.current_pane = pane;
+    refresh_pane_defaults(state);
     state.pane_mut().reset_cursor();
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
@@ -320,6 +319,19 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });
+}
+
+fn refresh_pane_defaults(state: &mut State) {
+    let pane_idx = state.current_pane.index();
+    let profiles = state.player_profiles.clone();
+    for player_idx in 0..PLAYER_SLOTS {
+        panes::apply_profile_defaults(
+            &mut state.panes[pane_idx].row_map,
+            &profiles[player_idx],
+            player_idx,
+            &mut state.option_masks[player_idx],
+        );
+    }
 }
 
 pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {

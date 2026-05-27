@@ -657,6 +657,7 @@ pub(super) fn handle_start_event(
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
             let gameplay = tr("PlayerOptions", "WhatComesNextGameplay");
+            let display = tr("PlayerOptions", "WhatComesNextDisplayModifiers");
             let advanced = tr("PlayerOptions", "WhatComesNextAdvancedModifiers");
             let uncommon = tr("PlayerOptions", "WhatComesNextUncommonModifiers");
             let main_mods = tr("PlayerOptions", "WhatComesNextMainModifiers");
@@ -672,6 +673,8 @@ pub(super) fn handle_start_event(
                 return Some(ScreenAction::Navigate(choose_different_screen(
                     state.return_screen,
                 )));
+            } else if choice_str == display.as_ref() {
+                switch_to_pane(state, OptionsPane::Display);
             } else if choice_str == advanced.as_ref() {
                 switch_to_pane(state, OptionsPane::Advanced);
             } else if choice_str == uncommon.as_ref() {
