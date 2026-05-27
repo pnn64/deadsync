@@ -3103,6 +3103,8 @@ pub struct ErrorBarTick {
 pub struct ErrorBarText {
     pub started_at: f32,
     pub early: bool,
+    pub offset_ms: f32,
+    pub scaled: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -7074,6 +7076,7 @@ const fn error_bar_window_ix(window: TimingWindow) -> usize {
 // Long-term (blue) Average error bar constants.
 pub(crate) const ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S: f32 = 0.060;
 pub(crate) const ERROR_BAR_LONG_AVG_PRUNE_PER_TAP: usize = 4;
+const ERROR_BAR_TEXT_10MS_THRESHOLD_MS: f32 = 10.0;
 
 #[inline(always)]
 fn error_bar_long_term_offset_s(
@@ -7187,6 +7190,7 @@ fn error_bar_register_tap(
     let show_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
     let show_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
     let show_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
+    let show_text_10ms = prof.text_error_bar_10ms;
     let show_fa_plus_window = prof.show_fa_plus_window;
     let blue_fantastic_window_s = player_blue_window_ms(state, player) / 1000.0;
     let error_bar_trim = prof.error_bar_trim;
@@ -7220,7 +7224,9 @@ fn error_bar_register_tap(
     }
 
     if show_text {
-        let threshold_s = if show_fa_plus_window {
+        let threshold_s = if show_text_10ms {
+            ERROR_BAR_TEXT_10MS_THRESHOLD_MS / 1000.0
+        } else if show_fa_plus_window {
             blue_fantastic_window_s
         } else {
             state.timing_profile.windows_s[0]
@@ -7229,6 +7235,8 @@ fn error_bar_register_tap(
             p.error_bar_text = Some(ErrorBarText {
                 started_at: now,
                 early: offset_s < 0.0,
+                offset_ms: judgment.time_error_ms.abs(),
+                scaled: show_text_10ms,
             });
         } else {
             p.error_bar_text = None;
@@ -10579,6 +10587,8 @@ return Def.ActorFrame{}
                     .expect("row-final judgment should drive the early/late text");
                 assert_eq!(early_late.started_at, 12.0);
                 assert!(!early_late.early);
+                assert_eq!(early_late.offset_ms, 96.0);
+                assert!(!early_late.scaled);
 
                 let last = state.players[0]
                     .last_judgment
@@ -10637,6 +10647,112 @@ return Def.ActorFrame{}
             .expect("12ms should exceed Arrow Cloud's 10ms blue window");
         assert_eq!(text.started_at, 4.0);
         assert!(!text.early);
+        assert_eq!(text.offset_ms, 12.0);
+        assert!(!text.scaled);
+    }
+
+    #[test]
+    fn text_error_bar_10ms_mode_surfaces_default_window_fantastics() {
+        let p1 = profile::Profile {
+            show_fa_plus_window: false,
+            error_bar_text: true,
+            text_error_bar_10ms: true,
+            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            ..profile::Profile::default()
+        };
+
+        let mut state = regression_state([p1, profile::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 10.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(10.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+        assert!(
+            state.players[0].error_bar_text.is_none(),
+            "10ms exactly should remain hidden"
+        );
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: -10.1,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(-10.1, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            1.1,
+        );
+
+        let text = state.players[0]
+            .error_bar_text
+            .expect(">10ms should show even inside the default Fantastic window");
+        assert_eq!(text.started_at, 4.0);
+        assert!(text.early);
+        assert_eq!(text.offset_ms, 10.1);
+        assert!(text.scaled);
+    }
+
+    #[test]
+    fn text_error_bar_window_mode_preserves_default_threshold() {
+        let p1 = profile::Profile {
+            show_fa_plus_window: false,
+            error_bar_text: true,
+            text_error_bar_10ms: false,
+            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            ..profile::Profile::default()
+        };
+
+        let mut state = regression_state([p1, profile::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 12.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+        assert!(
+            state.players[0].error_bar_text.is_none(),
+            "legacy Text mode should keep the active-window threshold"
+        );
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 24.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(24.0, 1.0),
+                grade: JudgeGrade::Excellent,
+                window: Some(TimingWindow::W2),
+                miss_because_held: false,
+            },
+            1.1,
+        );
+
+        let text = state.players[0]
+            .error_bar_text
+            .expect("legacy Text mode should still show hits outside the active window");
+        assert_eq!(text.started_at, 4.0);
+        assert!(!text.early);
+        assert_eq!(text.offset_ms, 24.0);
+        assert!(!text.scaled);
     }
 
     #[test]

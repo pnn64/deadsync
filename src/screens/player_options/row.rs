@@ -58,6 +58,7 @@ pub enum RowId {
     JudgmentBehindArrows,
     OffsetIndicator,
     ErrorBar,
+    TextErrorBar10ms,
     ShortAverageErrorBar,
     AverageErrorBarIntensity,
     AverageErrorBarInterval,

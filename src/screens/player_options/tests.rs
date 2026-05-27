@@ -361,6 +361,52 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn text_error_bar_10ms_child_shows_only_for_text_error_bar() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::ErrorBar,
+                lookup_key("PlayerOptions", "ErrorBar"),
+                &["Colorful", "Text"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::TextErrorBar10ms,
+                lookup_key("PlayerOptions", "TextErrorBar10ms"),
+                &["Window", "10ms+"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    error_bar: ErrorBarMask::COLORFUL,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    error_bar: ErrorBarMask::TEXT,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn live_timing_stats_options_hide_until_parent_toggle_active() {
         ensure_i18n();
         let row_map = test_row_map(vec![
@@ -2535,6 +2581,7 @@ pub(super) mod tests {
         p.custom_fantastic_window = true;
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
+        p.text_error_bar_10ms = true;
         p.short_average_error_bar_enabled = false;
         p.average_error_bar_intensity = 1.5;
         p.average_error_bar_interval_ms = 700;
@@ -2640,6 +2687,7 @@ pub(super) mod tests {
             RowId::JudgmentTilt,
             RowId::JudgmentBehindArrows,
             RowId::OffsetIndicator,
+            RowId::TextErrorBar10ms,
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
         ] {
@@ -2654,6 +2702,7 @@ pub(super) mod tests {
 
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
+        assert_choice_at_cursor(&row_map, RowId::TextErrorBar10ms, "10ms+");
         assert_choice_at_cursor(&row_map, RowId::ShortAverageErrorBar, "Off");
         assert_choice_at_cursor(&row_map, RowId::AverageErrorBarIntensity, "1.50x");
         assert_choice_at_cursor(&row_map, RowId::AverageErrorBarInterval, "700ms");

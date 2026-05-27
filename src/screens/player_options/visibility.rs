@@ -7,6 +7,7 @@ pub(super) struct RowVisibility {
     pub(super) show_judgment_tilt_options: bool,
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
+    pub(super) show_text_error_bar_children: bool,
     pub(super) show_average_error_bar_children: bool,
     pub(super) show_long_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
@@ -47,6 +48,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
         || id == RowId::ErrorBarOffsetY
     {
         return visibility.show_error_bar_children;
+    }
+    if id == RowId::TextErrorBar10ms {
+        return visibility.show_error_bar_children && visibility.show_text_error_bar_children;
     }
     if id == RowId::LongErrorBarIntensity
         || id == RowId::LongErrorBarThreshold
@@ -127,6 +131,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
+        || id == RowId::TextErrorBar10ms
         || id == RowId::ShortAverageErrorBar
         || id == RowId::LongErrorBar
         || id == RowId::AverageErrorBarIntensity
@@ -292,6 +297,23 @@ pub(super) fn average_error_bar_children_visible(
         if option_masks[player_idx]
             .error_bar
             .contains(ErrorBarMask::AVERAGE)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
+pub(super) fn text_error_bar_children_visible(
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if option_masks[player_idx]
+            .error_bar
+            .contains(ErrorBarMask::TEXT)
         {
             return true;
         }
@@ -536,6 +558,7 @@ pub(super) fn row_visibility(
         show_judgment_tilt_options: judgment_tilt_options_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
+        show_text_error_bar_children: text_error_bar_children_visible(active, option_masks),
         show_average_error_bar_children: average_error_bar_children_visible(active, option_masks),
         show_long_error_bar_children: long_error_bar_children_visible(row_map, active),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),

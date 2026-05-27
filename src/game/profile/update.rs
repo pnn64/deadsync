@@ -1073,6 +1073,18 @@ pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_text_error_bar_10ms_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.text_error_bar_10ms == enabled {
+            return;
+        }
+        profile.text_error_bar_10ms = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_average_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {
     let normalized = super::clamp_average_error_bar_intensity(intensity);
     {

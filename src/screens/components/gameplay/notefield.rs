@@ -100,6 +100,9 @@ const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
 const ERROR_BAR_LONG_AVG_TICK_EXTRA_H: f32 = 65.0;
 const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
 const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
+const ERROR_BAR_TEXT_10MS_FAST_RGBA: [f32; 4] = color::rgba_hex("#0051db");
+const ERROR_BAR_TEXT_10MS_SLOW_RGBA: [f32; 4] = color::rgba_hex("#ff1605");
+const ERROR_BAR_TEXT_ZOOM: f32 = 0.25;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
@@ -544,6 +547,9 @@ thread_local! {
         512,
         BuildHasherDefault::default(),
     ));
+    static ERROR_BAR_TEXT_LABEL_CACHE: RefCell<FastTextCache<(bool, i32)>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
+    );
     static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
@@ -668,6 +674,42 @@ fn cached_offset_ms(value: f32) -> Arc<str> {
     cached_text(&OFFSET_MS_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}ms", key as f64 / 100.0)
     })
+}
+
+#[inline(always)]
+fn cached_error_bar_text_label(early: bool, scaled: bool) -> Arc<str> {
+    let rounded = if scaled { -2 } else { -1 };
+    cached_text(
+        &ERROR_BAR_TEXT_LABEL_CACHE,
+        (early, rounded),
+        TEXT_CACHE_LIMIT,
+        || {
+            if scaled {
+                if early { "FAST" } else { "SLOW" }.to_string()
+            } else {
+                if early { "EARLY" } else { "LATE" }.to_string()
+            }
+        },
+    )
+}
+
+#[inline(always)]
+fn error_bar_text_10ms_zoom(abs_ms: f32, w2_ms: f32) -> f32 {
+    let ms = if abs_ms.is_finite() {
+        abs_ms
+    } else {
+        crate::game::timing::FA_PLUS_W010_MS
+    };
+    let smaller_white_ms = crate::game::timing::FA_PLUS_W010_MS;
+    let w1_ms = crate::game::timing::FA_PLUS_W0_MS;
+    let mut scale1 = 1.0;
+    let mut scale2 = 1.0;
+    if smaller_white_ms < ms && ms <= w1_ms && w1_ms > smaller_white_ms {
+        scale1 = (ms - smaller_white_ms) / (w1_ms - smaller_white_ms);
+    } else if w1_ms < ms && ms <= w2_ms && w2_ms > w1_ms {
+        scale2 = (ms - w1_ms) / (w2_ms - w1_ms);
+    }
+    0.15 + scale1 * 0.2 + scale2 * 0.1
 }
 
 fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
@@ -8497,16 +8539,32 @@ pub fn build_bundles(
             let age = elapsed_screen - text.started_at;
             if (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age) {
                 let x = if text.early { -40.0 } else { 40.0 };
-                let s = if text.early { "EARLY" } else { "LATE" };
-                let c = if text.early {
-                    ERROR_BAR_TEXT_EARLY_RGBA
+                let label = cached_error_bar_text_label(text.early, text.scaled);
+                let zoom = if text.scaled {
+                    error_bar_text_10ms_zoom(
+                        text.offset_ms.abs(),
+                        state.timing_profile.windows_s[0] * 1000.0,
+                    )
                 } else {
-                    ERROR_BAR_TEXT_LATE_RGBA
+                    ERROR_BAR_TEXT_ZOOM
+                };
+                let c = if text.early {
+                    if text.scaled {
+                        ERROR_BAR_TEXT_10MS_FAST_RGBA
+                    } else {
+                        ERROR_BAR_TEXT_EARLY_RGBA
+                    }
+                } else {
+                    if text.scaled {
+                        ERROR_BAR_TEXT_10MS_SLOW_RGBA
+                    } else {
+                        ERROR_BAR_TEXT_LATE_RGBA
+                    }
                 };
                 hud_actors.push(act!(text:
-                    font("wendy"): settext(s):
+                    font("wendy"): settext(label):
                     align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
-                    zoom(0.25): shadowlength(1.0):
+                    zoom(zoom): shadowlength(1.0):
                     diffuse(c[0], c[1], c[2], c[3]):
                     z(error_bar_text_z)
                 ));
@@ -8941,14 +8999,15 @@ mod tests {
         append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
         clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
         disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
-        hold_alpha_needs_rows, hold_body_needs_z_buffer, hold_body_segment_budget, hold_draw_span,
-        hold_explosion_active, hold_explosion_enabled, hold_explosion_slot_for_col,
-        hold_head_render_flags, hold_indicator_column_x, hold_segment_pose, hold_strip_actor,
-        hold_strip_glow_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
-        itg_actor_glow_alpha, judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg,
-        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra,
-        note_actor_alpha, note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy,
-        note_x_extra, offset_center, player_metric_y, predictive_itg_percents, pulse_inner_zoom,
+        error_bar_text_10ms_zoom, hold_alpha_needs_rows, hold_body_needs_z_buffer,
+        hold_body_segment_budget, hold_draw_span, hold_explosion_active, hold_explosion_enabled,
+        hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_x,
+        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, judgment_actor_zoom,
+        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
+        note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
+        offset_center, player_metric_y, predictive_itg_percents, pulse_inner_zoom,
         pulse_zoom_for_y, push_transform_parts, receptor_row_center, scale_effect_size,
         scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
         tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
@@ -9360,6 +9419,27 @@ mod tests {
     fn average_error_bar_draws_under_receptors() {
         assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_RECEPTOR);
         assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_TAP_NOTE);
+    }
+
+    #[test]
+    fn text_error_bar_10ms_zoom_matches_sl_fork_curve() {
+        fn assert_close(actual: f32, expected: f32) {
+            assert!(
+                (actual - expected).abs() <= 0.0001,
+                "{actual} != {expected}"
+            );
+        }
+
+        let w2_ms =
+            crate::game::timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
+        let smaller_white_ms = crate::game::timing::FA_PLUS_W010_MS;
+        let w1_ms = crate::game::timing::FA_PLUS_W0_MS;
+        let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
+        let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
+
+        assert_close(error_bar_text_10ms_zoom(inner_mid_ms, w2_ms), 0.35);
+        assert_close(error_bar_text_10ms_zoom(fantastic_mid_ms, w2_ms), 0.4);
+        assert_close(error_bar_text_10ms_zoom(w2_ms + 1.0, w2_ms), 0.45);
     }
 
     #[test]

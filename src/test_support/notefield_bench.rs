@@ -226,6 +226,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
     state.players[0].error_bar_text = Some(ErrorBarText {
         started_at: state.total_elapsed_in_screen - 0.05,
         early: true,
+        offset_ms: 12.0,
+        scaled: false,
     });
     state.players[0].last_judgment = None;
 }

@@ -882,6 +882,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.error_bar_text)
     ));
     content.push_str(&format!(
+        "TextErrorBar10ms={}\n",
+        i32::from(options.text_error_bar_10ms)
+    ));
+    content.push_str(&format!(
         "ErrorBarMask={}\n",
         options.error_bar_active_mask.bits()
     ));
@@ -1296,6 +1300,10 @@ fn load_player_options(
         .get(section, "ErrorBarText")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.error_bar_text, |v| v != 0);
+    options.text_error_bar_10ms = profile_conf
+        .get(section, "TextErrorBar10ms")
+        .and_then(|s| parse_profile_bool(&s))
+        .unwrap_or(options.text_error_bar_10ms);
     let mask_from_key = profile_conf
         .get(section, "ErrorBarMask")
         .and_then(|s| s.parse::<u8>().ok())
@@ -3123,6 +3131,7 @@ pub struct PlayerOptionsData {
     pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
+    pub text_error_bar_10ms: bool,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
@@ -3234,6 +3243,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
+        text_error_bar_10ms: false,
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
@@ -3398,6 +3408,9 @@ pub struct Profile {
     pub error_bar: ErrorBarStyle,
     // Backward-compatible text flag written to profile.ini.
     pub error_bar_text: bool,
+    // Optional Text error bar mode that surfaces >10ms hits independently
+    // of the active judgment windows.
+    pub text_error_bar_10ms: bool,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
@@ -3577,6 +3590,7 @@ impl Default for Profile {
             error_bar: player_options.error_bar,
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
+            text_error_bar_10ms: player_options.text_error_bar_10ms,
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
@@ -3759,6 +3773,7 @@ impl Profile {
             error_bar_active_mask: self.error_bar_active_mask,
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
+            text_error_bar_10ms: self.text_error_bar_10ms,
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
@@ -3872,6 +3887,7 @@ impl Profile {
         self.error_bar_active_mask = options.error_bar_active_mask;
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
+        self.text_error_bar_10ms = options.text_error_bar_10ms;
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;

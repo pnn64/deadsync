@@ -279,6 +279,16 @@ const SHORT_AVERAGE_ERROR_BAR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const TEXT_ERROR_BAR_10MS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.text_error_bar_10ms = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_text_error_bar_10ms_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.text_error_bar_10ms { 1 } else { 0 },
+    }),
+};
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.judgment_tilt = v;
@@ -1405,6 +1415,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "ErrorBarText").to_string(),
             tr("PlayerOptions", "ErrorBarHighlight").to_string(),
             tr("PlayerOptions", "ErrorBarAverage").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::TextErrorBar10ms,
+        lookup_key("PlayerOptions", "TextErrorBar10ms"),
+        lookup_key("PlayerOptionsHelp", "TextErrorBar10msHelp"),
+        CycleBinding::Bool(TEXT_ERROR_BAR_10MS),
+        vec![
+            tr("PlayerOptions", "TextErrorBar10msOff").to_string(),
+            tr("PlayerOptions", "TextErrorBar10msOn").to_string(),
         ],
     ));
     b.push(Row::cycle(
