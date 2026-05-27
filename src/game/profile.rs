@@ -663,6 +663,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.scale_scatterplot)
     ));
     content.push_str(&format!(
+        "ScatterplotMaxWindow={}\n",
+        options.scatterplot_max_window
+    ));
+    content.push_str(&format!(
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
     ));
@@ -995,6 +999,10 @@ fn load_player_options(
         .or_else(|| profile_conf.get(section, "ScatterplotGreatMax"))
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.scale_scatterplot, |v| v != 0);
+    options.scatterplot_max_window = profile_conf
+        .get(section, "ScatterplotMaxWindow")
+        .and_then(|s| ScatterplotMaxWindow::from_str(&s).ok())
+        .unwrap_or(options.scatterplot_max_window);
     options.custom_fantastic_window = profile_conf
         .get(section, "CustomFantasticWindow")
         .and_then(|s| s.parse::<u8>().ok())
@@ -2260,6 +2268,53 @@ impl core::fmt::Display for DataVisualizations {
     }
 }
 
+/// Hard cap for the evaluation scatter plot's vertical scale, selectable
+/// per profile. When set to anything other than `Off`, the scatter plot's
+/// worst-window ms is capped at the chosen judgment tier (mirroring the
+/// `Scatterplot <Tier> Max` toggle in Chris's Simply-Love-SM5-8ms theme),
+/// overriding the older `scale_scatterplot` floor/cap behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScatterplotMaxWindow {
+    #[default]
+    Off,
+    Fantastic,
+    Excellent,
+    Great,
+}
+
+impl FromStr for ScatterplotMaxWindow {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "off" | "none" | "autoscale" | "0" => Ok(Self::Off),
+            "fantastic" | "fantasticmax" | "fa" => Ok(Self::Fantastic),
+            "excellent" | "excellentmax" | "ex" => Ok(Self::Excellent),
+            "great" | "greatmax" | "gr" => Ok(Self::Great),
+            other => Err(format!(
+                "'{other}' is not a valid ScatterplotMaxWindow setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for ScatterplotMaxWindow {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Off => write!(f, "Off"),
+            Self::Fantastic => write!(f, "Fantastic"),
+            Self::Excellent => write!(f, "Excellent"),
+            Self::Great => write!(f, "Great"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LifeMeterType {
     #[default]
@@ -2677,6 +2732,7 @@ pub struct PlayerOptionsData {
     pub split_15_10ms: bool,
     pub track_early_judgments: bool,
     pub scale_scatterplot: bool,
+    pub scatterplot_max_window: ScatterplotMaxWindow,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     pub judgment_tilt: bool,
@@ -2776,6 +2832,7 @@ fn default_player_options() -> PlayerOptionsData {
         split_15_10ms: false,
         track_early_judgments: false,
         scale_scatterplot: false,
+        scatterplot_max_window: ScatterplotMaxWindow::Off,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         judgment_tilt: false,
@@ -2916,6 +2973,11 @@ pub struct Profile {
     // toggle). Off uses the original behavior of an Excellent floor with
     // no upper cap.
     pub scale_scatterplot: bool,
+    // Hard cap for the evaluation scatter plot's vertical scale. When
+    // anything other than `Off`, this overrides `scale_scatterplot`'s
+    // tier-snapped behavior and clamps the worst-window ms to the
+    // selected judgment tier (Chris's SL `ScaleGraph`-per-tier semantics).
+    pub scatterplot_max_window: ScatterplotMaxWindow,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -3083,6 +3145,7 @@ impl Default for Profile {
             split_15_10ms: player_options.split_15_10ms,
             track_early_judgments: player_options.track_early_judgments,
             scale_scatterplot: player_options.scale_scatterplot,
+            scatterplot_max_window: player_options.scatterplot_max_window,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             judgment_tilt: player_options.judgment_tilt,
@@ -3243,6 +3306,7 @@ impl Profile {
             split_15_10ms: self.split_15_10ms,
             track_early_judgments: self.track_early_judgments,
             scale_scatterplot: self.scale_scatterplot,
+            scatterplot_max_window: self.scatterplot_max_window,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             judgment_tilt: self.judgment_tilt,
@@ -3344,6 +3408,7 @@ impl Profile {
         self.split_15_10ms = options.split_15_10ms;
         self.track_early_judgments = options.track_early_judgments;
         self.scale_scatterplot = options.scale_scatterplot;
+        self.scatterplot_max_window = options.scatterplot_max_window;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.judgment_tilt = options.judgment_tilt;

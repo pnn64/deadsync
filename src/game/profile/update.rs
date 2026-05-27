@@ -1018,6 +1018,21 @@ pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisual
     save_profile_ini_for_side(side);
 }
 
+pub fn update_scatterplot_max_window_for_side(
+    side: PlayerSide,
+    setting: super::ScatterplotMaxWindow,
+) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.scatterplot_max_window == setting {
+            return;
+        }
+        profile.scatterplot_max_window = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSetting) {
     {
         let mut profiles = lock_profiles();

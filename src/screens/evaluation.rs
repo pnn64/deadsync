@@ -2024,7 +2024,22 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 } else {
                     5
                 };
-                if prof.scale_scatterplot {
+                // `scatterplot_max_window` takes precedence over the older
+                // `scale_scatterplot` toggle. When set, the plot's worst
+                // window is min(observed worst tier, selected tier) so the
+                // scale is forced to clamp at the chosen judgment window
+                // (matching Chris's Simply-Love-SM5-8ms `ScaleGraph`
+                // semantics, generalized per tier).
+                let cap_idx: Option<usize> = match prof.scatterplot_max_window {
+                    profile::ScatterplotMaxWindow::Off => None,
+                    profile::ScatterplotMaxWindow::Fantastic => Some(1),
+                    profile::ScatterplotMaxWindow::Excellent => Some(2),
+                    profile::ScatterplotMaxWindow::Great => Some(3),
+                };
+                if let Some(cap) = cap_idx {
+                    idx = idx.min(cap);
+                    tw[idx - 1]
+                } else if prof.scale_scatterplot {
                     // zmod-style `ScaleGraph`: cap at Great so a single
                     // Decent/Way Off doesn't squash the plot, and floor
                     // at Fantastic so quad/quint runs can zoom past

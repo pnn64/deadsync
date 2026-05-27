@@ -59,6 +59,21 @@ const DATA_VISUALIZATIONS: ChoiceBinding<usize> = index_binding!(
         }
     })
 );
+const SCATTERPLOT_MAX_WINDOW: ChoiceBinding<usize> = index_binding!(
+    SCATTERPLOT_MAX_WINDOW_VARIANTS,
+    gp::ScatterplotMaxWindow::Off,
+    scatterplot_max_window,
+    gp::update_scatterplot_max_window_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            SCATTERPLOT_MAX_WINDOW_VARIANTS
+                .iter()
+                .position(|&v| v == p.scatterplot_max_window)
+                .unwrap_or(0)
+        }
+    })
+);
 const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
     TARGET_SCORE_VARIANTS,
     gp::TargetScoreSetting::S,
@@ -1266,6 +1281,18 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
             tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::ScatterplotMaxWindow,
+        lookup_key("PlayerOptions", "ScatterplotMaxWindow"),
+        lookup_key("PlayerOptionsHelp", "ScatterplotMaxWindowHelp"),
+        CycleBinding::Index(SCATTERPLOT_MAX_WINDOW),
+        vec![
+            tr("PlayerOptions", "ScatterplotMaxWindowOff").to_string(),
+            tr("PlayerOptions", "ScatterplotMaxWindowFantastic").to_string(),
+            tr("PlayerOptions", "ScatterplotMaxWindowExcellent").to_string(),
+            tr("PlayerOptions", "ScatterplotMaxWindowGreat").to_string(),
         ],
     ));
     b.push(Row::cycle(
