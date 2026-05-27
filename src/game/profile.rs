@@ -56,6 +56,11 @@ pub const AVERAGE_ERROR_BAR_INTENSITY_MAX: f32 = 2.0;
 pub const AVERAGE_ERROR_BAR_INTENSITY_STEP: f32 = 0.25;
 pub const AVERAGE_ERROR_BAR_INTENSITY_DEFAULT: f32 = 1.0;
 
+pub const AVERAGE_ERROR_BAR_INTERVAL_MS_MIN: u32 = 100;
+pub const AVERAGE_ERROR_BAR_INTERVAL_MS_MAX: u32 = 2000;
+pub const AVERAGE_ERROR_BAR_INTERVAL_MS_STEP: u32 = 100;
+pub const AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT: u32 = 400;
+
 pub const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 = 1;
 pub const LONG_ERROR_BAR_THRESHOLD_MS_MAX: u32 = 15;
 pub const LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 4;
@@ -127,6 +132,21 @@ pub fn clamp_average_error_bar_intensity(value: f32) -> f32 {
         AVERAGE_ERROR_BAR_INTENSITY_MIN,
         AVERAGE_ERROR_BAR_INTENSITY_MAX,
     )
+}
+
+#[inline]
+pub const fn clamp_average_error_bar_interval_ms(ms: u32) -> u32 {
+    let clamped = if ms < AVERAGE_ERROR_BAR_INTERVAL_MS_MIN {
+        AVERAGE_ERROR_BAR_INTERVAL_MS_MIN
+    } else if ms > AVERAGE_ERROR_BAR_INTERVAL_MS_MAX {
+        AVERAGE_ERROR_BAR_INTERVAL_MS_MAX
+    } else {
+        ms
+    };
+    let steps = (clamped - AVERAGE_ERROR_BAR_INTERVAL_MS_MIN
+        + AVERAGE_ERROR_BAR_INTERVAL_MS_STEP / 2)
+        / AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
+    AVERAGE_ERROR_BAR_INTERVAL_MS_MIN + steps * AVERAGE_ERROR_BAR_INTERVAL_MS_STEP
 }
 
 /// Min/max for the per-player NoteField horizontal offset.
@@ -904,6 +924,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         clamp_average_error_bar_intensity(options.average_error_bar_intensity)
     ));
     content.push_str(&format!(
+        "AverageErrorBarIntervalMs={}\n",
+        clamp_average_error_bar_interval_ms(options.average_error_bar_interval_ms)
+    ));
+    content.push_str(&format!(
         "LongErrorBar={}\n",
         i32::from(options.long_error_bar_enabled)
     ));
@@ -1333,6 +1357,18 @@ fn load_player_options(
         .and_then(|s| s.trim().trim_end_matches('x').trim().parse::<f32>().ok())
         .map(clamp_average_error_bar_intensity)
         .unwrap_or(options.average_error_bar_intensity);
+    options.average_error_bar_interval_ms = profile_conf
+        .get(section, "AverageErrorBarIntervalMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_average_error_bar_interval_ms)
+        .or_else(|| {
+            profile_conf
+                .get(section, "HighlightAverageMs")
+                .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+                .filter(|&ms| ms > 0)
+                .map(clamp_average_error_bar_interval_ms)
+        })
+        .unwrap_or(options.average_error_bar_interval_ms);
     options.long_error_bar_enabled = profile_conf
         .get(section, "LongErrorBar")
         .and_then(|s| s.trim().parse::<i32>().ok())
@@ -3069,6 +3105,7 @@ pub struct PlayerOptionsData {
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
     pub average_error_bar_intensity: f32,
+    pub average_error_bar_interval_ms: u32,
     pub long_error_bar_enabled: bool,
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
@@ -3178,6 +3215,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
         average_error_bar_intensity: AVERAGE_ERROR_BAR_INTENSITY_DEFAULT,
+        average_error_bar_interval_ms: AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT,
         long_error_bar_enabled: true,
         long_error_bar_intensity: LONG_ERROR_BAR_INTENSITY_DEFAULT,
         long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
@@ -3340,6 +3378,7 @@ pub struct Profile {
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
     pub average_error_bar_intensity: f32,
+    pub average_error_bar_interval_ms: u32,
     pub long_error_bar_enabled: bool,
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
@@ -3517,6 +3556,7 @@ impl Default for Profile {
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
             average_error_bar_intensity: player_options.average_error_bar_intensity,
+            average_error_bar_interval_ms: player_options.average_error_bar_interval_ms,
             long_error_bar_enabled: player_options.long_error_bar_enabled,
             long_error_bar_intensity: player_options.long_error_bar_intensity,
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
@@ -3697,6 +3737,7 @@ impl Profile {
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
             average_error_bar_intensity: self.average_error_bar_intensity,
+            average_error_bar_interval_ms: self.average_error_bar_interval_ms,
             long_error_bar_enabled: self.long_error_bar_enabled,
             long_error_bar_intensity: self.long_error_bar_intensity,
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
@@ -3808,6 +3849,7 @@ impl Profile {
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
         self.average_error_bar_intensity = options.average_error_bar_intensity;
+        self.average_error_bar_interval_ms = options.average_error_bar_interval_ms;
         self.long_error_bar_enabled = options.long_error_bar_enabled;
         self.long_error_bar_intensity = options.long_error_bar_intensity;
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
@@ -5582,13 +5624,16 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 mod tests {
     use super::{
         AVERAGE_ERROR_BAR_INTENSITY_DEFAULT, AVERAGE_ERROR_BAR_INTENSITY_MAX,
-        AVERAGE_ERROR_BAR_INTENSITY_MIN, AVERAGE_ERROR_BAR_INTENSITY_STEP, BackgroundFilter,
+        AVERAGE_ERROR_BAR_INTENSITY_MIN, AVERAGE_ERROR_BAR_INTENSITY_STEP,
+        AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT, AVERAGE_ERROR_BAR_INTERVAL_MS_MAX,
+        AVERAGE_ERROR_BAR_INTERVAL_MS_MIN, AVERAGE_ERROR_BAR_INTERVAL_MS_STEP, BackgroundFilter,
         DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LONG_ERROR_BAR_INTENSITY_DEFAULT,
         LONG_ERROR_BAR_INTENSITY_MAX, LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP,
         LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorSize, NoteSkin,
         PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TapExplosionMask, TimingWindowsOption,
-        clamp_average_error_bar_intensity, clamp_long_error_bar_intensity, initials_from_name,
-        normalize_tap_explosion_mask, parse_groovestats_is_pad_player, sanitize_player_initials,
+        clamp_average_error_bar_intensity, clamp_average_error_bar_interval_ms,
+        clamp_long_error_bar_intensity, initials_from_name, normalize_tap_explosion_mask,
+        parse_groovestats_is_pad_player, sanitize_player_initials,
     };
     use std::str::FromStr;
 
@@ -5660,6 +5705,31 @@ mod tests {
             .round() as usize
             + 1;
         assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn average_error_bar_interval_clamps_to_supported_range() {
+        assert_eq!(AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT, 400);
+        assert_eq!(clamp_average_error_bar_interval_ms(100), 100);
+        assert_eq!(clamp_average_error_bar_interval_ms(2000), 2000);
+        assert_eq!(
+            clamp_average_error_bar_interval_ms(0),
+            AVERAGE_ERROR_BAR_INTERVAL_MS_MIN
+        );
+        assert_eq!(
+            clamp_average_error_bar_interval_ms(4000),
+            AVERAGE_ERROR_BAR_INTERVAL_MS_MAX
+        );
+    }
+
+    #[test]
+    fn average_error_bar_interval_snaps_to_100ms_step_grid() {
+        assert_eq!(AVERAGE_ERROR_BAR_INTERVAL_MS_STEP, 100);
+        assert_eq!(clamp_average_error_bar_interval_ms(149), 100);
+        assert_eq!(clamp_average_error_bar_interval_ms(150), 200);
+        assert_eq!(clamp_average_error_bar_interval_ms(349), 300);
+        assert_eq!(clamp_average_error_bar_interval_ms(350), 400);
+        assert_eq!(clamp_average_error_bar_interval_ms(1951), 2000);
     }
 
     #[test]

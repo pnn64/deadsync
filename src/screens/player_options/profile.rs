@@ -146,6 +146,24 @@ pub(super) fn average_error_bar_intensity_choices() -> Vec<String> {
 }
 
 #[inline(always)]
+pub(super) fn fmt_average_error_bar_interval_ms(ms: u32) -> String {
+    format!("{ms}ms")
+}
+
+pub(super) fn average_error_bar_interval_choices() -> Vec<String> {
+    let count = ((AVERAGE_ERROR_BAR_INTERVAL_MS_MAX - AVERAGE_ERROR_BAR_INTERVAL_MS_MIN)
+        / AVERAGE_ERROR_BAR_INTERVAL_MS_STEP) as usize
+        + 1;
+    let mut out = Vec::with_capacity(count);
+    let mut ms = AVERAGE_ERROR_BAR_INTERVAL_MS_MIN;
+    while ms <= AVERAGE_ERROR_BAR_INTERVAL_MS_MAX {
+        out.push(fmt_average_error_bar_interval_ms(ms));
+        ms += AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
+    }
+    out
+}
+
+#[inline(always)]
 pub(super) fn fmt_long_error_bar_intensity(value: f32) -> String {
     format!("{value:.2}x")
 }

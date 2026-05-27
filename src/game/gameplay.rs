@@ -7129,13 +7129,14 @@ fn error_bar_average_offset_s(
     samples: &mut VecDeque<(f32, f32)>,
     music_time_s: f32,
     offset_s: f32,
+    window_ms: u32,
 ) -> f32 {
     let now_ms = ((music_time_s * 100.0).round() * 10.0).max(0.0);
     samples.push_back((now_ms, offset_s));
 
-    const WINDOW_MS: f32 = 400.0;
+    let window_ms = profile::clamp_average_error_bar_interval_ms(window_ms) as f32;
     while let Some((t, _)) = samples.front() {
-        if now_ms - *t <= WINDOW_MS {
+        if now_ms - *t <= window_ms {
             break;
         }
         samples.pop_front();
@@ -7145,7 +7146,7 @@ fn error_bar_average_offset_s(
     let mut count: usize = 0;
     let mut oldest_in_window: Option<f32> = None;
     for &(t, v) in samples.iter().rev() {
-        if now_ms - t > WINDOW_MS {
+        if now_ms - t > window_ms {
             break;
         }
         sum += v;
@@ -7199,6 +7200,8 @@ fn error_bar_register_tap(
         profile::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
     let long_avg_buffer_cap =
         profile::clamp_long_error_bar_buffer_cap(prof.long_error_bar_buffer_cap) as usize;
+    let average_interval_ms =
+        profile::clamp_average_error_bar_interval_ms(prof.average_error_bar_interval_ms);
     let Some(window) = judgment.window else {
         return;
     };
@@ -7304,8 +7307,12 @@ fn error_bar_register_tap(
     }
 
     if show_average {
-        let avg =
-            error_bar_average_offset_s(&mut p.error_bar_avg_samples, tap_music_time_s, offset_s);
+        let avg = error_bar_average_offset_s(
+            &mut p.error_bar_avg_samples,
+            tap_music_time_s,
+            offset_s,
+            average_interval_ms,
+        );
         let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
             avg.clamp(-max_offset_s, max_offset_s)
         } else {
@@ -8836,29 +8843,30 @@ mod tests {
         effective_mini_percent_for_player, effective_player_global_offset_seconds,
         effective_scroll_effects_for_player, effective_visibility_effects_for_player,
         effective_visual_effects_for_player, enforce_max_simultaneous_notes,
-        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
-        handle_input, hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
-        max_grade_points, max_step_distance_ns, mine_window_bounds_ns,
-        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
-        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
-        score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
-        scored_hold_totals_with_carry, set_final_note_result, settle_completion_rows,
-        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_calories, step_stats_density_graph_width,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual,
-        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_receptor_step_pulse,
-        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        error_bar_average_offset_s, error_bar_register_tap, finalize_completed_mines,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, grade_to_window, handle_input, hit_mine,
+        input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
+        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
+        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
+        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
+        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
+        step_stats_density_graph_width, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
+        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
+        trigger_hold_explosion, trigger_receptor_step_pulse, trigger_tap_explosion,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -8873,6 +8881,7 @@ mod tests {
         TimingProfileNs, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
+    use std::collections::VecDeque;
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::{Duration, Instant};
     use std::{fs, path::PathBuf};
@@ -8899,6 +8908,17 @@ mod tests {
         );
         let expected = ((854.0 - 512.0) * 0.5) * 0.95;
         assert!((width - expected).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn average_error_bar_interval_controls_sample_window() {
+        let mut broad = VecDeque::from([(0.0, 0.010), (100.0, 0.020), (200.0, 0.030)]);
+        let broad_avg = error_bar_average_offset_s(&mut broad, 0.5, 0.050, 400);
+        assert!((broad_avg - 0.040).abs() <= 1e-6);
+
+        let mut narrow = VecDeque::from([(0.0, 0.010), (100.0, 0.020), (200.0, 0.030)]);
+        let narrow_avg = error_bar_average_offset_s(&mut narrow, 0.5, 0.050, 200);
+        assert!((narrow_avg - 0.0375).abs() <= 1e-6);
     }
 
     struct SessionRestore {

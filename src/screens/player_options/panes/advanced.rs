@@ -836,6 +836,35 @@ const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
+const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let parsed = choice.trim().trim_end_matches("ms").trim().parse::<u32>();
+        let Ok(raw) = parsed else {
+            return Outcome::persisted();
+        };
+        let value = gp::clamp_average_error_bar_interval_ms(raw);
+        state.player_profiles[player_idx].average_error_bar_interval_ms = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_average_error_bar_interval_ms_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
 const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
@@ -1368,6 +1397,13 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "AverageErrorBarIntensityHelp"),
         AVERAGE_ERROR_BAR_INTENSITY,
         average_error_bar_intensity_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::AverageErrorBarInterval,
+        lookup_key("PlayerOptions", "AverageErrorBarInterval"),
+        lookup_key("PlayerOptionsHelp", "AverageErrorBarIntervalHelp"),
+        AVERAGE_ERROR_BAR_INTERVAL,
+        average_error_bar_interval_choices(),
     ));
     b.push(Row::cycle(
         RowId::ErrorBarTrim,

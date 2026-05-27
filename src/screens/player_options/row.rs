@@ -59,6 +59,7 @@ pub enum RowId {
     OffsetIndicator,
     ErrorBar,
     AverageErrorBarIntensity,
+    AverageErrorBarInterval,
     ErrorBarTrim,
     ErrorBarOptions,
     ErrorBarOffsetX,

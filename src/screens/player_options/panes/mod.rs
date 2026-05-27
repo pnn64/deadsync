@@ -258,6 +258,18 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::AverageErrorBarInterval) {
+        let ms = crate::game::profile::clamp_average_error_bar_interval_ms(
+            profile.average_error_bar_interval_ms,
+        );
+        let needle = fmt_average_error_bar_interval_ms(ms);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarThreshold) {
         let ms = crate::game::profile::clamp_long_error_bar_threshold_ms(
             profile.long_error_bar_threshold_ms,

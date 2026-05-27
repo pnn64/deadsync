@@ -40,6 +40,15 @@ pub(super) const AVERAGE_ERROR_BAR_INTENSITY_MAX: f32 =
 pub(super) const AVERAGE_ERROR_BAR_INTENSITY_STEP: f32 =
     crate::game::profile::AVERAGE_ERROR_BAR_INTENSITY_STEP;
 
+pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_MIN: u32 =
+    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MIN;
+
+pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_MAX: u32 =
+    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MAX;
+
+pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_STEP: u32 =
+    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
+
 pub(super) const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 =
     crate::game::profile::LONG_ERROR_BAR_THRESHOLD_MS_MIN;
 
