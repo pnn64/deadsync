@@ -46,6 +46,68 @@ pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
     }
 }
 
+pub const LONG_ERROR_BAR_INTENSITY_MIN: f32 = 1.0;
+pub const LONG_ERROR_BAR_INTENSITY_MAX: f32 = 2.0;
+pub const LONG_ERROR_BAR_INTENSITY_STEP: f32 = 0.25;
+pub const LONG_ERROR_BAR_INTENSITY_DEFAULT: f32 = 2.0;
+
+pub const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 = 1;
+pub const LONG_ERROR_BAR_THRESHOLD_MS_MAX: u32 = 15;
+pub const LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 4;
+
+pub const LONG_ERROR_BAR_MIN_SAMPLES_MIN: u32 = 4;
+pub const LONG_ERROR_BAR_MIN_SAMPLES_MAX: u32 = 64;
+pub const LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT: u32 = 16;
+
+pub const LONG_ERROR_BAR_BUFFER_CAP_MIN: u32 = 16;
+pub const LONG_ERROR_BAR_BUFFER_CAP_MAX: u32 = 128;
+pub const LONG_ERROR_BAR_BUFFER_CAP_DEFAULT: u32 = 64;
+
+#[inline]
+pub const fn clamp_long_error_bar_threshold_ms(ms: u32) -> u32 {
+    if ms < LONG_ERROR_BAR_THRESHOLD_MS_MIN {
+        LONG_ERROR_BAR_THRESHOLD_MS_MIN
+    } else if ms > LONG_ERROR_BAR_THRESHOLD_MS_MAX {
+        LONG_ERROR_BAR_THRESHOLD_MS_MAX
+    } else {
+        ms
+    }
+}
+
+#[inline]
+pub const fn clamp_long_error_bar_min_samples(n: u32) -> u32 {
+    if n < LONG_ERROR_BAR_MIN_SAMPLES_MIN {
+        LONG_ERROR_BAR_MIN_SAMPLES_MIN
+    } else if n > LONG_ERROR_BAR_MIN_SAMPLES_MAX {
+        LONG_ERROR_BAR_MIN_SAMPLES_MAX
+    } else {
+        n
+    }
+}
+
+#[inline]
+pub const fn clamp_long_error_bar_buffer_cap(n: u32) -> u32 {
+    if n < LONG_ERROR_BAR_BUFFER_CAP_MIN {
+        LONG_ERROR_BAR_BUFFER_CAP_MIN
+    } else if n > LONG_ERROR_BAR_BUFFER_CAP_MAX {
+        LONG_ERROR_BAR_BUFFER_CAP_MAX
+    } else {
+        n
+    }
+}
+
+#[inline]
+pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
+    if !value.is_finite() {
+        return LONG_ERROR_BAR_INTENSITY_DEFAULT;
+    }
+    let clamped = value.clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX);
+    let steps =
+        ((clamped - LONG_ERROR_BAR_INTENSITY_MIN) / LONG_ERROR_BAR_INTENSITY_STEP).round();
+    (LONG_ERROR_BAR_INTENSITY_MIN + steps * LONG_ERROR_BAR_INTENSITY_STEP)
+        .clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX)
+}
+
 /// Min/max for the per-player NoteField horizontal offset.
 pub const NOTE_FIELD_OFFSET_X_MIN: i32 = 0;
 pub const NOTE_FIELD_OFFSET_X_MAX: i32 = 50;
@@ -765,6 +827,26 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     ));
     content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
     content.push_str(&format!(
+        "LongErrorBar={}\n",
+        i32::from(options.long_error_bar_enabled)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarIntensity={:.2}\n",
+        clamp_long_error_bar_intensity(options.long_error_bar_intensity)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarThresholdMs={}\n",
+        clamp_long_error_bar_threshold_ms(options.long_error_bar_threshold_ms)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarMinSamples={}\n",
+        clamp_long_error_bar_min_samples(options.long_error_bar_min_samples)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarBufferCap={}\n",
+        clamp_long_error_bar_buffer_cap(options.long_error_bar_buffer_cap)
+    ));
+    content.push_str(&format!(
         "DataVisualizations={}\n",
         options.data_visualizations
     ));
@@ -1147,6 +1229,30 @@ fn load_player_options(
         .get(section, "ErrorBarTrim")
         .and_then(|s| ErrorBarTrim::from_str(&s).ok())
         .unwrap_or(options.error_bar_trim);
+    options.long_error_bar_enabled = profile_conf
+        .get(section, "LongErrorBar")
+        .and_then(|s| s.trim().parse::<i32>().ok())
+        .map_or(options.long_error_bar_enabled, |v| v != 0);
+    options.long_error_bar_intensity = profile_conf
+        .get(section, "LongErrorBarIntensity")
+        .and_then(|s| s.trim().trim_end_matches('x').trim().parse::<f32>().ok())
+        .map(clamp_long_error_bar_intensity)
+        .unwrap_or(options.long_error_bar_intensity);
+    options.long_error_bar_threshold_ms = profile_conf
+        .get(section, "LongErrorBarThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_threshold_ms)
+        .unwrap_or(options.long_error_bar_threshold_ms);
+    options.long_error_bar_min_samples = profile_conf
+        .get(section, "LongErrorBarMinSamples")
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_min_samples)
+        .unwrap_or(options.long_error_bar_min_samples);
+    options.long_error_bar_buffer_cap = profile_conf
+        .get(section, "LongErrorBarBufferCap")
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_buffer_cap)
+        .unwrap_or(options.long_error_bar_buffer_cap);
     options.data_visualizations = profile_conf
         .get(section, "DataVisualizations")
         .and_then(|s| DataVisualizations::from_str(&s).ok())
@@ -2729,6 +2835,11 @@ pub struct PlayerOptionsData {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub long_error_bar_enabled: bool,
+    pub long_error_bar_intensity: f32,
+    pub long_error_bar_threshold_ms: u32,
+    pub long_error_bar_min_samples: u32,
+    pub long_error_bar_buffer_cap: u32,
     pub data_visualizations: DataVisualizations,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
@@ -2828,6 +2939,11 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
+        long_error_bar_enabled: true,
+        long_error_bar_intensity: LONG_ERROR_BAR_INTENSITY_DEFAULT,
+        long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
+        long_error_bar_min_samples: LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT,
+        long_error_bar_buffer_cap: LONG_ERROR_BAR_BUFFER_CAP_DEFAULT,
         data_visualizations: DataVisualizations::default(),
         target_score: TargetScoreSetting::default(),
         lifemeter_type: LifeMeterType::default(),
@@ -2976,6 +3092,11 @@ pub struct Profile {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub long_error_bar_enabled: bool,
+    pub long_error_bar_intensity: f32,
+    pub long_error_bar_threshold_ms: u32,
+    pub long_error_bar_min_samples: u32,
+    pub long_error_bar_buffer_cap: u32,
     pub data_visualizations: DataVisualizations,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
@@ -3143,6 +3264,11 @@ impl Default for Profile {
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
+            long_error_bar_enabled: player_options.long_error_bar_enabled,
+            long_error_bar_intensity: player_options.long_error_bar_intensity,
+            long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
+            long_error_bar_min_samples: player_options.long_error_bar_min_samples,
+            long_error_bar_buffer_cap: player_options.long_error_bar_buffer_cap,
             data_visualizations: player_options.data_visualizations,
             target_score: player_options.target_score,
             lifemeter_type: player_options.lifemeter_type,
@@ -3305,6 +3431,11 @@ impl Profile {
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
+            long_error_bar_enabled: self.long_error_bar_enabled,
+            long_error_bar_intensity: self.long_error_bar_intensity,
+            long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
+            long_error_bar_min_samples: self.long_error_bar_min_samples,
+            long_error_bar_buffer_cap: self.long_error_bar_buffer_cap,
             data_visualizations: self.data_visualizations,
             target_score: self.target_score,
             lifemeter_type: self.lifemeter_type,
@@ -3406,6 +3537,11 @@ impl Profile {
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
+        self.long_error_bar_enabled = options.long_error_bar_enabled;
+        self.long_error_bar_intensity = options.long_error_bar_intensity;
+        self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
+        self.long_error_bar_min_samples = options.long_error_bar_min_samples;
+        self.long_error_bar_buffer_cap = options.long_error_bar_buffer_cap;
         self.data_visualizations = options.data_visualizations;
         self.target_score = options.target_score;
         self.lifemeter_type = options.lifemeter_type;
@@ -5091,11 +5227,49 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, LastPlayedCourse,
-        NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TimingWindowsOption,
-        initials_from_name, parse_groovestats_is_pad_player, sanitize_player_initials,
+        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LONG_ERROR_BAR_INTENSITY_DEFAULT,
+        LONG_ERROR_BAR_INTENSITY_MAX, LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP,
+        LastPlayed, NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TimingWindowsOption,
+        clamp_long_error_bar_intensity, initials_from_name, parse_groovestats_is_pad_player,
+        sanitize_player_initials,
     };
     use std::str::FromStr;
+
+    #[test]
+    fn long_error_bar_intensity_clamps_to_supported_range() {
+        assert!((LONG_ERROR_BAR_INTENSITY_DEFAULT - 2.0).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(1.0) - 1.0).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(2.0) - 2.0).abs() < 1e-6);
+        assert!(
+            (clamp_long_error_bar_intensity(0.0) - LONG_ERROR_BAR_INTENSITY_MIN).abs() < 1e-6
+        );
+        assert!(
+            (clamp_long_error_bar_intensity(5.0) - LONG_ERROR_BAR_INTENSITY_MAX).abs() < 1e-6
+        );
+        assert!(
+            (clamp_long_error_bar_intensity(f32::NAN) - LONG_ERROR_BAR_INTENSITY_DEFAULT).abs()
+                < 1e-6
+        );
+        assert!(
+            (clamp_long_error_bar_intensity(f32::INFINITY) - LONG_ERROR_BAR_INTENSITY_DEFAULT)
+                .abs()
+                < 1e-6
+        );
+    }
+
+    #[test]
+    fn long_error_bar_intensity_snaps_to_quarter_step_grid() {
+        assert!((clamp_long_error_bar_intensity(1.10) - 1.00).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(1.13) - 1.25).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(1.40) - 1.50).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(1.75) - 1.75).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(1.95) - 2.00).abs() < 1e-6);
+        let count = ((LONG_ERROR_BAR_INTENSITY_MAX - LONG_ERROR_BAR_INTENSITY_MIN)
+            / LONG_ERROR_BAR_INTENSITY_STEP)
+            .round() as usize
+            + 1;
+        assert_eq!(count, 5);
+    }
 
     #[test]
     fn background_filter_default_matches_legacy_darkest_value() {

@@ -3353,6 +3353,10 @@ pub struct PlayerRuntime {
     pub error_bar_avg_next: usize,
     pub error_bar_avg_bar_started_at: Option<f32>,
     pub error_bar_avg_samples: VecDeque<(f32, f32)>,
+    pub error_bar_long_avg_samples: VecDeque<(f32, f32)>,
+    pub error_bar_long_avg_total: f32,
+    pub error_bar_long_avg_tick: Option<ErrorBarTick>,
+    pub error_bar_long_avg_visible: bool,
     pub live_timing_stats: crate::game::timing::LiveTimingStats,
 }
 
@@ -3475,6 +3479,12 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_next: 0,
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
+        error_bar_long_avg_samples: VecDeque::with_capacity(
+            crate::game::profile::LONG_ERROR_BAR_BUFFER_CAP_DEFAULT as usize,
+        ),
+        error_bar_long_avg_total: 0.0,
+        error_bar_long_avg_tick: None,
+        error_bar_long_avg_visible: false,
         live_timing_stats: crate::game::timing::LiveTimingStats::default(),
     }
 }
@@ -7058,6 +7068,39 @@ const fn error_bar_window_ix(window: TimingWindow) -> usize {
     }
 }
 
+// Long-term (blue) Average error bar constants.
+pub(crate) const ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S: f32 = 0.060;
+pub(crate) const ERROR_BAR_LONG_AVG_PRUNE_PER_TAP: usize = 4;
+
+#[inline(always)]
+fn error_bar_long_term_offset_s(
+    samples: &mut VecDeque<(f32, f32)>,
+    total: &mut f32,
+    music_time_s: f32,
+    offset_s: f32,
+    buffer_cap: usize,
+) -> (f32, usize) {
+    if offset_s.abs() <= ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S {
+        let now_ms = (music_time_s * 1000.0).max(0.0);
+        samples.push_back((now_ms, offset_s));
+        *total += offset_s;
+    }
+
+    let mut popped = 0usize;
+    while popped < ERROR_BAR_LONG_AVG_PRUNE_PER_TAP && samples.len() > buffer_cap {
+        if let Some((_, v)) = samples.pop_front() {
+            *total -= v;
+            popped += 1;
+        } else {
+            break;
+        }
+    }
+
+    let len = samples.len();
+    let mean = if len > 0 { *total / len as f32 } else { 0.0 };
+    (mean, len)
+}
+
 #[inline(always)]
 fn error_bar_push_tick<const N: usize>(
     ticks: &mut [Option<ErrorBarTick>; N],
@@ -7145,6 +7188,13 @@ fn error_bar_register_tap(
     let error_bar_trim = prof.error_bar_trim;
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
+    let long_avg_enabled = prof.long_error_bar_enabled;
+    let long_avg_threshold_s =
+        profile::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32 / 1000.0;
+    let long_avg_min_samples =
+        profile::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
+    let long_avg_buffer_cap =
+        profile::clamp_long_error_bar_buffer_cap(prof.long_error_bar_buffer_cap) as usize;
     let Some(window) = judgment.window else {
         return;
     };
@@ -7268,6 +7318,27 @@ fn error_bar_register_tap(
             },
         );
         p.error_bar_avg_bar_started_at = Some(now);
+
+        let (long_mean, long_len) = error_bar_long_term_offset_s(
+            &mut p.error_bar_long_avg_samples,
+            &mut p.error_bar_long_avg_total,
+            tap_music_time_s,
+            offset_s,
+            long_avg_buffer_cap,
+        );
+        if long_avg_enabled
+            && long_len >= long_avg_min_samples
+            && long_mean.abs() >= long_avg_threshold_s
+        {
+            p.error_bar_long_avg_tick = Some(ErrorBarTick {
+                started_at: now,
+                offset_s: long_mean,
+                window,
+            });
+            p.error_bar_long_avg_visible = true;
+        } else {
+            p.error_bar_long_avg_visible = false;
+        }
     }
 }
 

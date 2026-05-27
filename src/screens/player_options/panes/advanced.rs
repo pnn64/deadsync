@@ -204,6 +204,18 @@ const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const LONG_ERROR_BAR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.long_error_bar_enabled = v;
+        Outcome::persisted_with_visibility()
+    },
+    persist_for_side: gp::update_long_error_bar_enabled_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| {
+            if p.long_error_bar_enabled { 1 } else { 0 }
+        },
+    }),
+};
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.judgment_tilt = v;
@@ -748,6 +760,120 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
+const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let parsed = choice.trim().trim_end_matches('x').trim().parse::<f32>();
+        let Ok(raw) = parsed else {
+            return Outcome::persisted();
+        };
+        let value = gp::clamp_long_error_bar_intensity(raw);
+        state.player_profiles[player_idx].long_error_bar_intensity = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_long_error_bar_intensity_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
+const LONG_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let parsed = choice.trim().trim_end_matches("ms").trim().parse::<u32>();
+        let Ok(raw) = parsed else {
+            return Outcome::persisted();
+        };
+        let value = gp::clamp_long_error_bar_threshold_ms(raw);
+        state.player_profiles[player_idx].long_error_bar_threshold_ms = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_long_error_bar_threshold_ms_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
+const LONG_ERROR_BAR_MIN_SAMPLES: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let Ok(raw) = choice.trim().parse::<u32>() else {
+            return Outcome::persisted();
+        };
+        let value = gp::clamp_long_error_bar_min_samples(raw);
+        state.player_profiles[player_idx].long_error_bar_min_samples = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_long_error_bar_min_samples_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
+const LONG_ERROR_BAR_BUFFER_CAP: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let Ok(raw) = choice.trim().parse::<u32>() else {
+            return Outcome::persisted();
+        };
+        let value = gp::clamp_long_error_bar_buffer_cap(raw);
+        state.player_profiles[player_idx].long_error_bar_buffer_cap = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_long_error_bar_buffer_cap_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
 fn chosen_tilt_threshold_ms(
     state: &mut State,
     player_idx: usize,
@@ -1182,6 +1308,44 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         )
         .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
     );
+    b.push(Row::cycle(
+        RowId::LongErrorBar,
+        lookup_key("PlayerOptions", "LongErrorBar"),
+        lookup_key("PlayerOptionsHelp", "LongErrorBarHelp"),
+        CycleBinding::Bool(LONG_ERROR_BAR),
+        vec![
+            tr("PlayerOptions", "LongErrorBarOff").to_string(),
+            tr("PlayerOptions", "LongErrorBarOn").to_string(),
+        ],
+    ));
+    b.push(Row::custom(
+        RowId::LongErrorBarIntensity,
+        lookup_key("PlayerOptions", "LongErrorBarIntensity"),
+        lookup_key("PlayerOptionsHelp", "LongErrorBarIntensityHelp"),
+        LONG_ERROR_BAR_INTENSITY,
+        long_error_bar_intensity_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::LongErrorBarThreshold,
+        lookup_key("PlayerOptions", "LongErrorBarThreshold"),
+        lookup_key("PlayerOptionsHelp", "LongErrorBarThresholdHelp"),
+        LONG_ERROR_BAR_THRESHOLD,
+        long_error_bar_threshold_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::LongErrorBarMinSamples,
+        lookup_key("PlayerOptions", "LongErrorBarMinSamples"),
+        lookup_key("PlayerOptionsHelp", "LongErrorBarMinSamplesHelp"),
+        LONG_ERROR_BAR_MIN_SAMPLES,
+        long_error_bar_min_samples_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::LongErrorBarBufferCap,
+        lookup_key("PlayerOptions", "LongErrorBarBufferCap"),
+        lookup_key("PlayerOptionsHelp", "LongErrorBarBufferCapHelp"),
+        LONG_ERROR_BAR_BUFFER_CAP,
+        long_error_bar_buffer_cap_choices(),
+    ));
     b.push(Row::cycle(
         RowId::MeasureCounter,
         lookup_key("PlayerOptions", "MeasureCounter"),
