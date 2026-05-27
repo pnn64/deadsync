@@ -2004,6 +2004,28 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
     }
 }
 
+fn song_lua_constant_cutoff_second(
+    constant: &AttackMaskWindow,
+    window: &SongLuaEaseMaskWindow,
+    epsilon: f32,
+) -> Option<f32> {
+    if !constant.start_second.is_finite()
+        || !constant.end_second.is_finite()
+        || !window.end_second.is_finite()
+        || !song_lua_constant_sets_target(constant, window.target)
+    {
+        return None;
+    }
+    if constant.end_second <= window.end_second + epsilon {
+        return None;
+    }
+    if constant.start_second <= window.end_second + epsilon {
+        Some(window.end_second)
+    } else {
+        Some(constant.start_second)
+    }
+}
+
 fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow], constants: &[AttackMaskWindow]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
@@ -2037,14 +2059,7 @@ fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow], constants: &[At
         let constant_cutoff = constants
             .iter()
             .filter_map(|constant| {
-                if !constant.start_second.is_finite()
-                    || constant.start_second + SAME_TICK_EPSILON < window.end_second
-                    || !song_lua_constant_sets_target(constant, window.target)
-                {
-                    None
-                } else {
-                    Some(constant.start_second)
-                }
+                song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
             })
             .fold(cutoff_second, |acc, start| {
                 Some(match acc {

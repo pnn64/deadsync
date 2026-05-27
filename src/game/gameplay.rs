@@ -12378,6 +12378,142 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn song_lua_active_reset_cuts_overlapping_ease_tail() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            beat_mods: vec![crate::game::parsing::song_lua::SongLuaModWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 999.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                mods: "*1 0 Stealth, *1 0 PulseOuter".to_string(),
+                player: Some(1),
+            }],
+            eases: vec![
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "Stealth".to_string(),
+                    ),
+                    from: 0.0,
+                    to: 45.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "PulseOuter".to_string(),
+                    ),
+                    from: 0.0,
+                    to: 80.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "PulsePeriod".to_string(),
+                    ),
+                    from: 0.0,
+                    to: -80.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let constants =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+
+        assert_eq!(unsupported, 0);
+        let stealth = windows
+            .iter()
+            .find(|window| {
+                matches!(
+                    window.target,
+                    super::attacks::SongLuaEaseMaskTarget::AppearanceStealth
+                )
+            })
+            .unwrap();
+        let pulse_outer = windows
+            .iter()
+            .find(|window| {
+                matches!(
+                    window.target,
+                    super::attacks::SongLuaEaseMaskTarget::VisualPulseOuter
+                )
+            })
+            .unwrap();
+        let pulse_period = windows
+            .iter()
+            .find(|window| {
+                matches!(
+                    window.target,
+                    super::attacks::SongLuaEaseMaskTarget::VisualPulsePeriod
+                )
+            })
+            .unwrap();
+
+        assert_eq!(stealth.sustain_end_second, 6.0);
+        assert_eq!(pulse_outer.sustain_end_second, 6.0);
+        assert_eq!(pulse_period.sustain_end_second, f32::MAX);
+        assert!(super::song_lua_ease_window_value(stealth, 5.0).is_some());
+        assert!(super::song_lua_ease_window_value(pulse_outer, 5.0).is_some());
+        assert!(super::song_lua_ease_window_value(stealth, 6.25).is_none());
+        assert!(super::song_lua_ease_window_value(pulse_outer, 6.25).is_none());
+
+        state.attack_mask_windows[0] = constants;
+        state.song_lua_ease_windows[0] = windows;
+        state.current_music_time_visible[0] = 5.0;
+        refresh_active_attack_masks(&mut state, 0.0);
+        assert!(effective_appearance_effects_for_player(&state, 0).stealth > 0.0);
+        assert!(effective_visual_effects_for_player(&state, 0).pulse_outer > 0.0);
+
+        state.current_music_time_visible[0] = 7.0;
+        refresh_active_attack_masks(&mut state, 2.0);
+        assert!(
+            effective_appearance_effects_for_player(&state, 0)
+                .stealth
+                .abs()
+                <= 0.000_1
+        );
+        assert!(
+            effective_visual_effects_for_player(&state, 0)
+                .pulse_outer
+                .abs()
+                <= 0.000_1
+        );
+    }
+
+    #[test]
     fn song_lua_constant_mods_persist_after_attack_window() {
         let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
         let timing_segments = TimingSegments {
