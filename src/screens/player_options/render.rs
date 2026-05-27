@@ -510,6 +510,7 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
             .bits()
             .into(),
         EarlyDecentWayOffOptions => state.option_masks[player_idx].early_dw.bits().into(),
+        TapExplosionOptions => state.option_masks[player_idx].tap_explosion.bits().into(),
         _ => return None,
     })
 }
@@ -540,6 +541,7 @@ pub(super) fn is_multi_select_row(row_id: RowId) -> bool {
             | ErrorBar
             | ErrorBarOptions
             | EarlyDecentWayOffOptions
+            | TapExplosionOptions
     )
 }
 

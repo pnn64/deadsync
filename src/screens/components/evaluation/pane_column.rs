@@ -722,10 +722,7 @@ pub(crate) fn build_pane3_arrow_preview(
             let (sin_r, cos_r) = rot_rad.sin_cos();
             let ox = draw.pos[0] * note_scale;
             let oy = draw.pos[1] * note_scale;
-            let pos = [
-                cx + ox * cos_r - oy * sin_r,
-                cy + ox * sin_r + oy * cos_r,
-            ];
+            let pos = [cx + ox * cos_r - oy * sin_r, cy + ox * sin_r + oy * cos_r];
             let size = [
                 base_size[0] * draw.zoom[0].max(0.0),
                 base_size[1] * draw.zoom[1].max(0.0),

@@ -6781,6 +6781,9 @@ pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
 
 fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str, bright: bool) {
     let player = player_for_col(state, column);
+    if !state.player_profiles[player].tap_explosion_window_enabled(window_key) {
+        return;
+    }
     let local_col = if state.cols_per_player == 0 {
         column
     } else {
@@ -7190,7 +7193,8 @@ fn error_bar_register_tap(
     let error_ms_display = prof.error_ms_display;
     let long_avg_enabled = prof.long_error_bar_enabled;
     let long_avg_threshold_s =
-        profile::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32 / 1000.0;
+        profile::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
+            / 1000.0;
     let long_avg_min_samples =
         profile::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
     let long_avg_buffer_cap =
@@ -8852,9 +8856,9 @@ mod tests {
         stage_music_cut, start_active_hold, step_calories, step_stats_density_graph_width,
         step_stats_notefield_width, suppress_final_bad_rescore_visual,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_receptor_step_pulse,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_receptor_step_pulse,
+        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -10793,6 +10797,40 @@ return Def.ActorFrame{}
         assert!(judge_a_tap(&mut state, column, note_time));
         assert!(state.tap_explosions[column].is_some());
         assert!(state.receptor_bop_timers[column] > 0.0);
+    }
+
+    #[test]
+    fn tap_explosion_mask_disables_selected_tap_window() {
+        let column = 1usize;
+        let mut enabled =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        trigger_tap_explosion(&mut enabled, column, JudgeGrade::Great);
+        assert!(enabled.tap_explosions[column].is_some());
+
+        let mut profile = profile::Profile::default();
+        profile
+            .tap_explosion_active_mask
+            .remove(profile::TapExplosionMask::GREAT);
+        let mut disabled = regression_state([profile, profile::Profile::default()]);
+        trigger_tap_explosion(&mut disabled, column, JudgeGrade::Great);
+        assert!(disabled.tap_explosions[column].is_none());
+    }
+
+    #[test]
+    fn tap_explosion_mask_disables_held_success_flash() {
+        let column = 1usize;
+        let mut enabled =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        trigger_hold_explosion(&mut enabled, column);
+        assert!(enabled.tap_explosions[column].is_some());
+
+        let mut profile = profile::Profile::default();
+        profile
+            .tap_explosion_active_mask
+            .remove(profile::TapExplosionMask::HELD);
+        let mut disabled = regression_state([profile, profile::Profile::default()]);
+        trigger_hold_explosion(&mut disabled, column);
+        assert!(disabled.tap_explosions[column].is_none());
     }
 
     #[test]

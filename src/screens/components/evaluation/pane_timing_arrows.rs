@@ -82,15 +82,16 @@ pub fn build_timing_arrows_pane(
     }
 
     // L/R column headers.
-    let foot_labels: [(&str, [f32; 4]); 2] =
-        [("L", LEFT_FOOT_RGBA), ("R", RIGHT_FOOT_RGBA)];
+    let foot_labels: [(&str, [f32; 4]); 2] = [("L", LEFT_FOOT_RGBA), ("R", RIGHT_FOOT_RGBA)];
     for (i, (label, color_rgba)) in foot_labels.iter().enumerate() {
         let foot_header_font = current_machine_font_key_for_text(FontRole::Header, label);
-        children.push(act!(text: font(foot_header_font): settext(label.to_string()):
-            align(0.5, 0.5): xy(col_centers[4 + i], header_y):
-            zoom(0.55):
-            diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
-        ));
+        children.push(
+            act!(text: font(foot_header_font): settext(label.to_string()):
+                align(0.5, 0.5): xy(col_centers[4 + i], header_y):
+                zoom(0.55):
+                diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
+            ),
+        );
     }
 
     let buckets: [&ArrowTimingBucket; 6] = [

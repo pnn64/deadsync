@@ -578,6 +578,51 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn tap_explosion_options_hide_when_skin_is_none() {
+        ensure_i18n();
+        let mut row_map = test_row_map(vec![
+            test_row(
+                RowId::TapExplosionSkin,
+                lookup_key("PlayerOptions", "TapExplosionSkin"),
+                &["Same as NoteSkin", "None", "default"],
+                [1, 1],
+            ),
+            test_row(
+                RowId::TapExplosionOptions,
+                lookup_key("PlayerOptions", "TapExplosionOptions"),
+                &[
+                    "Fantastics",
+                    "Excellents",
+                    "Greats",
+                    "Decents",
+                    "Way Offs",
+                    "Helds",
+                ],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        row_map
+            .get_mut(RowId::TapExplosionSkin)
+            .unwrap()
+            .selected_choice_index[P1] = 0;
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn fa_plus_window_options_hide_until_window_is_active() {
         ensure_i18n();
         let row_map = test_row_map(vec![

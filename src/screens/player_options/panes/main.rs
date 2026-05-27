@@ -1,5 +1,5 @@
 use super::super::choice;
-use super::super::row::index_binding;
+use super::super::row::{index_binding, simple_bitmask_binding};
 use super::*;
 use crate::game::profile as gp;
 
@@ -277,7 +277,7 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
 };
 const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        apply_noteskin_delta(
+        let outcome = apply_noteskin_delta(
             state,
             player_idx,
             row_id,
@@ -305,9 +305,23 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                     player_idx,
                 );
             },
-        )
+        );
+        if outcome.persisted {
+            Outcome::persisted_with_visibility()
+        } else {
+            outcome
+        }
     },
 };
+
+const TAP_EXPLOSION_OPTIONS: BitmaskBinding = simple_bitmask_binding!(
+    mask = gp::TapExplosionMask,
+    bits = u8,
+    state_field = tap_explosion,
+    profile_field = tap_explosion_active_mask,
+    persist = gp::update_tap_explosion_mask_for_side,
+    width = 6,
+);
 
 const MUSIC_RATE: CustomBinding = CustomBinding {
     apply: |state, _player_idx, row_id, delta, _wrap| {
@@ -698,6 +712,20 @@ pub(super) fn build_main_rows(
         lookup_key("PlayerOptionsHelp", "TapExplosionSkinHelp"),
         TAP_EXPLOSION_SKIN,
         build_tap_explosion_noteskin_choices(noteskin_names),
+    ));
+    b.push(Row::bitmask(
+        RowId::TapExplosionOptions,
+        lookup_key("PlayerOptions", "TapExplosionOptions"),
+        lookup_key("PlayerOptionsHelp", "TapExplosionOptionsHelp"),
+        TAP_EXPLOSION_OPTIONS,
+        vec![
+            tr("PlayerOptions", "TapExplosionOptionsFantastics").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsExcellents").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsGreats").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsDecents").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsWayOffs").to_string(),
+            tr("PlayerOptions", "TapExplosionOptionsHelds").to_string(),
+        ],
     ));
     b.push(Row::custom(
         RowId::JudgmentFont,

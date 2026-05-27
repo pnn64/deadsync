@@ -1,7 +1,7 @@
 use super::*;
 pub use crate::game::profile::{
     AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-    LiveTimingStatsMask, RemoveMask, VisualEffectsMask,
+    LiveTimingStatsMask, RemoveMask, TapExplosionMask, VisualEffectsMask,
 };
 use bitflags::bitflags;
 
@@ -138,6 +138,7 @@ pub struct PlayerOptionMasks {
     pub error_bar: ErrorBarMask,
     pub error_bar_options: ErrorBarOptionsMask,
     pub measure_counter_options: MeasureCounterOptionsMask,
+    pub tap_explosion: TapExplosionMask,
 }
 
 /// Loaded noteskin previews for a single player slot.

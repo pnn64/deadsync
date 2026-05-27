@@ -18,6 +18,7 @@ pub(super) struct RowVisibility {
     pub(super) show_indicator_score_type: bool,
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
+    pub(super) show_tap_explosion_options: bool,
 }
 
 #[inline(always)]
@@ -82,6 +83,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::GlobalOffsetShift {
         return visibility.show_global_offset_shift;
     }
+    if id == RowId::TapExplosionOptions {
+        return visibility.show_tap_explosion_options;
+    }
     true
 }
 
@@ -136,6 +140,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::LiveTimingStats {
         return Some(RowId::GameplayExtras);
+    }
+    if id == RowId::TapExplosionOptions {
+        return Some(RowId::TapExplosionSkin);
     }
     if id == RowId::EarlyDecentWayOffOptions {
         return Some(RowId::RescoreEarlyHits);
@@ -425,6 +432,30 @@ pub(super) fn live_timing_stats_visible(
     !any_active
 }
 
+pub(super) fn tap_explosion_options_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    let Some(row) = row_map.get(RowId::TapExplosionSkin) else {
+        return true;
+    };
+    let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if row
+            .choices
+            .get(choice_idx)
+            .is_some_and(|choice| choice.as_str() != no_tap_label.as_ref())
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 pub(super) fn row_visibility(
     row_map: &RowMap,
@@ -449,6 +480,7 @@ pub(super) fn row_visibility(
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
+        show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
     }
 }
 

@@ -877,9 +877,7 @@ fn build_eval_scatter_bg_mesh(
     graph_width: f32,
     pane: EvalGraphPane,
 ) -> Option<Arc<[MeshVertex]>> {
-    use eval_graphs::{
-        ScatterPlotScale, build_scatter_background_mesh,
-    };
+    use eval_graphs::{ScatterPlotScale, build_scatter_background_mesh};
     let scale = match pane {
         EvalGraphPane::Itg => ScatterPlotScale::Itg,
         EvalGraphPane::Ex => ScatterPlotScale::Ex,
@@ -1814,7 +1812,15 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud, true, false);
+    let panes = eval_pane_cycle(
+        has_hard_ex,
+        has_qr,
+        has_gs,
+        has_itl,
+        has_arrowcloud,
+        true,
+        false,
+    );
     eval_pane_shift_in_cycle(pane, dir, &panes)
 }
 
@@ -2631,29 +2637,17 @@ pub fn init_from_score_info(
     let scatter_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(
-                si,
-                graph_width,
-                eval_graphs::ScatterPlotScale::Itg,
-            )
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Itg)
         });
     let scatter_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(
-                si,
-                graph_width,
-                eval_graphs::ScatterPlotScale::Ex,
-            )
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Ex)
         });
     let scatter_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(
-                si,
-                graph_width,
-                eval_graphs::ScatterPlotScale::HardEx,
-            )
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::HardEx)
         });
     let scatter_bg_mesh_itg: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
@@ -2673,44 +2667,27 @@ pub fn init_from_score_info(
     let scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(
-                si,
-                graph_width,
-                eval_graphs::ScatterPlotScale::Arrow,
-            )
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Arrow)
         });
     let scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_scatter_mesh(
-                si,
-                graph_width,
-                eval_graphs::ScatterPlotScale::Foot,
-            )
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Foot)
         });
     let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(
-                si,
-                eval_graphs::TimingHistogramScale::Itg,
-            )
+            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::Itg)
         });
     let timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(
-                si,
-                eval_graphs::TimingHistogramScale::Ex,
-            )
+            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::Ex)
         });
     let timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
-            build_eval_timing_hist_mesh(
-                si,
-                eval_graphs::TimingHistogramScale::HardEx,
-            )
+            build_eval_timing_hist_mesh(si, eval_graphs::TimingHistogramScale::HardEx)
         });
 
     State {
@@ -4461,10 +4438,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
                 EvalPane::TestInput => {
                     // Centered, uniformly scaled TestInput panel (text on left, pad on right).
-                    let pane_ox =
-                        crate::screens::components::evaluation::test_input_pane_origin_x(
-                            controller,
-                        );
+                    let pane_ox = crate::screens::components::evaluation::test_input_pane_origin_x(
+                        controller,
+                    );
                     let panel_scale = 1.0_f32;
                     let (panel_w, panel_h) = test_input::evaluation_panel_size();
                     let panel_w_scaled = panel_w * panel_scale;

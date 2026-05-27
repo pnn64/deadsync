@@ -1566,10 +1566,7 @@ pub fn compute_arrow_timing_stats(
         let mut direction_code: u32 = 0;
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
-            if !note.is_fake
-                && note.can_be_judged
-                && !matches!(note.note_type, NoteType::Mine)
-            {
+            if !note.is_fake && note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
                 if let Some(j) = note.result.as_ref() {
                     row_judgments.push(j);
                 }
@@ -2128,7 +2125,10 @@ mod tests {
         assert_eq!(stats.right_foot.count, 3);
         // Total per-column count should equal left + right.
         let per_col_total: u32 = stats.per_column.iter().map(|b| b.count).sum();
-        assert_eq!(per_col_total, stats.left_foot.count + stats.right_foot.count);
+        assert_eq!(
+            per_col_total,
+            stats.left_foot.count + stats.right_foot.count
+        );
     }
 
     #[test]
@@ -2136,7 +2136,7 @@ mod tests {
         // Miss on col 1 should still alternate the foot (matches scatter plot).
         let notes = vec![
             test_note(0, 0, JudgeGrade::Fantastic, 0.0), // forces left
-            test_note(1, 1, JudgeGrade::Miss, 0.0),      // alternates -> right (excluded from stats)
+            test_note(1, 1, JudgeGrade::Miss, 0.0), // alternates -> right (excluded from stats)
             test_note(2, 2, JudgeGrade::Fantastic, 5.0), // alternates -> left
         ];
 

@@ -6,11 +6,11 @@ use super::{
     MeasureLines, MiniIndicator, MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX,
     NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin,
     Perspective, PlayStyle, PlayerSide, RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
-    ScrollOption, ScrollSpeedSetting, TargetScoreSetting, TimingWindowsOption, TurnOption,
-    VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN, VisualEffectsMask, clamp_custom_fantastic_window_ms,
-    clamp_tilt_threshold_ms, error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles,
-    sanitize_player_initials, save_profile_ini_for_side, save_profile_stats_for_side,
-    session_side_is_guest, side_ix,
+    ScrollOption, ScrollSpeedSetting, TapExplosionMask, TargetScoreSetting, TimingWindowsOption,
+    TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN, VisualEffectsMask,
+    clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms, error_bar_style_from_mask,
+    error_bar_text_from_mask, lock_profiles, sanitize_player_initials, save_profile_ini_for_side,
+    save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -562,6 +562,18 @@ pub fn update_tap_explosion_noteskin_for_side(side: PlayerSide, setting: Option<
             return;
         }
         profile.tap_explosion_noteskin = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_tap_explosion_mask_for_side(side: PlayerSide, setting: TapExplosionMask) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.tap_explosion_active_mask == setting {
+            return;
+        }
+        profile.tap_explosion_active_mask = setting;
     }
     save_profile_ini_for_side(side);
 }

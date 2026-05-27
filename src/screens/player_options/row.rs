@@ -14,6 +14,7 @@ pub enum RowId {
     MineSkin,
     ReceptorSkin,
     TapExplosionSkin,
+    TapExplosionOptions,
     JudgmentFont,
     JudgmentOffsetX,
     JudgmentOffsetY,
@@ -1001,6 +1002,7 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::GameplayExtras
         || id == RowId::LiveTimingStats
         || id == RowId::GameplayExtrasMore
+        || id == RowId::TapExplosionOptions
         || id == RowId::ResultsExtras
         || id == RowId::RescoreEarlyHits
         || id == RowId::CustomBlueFantasticWindow

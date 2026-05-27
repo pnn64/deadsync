@@ -102,8 +102,7 @@ pub fn clamp_long_error_bar_intensity(value: f32) -> f32 {
         return LONG_ERROR_BAR_INTENSITY_DEFAULT;
     }
     let clamped = value.clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX);
-    let steps =
-        ((clamped - LONG_ERROR_BAR_INTENSITY_MIN) / LONG_ERROR_BAR_INTENSITY_STEP).round();
+    let steps = ((clamped - LONG_ERROR_BAR_INTENSITY_MIN) / LONG_ERROR_BAR_INTENSITY_STEP).round();
     (LONG_ERROR_BAR_INTENSITY_MIN + steps * LONG_ERROR_BAR_INTENSITY_STEP)
         .clamp(LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_MAX)
 }
@@ -530,6 +529,32 @@ bitflags! {
     }
 }
 
+bitflags! {
+    /// Persisted bitmask of tap explosion windows enabled for gameplay.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct TapExplosionMask: u8 {
+        const FANTASTIC = 1 << 0;
+        const EXCELLENT = 1 << 1;
+        const GREAT     = 1 << 2;
+        const DECENT    = 1 << 3;
+        const WAY_OFF   = 1 << 4;
+        const HELD      = 1 << 5;
+    }
+}
+
+#[inline(always)]
+fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
+    match window {
+        "W0" | "W1" => Some(TapExplosionMask::FANTASTIC),
+        "W2" => Some(TapExplosionMask::EXCELLENT),
+        "W3" => Some(TapExplosionMask::GREAT),
+        "W4" => Some(TapExplosionMask::DECENT),
+        "W5" => Some(TapExplosionMask::WAY_OFF),
+        "Held" => Some(TapExplosionMask::HELD),
+        _ => None,
+    }
+}
+
 // --- Profile Data ---
 const DEFAULT_PROFILE_ID: &str = "00000000";
 const PROFILE_STATS_VERSION_V1: u16 = 1;
@@ -908,6 +933,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
             .as_ref()
             .map_or("", NoteSkin::as_str)
     ));
+    content.push_str(&format!(
+        "TapExplosionMask={}\n",
+        options.tap_explosion_active_mask.bits()
+    ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
     content.push_str(&format!("Spacing={}\n", options.spacing_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
@@ -994,6 +1023,11 @@ fn load_player_options(
     options.tap_explosion_noteskin = profile_conf
         .get(section, "TapExplosionSkin")
         .and_then(|s| NoteSkin::from_str(&s).ok());
+    options.tap_explosion_active_mask = profile_conf
+        .get(section, "TapExplosionMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(TapExplosionMask::from_bits_truncate)
+        .unwrap_or(options.tap_explosion_active_mask);
     options.mini_percent = profile_conf
         .get(section, "MiniPercent")
         .and_then(|s| s.parse::<i32>().ok())
@@ -2845,6 +2879,7 @@ pub struct PlayerOptionsData {
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
     pub tap_explosion_noteskin: Option<NoteSkin>,
+    pub tap_explosion_active_mask: TapExplosionMask,
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
@@ -2950,6 +2985,7 @@ fn default_player_options() -> PlayerOptionsData {
         mine_noteskin: None,
         receptor_noteskin: None,
         tap_explosion_noteskin: None,
+        tap_explosion_active_mask: TapExplosionMask::all(),
         scroll_speed: ScrollSpeedSetting::default(),
         scroll_option: ScrollOption::default(),
         reverse_scroll: false,
@@ -3080,6 +3116,7 @@ pub struct Profile {
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
     pub tap_explosion_noteskin: Option<NoteSkin>,
+    pub tap_explosion_active_mask: TapExplosionMask,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -3279,6 +3316,7 @@ impl Default for Profile {
             mine_noteskin: player_options.mine_noteskin.clone(),
             receptor_noteskin: player_options.receptor_noteskin.clone(),
             tap_explosion_noteskin: player_options.tap_explosion_noteskin.clone(),
+            tap_explosion_active_mask: player_options.tap_explosion_active_mask,
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: player_options.scroll_speed,
@@ -3435,6 +3473,14 @@ impl Profile {
     }
 
     #[inline(always)]
+    pub fn tap_explosion_window_enabled(&self, window: &str) -> bool {
+        let Some(flag) = tap_explosion_mask_for_window(window) else {
+            return false;
+        };
+        self.tap_explosion_active_mask.contains(flag)
+    }
+
+    #[inline(always)]
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
             background_filter: self.background_filter,
@@ -3449,6 +3495,7 @@ impl Profile {
             mine_noteskin: self.mine_noteskin.clone(),
             receptor_noteskin: self.receptor_noteskin.clone(),
             tap_explosion_noteskin: self.tap_explosion_noteskin.clone(),
+            tap_explosion_active_mask: self.tap_explosion_active_mask,
             scroll_speed: self.scroll_speed,
             scroll_option: self.scroll_option,
             reverse_scroll: self.reverse_scroll,
@@ -3556,6 +3603,7 @@ impl Profile {
             .clone_from(&options.receptor_noteskin);
         self.tap_explosion_noteskin
             .clone_from(&options.tap_explosion_noteskin);
+        self.tap_explosion_active_mask = options.tap_explosion_active_mask;
         self.scroll_speed = options.scroll_speed;
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;
@@ -5292,11 +5340,12 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LONG_ERROR_BAR_INTENSITY_DEFAULT,
-        LONG_ERROR_BAR_INTENSITY_MAX, LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP,
-        LastPlayed, NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TimingWindowsOption,
-        clamp_long_error_bar_intensity, initials_from_name, parse_groovestats_is_pad_player,
-        sanitize_player_initials,
+        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS,
+        LONG_ERROR_BAR_INTENSITY_DEFAULT, LONG_ERROR_BAR_INTENSITY_MAX,
+        LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP, LastPlayed, LastPlayedCourse,
+        NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TapExplosionMask,
+        TimingWindowsOption, clamp_long_error_bar_intensity, initials_from_name,
+        parse_groovestats_is_pad_player, sanitize_player_initials,
     };
     use std::str::FromStr;
 
@@ -5305,12 +5354,8 @@ mod tests {
         assert!((LONG_ERROR_BAR_INTENSITY_DEFAULT - 2.0).abs() < 1e-6);
         assert!((clamp_long_error_bar_intensity(1.0) - 1.0).abs() < 1e-6);
         assert!((clamp_long_error_bar_intensity(2.0) - 2.0).abs() < 1e-6);
-        assert!(
-            (clamp_long_error_bar_intensity(0.0) - LONG_ERROR_BAR_INTENSITY_MIN).abs() < 1e-6
-        );
-        assert!(
-            (clamp_long_error_bar_intensity(5.0) - LONG_ERROR_BAR_INTENSITY_MAX).abs() < 1e-6
-        );
+        assert!((clamp_long_error_bar_intensity(0.0) - LONG_ERROR_BAR_INTENSITY_MIN).abs() < 1e-6);
+        assert!((clamp_long_error_bar_intensity(5.0) - LONG_ERROR_BAR_INTENSITY_MAX).abs() < 1e-6);
         assert!(
             (clamp_long_error_bar_intensity(f32::NAN) - LONG_ERROR_BAR_INTENSITY_DEFAULT).abs()
                 < 1e-6
@@ -5583,6 +5628,8 @@ mod tests {
         profile.timing_windows = TimingWindowsOption::WayOffs;
         profile.receptor_noteskin = Some(NoteSkin::new("default"));
         profile.tap_explosion_noteskin = Some(NoteSkin::new("metal"));
+        profile.tap_explosion_active_mask =
+            TapExplosionMask::all().difference(TapExplosionMask::HELD);
         profile.store_current_player_options(PlayStyle::Single);
 
         profile.mini_percent = 62;
@@ -5591,6 +5638,7 @@ mod tests {
         profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
         profile.receptor_noteskin = Some(NoteSkin::new("cyber"));
         profile.tap_explosion_noteskin = None;
+        profile.tap_explosion_active_mask = TapExplosionMask::HELD;
         profile.store_current_player_options(PlayStyle::Double);
 
         profile.apply_player_options_for_style(PlayStyle::Single);
@@ -5600,6 +5648,10 @@ mod tests {
         assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
         assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("default")));
         assert_eq!(profile.tap_explosion_noteskin, Some(NoteSkin::new("metal")));
+        assert_eq!(
+            profile.tap_explosion_active_mask,
+            TapExplosionMask::all().difference(TapExplosionMask::HELD)
+        );
 
         profile.apply_player_options_for_style(PlayStyle::Double);
         assert_eq!(profile.mini_percent, 62);
@@ -5611,6 +5663,7 @@ mod tests {
         );
         assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("cyber")));
         assert_eq!(profile.tap_explosion_noteskin, None);
+        assert_eq!(profile.tap_explosion_active_mask, TapExplosionMask::HELD);
     }
 
     #[test]
@@ -5628,7 +5681,7 @@ mod tests {
     fn persisted_row_mask_bit_layouts_are_stable() {
         use super::{
             AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-            LiveTimingStatsMask, RemoveMask, VisualEffectsMask,
+            LiveTimingStatsMask, RemoveMask, TapExplosionMask, VisualEffectsMask,
         };
 
         // InsertMask: persisted bits 0..=6 (Mines is runtime-only and
@@ -5697,6 +5750,14 @@ mod tests {
         assert_eq!(LiveTimingStatsMask::MEAN_ABS.bits(), 1 << 1);
         assert_eq!(LiveTimingStatsMask::MAX.bits(), 1 << 2);
         assert_eq!(LiveTimingStatsMask::all().bits(), 0b0000_0111);
+
+        assert_eq!(TapExplosionMask::FANTASTIC.bits(), 1 << 0);
+        assert_eq!(TapExplosionMask::EXCELLENT.bits(), 1 << 1);
+        assert_eq!(TapExplosionMask::GREAT.bits(), 1 << 2);
+        assert_eq!(TapExplosionMask::DECENT.bits(), 1 << 3);
+        assert_eq!(TapExplosionMask::WAY_OFF.bits(), 1 << 4);
+        assert_eq!(TapExplosionMask::HELD.bits(), 1 << 5);
+        assert_eq!(TapExplosionMask::all().bits(), 0b0011_1111);
     }
 
     #[test]
