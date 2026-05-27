@@ -3331,6 +3331,41 @@ fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
 }
 
 #[inline(always)]
+fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
+    if score_percent >= 99.0 {
+        color::rgba_hex("#FF00FF")
+    } else if score_percent >= 98.0 {
+        color::rgba_hex("#256ECE")
+    } else if score_percent >= 96.0 {
+        color::rgba_hex("#FFFFFF")
+    } else if score_percent >= 94.0 {
+        color::rgba_hex("#FDA307")
+    } else if score_percent >= 90.0 {
+        color::rgba_hex("#79A901")
+    } else if score_percent >= 85.0 {
+        color::rgba_hex("#B932E2")
+    } else {
+        color::rgba_hex("#FF0000")
+    }
+}
+
+#[inline(always)]
+fn zmod_indicator_score_color(score_percent: f64, style: profile::MiniIndicatorColor) -> [f32; 4] {
+    match style {
+        profile::MiniIndicatorColor::Default => zmod_indicator_default_color(score_percent),
+        profile::MiniIndicatorColor::Detailed => zmod_indicator_detailed_color(score_percent),
+    }
+}
+
+#[inline(always)]
+fn zmod_mini_indicator_zoom(size: profile::MiniIndicatorSize) -> f32 {
+    match size {
+        profile::MiniIndicatorSize::Default => 0.35,
+        profile::MiniIndicatorSize::Large => 0.5,
+    }
+}
+
+#[inline(always)]
 fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
     let r = (1.0 - (pace - rival_pace)).clamp(0.0, 1.0) as f32;
     let g = (0.5 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
@@ -3413,21 +3448,21 @@ fn zmod_mini_indicator_text(
             let score = pcts.kept_percent.clamp(0.0, 100.0);
             Some((
                 cached_signed_percent2_f64(pcts.lost_percent.clamp(0.0, 100.0), true),
-                zmod_indicator_default_color(score),
+                zmod_indicator_score_color(score, profile.mini_indicator_color),
             ))
         }
         profile::MiniIndicator::PredictiveScoring => {
             let score = progress.kept_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(score),
-                zmod_indicator_default_color(score),
+                zmod_indicator_score_color(score, profile.mini_indicator_color),
             ))
         }
         profile::MiniIndicator::PaceScoring => {
             let pace = progress.pace_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(pace),
-                zmod_indicator_default_color(pace),
+                zmod_indicator_score_color(pace, profile.mini_indicator_color),
             ))
         }
         profile::MiniIndicator::RivalScoring => {
@@ -8650,6 +8685,7 @@ pub fn build_bundles(
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
         let mut x = playfield_center_x + column_width;
         let mut h_align = 0.5;
+        let mini_indicator_zoom = zmod_mini_indicator_zoom(profile.mini_indicator_size);
         if !profile.measure_counter_left {
             h_align = 0.0;
             x -= 12.0;
@@ -8658,7 +8694,7 @@ pub fn build_bundles(
         hud_actors.push(act!(text:
             font(mc_font_name): settext(text):
             align(h_align, 0.5): xy(x, zmod_layout.subtractive_scoring_y):
-            zoom(0.35): shadowlength(1.0):
+            zoom(mini_indicator_zoom): shadowlength(1.0):
             diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
             z(85)
         ));
@@ -8902,11 +8938,12 @@ mod tests {
         pulse_zoom_for_y, push_transform_parts, receptor_row_center, scale_effect_size,
         scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
         tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
-        zmod_subtractive_counter_state,
+        zmod_indicator_score_color, zmod_mini_indicator_zoom, zmod_subtractive_counter_state,
     };
     use crate::assets;
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
+    use crate::engine::present::color;
     use crate::game::gameplay::{
         AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
         SongLuaColumnOffsetWindowRuntime, VisualEffects,
@@ -9498,6 +9535,51 @@ mod tests {
         assert_eq!(
             zmod_subtractive_counter_state(&hard_ex, profile::MiniIndicatorScoreType::HardEx),
             (7, true)
+        );
+    }
+
+    #[test]
+    fn mini_indicator_zoom_matches_size_setting() {
+        assert!(
+            (zmod_mini_indicator_zoom(profile::MiniIndicatorSize::Default) - 0.35).abs()
+                <= f32::EPSILON
+        );
+        assert!(
+            (zmod_mini_indicator_zoom(profile::MiniIndicatorSize::Large) - 0.5).abs()
+                <= f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn detailed_mini_indicator_color_uses_expanded_thresholds() {
+        let detailed = profile::MiniIndicatorColor::Detailed;
+        assert_eq!(
+            zmod_indicator_score_color(99.0, detailed),
+            color::rgba_hex("#FF00FF")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(98.0, detailed),
+            color::rgba_hex("#256ECE")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(96.0, detailed),
+            color::rgba_hex("#FFFFFF")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(94.0, detailed),
+            color::rgba_hex("#FDA307")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(90.0, detailed),
+            color::rgba_hex("#79A901")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(85.0, detailed),
+            color::rgba_hex("#B932E2")
+        );
+        assert_eq!(
+            zmod_indicator_score_color(84.99, detailed),
+            color::rgba_hex("#FF0000")
         );
     }
 

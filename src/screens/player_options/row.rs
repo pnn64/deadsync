@@ -44,6 +44,8 @@ pub enum RowId {
     ActionOnMissedTarget,
     MiniIndicator,
     IndicatorScoreType,
+    MiniIndicatorSize,
+    MiniIndicatorColor,
     GameplayExtras,
     LiveTimingStats,
     ComboColors,
@@ -997,6 +999,8 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::JudgmentTilt
         || id == RowId::MiniIndicator
         || id == RowId::IndicatorScoreType
+        || id == RowId::MiniIndicatorSize
+        || id == RowId::MiniIndicatorColor
         || id == RowId::Turn
         || id == RowId::Scroll
         || id == RowId::Hide

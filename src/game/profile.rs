@@ -728,6 +728,14 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         options.mini_indicator_score_type
     ));
     content.push_str(&format!(
+        "MiniIndicatorSize={}\n",
+        options.mini_indicator_size
+    ));
+    content.push_str(&format!(
+        "MiniIndicatorColor={}\n",
+        options.mini_indicator_color
+    ));
+    content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(options.reverse_scroll)
     ));
@@ -1495,6 +1503,14 @@ fn load_player_options(
         .get(section, "MiniIndicatorScoreType")
         .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
         .unwrap_or(options.mini_indicator_score_type);
+    options.mini_indicator_size = profile_conf
+        .get(section, "MiniIndicatorSize")
+        .and_then(|s| MiniIndicatorSize::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_size);
+    options.mini_indicator_color = profile_conf
+        .get(section, "MiniIndicatorColor")
+        .and_then(|s| MiniIndicatorColor::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_color);
     options.scroll_option = profile_conf
         .get(section, "Scroll")
         .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -2818,6 +2834,78 @@ impl core::fmt::Display for MiniIndicatorScoreType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorSize {
+    #[default]
+    Default,
+    Large,
+}
+
+impl FromStr for MiniIndicatorSize {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "default" => Ok(Self::Default),
+            "large" | "big" => Ok(Self::Large),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorSize setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorSize {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Default => write!(f, "Default"),
+            Self::Large => write!(f, "Large"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorColor {
+    #[default]
+    Default,
+    Detailed,
+}
+
+impl FromStr for MiniIndicatorColor {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "default" => Ok(Self::Default),
+            "detailed" => Ok(Self::Detailed),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorColor setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorColor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Default => write!(f, "Default"),
+            Self::Detailed => write!(f, "Detailed"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetScoreSetting {
     CMinus,
     C,
@@ -2978,6 +3066,8 @@ pub struct PlayerOptionsData {
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_size: MiniIndicatorSize,
+    pub mini_indicator_color: MiniIndicatorColor,
     pub mini_percent: i32,
     pub spacing_percent: i32,
     pub perspective: Perspective,
@@ -3084,6 +3174,8 @@ fn default_player_options() -> PlayerOptionsData {
         transparent_density_graph_bg: false,
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
+        mini_indicator_size: MiniIndicatorSize::Default,
+        mini_indicator_color: MiniIndicatorColor::Default,
         mini_percent: 0,
         spacing_percent: 0,
         perspective: Perspective::default(),
@@ -3245,6 +3337,8 @@ pub struct Profile {
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_size: MiniIndicatorSize,
+    pub mini_indicator_color: MiniIndicatorColor,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -3417,6 +3511,8 @@ impl Default for Profile {
             transparent_density_graph_bg: player_options.transparent_density_graph_bg,
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
+            mini_indicator_size: player_options.mini_indicator_size,
+            mini_indicator_color: player_options.mini_indicator_color,
             mini_percent: player_options.mini_percent,
             spacing_percent: player_options.spacing_percent,
             perspective: player_options.perspective,
@@ -3594,6 +3690,8 @@ impl Profile {
             transparent_density_graph_bg: self.transparent_density_graph_bg,
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
+            mini_indicator_size: self.mini_indicator_size,
+            mini_indicator_color: self.mini_indicator_color,
             mini_percent: self.mini_percent,
             spacing_percent: self.spacing_percent,
             perspective: self.perspective,
@@ -3702,6 +3800,8 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
+        self.mini_indicator_size = options.mini_indicator_size;
+        self.mini_indicator_color = options.mini_indicator_color;
         self.mini_percent = options.mini_percent;
         self.spacing_percent = options.spacing_percent;
         self.perspective = options.perspective;
@@ -5365,9 +5465,10 @@ mod tests {
         BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS,
         LONG_ERROR_BAR_INTENSITY_DEFAULT, LONG_ERROR_BAR_INTENSITY_MAX,
         LONG_ERROR_BAR_INTENSITY_MIN, LONG_ERROR_BAR_INTENSITY_STEP, LastPlayed, LastPlayedCourse,
-        NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TapExplosionMask,
-        TimingWindowsOption, clamp_long_error_bar_intensity, initials_from_name,
-        normalize_tap_explosion_mask, parse_groovestats_is_pad_player, sanitize_player_initials,
+        MiniIndicatorColor, MiniIndicatorSize, NoteSkin, PLAYER_INITIALS_MAX_LEN, PlayStyle,
+        Profile, TapExplosionMask, TimingWindowsOption, clamp_long_error_bar_intensity,
+        initials_from_name, normalize_tap_explosion_mask, parse_groovestats_is_pad_player,
+        sanitize_player_initials,
     };
     use std::str::FromStr;
 
@@ -5481,6 +5582,33 @@ mod tests {
             let parsed = BackgroundFilter::from_str(&s).expect("must round-trip");
             assert_eq!(parsed, filter);
         }
+    }
+
+    #[test]
+    fn mini_indicator_style_settings_round_trip() {
+        assert_eq!(
+            MiniIndicatorSize::from_str(&MiniIndicatorSize::Default.to_string()).unwrap(),
+            MiniIndicatorSize::Default
+        );
+        assert_eq!(
+            MiniIndicatorSize::from_str(&MiniIndicatorSize::Large.to_string()).unwrap(),
+            MiniIndicatorSize::Large
+        );
+        assert_eq!(
+            MiniIndicatorColor::from_str(&MiniIndicatorColor::Default.to_string()).unwrap(),
+            MiniIndicatorColor::Default
+        );
+        assert_eq!(
+            MiniIndicatorColor::from_str(&MiniIndicatorColor::Detailed.to_string()).unwrap(),
+            MiniIndicatorColor::Detailed
+        );
+    }
+
+    #[test]
+    fn mini_indicator_style_defaults_preserve_legacy_look() {
+        let profile = Profile::default();
+        assert_eq!(profile.mini_indicator_size, MiniIndicatorSize::Default);
+        assert_eq!(profile.mini_indicator_color, MiniIndicatorColor::Default);
     }
 
     #[test]

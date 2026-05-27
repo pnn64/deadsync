@@ -472,6 +472,21 @@ pub(super) mod tests {
         is_row_visible(row_map, 1, visibility)
     }
 
+    fn row_id_visible_for(row_map: &RowMap, id: RowId) -> bool {
+        let visibility = row_visibility(
+            row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        let idx = row_map
+            .display_order()
+            .iter()
+            .position(|&row_id| row_id == id)
+            .unwrap_or_else(|| panic!("Row {id:?} missing from test row map"));
+        is_row_visible(row_map, idx, visibility)
+    }
+
     #[test]
     fn target_score_hides_until_score_dependent_option_is_active() {
         ensure_i18n();
@@ -537,6 +552,65 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[P1] = 5;
         assert!(target_score_visible_for(&row_map));
+    }
+
+    #[test]
+    fn mini_indicator_style_rows_follow_indicator_mode() {
+        ensure_i18n();
+        let mut row_map = test_row_map(vec![
+            test_row(
+                RowId::MiniIndicator,
+                lookup_key("PlayerOptions", "MiniIndicator"),
+                &[
+                    "None",
+                    "Subtractive",
+                    "Predictive",
+                    "Pace",
+                    "Rival",
+                    "Pacemaker",
+                    "StreamProg",
+                ],
+                [0, 0],
+            ),
+            test_row(
+                RowId::IndicatorScoreType,
+                lookup_key("PlayerOptions", "IndicatorScoreType"),
+                &["ITG", "EX", "H.EX"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::MiniIndicatorSize,
+                lookup_key("PlayerOptions", "MiniIndicatorSize"),
+                &["Default", "Large"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::MiniIndicatorColor,
+                lookup_key("PlayerOptions", "MiniIndicatorColor"),
+                &["Default", "Detailed"],
+                [0, 0],
+            ),
+        ]);
+
+        assert!(!row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
+        assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+
+        row_map
+            .get_mut(RowId::MiniIndicator)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+        assert!(row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+
+        row_map
+            .get_mut(RowId::MiniIndicator)
+            .unwrap()
+            .selected_choice_index[P1] = 4;
+        assert!(!row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
+        assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
     }
 
     #[test]
@@ -2366,6 +2440,8 @@ pub(super) mod tests {
         p.data_visualizations = super::DATA_VISUALIZATIONS_VARIANTS[1];
         p.target_score = super::TARGET_SCORE_VARIANTS[1];
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
+        p.mini_indicator_size = super::MINI_INDICATOR_SIZE_VARIANTS[1];
+        p.mini_indicator_color = super::MINI_INDICATOR_COLOR_VARIANTS[1];
         p.combo_colors = super::COMBO_COLORS_VARIANTS[1];
         p.combo_mode = super::COMBO_MODE_VARIANTS[1];
         p.error_bar_trim = super::ERROR_BAR_TRIM_VARIANTS[1];
@@ -2427,6 +2503,18 @@ pub(super) mod tests {
             RowId::IndicatorScoreType,
             &super::MINI_INDICATOR_SCORE_TYPE_VARIANTS,
             profile.mini_indicator_score_type,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MiniIndicatorSize,
+            &super::MINI_INDICATOR_SIZE_VARIANTS,
+            profile.mini_indicator_size,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MiniIndicatorColor,
+            &super::MINI_INDICATOR_COLOR_VARIANTS,
+            profile.mini_indicator_color,
         );
         assert_variant_at_cursor(
             &row_map,

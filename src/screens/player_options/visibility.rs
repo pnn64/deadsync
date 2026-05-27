@@ -16,6 +16,8 @@ pub(super) struct RowVisibility {
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
+    pub(super) show_mini_indicator_size: bool,
+    pub(super) show_mini_indicator_color: bool,
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
@@ -77,6 +79,12 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::IndicatorScoreType {
         return visibility.show_indicator_score_type;
     }
+    if id == RowId::MiniIndicatorSize {
+        return visibility.show_mini_indicator_size;
+    }
+    if id == RowId::MiniIndicatorColor {
+        return visibility.show_mini_indicator_color;
+    }
     if id == RowId::LiveTimingStats {
         return visibility.show_live_timing_stats;
     }
@@ -135,7 +143,10 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     {
         return Some(RowId::Hide);
     }
-    if id == RowId::IndicatorScoreType {
+    if id == RowId::IndicatorScoreType
+        || id == RowId::MiniIndicatorSize
+        || id == RowId::MiniIndicatorColor
+    {
         return Some(RowId::MiniIndicator);
     }
     if id == RowId::LiveTimingStats {
@@ -399,6 +410,31 @@ pub(super) fn lifebar_rows_visible(
 }
 
 pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    mini_indicator_visible_for(row_map, active, |mode| {
+        matches!(
+            mode,
+            crate::game::profile::MiniIndicator::SubtractiveScoring
+                | crate::game::profile::MiniIndicator::PredictiveScoring
+                | crate::game::profile::MiniIndicator::PaceScoring
+        )
+    })
+}
+
+pub(super) fn mini_indicator_size_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    mini_indicator_visible_for(row_map, active, |mode| {
+        mode != crate::game::profile::MiniIndicator::None
+    })
+}
+
+pub(super) fn mini_indicator_color_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    indicator_score_type_visible(row_map, active)
+}
+
+fn mini_indicator_visible_for(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+    visible_for: impl Fn(crate::game::profile::MiniIndicator) -> bool,
+) -> bool {
     let Some(row) = row_map.get(RowId::MiniIndicator) else {
         return true;
     };
@@ -407,8 +443,10 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
     for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-        // Visible for Subtractive(1), Predictive(2), Pace(3)
-        if (1..=3).contains(&choice_idx) {
+        let Some(mode) = MINI_INDICATOR_VARIANTS.get(choice_idx).copied() else {
+            continue;
+        };
+        if visible_for(mode) {
             return true;
         }
     }
@@ -478,6 +516,8 @@ pub(super) fn row_visibility(
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
+        show_mini_indicator_size: mini_indicator_size_visible(row_map, active),
+        show_mini_indicator_color: mini_indicator_color_visible(row_map, active),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),

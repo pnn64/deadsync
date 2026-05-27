@@ -3,14 +3,14 @@ use super::{
     ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
     HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
     LifeMeterType, LiveTimingStatsMask, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter,
-    MeasureLines, MiniIndicator, MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX,
-    NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin,
-    Perspective, PlayStyle, PlayerSide, RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
-    ScrollOption, ScrollSpeedSetting, TapExplosionMask, TargetScoreSetting, TimingWindowsOption,
-    TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN, VisualEffectsMask,
-    clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms, error_bar_style_from_mask,
-    error_bar_text_from_mask, lock_profiles, sanitize_player_initials, save_profile_ini_for_side,
-    save_profile_stats_for_side, session_side_is_guest, side_ix,
+    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
+    NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX,
+    NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide, RemoveMask,
+    SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting, TapExplosionMask,
+    TargetScoreSetting, TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
+    VisualEffectsMask, clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms,
+    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
+    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -514,6 +514,30 @@ pub fn update_mini_indicator_score_type_for_side(
             return;
         }
         profile.mini_indicator_score_type = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_mini_indicator_size_for_side(side: PlayerSide, setting: MiniIndicatorSize) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mini_indicator_size == setting {
+            return;
+        }
+        profile.mini_indicator_size = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_mini_indicator_color_for_side(side: PlayerSide, setting: MiniIndicatorColor) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mini_indicator_color == setting {
+            return;
+        }
+        profile.mini_indicator_color = setting;
     }
     save_profile_ini_for_side(side);
 }

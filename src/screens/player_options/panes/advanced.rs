@@ -1,5 +1,7 @@
 use super::super::choice;
-use super::super::constants::MINI_INDICATOR_VARIANTS;
+use super::super::constants::{
+    MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS, MINI_INDICATOR_VARIANTS,
+};
 use super::super::row::{
     BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
 };
@@ -100,6 +102,36 @@ const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
             MINI_INDICATOR_SCORE_TYPE_VARIANTS
                 .iter()
                 .position(|&v| v == p.mini_indicator_score_type)
+                .unwrap_or(0)
+        }
+    })
+);
+const MINI_INDICATOR_SIZE: ChoiceBinding<usize> = index_binding!(
+    MINI_INDICATOR_SIZE_VARIANTS,
+    gp::MiniIndicatorSize::Default,
+    mini_indicator_size,
+    gp::update_mini_indicator_size_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MINI_INDICATOR_SIZE_VARIANTS
+                .iter()
+                .position(|&v| v == p.mini_indicator_size)
+                .unwrap_or(0)
+        }
+    })
+);
+const MINI_INDICATOR_COLOR: ChoiceBinding<usize> = index_binding!(
+    MINI_INDICATOR_COLOR_VARIANTS,
+    gp::MiniIndicatorColor::Default,
+    mini_indicator_color,
+    gp::update_mini_indicator_color_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MINI_INDICATOR_COLOR_VARIANTS
+                .iter()
+                .position(|&v| v == p.mini_indicator_color)
                 .unwrap_or(0)
         }
     })
@@ -1168,6 +1200,26 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "IndicatorScoreTypeITG").to_string(),
             tr("PlayerOptions", "IndicatorScoreTypeEX").to_string(),
             tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::MiniIndicatorSize,
+        lookup_key("PlayerOptions", "MiniIndicatorSize"),
+        lookup_key("PlayerOptionsHelp", "MiniIndicatorSizeHelp"),
+        CycleBinding::Index(MINI_INDICATOR_SIZE),
+        vec![
+            tr("PlayerOptions", "MiniIndicatorSizeDefault").to_string(),
+            tr("PlayerOptions", "MiniIndicatorSizeLarge").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::MiniIndicatorColor,
+        lookup_key("PlayerOptions", "MiniIndicatorColor"),
+        lookup_key("PlayerOptionsHelp", "MiniIndicatorColorHelp"),
+        CycleBinding::Index(MINI_INDICATOR_COLOR),
+        vec![
+            tr("PlayerOptions", "MiniIndicatorColorDefault").to_string(),
+            tr("PlayerOptions", "MiniIndicatorColorDetailed").to_string(),
         ],
     ));
     b.push(Row::bitmask(
