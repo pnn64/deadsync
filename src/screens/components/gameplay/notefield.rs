@@ -160,6 +160,9 @@ const Z_ERROR_BAR_TICK_FRONT: i16 = 183;
 const Z_ERROR_BAR_TICK_BACK: i16 = 89;
 const Z_ERROR_BAR_TEXT_FRONT: i16 = 184;
 const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
+// Arrow Cloud/zmod load Average.lua from ScreenGameplay underlay, below the
+// engine Player/NoteField. Keep it behind receptors even with front judgments.
+const Z_ERROR_BAR_AVERAGE: i16 = Z_ERROR_BAR_LINE_BACK;
 
 const BLINK_MOD_FREQUENCY: f32 = 0.3333;
 const BOOST_MOD_MIN_CLAMP: f32 = -400.0;
@@ -8416,7 +8419,7 @@ pub fn build_bundles(
                             align(0.5, 0.5): xy(error_bar_x + x, average_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(error_bar_line_z)
+                            z(Z_ERROR_BAR_AVERAGE)
                         ));
                         }
                     }
@@ -8465,13 +8468,18 @@ pub fn build_bundles(
                     } else {
                         error_bar_y
                     };
+                    let long_tick_z = if show_error_bar_average {
+                        Z_ERROR_BAR_AVERAGE
+                    } else {
+                        error_bar_line_z
+                    };
                     let long_tick_h =
                         ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_LONG_AVG_TICK_EXTRA_H;
                     hud_actors.push(act!(quad:
                         align(0.5, 0.5): xy(error_bar_x + x, long_tick_y):
                         zoomto(ERROR_BAR_TICK_WIDTH, long_tick_h):
                         diffuse(ERROR_BAR_LONG_AVG_TICK_RGBA[0], ERROR_BAR_LONG_AVG_TICK_RGBA[1], ERROR_BAR_LONG_AVG_TICK_RGBA[2], alpha):
-                        z(error_bar_line_z)
+                        z(long_tick_z)
                     ));
                 }
             }
@@ -8918,8 +8926,8 @@ pub fn build_bundles(
 #[cfg(test)]
 mod tests {
     use super::{
-        MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
-        Z_RECEPTOR_GLOW, Z_TAP_NOTE, actual_grade_points_with_provisional,
+        MiniIndicatorProgress, TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW,
+        Z_RECEPTOR, Z_RECEPTOR_GLOW, Z_TAP_NOTE, actual_grade_points_with_provisional,
         add_provisional_early_bad_counts_to_ex_score, append_mini_part, append_perspective_parts,
         append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
         clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
@@ -9337,6 +9345,12 @@ mod tests {
     fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
         assert!(Z_HOLD_BODY < Z_HOLD_GLOW);
         assert!(Z_HOLD_GLOW < Z_TAP_NOTE);
+    }
+
+    #[test]
+    fn average_error_bar_draws_under_receptors() {
+        assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_RECEPTOR);
+        assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_TAP_NOTE);
     }
 
     #[test]
