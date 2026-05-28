@@ -187,13 +187,13 @@ The whole feature is gated by `CustomSoundsEnabled` in `deadsync.ini`
 
 ## Data Directories
 
-By default, DeadSync stores user data outside the install directory so that upgrading the game doesn't risk overwriting your config, saves, or scores. Linux and FreeBSD use a single `~/.deadsync` root; Windows and macOS use platform-native locations.
+By default, DeadSync stores user data outside the install directory so that upgrading the game doesn't risk overwriting your config, saves, or scores. Each platform uses native, XDG-compliant locations.
 
 ### Default locations
 
 | Platform | Data directory | Cache directory |
 |----------|---------------|-----------------|
-| **Linux / FreeBSD** | `~/.deadsync` | `~/.deadsync/cache` |
+| **Linux / FreeBSD** | `~/.local/share/deadsync` (`$XDG_DATA_HOME/deadsync`) | `~/.cache/deadsync` (`$XDG_CACHE_HOME/deadsync`) |
 | **Windows** | `%APPDATA%\deadsync` | `%APPDATA%\deadsync\cache` |
 | **macOS** | `~/Library/Application Support/deadsync` | `~/Library/Caches/deadsync` |
 
