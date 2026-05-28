@@ -1,0 +1,12 @@
+DeadSync asset attributions
+===========================
+
+cursor.png
+----------
+Original artwork: "Cursor icons created by zky.icon - Flaticon"
+Source: https://www.flaticon.com/free-icons/cursor
+
+The PNG in this directory is a downsampled and recoloured derivative used
+as the in-game mouse cursor. See `scripts/gen_cursors.py` for the
+pipeline that produces `assets/graphics/cursor/cursor_default.png` and
+`assets/graphics/cursor/cursor_hover.png` from this source.
