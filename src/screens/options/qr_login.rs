@@ -527,13 +527,14 @@ fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&s
             let _ = username; // ArrowCloud's device-login never returns one.
         }
         BackendKind::GrooveStats => {
-            // Wired up by the follow-up groovestats_login commit, which
-            // adds `profile::set_groovestats_credentials_{for_side,for_id}`
-            // and replaces this stub with the real calls.  Reaching this
-            // arm today means a GrooveStats worker delivered a Consumed
-            // message before the next PR landed — keep it a no-op so a
-            // misbehaving build doesn't panic in front of the user.
-            let _ = (api_key, username);
+            let username = username.unwrap_or_default();
+            if let Some(profile_id) = slot.target_profile_id.as_ref() {
+                profile::set_groovestats_credentials_for_id(profile_id, api_key, username);
+            } else {
+                profile::set_groovestats_credentials_for_side(slot.side, api_key, username);
+                // Refresh display_name in case profile state changed.
+                slot.display_name = profile::get_for_side(slot.side).display_name;
+            }
         }
     }
 }
