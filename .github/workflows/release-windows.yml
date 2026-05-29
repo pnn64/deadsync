@@ -96,15 +96,11 @@ jobs:
         id: package
         shell: pwsh
         run: |
-          $args = @(
-            "-Tag", "${{ steps.tag.outputs.tag }}",
-            "-Arch", "x86_64",
-            "-Platform", "${{ matrix.platform }}"
-          )
-          if ("${{ matrix.target }}" -ne "") {
-            $args += @("-Target", "${{ matrix.target }}")
+          if ("${{ matrix.target }}" -eq "") {
+            scripts/package-windows-release.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Arch x86_64 -Platform "${{ matrix.platform }}"
+          } else {
+            scripts/package-windows-release.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Arch x86_64 -Platform "${{ matrix.platform }}" -Target "${{ matrix.target }}"
           }
-          & scripts/package-windows-release.ps1 @args
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
