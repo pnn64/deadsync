@@ -3,7 +3,12 @@ param(
     [Parameter(Mandatory)]
     [string]$Tag,
 
-    [string]$Arch
+    [string]$Arch,
+
+    [string]$Target,
+
+    [ValidateSet('windows', 'win7')]
+    [string]$Platform = 'windows'
 )
 
 Set-StrictMode -Version Latest
@@ -27,7 +32,11 @@ if (-not $Arch) {
     $Arch = Map-Arch $Arch
 }
 
-$binPath = 'target\release\deadsync.exe'
+$binPath = if ($Target) {
+    Join-Path (Join-Path (Join-Path 'target' $Target) 'release') 'deadsync.exe'
+} else {
+    'target\release\deadsync.exe'
+}
 
 if (-not (Test-Path $binPath)) {
     Write-Error "missing executable: $binPath"
@@ -41,7 +50,7 @@ foreach ($dir in 'assets', 'songs', 'courses') {
 }
 
 $distDir     = 'dist'
-$pkgName     = "deadsync-$Tag-$Arch-windows"
+$pkgName     = "deadsync-$Tag-$Arch-$Platform"
 $stageDir    = Join-Path $distDir 'DeadSync'
 $archivePath = Join-Path $distDir "$pkgName.zip"
 $checksumPath = "$archivePath.sha256"

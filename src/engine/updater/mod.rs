@@ -314,18 +314,22 @@ pub const fn host_target() -> Option<HostTarget> {
     };
 
     // Mapping from target_os -> (asset-name-os, asset-extension).  Windows
-    // is the only platform that ships a zip; everything else uses tar.gz.
-    const OS_AND_EXT: Option<(&str, &str)> = if cfg!(target_os = "windows") {
-        Some(("windows", "zip"))
-    } else if cfg!(target_os = "linux") {
-        Some(("linux", "tar.gz"))
-    } else if cfg!(target_os = "macos") {
-        Some(("macos", "tar.gz"))
-    } else if cfg!(target_os = "freebsd") {
-        Some(("freebsd", "tar.gz"))
-    } else {
-        None
-    };
+    // ships zip archives; everything else uses tar.gz.  The Windows 7
+    // target is ABI-distinct and gets its own release asset.
+    const OS_AND_EXT: Option<(&str, &str)> =
+        if cfg!(all(target_os = "windows", target_vendor = "win7")) {
+            Some(("win7", "zip"))
+        } else if cfg!(target_os = "windows") {
+            Some(("windows", "zip"))
+        } else if cfg!(target_os = "linux") {
+            Some(("linux", "tar.gz"))
+        } else if cfg!(target_os = "macos") {
+            Some(("macos", "tar.gz"))
+        } else if cfg!(target_os = "freebsd") {
+            Some(("freebsd", "tar.gz"))
+        } else {
+            None
+        };
 
     match (ARCH, OS_AND_EXT) {
         (Some(arch), Some((os, ext))) => Some(HostTarget { arch, os, ext }),
@@ -526,6 +530,20 @@ mod tests {
         parse_release_json(FIXTURE).unwrap().assets
     }
 
+    fn fixture_assets_with_win7() -> Vec<ReleaseAsset> {
+        let mut assets = fixture_assets();
+        assets.push(ReleaseAsset {
+            name: "deadsync-v0.3.871-x86_64-win7.zip".into(),
+            browser_download_url: "https://github.com/pnn64/deadsync/releases/download/v0.3.871/deadsync-v0.3.871-x86_64-win7.zip".into(),
+            size: 40_354_865,
+            digest: Some(
+                "sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68"
+                    .into(),
+            ),
+        });
+        assets
+    }
+
     fn target(arch: &'static str, os: &'static str, ext: &'static str) -> HostTarget {
         HostTarget { arch, os, ext }
     }
@@ -541,13 +559,20 @@ mod tests {
             expected_asset_name("0.3.871", t),
             "deadsync-v0.3.871-x86_64-windows.zip"
         );
+
+        let win7 = target("x86_64", "win7", "zip");
+        assert_eq!(
+            expected_asset_name("v0.3.871", win7),
+            "deadsync-v0.3.871-x86_64-win7.zip"
+        );
     }
 
     #[test]
-    fn picks_each_published_combo_from_fixture() {
-        let assets = fixture_assets();
+    fn picks_each_published_combo() {
+        let assets = fixture_assets_with_win7();
         let cases = [
             ("x86_64", "windows", "zip"),
+            ("x86_64", "win7", "zip"),
             ("x86_64", "linux", "tar.gz"),
             ("arm64", "linux", "tar.gz"),
             ("x86_64", "macos", "tar.gz"),
@@ -598,6 +623,20 @@ mod tests {
         )) {
             let t = host_target().expect("supported host should resolve");
             assert!(!t.arch.is_empty() && !t.os.is_empty() && !t.ext.is_empty());
+        }
+    }
+
+    #[test]
+    fn windows_host_target_distinguishes_win7_vendor() {
+        if cfg!(target_os = "windows") {
+            let t = host_target().expect("windows host should resolve");
+            let expected = if cfg!(target_vendor = "win7") {
+                "win7"
+            } else {
+                "windows"
+            };
+            assert_eq!(t.os, expected);
+            assert_eq!(t.ext, "zip");
         }
     }
 }

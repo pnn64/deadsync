@@ -23,6 +23,16 @@ permissions:
 jobs:
   build-release:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            target: ""
+            install_vulkan: true
+          - platform: win7
+            target: x86_64-win7-windows-msvc
+            install_vulkan: false
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -33,6 +43,7 @@ jobs:
           submodules: true
 
       - name: Install Vulkan SDK
+        if: ${{ matrix.install_vulkan }}
         shell: pwsh
         run: scripts/install-vulkan-sdk.ps1
 
@@ -65,18 +76,40 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup Rust nightly for Windows 7
+        if: ${{ matrix.target == 'x86_64-win7-windows-msvc' }}
+        shell: pwsh
+        run: |
+          rustup toolchain install nightly
+          rustup +nightly component add rust-src
+
       - name: Build release
-        run: cargo build --release --locked
+        shell: pwsh
+        run: |
+          if ("${{ matrix.target }}" -eq "") {
+            cargo build --release --locked
+          } else {
+            cargo +nightly build -Z build-std=std,panic_abort --release --locked --target "${{ matrix.target }}"
+          }
 
       - name: Package Windows release
         id: package
         shell: pwsh
-        run: scripts/package-windows-release.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Arch x86_64
+        run: |
+          $args = @(
+            "-Tag", "${{ steps.tag.outputs.tag }}",
+            "-Arch", "x86_64",
+            "-Platform", "${{ matrix.platform }}"
+          )
+          if ("${{ matrix.target }}" -ne "") {
+            $args += @("-Target", "${{ matrix.target }}")
+          }
+          & scripts/package-windows-release.ps1 @args
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deadsync-windows-${{ steps.tag.outputs.tag }}-x86_64
+          name: deadsync-${{ matrix.platform }}-${{ steps.tag.outputs.tag }}-x86_64
           if-no-files-found: error
           path: |
             ${{ steps.package.outputs.archive }}
