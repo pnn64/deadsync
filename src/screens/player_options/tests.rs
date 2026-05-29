@@ -2062,6 +2062,36 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn pane_switch_resets_what_comes_next_to_gameplay() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        let gameplay = crate::assets::i18n::tr("PlayerOptions", "WhatComesNextGameplay");
+
+        for pane in [
+            super::OptionsPane::Display,
+            super::OptionsPane::Advanced,
+            super::OptionsPane::Uncommon,
+        ] {
+            let row = state.panes[pane.index()]
+                .row_map
+                .get_mut(RowId::WhatComesNext)
+                .unwrap();
+            row.selected_choice_index = [2, 2];
+
+            super::apply_pane(&mut state, pane);
+
+            let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
+            for player_idx in [P1, P2] {
+                assert_eq!(row.selected_choice_index[player_idx], 0);
+                assert_eq!(
+                    row.choices[row.selected_choice_index[player_idx]],
+                    gameplay.as_ref()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_built_row_has_consistent_choices_and_index() {
         ensure_i18n();
         let (state, _asset_manager) = setup_state();

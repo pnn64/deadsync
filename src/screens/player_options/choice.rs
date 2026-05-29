@@ -308,6 +308,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     // current profiles so duplicate rows stay in sync across panes.
     state.current_pane = pane;
     refresh_pane_defaults(state);
+    reset_what_comes_next(state);
     state.pane_mut().reset_cursor();
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
@@ -331,6 +332,14 @@ fn refresh_pane_defaults(state: &mut State) {
             player_idx,
             &mut state.option_masks[player_idx],
         );
+    }
+}
+
+fn reset_what_comes_next(state: &mut State) {
+    // Simply Love's ScreenAfterPlayerOptions rows use the generic
+    // LoadSelections path, so they start on Gameplay each screen entry.
+    if let Some(row) = state.pane_mut().row_map.get_mut(RowId::WhatComesNext) {
+        row.selected_choice_index = [0; PLAYER_SLOTS];
     }
 }
 
