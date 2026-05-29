@@ -26,12 +26,21 @@ use bincode::{Decode, Encode};
 mod arrowcloud;
 mod groovestats;
 mod itl;
-mod submit_status;
 
 pub use arrowcloud::{
     ArrowCloudSubmitUiStatus, arrowcloud_next_retry_is_auto, arrowcloud_next_retry_remaining_secs,
     get_arrowcloud_submit_ui_status_for_side, retry_arrowcloud_submit,
     submit_arrowcloud_payloads_from_gameplay, tick_arrowcloud_auto_retries,
+};
+pub use deadsync_score::{
+    ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
+    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore, Grade, LeaderboardEntry,
+    LeaderboardPane, LocalScalarScore, MachineReplayEntry, PlayerLeaderboardData, RejectReason,
+    ReplayEdge, gameplay_run_failed, gameplay_run_passed, leaderboard_rank_for_score,
+    lua_chart_submit_allowed, lua_submit_allowed, promote_quint_grade, score_to_grade,
+};
+pub(crate) use deadsync_score::{
+    SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
 };
 pub use groovestats::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
@@ -54,106 +63,6 @@ pub use itl::{
     is_itl_song_folder_unlocked_for_side, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
     itl_points_for_chart, save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
 };
-pub use submit_status::RejectReason;
-pub(crate) use submit_status::{
-    SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
-};
-
-// Lua charts stay blocked from online submit unless their effects have been
-// verified closely enough to match ITGmania for scoring purposes.
-const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 8] = [
-    "d5bd4dd7224f68ff", // Spooky (SM)
-    "c9e45c5e534f058d", // media offline (SM)
-    "596b42ed8317d9b8", // Godspeed (SX)
-    "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
-    "a147dd828cd08fc7", // Riddle (DX)
-    "f95bc209c6f2cbfe", // Levels (SM)
-    "b50d0c3916e75b84", // Levels (SH)
-    "f41a24722a37758f", // Levels (SX)
-];
-
-pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
-    let hash = chart_hash.trim();
-    !hash.is_empty()
-        && LUA_SCORE_SUBMIT_ALLOWLIST
-            .iter()
-            .any(|allowed| allowed.eq_ignore_ascii_case(hash))
-}
-
-pub fn lua_submit_allowed(song_has_lua: bool, chart_hash: &str) -> bool {
-    !song_has_lua || lua_chart_submit_allowed(chart_hash)
-}
-
-// --- Grade Definitions ---
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum Grade {
-    Quint,
-    Tier01,
-    Tier02,
-    Tier03,
-    Tier04,
-    Tier05,
-    Tier06,
-    Tier07,
-    Tier08,
-    Tier09,
-    Tier10,
-    Tier11,
-    Tier12,
-    Tier13,
-    Tier14,
-    Tier15,
-    Tier16,
-    Tier17,
-    Failed,
-}
-
-impl Grade {
-    /// Converts a grade to the corresponding frame index on the "grades 1x19.png" spritesheet.
-    pub const fn to_sprite_state(&self) -> u32 {
-        match self {
-            Self::Quint => 0,
-            Self::Tier01 => 1,
-            Self::Tier02 => 2,
-            Self::Tier03 => 3,
-            Self::Tier04 => 4,
-            Self::Tier05 => 5,
-            Self::Tier06 => 6,
-            Self::Tier07 => 7,
-            Self::Tier08 => 8,
-            Self::Tier09 => 9,
-            Self::Tier10 => 10,
-            Self::Tier11 => 11,
-            Self::Tier12 => 12,
-            Self::Tier13 => 13,
-            Self::Tier14 => 14,
-            Self::Tier15 => 15,
-            Self::Tier16 => 16,
-            Self::Tier17 => 17,
-            Self::Failed => 18,
-        }
-    }
-}
-
-/// A struct to hold both the calculated grade and the precise score percentage.
-#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
-pub struct CachedScore {
-    pub grade: Grade,
-    pub score_percent: f64, // Stored as 0.0 to 1.0
-    /// Optional lamp index for UI (e.g., Select Music wheel).
-    /// This is intentionally UI-agnostic: the meaning of the index is left
-    /// to the presentation layer (colors, effects, etc.).
-    pub lamp_index: Option<u8>,
-    /// Optional single-digit judge count for the lamp (e.g. 1..=9).
-    pub lamp_judge_count: Option<u8>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LocalScalarScore {
-    pub percent: f64,
-    pub is_fail: bool,
-}
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
 
@@ -322,189 +231,6 @@ fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: 
 }
 
 // --- ArrowCloud score cache (on-disk, all 3 leaderboards per chart) ---
-
-/// Server-side grade name returned by ArrowCloud's grading systems
-/// (ITG / EX / HardEX). Source of truth:
-/// `arrow-cloud/api/src/utils/scoring/index.ts:223-260`.
-///
-/// `Quint` and `Sex` are the EX and HardEX top-tier grades respectively;
-/// `Quad` is the ITG top tier. `Failed` corresponds to AC's `failingGrade: 'F'`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
-pub enum ArrowCloudServerGrade {
-    Sex,
-    Quint,
-    Quad,
-    Tristar,
-    Twostar,
-    Star,
-    SPlus,
-    S,
-    SMinus,
-    APlus,
-    A,
-    AMinus,
-    BPlus,
-    B,
-    BMinus,
-    CPlus,
-    C,
-    CMinus,
-    D,
-    Failed,
-}
-
-impl ArrowCloudServerGrade {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Sex => "Sex",
-            Self::Quint => "Quint",
-            Self::Quad => "Quad",
-            Self::Tristar => "Tristar",
-            Self::Twostar => "Twostar",
-            Self::Star => "Star",
-            Self::SPlus => "S+",
-            Self::S => "S",
-            Self::SMinus => "S-",
-            Self::APlus => "A+",
-            Self::A => "A",
-            Self::AMinus => "A-",
-            Self::BPlus => "B+",
-            Self::B => "B",
-            Self::BMinus => "B-",
-            Self::CPlus => "C+",
-            Self::C => "C",
-            Self::CMinus => "C-",
-            Self::D => "D",
-            Self::Failed => "F",
-        }
-    }
-
-    /// Parse the canonical AC grade string. Case-sensitive (matches the
-    /// server's grading-system keys); whitespace is trimmed. Unrecognised
-    /// strings (e.g. event-only grades) yield `None`.
-    pub fn from_server_str(s: &str) -> Option<Self> {
-        match s.trim() {
-            "Sex" => Some(Self::Sex),
-            "Quint" => Some(Self::Quint),
-            "Quad" => Some(Self::Quad),
-            "Tristar" => Some(Self::Tristar),
-            "Twostar" => Some(Self::Twostar),
-            "Star" => Some(Self::Star),
-            "S+" => Some(Self::SPlus),
-            "S" => Some(Self::S),
-            "S-" => Some(Self::SMinus),
-            "A+" => Some(Self::APlus),
-            "A" => Some(Self::A),
-            "A-" => Some(Self::AMinus),
-            "B+" => Some(Self::BPlus),
-            "B" => Some(Self::B),
-            "B-" => Some(Self::BMinus),
-            "C+" => Some(Self::CPlus),
-            "C" => Some(Self::C),
-            "C-" => Some(Self::CMinus),
-            "D" => Some(Self::D),
-            "F" => Some(Self::Failed),
-            _ => None,
-        }
-    }
-}
-
-/// A single ArrowCloud score for one (chart, leaderboard) pair.
-///
-/// Holds AC-native fields rather than reusing `CachedScore`, because the AC
-/// bulk endpoint returns data the GS-style cache cannot represent (e.g. the
-/// canonical server grade string for events that don't map to ITG tiers, the
-/// play timestamp, the AC `playId`) and lacks data the GS cache requires
-/// (judgment counts for FA+/lamp computation).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ArrowCloudScore {
-    /// 0.0..=1.0 (the percent value from the API divided by 100).
-    pub score_percent: f64,
-    /// Canonical server grade name. `None` if the API returned an
-    /// unrecognised string (e.g. an event-specific grade).
-    pub server_grade: Option<ArrowCloudServerGrade>,
-    /// UTC timestamp of the play. `None` if the API omitted the field or
-    /// returned an unparseable string.
-    pub played_at: Option<DateTime<Utc>>,
-    /// Opaque AC play id used for linking back to the play detail page.
-    pub play_id: Option<i64>,
-    /// `true` if the play was marked as a fail by the server.
-    pub is_fail: bool,
-}
-
-// `chrono::DateTime` does not implement `bincode::Encode/Decode`. Persist the
-// timestamp as UTC milliseconds since the unix epoch so the on-disk index
-// stays compact and round-trips cleanly across timezones.
-impl Encode for ArrowCloudScore {
-    fn encode<E: bincode::enc::Encoder>(
-        &self,
-        encoder: &mut E,
-    ) -> Result<(), bincode::error::EncodeError> {
-        self.score_percent.encode(encoder)?;
-        self.server_grade.encode(encoder)?;
-        self.played_at
-            .map(|d| d.timestamp_millis())
-            .encode(encoder)?;
-        self.play_id.encode(encoder)?;
-        self.is_fail.encode(encoder)?;
-        Ok(())
-    }
-}
-
-impl<C> Decode<C> for ArrowCloudScore {
-    fn decode<D: bincode::de::Decoder<Context = C>>(
-        decoder: &mut D,
-    ) -> Result<Self, bincode::error::DecodeError> {
-        let score_percent = f64::decode(decoder)?;
-        let server_grade = Option::<ArrowCloudServerGrade>::decode(decoder)?;
-        let played_at_ms = Option::<i64>::decode(decoder)?;
-        let play_id = Option::<i64>::decode(decoder)?;
-        let is_fail = bool::decode(decoder)?;
-        let played_at = played_at_ms.and_then(|ms| Utc.timestamp_millis_opt(ms).single());
-        Ok(Self {
-            score_percent,
-            server_grade,
-            played_at,
-            play_id,
-            is_fail,
-        })
-    }
-}
-
-impl<'de, C> bincode::BorrowDecode<'de, C> for ArrowCloudScore {
-    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = C>>(
-        decoder: &mut D,
-    ) -> Result<Self, bincode::error::DecodeError> {
-        Self::decode(decoder)
-    }
-}
-
-impl ArrowCloudScore {
-    /// Adapter used by `get_cached_score_for_side` to merge AC scores with
-    /// local + GS scores in the same `CachedScore` slot. Recomputes the
-    /// internal `Grade` tier from the score percent because the server's
-    /// grade enum (e.g. `Tristar`) does not align with our `Tier01..Tier17`
-    /// scheme. AC entries carry no FA+/lamp data, so the lamp fields stay
-    /// `None`.
-    pub fn to_cached_score(&self) -> CachedScore {
-        let percent_0_100 = (self.score_percent * 100.0).clamp(0.0, 100.0);
-        let score_10000 = percent_0_100 * 100.0;
-        cached_score_from_gs(score_10000, None, "", self.is_fail, GsExEvidence::default())
-    }
-}
-
-/// Cached AC scores for a single chart, one entry per global leaderboard.
-///
-/// Fields correspond to AC `Leaderboard.id`:
-/// - `itg`     -> `GLOBAL_MONEY_LEADERBOARD_ID = 3`
-/// - `ex`      -> `GLOBAL_EX_LEADERBOARD_ID = 2`
-/// - `hard_ex` -> `GLOBAL_HARD_EX_LEADERBOARD_ID = 4`
-#[derive(Debug, Clone, Copy, Default, PartialEq, Encode, Decode)]
-pub struct ArrowCloudScores {
-    pub itg: Option<ArrowCloudScore>,
-    pub ex: Option<ArrowCloudScore>,
-    pub hard_ex: Option<ArrowCloudScore>,
-}
 
 #[derive(Default)]
 struct AcScoreCacheState {
@@ -2308,21 +2034,6 @@ pub(super) const fn submit_side_ix(side: profile::PlayerSide) -> usize {
 }
 
 #[inline(always)]
-pub const fn gameplay_run_passed(
-    song_completed_naturally: bool,
-    is_failing: bool,
-    life: f32,
-    has_fail_time: bool,
-) -> bool {
-    song_completed_naturally && !gameplay_run_failed(is_failing, has_fail_time) && life > 0.0
-}
-
-#[inline(always)]
-pub const fn gameplay_run_failed(is_failing: bool, has_fail_time: bool) -> bool {
-    is_failing || has_fail_time
-}
-
-#[inline(always)]
 pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
@@ -2436,99 +2147,6 @@ pub fn save_local_summary_score_for_side(
 }
 
 // --- API Response Structs ---
-
-#[derive(Debug, Clone)]
-pub struct LeaderboardEntry {
-    pub rank: u32,
-    pub name: String,
-    pub machine_tag: Option<String>,
-    pub score: f64, // 0..10000
-    pub date: String,
-    pub is_rival: bool,
-    pub is_self: bool,
-    pub is_fail: bool,
-}
-
-#[inline(always)]
-pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f64) -> Option<u32> {
-    if !score_percent.is_finite() {
-        return None;
-    }
-    let target = (score_percent * 10000.0).round();
-    let higher_scores = entries
-        .iter()
-        .filter(|entry| entry.score - target > 0.5)
-        .count();
-    Some((higher_scores as u32).saturating_add(1))
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ReplayEdge {
-    pub event_music_time_ns: gameplay::SongTimeNs,
-    pub lane_index: u8,
-    pub pressed: bool,
-    pub source: InputSource,
-}
-
-#[derive(Debug, Clone)]
-pub struct MachineReplayEntry {
-    pub rank: u32,
-    pub name: String,
-    pub score: f64, // 0..10000
-    pub date: String,
-    pub is_fail: bool,
-    pub replay_beat0_time_ns: gameplay::SongTimeNs,
-    pub replay: Vec<ReplayEdge>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArrowCloudPaneKind {
-    Itg,
-    Ex,
-    HardEx,
-}
-
-#[derive(Debug, Clone)]
-pub struct LeaderboardPane {
-    pub name: String,
-    pub entries: Vec<LeaderboardEntry>,
-    pub is_ex: bool,
-    pub disabled: bool,
-    pub personalized: bool,
-    pub arrowcloud_kind: Option<ArrowCloudPaneKind>,
-}
-
-impl LeaderboardPane {
-    #[inline(always)]
-    pub fn is_groovestats(&self) -> bool {
-        self.name.eq_ignore_ascii_case("GrooveStats")
-    }
-
-    #[inline(always)]
-    pub fn is_arrowcloud(&self) -> bool {
-        self.arrowcloud_kind.is_some() || self.name.eq_ignore_ascii_case("ArrowCloud")
-    }
-
-    #[inline(always)]
-    pub fn is_hard_ex(&self) -> bool {
-        self.arrowcloud_kind == Some(ArrowCloudPaneKind::HardEx)
-            || (self.arrowcloud_kind.is_none() && self.name.eq_ignore_ascii_case("ArrowCloud"))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PlayerLeaderboardData {
-    pub panes: Vec<LeaderboardPane>,
-    pub itl_self_score: Option<u32>,
-    pub itl_self_rank: Option<u32>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CachedPlayerLeaderboardData {
-    pub loading: bool,
-    pub data: Option<PlayerLeaderboardData>,
-    pub error: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct PlayerLeaderboardCacheKey {
@@ -3329,43 +2947,6 @@ fn fetch_arrowcloud_user_context(
 
 /// Maximum chart hashes per `/v1/retrieve-scores` request, server-enforced.
 pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
-
-/// Global ArrowCloud leaderboard variants. Numeric values match the
-/// `Leaderboard.id` rows seeded by ArrowCloud:
-/// `2 = EX`, `3 = ITG / Money`, `4 = HardEX`. See
-/// `arrow-cloud/api/src/utils/leaderboard/index.ts` (`GLOBAL_*_LEADERBOARD_ID`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum ArrowCloudLeaderboard {
-    Ex = 2,
-    Itg = 3,
-    HardEx = 4,
-}
-
-impl ArrowCloudLeaderboard {
-    pub const ALL_GLOBAL: [Self; 3] = [Self::HardEx, Self::Ex, Self::Itg];
-
-    #[inline(always)]
-    pub const fn id(self) -> u32 {
-        self as u32
-    }
-
-    #[inline(always)]
-    pub const fn from_id(id: u32) -> Option<Self> {
-        match id {
-            2 => Some(Self::Ex),
-            3 => Some(Self::Itg),
-            4 => Some(Self::HardEx),
-            _ => None,
-        }
-    }
-}
-
-impl serde::Serialize for ArrowCloudLeaderboard {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u32(self.id())
-    }
-}
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -4764,89 +4345,6 @@ fn compute_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Op
     } else {
         None
     }
-}
-
-// --- Grade Calculation ---
-
-pub fn promote_quint_grade(grade: Grade, ex_score_percent: f64) -> Grade {
-    if grade != Grade::Failed && ex_score_percent >= 100.0 {
-        Grade::Quint
-    } else {
-        grade
-    }
-}
-
-pub fn score_to_grade(score: f64) -> Grade {
-    let percent = score / 10000.0;
-    if percent >= 1.00 {
-        Grade::Tier01
-    }
-    // Note: We don't have enough info to detect Quints (W0) yet.
-    else if percent >= 0.99 {
-        Grade::Tier02
-    }
-    // three-stars
-    else if percent >= 0.98 {
-        Grade::Tier03
-    }
-    // two-stars
-    else if percent >= 0.96 {
-        Grade::Tier04
-    }
-    // one-star
-    else if percent >= 0.94 {
-        Grade::Tier05
-    }
-    // s-plus
-    else if percent >= 0.92 {
-        Grade::Tier06
-    }
-    // s
-    else if percent >= 0.89 {
-        Grade::Tier07
-    }
-    // s-minus
-    else if percent >= 0.86 {
-        Grade::Tier08
-    }
-    // a-plus
-    else if percent >= 0.83 {
-        Grade::Tier09
-    }
-    // a
-    else if percent >= 0.80 {
-        Grade::Tier10
-    }
-    // a-minus
-    else if percent >= 0.76 {
-        Grade::Tier11
-    }
-    // b-plus
-    else if percent >= 0.72 {
-        Grade::Tier12
-    }
-    // b
-    else if percent >= 0.68 {
-        Grade::Tier13
-    }
-    // b-minus
-    else if percent >= 0.64 {
-        Grade::Tier14
-    }
-    // c-plus
-    else if percent >= 0.60 {
-        Grade::Tier15
-    }
-    // c
-    else if percent >= 0.55 {
-        Grade::Tier16
-    }
-    // c-minus
-    else {
-        Grade::Tier17
-    } // d
-    // Grade::Failed is not score-based; it's determined by gameplay failure (e.g., lifebar empty),
-    // which is not yet implemented. This function will never return Grade::Failed.
 }
 
 // --- Public Fetch Function ---

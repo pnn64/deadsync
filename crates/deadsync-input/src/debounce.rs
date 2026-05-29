@@ -7,15 +7,15 @@ use std::time::{Duration, Instant};
 use super::InputSource;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct DebounceState {
-    pub(super) action_mask: u32,
-    pub(super) source: InputSource,
-    pub(super) held_raw: bool,
-    pub(super) held_reported: bool,
-    pub(super) last_raw_change_time: Instant,
-    pub(super) last_raw_change_host_nanos: u64,
-    pub(super) last_raw_store_time: Instant,
-    pub(super) last_report_time: Instant,
+struct DebounceState {
+    action_mask: u32,
+    source: InputSource,
+    held_raw: bool,
+    held_reported: bool,
+    last_raw_change_time: Instant,
+    last_raw_change_host_nanos: u64,
+    last_raw_store_time: Instant,
+    last_report_time: Instant,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -48,7 +48,7 @@ impl PartialOrd for DueSlot {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct DebounceStore {
+pub struct DebounceStore {
     slots: Vec<SlotState>,
     due_slots: BinaryHeap<Reverse<DueSlot>>,
     active_len: usize,
@@ -56,7 +56,7 @@ pub(super) struct DebounceStore {
 
 impl DebounceStore {
     #[inline(always)]
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             slots: Vec::new(),
             due_slots: BinaryHeap::new(),
@@ -65,7 +65,7 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    pub(super) fn clear_and_reserve(&mut self, cap: usize) {
+    pub fn clear_and_reserve(&mut self, cap: usize) {
         self.slots.clear();
         self.due_slots.clear();
         self.active_len = 0;
@@ -75,7 +75,7 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    pub(super) fn prepare_slots(&mut self, len: usize) {
+    pub fn prepare_slots(&mut self, len: usize) {
         self.clear_and_reserve(len);
         if len != 0 {
             self.slots.resize(len, SlotState::default());
@@ -114,38 +114,38 @@ impl DebounceStore {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct DebouncedEdge {
-    pub(super) action_mask: u32,
-    pub(super) input_slot: u32,
-    pub(super) pressed: bool,
-    pub(super) source: InputSource,
-    pub(super) timestamp: Instant,
-    pub(super) timestamp_host_nanos: u64,
-    pub(super) stored_at: Instant,
-    pub(super) emitted_at: Instant,
+pub struct DebouncedEdge {
+    pub action_mask: u32,
+    pub input_slot: u32,
+    pub pressed: bool,
+    pub source: InputSource,
+    pub timestamp: Instant,
+    pub timestamp_host_nanos: u64,
+    pub stored_at: Instant,
+    pub emitted_at: Instant,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct DebounceEdges {
-    pub(super) first: Option<DebouncedEdge>,
-    pub(super) second: Option<DebouncedEdge>,
+pub struct DebounceEdges {
+    pub first: Option<DebouncedEdge>,
+    pub second: Option<DebouncedEdge>,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct DebounceWindows {
-    pub(super) window: Duration,
+pub struct DebounceWindows {
+    window: Duration,
 }
 
 impl DebounceWindows {
     #[inline(always)]
-    pub(super) const fn uniform(window: Duration) -> Self {
+    pub const fn uniform(window: Duration) -> Self {
         // ITGmania InputFilter parity: one global debounce window gates both
         // press and release edges for every input binding.
         Self { window }
     }
 
     #[inline(always)]
-    pub(super) fn prune_window(self) -> Duration {
+    fn prune_window(self) -> Duration {
         self.window
     }
 }
@@ -184,7 +184,7 @@ fn debounced_edge(
 }
 
 #[inline(always)]
-pub(super) fn debounce_emit_if_due(
+fn debounce_emit_if_due(
     state: &mut DebounceState,
     input_slot: u32,
     now: Instant,
@@ -204,7 +204,7 @@ pub(super) fn debounce_emit_if_due(
 }
 
 #[inline(always)]
-pub(super) fn debounce_step(
+fn debounce_step(
     state: &mut DebounceState,
     action_mask: u32,
     source: InputSource,
@@ -319,7 +319,7 @@ fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Ins
 }
 
 #[cfg(test)]
-pub(super) fn debounce_input_edge_in_store(
+fn debounce_input_edge_in_store(
     states: &Mutex<DebounceStore>,
     slot: usize,
     action_mask: u32,
@@ -342,7 +342,7 @@ pub(super) fn debounce_input_edge_in_store(
     )
 }
 
-pub(super) fn debounce_input_edge_in_store_mut(
+pub fn debounce_input_edge_in_store_mut(
     states: &mut DebounceStore,
     slot: usize,
     action_mask: u32,
@@ -424,7 +424,7 @@ pub(super) fn debounce_input_edge_in_store_mut(
 }
 
 #[cfg(test)]
-pub(super) fn emit_due_debounce_edges_from(
+fn emit_due_debounce_edges_from(
     states: &Mutex<DebounceStore>,
     now: Instant,
     windows: DebounceWindows,
@@ -434,7 +434,7 @@ pub(super) fn emit_due_debounce_edges_from(
     emit_due_debounce_edges_from_mut(&mut states, now, windows, &mut emit)
 }
 
-pub(super) fn emit_due_debounce_edges_from_mut(
+pub fn emit_due_debounce_edges_from_mut(
     states: &mut DebounceStore,
     now: Instant,
     windows: DebounceWindows,

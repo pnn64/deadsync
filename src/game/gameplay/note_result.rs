@@ -1,18 +1,18 @@
-use crate::game::judgment::{JudgeGrade, Judgment};
+use crate::game::judgment::{self, JudgeGrade, Judgment};
 use crate::game::note::NoteType;
 
-use super::{HeldMissRenderInfo, MAX_COLS, PlayerRuntime, State, display_judge_ix};
+use super::{HeldMissRenderInfo, MAX_COLS, PlayerRuntime, State};
 
 #[inline(always)]
 pub(super) fn add_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = display_judge_ix(grade);
+    let grade_ix = judgment::display_judge_ix(grade);
     p.provisional_scoring_counts[grade_ix] =
         p.provisional_scoring_counts[grade_ix].saturating_add(1);
 }
 
 #[inline(always)]
 pub(super) fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = display_judge_ix(grade);
+    let grade_ix = judgment::display_judge_ix(grade);
     p.provisional_scoring_counts[grade_ix] =
         p.provisional_scoring_counts[grade_ix].saturating_sub(1);
 }

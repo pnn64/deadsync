@@ -1,12 +1,22 @@
 [package]
 name = "deadsync"
-version = "0.4.271"
+version = "0.4.285"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
 license = "GPL-3.0"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan"]
+
+[workspace]
+members = [
+    ".",
+    "crates/deadsync-chart",
+    "crates/deadsync-input",
+    "crates/deadsync-rules",
+    "crates/deadsync-score",
+]
+resolver = "3"
 
 [[bin]]
 name = "compose_bench"
@@ -41,6 +51,10 @@ path = "scripts/replaygain_bench.rs"
 pipewire-audio = ["dep:pipewire"]
 
 [dependencies]
+deadsync-chart = { path = "crates/deadsync-chart" }
+deadsync-input = { path = "crates/deadsync-input" }
+deadsync-rules = { path = "crates/deadsync-rules" }
+deadsync-score = { path = "crates/deadsync-score" }
 winit = "0.30.13"
 log = "0.4.30"
 env_logger = "0.11.10"

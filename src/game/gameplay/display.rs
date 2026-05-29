@@ -3,53 +3,8 @@ use crate::game::timing::{self, WindowCounts};
 
 use super::{
     CourseDisplayCarry, CourseDisplayTotals, ExScoreInputs, MAX_PLAYERS, PlayerRuntime, State,
-    display_judge_ix, player_blue_window_ms,
+    player_blue_window_ms,
 };
-
-#[inline(always)]
-fn add_window_counts(lhs: WindowCounts, rhs: WindowCounts) -> WindowCounts {
-    WindowCounts {
-        w0: lhs.w0.saturating_add(rhs.w0),
-        w1: lhs.w1.saturating_add(rhs.w1),
-        w2: lhs.w2.saturating_add(rhs.w2),
-        w3: lhs.w3.saturating_add(rhs.w3),
-        w4: lhs.w4.saturating_add(rhs.w4),
-        w5: lhs.w5.saturating_add(rhs.w5),
-        miss: lhs.miss.saturating_add(rhs.miss),
-    }
-}
-
-#[inline(always)]
-fn normalized_blue_window_ms(ms: f32) -> f32 {
-    if ms.is_finite() && ms > 0.0 {
-        ms
-    } else {
-        timing::FA_PLUS_W010_MS
-    }
-}
-
-#[inline(always)]
-fn add_judgment_to_window_counts(
-    counts: &mut WindowCounts,
-    judgment: &Judgment,
-    blue_window_ms: f32,
-) {
-    let split_ms = normalized_blue_window_ms(blue_window_ms);
-    match judgment.grade {
-        JudgeGrade::Fantastic => {
-            if judgment.time_error_ms.abs() <= split_ms {
-                counts.w0 = counts.w0.saturating_add(1);
-            } else {
-                counts.w1 = counts.w1.saturating_add(1);
-            }
-        }
-        JudgeGrade::Excellent => counts.w2 = counts.w2.saturating_add(1),
-        JudgeGrade::Great => counts.w3 = counts.w3.saturating_add(1),
-        JudgeGrade::Decent => counts.w4 = counts.w4.saturating_add(1),
-        JudgeGrade::WayOff => counts.w5 = counts.w5.saturating_add(1),
-        JudgeGrade::Miss => counts.miss = counts.miss.saturating_add(1),
-    }
-}
 
 #[inline(always)]
 fn float_match(a: f32, b: f32) -> bool {
@@ -63,21 +18,7 @@ fn display_window_counts_10ms(state: &State, player_idx: usize) -> WindowCounts 
     }
     let current = state.live_window_counts_10ms_blue[player_idx];
     let carry = display_carry_for_player(state, player_idx);
-    add_window_counts(current, carry.window_counts_10ms_blue)
-}
-
-#[inline(always)]
-pub(super) fn scored_hold_totals_with_carry(
-    held: u32,
-    let_go: u32,
-    carry_held: u32,
-    carry_let_go: u32,
-) -> (u32, u32) {
-    let held_total = held.saturating_add(carry_held);
-    let resolved_total = held_total
-        .saturating_add(let_go)
-        .saturating_add(carry_let_go);
-    (held_total, resolved_total)
+    judgment::add_window_counts(current, carry.window_counts_10ms_blue)
 }
 
 #[inline(always)]
@@ -102,13 +43,13 @@ fn ex_score_data_from_inputs(
 ) -> judgment::ExScoreData {
     let carry = display_carry_for_player(state, player_idx);
     let totals = display_totals_for_player(state, player_idx);
-    let (holds_held, holds_resolved) = scored_hold_totals_with_carry(
+    let (holds_held, holds_resolved) = judgment::scored_hold_totals_with_carry(
         inputs.holds_held_for_score,
         inputs.holds_let_go_for_score,
         carry.holds_held_for_score,
         carry.holds_let_go_for_score,
     );
-    let (rolls_held, rolls_resolved) = scored_hold_totals_with_carry(
+    let (rolls_held, rolls_resolved) = judgment::scored_hold_totals_with_carry(
         inputs.rolls_held_for_score,
         inputs.rolls_let_go_for_score,
         carry.rolls_held_for_score,
@@ -152,17 +93,17 @@ pub(super) fn record_display_window_counts(
         return;
     }
     let display_window_ms = player_blue_window_ms(state, player_idx);
-    add_judgment_to_window_counts(
+    judgment::add_judgment_to_window_counts(
         &mut state.live_window_counts[player_idx],
         judgment,
         timing::FA_PLUS_W0_MS,
     );
-    add_judgment_to_window_counts(
+    judgment::add_judgment_to_window_counts(
         &mut state.live_window_counts_10ms_blue[player_idx],
         judgment,
         timing::FA_PLUS_W010_MS,
     );
-    add_judgment_to_window_counts(
+    judgment::add_judgment_to_window_counts(
         &mut state.live_window_counts_display_blue[player_idx],
         judgment,
         display_window_ms,
@@ -171,7 +112,7 @@ pub(super) fn record_display_window_counts(
 
 #[inline(always)]
 pub(super) fn record_current_combo_window_count(player: &mut PlayerRuntime, judgment: &Judgment) {
-    add_judgment_to_window_counts(
+    judgment::add_judgment_to_window_counts(
         &mut player.current_combo_window_counts,
         judgment,
         timing::FA_PLUS_W0_MS,
@@ -199,9 +140,9 @@ pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrad
     if player_idx >= state.num_players {
         return 0;
     }
-    let base = state.players[player_idx].judgment_counts[display_judge_ix(grade)];
+    let base = state.players[player_idx].judgment_counts[judgment::display_judge_ix(grade)];
     let carry = display_carry_for_player(state, player_idx);
-    base.saturating_add(carry.judgment_counts[display_judge_ix(grade)])
+    base.saturating_add(carry.judgment_counts[judgment::display_judge_ix(grade)])
 }
 
 pub fn display_live_timing_stats(state: &State, player_idx: usize) -> timing::LiveTimingSnapshot {
@@ -220,8 +161,9 @@ pub fn display_window_counts(
         return WindowCounts::default();
     }
     let current = if let Some(ms) = blue_window_ms {
-        let split_ms = normalized_blue_window_ms(ms);
-        let display_split_ms = normalized_blue_window_ms(player_blue_window_ms(state, player_idx));
+        let split_ms = judgment::normalized_blue_window_ms(ms);
+        let display_split_ms =
+            judgment::normalized_blue_window_ms(player_blue_window_ms(state, player_idx));
         if float_match(split_ms, timing::FA_PLUS_W0_MS) {
             state.live_window_counts[player_idx]
         } else if float_match(split_ms, timing::FA_PLUS_W010_MS) {
@@ -237,7 +179,7 @@ pub fn display_window_counts(
     };
     let carry = display_carry_for_player(state, player_idx);
     let carry_counts = if let Some(ms) = blue_window_ms {
-        let split_ms = normalized_blue_window_ms(ms);
+        let split_ms = judgment::normalized_blue_window_ms(ms);
         if float_match(split_ms, timing::FA_PLUS_W0_MS) {
             carry.window_counts
         } else if float_match(split_ms, timing::FA_PLUS_W010_MS) {
@@ -248,7 +190,7 @@ pub fn display_window_counts(
     } else {
         carry.window_counts
     };
-    add_window_counts(current, carry_counts)
+    judgment::add_window_counts(current, carry_counts)
 }
 
 pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {

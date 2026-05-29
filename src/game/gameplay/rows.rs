@@ -4,10 +4,9 @@ use crate::game::timing;
 use super::{
     FinalizedRowOutcome, RowEntry, SongTimeNs, State, active_hold_is_engaged,
     apply_autosync_for_row_hits, apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
-    capture_failed_ex_score_inputs, current_music_time_s, display_judge_ix, error_bar_register_tap,
-    is_player_dead, judge_life_delta, max_step_distance_ns, player_col_range,
-    record_current_combo_window_count, record_display_window_counts, set_last_judgment,
-    update_itg_grade_totals,
+    capture_failed_ex_score_inputs, current_music_time_s, error_bar_register_tap, is_player_dead,
+    judge_life_delta, max_step_distance_ns, player_col_range, record_current_combo_window_count,
+    record_display_window_counts, set_last_judgment, update_itg_grade_totals,
 };
 
 #[inline(always)]
@@ -64,7 +63,7 @@ pub(super) fn finalize_row_judgment(
     let current_music_time = current_music_time_s(state);
     {
         let p = &mut state.players[player];
-        let grade_ix = display_judge_ix(final_grade);
+        let grade_ix = judgment::display_judge_ix(final_grade);
         p.judgment_counts[grade_ix] = p.judgment_counts[grade_ix].saturating_add(1);
         if !is_player_dead(p) {
             p.scoring_counts[grade_ix] = p.scoring_counts[grade_ix].saturating_add(1);

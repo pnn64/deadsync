@@ -6,7 +6,9 @@ use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{
     self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
-use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
+use crate::game::note::{
+    HoldData, HoldResult, MineResult, Note, NoteType, recompute_player_totals,
+};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
@@ -21,6 +23,15 @@ use crate::game::{
     profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
+use deadsync_rules::combo::{
+    self as combo_rules, ComboState, apply_row_combo_state as apply_rules_row_combo_state,
+};
+#[cfg(test)]
+use deadsync_rules::life::{
+    LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
+};
+use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
+use deadsync_rules::stream::{stream_sequences_threshold, zmod_stream_totals_full_measures};
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::borrow::Cow;
@@ -108,8 +119,6 @@ pub use self::controls::{
 use self::controls::{next_tick_mode, tick_mode_status_line};
 #[cfg(test)]
 use self::display::effective_ex_score_inputs;
-#[cfg(test)]
-use self::display::scored_hold_totals_with_carry;
 use self::display::{
     capture_failed_ex_score_inputs, record_current_combo_window_count, record_display_window_counts,
 };
@@ -169,10 +178,7 @@ pub use self::stats::{
     CourseDisplayTotals, course_display_carry_from_state, course_display_totals_for_chart,
     score_invalid_reason_lines_for_chart, stream_segments_for_results,
 };
-use self::stats::{
-    max_grade_points, mini_indicator_mode, needs_stream_data, recompute_player_totals,
-    stream_sequences_threshold, target_score_setting_percent, zmod_stream_totals_full_measures,
-};
+use self::stats::{mini_indicator_mode, needs_stream_data, target_score_setting_percent};
 use self::time::{
     INVALID_SONG_TIME_NS, clamp_song_time_ns, current_music_time_s, normalized_song_rate,
     scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_add_seconds,
@@ -196,27 +202,8 @@ pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_F
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
 const MAX_ACTIVE_INPUT_SLOTS: usize = 128;
-// Match Simply Love ITG / FA+: repeated negative life events add a 5-hit lock
-// back up to a 10-hit ceiling before life can regenerate again.
-const REGEN_COMBO_AFTER_MISS: u32 = 5;
-const MAX_REGEN_COMBO_AFTER_MISS: u32 = 10;
-// Simply Love enables HarshHotLifePenalty, so negative events from a full bar
-// should cost at least 10% life.
-const HOT_LIFE_MIN_NEGATIVE_DELTA: f32 = -0.10;
 // ITGmania _fallback and Simply Love keep mine hits from incrementing miss combo.
 const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
-// In SM, life regeneration is tied to LifePercentChangeHeld. Simply Love sets
-// TimingWindowSecondsHold to 0.32s before TimingWindowAdd is applied. Reference:
-// itgmania/Themes/Simply Love/Scripts/SL_Init.lua
-const LIFE_FANTASTIC: f32 = 0.008;
-const LIFE_EXCELLENT: f32 = 0.008;
-const LIFE_GREAT: f32 = 0.004;
-const LIFE_DECENT: f32 = 0.0;
-const LIFE_WAY_OFF: f32 = -0.050;
-const LIFE_MISS: f32 = -0.100;
-const LIFE_HIT_MINE: f32 = -0.050;
-const LIFE_HELD: f32 = 0.008;
-const LIFE_LET_GO: f32 = -0.080;
 const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
 const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
 const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
@@ -718,7 +705,7 @@ const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
-pub type SongTimeNs = i64;
+pub use deadsync_rules::song_time::SongTimeNs;
 
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
@@ -3283,25 +3270,7 @@ struct ExScoreInputs {
     mines_hit_for_score: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct CourseSubmitLife {
-    life: f32,
-    combo_after_miss: u32,
-    is_failing: bool,
-    fail_time: Option<f32>,
-}
-
-impl CourseSubmitLife {
-    #[inline(always)]
-    const fn new() -> Self {
-        Self {
-            life: 0.5,
-            combo_after_miss: 0,
-            is_failing: false,
-            fail_time: None,
-        }
-    }
-}
+type CourseSubmitLife = deadsync_rules::life::LifeMeter;
 
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
@@ -3392,46 +3361,6 @@ pub struct CourseDisplayCarry {
 pub struct CourseDisplayTiming {
     pub elapsed_seconds: f32,
     pub total_seconds: f32,
-}
-
-const DISPLAY_JUDGE_ORDER: [JudgeGrade; 6] = [
-    JudgeGrade::Fantastic,
-    JudgeGrade::Excellent,
-    JudgeGrade::Great,
-    JudgeGrade::Decent,
-    JudgeGrade::WayOff,
-    JudgeGrade::Miss,
-];
-
-#[inline(always)]
-const fn display_judge_ix(grade: JudgeGrade) -> usize {
-    judgment::judge_grade_ix(grade)
-}
-
-#[inline(always)]
-const fn judge_life_delta(grade: JudgeGrade) -> f32 {
-    match grade {
-        JudgeGrade::Fantastic => LIFE_FANTASTIC,
-        JudgeGrade::Excellent => LIFE_EXCELLENT,
-        JudgeGrade::Great => LIFE_GREAT,
-        JudgeGrade::Decent => LIFE_DECENT,
-        JudgeGrade::WayOff => LIFE_WAY_OFF,
-        JudgeGrade::Miss => LIFE_MISS,
-    }
-}
-
-#[inline(always)]
-fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
-    // ITGmania _fallback metrics:
-    // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
-    let chart_type = chart_type.trim();
-    let is_dance = chart_type
-        .get(..5)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("dance"));
-    let is_pump = chart_type
-        .get(..4)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("pump"));
-    !(is_dance || is_pump)
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -4800,28 +4729,6 @@ const fn player_col_range(state: &State, player: usize) -> (usize, usize) {
 const STEP_CAL_JUMP_WINDOW_S: f32 = 0.25;
 
 #[inline(always)]
-fn scale_range(v: f32, in_lo: f32, in_hi: f32, out_lo: f32, out_hi: f32) -> f32 {
-    if (in_hi - in_lo).abs() <= f32::EPSILON {
-        return out_lo;
-    }
-    out_lo + (v - in_lo) * (out_hi - out_lo) / (in_hi - in_lo)
-}
-
-#[inline(always)]
-fn step_calories(weight_pounds: i32, tracks_held: usize) -> f32 {
-    let tracks = tracks_held.max(1) as f32;
-    let cals_100 = scale_range(tracks, 1.0, 2.0, 0.023, 0.077);
-    let cals_200 = scale_range(tracks, 1.0, 2.0, 0.041, 0.133);
-    scale_range(
-        weight_pounds.max(0) as f32,
-        100.0,
-        200.0,
-        cals_100,
-        cals_200,
-    )
-}
-
-#[inline(always)]
 fn recent_step_tracks(
     pressed_since_ns: &[Option<SongTimeNs>; MAX_COLS],
     start: usize,
@@ -4857,7 +4764,7 @@ fn record_step_calories(state: &mut State, lane_idx: usize, event_music_time_ns:
         event_music_time_ns,
     );
     let weight_pounds = state.player_profiles[player].calculated_weight_pounds();
-    state.players[player].calories_burned += step_calories(weight_pounds, tracks);
+    state.players[player].calories_burned += judgment::step_calories(weight_pounds, tracks);
 }
 
 #[inline(always)]
@@ -5730,7 +5637,8 @@ pub fn init(
                 invalid_reasons.join("; ")
             );
         }
-        score_missed_holds_rolls[player] = score_missed_holds_and_rolls(&charts[player].chart_type);
+        score_missed_holds_rolls[player] =
+            judgment::score_missed_holds_and_rolls(&charts[player].chart_type);
     }
 
     let chart_layout_changed = (0..num_players)
@@ -5749,7 +5657,7 @@ pub fn init(
             rolls_total[player] = totals.rolls;
             mines_total[player] = totals.mines;
             hands_total[player] = totals.hands;
-            possible_grade_points[player] = max_grade_points(
+            possible_grade_points[player] = judgment::max_grade_points(
                 &notes,
                 note_ranges[player],
                 holds_total[player],
@@ -6832,64 +6740,51 @@ fn trigger_combo_milestone(p: &mut PlayerRuntime, kind: ComboMilestoneKind) {
 }
 
 #[inline(always)]
-const fn combo_continues_on_grade(grade: JudgeGrade) -> bool {
-    matches!(
-        grade,
-        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-    )
+fn player_combo_state(p: &PlayerRuntime) -> ComboState {
+    ComboState {
+        combo: p.combo,
+        miss_combo: p.miss_combo,
+        full_combo_grade: p.full_combo_grade,
+        current_combo_grade: p.current_combo_grade,
+        first_fc_attempt_broken: p.first_fc_attempt_broken,
+    }
 }
 
 #[inline(always)]
-const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
-    matches!(grade, JudgeGrade::Miss)
+fn write_player_combo_state(p: &mut PlayerRuntime, state: ComboState) {
+    p.combo = state.combo;
+    p.miss_combo = state.miss_combo;
+    p.full_combo_grade = state.full_combo_grade;
+    p.current_combo_grade = state.current_combo_grade;
+    p.first_fc_attempt_broken = state.first_fc_attempt_broken;
+}
+
+#[inline(always)]
+fn apply_combo_update(p: &mut PlayerRuntime, update: combo_rules::ComboUpdate) {
+    if update.combo_broken {
+        p.current_combo_window_counts = crate::game::timing::WindowCounts::default();
+    }
+    if update.hit_thousand_milestone {
+        trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
+    }
+    if update.hit_hundred_milestone {
+        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
+    }
 }
 
 #[inline(always)]
 fn clear_full_combo_state(p: &mut PlayerRuntime) {
-    p.first_fc_attempt_broken = true;
-    p.full_combo_grade = None;
+    let mut state = player_combo_state(p);
+    combo_rules::clear_full_combo_state(&mut state);
+    write_player_combo_state(p, state);
 }
 
 #[inline(always)]
 fn break_combo_state(p: &mut PlayerRuntime, miss_combo_delta: u32) {
-    p.combo = 0;
-    if miss_combo_delta > 0 {
-        p.miss_combo = p.miss_combo.saturating_add(miss_combo_delta);
-    }
-    clear_full_combo_state(p);
-    p.current_combo_grade = None;
-    p.current_combo_window_counts = crate::game::timing::WindowCounts::default();
-}
-
-#[inline(always)]
-fn apply_successful_row_combo_state(
-    p: &mut PlayerRuntime,
-    final_grade: JudgeGrade,
-    row_combo_count: u32,
-) {
-    p.miss_combo = 0;
-    p.combo = p.combo.saturating_add(row_combo_count);
-    let combo = p.combo;
-    if combo > 0 && combo.is_multiple_of(1000) {
-        trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
-        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
-    } else if combo > 0 && combo.is_multiple_of(100) {
-        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
-    }
-    if !p.first_fc_attempt_broken {
-        let new_grade = if let Some(current_fc_grade) = &p.full_combo_grade {
-            final_grade.max(*current_fc_grade)
-        } else {
-            final_grade
-        };
-        p.full_combo_grade = Some(new_grade);
-    }
-    let current_combo_grade = if let Some(curr_grade) = p.current_combo_grade {
-        final_grade.max(curr_grade)
-    } else {
-        final_grade
-    };
-    p.current_combo_grade = Some(current_combo_grade);
+    let mut state = player_combo_state(p);
+    let update = combo_rules::break_combo_state(&mut state, miss_combo_delta);
+    write_player_combo_state(p, state);
+    apply_combo_update(p, update);
 }
 
 #[inline(always)]
@@ -6899,17 +6794,11 @@ fn apply_row_combo_state(
     row_combo_count: u32,
     miss_combo_count: u32,
 ) {
-    if combo_continues_on_grade(final_grade) {
-        apply_successful_row_combo_state(p, final_grade, row_combo_count);
-        return;
-    }
-
-    let miss_combo_delta = if combo_increments_miss_combo(final_grade) {
-        miss_combo_count
-    } else {
-        0
-    };
-    break_combo_state(p, miss_combo_delta);
+    let mut state = player_combo_state(p);
+    let update =
+        apply_rules_row_combo_state(&mut state, final_grade, row_combo_count, miss_combo_count);
+    write_player_combo_state(p, state);
+    apply_combo_update(p, update);
 }
 
 #[inline(always)]
@@ -8861,24 +8750,22 @@ mod tests {
         input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
         lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
-        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
-        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
-        step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
-        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
-        trigger_hold_explosion, trigger_receptor_step_pulse, trigger_tap_explosion,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
+        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
+        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
+        score_invalid_reason_lines_for_chart, set_final_note_result, settle_completion_rows,
+        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual,
+        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
+        trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_receptor_step_pulse,
+        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -11386,7 +11273,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn scored_hold_totals_with_carry_include_prior_let_go() {
-        assert_eq!(scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
+        assert_eq!(judgment::scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
     }
 
     #[test]
@@ -11852,10 +11739,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn missed_holds_and_rolls_are_not_scored_for_dance_or_pump() {
-        assert!(!score_missed_holds_and_rolls("dance-single"));
-        assert!(!score_missed_holds_and_rolls("pump-single"));
-        assert!(!score_missed_holds_and_rolls(" Dance-single "));
-        assert!(score_missed_holds_and_rolls("kb7-single"));
+        assert!(!judgment::score_missed_holds_and_rolls("dance-single"));
+        assert!(!judgment::score_missed_holds_and_rolls("pump-single"));
+        assert!(!judgment::score_missed_holds_and_rolls(" Dance-single "));
+        assert!(judgment::score_missed_holds_and_rolls("kb7-single"));
     }
 
     #[test]
@@ -11891,7 +11778,7 @@ return Def.ActorFrame{}
     fn max_grade_points_keeps_removed_notes_in_denominator() {
         let notes = vec![test_note(0, 48, NoteType::Tap)];
 
-        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 15);
+        let points = judgment::max_grade_points(&notes, (0, notes.len()), 0, 0, 15);
 
         assert_eq!(points, 15);
     }
@@ -11903,7 +11790,7 @@ return Def.ActorFrame{}
             test_note(1, 96, NoteType::Tap),
         ];
 
-        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 5);
+        let points = judgment::max_grade_points(&notes, (0, notes.len()), 0, 0, 5);
 
         assert_eq!(points, 10);
     }
@@ -14298,9 +14185,9 @@ return Def.ActorFrame{}
 
     #[test]
     fn step_calories_matches_itg_formula() {
-        assert!((step_calories(120, 1) - 0.0266).abs() <= 1e-6);
-        assert!((step_calories(120, 2) - 0.0882).abs() <= 1e-6);
-        assert!((step_calories(120, 3) - 0.1498).abs() <= 1e-6);
+        assert!((judgment::step_calories(120, 1) - 0.0266).abs() <= 1e-6);
+        assert!((judgment::step_calories(120, 2) - 0.0882).abs() <= 1e-6);
+        assert!((judgment::step_calories(120, 3) - 0.1498).abs() <= 1e-6);
     }
 
     #[test]
