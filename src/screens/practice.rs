@@ -839,6 +839,9 @@ fn stop_playback(state: &mut State) {
     clear_cursor_hold_inputs(state);
     audio::stop_music();
     let current_beat = state.gameplay.current_beat.max(MIN_CURSOR_BEAT);
+    let current_time = gameplay_core::music_time_for_beat(&state.gameplay, current_beat);
+    // Practice hits mutate note results, which the edit notefield uses for hide logic.
+    gameplay_core::reset_practice_playback(&mut state.gameplay, current_time);
     state.mode = Mode::Editing;
     set_cursor(state, current_beat);
 }
