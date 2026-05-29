@@ -232,6 +232,9 @@ pub fn run_pad_backend(
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
             backends::w32_raw_input::run(emit_pad, emit_sys, |_| {})
         }
+        #[cfg(target_vendor = "win7")]
+        WindowsPadBackend::Wgi => backends::w32_raw_input::run(emit_pad, emit_sys, |_| {}),
+        #[cfg(not(target_vendor = "win7"))]
         WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys),
     }
     #[cfg(target_os = "linux")]
@@ -301,6 +304,12 @@ pub fn run_windows_backend(
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
             backends::w32_raw_input::run(emit_pad, emit_sys, emit_key);
         }
+        #[cfg(target_vendor = "win7")]
+        WindowsPadBackend::Wgi => {
+            log::warn!("WGI gamepad backend is unavailable in Windows 7 builds; using Raw Input");
+            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key);
+        }
+        #[cfg(not(target_vendor = "win7"))]
         WindowsPadBackend::Wgi => {
             std::thread::spawn(move || backends::wgi::run(emit_pad, emit_sys));
             backends::w32_raw_input::run_keyboard_only(emit_key);

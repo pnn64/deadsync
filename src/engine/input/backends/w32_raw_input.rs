@@ -1056,6 +1056,7 @@ pub fn run(
     }));
 }
 
+#[cfg(not(target_vendor = "win7"))]
 pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static) {
     run_inner(Box::new(Ctx {
         emit_pad: Box::new(|_| {}),

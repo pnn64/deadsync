@@ -274,12 +274,21 @@ pub(super) fn submenu_visible_row_to_actual(
 pub(super) const fn windows_backend_choice_index(backend: WindowsPadBackend) -> usize {
     match backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
+        #[cfg(target_vendor = "win7")]
+        WindowsPadBackend::Wgi => 0,
+        #[cfg(not(target_vendor = "win7"))]
         WindowsPadBackend::Wgi => 1,
     }
 }
 
 #[cfg(target_os = "windows")]
 pub(super) const fn windows_backend_from_choice(idx: usize) -> WindowsPadBackend {
+    #[cfg(target_vendor = "win7")]
+    {
+        let _ = idx;
+        WindowsPadBackend::RawInput
+    }
+    #[cfg(not(target_vendor = "win7"))]
     match idx {
         0 => WindowsPadBackend::RawInput,
         _ => WindowsPadBackend::Wgi,

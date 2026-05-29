@@ -42,7 +42,7 @@ pub(super) mod hidraw;
 pub(super) mod iohid;
 #[cfg(windows)]
 pub(super) mod w32_raw_input;
-#[cfg(windows)]
+#[cfg(all(windows, not(target_vendor = "win7")))]
 pub(super) mod wgi;
 
 #[cfg(test)]

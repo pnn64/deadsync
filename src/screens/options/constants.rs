@@ -111,7 +111,9 @@ pub(super) const LANGUAGE_CHOICES: &[Choice] = &[
     localized_choice("OptionsSystem", "PseudoLanguage"),
 ];
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", target_vendor = "win7"))]
+pub(super) const INPUT_BACKEND_CHOICES: &[Choice] = &[literal_choice("W32 Raw Input")];
+#[cfg(all(target_os = "windows", not(target_vendor = "win7")))]
 pub(super) const INPUT_BACKEND_CHOICES: &[Choice] = &[
     literal_choice("W32 Raw Input"),
     literal_choice("WGI (compat)"),
