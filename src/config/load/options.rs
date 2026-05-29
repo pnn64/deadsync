@@ -543,6 +543,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             )
         })
         .unwrap_or(default.lights_gameplay_pad_lights);
+    cfg.lights_simplify_bass = conf
+        .get("Options", "LightsSimplifyBass")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.lights_simplify_bass);
     cfg.lights_com_port = conf
         .get("Options", "LightsComPort")
         .map(|v| crate::engine::lights::SerialPortName::parse(&v, default.lights_com_port))

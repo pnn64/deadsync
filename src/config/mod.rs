@@ -317,6 +317,8 @@ pub struct Config {
     pub lights_driver: LightsDriverKind,
     /// Source for gameplay arrow pad lights.
     pub lights_gameplay_pad_lights: GameplayPadLightMode,
+    /// ITGmania parity: bass lights use quarter-note chart rows only.
+    pub lights_simplify_bass: bool,
     /// Serial port used by the Litboard/Win32Serial/Sextet lights drivers.
     pub lights_com_port: SerialPortName,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -462,6 +464,7 @@ impl Default for Config {
             use_fsrs: false,
             lights_driver: LightsDriverKind::Off,
             lights_gameplay_pad_lights: GameplayPadLightMode::Input,
+            lights_simplify_bass: false,
             lights_com_port: SerialPortName::default(),
             only_dedicated_menu_buttons: false,
         }

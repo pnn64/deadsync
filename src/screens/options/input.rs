@@ -363,6 +363,9 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::GameplayPadLights {
             config::update_lights_gameplay_pad_lights(lights_gameplay_pad_from_choice(new_index));
         }
+        if row.id == SubRowId::LightsSimplifyBass {
+            config::update_lights_simplify_bass(yes_no_from_choice(new_index));
+        }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
         let enabled = new_index == 1;

@@ -517,6 +517,12 @@ pub fn init() -> State {
         lights_gameplay_pad_choice_index(cfg.lights_gameplay_pad_lights),
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::Lights].choice_indices,
+        LIGHTS_OPTIONS_ROWS,
+        SubRowId::LightsSimplifyBass,
+        yes_no_choice_index(cfg.lights_simplify_bass),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectProfile,

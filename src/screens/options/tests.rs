@@ -145,6 +145,23 @@ fn lights_driver_choices_roundtrip() {
 }
 
 #[test]
+fn lights_items_match_rows() {
+    let expected = [
+        (SubRowId::LightsDriver, ItemId::LightsDriver),
+        (SubRowId::GameplayPadLights, ItemId::LightsGameplayPadLights),
+        (SubRowId::LightsSimplifyBass, ItemId::LightsSimplifyBass),
+        (SubRowId::TestLights, ItemId::LightsTest),
+    ];
+
+    assert_eq!(LIGHTS_OPTIONS_ROWS.len() + 1, LIGHTS_OPTIONS_ITEMS.len());
+    for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
+        assert_eq!(LIGHTS_OPTIONS_ROWS[idx].id, row_id);
+        assert_eq!(LIGHTS_OPTIONS_ITEMS[idx].id, item_id);
+    }
+    assert_eq!(LIGHTS_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
 fn graphics_hide_cursor_item_matches_row() {
     let row_idx = row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::HideMouseCursor)
         .expect("hide cursor row should exist");

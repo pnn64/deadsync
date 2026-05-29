@@ -304,6 +304,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "GameplayPadLights",
         default.lights_gameplay_pad_lights.as_str(),
     );
+    push_bool(content, "LightsSimplifyBass", default.lights_simplify_bass);
     push_line(content, "LightsComPort", default.lights_com_port.as_str());
     push_bool(
         content,

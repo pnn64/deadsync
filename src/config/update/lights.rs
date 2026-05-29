@@ -21,3 +21,14 @@ pub fn update_lights_gameplay_pad_lights(mode: GameplayPadLightMode) {
     }
     save_without_keymaps();
 }
+
+pub fn update_lights_simplify_bass(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.lights_simplify_bass == enabled {
+            return;
+        }
+        cfg.lights_simplify_bass = enabled;
+    }
+    save_without_keymaps();
+}

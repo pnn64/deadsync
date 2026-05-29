@@ -27,6 +27,15 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::LightsSimplifyBass,
+        label: lookup_key("OptionsLights", "SimplifyBass"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::TestLights,
         label: lookup_key("OptionsLights", "TestLights"),
         choices: &[localized_choice("Common", "Open")],
@@ -49,6 +58,14 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsLightsHelp",
             "GameplayPadLightsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::LightsSimplifyBass,
+        name: lookup_key("OptionsLights", "SimplifyBass"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsLightsHelp",
+            "SimplifyBassHelp",
         ))],
     },
     Item {

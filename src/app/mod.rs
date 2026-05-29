@@ -28,6 +28,7 @@ use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
 use crate::game::note::NoteType;
 use crate::game::parsing::simfile as song_loading;
+use crate::game::timing::ROWS_PER_BEAT;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
@@ -107,6 +108,7 @@ const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
 const LIGHTS_AHEAD_NS: crate::game::gameplay::SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: crate::game::gameplay::SongTimeNs = 500_000_000;
+const LIGHTS_QUARTER_ROWS: usize = ROWS_PER_BEAT as usize;
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -122,7 +124,12 @@ impl GameplayLightTracker {
         *self = Self::default();
     }
 
-    fn queue_blinks(&mut self, lights: &mut lights::Manager, state: &crate::game::gameplay::State) {
+    fn queue_blinks(
+        &mut self,
+        lights: &mut lights::Manager,
+        state: &crate::game::gameplay::State,
+        simplify_bass: bool,
+    ) {
         let now_ns = state.current_music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
         let notes_ptr = state.notes.as_ptr() as usize;
         let reset = self.notes_ptr != notes_ptr
@@ -140,7 +147,12 @@ impl GameplayLightTracker {
         while self.cursor < state.notes.len() && state.note_time_cache_ns[self.cursor] <= now_ns {
             let note = &state.notes[self.cursor];
             if gameplay_note_lights(note) {
-                blink_note_lights(lights, state, note.column);
+                blink_note_lights(
+                    lights,
+                    state,
+                    note.column,
+                    gameplay_bass_lights(note, simplify_bass),
+                );
             }
             self.cursor += 1;
         }
@@ -157,13 +169,20 @@ fn gameplay_note_lights(note: &crate::game::note::Note) -> bool {
         )
 }
 
+fn gameplay_bass_lights(note: &crate::game::note::Note, simplify_bass: bool) -> bool {
+    gameplay_note_lights(note) && (!simplify_bass || note.row_index % LIGHTS_QUARTER_ROWS == 0)
+}
+
 fn blink_note_lights(
     lights: &mut lights::Manager,
     state: &crate::game::gameplay::State,
     column: usize,
+    blink_bass: bool,
 ) {
-    lights.blink_cabinet(CabinetLight::BassLeft);
-    lights.blink_cabinet(CabinetLight::BassRight);
+    if blink_bass {
+        lights.blink_cabinet(CabinetLight::BassLeft);
+        lights.blink_cabinet(CabinetLight::BassRight);
+    }
     let Some(local_col) = physical_light_col(state, column) else {
         return;
     };
@@ -3503,7 +3522,7 @@ impl App {
             profile::is_session_side_joined(profile::PlayerSide::P2),
         ]);
         self.lights.set_hide_flags(self.current_light_hide_flags());
-        self.sync_gameplay_light_blinks();
+        self.sync_gameplay_light_blinks(config.lights_simplify_bass);
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -3539,18 +3558,22 @@ impl App {
         })
     }
 
-    fn sync_gameplay_light_blinks(&mut self) {
+    fn sync_gameplay_light_blinks(&mut self, simplify_bass: bool) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                    self.gameplay_lights.queue_blinks(&mut self.lights, gs);
+                    self.gameplay_lights
+                        .queue_blinks(&mut self.lights, gs, simplify_bass);
                     return;
                 }
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = self.state.screens.practice_state.as_ref() {
-                    self.gameplay_lights
-                        .queue_blinks(&mut self.lights, &ps.gameplay);
+                    self.gameplay_lights.queue_blinks(
+                        &mut self.lights,
+                        &ps.gameplay,
+                        simplify_bass,
+                    );
                     return;
                 }
             }
@@ -9028,9 +9051,26 @@ mod tests {
     use super::*;
     use crate::game::{
         chart::{ChartData, StaminaCounts},
+        note::Note,
         parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState},
         song::SongData,
     };
+
+    fn light_test_note(row_index: usize, note_type: NoteType) -> Note {
+        Note {
+            beat: row_index as f32 / LIGHTS_QUARTER_ROWS as f32,
+            quantization_idx: 0,
+            column: 0,
+            note_type,
+            row_index,
+            result: None,
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
 
     fn test_chart(hash: &str) -> ChartData {
         ChartData {
@@ -9069,6 +9109,23 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
         }
+    }
+
+    #[test]
+    fn simplified_bass_lights_only_use_quarter_rows() {
+        let quarter = light_test_note(LIGHTS_QUARTER_ROWS * 2, NoteType::Tap);
+        let eighth = light_test_note(
+            LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
+            NoteType::Tap,
+        );
+        let hold = light_test_note(LIGHTS_QUARTER_ROWS * 3, NoteType::Hold);
+        let mine = light_test_note(LIGHTS_QUARTER_ROWS * 4, NoteType::Mine);
+
+        assert!(gameplay_bass_lights(&quarter, true));
+        assert!(gameplay_bass_lights(&hold, true));
+        assert!(!gameplay_bass_lights(&eighth, true));
+        assert!(gameplay_bass_lights(&eighth, false));
+        assert!(!gameplay_bass_lights(&mine, true));
     }
 
     fn test_song(path: &str, offset: f32, hashes: [&str; 2]) -> SongData {

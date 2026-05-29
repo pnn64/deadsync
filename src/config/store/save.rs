@@ -367,6 +367,7 @@ fn push_saved_options(
         "GameplayPadLights",
         cfg.lights_gameplay_pad_lights.as_str(),
     );
+    push_bool(content, "LightsSimplifyBass", cfg.lights_simplify_bass);
     push_line(content, "LightsComPort", cfg.lights_com_port.as_str());
     push_bool(
         content,

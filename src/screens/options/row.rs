@@ -57,6 +57,7 @@ pub enum SubRowId {
     // Lights Options
     LightsDriver,
     GameplayPadLights,
+    LightsSimplifyBass,
     TestLights,
     // Machine Options
     SelectProfile,
