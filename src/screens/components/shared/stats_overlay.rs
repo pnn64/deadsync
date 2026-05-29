@@ -20,9 +20,9 @@ thread_local! {
 #[inline(always)]
 const fn backend_key(backend: BackendType) -> u8 {
     match backend {
-        #[cfg(not(target_pointer_width = "32"))]
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         BackendType::Vulkan => 0,
-        #[cfg(not(target_pointer_width = "32"))]
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         BackendType::VulkanWgpu => 1,
         BackendType::OpenGL => 2,
         BackendType::OpenGLWgpu => 3,

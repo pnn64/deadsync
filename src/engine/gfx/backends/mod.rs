@@ -1,5 +1,5 @@
 pub mod opengl;
 pub mod software;
-#[cfg(not(target_pointer_width = "32"))]
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 pub mod vulkan;
 pub mod wgpu_core;

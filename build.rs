@@ -24,13 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     embed_windows_icon()?;
 
-    let mut compiler = Compiler::new()?;
-
-    // OUT_DIR used by include_bytes! in Vulkan source
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-
-    // 32-bit targets compile without Vulkan backends, so skip the shader pass there.
-    if std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").as_deref() != Ok("32") {
+    if has_vulkan_backend() {
+        let mut compiler = Compiler::new()?;
+        // OUT_DIR used by include_bytes! in Vulkan source.
+        let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
         compile_vulkan_shaders(&mut compiler, &out_dir)?;
     }
 
@@ -66,16 +63,28 @@ fn detect_pulse_audio() {
     }
 }
 
+fn has_vulkan_backend() -> bool {
+    std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").as_deref() != Ok("32")
+        && std::env::var("CARGO_CFG_TARGET_VENDOR").as_deref() != Ok("win7")
+}
+
 fn configure_windows_stack() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os != "windows" {
         return;
     }
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    const STACK_RESERVE_BYTES: usize = 32 * 1024 * 1024;
+
     // Gameplay/notefield construction currently uses a large main-thread stack
-    // frame in debug builds. Windows binaries default to a 1 MiB stack reserve,
-    // which is smaller than the reserve we effectively get on Unix and has
-    // started overflowing when entering gameplay.
-    println!("cargo:rustc-link-arg-bins=/STACK:8388608");
+    // frame, especially in debug builds. Windows binaries default to a 1 MiB
+    // stack reserve, which is smaller than the reserve we effectively get on
+    // Unix and can overflow while entering gameplay through a window callback.
+    match target_env.as_str() {
+        "msvc" => println!("cargo:rustc-link-arg-bins=/STACK:{STACK_RESERVE_BYTES}"),
+        "gnu" => println!("cargo:rustc-link-arg-bins=-Wl,--stack,{STACK_RESERVE_BYTES}"),
+        _ => println!("cargo:rustc-link-arg-bins=/STACK:{STACK_RESERVE_BYTES}"),
+    }
 }
 
 #[cfg(windows)]
@@ -187,23 +196,11 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
 }
 
 fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
-    // Cargo's `PROFILE` env var only ever takes the values `debug` or
-    // `release` (it reflects the inherited base profile, not the actual
-    // profile name). For custom profiles like `[profile.local]` that inherit
-    // from `release`, joining `target/<PROFILE>` would copy assets into
-    // `target/release` while the binary is built into `target/local`,
-    // leaving the runtime without its bundled assets.
-    //
-    // Instead, derive the real per-profile output directory from `OUT_DIR`,
-    // which Cargo sets to `target/<profile>/build/<crate-hash>/out`. Walking
-    // up three parents lands on `target/<profile>` for every profile name.
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-    let target_dir = out_dir
-        .ancestors()
-        .nth(3)
-        .ok_or("OUT_DIR did not have the expected target/<profile>/build/<hash>/out shape")?
-        .to_path_buf();
-    Ok(target_dir)
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let profile = std::env::var("PROFILE")?;
+    let base = std::env::var("CARGO_TARGET_DIR")
+        .map_or_else(|_| manifest_dir.join("target"), PathBuf::from);
+    Ok(base.join(profile))
 }
 
 fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {

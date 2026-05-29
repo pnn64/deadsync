@@ -28,7 +28,7 @@ const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
-    #[cfg(not(target_pointer_width = "32"))]
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     Vulkan,
     #[cfg(target_os = "macos")]
     Metal,
@@ -41,7 +41,7 @@ impl Api {
     #[inline(always)]
     const fn name(self) -> &'static str {
         match self {
-            #[cfg(not(target_pointer_width = "32"))]
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             Self::Vulkan => "Vulkan",
             #[cfg(target_os = "macos")]
             Self::Metal => "Metal",
@@ -54,7 +54,7 @@ impl Api {
     #[inline(always)]
     const fn backends(self) -> wgpu::Backends {
         match self {
-            #[cfg(not(target_pointer_width = "32"))]
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             Self::Vulkan => wgpu::Backends::VULKAN,
             #[cfg(target_os = "macos")]
             Self::Metal => wgpu::Backends::METAL,
@@ -244,7 +244,7 @@ pub struct State {
     captured_frame: Option<RgbaImage>,
 }
 
-#[cfg(not(target_pointer_width = "32"))]
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 pub fn init_vulkan(
     window: Arc<Window>,
     vsync_enabled: bool,
@@ -344,9 +344,9 @@ fn init(
     .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
     log_wgpu_adapter_info(api, &adapter);
 
-    #[cfg(not(target_pointer_width = "32"))]
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
     let want_immediates = matches!(api, Api::Vulkan);
-    #[cfg(target_pointer_width = "32")]
+    #[cfg(any(target_pointer_width = "32", target_vendor = "win7"))]
     let want_immediates = false;
     let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
     if want_immediates && !use_immediates {
@@ -889,7 +889,7 @@ pub fn update_texture(
 #[inline(always)]
 fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
     match (api, tex) {
-        #[cfg(not(target_pointer_width = "32"))]
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
         #[cfg(target_os = "macos")]
         (Api::Metal, RendererTexture::Metal(t)) => Some(t),

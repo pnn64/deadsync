@@ -280,7 +280,11 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-#[cfg(all(target_os = "windows", not(target_pointer_width = "32")))]
+#[cfg(all(
+    target_os = "windows",
+    not(target_vendor = "win7"),
+    not(target_pointer_width = "32")
+))]
 pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
@@ -289,7 +293,10 @@ pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &s
     (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
 ];
-#[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+#[cfg(all(
+    target_os = "windows",
+    any(target_vendor = "win7", target_pointer_width = "32")
+))]
 pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::DirectX, "DirectX"),
@@ -323,7 +330,11 @@ pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &s
     (BackendType::Software, "Software"),
 ];
 
-#[cfg(all(target_os = "windows", not(target_pointer_width = "32")))]
+#[cfg(all(
+    target_os = "windows",
+    not(target_vendor = "win7"),
+    not(target_pointer_width = "32")
+))]
 pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererVulkan"),
@@ -332,7 +343,10 @@ pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererVulkanWgpu"),
     localized_choice("OptionsGraphics", "RendererSoftware"),
 ];
-#[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+#[cfg(all(
+    target_os = "windows",
+    any(target_vendor = "win7", target_pointer_width = "32")
+))]
 pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererDirectX"),
