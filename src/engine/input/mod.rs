@@ -14,30 +14,14 @@ use deadsync_input::debounce::{
     emit_due_debounce_edges_from_mut,
 };
 pub use deadsync_input::{
-    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction,
+    ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, INPUT_DEBOUNCE_MAX_SECONDS,
+    INPUT_DEBOUNCE_MIN_SECONDS, INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane,
+    PadCode, PadDir, PadEvent, PadId, VirtualAction, action_from_ini_key_lower, action_to_ini_key,
+    clamp_input_debounce_seconds, emit_normalized_actions, lane_from_action, lane_from_column,
+    pad_dir_from_action, parse_pad_dir,
 };
 
 /* ------------------------ Pad types + backend ------------------------ */
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PadId(pub u32);
-
-impl From<PadId> for usize {
-    #[inline(always)]
-    fn from(value: PadId) -> Self {
-        value.0 as Self
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PadCode(pub u32);
-
-impl PadCode {
-    #[inline(always)]
-    pub const fn into_u32(self) -> u32 {
-        self.0
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {
@@ -129,57 +113,6 @@ fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
     out[..8].copy_from_slice(&a.to_le_bytes());
     out[8..].copy_from_slice(&b.to_le_bytes());
     out
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadDir {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl PadDir {
-    #[inline(always)]
-    pub const fn ix(self) -> usize {
-        match self {
-            Self::Up => 0,
-            Self::Down => 1,
-            Self::Left => 2,
-            Self::Right => 3,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PadEvent {
-    Dir {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        dir: PadDir,
-        pressed: bool,
-    },
-    /// Raw low-level button event with platform-specific code and device UUID.
-    RawButton {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        code: PadCode,
-        uuid: [u8; 16],
-        value: f32,
-        pressed: bool,
-    },
-    /// Raw low-level axis event with platform-specific code and device UUID.
-    #[cfg_attr(windows, allow(dead_code))]
-    RawAxis {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        code: PadCode,
-        uuid: [u8; 16],
-        value: f32,
-    },
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -387,18 +320,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
 
 /* ------------------------ Virtual Keymap system ------------------------ */
 
-/// Low-level gamepad binding to a platform-specific element code.
-///
-/// - `code_u32` is the emitted `PadCode(u32)` (see `PadEvent::RawButton`).
-/// - `device` is an optional runtime `PadId` index (from `usize::from(id)`).
-/// - `uuid` is an optional per-device stable identifier (backend-derived).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GamepadCodeBinding {
-    pub code_u32: u32,
-    pub device: Option<usize>,
-    pub uuid: Option<[u8; 16]>,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum InputBinding {
     Key(KeyCode),
@@ -509,7 +430,7 @@ impl CompiledKeymap {
             }
             let mut mask = 0;
             for &action in actions {
-                mask |= action_bit(action);
+                mask |= action.bit();
             }
             key_rev[ix] = CompiledBindingRev {
                 mask,
@@ -521,7 +442,7 @@ impl CompiledKeymap {
         for (&code, actions) in &km.key_rev_extra {
             let mut mask = 0;
             for &action in actions {
-                mask |= action_bit(action);
+                mask |= action.bit();
             }
             key_rev_extra.insert(
                 code,
@@ -536,7 +457,7 @@ impl CompiledKeymap {
         for (ix, actions) in km.pad_dir_rev.iter().enumerate() {
             let mut mask = 0;
             for &action in actions {
-                mask |= action_bit(action);
+                mask |= action.bit();
             }
             pad_dir_rev[ix] = mask;
         }
@@ -545,7 +466,7 @@ impl CompiledKeymap {
         for (&key, actions) in &km.pad_dir_on_rev {
             let mut mask = 0;
             for &action in actions {
-                mask |= action_bit(action);
+                mask |= action.bit();
             }
             max_pad_device = Some(max_pad_device.map_or(key.0, |max| max.max(key.0)));
             pad_dir_on_rev.insert(key, mask);
@@ -562,11 +483,11 @@ impl CompiledKeymap {
                             item.device == entry.device && item.uuid == entry.uuid
                         })
                 {
-                    existing.mask |= action_bit(entry.act);
+                    existing.mask |= entry.act.bit();
                     continue;
                 }
                 compiled_entries.push(CompiledPadCodeRev {
-                    mask: action_bit(entry.act),
+                    mask: entry.act.bit(),
                     device: entry.device,
                     uuid: entry.uuid,
                 });
@@ -646,8 +567,6 @@ thread_local! {
     static THREAD_PAD_DEBOUNCE_STATE: RefCell<DebounceStore> =
         RefCell::new(DebounceStore::new());
 }
-
-const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
 fn reset_debounce_state(key_slot_count: usize, pad_slot_count: usize) {
@@ -756,7 +675,7 @@ pub fn any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation: bool
 
 #[inline(always)]
 pub fn set_input_debounce_seconds(seconds: f32) {
-    let clamped = seconds.clamp(0.0, INPUT_DEBOUNCE_MAX_SECONDS);
+    let clamped = clamp_input_debounce_seconds(seconds);
     INPUT_DEBOUNCE_SECONDS_BITS.store(clamped.to_bits(), Ordering::Relaxed);
 }
 
@@ -953,89 +872,6 @@ impl Keymap {
 
 // INI parsing and default emission moved to config.rs
 
-/* ------------------------- Normalized input events ------------------------- */
-
-#[inline(always)]
-fn input_event(
-    action: VirtualAction,
-    input_slot: u32,
-    pressed: bool,
-    source: InputSource,
-    timestamp: Instant,
-    timestamp_host_nanos: u64,
-    stored_at: Instant,
-    emitted_at: Instant,
-) -> InputEvent {
-    InputEvent {
-        action,
-        input_slot,
-        pressed,
-        source,
-        timestamp,
-        timestamp_host_nanos,
-        stored_at,
-        emitted_at,
-    }
-}
-
-#[inline(always)]
-const fn action_bit(action: VirtualAction) -> u32 {
-    1u32 << (action.ix() as u32)
-}
-
-#[inline(always)]
-const fn action_from_ix(ix: usize) -> VirtualAction {
-    match ix {
-        0 => VirtualAction::p1_up,
-        1 => VirtualAction::p1_down,
-        2 => VirtualAction::p1_left,
-        3 => VirtualAction::p1_right,
-        4 => VirtualAction::p1_start,
-        5 => VirtualAction::p1_back,
-        6 => VirtualAction::p1_menu_up,
-        7 => VirtualAction::p1_menu_down,
-        8 => VirtualAction::p1_menu_left,
-        9 => VirtualAction::p1_menu_right,
-        10 => VirtualAction::p1_select,
-        11 => VirtualAction::p1_operator,
-        12 => VirtualAction::p1_restart,
-        13 => VirtualAction::p2_up,
-        14 => VirtualAction::p2_down,
-        15 => VirtualAction::p2_left,
-        16 => VirtualAction::p2_right,
-        17 => VirtualAction::p2_start,
-        18 => VirtualAction::p2_back,
-        19 => VirtualAction::p2_menu_up,
-        20 => VirtualAction::p2_menu_down,
-        21 => VirtualAction::p2_menu_left,
-        22 => VirtualAction::p2_menu_right,
-        23 => VirtualAction::p2_select,
-        24 => VirtualAction::p2_operator,
-        25 => VirtualAction::p2_restart,
-        _ => unreachable!(),
-    }
-}
-
-#[inline(always)]
-fn for_each_action(mut mask: u32, mut f: impl FnMut(VirtualAction)) {
-    while mask != 0 {
-        let ix = mask.trailing_zeros() as usize;
-        f(action_from_ix(ix));
-        mask &= mask - 1;
-    }
-}
-
-#[inline(always)]
-fn secondary_menu_mask(mask: u32) -> u32 {
-    let mut out = 0;
-    for_each_action(mask, |action| {
-        if let Some(menu_action) = action.secondary_menu() {
-            out |= action_bit(menu_action);
-        }
-    });
-    out
-}
-
 #[inline(always)]
 fn collect_key_binding_from_compiled(
     km: &CompiledKeymap,
@@ -1109,62 +945,24 @@ fn pad_button_slot_from_compiled(km: &CompiledKeymap, id: PadId, code_slot: u32)
         .saturating_add(code_slot as usize)
 }
 
-#[inline(always)]
-fn emit_normalized_action(
-    action: VirtualAction,
-    pressed: bool,
-    direct_mask: u32,
-    emitted: &mut u32,
-    emit: &mut impl FnMut(VirtualAction, bool),
-) {
-    if pressed
-        && let Some(primary) = primary_from_menu_alias(action)
-        && (direct_mask & action_bit(primary)) != 0
-    {
-        return;
-    }
-    let bit = action_bit(action);
-    if (*emitted & bit) != 0 {
-        return;
-    }
-    *emitted |= bit;
-    emit(action, pressed);
-}
-
-#[inline(always)]
-fn emit_normalized_actions(
-    direct_mask: u32,
-    pressed: bool,
-    mut emit: impl FnMut(VirtualAction, bool),
-) {
-    if direct_mask == 0 {
-        return;
-    }
-    let mut emitted = 0;
-    for_each_action(direct_mask, |action| {
-        emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
-    });
-    if ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed) && pressed {
-        return;
-    }
-    for_each_action(secondary_menu_mask(direct_mask), |action| {
-        emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
-    });
-}
-
 fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
-    emit_normalized_actions(edge.action_mask, edge.pressed, |action, pressed| {
-        emit(input_event(
-            action,
-            edge.input_slot,
-            pressed,
-            edge.source,
-            edge.timestamp,
-            edge.timestamp_host_nanos,
-            edge.stored_at,
-            edge.emitted_at,
-        ));
-    });
+    emit_normalized_actions(
+        edge.action_mask,
+        edge.pressed,
+        ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed),
+        |action, pressed| {
+            emit(InputEvent::new(
+                action,
+                edge.input_slot,
+                pressed,
+                edge.source,
+                edge.timestamp,
+                edge.timestamp_host_nanos,
+                edge.stored_at,
+                edge.emitted_at,
+            ));
+        },
+    );
 }
 
 #[inline(always)]
@@ -1223,18 +1021,23 @@ pub fn map_keycode_event_with_host(
     else {
         return;
     };
-    emit_normalized_actions(binding.mask, pressed, |action, pressed| {
-        emit(input_event(
-            action,
-            binding.slot,
-            pressed,
-            InputSource::Keyboard,
-            timestamp,
-            timestamp_host_nanos,
-            timestamp,
-            timestamp,
-        ));
-    });
+    emit_normalized_actions(
+        binding.mask,
+        pressed,
+        ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed),
+        |action, pressed| {
+            emit(InputEvent::new(
+                action,
+                binding.slot,
+                pressed,
+                InputSource::Keyboard,
+                timestamp,
+                timestamp_host_nanos,
+                timestamp,
+                timestamp,
+            ));
+        },
+    );
 }
 
 #[inline(always)]
@@ -1319,36 +1122,6 @@ pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bo
     flushed
 }
 
-#[inline(always)]
-pub const fn lane_from_action(act: VirtualAction) -> Option<Lane> {
-    match act {
-        VirtualAction::p1_left => Some(Lane::Left),
-        VirtualAction::p1_down => Some(Lane::Down),
-        VirtualAction::p1_up => Some(Lane::Up),
-        VirtualAction::p1_right => Some(Lane::Right),
-        VirtualAction::p2_left => Some(Lane::P2Left),
-        VirtualAction::p2_down => Some(Lane::P2Down),
-        VirtualAction::p2_up => Some(Lane::P2Up),
-        VirtualAction::p2_right => Some(Lane::P2Right),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
-    match act {
-        VirtualAction::p1_menu_up => Some(VirtualAction::p1_up),
-        VirtualAction::p1_menu_down => Some(VirtualAction::p1_down),
-        VirtualAction::p1_menu_left => Some(VirtualAction::p1_left),
-        VirtualAction::p1_menu_right => Some(VirtualAction::p1_right),
-        VirtualAction::p2_menu_up => Some(VirtualAction::p2_up),
-        VirtualAction::p2_menu_down => Some(VirtualAction::p2_down),
-        VirtualAction::p2_menu_left => Some(VirtualAction::p2_left),
-        VirtualAction::p2_menu_right => Some(VirtualAction::p2_right),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1410,7 +1183,7 @@ mod tests {
         map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
             actual.push(event);
         });
-        let expected = [input_event(
+        let expected = [InputEvent::new(
             VirtualAction::p1_left,
             0,
             true,
@@ -1483,7 +1256,7 @@ mod tests {
         map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
             actual.push(event);
         });
-        let expected = [input_event(
+        let expected = [InputEvent::new(
             VirtualAction::p1_left,
             0,
             true,
@@ -1514,7 +1287,7 @@ mod tests {
             actual.push(event);
         });
         let expected = [
-            input_event(
+            InputEvent::new(
                 VirtualAction::p1_left,
                 0,
                 false,
@@ -1524,7 +1297,7 @@ mod tests {
                 timestamp,
                 timestamp,
             ),
-            input_event(
+            InputEvent::new(
                 VirtualAction::p1_menu_left,
                 0,
                 false,

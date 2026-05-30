@@ -1,12 +1,14 @@
 [package]
-name = "deadsync-input"
+name = "deadsync-simfile"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
-log = "0.4.29"
+deadsync-rules = { path = "../deadsync-rules" }
+rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -22,7 +22,7 @@ use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{SongData, get_song_cache};
+use crate::game::song::{SongData, SyncPref, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
@@ -1182,7 +1182,7 @@ pub struct State {
     cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
     pack_total_seconds_by_index: Vec<f64>,
     song_has_edit_ptrs: HashSet<usize>,
-    pack_sync_prefs: HashMap<String, rssp::pack::SyncPref>,
+    pack_sync_prefs: HashMap<String, SyncPref>,
     new_pack_names: HashSet<String>,
 }
 
@@ -12653,7 +12653,7 @@ mod tests {
 
     // --- Regression tests for preferred_difficulty_index preservation ---
 
-    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
 
     fn test_chart(difficulty: &str) -> ChartData {
         ChartData {
@@ -12665,8 +12665,8 @@ mod tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: format!("hash_{}", difficulty.to_lowercase()),
-            stats: rssp::stats::ArrowStats::default(),
-            tech_counts: rssp::TechCounts::default(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
             mines_nonfake: 0,
             stamina_counts: StaminaCounts::default(),
             total_streams: 0,

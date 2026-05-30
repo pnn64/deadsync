@@ -506,11 +506,11 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
                     .trim()
                     .parse::<f32>()
                     .ok()
-                    .map(|n| (n / 1000.0).clamp(0.0, 0.2));
+                    .map(|n| deadsync_input::clamp_input_debounce_seconds(n / 1000.0));
             }
             v.parse::<f32>().ok().map(|n| {
                 let secs = if n > 1.0 { n / 1000.0 } else { n };
-                secs.clamp(0.0, 0.2)
+                deadsync_input::clamp_input_debounce_seconds(secs)
             })
         })
         .unwrap_or(default.input_debounce_seconds);

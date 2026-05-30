@@ -1,36 +1,10 @@
 use super::{SimpleIni, save_without_keymaps};
-use crate::engine::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
+pub(crate) use crate::engine::input::{ALL_VIRTUAL_ACTIONS, action_to_ini_key, parse_pad_dir};
+use crate::engine::input::{
+    GamepadCodeBinding, InputBinding, Keymap, VirtualAction, action_from_ini_key_lower,
+};
 use std::str::FromStr;
 use winit::keyboard::KeyCode;
-
-pub(crate) const ALL_VIRTUAL_ACTIONS: [VirtualAction; 26] = [
-    VirtualAction::p1_back,
-    VirtualAction::p1_down,
-    VirtualAction::p1_left,
-    VirtualAction::p1_menu_down,
-    VirtualAction::p1_menu_left,
-    VirtualAction::p1_menu_right,
-    VirtualAction::p1_menu_up,
-    VirtualAction::p1_operator,
-    VirtualAction::p1_restart,
-    VirtualAction::p1_right,
-    VirtualAction::p1_select,
-    VirtualAction::p1_start,
-    VirtualAction::p1_up,
-    VirtualAction::p2_back,
-    VirtualAction::p2_down,
-    VirtualAction::p2_left,
-    VirtualAction::p2_menu_down,
-    VirtualAction::p2_menu_left,
-    VirtualAction::p2_menu_right,
-    VirtualAction::p2_menu_up,
-    VirtualAction::p2_operator,
-    VirtualAction::p2_restart,
-    VirtualAction::p2_right,
-    VirtualAction::p2_select,
-    VirtualAction::p2_start,
-    VirtualAction::p2_up,
-];
 
 fn default_keymap_local() -> Keymap {
     use VirtualAction as A;
@@ -106,83 +80,6 @@ const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
 #[inline(always)]
 fn default_binding_for_action(action: VirtualAction) -> Option<InputBinding> {
     default_key_for_action(action).map(InputBinding::Key)
-}
-
-#[inline(always)]
-fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
-    use VirtualAction::{
-        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
-        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
-        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
-        p2_select, p2_start, p2_up,
-    };
-    match k {
-        "p1_up" => Some(p1_up),
-        "p1_down" => Some(p1_down),
-        "p1_left" => Some(p1_left),
-        "p1_right" => Some(p1_right),
-        "p1_start" => Some(p1_start),
-        "p1_back" => Some(p1_back),
-        "p1_menuup" => Some(p1_menu_up),
-        "p1_menudown" => Some(p1_menu_down),
-        "p1_menuleft" => Some(p1_menu_left),
-        "p1_menuright" => Some(p1_menu_right),
-        "p1_select" => Some(p1_select),
-        "p1_operator" => Some(p1_operator),
-        "p1_restart" => Some(p1_restart),
-        "p2_up" => Some(p2_up),
-        "p2_down" => Some(p2_down),
-        "p2_left" => Some(p2_left),
-        "p2_right" => Some(p2_right),
-        "p2_start" => Some(p2_start),
-        "p2_back" => Some(p2_back),
-        "p2_menuup" => Some(p2_menu_up),
-        "p2_menudown" => Some(p2_menu_down),
-        "p2_menuleft" => Some(p2_menu_left),
-        "p2_menuright" => Some(p2_menu_right),
-        "p2_select" => Some(p2_select),
-        "p2_operator" => Some(p2_operator),
-        "p2_restart" => Some(p2_restart),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn action_to_ini_key(action: VirtualAction) -> &'static str {
-    use VirtualAction::{
-        p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
-        p1_operator, p1_restart, p1_right, p1_select, p1_start, p1_up, p2_back, p2_down, p2_left,
-        p2_menu_down, p2_menu_left, p2_menu_right, p2_menu_up, p2_operator, p2_restart, p2_right,
-        p2_select, p2_start, p2_up,
-    };
-    match action {
-        p1_up => "P1_Up",
-        p1_down => "P1_Down",
-        p1_left => "P1_Left",
-        p1_right => "P1_Right",
-        p1_start => "P1_Start",
-        p1_back => "P1_Back",
-        p1_menu_up => "P1_MenuUp",
-        p1_menu_down => "P1_MenuDown",
-        p1_menu_left => "P1_MenuLeft",
-        p1_menu_right => "P1_MenuRight",
-        p1_select => "P1_Select",
-        p1_operator => "P1_Operator",
-        p1_restart => "P1_Restart",
-        p2_up => "P2_Up",
-        p2_down => "P2_Down",
-        p2_left => "P2_Left",
-        p2_right => "P2_Right",
-        p2_start => "P2_Start",
-        p2_back => "P2_Back",
-        p2_menu_up => "P2_MenuUp",
-        p2_menu_down => "P2_MenuDown",
-        p2_menu_left => "P2_MenuLeft",
-        p2_menu_right => "P2_MenuRight",
-        p2_select => "P2_Select",
-        p2_operator => "P2_Operator",
-        p2_restart => "P2_Restart",
-    }
 }
 
 #[inline(always)]
@@ -423,17 +320,6 @@ pub(crate) fn parse_keycode(t: &str) -> Option<InputBinding> {
 }
 
 #[inline(always)]
-pub(crate) fn parse_pad_dir(name: &str) -> Option<PadDir> {
-    match name {
-        "Up" => Some(PadDir::Up),
-        "Down" => Some(PadDir::Down),
-        "Left" => Some(PadDir::Left),
-        "Right" => Some(PadDir::Right),
-        _ => None,
-    }
-}
-
-#[inline(always)]
 pub(crate) fn parse_pad_code(t: &str) -> Option<InputBinding> {
     let rest = t.strip_prefix("PadCode[")?;
     let end = rest.find(']')?;
@@ -559,7 +445,7 @@ pub(crate) fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
 
         for (k, v) in section {
             let key = k.to_ascii_lowercase();
-            if let Some(action) = parse_action_key_lower(&key) {
+            if let Some(action) = action_from_ini_key_lower(&key) {
                 let mut bindings = Vec::new();
                 for tok in v.split(',') {
                     if let Some(b) = parse_binding_token(tok) {

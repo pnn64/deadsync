@@ -1,8 +1,7 @@
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment;
 use crate::game::profile;
-use deadsync_rules::stream::zmod_stream_totals_full_measures;
-use rssp::streams::StreamSegment;
+use deadsync_rules::stream::{StreamSegment, zmod_stream_totals_full_measures};
 
 use super::{
     CourseDisplayCarry, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,

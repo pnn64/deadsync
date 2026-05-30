@@ -1,5 +1,5 @@
 use crate::engine::present::actors::Actor;
-use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
+use crate::game::chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
     MAX_COLS, MAX_PLAYERS,
@@ -12,8 +12,6 @@ use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
 use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
-use rssp::TechCounts;
-use rssp::stats::ArrowStats;
 use std::path::PathBuf;
 use std::sync::Arc;
 

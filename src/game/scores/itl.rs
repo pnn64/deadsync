@@ -1832,9 +1832,8 @@ pub fn get_or_fetch_itl_tournament_rank_for_side(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use crate::game::song::SongData;
-    use rssp::{TechCounts, stats::ArrowStats};
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};

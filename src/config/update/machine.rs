@@ -15,7 +15,7 @@ const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'static
 }
 
 pub fn update_input_debounce_seconds(seconds: f32) {
-    let seconds = seconds.clamp(0.0, 0.2);
+    let seconds = deadsync_input::clamp_input_debounce_seconds(seconds);
     {
         let mut cfg = lock_config();
         if (cfg.input_debounce_seconds - seconds).abs() <= f32::EPSILON {

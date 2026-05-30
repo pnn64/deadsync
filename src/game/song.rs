@@ -1,6 +1,6 @@
 pub use deadsync_chart::song::{
     SongBackgroundChange, SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData,
-    SongForegroundChange, SongForegroundLuaChange, SongPack,
+    SongForegroundChange, SongForegroundLuaChange, SongPack, SyncPref,
 };
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,25 +17,25 @@ pub const fn default_sync_pref_offset(pref: crate::config::DefaultSyncOffset) ->
 
 #[inline(always)]
 pub const fn pack_sync_pref_offset(
-    pref: rssp::pack::SyncPref,
+    pref: SyncPref,
     default: crate::config::DefaultSyncOffset,
 ) -> f32 {
     match pref {
-        rssp::pack::SyncPref::Default => default_sync_pref_offset(default),
-        rssp::pack::SyncPref::Null => 0.0,
-        rssp::pack::SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
+        SyncPref::Default => default_sync_pref_offset(default),
+        SyncPref::Null => 0.0,
+        SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
     }
 }
 
 #[inline(always)]
 pub const fn pack_sync_pref_default(
-    pref: rssp::pack::SyncPref,
+    pref: SyncPref,
     default: crate::config::DefaultSyncOffset,
 ) -> crate::config::DefaultSyncOffset {
     match pref {
-        rssp::pack::SyncPref::Default => default,
-        rssp::pack::SyncPref::Null => crate::config::DefaultSyncOffset::Null,
-        rssp::pack::SyncPref::Itg => crate::config::DefaultSyncOffset::Itg,
+        SyncPref::Default => default,
+        SyncPref::Null => crate::config::DefaultSyncOffset::Null,
+        SyncPref::Itg => crate::config::DefaultSyncOffset::Itg,
     }
 }
 
@@ -63,7 +63,6 @@ pub(super) fn set_song_cache(packs: Vec<SongPack>) {
 mod tests {
     use super::*;
     use crate::config::DefaultSyncOffset;
-    use rssp::pack::SyncPref;
 
     #[test]
     fn pack_sync_pref_offset_matches_itg_group_offset() {

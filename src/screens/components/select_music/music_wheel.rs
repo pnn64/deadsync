@@ -12,7 +12,7 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::SongData;
+use crate::game::song::{SongData, SyncPref};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
 use std::cell::RefCell;
@@ -270,7 +270,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 
 fn song_pack_sync_style(
     song: &SongData,
-    prefs: Option<&HashMap<String, rssp::pack::SyncPref>>,
+    prefs: Option<&HashMap<String, SyncPref>>,
     default: DefaultSyncOffset,
 ) -> Option<DefaultSyncOffset> {
     let prefs = prefs?;
@@ -281,7 +281,7 @@ fn song_pack_sync_style(
         .and_then(|p| p.file_name())
         .and_then(|s| s.to_str())
         .and_then(|group| prefs.get(group).copied())
-        .unwrap_or(rssp::pack::SyncPref::Default);
+        .unwrap_or(SyncPref::Default);
     Some(crate::game::song::pack_sync_pref_default(pref, default))
 }
 
@@ -443,7 +443,7 @@ pub struct MusicWheelParams<'a> {
     pub expanded_pack_name: Option<&'a str>,
     pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
-    pub pack_sync_prefs: Option<&'a HashMap<String, rssp::pack::SyncPref>>,
+    pub pack_sync_prefs: Option<&'a HashMap<String, SyncPref>>,
     pub default_sync_offset: DefaultSyncOffset,
 }
 

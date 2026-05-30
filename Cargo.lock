@@ -977,7 +977,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.294"
+version = "0.4.308"
 dependencies = [
  "alsa",
  "ash",
@@ -992,6 +992,7 @@ dependencies = [
  "deadsync-input",
  "deadsync-rules",
  "deadsync-score",
+ "deadsync-simfile",
  "directories",
  "ebur128",
  "env_logger",
@@ -1060,14 +1061,19 @@ dependencies = [
 name = "deadsync-chart"
 version = "0.1.0"
 dependencies = [
+ "deadsync-core",
  "deadsync-rules",
- "rssp",
 ]
+
+[[package]]
+name = "deadsync-core"
+version = "0.1.0"
 
 [[package]]
 name = "deadsync-input"
 version = "0.1.0"
 dependencies = [
+ "deadsync-core",
  "log",
 ]
 
@@ -1075,8 +1081,8 @@ dependencies = [
 name = "deadsync-rules"
 version = "0.1.0"
 dependencies = [
+ "deadsync-core",
  "log",
- "rssp",
 ]
 
 [[package]]
@@ -1085,10 +1091,19 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "chrono",
- "deadsync-input",
- "deadsync-rules",
+ "deadsync-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "deadsync-simfile"
+version = "0.1.0"
+dependencies = [
+ "deadsync-chart",
+ "deadsync-core",
+ "deadsync-rules",
+ "rssp",
 ]
 
 [[package]]

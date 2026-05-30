@@ -952,7 +952,7 @@ mod tests {
     };
     use crate::assets::i18n;
     use crate::engine::present::actors::Actor;
-    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
     use crate::game::scores;
@@ -969,8 +969,8 @@ mod tests {
                 step_artist: String::new(),
                 music_path: None,
                 short_hash: String::new(),
-                stats: rssp::stats::ArrowStats::default(),
-                tech_counts: rssp::TechCounts::default(),
+                stats: ArrowStats::default(),
+                tech_counts: TechCounts::default(),
                 mines_nonfake: 0,
                 stamina_counts: StaminaCounts::default(),
                 total_streams: 0,

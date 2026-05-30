@@ -1,6 +1,6 @@
 use super::{fmt_scan_time, process_song};
 use crate::config::dirs;
-use crate::game::song::{SongData, SongPack, get_song_cache, set_song_cache};
+use crate::game::song::{SongData, SongPack, SyncPref, get_song_cache, set_song_cache};
 use log::{debug, info, warn};
 use rssp::pack::{PackScan, SongScan};
 use std::collections::HashMap;
@@ -241,6 +241,15 @@ fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
     }
 
     merged
+}
+
+#[inline(always)]
+const fn sync_pref_from_rssp(pref: rssp::pack::SyncPref) -> SyncPref {
+    match pref {
+        rssp::pack::SyncPref::Default => SyncPref::Default,
+        rssp::pack::SyncPref::Null => SyncPref::Null,
+        rssp::pack::SyncPref::Itg => SyncPref::Itg,
+    }
 }
 
 fn pack_dir_key(path: &Path) -> Option<String> {
@@ -511,7 +520,7 @@ where
             translit_title: pack.translit_title,
             series: pack.series,
             year: pack.year,
-            sync_pref: pack.sync_pref,
+            sync_pref: sync_pref_from_rssp(pack.sync_pref),
             directory: pack.dir,
             banner_path: pack.banner_path,
             songs: Vec::new(),
@@ -735,7 +744,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{collect_reload_pack_dirs, merge_pack_scans, replace_song_packs};
-    use crate::game::song::SongPack;
+    use crate::game::song::{SongPack, SyncPref};
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -790,7 +799,7 @@ mod tests {
             translit_title: sort_title.to_string(),
             series: String::new(),
             year: 0,
-            sync_pref: rssp::pack::SyncPref::Default,
+            sync_pref: SyncPref::Default,
             directory: root.join(group_name),
             banner_path: None,
             songs: Vec::new(),

@@ -5,8 +5,8 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
-rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

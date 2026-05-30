@@ -1,6 +1,6 @@
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
-use crate::game::chart::{ChartData, StaminaCounts};
+use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
 use crate::game::profile;
 use crate::game::scores::{Grade, GrooveStatsEvalState, ItlEvalState};
 use crate::game::scroll::ScrollSpeedSetting;
@@ -9,8 +9,6 @@ use crate::game::timing::{HistogramMs, TimingStats, WindowCounts};
 use crate::screens::components::evaluation::pane_stats;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use crate::test_support::compose_scenarios;
-use rssp::TechCounts;
-use rssp::stats::ArrowStats;
 use std::path::PathBuf;
 use std::sync::Arc;
 

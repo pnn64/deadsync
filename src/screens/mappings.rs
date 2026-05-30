@@ -4,7 +4,7 @@ use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, RawKeyboardEvent,
-    VirtualAction, with_keymap,
+    VirtualAction, clamp_input_debounce_seconds, with_keymap,
 };
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -343,12 +343,9 @@ fn set_active_slot(state: &mut State, new_slot: ActiveSlot) {
 
 #[inline(always)]
 fn capture_debounce_window() -> Duration {
-    const MAX_DEBOUNCE_SECONDS: f32 = 0.2;
-    Duration::from_secs_f32(
-        crate::config::get()
-            .input_debounce_seconds
-            .clamp(0.0, MAX_DEBOUNCE_SECONDS),
-    )
+    Duration::from_secs_f32(clamp_input_debounce_seconds(
+        crate::config::get().input_debounce_seconds,
+    ))
 }
 
 #[inline(always)]

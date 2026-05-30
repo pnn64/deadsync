@@ -9050,7 +9050,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use crate::game::{
-        chart::{ChartData, StaminaCounts},
+        chart::{ArrowStats, ChartData, StaminaCounts, TechCounts},
         note::Note,
         parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState},
         song::SongData,
@@ -9082,8 +9082,8 @@ mod tests {
             step_artist: String::new(),
             music_path: None,
             short_hash: hash.to_string(),
-            stats: rssp::stats::ArrowStats::default(),
-            tech_counts: rssp::TechCounts::default(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
             mines_nonfake: 0,
             stamina_counts: StaminaCounts::default(),
             total_streams: 0,

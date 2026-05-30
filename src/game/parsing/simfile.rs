@@ -1,6 +1,6 @@
 use crate::engine::audio::decode;
 use crate::game::{
-    chart::{ChartData, GameplayChartData, StaminaCounts},
+    chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts},
     note::NoteType,
     parsing::notes::ParsedNote,
     song::{
@@ -80,7 +80,7 @@ impl From<&rssp::stats::ArrowStats> for CachedArrowStats {
     }
 }
 
-impl From<CachedArrowStats> for rssp::stats::ArrowStats {
+impl From<CachedArrowStats> for ArrowStats {
     fn from(stats: CachedArrowStats) -> Self {
         Self {
             total_arrows: stats.total_arrows,
@@ -132,7 +132,7 @@ impl From<&rssp::TechCounts> for CachedTechCounts {
     }
 }
 
-impl From<CachedTechCounts> for rssp::TechCounts {
+impl From<CachedTechCounts> for TechCounts {
     fn from(counts: CachedTechCounts) -> Self {
         Self {
             crossovers: counts.crossovers,
@@ -2453,7 +2453,8 @@ fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, Stri
             } else {
                 global_time_signatures
             };
-            let mut timing_segments = TimingSegments::from(c.timing_segments.as_ref());
+            let mut timing_segments =
+                deadsync_simfile::timing::timing_segments_from_rssp(c.timing_segments.as_ref());
             timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
             let stamina_counts = build_stamina_counts(&c);
             debug!(

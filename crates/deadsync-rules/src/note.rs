@@ -1,14 +1,5 @@
 use crate::judgment::Judgment;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum NoteType {
-    Tap,
-    Hold,
-    Roll,
-    Mine,
-    Lift,
-    Fake,
-}
+pub use deadsync_core::note::NoteType;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HoldResult {

@@ -14,7 +14,7 @@ use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
 use crate::game::scores;
-use crate::game::song::{self, SongData};
+use crate::game::song::{self, SongData, SyncPref};
 use crate::game::timing::{
     BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
     TimingProfileNs, beat_to_note_row,
@@ -31,9 +31,9 @@ use deadsync_rules::life::{
     LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
 };
 use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
+use deadsync_rules::stream::StreamSegment;
 use deadsync_rules::stream::{stream_sequences_threshold, zmod_stream_totals_full_measures};
 use log::{debug, info, trace, warn};
-use rssp::streams::StreamSegment;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -5400,16 +5400,15 @@ pub fn init(
             .unwrap_or("")
             .to_owned(),
     );
-    let (pack_banner_path, pack_sync_pref): (Option<PathBuf>, rssp::pack::SyncPref) =
-        if pack_group.is_empty() {
-            (None, rssp::pack::SyncPref::Default)
-        } else {
-            crate::game::song::get_song_cache()
-                .iter()
-                .find(|p| p.group_name == pack_group.as_ref())
-                .map(|p| (p.banner_path.clone(), p.sync_pref))
-                .unwrap_or((None, rssp::pack::SyncPref::Default))
-        };
+    let (pack_banner_path, pack_sync_pref): (Option<PathBuf>, SyncPref) = if pack_group.is_empty() {
+        (None, SyncPref::Default)
+    } else {
+        crate::game::song::get_song_cache()
+            .iter()
+            .find(|p| p.group_name == pack_group.as_ref())
+            .map(|p| (p.banner_path.clone(), p.sync_pref))
+            .unwrap_or((None, SyncPref::Default))
+    };
     let song_banner_key = song.banner_path.as_deref().map(media_path_key);
     let pack_banner_key = pack_banner_path.as_deref().map(media_path_key);
     let foreground_texture_keys = song
@@ -8768,7 +8767,7 @@ mod tests {
         update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
-    use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
+    use crate::game::chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
@@ -8779,7 +8778,6 @@ mod tests {
         DelaySegment, FakeSegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile,
         TimingProfileNs, TimingSegments,
     };
-    use rssp::{TechCounts, stats::ArrowStats};
     use std::collections::VecDeque;
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::{Duration, Instant};

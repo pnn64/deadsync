@@ -2,6 +2,13 @@ use crate::chart::{ChartData, ChartDisplayBpm};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncPref {
+    Default,
+    Null,
+    Itg,
+}
+
 #[derive(Clone, Debug)]
 pub enum SongBackgroundChangeTarget {
     File(PathBuf),
@@ -76,7 +83,7 @@ pub struct SongPack {
     pub translit_title: String,
     pub series: String,
     pub year: i32,
-    pub sync_pref: rssp::pack::SyncPref,
+    pub sync_pref: SyncPref,
     pub directory: PathBuf,
     pub banner_path: Option<PathBuf>,
     pub songs: Vec<Arc<SongData>>,

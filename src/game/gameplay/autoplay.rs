@@ -1,11 +1,12 @@
 use crate::engine::input::INPUT_SLOT_INVALID;
 use crate::game::note::NoteType;
 
-use super::input::{lane_from_column, push_input_edge};
+use super::input::push_input_edge;
 use super::{
     MAX_COLS, SongTimeNs, State, handle_hold_let_go, handle_hold_success, judge_a_lift,
     judge_a_tap, player_note_range, refresh_roll_life_on_step,
 };
+use crate::engine::input::lane_from_column;
 
 #[inline(always)]
 pub(super) fn autoplay_blocks_scoring(state: &State) -> bool {

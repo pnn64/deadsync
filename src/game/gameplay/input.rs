@@ -504,21 +504,6 @@ fn push_input_edge_timed(
     }
 }
 
-#[inline(always)]
-pub(super) const fn lane_from_column(column: usize) -> Option<Lane> {
-    match column {
-        0 => Some(Lane::Left),
-        1 => Some(Lane::Down),
-        2 => Some(Lane::Up),
-        3 => Some(Lane::Right),
-        4 => Some(Lane::P2Left),
-        5 => Some(Lane::P2Down),
-        6 => Some(Lane::P2Up),
-        7 => Some(Lane::P2Right),
-        _ => None,
-    }
-}
-
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
     if state.exit_transition.is_some() {
         return GameplayAction::None;

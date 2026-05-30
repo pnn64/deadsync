@@ -7,8 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 bincode = "2.0.1"
 chrono = "0.4.44"
-deadsync-input = { path = "../deadsync-input" }
-deadsync-rules = { path = "../deadsync-rules" }
+deadsync-core = { path = "../deadsync-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]

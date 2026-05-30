@@ -1,7 +1,5 @@
 use crate::notes::ParsedNote;
 use deadsync_rules::timing::{TimingData, TimingSegments};
-use rssp::TechCounts;
-use rssp::stats::ArrowStats;
 use std::path::PathBuf;
 
 /// Chart-level display BPM override parsed from `#DISPLAYBPM` inside a `#NOTEDATA` block.
@@ -29,6 +27,38 @@ pub struct StaminaCounts {
     pub mono: u32,
     pub mono_percent: f64,
     pub sweeps: u32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ArrowStats {
+    pub total_arrows: u32,
+    pub left: u32,
+    pub down: u32,
+    pub up: u32,
+    pub right: u32,
+    pub total_steps: u32,
+    pub jumps: u32,
+    pub hands: u32,
+    pub mines: u32,
+    pub holds: u32,
+    pub rolls: u32,
+    pub lifts: u32,
+    pub fakes: u32,
+    pub holding: i32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TechCounts {
+    pub crossovers: u32,
+    pub half_crossovers: u32,
+    pub full_crossovers: u32,
+    pub footswitches: u32,
+    pub up_footswitches: u32,
+    pub down_footswitches: u32,
+    pub sideswitches: u32,
+    pub jacks: u32,
+    pub brackets: u32,
+    pub doublesteps: u32,
 }
 
 #[derive(Clone, Debug)]

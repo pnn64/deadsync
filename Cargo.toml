@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.294"
+version = "0.4.308"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -12,9 +12,11 @@ keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan
 members = [
     ".",
     "crates/deadsync-chart",
+    "crates/deadsync-core",
     "crates/deadsync-input",
     "crates/deadsync-rules",
     "crates/deadsync-score",
+    "crates/deadsync-simfile",
 ]
 resolver = "3"
 
@@ -55,6 +57,7 @@ deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-input = { path = "crates/deadsync-input" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
+deadsync-simfile = { path = "crates/deadsync-simfile" }
 winit = "0.30.13"
 log = "0.4.30"
 env_logger = "0.11.10"

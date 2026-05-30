@@ -2,6 +2,7 @@ use crate::config::SimpleIni;
 use crate::config::dirs;
 use crate::engine::input::InputSource;
 use crate::engine::network;
+use crate::game::chart::ArrowStats;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online;
@@ -4091,7 +4092,7 @@ impl GsExEvidence {
     }
 }
 
-fn find_chart_stats_for_hash(chart_hash: &str) -> Option<rssp::stats::ArrowStats> {
+fn find_chart_stats_for_hash(chart_hash: &str) -> Option<ArrowStats> {
     let cache = get_song_cache();
     for pack in cache.iter() {
         for song in &pack.songs {

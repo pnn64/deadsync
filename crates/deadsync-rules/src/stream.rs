@@ -1,4 +1,9 @@
-use rssp::streams::StreamSegment;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamSegment {
+    pub start: usize,
+    pub end: usize,
+    pub is_break: bool,
+}
 
 pub fn stream_sequences_threshold(measures: &[usize], threshold: usize) -> Vec<StreamSegment> {
     let streams: Vec<_> = measures

@@ -36,8 +36,8 @@ use crate::game::{
     timing::{TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat},
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
+use deadsync_rules::stream::StreamSegment;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
-use rssp::streams::StreamSegment;
 use std::array::from_fn;
 use std::cell::RefCell;
 use std::collections::HashMap;

@@ -1,13 +1,12 @@
 use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::{Note, NoteType};
+use crate::stream::StreamSegment;
 use log::debug;
-use rssp::streams::StreamSegment;
-use rssp::timing as rssp_timing;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
 // --- ITGMania Parity Constants and Helpers ---
-pub const ROWS_PER_BEAT: i32 = 48;
+pub use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 type TimingNs = i64;
 const INVALID_TIMING_NS: TimingNs = i64::MIN;
 
@@ -215,16 +214,6 @@ pub fn largest_enabled_tap_window_ns(
     None
 }
 
-#[inline(always)]
-pub fn note_row_to_beat(row: i32) -> f32 {
-    row as f32 / ROWS_PER_BEAT as f32
-}
-
-#[inline(always)]
-pub fn beat_to_note_row(beat: f32) -> i32 {
-    (beat * ROWS_PER_BEAT as f32).round() as i32
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpeedUnit {
     Beats,
@@ -309,71 +298,6 @@ pub fn default_time_signature() -> TimeSignatureSegment {
 
 pub fn default_time_signatures() -> Vec<TimeSignatureSegment> {
     vec![default_time_signature()]
-}
-
-impl From<&rssp_timing::TimingSegments> for TimingSegments {
-    fn from(segments: &rssp_timing::TimingSegments) -> Self {
-        let speeds = segments
-            .speeds
-            .iter()
-            .map(|(beat, ratio, delay, unit)| SpeedSegment {
-                beat: *beat,
-                ratio: *ratio,
-                delay: *delay,
-                unit: match unit {
-                    rssp_timing::SpeedUnit::Beats => SpeedUnit::Beats,
-                    rssp_timing::SpeedUnit::Seconds => SpeedUnit::Seconds,
-                },
-            })
-            .collect();
-
-        Self {
-            beat0_offset_adjust: segments.beat0_offset_adjust,
-            bpms: segments.bpms.clone(),
-            stops: segments
-                .stops
-                .iter()
-                .map(|(beat, duration)| StopSegment {
-                    beat: *beat,
-                    duration: *duration,
-                })
-                .collect(),
-            delays: segments
-                .delays
-                .iter()
-                .map(|(beat, duration)| DelaySegment {
-                    beat: *beat,
-                    duration: *duration,
-                })
-                .collect(),
-            warps: segments
-                .warps
-                .iter()
-                .map(|(beat, length)| WarpSegment {
-                    beat: *beat,
-                    length: *length,
-                })
-                .collect(),
-            speeds,
-            scrolls: segments
-                .scrolls
-                .iter()
-                .map(|(beat, ratio)| ScrollSegment {
-                    beat: *beat,
-                    ratio: *ratio,
-                })
-                .collect(),
-            fakes: segments
-                .fakes
-                .iter()
-                .map(|(beat, length)| FakeSegment {
-                    beat: *beat,
-                    length: *length,
-                })
-                .collect(),
-            time_signatures: default_time_signatures(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

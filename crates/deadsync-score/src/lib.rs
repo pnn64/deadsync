@@ -1,7 +1,7 @@
 use bincode::{Decode, Encode};
 use chrono::{DateTime, TimeZone, Utc};
-use deadsync_input::InputSource;
-use deadsync_rules::song_time::SongTimeNs;
+use deadsync_core::input::InputSource;
+use deadsync_core::song_time::SongTimeNs;
 use serde::Serialize;
 use std::time::Duration;
 

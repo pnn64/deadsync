@@ -1718,9 +1718,8 @@ pub fn tick_groovestats_auto_retries() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use crate::game::scroll::ScrollSpeedSetting;
-    use rssp::{TechCounts, stats::ArrowStats};
     use serde_json::json;
 
     fn sample_chart(chart_type: &str) -> ChartData {

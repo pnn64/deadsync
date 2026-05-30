@@ -1,4 +1,5 @@
 use crate::engine::input::PadDir;
+pub use crate::engine::input::pad_dir_from_action;
 use crate::game::profile;
 use std::time::{Duration, Instant};
 
@@ -99,18 +100,5 @@ impl FavoriteCodeTracker {
             *last_input = None;
         }
         false
-    }
-}
-
-/// Map a `VirtualAction` to `(PadDir, is_p1)` for pad arrows only
-/// (not menu buttons). Returns `None` for non-pad-arrow actions.
-pub fn pad_dir_from_action(action: crate::engine::input::VirtualAction) -> Option<PadDir> {
-    use crate::engine::input::VirtualAction;
-    match action {
-        VirtualAction::p1_left | VirtualAction::p2_left => Some(PadDir::Left),
-        VirtualAction::p1_right | VirtualAction::p2_right => Some(PadDir::Right),
-        VirtualAction::p1_up | VirtualAction::p2_up => Some(PadDir::Up),
-        VirtualAction::p1_down | VirtualAction::p2_down => Some(PadDir::Down),
-        _ => None,
     }
 }
