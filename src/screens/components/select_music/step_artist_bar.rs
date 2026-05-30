@@ -40,8 +40,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 settext(p.label_text):
                 align(0.0, 0.5):
                 xy(p.x0 + 30.0, p.center_y):
-                zoom(0.8):
                 maxwidth(p.label_max_width):
+                zoom(0.8):
                 z(z_text):
                 diffuse(0.0, 0.0, 0.0, 1.0)
             ));
@@ -50,8 +50,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 settext(p.artist_text):
                 align(0.0, 0.5):
                 xy(p.x0 + p.artist_x_offset, p.center_y):
-                zoom(0.8):
                 maxwidth(p.artist_max_width):
+                zoom(0.8):
                 z(z_text):
                 diffuse(
                     p.artist_color[0],
@@ -81,8 +81,8 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 settext(p.label_text):
                 align(0.0, 0.5):
                 xy(p.x0 + 30.0, p.center_y):
-                zoom(0.8):
                 maxwidth(p.label_max_width):
+                zoom(0.8):
                 z(z_text):
                 diffuse(0.0, 0.0, 0.0, 1.0)
             ));
@@ -91,11 +91,74 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 settext(p.artist_text):
                 align(0.0, 0.0):
                 xy(p.x0 + 70.0, p.center_y - 6.0):
-                zoom(0.8):
                 maxwidth(175.0):
+                zoom(0.8):
                 z(z_text):
                 diffuse(0.0, 0.0, 0.0, 1.0)
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::present::actors::TextContent;
+
+    fn params(layout: StepArtistBarLayout) -> StepArtistBarParams {
+        StepArtistBarParams {
+            x0: 0.0,
+            center_y: 0.0,
+            layout,
+            expanded_line_count: 3,
+            accent_color: [1.0, 0.0, 0.0, 1.0],
+            z_base: 10,
+            label_text: TextContent::Static("STEPS"),
+            label_max_width: 40.0,
+            artist_text: TextContent::Static("a very long chart description"),
+            artist_x_offset: 75.0,
+            artist_max_width: 124.0,
+            artist_color: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+
+    fn text_width_flags(actors: &[Actor]) -> Vec<(Option<f32>, bool)> {
+        actors
+            .iter()
+            .filter_map(|actor| {
+                if let Actor::Text {
+                    max_width,
+                    max_w_pre_zoom,
+                    ..
+                } = actor
+                {
+                    Some((*max_width, *max_w_pre_zoom))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn legacy_step_artist_maxwidth_is_unzoomed_like_itgmania() {
+        let mut actors = Vec::new();
+        push(&mut actors, params(StepArtistBarLayout::Legacy));
+
+        assert_eq!(
+            text_width_flags(&actors),
+            vec![(Some(40.0), true), (Some(124.0), true)]
+        );
+    }
+
+    #[test]
+    fn expanded_step_artist_maxwidth_is_unzoomed_like_arrow_cloud() {
+        let mut actors = Vec::new();
+        push(&mut actors, params(StepArtistBarLayout::Expanded));
+
+        assert_eq!(
+            text_width_flags(&actors),
+            vec![(Some(40.0), true), (Some(175.0), true)]
+        );
     }
 }
