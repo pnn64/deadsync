@@ -1,21 +1,7 @@
 use deadsync_core::note::NoteType;
-use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
+use deadsync_rules::judgment::{JudgeGrade, Judgment};
 
-use super::{HeldMissRenderInfo, MAX_COLS, PlayerRuntime, State};
-
-#[inline(always)]
-pub(super) fn add_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = judgment::display_judge_ix(grade);
-    p.provisional_scoring_counts[grade_ix] =
-        p.provisional_scoring_counts[grade_ix].saturating_add(1);
-}
-
-#[inline(always)]
-pub(super) fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = judgment::display_judge_ix(grade);
-    p.provisional_scoring_counts[grade_ix] =
-        p.provisional_scoring_counts[grade_ix].saturating_sub(1);
-}
+use super::{HeldMissRenderInfo, MAX_COLS, State};
 
 #[inline(always)]
 fn mark_row_provisional_early_result(state: &mut State, note_index: usize) {
@@ -50,29 +36,19 @@ fn mark_row_note_finalized(state: &mut State, note_index: usize) {
 #[inline(always)]
 pub(super) fn register_provisional_early_result(
     state: &mut State,
-    player: usize,
     note_index: usize,
     judgment: Judgment,
 ) {
     if state.notes[note_index].early_result.is_some() {
         return;
     }
-    add_provisional_early_score(&mut state.players[player], judgment.grade);
     state.notes[note_index].early_result = Some(judgment);
     mark_row_provisional_early_result(state, note_index);
 }
 
 #[inline(always)]
-pub(super) fn set_final_note_result(
-    state: &mut State,
-    player: usize,
-    note_index: usize,
-    judgment: Judgment,
-) {
+pub(super) fn set_final_note_result(state: &mut State, note_index: usize, judgment: Judgment) {
     let was_unjudged = state.notes[note_index].result.is_none();
-    if was_unjudged && let Some(early) = state.notes[note_index].early_result.as_ref() {
-        remove_provisional_early_score(&mut state.players[player], early.grade);
-    }
     state.notes[note_index].result = Some(judgment);
     if was_unjudged {
         mark_row_note_finalized(state, note_index);

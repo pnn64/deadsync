@@ -159,8 +159,6 @@ use self::life::{
     all_joined_players_failed, apply_life_change, init_course_submit_life, is_player_dead,
     is_state_dead,
 };
-#[cfg(test)]
-use self::note_result::{add_provisional_early_score, remove_provisional_early_score};
 use self::note_result::{register_provisional_early_result, set_final_note_result};
 use self::offset::update_offset_adjust_hold;
 #[cfg(test)]
@@ -3276,7 +3274,6 @@ pub struct PlayerRuntime {
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
-    pub provisional_scoring_counts: judgment::JudgeCounts,
     pub last_judgment: Option<JudgmentRenderInfo>,
     pub last_mine_judgment: Option<MineJudgmentRenderInfo>,
 
@@ -3367,7 +3364,6 @@ fn init_player_runtime() -> PlayerRuntime {
         first_fc_attempt_broken: false,
         judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
-        provisional_scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
         last_judgment: None,
         last_mine_judgment: None,
         life: 0.5,
@@ -7422,7 +7418,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, note_index, judgment);
+            set_final_note_result(state, note_index, judgment);
             log_timing_hit_detail(
                 timing_hit_log,
                 stream_pos_s,
@@ -7485,7 +7481,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
                         window: Some(hit.window),
                         miss_because_held: false,
                     };
-                    register_provisional_early_result(state, player, note_index, judgment);
+                    register_provisional_early_result(state, note_index, judgment);
                     let life_delta = judge_life_delta(hit.grade);
                     let current_music_time = current_music_time_s(state);
                     {
@@ -7579,7 +7575,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, note_index, judgment);
+            set_final_note_result(state, note_index, judgment);
 
             log_timing_hit_detail(
                 timing_hit_log,
@@ -7671,7 +7667,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, idx, judgment);
+            set_final_note_result(state, idx, judgment);
 
             log_timing_hit_detail(
                 timing_hit_log,
@@ -7818,7 +7814,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
                     window: Some(hit.window),
                     miss_because_held: false,
                 };
-                register_provisional_early_result(state, player, note_index, judgment);
+                register_provisional_early_result(state, note_index, judgment);
                 let life_delta = judge_life_delta(hit.grade);
                 let current_music_time = current_music_time_s(state);
                 if !scoring_blocked {
@@ -7867,7 +7863,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     }
 
     let (judgment, judgment_event_time) = build_final_note_hit_judgment(state, player, hit, rate);
-    set_final_note_result(state, player, note_index, judgment);
+    set_final_note_result(state, note_index, judgment);
 
     log_timing_hit_detail(
         timing_hit_log,
@@ -8239,7 +8235,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 if queue_missed_hold {
                     queue_missed_hold_resolution(state, cursor);
                 }
-                set_final_note_result(state, player, cursor, judgment);
+                set_final_note_result(state, cursor, judgment);
                 if log::log_enabled!(log::Level::Debug) {
                     let note_time = song_time_ns_to_seconds(note_time_ns);
                     let song_offset_s = state.song_offset_seconds;
@@ -8724,22 +8720,21 @@ mod tests {
         HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
         INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry,
         ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode,
-        TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
-        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
-        apply_time_based_tap_misses, autoplay_random_offset_music_ns_for_window,
-        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
-        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        crossed_mine_held_start_time, effective_appearance_effects_for_player,
-        effective_mini_percent_for_player, effective_player_global_offset_seconds,
-        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
-        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
-        error_bar_average_offset_s, error_bar_register_tap, finalize_completed_mines,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        TurnRng, active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
+        advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
+        apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
+        apply_time_based_mine_avoidance, apply_time_based_tap_misses,
+        autoplay_random_offset_music_ns_for_window, begin_outro_attack_clear,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
+        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
+        effective_appearance_effects_for_player, effective_mini_percent_for_player,
+        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
+        effective_visibility_effects_for_player, effective_visual_effects_for_player,
+        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_register_tap,
+        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, grade_to_window, handle_input, hit_mine,
         input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
@@ -8750,16 +8745,16 @@ mod tests {
         note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
-        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
-        score_invalid_reason_lines_for_chart, set_final_note_result, settle_completion_rows,
-        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_stats_density_graph_width,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual,
-        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_receptor_step_pulse,
-        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        refresh_timing_after_offset_change, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        set_final_note_result, settle_completion_rows, single_runtime_player_is_p2,
+        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, start_active_hold,
+        step_stats_density_graph_width, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
+        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
+        trigger_hold_explosion, trigger_receptor_step_pulse, trigger_tap_explosion,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
@@ -10425,7 +10420,6 @@ return Def.ActorFrame{}
                 set_final_note_result(
                     &mut state,
                     0,
-                    0,
                     Judgment {
                         time_error_ms: -12.0,
                         time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
@@ -10438,7 +10432,6 @@ return Def.ActorFrame{}
                 );
                 set_final_note_result(
                     &mut state,
-                    0,
                     1,
                     Judgment {
                         time_error_ms: 96.0,
@@ -10744,7 +10737,6 @@ return Def.ActorFrame{}
 
         set_final_note_result(
             &mut state,
-            0,
             0,
             Judgment {
                 time_error_ms: 180.0,
@@ -11590,40 +11582,6 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn provisional_early_score_counts_round_trip() {
-        let mut player = super::init_player_runtime();
-        add_provisional_early_score(&mut player, JudgeGrade::WayOff);
-        add_provisional_early_score(&mut player, JudgeGrade::Decent);
-        add_provisional_early_score(&mut player, JudgeGrade::WayOff);
-
-        assert_eq!(
-            player.provisional_scoring_counts
-                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Decent)],
-            1
-        );
-        assert_eq!(
-            player.provisional_scoring_counts
-                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::WayOff)],
-            2
-        );
-
-        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
-        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
-        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
-
-        assert_eq!(
-            player.provisional_scoring_counts
-                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Decent)],
-            1
-        );
-        assert_eq!(
-            player.provisional_scoring_counts
-                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::WayOff)],
-            0
-        );
-    }
-
-    #[test]
     fn effective_ex_score_inputs_use_live_values_before_fail() {
         let player = super::init_player_runtime();
         let live = super::ExScoreInputs {
@@ -11713,7 +11671,6 @@ return Def.ActorFrame{}
 
         set_final_note_result(
             &mut state,
-            0,
             0,
             Judgment {
                 time_error_ms: 0.0,
@@ -13571,7 +13528,6 @@ return Def.ActorFrame{}
 
         set_final_note_result(
             &mut state,
-            0,
             first_note,
             Judgment {
                 time_error_ms: 0.0,
