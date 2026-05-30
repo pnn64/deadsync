@@ -1,29 +1,18 @@
-use lewton::inside_ogg::OggStreamReader;
-use memmap2::Mmap;
-use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Cursor};
 use std::path::Path;
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::{CODEC_TYPE_VORBIS, Decoder, DecoderOptions};
+use symphonia::core::errors::Error as SymphoniaError;
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
 
-const OGG_PAGE_HEADER_LEN: usize = 27;
-const OGG_SCAN_CHUNK_BYTES: usize = 64 * 1024;
-const OGG_SERIAL_OFFSET: usize = 14;
-const OGG_SEEK_ATTEMPTS: usize = 6;
-
-#[derive(Clone, Copy)]
-struct VorbisStreamInfo {
-    serial: u32,
-    sample_rate_hz: f64,
-}
-
-#[derive(Clone, Copy)]
-struct OggPageHeader {
-    serial: u32,
-    granule: u64,
-    continued: bool,
-    header_end: usize,
-    body_end: usize,
-}
+// Decode at least this many frames before a seek target so the Vorbis MDCT
+// overlap is primed and post-seek audio matches a linear decode. Vorbis blocks
+// are at most 8192 frames, so one block of preroll is sufficient; we still retry
+// with a larger window (and finally from the stream start) for safety.
+const SEEK_PREROLL_FRAMES: u64 = 1 << 14;
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -31,18 +20,27 @@ pub(crate) struct OpenFile {
     pub sample_rate_hz: u32,
 }
 
-enum Inner {
-    File(OggStreamReader<BufReader<File>>),
-    Memory(OggStreamReader<Cursor<Vec<u8>>>),
-}
-
 pub(crate) struct Reader {
-    inner: Inner,
+    format: Box<dyn FormatReader>,
+    decoder: Box<dyn Decoder>,
+    track_id: u32,
     channels: usize,
-    sample_rate_hz: u32,
-    blocksize_1: u8,
+    // Absolute timestamp of the stream's first sample (codec params start_ts);
+    // used as the floor for seek positions.
+    start_ts: u64,
+    // Absolute timestamp of the first *emitted* audio frame. Frame 0 in our
+    // cursor space maps to this timestamp, so seek arithmetic is independent of
+    // any encoder pre-skip.
+    base_ts: u64,
+    sample_buf: Option<SampleBuffer<i16>>,
+    sample_buf_frames: u64,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
+}
+
+enum SeekOutcome {
+    Landed,
+    Overshoot,
 }
 
 #[inline(always)]
@@ -52,57 +50,127 @@ pub(crate) fn path_is_ogg_vorbis(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("ogg") || ext.eq_ignore_ascii_case("oga"))
 }
 
-pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+fn probe_format(
+    path: &Path,
+) -> Result<Box<dyn FormatReader>, Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(path)?;
-    match OggStreamReader::new(BufReader::new(file)) {
-        Ok(inner) => opened_from_inner(Inner::File(inner)),
-        Err(open_err) => {
-            let file = File::open(path)
-                .map_err(|e| format!("Cannot reopen file after OGG open failure: {e}"))?;
-            // SAFETY: the mapping is read-only, tied to the lifetime of `file`, and this
-            // function never mutates the file descriptor while the map is live.
-            let mmap =
-                unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
-            let Some(stream) = vorbis_stream_info(&mmap) else {
-                return Err(open_err.into());
-            };
-            let pages = extract_logical_stream(&mmap, stream.serial).ok_or_else(|| {
-                format!(
-                    "Could not extract Vorbis logical stream from '{}'",
-                    path.display()
-                )
-            })?;
-            let inner = OggStreamReader::new(Cursor::new(pages))?;
-            opened_from_inner(Inner::Memory(inner))
-        }
-    }
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    hint.with_extension("ogg");
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()))?;
+    Ok(probed.format)
 }
 
-fn opened_from_inner(inner: Inner) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let (channels, sample_rate_hz, blocksize_1) = match &inner {
-        Inner::File(reader) => (
-            reader.ident_hdr.audio_channels.max(1) as usize,
-            reader.ident_hdr.audio_sample_rate,
-            reader.ident_hdr.blocksize_1,
-        ),
-        Inner::Memory(reader) => (
-            reader.ident_hdr.audio_channels.max(1) as usize,
-            reader.ident_hdr.audio_sample_rate,
-            reader.ident_hdr.blocksize_1,
-        ),
+pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+    let format = probe_format(path)?;
+
+    let (track_id, channels, sample_rate_hz, start_ts, decoder) = {
+        let track = format
+            .tracks()
+            .iter()
+            .find(|t| t.codec_params.codec == CODEC_TYPE_VORBIS)
+            .ok_or_else(|| format!("OGG '{}' has no Vorbis track", path.display()))?;
+        let cp = &track.codec_params;
+        let channels = cp.channels.map(|c| c.count() as usize).unwrap_or(0);
+        if channels == 0 {
+            return Err(format!("OGG '{}' has unknown channel layout", path.display()).into());
+        }
+        let sample_rate_hz = cp
+            .sample_rate
+            .ok_or_else(|| format!("OGG '{}' has unknown sample rate", path.display()))?;
+        let decoder = symphonia::default::get_codecs()
+            .make(cp, &DecoderOptions::default())
+            .map_err(|e| format!("Cannot create Vorbis decoder for '{}': {e}", path.display()))?;
+        (track.id, channels, sample_rate_hz, cp.start_ts, decoder)
     };
+
+    let mut reader = Reader {
+        format,
+        decoder,
+        track_id,
+        channels,
+        start_ts,
+        base_ts: start_ts,
+        sample_buf: None,
+        sample_buf_frames: 0,
+        pending: None,
+        cursor_frames: 0,
+    };
+
+    // Prime the first audio packet so linear reads start at the true first
+    // sample, and record its timestamp as the frame origin for seeks.
+    let mut first = Vec::new();
+    match reader.next_audio_packet(&mut first)? {
+        Some(ts) => {
+            reader.base_ts = ts;
+            reader.pending = Some(first);
+        }
+        None => {
+            return Err(format!(
+                "OGG '{}' contained no decodable audio frames",
+                path.display()
+            )
+            .into());
+        }
+    }
+
     Ok(OpenFile {
-        reader: Reader {
-            inner,
-            channels,
-            sample_rate_hz,
-            blocksize_1,
-            pending: None,
-            cursor_frames: 0,
-        },
+        reader,
         channels,
         sample_rate_hz,
     })
+}
+
+pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
+    let mut format = probe_format(path).map_err(|e| format!("Cannot open OGG file: {e}"))?;
+
+    let (track_id, sample_rate, start_ts, n_frames) = {
+        let track = format
+            .tracks()
+            .iter()
+            .find(|t| t.codec_params.codec == CODEC_TYPE_VORBIS)
+            .ok_or_else(|| "OGG file has no Vorbis track".to_string())?;
+        let cp = &track.codec_params;
+        let sample_rate = cp
+            .sample_rate
+            .ok_or_else(|| "OGG sample rate is invalid".to_string())?;
+        (track.id, sample_rate, cp.start_ts, cp.n_frames)
+    };
+    if sample_rate == 0 {
+        return Err("OGG sample rate is invalid (0)".to_string());
+    }
+
+    if let Some(n_frames) = n_frames {
+        return Ok((n_frames as f64 / f64::from(sample_rate)) as f32);
+    }
+
+    // Fallback: demux (without decoding) and track the maximum end timestamp.
+    let mut last_end = start_ts;
+    loop {
+        match format.next_packet() {
+            Ok(packet) => {
+                if packet.track_id() == track_id {
+                    last_end = last_end.max(packet.ts().saturating_add(packet.dur()));
+                }
+            }
+            Err(SymphoniaError::IoError(e))
+                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                break;
+            }
+            Err(SymphoniaError::ResetRequired) => break,
+            Err(e) => return Err(format!("OGG decode failed: {e}")),
+        }
+    }
+    let total = last_end.saturating_sub(start_ts);
+    Ok((total as f64 / f64::from(sample_rate)) as f32)
 }
 
 impl Reader {
@@ -111,60 +179,45 @@ impl Reader {
         out: &mut Vec<i16>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(mut packet) = self.pending.take() {
+            std::mem::swap(out, &mut packet);
             self.cursor_frames = self
                 .cursor_frames
-                .saturating_add((packet.len() / self.channels) as u64);
-            std::mem::swap(out, &mut packet);
+                .saturating_add((out.len() / self.channels) as u64);
             return Ok(true);
         }
-        let Some(packet) = self.read_packet()? else {
-            out.clear();
-            return Ok(false);
-        };
-        self.cursor_frames = self
-            .cursor_frames
-            .saturating_add((packet.len() / self.channels) as u64);
-        let mut packet = packet;
-        std::mem::swap(out, &mut packet);
-        Ok(true)
+        match self.next_audio_packet(out)? {
+            Some(_ts) => {
+                self.cursor_frames = self
+                    .cursor_frames
+                    .saturating_add((out.len() / self.channels) as u64);
+                Ok(true)
+            }
+            None => {
+                out.clear();
+                Ok(false)
+            }
+        }
     }
 
     pub(crate) fn seek_frame(
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Seek *before* the target so the Vorbis decoder's overlap
-        // state (PreviousWindowRight) is fully primed by the time we
-        // reach `target_frame`.  After `seek_absgp_pg` the first
-        // decoded packet is a warmup that produces 0 output frames;
-        // if the target falls inside that warmup gap the audio starts late.
-        // Retry farther back when page-granular seeking leaves the first
-        // decoded packet after the requested target.
-        let max_block_frames = 1u64 << self.blocksize_1;
-        let mut preroll_frames = max_block_frames
-            .saturating_mul(2)
-            .max(u64::from(self.sample_rate_hz) / 8)
-            .max(1);
-        let max_preroll_frames = u64::from(self.sample_rate_hz)
-            .saturating_mul(2)
-            .max(preroll_frames);
+        let target_ts = self.base_ts.saturating_add(target_frame);
 
-        for _ in 0..OGG_SEEK_ATTEMPTS {
-            let seek_pos = target_frame.saturating_sub(preroll_frames);
-            if self.seek_frame_from(target_frame, seek_pos, false)? {
-                return Ok(());
+        // Try progressively larger prerolls; a larger window guarantees we land
+        // before the target so the post-seek audio reproduces a linear decode.
+        for preroll in [SEEK_PREROLL_FRAMES, SEEK_PREROLL_FRAMES * 4] {
+            let seek_ts = target_ts.saturating_sub(preroll).max(self.start_ts);
+            match self.seek_and_collect(seek_ts, target_ts, target_frame)? {
+                SeekOutcome::Landed => return Ok(()),
+                SeekOutcome::Overshoot => continue,
             }
-            if seek_pos == 0 {
-                break;
-            }
-            preroll_frames = preroll_frames
-                .saturating_mul(2)
-                .min(max_preroll_frames)
-                .max(preroll_frames.saturating_add(max_block_frames));
         }
 
-        let seek_pos = target_frame.saturating_sub(max_preroll_frames.min(target_frame));
-        self.seek_frame_from(target_frame, seek_pos, true)?;
+        // Final fallback: decode from the very start of the stream. The target
+        // is always >= base_ts, so decoding from start_ts can never overshoot.
+        self.seek_and_collect(self.start_ts, target_ts, target_frame)?;
         Ok(())
     }
 
@@ -173,307 +226,105 @@ impl Reader {
         self.cursor_frames
     }
 
-    fn seek_frame_from(
+    fn seek_and_collect(
         &mut self,
+        seek_ts: u64,
+        target_ts: u64,
         target_frame: u64,
-        seek_pos: u64,
-        allow_late_start: bool,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        self.seek_absgp_pg(seek_pos)?;
+    ) -> Result<SeekOutcome, Box<dyn std::error::Error + Send + Sync>> {
+        self.format
+            .seek(
+                SeekMode::Accurate,
+                SeekTo::TimeStamp {
+                    ts: seek_ts,
+                    track_id: self.track_id,
+                },
+            )
+            .map_err(|e| format!("OGG seek error: {e}"))?;
+        self.decoder.reset();
         self.pending = None;
 
-        // After `seek_absgp_pg`, lewton resets its internal `cur_absgp` to
-        // None.  It only becomes Some again after we read the last packet on
-        // the first page (`last_in_page`).  Stash all packets until that
-        // calibration point so we can compute their absolute positions via
-        // backward traversal from the page's absgp.
-        let mut stashed: Vec<Vec<i16>> = Vec::new();
-        let calibrated_absgp: u64;
-
+        let mut scratch = Vec::new();
         loop {
-            let Some(pkt) = self.read_packet()? else {
-                self.cursor_frames = target_frame;
-                return Ok(true);
-            };
-            stashed.push(pkt);
-            if let Some(absgp) = self.last_absgp() {
-                calibrated_absgp = absgp;
-                break;
-            }
-        }
-
-        // Assign positions to stashed packets by walking backwards from
-        // `calibrated_absgp` (the page's end granule).
-        let mut positions: Vec<(u64, u64)> = Vec::with_capacity(stashed.len());
-        let mut pos = calibrated_absgp;
-        for pkt in stashed.iter().rev() {
-            let frames = (pkt.len() / self.channels) as u64;
-            let start = pos.saturating_sub(frames);
-            positions.push((start, frames));
-            pos = start;
-        }
-        positions.reverse();
-
-        let page_start = positions.first().map_or(calibrated_absgp, |&(s, _)| s);
-        self.cursor_frames = page_start;
-
-        // Replay stashed packets, discarding/trimming to reach target.
-        for (i, &(pkt_start, pkt_frames)) in positions.iter().enumerate() {
-            if pkt_frames == 0 {
-                continue; // Skip warmup packets with no decoded audio.
-            }
-            if pkt_start >= target_frame {
-                if pkt_start > target_frame && !allow_late_start {
-                    return Ok(false);
+            let ts = match self.next_audio_packet(&mut scratch)? {
+                Some(ts) => ts,
+                None => {
+                    // Target is at or past the end of the stream; clamp.
+                    self.cursor_frames = target_frame;
+                    self.pending = None;
+                    return Ok(SeekOutcome::Landed);
                 }
-                // This packet is entirely at or past the target; stash it
-                // for the next read_dec_packet_itl call.
-                self.pending = Some(stashed.into_iter().nth(i).unwrap());
-                self.cursor_frames = pkt_start;
-                return Ok(true);
-            }
-            if pkt_start + pkt_frames > target_frame {
-                // Target is within this packet; trim leading samples.
-                let skip = (target_frame - pkt_start) as usize;
-                let drop_samples = skip * self.channels;
-                let pkt = &stashed[i];
-                if drop_samples < pkt.len() {
-                    self.pending = Some(pkt[drop_samples..].to_vec());
-                }
-                self.cursor_frames = target_frame;
-                return Ok(true);
-            }
-            self.cursor_frames = pkt_start + pkt_frames;
-        }
-
-        // Target is beyond this page; continue reading forward.
-        // From here, lewton's cur_absgp is calibrated and increments
-        // correctly with each decoded packet.
-        while self.cursor_frames < target_frame {
-            let Some(pkt) = self.read_packet()? else {
-                return Ok(true);
             };
-            let pkt_frames = (pkt.len() / self.channels) as u64;
-            if pkt_frames == 0 {
+            let frames = (scratch.len() / self.channels) as u64;
+            if ts.saturating_add(frames) <= target_ts {
+                continue; // Entirely before the target.
+            }
+            if ts > target_ts {
+                // Seek landed after the target; caller retries with more preroll.
+                return Ok(SeekOutcome::Overshoot);
+            }
+            let skip = (target_ts - ts) as usize;
+            let drop_samples = skip * self.channels;
+            self.pending = Some(scratch[drop_samples..].to_vec());
+            self.cursor_frames = target_frame;
+            return Ok(SeekOutcome::Landed);
+        }
+    }
+
+    // Reads, decodes and interleaves the next non-empty audio packet for our
+    // track into `out`, returning its absolute timestamp. Returns `None` at end
+    // of stream. All field accesses are direct (no `&mut self` helper call while
+    // the decoded buffer borrows `self.decoder`) to satisfy the borrow checker.
+    fn next_audio_packet(
+        &mut self,
+        out: &mut Vec<i16>,
+    ) -> Result<Option<u64>, Box<dyn std::error::Error + Send + Sync>> {
+        loop {
+            let packet = match self.format.next_packet() {
+                Ok(packet) => packet,
+                Err(SymphoniaError::IoError(e))
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    return Ok(None);
+                }
+                // A chained/linked OGG stream needs a decoder reset; we treat the
+                // end of the first logical stream as end-of-audio (game music is
+                // single-stream).
+                Err(SymphoniaError::ResetRequired) => return Ok(None),
+                Err(e) => return Err(format!("OGG read error: {e}").into()),
+            };
+            if packet.track_id() != self.track_id {
                 continue;
             }
-            let remaining = (target_frame - self.cursor_frames) as usize;
-            if remaining < pkt_frames as usize {
-                let drop_samples = remaining * self.channels;
-                if drop_samples < pkt.len() {
-                    self.pending = Some(pkt[drop_samples..].to_vec());
-                }
-                self.cursor_frames = target_frame;
-                return Ok(true);
+            let ts = packet.ts();
+            let audio = match self.decoder.decode(&packet) {
+                Ok(audio) => audio,
+                // Recoverable per symphonia's contract: skip and continue.
+                Err(SymphoniaError::DecodeError(_)) => continue,
+                Err(e) => return Err(format!("OGG decode error: {e}").into()),
+            };
+            let spec = *audio.spec();
+            let frames = audio.capacity() as u64;
+            if frames == 0 {
+                // Vorbis warmup / priming packet — produces no output frames.
+                continue;
             }
-            self.cursor_frames += pkt_frames;
-        }
-
-        Ok(true)
-    }
-
-    #[inline(always)]
-    fn read_packet(
-        &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        match &mut self.inner {
-            Inner::File(reader) => Ok(reader.read_dec_packet_itl()?),
-            Inner::Memory(reader) => Ok(reader.read_dec_packet_itl()?),
-        }
-    }
-
-    #[inline(always)]
-    fn seek_absgp_pg(
-        &mut self,
-        target_frame: u64,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        match &mut self.inner {
-            Inner::File(reader) => Ok(reader.seek_absgp_pg(target_frame)?),
-            Inner::Memory(reader) => Ok(reader.seek_absgp_pg(target_frame)?),
-        }
-    }
-
-    #[inline(always)]
-    fn last_absgp(&self) -> Option<u64> {
-        match &self.inner {
-            Inner::File(reader) => reader.get_last_absgp(),
-            Inner::Memory(reader) => reader.get_last_absgp(),
-        }
-    }
-}
-
-pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
-    let file = File::open(path).map_err(|e| format!("Cannot open file: {e}"))?;
-    // SAFETY: the mapping is read-only, tied to the lifetime of `file`, and this
-    // function never mutates the file descriptor while the map is live.
-    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
-    let stream = vorbis_stream_info(&mmap).ok_or_else(|| match sample_rate_hz_lewton(&mmap) {
-        Ok(_) => "fallback OGG ident parse failed".to_string(),
-        Err(lewton_err) => {
-            format!("lewton header error: {lewton_err}; fallback OGG ident parse failed")
-        }
-    })?;
-    let total_samples = find_last_granule_backwards(&mmap, stream.serial)?;
-    Ok((total_samples as f64 / stream.sample_rate_hz) as f32)
-}
-
-fn sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
-    let cursor = Cursor::new(data);
-    let reader = OggStreamReader::new(BufReader::new(cursor)).map_err(|e| format!("{e}"))?;
-    let rate = reader.ident_hdr.audio_sample_rate;
-    if rate == 0 {
-        return Err("Invalid sample rate (0)".into());
-    }
-    Ok(f64::from(rate))
-}
-
-fn vorbis_stream_info(data: &[u8]) -> Option<VorbisStreamInfo> {
-    // OGG files may contain cover art or other logical streams before the
-    // Vorbis stream. Track packets per serial and find the first completed
-    // Vorbis ident packet instead of assuming the first BOS packet is audio.
-    let mut packets: HashMap<u32, Vec<u8>> = HashMap::new();
-    let mut pos = 0usize;
-    while pos + OGG_PAGE_HEADER_LEN <= data.len() {
-        if !has_ogg_page_header(data, pos) {
-            pos += 1;
-            continue;
-        }
-        let page = parse_page_header(data, pos)?;
-        let seg_table = &data[pos + OGG_PAGE_HEADER_LEN..page.header_end];
-        let packet = packets.entry(page.serial).or_default();
-        if !page.continued {
-            packet.clear();
-        }
-        let mut body_pos = page.header_end;
-        for &seg_len_u8 in seg_table {
-            let seg_len = seg_len_u8 as usize;
-            let seg_end = body_pos.checked_add(seg_len)?;
-            packet.extend_from_slice(&data[body_pos..seg_end]);
-            body_pos = seg_end;
-            if seg_len < 255 {
-                if let Some(sample_rate_hz) = sample_rate_hz_ident_packet(packet) {
-                    return Some(VorbisStreamInfo {
-                        serial: page.serial,
-                        sample_rate_hz,
-                    });
-                }
-                packet.clear();
+            if self.sample_buf.is_none() || self.sample_buf_frames < frames {
+                self.sample_buf = Some(SampleBuffer::<i16>::new(frames, spec));
+                self.sample_buf_frames = frames;
             }
+            let buf = self.sample_buf.as_mut().expect("sample buffer present");
+            buf.copy_interleaved_ref(audio);
+            out.clear();
+            out.extend_from_slice(buf.samples());
+            return Ok(Some(ts));
         }
-        pos = page.body_end;
     }
-    None
-}
-
-fn sample_rate_hz_ident_packet(packet: &[u8]) -> Option<f64> {
-    const MIN_RATE_HZ: u32 = 8_000;
-    const MAX_RATE_HZ: u32 = 384_000;
-
-    if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
-        return None;
-    }
-    let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
-    if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
-        return None;
-    }
-    Some(f64::from(rate))
-}
-
-fn parse_page_header(data: &[u8], pos: usize) -> Option<OggPageHeader> {
-    if pos + OGG_PAGE_HEADER_LEN > data.len() || !has_ogg_page_header(data, pos) {
-        return None;
-    }
-    let seg_count = data[pos + 26] as usize;
-    let header_end = pos.checked_add(OGG_PAGE_HEADER_LEN + seg_count)?;
-    if header_end > data.len() {
-        return None;
-    }
-    let body_len = data[pos + OGG_PAGE_HEADER_LEN..header_end]
-        .iter()
-        .map(|&len| len as usize)
-        .sum::<usize>();
-    let body_end = header_end.checked_add(body_len)?;
-    if body_end > data.len() {
-        return None;
-    }
-    let serial = u32::from_le_bytes(
-        data[pos + OGG_SERIAL_OFFSET..pos + OGG_SERIAL_OFFSET + 4]
-            .try_into()
-            .ok()?,
-    );
-    let granule = u64::from_le_bytes(data[pos + 6..pos + 14].try_into().ok()?);
-    Some(OggPageHeader {
-        serial,
-        granule,
-        continued: data[pos + 5] & 0x01 != 0,
-        header_end,
-        body_end,
-    })
-}
-
-fn extract_logical_stream(data: &[u8], serial: u32) -> Option<Vec<u8>> {
-    let mut pos = 0usize;
-    let mut stream = Vec::new();
-    while pos + OGG_PAGE_HEADER_LEN <= data.len() {
-        if !has_ogg_page_header(data, pos) {
-            pos += 1;
-            continue;
-        }
-        let page = parse_page_header(data, pos)?;
-        if page.serial == serial {
-            stream.extend_from_slice(&data[pos..page.body_end]);
-        }
-        pos = page.body_end;
-    }
-    (!stream.is_empty()).then_some(stream)
-}
-
-fn find_last_granule_backwards(data: &[u8], serial: u32) -> Result<u64, String> {
-    let mut pos = data.len();
-    while pos >= OGG_PAGE_HEADER_LEN {
-        let start = pos.saturating_sub(OGG_SCAN_CHUNK_BYTES);
-        if let Some(granule) = find_last_chunk_granule(&data[start..pos], serial) {
-            return Ok(granule);
-        }
-        if start == 0 {
-            break;
-        }
-        pos = start + OGG_PAGE_HEADER_LEN - 1;
-    }
-    Err("No valid granule position found for Vorbis stream".into())
-}
-
-fn find_last_chunk_granule(chunk: &[u8], serial: u32) -> Option<u64> {
-    if chunk.len() < OGG_PAGE_HEADER_LEN {
-        return None;
-    }
-    let serial = serial.to_le_bytes();
-    let mut i = chunk.len() - OGG_PAGE_HEADER_LEN;
-    loop {
-        if has_ogg_page_header(chunk, i)
-            && chunk.get(i + OGG_SERIAL_OFFSET..i + OGG_SERIAL_OFFSET + 4)
-                == Some(serial.as_slice())
-        {
-            let page = parse_page_header(chunk, i)?;
-            if page.granule != u64::MAX {
-                return Some(page.granule);
-            }
-        }
-        if i == 0 {
-            return None;
-        }
-        i -= 1;
-    }
-}
-
-#[inline(always)]
-fn has_ogg_page_header(chunk: &[u8], at: usize) -> bool {
-    &chunk[at..at + 4] == b"OggS" && chunk[at + 4] == 0
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Reader, open_file};
+    use super::{Reader, file_length_seconds, open_file};
     use std::path::PathBuf;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;
@@ -529,6 +380,96 @@ mod tests {
             let actual = read_frames(&mut seeked, SEEK_COMPARE_FRAMES);
 
             assert_eq!(actual, expected, "seek target frame {target}");
+        }
+    }
+
+    // Characterization test: the symphonia decoder must reproduce the audio
+    // fingerprint captured from the original lewton decoder (channels/sample
+    // rate exactly; energy metrics within cross-decoder float-rounding
+    // tolerance). A real regression (wrong decode, off-by-N seek, dropped
+    // warmup, channel swap, truncation) moves a metric far outside tolerance.
+    #[test]
+    fn matches_golden_fingerprint() {
+        let path = fixture_path();
+        if !path.exists() {
+            return;
+        }
+        let opened = open_file(&path).expect("open fixture");
+        let channels = opened.channels;
+        let sample_rate = opened.sample_rate_hz;
+        assert_eq!(channels, 2, "channels");
+        assert_eq!(sample_rate, 44100, "sample_rate");
+
+        let mut reader = opened.reader;
+        let mut packet = Vec::new();
+        let mut frame_count: u64 = 0;
+        let mut sum_sq = [0f64; 2];
+        let mut peak = [0i32; 2];
+        loop {
+            let more = reader.read_dec_packet_into(&mut packet).expect("decode");
+            if !more {
+                break;
+            }
+            let frames = packet.len() / channels;
+            frame_count += frames as u64;
+            for f in 0..frames {
+                for c in 0..channels {
+                    let s = i32::from(packet[f * channels + c]);
+                    let a = s.abs();
+                    if a > peak[c] {
+                        peak[c] = a;
+                    }
+                    sum_sq[c] += (s as f64) * (s as f64);
+                }
+            }
+        }
+        let rms = [
+            (sum_sq[0] / frame_count as f64).sqrt(),
+            (sum_sq[1] / frame_count as f64).sqrt(),
+        ];
+        let length = file_length_seconds(&path).expect("length");
+
+        // Per-sample (combined-channel) RMS of a 0.25s window after each seek.
+        let targets = [90794u64, 138600, 235200];
+        const WINDOW: usize = 11025;
+        let mut seek_rms = [0f64; 3];
+        for (i, &target) in targets.iter().enumerate() {
+            let mut sk = open_file(&path).expect("open seek").reader;
+            sk.seek_frame(target).expect("seek");
+            let window = read_frames(&mut sk, WINDOW);
+            let mut ss = 0f64;
+            for v in &window {
+                ss += (f64::from(*v)) * (f64::from(*v));
+            }
+            seek_rms[i] = (ss / window.len() as f64).sqrt();
+        }
+
+        eprintln!(
+            "ogg golden actuals: frame_count={frame_count} length={length} \
+             peak={peak:?} rms={rms:?} seek_rms={seek_rms:?}"
+        );
+
+        // channels / sample_rate already asserted exactly above.
+        // frame_count: tolerate at most one max Vorbis block (8192 frames) of
+        // difference for end-of-stream trimming; catch any gross truncation.
+        let frame_diff = frame_count as i64 - 2_892_139;
+        assert!(
+            (-8192..=8192).contains(&frame_diff),
+            "frame_count={frame_count} (diff {frame_diff})"
+        );
+        assert!((length - 65.58138).abs() < 0.05, "length={length}");
+        for c in 0..channels {
+            assert!((peak[c] - 32768).abs() <= 64, "peak[{c}]={}", peak[c]);
+        }
+        let golden_rms = [6302.808355648021, 6223.901709056613];
+        for c in 0..channels {
+            let rel = (rms[c] - golden_rms[c]).abs() / golden_rms[c];
+            assert!(rel < 0.01, "rms[{c}]={} rel={rel}", rms[c]);
+        }
+        let golden_seek_rms = [3122.937572171839, 5679.57538944586, 1719.3614305311685];
+        for i in 0..3 {
+            let rel = (seek_rms[i] - golden_seek_rms[i]).abs() / golden_seek_rms[i];
+            assert!(rel < 0.02, "seek_rms[{i}]={} rel={rel}", seek_rms[i]);
         }
     }
 }
