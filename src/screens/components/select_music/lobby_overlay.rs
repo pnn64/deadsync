@@ -7,6 +7,7 @@ use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::online::lobbies;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::lobbies as lobby_data;
 use std::time::{Duration, Instant};
 
 const DIM_ALPHA: f32 = 0.875;
@@ -40,7 +41,7 @@ const PASSWORD_WHEEL_CHAR_WIDTH: f32 = 52.0;
 const PASSWORD_WHEEL_NUM_ITEMS: usize = 7;
 const PASSWORD_WHEEL_FOCUS_POS: usize = 3;
 const PASSWORD_WHEEL_SLIDE_SECONDS: f32 = 0.075;
-const PASSWORD_PROMPT_MAX_LEN: usize = lobbies::LOBBY_PASSWORD_MAX_LEN;
+const PASSWORD_PROMPT_MAX_LEN: usize = lobby_data::LOBBY_PASSWORD_MAX_LEN;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_nanos(66_666_667);
 const PASSWORD_CHARS: [&str; 28] = [
@@ -361,7 +362,7 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
         return InputOutcome::None;
     }
     match snapshot.connection {
-        lobbies::ConnectionState::Disconnected | lobbies::ConnectionState::Error(_) => {
+        lobby_data::ConnectionState::Disconnected | lobby_data::ConnectionState::Error(_) => {
             return match ev.action {
                 VirtualAction::p1_start | VirtualAction::p2_start => InputOutcome::ConnectRequested,
                 VirtualAction::p1_back
@@ -374,7 +375,7 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
                 _ => InputOutcome::None,
             };
         }
-        lobbies::ConnectionState::Connecting => {
+        lobby_data::ConnectionState::Connecting => {
             return match ev.action {
                 VirtualAction::p1_back
                 | VirtualAction::p2_back
@@ -386,7 +387,7 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
                 _ => InputOutcome::None,
             };
         }
-        lobbies::ConnectionState::Connected => {}
+        lobby_data::ConnectionState::Connected => {}
     }
 
     match ev.action {
@@ -549,7 +550,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
     }
 
     match snapshot.connection {
-        lobbies::ConnectionState::Disconnected | lobbies::ConnectionState::Error(_) => {
+        lobby_data::ConnectionState::Disconnected | lobby_data::ConnectionState::Error(_) => {
             actors.push(act!(text:
                 font("miso"):
                 settext("Press &START; to connect."):
@@ -562,7 +563,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
             ));
             return Some(actors);
         }
-        lobbies::ConnectionState::Connecting => {
+        lobby_data::ConnectionState::Connecting => {
             actors.push(act!(text:
                 font("miso"):
                 settext("Connecting..."):
@@ -575,7 +576,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
             ));
             return Some(actors);
         }
-        lobbies::ConnectionState::Connected => {}
+        lobby_data::ConnectionState::Connected => {}
     }
 
     actors.extend(build_browse_overlay(
@@ -600,7 +601,7 @@ fn build_browse_overlay(
     center_x: f32,
     center_y: f32,
     overlay: &OverlayStateData,
-    snapshot: &lobbies::Snapshot,
+    snapshot: &lobby_data::Snapshot,
     select_color: &[f32; 4],
 ) -> Vec<Actor> {
     let mut actors = Vec::new();
@@ -720,7 +721,7 @@ fn build_browse_overlay(
 fn build_joined_overlay(
     center_x: f32,
     center_y: f32,
-    joined: &lobbies::JoinedLobby,
+    joined: &lobby_data::JoinedLobby,
     selected_action_index: usize,
     select_color: &[f32; 4],
 ) -> Vec<Actor> {
@@ -821,7 +822,7 @@ fn build_joined_overlay(
     actors
 }
 
-fn joined_song_info_text(joined: &lobbies::JoinedLobby) -> Option<String> {
+fn joined_song_info_text(joined: &lobby_data::JoinedLobby) -> Option<String> {
     let song_info = joined.song_info.as_ref()?;
     let title = song_info
         .title
@@ -852,7 +853,7 @@ fn joined_song_info_text(joined: &lobbies::JoinedLobby) -> Option<String> {
     }
 }
 
-fn lobby_player_screen_suffix(player: &lobbies::LobbyPlayer) -> String {
+fn lobby_player_screen_suffix(player: &lobby_data::LobbyPlayer) -> String {
     let screen = player.screen_name.trim();
     if screen.is_empty() || screen.eq_ignore_ascii_case("ScreenSelectMusic") {
         return String::new();
@@ -1037,7 +1038,7 @@ fn push_password_prompt_footer(actors: &mut Vec<Actor>, center_x: f32, center_y:
     }
 }
 
-fn close_hint(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> &'static str {
+fn close_hint(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> &'static str {
     if overlay.password_prompt.is_some() {
         return "&MENULEFT;/&MENURIGHT;: PICK    &START;: CHOOSE    &BACK;: CANCEL";
     }
@@ -1048,7 +1049,7 @@ fn close_hint(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> &'sta
     }
 }
 
-fn status_text(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> String {
+fn status_text(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> String {
     if let Some(text) = overlay.notice_text.as_ref() {
         return text.clone();
     }
@@ -1078,25 +1079,27 @@ fn status_text(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> Stri
         return message.clone();
     }
     match &snapshot.connection {
-        lobbies::ConnectionState::Disconnected => "Disconnected from online service.".to_string(),
-        lobbies::ConnectionState::Connecting => "Connecting to online service...".to_string(),
-        lobbies::ConnectionState::Connected => {
+        lobby_data::ConnectionState::Disconnected => {
+            "Disconnected from online service.".to_string()
+        }
+        lobby_data::ConnectionState::Connecting => "Connecting to online service...".to_string(),
+        lobby_data::ConnectionState::Connected => {
             if snapshot.joined_lobby.is_some() {
                 "Connected to online service.".to_string()
             } else {
                 "Select a lobby or create one.".to_string()
             }
         }
-        lobbies::ConnectionState::Error(error) => format!("Connection error: {error}"),
+        lobby_data::ConnectionState::Error(error) => format!("Connection error: {error}"),
     }
 }
 
 #[inline(always)]
-fn browse_item_count(snapshot: &lobbies::Snapshot) -> usize {
+fn browse_item_count(snapshot: &lobby_data::Snapshot) -> usize {
     snapshot.available_lobbies.len() + 3
 }
 
-fn clamp_browse_scroll(overlay: &mut OverlayStateData, snapshot: &lobbies::Snapshot) {
+fn clamp_browse_scroll(overlay: &mut OverlayStateData, snapshot: &lobby_data::Snapshot) {
     let max_scroll = snapshot
         .available_lobbies
         .len()
@@ -1117,14 +1120,14 @@ fn clamp_browse_scroll(overlay: &mut OverlayStateData, snapshot: &lobbies::Snaps
 }
 
 enum BrowseAction<'a> {
-    Lobby(&'a lobbies::PublicLobby),
+    Lobby(&'a lobby_data::PublicLobby),
     Refresh,
     Create,
     Close,
 }
 
 fn resolve_browse_action<'a>(
-    snapshot: &'a lobbies::Snapshot,
+    snapshot: &'a lobby_data::Snapshot,
     browse_index: usize,
 ) -> BrowseAction<'a> {
     if let Some(lobby) = snapshot.available_lobbies.get(browse_index) {

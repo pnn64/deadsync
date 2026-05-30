@@ -21,6 +21,7 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::online::arrowcloud as ac_online;
 use crate::game::profile;
 use crate::screens::components::shared::qr_code;
+use deadsync_online::arrowcloud as ac_api;
 
 const POLL_INTERVAL_MIN_S: f32 = 1.0;
 const POLL_INTERVAL_MAX_S: f32 = 10.0;
@@ -235,8 +236,8 @@ pub fn create_arrowcloud_login_ui() -> QrLoginUiState {
                 side,
                 tx,
                 cancel_for_thread,
-                ac_online::device_login_start,
-                ac_online::device_login_poll,
+                ac_api::device_login_start,
+                ac_api::device_login_poll,
             );
         });
     });
@@ -261,8 +262,8 @@ pub fn create_arrowcloud_login_ui_for_profile(
             profile::PlayerSide::P1, // unused when target_profile_id is Some
             tx,
             cancel_for_thread,
-            ac_online::device_login_start,
-            ac_online::device_login_poll,
+            ac_api::device_login_start,
+            ac_api::device_login_poll,
         );
     });
     let p1_slot = LoginSlot {
@@ -358,17 +359,17 @@ fn run_login_session<S, P>(
     poll_fn: P,
 ) where
     S: Fn(
-        &ac_online::DeviceLoginStartReq,
-    ) -> Result<ac_online::DeviceLoginStartResp, deadsync_net::NetworkError>,
+        &ac_api::DeviceLoginStartReq,
+    ) -> Result<ac_api::DeviceLoginStartResp, deadsync_net::NetworkError>,
     P: Fn(
-        &ac_online::DeviceLoginPollReq,
-    ) -> Result<ac_online::DeviceLoginPollResp, deadsync_net::NetworkError>,
+        &ac_api::DeviceLoginPollReq,
+    ) -> Result<ac_api::DeviceLoginPollResp, deadsync_net::NetworkError>,
 {
     if cancel.load(Ordering::Relaxed) {
         return;
     }
 
-    let req = ac_online::DeviceLoginStartReq {
+    let req = ac_api::DeviceLoginStartReq {
         machine_label: None,
         client_version: Some(format!("deadsync {}", env!("CARGO_PKG_VERSION"))),
         theme_version: None,
@@ -384,7 +385,7 @@ fn run_login_session<S, P>(
     };
 
     let mut interval_s = clamp_poll_interval(start.poll_interval_seconds);
-    let poll_req = ac_online::DeviceLoginPollReq {
+    let poll_req = ac_api::DeviceLoginPollReq {
         session_id: start.session_id.clone(),
         poll_token: start.poll_token.clone(),
     };
@@ -407,7 +408,7 @@ fn run_login_session<S, P>(
             Ok(resp) => {
                 interval_s = clamp_poll_interval(resp.poll_interval_seconds);
                 match resp.status {
-                    ac_online::DeviceLoginStatus::Consumed => {
+                    ac_api::DeviceLoginStatus::Consumed => {
                         let api_key = resp.api_key.unwrap_or_default();
                         if api_key.trim().is_empty() {
                             let _ = tx.send(LoginMsg::Failed {
@@ -421,15 +422,13 @@ fn run_login_session<S, P>(
                         }
                         return;
                     }
-                    ac_online::DeviceLoginStatus::Cancelled
-                    | ac_online::DeviceLoginStatus::Expired => {
+                    ac_api::DeviceLoginStatus::Cancelled | ac_api::DeviceLoginStatus::Expired => {
                         let _ = tx.send(LoginMsg::Failed {
                             reason: format!("{:?}", resp.status).to_lowercase(),
                         });
                         return;
                     }
-                    ac_online::DeviceLoginStatus::Pending
-                    | ac_online::DeviceLoginStatus::Approved => {
+                    ac_api::DeviceLoginStatus::Pending | ac_api::DeviceLoginStatus::Approved => {
                         if tx.send(LoginMsg::StatusUpdate).is_err() {
                             return;
                         }
@@ -1142,8 +1141,8 @@ mod tests {
         out
     }
 
-    fn make_start_ok() -> ac_online::DeviceLoginStartResp {
-        ac_online::DeviceLoginStartResp {
+    fn make_start_ok() -> ac_api::DeviceLoginStartResp {
+        ac_api::DeviceLoginStartResp {
             session_id: "sess-1".into(),
             short_code: "ABCD2345".into(),
             poll_token: "tok-1".into(),
@@ -1175,21 +1174,21 @@ mod tests {
         let polls_clone = Arc::clone(&polls);
 
         let start = make_start_ok();
-        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
             Ok(start.clone())
         };
-        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
             let mut n = polls_clone.lock().unwrap();
             *n += 1;
             if *n == 1 {
-                Ok(ac_online::DeviceLoginPollResp {
-                    status: ac_online::DeviceLoginStatus::Pending,
+                Ok(ac_api::DeviceLoginPollResp {
+                    status: ac_api::DeviceLoginStatus::Pending,
                     poll_interval_seconds: Some(0),
                     api_key: None,
                 })
             } else {
-                Ok(ac_online::DeviceLoginPollResp {
-                    status: ac_online::DeviceLoginStatus::Consumed,
+                Ok(ac_api::DeviceLoginPollResp {
+                    status: ac_api::DeviceLoginStatus::Consumed,
                     poll_interval_seconds: None,
                     api_key: Some("AC-KEY-7".into()),
                 })
@@ -1216,12 +1215,12 @@ mod tests {
         let (tx, rx) = mpsc::channel::<LoginMsg>();
         let cancel = Arc::new(AtomicBool::new(false));
         let start = make_start_ok();
-        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
             Ok(start.clone())
         };
-        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            Ok(ac_online::DeviceLoginPollResp {
-                status: ac_online::DeviceLoginStatus::Expired,
+        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(ac_api::DeviceLoginPollResp {
+                status: ac_api::DeviceLoginStatus::Expired,
                 poll_interval_seconds: None,
                 api_key: None,
             })
@@ -1236,10 +1235,10 @@ mod tests {
     fn worker_reports_failure_when_start_errors() {
         let (tx, rx) = mpsc::channel::<LoginMsg>();
         let cancel = Arc::new(AtomicBool::new(false));
-        let start_fn = |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+        let start_fn = |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
             Err(NetworkError::Request("boom".into()))
         };
-        let poll_fn = |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
+        let poll_fn = |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
             unreachable!("poll should not be called when start fails")
         };
 
@@ -1254,12 +1253,12 @@ mod tests {
         let (tx, rx) = mpsc::channel::<LoginMsg>();
         let cancel = Arc::new(AtomicBool::new(false));
         let start = make_start_ok();
-        let start_fn = move |_req: &ac_online::DeviceLoginStartReq| -> Result<_, NetworkError> {
+        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
             Ok(start.clone())
         };
-        let poll_fn = move |_req: &ac_online::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            Ok(ac_online::DeviceLoginPollResp {
-                status: ac_online::DeviceLoginStatus::Consumed,
+        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(ac_api::DeviceLoginPollResp {
+                status: ac_api::DeviceLoginStatus::Consumed,
                 poll_interval_seconds: None,
                 api_key: Some("   ".into()),
             })

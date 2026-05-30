@@ -1,32 +1,19 @@
-use super::groovestats::{self, ConnectionStatus};
+use super::groovestats;
 use crate::config;
 use crate::config::dirs;
 use deadsync_net as network;
+use deadsync_online::downloads::{
+    DownloadSnapshot, UnlockCache, UnlockCacheFile, cache_has_destination,
+    itl_unlock_pack_ini_content, mime_token, sanitize_pack_name,
+};
+use deadsync_online::groovestats::ConnectionStatus;
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use zip::ZipArchive;
-
-const ITL_UNLOCK_PACK_YEAR: u32 = 2026;
-const INVALID_PACK_CHARS: [char; 9] = ['/', '<', '>', ':', '"', '\\', '|', '?', '*'];
-const WINDOWS_RESERVED_NAMES: [&str; 22] = [
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
-
-#[derive(Clone, Debug)]
-pub struct DownloadSnapshot {
-    pub name: String,
-    pub current_bytes: u64,
-    pub total_bytes: u64,
-    pub complete: bool,
-    pub error_message: Option<String>,
-}
 
 #[derive(Clone, Debug)]
 struct DownloadEntry {
@@ -48,14 +35,9 @@ struct DownloadState {
     ready_song_reload_dirs: Vec<PathBuf>,
 }
 
-type UnlockCache = HashMap<String, HashMap<String, bool>>;
-
 static DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
     LazyLock::new(|| Mutex::new(DownloadState::default()));
 static NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Serialize, Deserialize)]
-struct UnlockCacheFile(HashMap<String, HashMap<String, bool>>);
 
 pub fn sort_menu_available() -> bool {
     config::get().auto_download_unlocks
@@ -245,17 +227,13 @@ fn write_pack_ini_if_needed(
     destination_pack: &Path,
     pack_name: &str,
 ) -> Result<(), std::io::Error> {
-    let lower = pack_name.to_ascii_lowercase();
-    if !lower.contains(&format!("itl online {ITL_UNLOCK_PACK_YEAR} unlocks")) {
+    let Some(content) = itl_unlock_pack_ini_content(pack_name) else {
         return Ok(());
-    }
+    };
     let pack_ini = destination_pack.join("Pack.ini");
     if pack_ini.exists() {
         return Ok(());
     }
-    let content = format!(
-        "[Group]\nVersion=1\nDisplayTitle={pack_name}\nTranslitTitle={pack_name}\nSortTitle={pack_name}\nSeries=ITL Online\nYear={ITL_UNLOCK_PACK_YEAR}\nBanner=\nSyncOffset=NULL\n"
-    );
     fs::write(pack_ini, content)
 }
 
@@ -322,13 +300,13 @@ fn ensure_cache_loaded(state: &mut DownloadState) {
 fn load_unlock_cache() -> UnlockCache {
     let path = dirs::app_dirs().unlock_cache_path();
     let Ok(text) = fs::read_to_string(&path) else {
-        return HashMap::new();
+        return UnlockCache::new();
     };
     serde_json::from_str::<UnlockCacheFile>(&text)
         .map(|file| file.0)
         .unwrap_or_else(|error| {
             warn!("Failed to parse unlock cache {path:?}: {error}");
-            HashMap::new()
+            UnlockCache::new()
         })
 }
 
@@ -355,14 +333,6 @@ fn write_unlock_cache(cache: &UnlockCache) {
     }
 }
 
-fn cache_has_destination(cache: &UnlockCache, url: &str, destination: &str) -> bool {
-    cache
-        .get(url)
-        .and_then(|packs| packs.get(destination))
-        .copied()
-        .unwrap_or(false)
-}
-
 fn download_filename(id: u64) -> String {
     format!("{id:016x}.zip")
 }
@@ -371,35 +341,11 @@ fn file_len(path: &Path) -> u64 {
     fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
 }
 
-fn sanitize_pack_name(raw: &str) -> String {
-    let mut sanitized = String::with_capacity(raw.len());
-    for ch in raw.chars() {
-        if INVALID_PACK_CHARS.contains(&ch) {
-            continue;
-        }
-        sanitized.push(ch);
-    }
-    if sanitized.trim().is_empty() {
-        sanitized = "Unlocks".to_string();
-    }
-    if WINDOWS_RESERVED_NAMES
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case(sanitized.trim()))
-    {
-        return format!(" {} ", sanitized.trim());
-    }
-    sanitized
-}
-
-fn mime_token(value: &str) -> &str {
-    value.split(';').next().unwrap_or("").trim()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID, mime_token,
-        sanitize_pack_name, take_ready_song_reload_request,
+        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID,
+        take_ready_song_reload_request,
     };
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
@@ -407,24 +353,6 @@ mod tests {
     fn reset_download_state() {
         *DOWNLOAD_STATE.lock().unwrap() = DownloadState::default();
         NEXT_DOWNLOAD_ID.store(1, Ordering::Relaxed);
-    }
-
-    #[test]
-    fn sanitize_pack_name_strips_invalid_chars() {
-        assert_eq!(sanitize_pack_name("ITL/Unlocks:*?"), "ITLUnlocks");
-    }
-
-    #[test]
-    fn sanitize_pack_name_avoids_windows_reserved_names() {
-        assert_eq!(sanitize_pack_name("CON"), " CON ");
-    }
-
-    #[test]
-    fn mime_token_strips_parameters() {
-        assert_eq!(
-            mime_token("application/zip; charset=binary"),
-            "application/zip"
-        );
     }
 
     #[test]

@@ -38,6 +38,7 @@ use crate::screens::{
 };
 use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
+use deadsync_online::lobbies as lobby_data;
 use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
@@ -6416,9 +6417,7 @@ pub(crate) fn selected_chart_ix_for_sync(
     chart_ix_for_steps_index(&standard, steps_index, edits.as_slice())
 }
 
-fn build_local_lobby_song_info(
-    state: &State,
-) -> Option<crate::game::online::lobbies::LobbySongInfo> {
+fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
     let song = selected_song_arc(state)?;
     let song_path = lobby_song_path(song.as_ref())?;
     let chart_type = profile::get_session_play_style().chart_type();
@@ -6427,7 +6426,7 @@ fn build_local_lobby_song_info(
         chart_type,
         selected_steps_index_for_sync(state),
     )?;
-    Some(crate::game::online::lobbies::LobbySongInfo {
+    Some(lobby_data::LobbySongInfo {
         song_path,
         title: Some(song.display_full_title(false)),
         artist: Some(song.artist.clone()),
@@ -6439,7 +6438,7 @@ fn build_local_lobby_song_info(
     })
 }
 
-fn lobby_song_signature(song_info: &crate::game::online::lobbies::LobbySongInfo) -> String {
+fn lobby_song_signature(song_info: &lobby_data::LobbySongInfo) -> String {
     let rate_bits = song_info.rate.unwrap_or(1.0).to_bits();
     format!(
         "{}|{}|{}|{}",
@@ -6451,8 +6450,8 @@ fn lobby_song_signature(song_info: &crate::game::online::lobbies::LobbySongInfo)
 }
 
 fn lobby_song_matches_remote_selection(
-    local_song_info: &crate::game::online::lobbies::LobbySongInfo,
-    remote_song_info: &crate::game::online::lobbies::LobbySongInfo,
+    local_song_info: &lobby_data::LobbySongInfo,
+    remote_song_info: &lobby_data::LobbySongInfo,
 ) -> bool {
     if normalize_lobby_song_path(local_song_info.song_path.as_str())
         != normalize_lobby_song_path(remote_song_info.song_path.as_str())
@@ -6495,14 +6494,11 @@ fn lobby_song_matches_remote_selection(
     true
 }
 
-fn lobby_player_on_screen(
-    player: &crate::game::online::lobbies::LobbyPlayer,
-    screen_name: &str,
-) -> bool {
+fn lobby_player_on_screen(player: &lobby_data::LobbyPlayer, screen_name: &str) -> bool {
     player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
-fn lobby_player_has_gameplay_progress(player: &crate::game::online::lobbies::LobbyPlayer) -> bool {
+fn lobby_player_has_gameplay_progress(player: &lobby_data::LobbyPlayer) -> bool {
     if let Some(judgments) = player.judgments.as_ref()
         && (judgments.fantastic_plus > 0
             || judgments.fantastics > 0
@@ -6523,9 +6519,9 @@ fn lobby_player_has_gameplay_progress(player: &crate::game::online::lobbies::Lob
 }
 
 fn select_music_lobby_lock_text_for(
-    joined: &crate::game::online::lobbies::JoinedLobby,
+    joined: &lobby_data::JoinedLobby,
     local_player_count: usize,
-    _local_song_info: Option<&crate::game::online::lobbies::LobbySongInfo>,
+    _local_song_info: Option<&lobby_data::LobbySongInfo>,
     reconnect_status_text: Option<&str>,
 ) -> Option<String> {
     if joined.players.len() <= local_player_count {
@@ -6576,7 +6572,7 @@ fn select_music_lobby_lock_text_for(
 
 fn apply_remote_lobby_song_selection(
     state: &mut State,
-    song_info: &crate::game::online::lobbies::LobbySongInfo,
+    song_info: &lobby_data::LobbySongInfo,
 ) -> bool {
     let Some(target_song) = find_song_by_lobby_path(state, song_info.song_path.as_str()) else {
         return false;
@@ -6645,10 +6641,7 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
     if joined.players.len() <= local_lobby_player_count() {
         return;
     }
-    if !matches!(
-        snapshot.connection,
-        crate::game::online::lobbies::ConnectionState::Connected
-    ) {
+    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
         return;
     }
 
@@ -6691,10 +6684,7 @@ fn sync_lobby_select_music(state: &mut State) {
         state.lobby_last_failed_remote_song_sig = None;
     }
 
-    if !matches!(
-        snapshot.connection,
-        crate::game::online::lobbies::ConnectionState::Connected
-    ) {
+    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
         state.lobby_last_published_machine_sig = None;
         state.lobby_last_published_song_sig = None;
         state.lobby_last_failed_remote_song_sig = None;
@@ -11856,6 +11846,7 @@ mod tests {
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
     use deadsync_input::{PadDir, VirtualAction};
+    use deadsync_online::lobbies as lobby_data;
     use deadsync_score as score_data;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -12092,8 +12083,8 @@ mod tests {
         ]
     }
 
-    fn test_lobby_song_info(song_path: &str) -> crate::game::online::lobbies::LobbySongInfo {
-        crate::game::online::lobbies::LobbySongInfo {
+    fn test_lobby_song_info(song_path: &str) -> lobby_data::LobbySongInfo {
+        lobby_data::LobbySongInfo {
             song_path: song_path.to_string(),
             title: Some("Song".to_string()),
             artist: Some("Artist".to_string()),
@@ -12105,8 +12096,8 @@ mod tests {
         }
     }
 
-    fn test_lobby_player(screen_name: &str) -> crate::game::online::lobbies::LobbyPlayer {
-        crate::game::online::lobbies::LobbyPlayer {
+    fn test_lobby_player(screen_name: &str) -> lobby_data::LobbyPlayer {
+        lobby_data::LobbyPlayer {
             label: "Remote".to_string(),
             ready: false,
             screen_name: screen_name.to_string(),
@@ -12117,10 +12108,10 @@ mod tests {
     }
 
     fn test_joined_lobby(
-        players: Vec<crate::game::online::lobbies::LobbyPlayer>,
-        song_info: Option<crate::game::online::lobbies::LobbySongInfo>,
-    ) -> crate::game::online::lobbies::JoinedLobby {
-        crate::game::online::lobbies::JoinedLobby {
+        players: Vec<lobby_data::LobbyPlayer>,
+        song_info: Option<lobby_data::LobbySongInfo>,
+    ) -> lobby_data::JoinedLobby {
+        lobby_data::JoinedLobby {
             code: "ABCD".to_string(),
             players,
             song_info,
@@ -12605,7 +12596,7 @@ mod tests {
     fn lobby_lock_text_waits_once_remote_gameplay_has_progress() {
         let song = test_lobby_song_info("Songs/Pack/Song");
         let mut remote = test_lobby_player("ScreenGameplay");
-        remote.judgments = Some(crate::game::online::lobbies::LobbyJudgments {
+        remote.judgments = Some(lobby_data::LobbyJudgments {
             fantastics: 1,
             ..Default::default()
         });

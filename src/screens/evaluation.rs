@@ -31,6 +31,7 @@ use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
+use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -46,6 +47,7 @@ use crate::game::profile;
 use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_online::groovestats as groovestats_api;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
@@ -211,6 +213,11 @@ fn submit_footer_gs_label() -> Arc<str> {
     } else {
         tr("SubmitStatus", "GSLabel")
     }
+}
+
+#[inline(always)]
+fn active_groovestats_service_name() -> &'static str {
+    groovestats_api::service_name(online::groovestats_active_service())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2815,7 +2822,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
                 });
             warn!(
                 "Missing {} submit status for {:?} ({}); rendering evaluation footer as failed.",
-                online::groovestats_service_name(),
+                active_groovestats_service_name(),
                 si.side,
                 chart_hash,
             );
@@ -2939,13 +2946,13 @@ fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
 fn evaluation_lobby_player_stats(
     state: &State,
     side: profile::PlayerSide,
-) -> Option<online::lobbies::MachinePlayerStats> {
+) -> Option<lobby_data::MachinePlayerStats> {
     let score_info = state
         .score_info
         .iter()
         .flatten()
         .find(|score_info| score_info.side == side)?;
-    let judgments = online::lobbies::LobbyJudgments {
+    let judgments = lobby_data::LobbyJudgments {
         fantastic_plus: score_info.window_counts.w0,
         fantastics: score_info.window_counts.w1,
         excellents: score_info.window_counts.w2,
@@ -2963,7 +2970,7 @@ fn evaluation_lobby_player_stats(
         rolls_held: score_info.rolls_held,
         total_rolls: score_info.rolls_total,
     };
-    Some(online::lobbies::MachinePlayerStats {
+    Some(lobby_data::MachinePlayerStats {
         judgments: Some(judgments),
         score: Some((score_info.score_percent * 100.0) as f32),
         ex_score: Some(score_info.ex_score_percent as f32),

@@ -8,8 +8,7 @@ use crate::game::stage_stats;
 use chrono::{DateTime, Local, TimeZone, Utc};
 use deadsync_chart::ArrowStats;
 use log::{debug, warn};
-use serde::de::{DeserializeOwned, Deserializer};
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -23,11 +22,26 @@ use bincode::{Decode, Encode};
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_input::InputSource;
 use deadsync_net as network;
+use deadsync_online::arrowcloud::{
+    self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES, ArrowCloudLeaderboardEntry,
+    ArrowCloudLeaderboardPane, ArrowCloudLeaderboardsApiResponse, ArrowCloudRetrieveScoreEntry,
+    ArrowCloudRetrieveScoresRequest, ArrowCloudRetrieveScoresResponse, ArrowCloudUserApiResponse,
+    ArrowCloudUserApiUser,
+};
+use deadsync_online::groovestats::{
+    self as groovestats_api, GrooveStatsSubmitApiPlayer, LeaderboardApiEntry, LeaderboardApiPlayer,
+    LeaderboardsApiResponse,
+};
 use deadsync_rules::judgment;
 
 mod arrowcloud;
 mod groovestats;
 mod itl;
+
+#[inline(always)]
+fn active_groovestats_service() -> groovestats_api::Service {
+    online::groovestats_active_service()
+}
 
 pub use arrowcloud::{
     ArrowCloudSubmitUiStatus, arrowcloud_next_retry_is_auto, arrowcloud_next_retry_remaining_secs,
@@ -52,11 +66,7 @@ pub use groovestats::{
     retry_groovestats_submit, submit_groovestats_payloads_from_gameplay,
     tick_groovestats_auto_retries,
 };
-use groovestats::{
-    GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
-    GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, GrooveStatsSubmitPlayerJob,
-    groovestats_judgment_counts,
-};
+use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use itl::{
     CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage, get_cached_itl_score_for_side,
     get_cached_itl_score_for_song, get_cached_itl_self_score_for_side,
@@ -2233,238 +2243,10 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct LeaderboardsApiResponse {
-    player1: Option<LeaderboardApiPlayer>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudLeaderboardsApiResponse {
-    #[serde(default)]
-    leaderboards: Vec<ArrowCloudLeaderboardPane>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudLeaderboardPane {
-    #[serde(default)]
-    r#type: String,
-    #[serde(default)]
-    scores: Vec<ArrowCloudLeaderboardEntry>,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    page: u32,
-    #[serde(default)]
-    has_next: bool,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    total_pages: u32,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudLeaderboardEntry {
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    rank: u32,
-    #[serde(default, deserialize_with = "de_f64_from_string_or_number")]
-    score: f64, // 0..100
-    #[serde(default)]
-    alias: String,
-    #[serde(default)]
-    date: String,
-    #[serde(default)]
-    user_id: String,
-    #[serde(default)]
-    is_rival: bool,
-    #[serde(default)]
-    is_self: bool,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudUserApiResponse {
-    user: ArrowCloudUserApiUser,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudUserApiUser {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    rival_user_ids: Vec<String>,
-}
-
 #[derive(Debug, Default)]
 struct ArrowCloudUserContext {
     self_user_id: Option<String>,
     rival_user_ids: HashSet<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum U32OrString {
-    U32(u32),
-    F64(f64),
-    String(String),
-}
-
-fn de_u32_from_string_or_number<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<U32OrString>::deserialize(deserializer)? {
-        Some(U32OrString::U32(v)) => Ok(v),
-        Some(U32OrString::F64(v)) => Ok(v.max(0.0).floor() as u32),
-        Some(U32OrString::String(text)) => Ok(text.trim().parse::<u32>().unwrap_or(0)),
-        None => Ok(0),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum I32OrString {
-    I32(i32),
-    I64(i64),
-    F64(f64),
-    String(String),
-}
-
-fn de_i32_from_string_or_number<'de, D>(deserializer: D) -> Result<i32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<I32OrString>::deserialize(deserializer)? {
-        Some(I32OrString::I32(v)) => Ok(v),
-        Some(I32OrString::I64(v)) => Ok(v.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
-        Some(I32OrString::F64(v)) => {
-            Ok(v.clamp(f64::from(i32::MIN), f64::from(i32::MAX)).round() as i32)
-        }
-        Some(I32OrString::String(text)) => Ok(text.trim().parse::<i32>().unwrap_or(0)),
-        None => Ok(0),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum F64OrString {
-    F64(f64),
-    String(String),
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-enum StringOrNumber {
-    String(String),
-    I64(i64),
-    U64(u64),
-    F64(f64),
-}
-
-fn de_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<F64OrString>::deserialize(deserializer)? {
-        Some(F64OrString::F64(v)) => Ok(v),
-        Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().unwrap_or(0.0)),
-        None => Ok(0.0),
-    }
-}
-
-/// `Option<f64>` variant of [`de_f64_from_string_or_number`]. Returns `None`
-/// for missing fields or unparseable strings instead of defaulting to `0.0`,
-/// so callers can distinguish "no score" from "actual 0% score".
-fn de_optional_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<F64OrString>::deserialize(deserializer)? {
-        Some(F64OrString::F64(v)) => Ok(Some(v)),
-        Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().ok()),
-        None => Ok(None),
-    }
-}
-
-/// `Option<i64>` variant accepting either a JSON number or a numeric string.
-/// Returns `None` for missing fields or unparseable strings.
-fn de_optional_i64_from_string_or_number<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<StringOrNumber>::deserialize(deserializer)? {
-        Some(StringOrNumber::I64(v)) => Ok(Some(v)),
-        Some(StringOrNumber::U64(v)) => Ok(i64::try_from(v).ok()),
-        Some(StringOrNumber::F64(v)) => {
-            if v.is_finite() && v >= i64::MIN as f64 && v <= i64::MAX as f64 {
-                Ok(Some(v as i64))
-            } else {
-                Ok(None)
-            }
-        }
-        Some(StringOrNumber::String(text)) => Ok(text.trim().parse::<i64>().ok()),
-        None => Ok(None),
-    }
-}
-
-fn de_string_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Option::<StringOrNumber>::deserialize(deserializer)? {
-        Some(StringOrNumber::String(text)) => Ok(text),
-        Some(StringOrNumber::I64(v)) => Ok(v.to_string()),
-        Some(StringOrNumber::U64(v)) => Ok(v.to_string()),
-        Some(StringOrNumber::F64(v)) => Ok(compact_f32_text(v as f32)),
-        None => Ok(String::new()),
-    }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct LeaderboardApiPlayer {
-    #[serde(default)]
-    is_ranked: bool,
-    #[serde(rename = "gsLeaderboard", default)]
-    gs_leaderboard: Vec<LeaderboardApiEntry>,
-    #[serde(rename = "exLeaderboard", default)]
-    ex_leaderboard: Vec<LeaderboardApiEntry>,
-    rpg: Option<LeaderboardEventData>,
-    itl: Option<LeaderboardEventData>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct LeaderboardEventData {
-    #[serde(default)]
-    name: String,
-    #[serde(rename = "rpgLeaderboard", default)]
-    rpg_leaderboard: Vec<LeaderboardApiEntry>,
-    #[serde(rename = "itlLeaderboard", default)]
-    itl_leaderboard: Vec<LeaderboardApiEntry>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-struct LeaderboardApiEntry {
-    #[serde(default)]
-    rank: u32,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    machine_tag: Option<String>,
-    #[serde(default)]
-    score: f64, // 0..10000
-    #[serde(default)]
-    date: String,
-    #[serde(default)]
-    is_rival: bool,
-    #[serde(default)]
-    is_self: bool,
-    #[serde(default)]
-    is_fail: bool,
-    #[serde(default)]
-    comments: Option<String>,
 }
 
 fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
@@ -2904,24 +2686,9 @@ fn fetch_arrowcloud_json<T: DeserializeOwned>(
         .http_status_as_error(false)
         .build()
         .call()
-        .map_err(|error| match error {
-            ureq::Error::StatusCode(status) => network::NetworkError::HttpStatus(status),
-            other => {
-                let message = other.to_string();
-                let lower = message.to_ascii_lowercase();
-                if lower.contains("timeout") || lower.contains("timed out") {
-                    network::NetworkError::Timeout
-                } else {
-                    network::NetworkError::Request(message)
-                }
-            }
-        })?;
+        .map_err(network::error_from_ureq)?;
     match response.status().as_u16() {
-        200 => response
-            .into_body()
-            .read_json()
-            .map(Some)
-            .map_err(|error| network::NetworkError::Decode(error.to_string())),
+        200 => network::read_json_body(response).map(Some),
         404 => Ok(None),
         status => Err(network::NetworkError::HttpStatus(status)),
     }
@@ -2938,7 +2705,7 @@ fn fetch_arrowcloud_user_context(
     api_key: &str,
 ) -> Result<Option<ArrowCloudUserContext>, network::NetworkError> {
     fetch_arrowcloud_json::<ArrowCloudUserApiResponse>(
-        online::arrowcloud_user_url(),
+        arrowcloud_api::user_url(),
         Some(api_key),
         None,
     )
@@ -2946,44 +2713,6 @@ fn fetch_arrowcloud_user_context(
 }
 
 // --- ArrowCloud bulk score retrieval (POST /v1/retrieve-scores) ---
-
-/// Maximum chart hashes per `/v1/retrieve-scores` request, server-enforced.
-pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudRetrieveScoresRequest<'a> {
-    chart_hashes: &'a [String],
-    leaderboard_ids: &'a [ArrowCloudLeaderboard],
-    #[serde(skip_serializing_if = "Option::is_none")]
-    user_id: Option<&'a str>,
-}
-
-#[derive(Deserialize, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudRetrieveScoresResponse {
-    #[serde(default)]
-    scores: HashMap<String, HashMap<String, ArrowCloudRetrieveScoreEntry>>,
-}
-
-#[derive(Deserialize, Debug, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudRetrieveScoreEntry {
-    /// Score percent on a 0..100 scale (string in JSON, e.g. `"99.12"`).
-    /// `None` means the server returned an entry without a score field; we
-    /// treat such rows as "no score" rather than caching a fake 0.00%.
-    #[serde(default, deserialize_with = "de_optional_f64_from_string_or_number")]
-    score: Option<f64>,
-    #[serde(default)]
-    grade: Option<String>,
-    /// ISO-8601 / RFC-3339 timestamp string, e.g. `"2026-05-03T19:10:17.504Z"`.
-    #[serde(default)]
-    date: Option<String>,
-    #[serde(default, deserialize_with = "de_optional_i64_from_string_or_number")]
-    play_id: Option<i64>,
-    #[serde(default)]
-    is_fail: bool,
-}
 
 /// Convert a single bulk-API entry into our internal `ArrowCloudScore`.
 ///
@@ -3063,7 +2792,7 @@ fn fetch_arrowcloud_bulk_scores(
         user_id,
     };
     let bearer = format!("Bearer {api_key}");
-    let url = online::arrowcloud_retrieve_scores_url();
+    let url = arrowcloud_api::retrieve_scores_url();
     let response = network::get_agent()
         .post(&url)
         .header("Content-Type", "application/json")
@@ -3078,7 +2807,7 @@ fn fetch_arrowcloud_bulk_scores(
         .into());
     }
 
-    let decoded: ArrowCloudRetrieveScoresResponse = response.into_body().read_json()?;
+    let decoded: ArrowCloudRetrieveScoresResponse = network::read_json_body(response)?;
     let mut out = HashMap::with_capacity(decoded.scores.len());
     for (chart_hash, leaderboards) in decoded.scores {
         let entries = arrowcloud_scores_from_entry_map(&leaderboards);
@@ -3111,7 +2840,7 @@ fn fetch_arrowcloud_panes(
         }
     };
 
-    let Some(legacy_api_url) = online::arrowcloud_legacy_leaderboards_url(chart_hash) else {
+    let Some(legacy_api_url) = arrowcloud_api::legacy_leaderboards_url(chart_hash) else {
         return Ok(vec![empty_arrowcloud_hard_ex_pane()]);
     };
     let Some(decoded) = fetch_arrowcloud_leaderboards(legacy_api_url.as_str(), Some(1))? else {
@@ -3185,7 +2914,7 @@ fn fetch_player_leaderboards_internal(
     let max_entries = max_entries.max(1);
     let max_entries_str = max_entries.to_string();
     let agent = network::get_groovestats_agent();
-    let api_url = online::groovestats_player_leaderboards_url();
+    let api_url = groovestats_api::player_leaderboards_url(active_groovestats_service());
     let response = agent
         .get(&api_url)
         .header("x-api-key-player-1", api_key)
@@ -3197,7 +2926,7 @@ fn fetch_player_leaderboards_internal(
         return Err(format!("Leaderboard API returned status {}", response.status()).into());
     }
 
-    let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
+    let decoded: LeaderboardsApiResponse = network::read_json_body(response)?;
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
     let mut ex_entries = Vec::new();
@@ -4378,12 +4107,18 @@ impl ScoreImportEndpoint {
     }
 
     fn player_leaderboards_url(self) -> String {
-        let base = match self {
-            Self::GrooveStats => online::groovestats_primary_api_base_url(),
-            Self::BoogieStats => online::boogiestats_api_base_url(),
-            Self::ArrowCloud => online::arrowcloud_api_base_url(),
-        };
-        format!("{}/player-leaderboards.php", base.trim_end_matches('/'))
+        match self {
+            Self::GrooveStats => {
+                groovestats_api::player_leaderboards_url(groovestats_api::Service::GrooveStats)
+            }
+            Self::BoogieStats => {
+                groovestats_api::player_leaderboards_url(groovestats_api::Service::BoogieStats)
+            }
+            Self::ArrowCloud => format!(
+                "{}/player-leaderboards.php",
+                arrowcloud_api::api_base_url().trim_end_matches('/')
+            ),
+        }
     }
 }
 
@@ -4532,7 +4267,7 @@ fn fetch_player_score_from_endpoint(
         return Err(format!("API returned status {}", response.status()).into());
     }
 
-    let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
+    let decoded: LeaderboardsApiResponse = network::read_json_body(response)?;
     Ok(score_import_result_from_response(
         decoded, endpoint, username, chart_hash,
     ))
@@ -5028,10 +4763,9 @@ pub fn fetch_and_store_grade(
         profile.groovestats_username, chart_hash
     );
 
-    let endpoint = if crate::game::online::is_boogiestats_active() {
-        ScoreImportEndpoint::BoogieStats
-    } else {
-        ScoreImportEndpoint::GrooveStats
+    let endpoint = match active_groovestats_service() {
+        groovestats_api::Service::GrooveStats => ScoreImportEndpoint::GrooveStats,
+        groovestats_api::Service::BoogieStats => ScoreImportEndpoint::BoogieStats,
     };
     let result = fetch_player_score_from_endpoint(endpoint, &profile, chart_hash.as_str())?;
     if let Some(cached_score) = result.score {
@@ -5396,7 +5130,7 @@ mod tests {
                     }],
                     ex_leaderboard: Vec::new(),
                     rpg: None,
-                    itl: Some(LeaderboardEventData {
+                    itl: Some(groovestats_api::LeaderboardEventData {
                         name: "ITL Online 2026".to_string(),
                         rpg_leaderboard: Vec::new(),
                         itl_leaderboard: vec![LeaderboardApiEntry {

@@ -30,6 +30,7 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
@@ -408,10 +409,10 @@ fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> O
 fn gameplay_lobby_player_stats(
     state: &State,
     side: profile::PlayerSide,
-) -> Option<crate::game::online::lobbies::MachinePlayerStats> {
+) -> Option<lobby_data::MachinePlayerStats> {
     let player_idx = gameplay_player_index_for_side(state, side)?;
     let ex_data = crate::game::gameplay::display_ex_score_data(state, player_idx);
-    let judgments = crate::game::online::lobbies::LobbyJudgments {
+    let judgments = lobby_data::LobbyJudgments {
         fantastic_plus: ex_data.counts.w0,
         fantastics: ex_data.counts.w1,
         excellents: ex_data.counts.w2,
@@ -427,7 +428,7 @@ fn gameplay_lobby_player_stats(
         rolls_held: ex_data.rolls_held,
         total_rolls: ex_data.rolls_total,
     };
-    Some(crate::game::online::lobbies::MachinePlayerStats {
+    Some(lobby_data::MachinePlayerStats {
         judgments: Some(judgments),
         score: Some(
             (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0) as f32,
@@ -507,16 +508,11 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn lobby_player_on_screen(
-    player: &crate::game::online::lobbies::LobbyPlayer,
-    screen_name: &str,
-) -> bool {
+fn lobby_player_on_screen(player: &lobby_data::LobbyPlayer, screen_name: &str) -> bool {
     player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
-fn gameplay_requires_lobby_wait_for(
-    joined: Option<&crate::game::online::lobbies::JoinedLobby>,
-) -> bool {
+fn gameplay_requires_lobby_wait_for(joined: Option<&lobby_data::JoinedLobby>) -> bool {
     joined.is_some()
 }
 
@@ -526,7 +522,7 @@ fn gameplay_requires_lobby_wait() -> bool {
 }
 
 fn gameplay_lobby_wait_text_for(
-    joined: &crate::game::online::lobbies::JoinedLobby,
+    joined: &lobby_data::JoinedLobby,
     local_players_ready: bool,
     reconnect_status_text: Option<&str>,
 ) -> Option<String> {
@@ -8806,11 +8802,8 @@ mod tests {
         }
     }
 
-    fn test_lobby_player(
-        screen_name: &str,
-        ready: bool,
-    ) -> crate::game::online::lobbies::LobbyPlayer {
-        crate::game::online::lobbies::LobbyPlayer {
+    fn test_lobby_player(screen_name: &str, ready: bool) -> lobby_data::LobbyPlayer {
+        lobby_data::LobbyPlayer {
             label: "Local".to_string(),
             ready,
             screen_name: screen_name.to_string(),
@@ -8918,10 +8911,8 @@ mod tests {
         assert!((point[1] + 20.0).abs() <= 0.000_1);
     }
 
-    fn test_joined_lobby(
-        players: Vec<crate::game::online::lobbies::LobbyPlayer>,
-    ) -> crate::game::online::lobbies::JoinedLobby {
-        crate::game::online::lobbies::JoinedLobby {
+    fn test_joined_lobby(players: Vec<lobby_data::LobbyPlayer>) -> lobby_data::JoinedLobby {
+        lobby_data::JoinedLobby {
             code: "ABCD".to_string(),
             players,
             song_info: None,

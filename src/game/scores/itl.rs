@@ -1,7 +1,5 @@
 use super::{
-    GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
-    GrooveStatsSubmitApiProgress, GrooveStatsSubmitPlayerJob, LeaderboardApiEntry,
-    LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
+    GrooveStatsSubmitPlayerJob, LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts, leaderboard_entries_from_api,
@@ -13,6 +11,10 @@ use crate::game::profile;
 use crate::game::song::{get_song_cache, song_cache_generation};
 use chrono::Local;
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_online::groovestats::{
+    GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
+    GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, LeaderboardApiEntry,
+};
 use log::{debug, warn};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -1193,7 +1195,7 @@ fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions:
     out.push_str(descriptions.join("\n").as_str());
 }
 
-fn quest_page_text(quest: &super::GrooveStatsSubmitApiQuest) -> String {
+fn quest_page_text(quest: &GrooveStatsSubmitApiQuest) -> String {
     let mut body = format!("Completed \"{}\"!", quest.title.trim());
     let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
     for reward in &quest.rewards {

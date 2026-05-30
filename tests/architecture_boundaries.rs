@@ -180,6 +180,190 @@ const CORE_NOTE_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
+    "ARROWCLOUD_BULK_MAX_HASHES",
+    "ConnectionError",
+    "ConnectionStatus",
+    "DeviceLoginPollReq",
+    "DeviceLoginPollResp",
+    "DeviceLoginStartReq",
+    "DeviceLoginStartResp",
+    "DeviceLoginStatus",
+    "ArrowCloudJudgmentCounts",
+    "ArrowCloudLeaderboardEntry",
+    "ArrowCloudLeaderboardPane",
+    "ArrowCloudLeaderboardsApiResponse",
+    "ArrowCloudLifePoint",
+    "ArrowCloudModifiers",
+    "ArrowCloudNpsInfo",
+    "ArrowCloudNpsPoint",
+    "ArrowCloudPayload",
+    "ArrowCloudRadar",
+    "ArrowCloudRetrieveScoreEntry",
+    "ArrowCloudRetrieveScoresRequest",
+    "ArrowCloudRetrieveScoresResponse",
+    "ArrowCloudSpeed",
+    "ArrowCloudTimingDatum",
+    "ArrowCloudTimingOffset",
+    "ArrowCloudUserApiResponse",
+    "ArrowCloudUserApiUser",
+    "api_base_url",
+    "classify_connection_error",
+    "device_login_poll",
+    "device_login_start",
+    "leaderboards_url",
+    "legacy_leaderboards_url",
+    "retrieve_scores_url",
+    "submit_url",
+    "user_url",
+];
+
+const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
+const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
+    "ConnectionError",
+    "ConnectionStatus",
+    "GrooveStatsJudgmentCounts",
+    "GrooveStatsRescoreCounts",
+    "GrooveStatsSubmitApiAchievement",
+    "GrooveStatsSubmitApiAchievementReward",
+    "GrooveStatsSubmitApiEvent",
+    "GrooveStatsSubmitApiPlayer",
+    "GrooveStatsSubmitApiProgress",
+    "GrooveStatsSubmitApiQuest",
+    "GrooveStatsSubmitApiQuestReward",
+    "GrooveStatsSubmitApiResponse",
+    "GrooveStatsSubmitApiStatImprovement",
+    "GrooveStatsSubmitPlayerPayload",
+    "LeaderboardApiEntry",
+    "LeaderboardApiPlayer",
+    "LeaderboardEventData",
+    "LeaderboardsApiResponse",
+    "NewSessionResponse",
+    "NewSessionServices",
+    "Service",
+    "Services",
+    "api_base_url",
+    "boogiestats_api_base_url",
+    "connection_error_from_network_error",
+    "connection_status_from_new_session",
+    "new_session_url",
+    "player_leaderboards_url",
+    "primary_api_base_url",
+    "qr_base_url",
+    "score_submit_url",
+    "service_name",
+    "services_from_new_session",
+];
+
+const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
+const LOBBY_DATA_SYMBOLS: &[&str] = &[
+    "ConnectionState",
+    "EVENT_CLIENT_DISCONNECTED",
+    "EVENT_CREATE_LOBBY",
+    "EVENT_JOIN_LOBBY",
+    "EVENT_LEAVE_LOBBY",
+    "EVENT_LOBBY_LEFT",
+    "EVENT_LOBBY_SEARCHED",
+    "EVENT_LOBBY_STATE",
+    "EVENT_RESPONSE_STATUS",
+    "EVENT_SEARCH_LOBBY",
+    "EVENT_SELECT_SONG",
+    "EVENT_UPDATE_MACHINE",
+    "InboundEnvelope",
+    "JoinedLobby",
+    "LobbyJudgments",
+    "LobbyLeftData",
+    "LobbyMachinePlayer",
+    "LobbyMachineState",
+    "LobbyPlayer",
+    "LobbySearchedData",
+    "LobbySongInfo",
+    "LobbyStateData",
+    "LobbyStatePlayerData",
+    "LOBBY_PASSWORD_MAX_LEN",
+    "LOBBY_SERVICE_URL",
+    "MachinePlayerStats",
+    "OutboundEnvelope",
+    "PublicLobby",
+    "PublicLobbyData",
+    "ResponseStatus",
+    "ResponseStatusData",
+    "Snapshot",
+    "joined_lobby_from_state",
+    "lobby_left_clears_joined",
+    "lobby_machine_player",
+    "lobby_machine_state_value",
+    "lobby_profile_name",
+    "normalize_lobby_password",
+    "outbound_event_text",
+    "public_lobbies_from_search",
+    "response_status_clears_joined",
+    "response_status_from_data",
+];
+
+const LOBBY_DATA_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
+const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
+    "DownloadSnapshot",
+    "UnlockCache",
+    "UnlockCacheFile",
+    "cache_has_destination",
+    "itl_unlock_pack_ini_content",
+    "mime_token",
+    "sanitize_pack_name",
+];
+
+const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
+const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
+const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-online",
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 #[test]
 fn game_upward_dependencies_do_not_grow() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -547,6 +731,207 @@ fn core_note_imports_do_not_use_rules_facade() {
     );
 }
 
+#[test]
+fn arrowcloud_protocol_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in ARROWCLOUD_PROTOCOL_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            for symbol in ARROWCLOUD_PROTOCOL_SYMBOLS {
+                let count = count_arrowcloud_protocol_game_facade_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references ArrowCloud protocol {symbol} through game::online {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "ArrowCloud protocol DTOs, clients, and URL helpers should be imported from deadsync_online::arrowcloud:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn groovestats_protocol_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in GROOVESTATS_PROTOCOL_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            for symbol in GROOVESTATS_PROTOCOL_SYMBOLS {
+                let count = count_groovestats_protocol_game_facade_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references GrooveStats protocol {symbol} through game::online {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "GrooveStats protocol DTOs and URL helpers should be imported from deadsync_online::groovestats:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn lobby_data_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in LOBBY_DATA_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            for symbol in LOBBY_DATA_SYMBOLS {
+                let count = count_lobby_data_game_facade_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references lobby protocol {symbol} through game::online {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "lobby protocol data and helpers should be imported from deadsync_online::lobbies:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn download_protocol_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in DOWNLOAD_PROTOCOL_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            for symbol in DOWNLOAD_PROTOCOL_SYMBOLS {
+                let count = count_download_protocol_game_facade_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references download protocol {symbol} through game::online {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "download protocol data and helpers should be imported from deadsync_online::downloads:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn transport_error_mapping_stays_in_net_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in NET_TRANSPORT_ERROR_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let count = text.match_indices("ureq::Error::StatusCode").count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} maps ureq status errors directly {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "transport error classification should use deadsync_net helpers:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn response_body_decoding_stays_in_net_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in NET_RESPONSE_BODY_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let count = text.match_indices("into_body().read_json()").count()
+                + text.match_indices("into_body().read_to_string()").count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} decodes ureq response bodies directly {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "ureq response body decoding should use deadsync_net helpers:\n{}",
+        failures.join("\n")
+    );
+}
+
 fn baseline_map() -> HashMap<(String, String), usize> {
     GAME_UPWARD_DEP_BASELINE
         .iter()
@@ -829,4 +1214,137 @@ fn count_grouped_gameplay_limit_uses(text: &str, marker: &str, symbol: &str) -> 
 fn count_core_note_rules_facade_refs(text: &str, symbol: &str) -> usize {
     count_token_refs(text, &format!("deadsync_rules::note::{symbol}"))
         + count_grouped_game_rule_uses(text, "use deadsync_rules::note::{", symbol)
+}
+
+fn count_arrowcloud_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
+    count_token_refs(text, &format!("crate::game::online::arrowcloud::{symbol}"))
+        + count_token_refs(
+            text,
+            &format!("deadsync::game::online::arrowcloud::{symbol}"),
+        )
+        + count_token_refs(text, &format!("crate::game::online::arrowcloud_{symbol}"))
+        + count_token_refs(
+            text,
+            &format!("deadsync::game::online::arrowcloud_{symbol}"),
+        )
+        + count_grouped_game_rule_uses(text, "use crate::game::online::arrowcloud::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::game::online::arrowcloud::{", symbol)
+        + count_grouped_arrowcloud_protocol_online_uses(text, "use crate::game::online::{", symbol)
+        + count_grouped_arrowcloud_protocol_online_uses(
+            text,
+            "use deadsync::game::online::{",
+            symbol,
+        )
+}
+
+fn count_grouped_arrowcloud_protocol_online_uses(text: &str, marker: &str, symbol: &str) -> usize {
+    let mut count = 0;
+    let mut rest = text;
+    let prefixed_symbol = format!("arrowcloud_{symbol}");
+
+    while let Some(index) = rest.find(marker) {
+        let after = &rest[index + marker.len()..];
+        let end = after.find(';').unwrap_or(after.len());
+        let statement = &after[..end];
+        let mut saw_arrowcloud = false;
+        let mut saw_symbol = false;
+        for token in statement.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_') {
+            saw_arrowcloud |= token == "arrowcloud";
+            saw_symbol |= token == symbol || token == prefixed_symbol.as_str();
+        }
+        if saw_arrowcloud && saw_symbol {
+            count += 1;
+        }
+        rest = &after[end..];
+        if end == after.len() {
+            break;
+        }
+    }
+
+    count
+}
+
+fn count_groovestats_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
+    count_token_refs(text, &format!("crate::game::online::groovestats::{symbol}"))
+        + count_token_refs(
+            text,
+            &format!("deadsync::game::online::groovestats::{symbol}"),
+        )
+        + count_token_refs(text, &format!("crate::game::online::groovestats_{symbol}"))
+        + count_token_refs(
+            text,
+            &format!("deadsync::game::online::groovestats_{symbol}"),
+        )
+        + count_grouped_game_rule_uses(text, "use crate::game::online::groovestats::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::game::online::groovestats::{", symbol)
+        + count_grouped_groovestats_protocol_online_uses(text, "use crate::game::online::{", symbol)
+        + count_grouped_groovestats_protocol_online_uses(
+            text,
+            "use deadsync::game::online::{",
+            symbol,
+        )
+}
+
+fn count_grouped_groovestats_protocol_online_uses(text: &str, marker: &str, symbol: &str) -> usize {
+    let mut count = 0;
+    let mut rest = text;
+    let prefixed_symbol = format!("groovestats_{symbol}");
+
+    while let Some(index) = rest.find(marker) {
+        let after = &rest[index + marker.len()..];
+        let end = after.find(';').unwrap_or(after.len());
+        let statement = &after[..end];
+        let mut saw_groovestats = false;
+        let mut saw_symbol = false;
+        for token in statement.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_') {
+            saw_groovestats |= token == "groovestats";
+            saw_symbol |= token == symbol || token == prefixed_symbol.as_str();
+        }
+        if saw_groovestats && saw_symbol {
+            count += 1;
+        }
+        rest = &after[end..];
+        if end == after.len() {
+            break;
+        }
+    }
+
+    count
+}
+
+fn count_lobby_data_game_facade_refs(text: &str, symbol: &str) -> usize {
+    let module_alias = text.contains("use crate::game::online::lobbies;")
+        || text.contains("use deadsync::game::online::lobbies;")
+        || text.contains("use crate::game::online::lobbies as lobbies;")
+        || text.contains("use deadsync::game::online::lobbies as lobbies;");
+
+    count_token_refs(text, &format!("crate::game::online::lobbies::{symbol}"))
+        + count_token_refs(text, &format!("deadsync::game::online::lobbies::{symbol}"))
+        + count_grouped_game_rule_uses(text, "use crate::game::online::lobbies::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::game::online::lobbies::{", symbol)
+        + if module_alias {
+            count_token_refs(text, &format!("lobbies::{symbol}"))
+        } else {
+            0
+        }
+}
+
+fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
+    let module_alias = text.contains("use crate::game::online::downloads;")
+        || text.contains("use deadsync::game::online::downloads;")
+        || text.contains("use crate::game::online::downloads as downloads;")
+        || text.contains("use deadsync::game::online::downloads as downloads;");
+
+    count_token_refs(text, &format!("crate::game::online::downloads::{symbol}"))
+        + count_token_refs(
+            text,
+            &format!("deadsync::game::online::downloads::{symbol}"),
+        )
+        + count_grouped_game_rule_uses(text, "use crate::game::online::downloads::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::game::online::downloads::{", symbol)
+        + if module_alias {
+            count_token_refs(text, &format!("downloads::{symbol}"))
+        } else {
+            0
+        }
 }

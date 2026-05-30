@@ -5,17 +5,20 @@ use super::{
     submit_side_ix,
 };
 use crate::game::gameplay;
-use crate::game::online;
 use crate::game::profile::{self, Profile};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_net as network;
+use deadsync_online::arrowcloud::{
+    self as arrowcloud_api, ArrowCloudJudgmentCounts, ArrowCloudLifePoint, ArrowCloudModifiers,
+    ArrowCloudNpsInfo, ArrowCloudNpsPoint, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSpeed,
+    ArrowCloudTimingDatum, ArrowCloudTimingOffset,
+};
 use deadsync_rules::{
     judgment,
     scroll::ScrollSpeedSetting,
     timing::{self, ScatterPoint},
 };
 use log::{debug, warn};
-use serde::Serialize;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{Duration, Instant};
@@ -205,8 +208,7 @@ const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
 
 #[inline(always)]
 fn arrowcloud_status_from_transport_error(message: &str) -> ArrowCloudSubmitUiStatus {
-    let lower = message.to_ascii_lowercase();
-    if lower.contains("timeout") || lower.contains("timed out") {
+    if network::is_timeout_message(message) {
         ArrowCloudSubmitUiStatus::TimedOut
     } else {
         ArrowCloudSubmitUiStatus::NetworkError
@@ -272,125 +274,6 @@ pub fn get_arrowcloud_submit_ui_status_for_side(
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .map(|entry| entry.status)
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudSpeed {
-    value: f64,
-    #[serde(rename = "type")]
-    speed_type: &'static str,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudModifiers {
-    #[serde(rename = "visualDelay")]
-    visual_delay: i32,
-    acceleration: Vec<String>,
-    appearance: Vec<String>,
-    effect: Vec<String>,
-    mini: i32,
-    turn: String,
-    #[serde(rename = "disabledWindows")]
-    disabled_windows: String,
-    speed: ArrowCloudSpeed,
-    perspective: String,
-    noteskin: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    scroll: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudRadar {
-    #[serde(rename = "Holds")]
-    holds: [u32; 2],
-    #[serde(rename = "Mines")]
-    mines: [u32; 2],
-    #[serde(rename = "Rolls")]
-    rolls: [u32; 2],
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudLifePoint {
-    x: f64,
-    y: f64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudNpsPoint {
-    x: f64,
-    y: f64,
-    measure: u32,
-    nps: f64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudNpsInfo {
-    #[serde(rename = "peakNPS")]
-    peak_nps: f64,
-    points: Vec<ArrowCloudNpsPoint>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-enum ArrowCloudTimingOffset {
-    Seconds(f64),
-    Miss(&'static str),
-}
-
-type ArrowCloudTimingDatum = (f64, ArrowCloudTimingOffset);
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ArrowCloudJudgmentCounts {
-    fantastic_plus: u32,
-    fantastic: u32,
-    excellent: u32,
-    great: u32,
-    decent: u32,
-    way_off: u32,
-    miss: u32,
-    total_steps: u32,
-    holds_held: u32,
-    total_holds: u32,
-    mines_hit: u32,
-    total_mines: u32,
-    rolls_held: u32,
-    total_rolls: u32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ArrowCloudPayload {
-    #[serde(rename = "songName")]
-    song_name: String,
-    artist: String,
-    pack: String,
-    length: String,
-    hash: String,
-    #[serde(rename = "timingData")]
-    timing_data: Vec<ArrowCloudTimingDatum>,
-    difficulty: u32,
-    stepartist: String,
-    radar: ArrowCloudRadar,
-    #[serde(rename = "judgmentCounts")]
-    judgment_counts: ArrowCloudJudgmentCounts,
-    #[serde(rename = "npsInfo")]
-    nps_info: ArrowCloudNpsInfo,
-    #[serde(rename = "lifebarInfo")]
-    lifebar_info: Vec<ArrowCloudLifePoint>,
-    modifiers: ArrowCloudModifiers,
-    #[serde(rename = "musicRate")]
-    music_rate: f64,
-    #[serde(rename = "usedAutoplay")]
-    used_autoplay: bool,
-    passed: bool,
-    #[serde(rename = "bodyVersion")]
-    body_version: &'static str,
-    #[serde(rename = "_arrowCloudBodyVersion")]
-    arrow_cloud_body_version: &'static str,
-    #[serde(rename = "_engineName")]
-    engine_name: &'static str,
-    #[serde(rename = "_engineVersion")]
-    engine_version: &'static str,
 }
 
 #[derive(Debug)]
@@ -771,7 +654,7 @@ fn submit_arrowcloud_payload(
             message: "missing ArrowCloud API key".to_string(),
         });
     }
-    let Some(url) = online::arrowcloud_submit_url(payload.hash.as_str()) else {
+    let Some(url) = arrowcloud_api::submit_url(payload.hash.as_str()) else {
         return Err(ArrowCloudSubmitError {
             status: ArrowCloudSubmitUiStatus::Rejected {
                 reason: RejectReason::InvalidScore,
@@ -796,7 +679,7 @@ fn submit_arrowcloud_payload(
         })?;
     let status = response.status();
     let status_code = status.as_u16();
-    let body = response.into_body().read_to_string().unwrap_or_default();
+    let body = network::read_text_body_or_empty(response);
     if status.is_success() {
         let snippet = log_body_snippet(body.as_str());
         if snippet.is_empty() {

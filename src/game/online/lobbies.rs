@@ -1,6 +1,16 @@
 use crate::game::profile;
+use deadsync_online::lobbies::{
+    ConnectionState, EVENT_CLIENT_DISCONNECTED, EVENT_CREATE_LOBBY, EVENT_JOIN_LOBBY,
+    EVENT_LEAVE_LOBBY, EVENT_LOBBY_LEFT, EVENT_LOBBY_SEARCHED, EVENT_LOBBY_STATE,
+    EVENT_RESPONSE_STATUS, EVENT_SEARCH_LOBBY, EVENT_SELECT_SONG, EVENT_UPDATE_MACHINE,
+    InboundEnvelope, LOBBY_SERVICE_URL, LobbyLeftData, LobbyMachinePlayer, LobbySearchedData,
+    LobbySongInfo, LobbyStateData, MachinePlayerStats, ResponseStatusData, Snapshot,
+    joined_lobby_from_state, lobby_left_clears_joined, lobby_machine_player,
+    lobby_machine_state_value, normalize_lobby_password, outbound_event_text,
+    public_lobbies_from_search, response_status_clears_joined, response_status_from_data,
+};
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fmt::Display;
 use std::io::ErrorKind;
@@ -12,131 +22,9 @@ use std::time::{Duration, Instant};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket, connect};
 
-const LOBBY_SERVICE_URL: &str = "ws://syncservice.groovestats.com:1337";
 const SOCKET_POLL_SLEEP: Duration = Duration::from_millis(16);
 const SOCKET_PING_INTERVAL: Duration = Duration::from_secs(15);
 pub const LOBBY_DISCONNECT_HOLD_SECONDS: f32 = 5.0;
-pub const LOBBY_PASSWORD_MAX_LEN: usize = 4;
-const LOBBY_PROFILE_PREFIX: &str = "[DS] ";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionState {
-    Disconnected,
-    Connecting,
-    Connected,
-    Error(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PublicLobby {
-    pub code: String,
-    pub player_count: usize,
-    pub is_password_protected: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct LobbyJudgments {
-    #[serde(default)]
-    pub fantastic_plus: u32,
-    #[serde(default)]
-    pub fantastics: u32,
-    #[serde(default)]
-    pub excellents: u32,
-    #[serde(default)]
-    pub greats: u32,
-    #[serde(default)]
-    pub decents: u32,
-    #[serde(default)]
-    pub way_offs: u32,
-    #[serde(default)]
-    pub misses: u32,
-    #[serde(default)]
-    pub total_steps: u32,
-    #[serde(default)]
-    pub mines_hit: u32,
-    #[serde(default)]
-    pub total_mines: u32,
-    #[serde(default)]
-    pub holds_held: u32,
-    #[serde(default)]
-    pub total_holds: u32,
-    #[serde(default)]
-    pub rolls_held: u32,
-    #[serde(default)]
-    pub total_rolls: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct MachinePlayerStats {
-    pub judgments: Option<LobbyJudgments>,
-    pub score: Option<f32>,
-    pub ex_score: Option<f32>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LobbyPlayer {
-    pub label: String,
-    pub ready: bool,
-    pub screen_name: String,
-    pub judgments: Option<LobbyJudgments>,
-    pub score: Option<f32>,
-    pub ex_score: Option<f32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LobbySongInfo {
-    #[serde(default)]
-    pub song_path: String,
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub artist: Option<String>,
-    #[serde(rename = "songLength", default)]
-    pub song_length_seconds: Option<f32>,
-    #[serde(default)]
-    pub chart_hash: Option<String>,
-    #[serde(default)]
-    pub chart_type: Option<String>,
-    #[serde(default)]
-    pub chart_label: Option<String>,
-    #[serde(default)]
-    pub rate: Option<f32>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct JoinedLobby {
-    pub code: String,
-    pub players: Vec<LobbyPlayer>,
-    pub song_info: Option<LobbySongInfo>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResponseStatus {
-    pub event: String,
-    pub success: bool,
-    pub message: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Snapshot {
-    pub connection: ConnectionState,
-    pub available_lobbies: Vec<PublicLobby>,
-    pub joined_lobby: Option<JoinedLobby>,
-    pub last_status: Option<ResponseStatus>,
-}
-
-impl Default for Snapshot {
-    fn default() -> Self {
-        Self {
-            connection: ConnectionState::Disconnected,
-            available_lobbies: Vec::new(),
-            joined_lobby: None,
-            last_status: None,
-        }
-    }
-}
 
 #[derive(Debug)]
 enum Command {
@@ -232,20 +120,6 @@ pub fn join_lobby_with_password(code: &str, password: &str) {
         code: code.to_string(),
         password,
     });
-}
-
-fn normalize_lobby_password(raw: &str) -> String {
-    let mut out = String::with_capacity(LOBBY_PASSWORD_MAX_LEN);
-    for ch in raw.chars() {
-        if out.len() >= LOBBY_PASSWORD_MAX_LEN {
-            break;
-        }
-        if !ch.is_ascii_graphic() {
-            continue;
-        }
-        out.push(ch.to_ascii_uppercase());
-    }
-    out
 }
 
 pub fn leave_lobby() {
@@ -533,10 +407,10 @@ fn handle_command(
     command: Command,
 ) -> Result<(), tungstenite::Error> {
     match command {
-        Command::Search => send_event(socket, "searchLobby", json!({})),
+        Command::Search => send_event(socket, EVENT_SEARCH_LOBBY, json!({})),
         Command::Create { password } => send_event(
             socket,
-            "createLobby",
+            EVENT_CREATE_LOBBY,
             json!({
                 "machine": local_machine_state_json("ScreenSelectMusic", true, true, None, None),
                 "password": password,
@@ -544,14 +418,14 @@ fn handle_command(
         ),
         Command::Join { code, password } => send_event(
             socket,
-            "joinLobby",
+            EVENT_JOIN_LOBBY,
             json!({
                 "machine": local_machine_state_json("ScreenSelectMusic", true, true, None, None),
                 "code": code,
                 "password": password,
             }),
         ),
-        Command::Leave => send_event(socket, "leaveLobby", json!({})),
+        Command::Leave => send_event(socket, EVENT_LEAVE_LOBBY, json!({})),
         Command::UpdateMachine {
             screen_name,
             p1_ready,
@@ -560,7 +434,7 @@ fn handle_command(
             p2_stats,
         } => send_event(
             socket,
-            "updateMachine",
+            EVENT_UPDATE_MACHINE,
             json!({
                 "machine": local_machine_state_json(
                     screen_name.as_str(),
@@ -573,7 +447,7 @@ fn handle_command(
         ),
         Command::SelectSong { song_info } => send_event(
             socket,
-            "selectSong",
+            EVENT_SELECT_SONG,
             json!({
                 "songInfo": song_info,
             }),
@@ -590,14 +464,7 @@ fn send_event(
     event: &str,
     data: Value,
 ) -> Result<(), tungstenite::Error> {
-    socket.send(Message::Text(
-        json!({
-            "event": event,
-            "data": data,
-        })
-        .to_string()
-        .into(),
-    ))
+    socket.send(Message::Text(outbound_event_text(event, &data).into()))
 }
 
 fn is_transient_socket_error(error: &tungstenite::Error) -> bool {
@@ -621,52 +488,38 @@ fn local_machine_state_json(
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         let side = profile::get_session_player_side();
-        return json!({
-            "player1": if side == profile::PlayerSide::P1 { local_player_json(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats) } else { Value::Null },
-            "player2": if side == profile::PlayerSide::P2 { local_player_json(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats) } else { Value::Null },
-        });
+        return lobby_machine_state_value(
+            (side == profile::PlayerSide::P1)
+                .then(|| local_player(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats)),
+            (side == profile::PlayerSide::P2)
+                .then(|| local_player(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats)),
+        );
     }
 
-    json!({
-        "player1": if p1_joined { local_player_json(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats) } else { Value::Null },
-        "player2": if p2_joined { local_player_json(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats) } else { Value::Null },
-    })
+    lobby_machine_state_value(
+        p1_joined.then(|| local_player(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats)),
+        p2_joined.then(|| local_player(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats)),
+    )
 }
 
-fn local_player_json(
+fn local_player(
     side: profile::PlayerSide,
     screen_name: &str,
     ready: bool,
     stats: Option<&MachinePlayerStats>,
-) -> Value {
+) -> LobbyMachinePlayer {
     let player_id = match side {
         profile::PlayerSide::P1 => "P1",
         profile::PlayerSide::P2 => "P2",
     };
     let profile = profile::get_for_side(side);
-    let profile_name = decorate_lobby_profile_name(profile.display_name.as_str());
-    json!({
-        "playerId": player_id,
-        "profileName": profile_name,
-        "screenName": screen_name,
-        "ready": ready,
-        "judgments": stats.and_then(|stats| stats.judgments.clone()),
-        "score": stats.and_then(|stats| stats.score),
-        "exScore": stats.and_then(|stats| stats.ex_score),
-    })
-}
-
-fn decorate_lobby_profile_name(name: &str) -> String {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return format!("{LOBBY_PROFILE_PREFIX}Player");
-    }
-    let prefix_tag: String = trimmed.chars().take(4).collect();
-    if prefix_tag.eq_ignore_ascii_case("[DS]") {
-        trimmed.to_string()
-    } else {
-        format!("{LOBBY_PROFILE_PREFIX}{trimmed}")
-    }
+    lobby_machine_player(
+        player_id,
+        profile.display_name.as_str(),
+        screen_name,
+        ready,
+        stats,
+    )
 }
 
 fn handle_message(message: Message) -> Result<(), String> {
@@ -688,24 +541,16 @@ fn handle_text_message(text: &str) -> Result<(), String> {
 
     let event = envelope.event;
     match event.as_str() {
-        "lobbySearched" => {
+        EVENT_LOBBY_SEARCHED => {
             let Some(data): Option<LobbySearchedData> =
                 parse_inbound_data(event.as_str(), envelope.data, text)
             else {
                 return Ok(());
             };
             let mut snapshot = SNAPSHOT.lock().unwrap();
-            snapshot.available_lobbies = data
-                .lobbies
-                .into_iter()
-                .map(|lobby| PublicLobby {
-                    code: lobby.code,
-                    player_count: lobby.player_count,
-                    is_password_protected: lobby.is_password_protected,
-                })
-                .collect();
+            snapshot.available_lobbies = public_lobbies_from_search(data);
         }
-        "lobbyState" => {
+        EVENT_LOBBY_STATE => {
             let Some(data): Option<LobbyStateData> =
                 parse_inbound_data(event.as_str(), envelope.data, text)
             else {
@@ -713,6 +558,7 @@ fn handle_text_message(text: &str) -> Result<(), String> {
             };
             {
                 let mut reconnect = RECONNECT_STATE.lock().unwrap();
+                let code = data.code.clone();
                 let password = reconnect
                     .pending_create_password
                     .take()
@@ -723,79 +569,50 @@ fn handle_text_message(text: &str) -> Result<(), String> {
                             .map(|target| target.password.clone())
                     })
                     .unwrap_or_default();
-                reconnect.target = Some(ReconnectTarget {
-                    code: data.code.clone(),
-                    password,
-                });
+                reconnect.target = Some(ReconnectTarget { code, password });
                 reconnect.retry_attempts = 0;
                 reconnect.next_retry_at = None;
             }
             let mut snapshot = SNAPSHOT.lock().unwrap();
-            snapshot.joined_lobby = Some(JoinedLobby {
-                code: data.code,
-                players: data
-                    .players
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, player)| LobbyPlayer {
-                        label: player
-                            .profile_name
-                            .or(player.name)
-                            .or(player.player_id)
-                            .unwrap_or_else(|| format!("Player {}", idx + 1)),
-                        ready: player.ready,
-                        screen_name: player.screen_name.unwrap_or_else(|| "NoScreen".to_string()),
-                        judgments: player.judgments,
-                        score: player.score,
-                        ex_score: player.ex_score,
-                    })
-                    .collect(),
-                song_info: data.song_info,
-            });
+            snapshot.joined_lobby = Some(joined_lobby_from_state(data));
         }
-        "lobbyLeft" => {
+        EVENT_LOBBY_LEFT => {
             let Some(data): Option<LobbyLeftData> =
                 parse_inbound_data(event.as_str(), envelope.data, text)
             else {
                 return Ok(());
             };
-            if data.left.unwrap_or(true) {
+            if lobby_left_clears_joined(&data) {
                 clear_reconnect_target();
                 *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
                 let mut snapshot = SNAPSHOT.lock().unwrap();
                 snapshot.joined_lobby = None;
             }
         }
-        "clientDisconnected" => {
+        EVENT_CLIENT_DISCONNECTED => {
             clear_reconnect_target();
             *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.joined_lobby = None;
         }
-        "responseStatus" => {
+        EVENT_RESPONSE_STATUS => {
             let Some(data): Option<ResponseStatusData> =
                 parse_inbound_data(event.as_str(), envelope.data, text)
             else {
                 return Ok(());
             };
-            if !data.success && matches!(data.event.as_str(), "joinLobby" | "createLobby") {
+            let clears_lobby = response_status_clears_joined(&data);
+            let status = response_status_from_data(data);
+            if clears_lobby {
                 clear_reconnect_target();
                 *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
                 let mut snapshot = SNAPSHOT.lock().unwrap();
                 snapshot.joined_lobby = None;
-                snapshot.last_status = Some(ResponseStatus {
-                    event: data.event,
-                    success: data.success,
-                    message: data.message,
-                });
+                snapshot.last_status = Some(status);
                 return Ok(());
             }
             let mut snapshot = SNAPSHOT.lock().unwrap();
-            snapshot.last_status = Some(ResponseStatus {
-                event: data.event,
-                success: data.success,
-                message: data.message,
-            });
+            snapshot.last_status = Some(status);
         }
         _ => {}
     }
@@ -832,75 +649,13 @@ fn set_socket_nonblocking(
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct InboundEnvelope {
-    event: String,
-    #[serde(default)]
-    data: Value,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PublicLobbyData {
-    code: String,
-    player_count: usize,
-    #[serde(default)]
-    is_password_protected: bool,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct LobbySearchedData {
-    #[serde(default)]
-    lobbies: Vec<PublicLobbyData>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LobbyStatePlayerData {
-    profile_name: Option<String>,
-    name: Option<String>,
-    player_id: Option<String>,
-    screen_name: Option<String>,
-    #[serde(default)]
-    ready: bool,
-    #[serde(default)]
-    judgments: Option<LobbyJudgments>,
-    #[serde(default)]
-    score: Option<f32>,
-    #[serde(rename = "exScore", default)]
-    ex_score: Option<f32>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LobbyStateData {
-    #[serde(default)]
-    code: String,
-    #[serde(default)]
-    players: Vec<LobbyStatePlayerData>,
-    #[serde(default)]
-    song_info: Option<LobbySongInfo>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct LobbyLeftData {
-    left: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResponseStatusData {
-    event: String,
-    success: bool,
-    message: Option<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        COMMAND_TX, ConnectionState, LAST_MACHINE_STATE_SIG, LOBBY_PASSWORD_MAX_LEN, LobbyPlayer,
-        RECONNECT_STATE, ReconnectState, SNAPSHOT, Snapshot, handle_text_message,
-        normalize_lobby_password,
+        COMMAND_TX, ConnectionState, LAST_MACHINE_STATE_SIG, RECONNECT_STATE, ReconnectState,
+        SNAPSHOT, Snapshot, handle_text_message,
     };
+    use deadsync_online::lobbies::{JoinedLobby, LobbyPlayer};
     use std::sync::{LazyLock, Mutex};
 
     static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -910,18 +665,6 @@ mod tests {
         *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
         *RECONNECT_STATE.lock().unwrap() = ReconnectState::default();
         COMMAND_TX.lock().unwrap().take();
-    }
-
-    #[test]
-    fn normalize_lobby_password_uppercases_and_caps_length() {
-        assert_eq!(normalize_lobby_password("ab1!cd"), "AB1!");
-        assert_eq!(LOBBY_PASSWORD_MAX_LEN, 4);
-    }
-
-    #[test]
-    fn normalize_lobby_password_skips_non_graphic_ascii() {
-        assert_eq!(normalize_lobby_password(" a b "), "AB");
-        assert_eq!(normalize_lobby_password("ab\n\tcd"), "ABCD");
     }
 
     #[test]
@@ -940,7 +683,7 @@ mod tests {
         {
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.connection = ConnectionState::Connected;
-            snapshot.joined_lobby = Some(super::JoinedLobby {
+            snapshot.joined_lobby = Some(JoinedLobby {
                 code: "ABCD".to_string(),
                 players: vec![existing_player.clone()],
                 song_info: None,
@@ -966,7 +709,7 @@ mod tests {
         assert_eq!(snapshot.connection, ConnectionState::Connected);
         assert_eq!(
             snapshot.joined_lobby,
-            Some(super::JoinedLobby {
+            Some(JoinedLobby {
                 code: "ABCD".to_string(),
                 players: vec![existing_player],
                 song_info: None,

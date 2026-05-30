@@ -6,10 +6,7 @@ use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::game::course::get_course_cache;
-use crate::game::online::{
-    self as network, ArrowCloudConnectionStatus, ArrowCloudError, ConnectionStatus,
-    GrooveStatsError,
-};
+use crate::game::online as network;
 use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
@@ -18,6 +15,10 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::arrowcloud::{
+    ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
+};
+use deadsync_online::groovestats::{ConnectionError as GrooveStatsError, ConnectionStatus};
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;

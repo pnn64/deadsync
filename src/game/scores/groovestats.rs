@@ -2,9 +2,8 @@ use super::{
     GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
     GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
     GS_INVALID_REMOVE_MASK, ItlEventProgress, RejectReason, cache_gs_score_for_profile,
-    cached_score_from_gs, compact_f32_text, de_i32_from_string_or_number,
-    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_run_failed,
-    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    cached_score_from_gs, compact_f32_text, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
     gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
     log_body_snippet, lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
 };
@@ -13,9 +12,12 @@ use crate::game::online;
 use crate::game::profile::{self, Profile, TimingWindowsOption};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_net as network;
+use deadsync_online::groovestats::{
+    self as groovestats_api, GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts,
+    GrooveStatsSubmitApiResponse, GrooveStatsSubmitPlayerPayload,
+};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -43,6 +45,16 @@ pub enum GrooveStatsSubmitRecordBanner {
     PersonalBest,
     WorldRecord,
     WorldRecordEx,
+}
+
+#[inline(always)]
+fn active_groovestats_service() -> groovestats_api::Service {
+    online::groovestats_active_service()
+}
+
+#[inline(always)]
+fn active_groovestats_service_name() -> &'static str {
+    groovestats_api::service_name(active_groovestats_service())
 }
 
 #[derive(Debug, Clone)]
@@ -126,70 +138,6 @@ fn groovestats_trim_submit_retry_entries(entries: &mut Vec<GrooveStatsSubmitRetr
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsJudgmentCounts {
-    pub(super) fantastic_plus: u32,
-    pub(super) fantastic: u32,
-    pub(super) excellent: u32,
-    pub(super) great: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) decent: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) way_off: Option<u32>,
-    pub(super) miss: u32,
-    pub(super) total_steps: u32,
-    pub(super) holds_held: u32,
-    pub(super) total_holds: u32,
-    pub(super) mines_hit: u32,
-    pub(super) total_mines: u32,
-    pub(super) rolls_held: u32,
-    pub(super) total_rolls: u32,
-}
-
-impl GrooveStatsJudgmentCounts {
-    #[inline(always)]
-    const fn optional_count(count: Option<u32>) -> u32 {
-        match count {
-            Some(count) => count,
-            None => 0,
-        }
-    }
-
-    #[inline(always)]
-    pub(super) const fn decent_count(&self) -> u32 {
-        Self::optional_count(self.decent)
-    }
-
-    #[inline(always)]
-    pub(super) const fn way_off_count(&self) -> u32 {
-        Self::optional_count(self.way_off)
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GrooveStatsRescoreCounts {
-    fantastic_plus: u32,
-    fantastic: u32,
-    excellent: u32,
-    great: u32,
-    decent: u32,
-    way_off: u32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GrooveStatsSubmitPlayerPayload {
-    rate: u32,
-    score: u32,
-    judgment_counts: GrooveStatsJudgmentCounts,
-    rescore_counts: GrooveStatsRescoreCounts,
-    used_cmod: bool,
-    comment: String,
-    player_options: String,
-}
-
 #[derive(Debug)]
 pub(super) struct GrooveStatsSubmitPlayerJob {
     pub(super) side: profile::PlayerSide,
@@ -217,141 +165,6 @@ struct GrooveStatsSubmitRequest {
 struct GrooveStatsSubmitError {
     status: GrooveStatsSubmitUiStatus,
     message: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GrooveStatsSubmitApiResponse {
-    #[serde(default)]
-    error: String,
-    player1: Option<GrooveStatsSubmitApiPlayer>,
-    player2: Option<GrooveStatsSubmitApiPlayer>,
-}
-
-impl GrooveStatsSubmitApiResponse {
-    #[inline(always)]
-    fn player_for_slot(&self, slot: u8) -> Option<&GrooveStatsSubmitApiPlayer> {
-        match slot {
-            1 => self.player1.as_ref(),
-            2 => self.player2.as_ref(),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiPlayer {
-    #[serde(default)]
-    pub(super) chart_hash: String,
-    #[serde(default)]
-    pub(super) result: String,
-    #[serde(rename = "gsLeaderboard", default)]
-    pub(super) gs_leaderboard: Vec<super::LeaderboardApiEntry>,
-    #[serde(rename = "exLeaderboard", default)]
-    pub(super) ex_leaderboard: Vec<super::LeaderboardApiEntry>,
-    pub(super) rpg: Option<GrooveStatsSubmitApiEvent>,
-    pub(super) itl: Option<GrooveStatsSubmitApiEvent>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiEvent {
-    #[serde(default)]
-    pub(super) name: String,
-    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
-    pub(super) score_delta: i32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) top_score_points: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) prev_top_score_points: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) total_passes: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) current_ranking_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) previous_ranking_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) current_song_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) previous_song_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) current_ex_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) previous_ex_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) current_point_total: u32,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) previous_point_total: u32,
-    #[serde(rename = "itlLeaderboard", default)]
-    pub(super) itl_leaderboard: Vec<super::LeaderboardApiEntry>,
-    #[serde(default)]
-    pub(super) is_doubles: bool,
-    pub(super) progress: Option<GrooveStatsSubmitApiProgress>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiProgress {
-    #[serde(rename = "statImprovements", default)]
-    pub(super) stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
-    #[serde(rename = "questsCompleted", default)]
-    pub(super) quests_completed: Vec<GrooveStatsSubmitApiQuest>,
-    #[serde(rename = "achievementsCompleted", default)]
-    pub(super) achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiStatImprovement {
-    #[serde(default)]
-    pub(super) name: String,
-    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
-    pub(super) gained: u32,
-    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
-    pub(super) current: i32,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiQuest {
-    #[serde(default)]
-    pub(super) title: String,
-    #[serde(default)]
-    pub(super) rewards: Vec<GrooveStatsSubmitApiQuestReward>,
-    #[serde(default)]
-    pub(super) song_download_url: String,
-    #[serde(rename = "songDownloadFolders", default)]
-    pub(super) song_download_folders: Vec<String>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiQuestReward {
-    #[serde(rename = "type", default)]
-    pub(super) reward_type: String,
-    #[serde(default)]
-    pub(super) description: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiAchievement {
-    #[serde(default)]
-    pub(super) title: String,
-    #[serde(default)]
-    pub(super) rewards: Vec<GrooveStatsSubmitApiAchievementReward>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct GrooveStatsSubmitApiAchievementReward {
-    #[serde(default, deserialize_with = "de_string_from_string_or_number")]
-    pub(super) tier: String,
-    #[serde(default)]
-    pub(super) requirements: Vec<String>,
-    #[serde(rename = "titleUnlocked", default)]
-    pub(super) title_unlocked: String,
 }
 
 #[inline(always)]
@@ -720,7 +533,7 @@ fn groovestats_manual_qr_url_from_gameplay(
     }
     let payload = groovestats_payload_for_player(gs, player_idx)?;
     groovestats_manual_qr_url(
-        online::groovestats_qr_base_url(),
+        groovestats_api::qr_base_url(),
         gs.charts[player_idx].short_hash.as_str(),
         GROOVESTATS_CHART_HASH_VERSION,
         &payload.judgment_counts,
@@ -867,7 +680,7 @@ fn groovestats_final_result_counts_as_rescore_target(j: &judgment::Judgment) -> 
 fn groovestats_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reason: &str) {
     warn!(
         "Skipping {} submit for {:?} ({}): {}.",
-        online::groovestats_service_name(),
+        active_groovestats_service_name(),
         side,
         chart_hash,
         reason
@@ -1103,9 +916,11 @@ fn groovestats_status_from_http(status_code: u16) -> GrooveStatsSubmitUiStatus {
 fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
-    let service_name = online::groovestats_service_name();
+    let service_name = active_groovestats_service_name();
     let mut request = network::get_groovestats_agent()
-        .post(&online::groovestats_score_submit_url())
+        .post(&groovestats_api::score_submit_url(
+            active_groovestats_service(),
+        ))
         .header("Content-Type", "application/json");
     for (name, value) in &job.headers {
         request = request.header(name, value);
@@ -1116,9 +931,8 @@ fn submit_groovestats_request(
 
     let response = request.send_json(&job.body).map_err(|e| {
         let message = format!("network error: {e}");
-        let lower = message.to_ascii_lowercase();
         GrooveStatsSubmitError {
-            status: if lower.contains("timeout") || lower.contains("timed out") {
+            status: if network::is_timeout_message(message.as_str()) {
                 GrooveStatsSubmitUiStatus::TimedOut
             } else {
                 GrooveStatsSubmitUiStatus::NetworkError
@@ -1129,7 +943,7 @@ fn submit_groovestats_request(
 
     let status = response.status();
     let status_code = status.as_u16();
-    let body = response.into_body().read_to_string().unwrap_or_default();
+    let body = network::read_text_body_or_empty(response);
     if !status.is_success() {
         let snippet = log_body_snippet(body.as_str());
         let status_kind = groovestats_status_from_http(status_code);
@@ -1186,7 +1000,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     );
                     warn!(
                         "{} submit response omitted player{} for {:?} ({}).",
-                        online::groovestats_service_name(),
+                        active_groovestats_service_name(),
                         player.slot,
                         player.side,
                         player.chart_hash
@@ -1217,7 +1031,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     );
                     warn!(
                         "{} submit response hash mismatch for {:?}: expected {}, got {}.",
-                        online::groovestats_service_name(),
+                        active_groovestats_service_name(),
                         player.side,
                         player.chart_hash,
                         player_response.chart_hash
@@ -1274,7 +1088,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                 }
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",
-                    online::groovestats_service_name(),
+                    active_groovestats_service_name(),
                     player.side,
                     player.chart_hash,
                     player_response.result
@@ -1298,7 +1112,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                 );
                 warn!(
                     "{} submit failed for {:?} ({}) status={:?}: {}",
-                    online::groovestats_service_name(),
+                    active_groovestats_service_name(),
                     player.side,
                     player.chart_hash,
                     status,
@@ -1379,14 +1193,14 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     if gs.autoplay_used {
         debug!(
             "Skipping {} submit: autoplay/replay was used.",
-            online::groovestats_service_name()
+            active_groovestats_service_name()
         );
         return;
     }
     if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
         debug!(
             "Skipping {} submit: course per-song autosubmit is disabled.",
-            online::groovestats_service_name()
+            active_groovestats_service_name()
         );
         return;
     }
@@ -1434,7 +1248,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         if !finished {
             debug!(
                 "Skipping {} submit for {:?} ({}): stage was not completed.",
-                online::groovestats_service_name(),
+                active_groovestats_service_name(),
                 side,
                 chart_hash
             );
@@ -1443,7 +1257,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         if !passed {
             debug!(
                 "Skipping {} submit for {:?} ({}): stage was not passed.",
-                online::groovestats_service_name(),
+                active_groovestats_service_name(),
                 side,
                 chart_hash
             );
@@ -1574,7 +1388,7 @@ fn retry_groovestats_submit_inner(
     groovestats_arm_submit_event_ui(side, hash, token);
     debug!(
         "Retrying {} submit for {:?} ({}).",
-        online::groovestats_service_name(),
+        active_groovestats_service_name(),
         side,
         hash
     );
@@ -1720,6 +1534,7 @@ pub fn tick_groovestats_auto_retries() -> bool {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_online::groovestats::{GrooveStatsSubmitApiPlayer, LeaderboardApiEntry};
     use serde_json::json;
 
     fn sample_chart(chart_type: &str) -> ChartData {
@@ -2154,8 +1969,8 @@ mod tests {
         }
     }
 
-    fn sample_submit_entry(rank: u32, is_self: bool) -> super::super::LeaderboardApiEntry {
-        super::super::LeaderboardApiEntry {
+    fn sample_submit_entry(rank: u32, is_self: bool) -> LeaderboardApiEntry {
+        LeaderboardApiEntry {
             rank,
             name: "PerfectTaste".to_string(),
             machine_tag: None,
@@ -2170,8 +1985,8 @@ mod tests {
 
     fn sample_submit_response(
         result: &str,
-        gs_leaderboard: Vec<super::super::LeaderboardApiEntry>,
-        ex_leaderboard: Vec<super::super::LeaderboardApiEntry>,
+        gs_leaderboard: Vec<LeaderboardApiEntry>,
+        ex_leaderboard: Vec<LeaderboardApiEntry>,
     ) -> GrooveStatsSubmitApiPlayer {
         GrooveStatsSubmitApiPlayer {
             chart_hash: "deadbeef".to_string(),

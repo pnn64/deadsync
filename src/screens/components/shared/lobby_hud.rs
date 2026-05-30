@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::online::lobbies;
 use crate::game::profile;
+use deadsync_online::lobbies;
 use std::cmp::Ordering;
 
 const PANEL_WIDTH: f32 = 200.0;

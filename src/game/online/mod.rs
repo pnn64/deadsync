@@ -3,21 +3,9 @@ pub mod downloads;
 pub mod groovestats;
 pub mod lobbies;
 
-pub use arrowcloud::{
-    ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
-    api_base_url as arrowcloud_api_base_url, get_status as get_arrowcloud_status,
-    leaderboards_url as arrowcloud_leaderboards_url,
-    legacy_leaderboards_url as arrowcloud_legacy_leaderboards_url,
-    retrieve_scores_url as arrowcloud_retrieve_scores_url, submit_url as arrowcloud_submit_url,
-    user_url as arrowcloud_user_url,
-};
+pub use arrowcloud::get_status as get_arrowcloud_status;
 pub use groovestats::{
-    ConnectionError as GrooveStatsError, ConnectionStatus, Services,
-    api_base_url as groovestats_api_base_url, boogiestats_api_base_url, get_status,
-    is_boogiestats_active, player_leaderboards_url as groovestats_player_leaderboards_url,
-    primary_api_base_url as groovestats_primary_api_base_url,
-    qr_base_url as groovestats_qr_base_url, score_submit_url as groovestats_score_submit_url,
-    service_name as groovestats_service_name,
+    active_service as groovestats_active_service, get_status, is_boogiestats_active,
 };
 
 pub fn init() {
