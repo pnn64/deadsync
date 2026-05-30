@@ -62,8 +62,8 @@ pub enum InputOutcome {
 
 /// Build the actor list for the overlay.  Returns an empty `Vec` when
 /// the phase is [`ActionPhase::Idle`], so callers can unconditionally
-/// `.extend(update_overlay::build(&action::current()))`.
-pub fn build(phase: &ActionPhase) -> Vec<Actor> {
+/// `.extend(update_overlay::build(&action::current(), active_color_index))`.
+pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
     if matches!(phase, ActionPhase::Idle) {
         return Vec::new();
     }
@@ -147,6 +147,7 @@ pub fn build(phase: &ActionPhase) -> Vec<Actor> {
         let bar_h = 32.0;
         let bar_x = cx - bar_w * 0.5;
         let bar_y = footer_y - 56.0;
+        let fill = color::decorative_rgba(active_color_index);
         actors.push(loading_bar::build(loading_bar::LoadingBarParams {
             align: [0.0, 1.0],
             offset: [bar_x, bar_y],
@@ -154,11 +155,11 @@ pub fn build(phase: &ActionPhase) -> Vec<Actor> {
             height: bar_h,
             progress,
             label: progress_label(progress).into(),
-            fill_rgba: color::rgba_hex("#3399ff"),
-            bg_rgba: color::rgba_hex("#202020"),
-            border_rgba: color::rgba_hex("#606060"),
+            fill_rgba: [fill[0], fill[1], fill[2], 1.0],
+            bg_rgba: [0.0, 0.0, 0.0, 1.0],
+            border_rgba: [1.0, 1.0, 1.0, 1.0],
             text_rgba: [1.0, 1.0, 1.0, 1.0],
-            text_zoom: 0.8,
+            text_zoom: 0.9,
             z: Z_PANEL_TEXT,
         }));
     }
@@ -575,13 +576,64 @@ mod tests {
 
     #[test]
     fn build_idle_returns_no_actors() {
-        assert!(build(&ActionPhase::Idle).is_empty());
+        assert!(build(&ActionPhase::Idle, 0).is_empty());
     }
 
     #[test]
     fn build_checking_returns_actors() {
-        let actors = build(&ActionPhase::Checking);
+        let actors = build(&ActionPhase::Checking, 0);
         assert!(!actors.is_empty(), "checking phase should render actors");
+    }
+
+    #[test]
+    fn build_downloading_uses_active_loading_bar_style() {
+        use crate::engine::present::actors::SizeSpec;
+
+        let r = sample_release();
+        let asset = r.assets[0].clone();
+        let phase = ActionPhase::Downloading {
+            info: r,
+            asset,
+            written: 6 * 1024 * 1024,
+            total: Some(12 * 1024 * 1024),
+            eta_secs: None,
+        };
+        let active_color_index = 5;
+        let actors = build(&phase, active_color_index);
+        let Some(children) = actors.iter().find_map(|actor| match actor {
+            Actor::Frame {
+                size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                children,
+                ..
+            } if (*w - (PANEL_W - 100.0)).abs() < f32::EPSILON
+                && (*h - 32.0).abs() < f32::EPSILON =>
+            {
+                Some(children)
+            }
+            _ => None,
+        }) else {
+            panic!("download phase should render a loading bar frame");
+        };
+
+        let [border, bg, fill, text] = children.as_slice() else {
+            panic!("loading bar should have border, background, fill, and text actors");
+        };
+        let sprite_tint = |actor: &Actor| match actor {
+            Actor::Sprite { tint, .. } => *tint,
+            _ => panic!("expected loading bar sprite child"),
+        };
+        let Actor::Text { color, .. } = text else {
+            panic!("expected loading bar text child");
+        };
+
+        let expected_fill = color::decorative_rgba(active_color_index);
+        assert_eq!(sprite_tint(border), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(sprite_tint(bg), [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(
+            sprite_tint(fill),
+            [expected_fill[0], expected_fill[1], expected_fill[2], 1.0],
+        );
+        assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
     }
 
     #[test]

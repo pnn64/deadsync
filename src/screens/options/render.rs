@@ -1301,6 +1301,7 @@ pub fn get_actors(
 
     actors.extend(crate::screens::components::shared::update_overlay::build(
         &crate::engine::updater::action::current(),
+        state.active_color_index,
     ));
 
     actors
