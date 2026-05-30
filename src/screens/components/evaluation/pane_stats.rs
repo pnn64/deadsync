@@ -6,9 +6,10 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::screen_center_y;
-use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
+use deadsync_rules::judgment::JudgeGrade;
+use deadsync_rules::timing::WindowCounts;
 use std::sync::{Arc, LazyLock};
 
 use super::utils::pane_origin_x;
@@ -153,7 +154,7 @@ fn fill_padded_digits(mut value: u32, width: usize, out: &mut [u8; 10]) -> usize
 }
 
 #[inline(always)]
-fn max_window_count(wc: crate::game::timing::WindowCounts) -> u32 {
+fn max_window_count(wc: WindowCounts) -> u32 {
     wc.w0
         .max(wc.w1)
         .max(wc.w2)

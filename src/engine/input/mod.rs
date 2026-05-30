@@ -13,12 +13,9 @@ use deadsync_input::debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
     emit_due_debounce_edges_from_mut,
 };
-pub use deadsync_input::{
-    ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, INPUT_DEBOUNCE_MAX_SECONDS,
-    INPUT_DEBOUNCE_MIN_SECONDS, INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane,
-    PadCode, PadDir, PadEvent, PadId, VirtualAction, action_from_ini_key_lower, action_to_ini_key,
-    clamp_input_debounce_seconds, emit_normalized_actions, lane_from_action, lane_from_column,
-    pad_dir_from_action, parse_pad_dir,
+use deadsync_input::{
+    GamepadCodeBinding, InputEvent, InputSource, PadCode, PadDir, PadEvent, PadId, VirtualAction,
+    clamp_input_debounce_seconds, emit_normalized_actions,
 };
 
 /* ------------------------ Pad types + backend ------------------------ */

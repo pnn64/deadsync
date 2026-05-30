@@ -1,3 +1,4 @@
+use deadsync_score as score_data;
 mod commands;
 mod dynamic_media;
 mod graphics;
@@ -20,16 +21,14 @@ use crate::engine::gfx::{
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
-use crate::engine::input::{self, InputEvent};
+use crate::engine::input;
 use crate::engine::lights::{
     self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
 };
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
-use crate::game::note::NoteType;
 use crate::game::parsing::simfile as song_loading;
-use crate::game::timing::ROWS_PER_BEAT;
-use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
+use crate::game::{profile, scores, stage_stats};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
@@ -69,7 +68,14 @@ compile_error!(
 
 use crate::engine::present::actors::Actor;
 /* -------------------- gamepad -------------------- */
-use crate::engine::input::{GpSystemEvent, PadEvent};
+use crate::engine::input::GpSystemEvent;
+use deadsync_core::note::NoteType;
+use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs};
+use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_rules::judgment as judgment_rules;
+use deadsync_rules::note::Note;
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::{self as timing_rules, ROWS_PER_BEAT};
 
 /* -------------------- user events -------------------- */
 #[derive(Debug, Clone)]
@@ -106,8 +112,8 @@ const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
-const LIGHTS_AHEAD_NS: crate::game::gameplay::SongTimeNs = 50_000_000;
-const LIGHTS_MAX_CATCHUP_NS: crate::game::gameplay::SongTimeNs = 500_000_000;
+const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
+const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
 const LIGHTS_QUARTER_ROWS: usize = ROWS_PER_BEAT as usize;
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
@@ -116,7 +122,7 @@ struct GameplayLightTracker {
     notes_ptr: usize,
     notes_len: usize,
     cursor: usize,
-    last_time_ns: crate::game::gameplay::SongTimeNs,
+    last_time_ns: SongTimeNs,
 }
 
 impl GameplayLightTracker {
@@ -160,7 +166,7 @@ impl GameplayLightTracker {
     }
 }
 
-fn gameplay_note_lights(note: &crate::game::note::Note) -> bool {
+fn gameplay_note_lights(note: &Note) -> bool {
     note.can_be_judged
         && !note.is_fake
         && matches!(
@@ -169,7 +175,7 @@ fn gameplay_note_lights(note: &crate::game::note::Note) -> bool {
         )
 }
 
-fn gameplay_bass_lights(note: &crate::game::note::Note, simplify_bass: bool) -> bool {
+fn gameplay_bass_lights(note: &Note, simplify_bass: bool) -> bool {
     gameplay_note_lights(note) && (!simplify_bass || note.row_index % LIGHTS_QUARTER_ROWS == 0)
 }
 
@@ -281,67 +287,55 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     }
 }
 
-const fn light_button_from_action(action: input::VirtualAction) -> Option<LightButtonSource> {
+const fn light_button_from_action(action: VirtualAction) -> Option<LightButtonSource> {
     match action {
-        input::VirtualAction::p1_left => {
-            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Left))
-        }
-        input::VirtualAction::p1_down => {
-            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Down))
-        }
-        input::VirtualAction::p1_up => {
-            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Up))
-        }
-        input::VirtualAction::p1_right => {
+        VirtualAction::p1_left => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Left)),
+        VirtualAction::p1_down => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Down)),
+        VirtualAction::p1_up => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Up)),
+        VirtualAction::p1_right => {
             Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Right))
         }
-        input::VirtualAction::p1_menu_left => {
+        VirtualAction::p1_menu_left => {
             Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Left))
         }
-        input::VirtualAction::p1_menu_down => {
+        VirtualAction::p1_menu_down => {
             Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Down))
         }
-        input::VirtualAction::p1_menu_up => {
+        VirtualAction::p1_menu_up => {
             Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Up))
         }
-        input::VirtualAction::p1_menu_right => {
+        VirtualAction::p1_menu_right => {
             Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Right))
         }
-        input::VirtualAction::p1_start => {
+        VirtualAction::p1_start => {
             Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Start))
         }
-        input::VirtualAction::p1_select => Some(LightButtonSource::Menu(
+        VirtualAction::p1_select => Some(LightButtonSource::Menu(
             LightPlayer::P1,
             ButtonLight::Select,
         )),
-        input::VirtualAction::p2_left => {
-            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Left))
-        }
-        input::VirtualAction::p2_down => {
-            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Down))
-        }
-        input::VirtualAction::p2_up => {
-            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Up))
-        }
-        input::VirtualAction::p2_right => {
+        VirtualAction::p2_left => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Left)),
+        VirtualAction::p2_down => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Down)),
+        VirtualAction::p2_up => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Up)),
+        VirtualAction::p2_right => {
             Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Right))
         }
-        input::VirtualAction::p2_menu_left => {
+        VirtualAction::p2_menu_left => {
             Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Left))
         }
-        input::VirtualAction::p2_menu_down => {
+        VirtualAction::p2_menu_down => {
             Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Down))
         }
-        input::VirtualAction::p2_menu_up => {
+        VirtualAction::p2_menu_up => {
             Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Up))
         }
-        input::VirtualAction::p2_menu_right => {
+        VirtualAction::p2_menu_right => {
             Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Right))
         }
-        input::VirtualAction::p2_start => {
+        VirtualAction::p2_start => {
             Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Start))
         }
-        input::VirtualAction::p2_select => Some(LightButtonSource::Menu(
+        VirtualAction::p2_select => Some(LightButtonSource::Menu(
             LightPlayer::P2,
             ButtonLight::Select,
         )),
@@ -350,10 +344,10 @@ const fn light_button_from_action(action: input::VirtualAction) -> Option<LightB
 }
 
 #[inline(always)]
-const fn is_operator_menu_action(action: input::VirtualAction) -> bool {
+const fn is_operator_menu_action(action: VirtualAction) -> bool {
     matches!(
         action,
-        input::VirtualAction::p1_operator | input::VirtualAction::p2_operator
+        VirtualAction::p1_operator | VirtualAction::p2_operator
     )
 }
 
@@ -414,30 +408,30 @@ struct GameplayOffsetSavePrompt {
 
 #[inline(always)]
 const fn gameplay_offset_prompt_choice_delta(
-    action: input::VirtualAction,
+    action: VirtualAction,
     dedicated_menu_only: bool,
 ) -> Option<i8> {
     if dedicated_menu_only && action.is_gameplay_arrow() {
         return None;
     }
     match action {
-        input::VirtualAction::p1_left
-        | input::VirtualAction::p1_menu_left
-        | input::VirtualAction::p2_left
-        | input::VirtualAction::p2_menu_left => Some(-1),
-        input::VirtualAction::p1_right
-        | input::VirtualAction::p1_menu_right
-        | input::VirtualAction::p2_right
-        | input::VirtualAction::p2_menu_right => Some(1),
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(-1),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(1),
         _ => None,
     }
 }
 
 #[derive(Clone)]
 struct CourseStageRuntime {
-    song: Arc<crate::game::song::SongData>,
-    steps_index: [usize; crate::game::gameplay::MAX_PLAYERS],
-    preferred_difficulty_index: [usize; crate::game::gameplay::MAX_PLAYERS],
+    song: Arc<deadsync_chart::SongData>,
+    steps_index: [usize; MAX_PLAYERS],
+    preferred_difficulty_index: [usize; MAX_PLAYERS],
 }
 
 #[derive(Clone)]
@@ -449,10 +443,9 @@ struct CourseRunState {
     course_difficulty_name: String,
     course_meter: Option<u32>,
     course_stepchart_label: String,
-    song_stub: Arc<crate::game::song::SongData>,
+    song_stub: Arc<deadsync_chart::SongData>,
     stages: Vec<CourseStageRuntime>,
-    course_display_totals:
-        [crate::game::gameplay::CourseDisplayTotals; crate::game::gameplay::MAX_PLAYERS],
+    course_display_totals: [crate::game::gameplay::CourseDisplayTotals; MAX_PLAYERS],
     next_stage_index: usize,
     stage_summaries: Vec<stage_stats::StageSummary>,
     stage_eval_pages: Vec<evaluation::State>,
@@ -1205,7 +1198,7 @@ pub struct SessionState {
     played_stages: Vec<stage_stats::StageSummary>,
     pending_post_select_summary_exit: bool,
     course_individual_stage_indices: Vec<usize>,
-    combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
+    combo_carry: [u32; MAX_PLAYERS],
     gameplay_restart_count: u32,
     /// SL/zmod parity: when a restart key is pressed mid-gameplay, the gameplay
     /// state runs its fast Cancel exit. This flag intercepts the resulting
@@ -1596,10 +1589,7 @@ impl ShellState {
 }
 
 impl SessionState {
-    fn new(
-        preferred_difficulty_index: usize,
-        combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
-    ) -> Self {
+    fn new(preferred_difficulty_index: usize, combo_carry: [u32; MAX_PLAYERS]) -> Self {
         Self {
             preferred_difficulty_index,
             session_start_time: None,
@@ -1627,7 +1617,7 @@ const fn side_ix(side: profile::PlayerSide) -> usize {
 }
 
 #[inline(always)]
-fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
+fn combo_carry_from_profiles() -> [u32; MAX_PLAYERS] {
     [
         profile::get_for_side(profile::PlayerSide::P1).current_combo,
         profile::get_for_side(profile::PlayerSide::P2).current_combo,
@@ -1659,8 +1649,8 @@ fn course_stage_runtime_from_plan(
     )?;
     Some(CourseStageRuntime {
         song: plan.song.clone(),
-        steps_index: [steps_idx; crate::game::gameplay::MAX_PLAYERS],
-        preferred_difficulty_index: [steps_idx; crate::game::gameplay::MAX_PLAYERS],
+        steps_index: [steps_idx; MAX_PLAYERS],
+        preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
     })
 }
 
@@ -1678,7 +1668,7 @@ fn build_course_run_from_selection(
         return None;
     }
     let mut course_display_totals =
-        [crate::game::gameplay::CourseDisplayTotals::default(); crate::game::gameplay::MAX_PLAYERS];
+        [crate::game::gameplay::CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in &stages {
         for (player_idx, total) in course_display_totals.iter_mut().enumerate() {
             let Some(chart) = select_music::chart_for_steps_index(
@@ -1717,7 +1707,7 @@ fn build_course_run_from_selection(
 
 fn build_course_graph_stages(
     course: &CourseRunState,
-) -> [Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS] {
+) -> [Vec<evaluation::CourseGraphStage>; MAX_PLAYERS] {
     let chart_type = profile::get_session_play_style().chart_type();
     std::array::from_fn(|player_idx| {
         let mut out = Vec::with_capacity(course.stages.len());
@@ -1776,9 +1766,9 @@ fn course_display_timing_for_run(
 
 #[inline(always)]
 fn merge_window_counts(
-    mut total: crate::game::timing::WindowCounts,
-    add: crate::game::timing::WindowCounts,
-) -> crate::game::timing::WindowCounts {
+    mut total: timing_rules::WindowCounts,
+    add: timing_rules::WindowCounts,
+) -> timing_rules::WindowCounts {
     total.w0 = total.w0.saturating_add(add.w0);
     total.w1 = total.w1.saturating_add(add.w1);
     total.w2 = total.w2.saturating_add(add.w2);
@@ -1790,7 +1780,7 @@ fn merge_window_counts(
 }
 
 #[inline(always)]
-fn window_counts_total(counts: crate::game::timing::WindowCounts) -> u32 {
+fn window_counts_total(counts: timing_rules::WindowCounts) -> u32 {
     counts
         .w0
         .saturating_add(counts.w1)
@@ -1820,7 +1810,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
     summary_song.total_length_seconds = duration_seconds.round() as i32;
     let summary_song = Arc::new(summary_song);
 
-    let mut players: [Option<stage_stats::PlayerStageSummary>; crate::game::gameplay::MAX_PLAYERS] =
+    let mut players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
         let idx = side_ix(side);
@@ -1841,8 +1831,8 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut show_ex = false;
         let mut show_hard_ex = false;
         let mut track_early_judgments = false;
-        let mut counts = crate::game::timing::WindowCounts::default();
-        let mut counts_10ms = crate::game::timing::WindowCounts::default();
+        let mut counts = timing_rules::WindowCounts::default();
+        let mut counts_10ms = timing_rules::WindowCounts::default();
         let mut hands_achieved = 0u32;
         let mut hands_total = 0u32;
         let mut holds_held = 0u32;
@@ -1882,7 +1872,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             calories_burned += player.calories_burned.max(0.0);
             meter_sum = meter_sum.saturating_add(player.chart.meter);
             meter_count = meter_count.saturating_add(1);
-            any_failed |= player.grade == scores::Grade::Failed;
+            any_failed |= player.grade == score_data::Grade::Failed;
             score_valid &= player.score_valid;
             disqualified |= player.disqualified;
             show_w0 |= player.show_w0;
@@ -1947,11 +1937,11 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         } else {
             played_mines_total
         };
-        let score_percent = crate::game::judgment::calculate_itg_score_percent_from_points(
+        let score_percent = judgment_rules::calculate_itg_score_percent_from_points(
             earned_grade_points,
             possible_grade_points,
         );
-        let ex_data = crate::game::judgment::ExScoreData {
+        let ex_data = judgment_rules::ExScoreData {
             counts,
             counts_10ms,
             holds_held: holds_held_for_score,
@@ -1964,14 +1954,14 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             rolls_total,
             mines_total,
         };
-        let ex_score_percent = crate::game::judgment::ex_score_percent(&ex_data);
-        let hard_ex_score_percent = crate::game::judgment::hard_ex_score_percent(&ex_data);
+        let ex_score_percent = judgment_rules::ex_score_percent(&ex_data);
+        let hard_ex_score_percent = judgment_rules::hard_ex_score_percent(&ex_data);
         let mut grade = if any_failed {
-            scores::Grade::Failed
+            score_data::Grade::Failed
         } else {
-            scores::score_to_grade(score_percent * 10000.0)
+            score_data::score_to_grade(score_percent * 10000.0)
         };
-        grade = scores::promote_quint_grade(grade, ex_score_percent);
+        grade = score_data::promote_quint_grade(grade, ex_score_percent);
         let mut summary_chart = (*first_player.chart).clone();
         summary_chart.short_hash.clone_from(&course.score_hash);
         summary_chart
@@ -2017,11 +2007,11 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             calories_burned,
             window_counts: counts,
             window_counts_10ms: counts_10ms,
-            timing: crate::game::timing::timing_stats_from_offsets(timing_offsets_ms),
-            arrow_timing: crate::game::timing::ArrowTimingStats::default(),
+            timing: timing_rules::timing_stats_from_offsets(timing_offsets_ms),
+            arrow_timing: timing_rules::ArrowTimingStats::default(),
             scatter,
             scatter_worst_window_ms: scatter_worst_window_ms.max(45.0),
-            histogram: crate::game::timing::merge_histograms_ms(histograms.as_slice()),
+            histogram: timing_rules::merge_histograms_ms(histograms.as_slice()),
             graph_first_second,
             graph_last_second,
             life_history,
@@ -2070,9 +2060,9 @@ fn score_info_from_stage(
     let personal_records =
         scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
     let machine_record_highlight_rank =
-        scores::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
+        score_data::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
     let personal_record_highlight_rank =
-        scores::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
+        score_data::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
     let local_score_valid = player.score_valid && !player.disqualified;
     let earned_machine_record =
         local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
@@ -2128,9 +2118,9 @@ fn score_info_from_stage(
             1.0
         },
         life_history: player.life_history.clone(),
-        fail_time: player
-            .fail_time
-            .or_else(|| (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds)),
+        fail_time: player.fail_time.or_else(|| {
+            (player.grade == score_data::Grade::Failed).then_some(stage.duration_seconds)
+        }),
         window_counts: player.window_counts,
         window_counts_10ms: player.window_counts_10ms,
         ex_score_percent: player.ex_score_percent,
@@ -2230,7 +2220,7 @@ fn merge_column_judgments(
 }
 
 fn score_info_for_side(
-    score_info: &[Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS],
+    score_info: &[Option<evaluation::ScoreInfo>; MAX_PLAYERS],
     side: profile::PlayerSide,
 ) -> Option<&evaluation::ScoreInfo> {
     score_info.iter().flatten().find(|si| si.side == side)
@@ -2261,12 +2251,12 @@ fn apply_course_summary_column_judgments(
 
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
-    course_graph_stages: &[Vec<evaluation::CourseGraphStage>; crate::game::gameplay::MAX_PLAYERS],
+    course_graph_stages: &[Vec<evaluation::CourseGraphStage>; MAX_PLAYERS],
     active_color_index: i32,
     session_elapsed: f32,
     gameplay_elapsed: f32,
 ) -> evaluation::State {
-    let mut score_info: [Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS] =
+    let mut score_info: [Option<evaluation::ScoreInfo>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     match profile::get_session_play_style() {
         profile::PlayStyle::Versus => {
@@ -2439,7 +2429,7 @@ fn prewarm_gameplay_assets(
             paths.push(path);
         }
         for change in &state.background_changes {
-            let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+            let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target else {
                 continue;
             };
             paths.push(path);
@@ -2743,7 +2733,7 @@ fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
         keys.push(path.to_string_lossy().into_owned());
     }
     for change in &state.background_changes {
-        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+        let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target else {
             continue;
         };
         keys.push(path.to_string_lossy().into_owned());
@@ -2786,9 +2776,9 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
 
-    let mut song_opt: Option<Arc<crate::game::song::SongData>> = None;
+    let mut song_opt: Option<Arc<deadsync_chart::SongData>> = None;
     let mut music_rate: f32 = 1.0;
-    let mut players: [Option<stage_stats::PlayerStageSummary>; crate::game::gameplay::MAX_PLAYERS] =
+    let mut players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
 
     let notes_hit = |si: &evaluation::ScoreInfo| -> u32 {
@@ -2919,8 +2909,8 @@ fn format_offset_tag_value(value: f32) -> String {
 
 #[inline(always)]
 fn replace_song_arc_if_same_simfile(
-    current_song: &mut Arc<crate::game::song::SongData>,
-    updated_song: &Arc<crate::game::song::SongData>,
+    current_song: &mut Arc<deadsync_chart::SongData>,
+    updated_song: &Arc<deadsync_chart::SongData>,
 ) -> bool {
     if current_song.simfile_path != updated_song.simfile_path {
         return false;
@@ -2931,9 +2921,9 @@ fn replace_song_arc_if_same_simfile(
 
 #[inline(always)]
 fn can_reuse_quick_restart_payload(
-    current_song: &crate::game::song::SongData,
+    current_song: &deadsync_chart::SongData,
     current_chart_hashes: [&str; 2],
-    next_song: &crate::game::song::SongData,
+    next_song: &deadsync_chart::SongData,
     next_chart_hashes: [&str; 2],
 ) -> bool {
     current_song.simfile_path == next_song.simfile_path
@@ -2942,16 +2932,16 @@ fn can_reuse_quick_restart_payload(
 }
 
 fn restart_payload_from_eval(
-    score_info: &[Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS],
+    score_info: &[Option<evaluation::ScoreInfo>; MAX_PLAYERS],
 ) -> Option<(
-    Arc<crate::game::song::SongData>,
-    [String; crate::game::gameplay::MAX_PLAYERS],
+    Arc<deadsync_chart::SongData>,
+    [String; MAX_PLAYERS],
     f32,
-    [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
+    [ScrollSpeedSetting; MAX_PLAYERS],
 )> {
     let mut song = None;
     let mut chart_hashes = std::array::from_fn(|_| String::new());
-    let mut scroll_speed = [ScrollSpeedSetting::default(); crate::game::gameplay::MAX_PLAYERS];
+    let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
     let mut music_rate = None;
 
     for entry in score_info.iter().flatten() {
@@ -4816,10 +4806,10 @@ impl App {
                 None
             }
             _ => match ev.action {
-                input::VirtualAction::p1_start
-                | input::VirtualAction::p2_start
-                | input::VirtualAction::p1_select
-                | input::VirtualAction::p2_select => {
+                VirtualAction::p1_start
+                | VirtualAction::p2_start
+                | VirtualAction::p1_select
+                | VirtualAction::p2_select => {
                     let save_changes = self
                         .state
                         .gameplay_offset_save_prompt
@@ -4828,7 +4818,7 @@ impl App {
                     crate::engine::audio::play_sfx("assets/sounds/start.ogg");
                     Some(save_changes)
                 }
-                input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
+                VirtualAction::p1_back | VirtualAction::p2_back => None,
                 _ => None,
             },
         };
@@ -4852,7 +4842,7 @@ impl App {
         let player_side = profile::get_session_player_side();
         match play_style {
             profile::PlayStyle::Versus => {
-                for idx in 0..gs.num_players.min(crate::game::gameplay::MAX_PLAYERS) {
+                for idx in 0..gs.num_players.min(MAX_PLAYERS) {
                     let combo = gs.players[idx].combo;
                     self.state.session.combo_carry[idx] = combo;
                     let side = if idx == 0 {
@@ -4946,10 +4936,10 @@ impl App {
 
     fn prepare_restart_player_options(
         &mut self,
-        song: Arc<crate::game::song::SongData>,
-        chart_hashes: [&str; crate::game::gameplay::MAX_PLAYERS],
+        song: Arc<deadsync_chart::SongData>,
+        chart_hashes: [&str; MAX_PLAYERS],
         music_rate: f32,
-        scroll_speed: [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
+        scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
         active_color_index: i32,
         return_screen: CurrentScreen,
     ) -> bool {
@@ -5124,7 +5114,7 @@ impl App {
         let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
             return false;
         };
-        (0..gs.num_players.min(crate::game::gameplay::MAX_PLAYERS)).any(|player_idx| {
+        (0..gs.num_players.min(MAX_PLAYERS)).any(|player_idx| {
             let p = &gs.players[player_idx];
             p.is_failing || p.life <= 0.0 || p.fail_time.is_some()
         })
@@ -5360,8 +5350,8 @@ impl App {
             return false;
         }
         let join_side = match ev.action {
-            input::VirtualAction::p1_start => profile::PlayerSide::P1,
-            input::VirtualAction::p2_start => profile::PlayerSide::P2,
+            VirtualAction::p1_start => profile::PlayerSide::P1,
+            VirtualAction::p2_start => profile::PlayerSide::P2,
             _ => return false,
         };
 
@@ -5504,13 +5494,13 @@ impl App {
             )
             && matches!(
                 ev.action,
-                input::VirtualAction::p1_select | input::VirtualAction::p2_select
+                VirtualAction::p1_select | VirtualAction::p2_select
             )
         {
             self.state.shell.screenshot_pending = true;
             self.state.shell.screenshot_request_side = match ev.action {
-                input::VirtualAction::p1_select => Some(profile::PlayerSide::P1),
-                input::VirtualAction::p2_select => Some(profile::PlayerSide::P2),
+                VirtualAction::p1_select => Some(profile::PlayerSide::P1),
+                VirtualAction::p2_select => Some(profile::PlayerSide::P2),
                 _ => None,
             };
             return Ok(());
@@ -5524,7 +5514,7 @@ impl App {
             && self.state.session.course_run.is_none()
             && matches!(
                 ev.action,
-                input::VirtualAction::p1_restart | input::VirtualAction::p2_restart
+                VirtualAction::p1_restart | VirtualAction::p2_restart
             )
         {
             self.try_gameplay_restart(event_loop, "Restart button");
@@ -7668,7 +7658,7 @@ impl App {
                     );
                     chart_ref
                 };
-                let chart_ix_for_ref = |chart_ref: &crate::game::chart::ChartData| {
+                let chart_ix_for_ref = |chart_ref: &deadsync_chart::ChartData| {
                     song_arc
                         .charts
                         .iter()
@@ -7781,7 +7771,7 @@ impl App {
                     None,
                     None,
                     None,
-                    [0; crate::game::gameplay::MAX_PLAYERS],
+                    [0; MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
@@ -7942,7 +7932,7 @@ impl App {
                     );
                     chart_ref
                 };
-                let chart_ix_for_ref = |chart_ref: &crate::game::chart::ChartData| {
+                let chart_ix_for_ref = |chart_ref: &deadsync_chart::ChartData| {
                     song_arc
                         .charts
                         .iter()
@@ -8087,15 +8077,9 @@ impl App {
                 }
 
                 let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
-                    player_options::SpeedModType::X => {
-                        crate::game::scroll::ScrollSpeedSetting::XMod(m.value)
-                    }
-                    player_options::SpeedModType::C => {
-                        crate::game::scroll::ScrollSpeedSetting::CMod(m.value)
-                    }
-                    player_options::SpeedModType::M => {
-                        crate::game::scroll::ScrollSpeedSetting::MMod(m.value)
-                    }
+                    player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
+                    player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
+                    player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
                 };
                 let scroll_speeds = [
                     to_scroll_speed(&po_state.speed_mod[0]),
@@ -9049,12 +9033,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{
-        chart::{ArrowStats, ChartData, StaminaCounts, TechCounts},
-        note::Note,
-        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState},
-        song::SongData,
+    use crate::game::parsing::song_lua::{
+        SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState,
     };
+    use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+    use deadsync_rules::note::Note;
 
     fn light_test_note(row_index: usize, note_type: NoteType) -> Note {
         Note {
@@ -9163,19 +9146,19 @@ mod tests {
     #[test]
     fn gameplay_offset_prompt_ignores_pad_lr_in_dedicated_menu_mode() {
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, true),
             None
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, true),
             None
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_left, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_left, true),
             None
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_right, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_right, true),
             None
         );
     }
@@ -9183,19 +9166,19 @@ mod tests {
     #[test]
     fn gameplay_offset_prompt_keeps_menu_lr_in_dedicated_menu_mode() {
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_left, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_left, true),
             Some(-1)
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_right, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_right, true),
             Some(1)
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_left, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_left, true),
             Some(-1)
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_right, true),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_right, true),
             Some(1)
         );
     }
@@ -9203,11 +9186,11 @@ mod tests {
     #[test]
     fn gameplay_offset_prompt_allows_pad_lr_when_fallback_enabled() {
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, false),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, false),
             Some(-1)
         );
         assert_eq!(
-            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, false),
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, false),
             Some(1)
         );
     }
@@ -9336,11 +9319,11 @@ mod tests {
             expected_arrowcloud_submit: false,
             groovestats: crate::game::scores::GrooveStatsEvalState::default(),
             itl: crate::game::scores::ItlEvalState::default(),
-            judgment_counts: [0; crate::game::judgment::JUDGE_GRADE_COUNT],
+            judgment_counts: [0; judgment_rules::JUDGE_GRADE_COUNT],
             score_percent: 0.0,
             earned_grade_points: 0,
             possible_grade_points: 0,
-            grade: crate::game::scores::Grade::Tier01,
+            grade: score_data::Grade::Tier01,
             speed_mod,
             mods_text: fallback_eval_mods_text(side, speed_mod),
             hands_achieved: 0,
@@ -9354,18 +9337,18 @@ mod tests {
             mines_hit_for_score: 0,
             mines_avoided: 0,
             mines_total: 0,
-            timing: crate::game::timing::TimingStats::default(),
+            timing: timing_rules::TimingStats::default(),
             arrow_timing: Default::default(),
             scatter: Vec::new(),
             scatter_worst_window_ms: 45.0,
-            histogram: crate::game::timing::HistogramMs::default(),
+            histogram: timing_rules::HistogramMs::default(),
             graph_first_second: 0.0,
             graph_last_second: song.precise_last_second(),
             music_rate,
             life_history: Vec::new(),
             fail_time: None,
-            window_counts: crate::game::timing::WindowCounts::default(),
-            window_counts_10ms: crate::game::timing::WindowCounts::default(),
+            window_counts: timing_rules::WindowCounts::default(),
+            window_counts_10ms: timing_rules::WindowCounts::default(),
             ex_score_percent: 0.0,
             hard_ex_score_percent: 0.0,
             calories_burned: 0.0,
@@ -9396,14 +9379,14 @@ mod tests {
     fn test_course_stage(song: Arc<SongData>) -> CourseStageRuntime {
         CourseStageRuntime {
             song,
-            steps_index: [0; crate::game::gameplay::MAX_PLAYERS],
-            preferred_difficulty_index: [0; crate::game::gameplay::MAX_PLAYERS],
+            steps_index: [0; MAX_PLAYERS],
+            preferred_difficulty_index: [0; MAX_PLAYERS],
         }
     }
 
     fn test_player_stage_summary(
         chart: Arc<ChartData>,
-        grade: scores::Grade,
+        grade: score_data::Grade,
         score_percent: f64,
         earned_grade_points: i32,
         possible_grade_points: i32,
@@ -9434,23 +9417,23 @@ mod tests {
             mines_total: 3,
             notes_hit: 20,
             calories_burned: 12.5,
-            window_counts: crate::game::timing::WindowCounts {
+            window_counts: timing_rules::WindowCounts {
                 w0: 20,
                 ..Default::default()
             },
-            window_counts_10ms: crate::game::timing::WindowCounts {
+            window_counts_10ms: timing_rules::WindowCounts {
                 w0: 16,
                 w1: 4,
                 ..Default::default()
             },
-            timing: crate::game::timing::TimingStats {
+            timing: timing_rules::TimingStats {
                 mean_abs_ms: 10.0,
                 mean_ms: 10.0,
                 stddev_ms: 0.0,
                 max_abs_ms: 10.0,
             },
             arrow_timing: Default::default(),
-            scatter: vec![crate::game::timing::ScatterPoint {
+            scatter: vec![timing_rules::ScatterPoint {
                 time_sec: 12.0,
                 offset_ms: Some(10.0),
                 direction_code: 1,
@@ -9459,7 +9442,7 @@ mod tests {
                 miss_because_held: false,
             }],
             scatter_worst_window_ms: 45.0,
-            histogram: crate::game::timing::HistogramMs {
+            histogram: timing_rules::HistogramMs {
                 bins: vec![(10, 1)],
                 smoothed: Vec::new(),
                 max_count: 1,
@@ -9507,18 +9490,18 @@ mod tests {
         let song_a = test_song_with_duration("Songs/Test/a.ssc", "a", 60.0);
         let song_b = test_song_with_duration("Songs/Test/b.ssc", "b", 90.0);
         let chart = Arc::new(test_chart("stage-a"));
-        let mut stage_players: [Option<stage_stats::PlayerStageSummary>;
-            crate::game::gameplay::MAX_PLAYERS] = std::array::from_fn(|_| None);
+        let mut stage_players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
+            std::array::from_fn(|_| None);
         stage_players[0] = Some(test_player_stage_summary(
             chart,
-            scores::Grade::Failed,
+            score_data::Grade::Failed,
             1.0,
             500,
             500,
         ));
 
-        let mut course_display_totals = [crate::game::gameplay::CourseDisplayTotals::default();
-            crate::game::gameplay::MAX_PLAYERS];
+        let mut course_display_totals =
+            [crate::game::gameplay::CourseDisplayTotals::default(); MAX_PLAYERS];
         course_display_totals[0] = crate::game::gameplay::CourseDisplayTotals {
             possible_grade_points: 1000,
             total_steps: 40,
@@ -9559,7 +9542,7 @@ mod tests {
         assert_eq!(player.holds_total, 4);
         assert_eq!(player.rolls_total, 2);
         assert_eq!(player.mines_total, 6);
-        assert_eq!(player.grade, scores::Grade::Failed);
+        assert_eq!(player.grade, score_data::Grade::Failed);
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
@@ -9699,10 +9682,10 @@ mod tests {
 
     #[test]
     fn operator_menu_actions_are_player_operator_buttons() {
-        assert!(is_operator_menu_action(input::VirtualAction::p1_operator));
-        assert!(is_operator_menu_action(input::VirtualAction::p2_operator));
-        assert!(!is_operator_menu_action(input::VirtualAction::p1_start));
-        assert!(!is_operator_menu_action(input::VirtualAction::p2_back));
+        assert!(is_operator_menu_action(VirtualAction::p1_operator));
+        assert!(is_operator_menu_action(VirtualAction::p2_operator));
+        assert!(!is_operator_menu_action(VirtualAction::p1_start));
+        assert!(!is_operator_menu_action(VirtualAction::p2_back));
     }
 
     #[test]

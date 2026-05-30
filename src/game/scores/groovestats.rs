@@ -8,11 +8,12 @@ use super::{
     gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
     log_body_snippet, lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
 };
-use crate::engine::network;
 use crate::game::gameplay;
-use crate::game::judgment;
 use crate::game::online;
 use crate::game::profile::{self, Profile, TimingWindowsOption};
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_net as network;
+use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -597,7 +598,7 @@ fn groovestats_reason_lines(
 }
 
 fn groovestats_eval_state(
-    chart: &crate::game::chart::ChartData,
+    chart: &deadsync_chart::ChartData,
     profile: &Profile,
     music_rate: f32,
     autoplay_used: bool,
@@ -733,7 +734,7 @@ pub fn groovestats_eval_state_from_gameplay(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> GrooveStatsEvalState {
-    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
+    if player_idx >= gs.num_players.min(MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
     let mut state = groovestats_eval_state(
@@ -791,7 +792,7 @@ pub fn groovestats_eval_state_from_gameplay(
 }
 
 fn groovestats_submit_invalid_reason(
-    chart: &crate::game::chart::ChartData,
+    chart: &deadsync_chart::ChartData,
     song_has_lua: bool,
     profile: &Profile,
     music_rate: f32,
@@ -941,7 +942,7 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
         parts.push(timing_windows.to_string());
     }
 
-    if let crate::game::scroll::ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
+    if let ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
         parts.push(format!("C{}", compact_f32_text(value)));
     }
 
@@ -964,9 +965,9 @@ fn groovestats_timing_windows_comment(setting: TimingWindowsOption) -> Option<&'
 
 fn groovestats_player_options_json(profile: &Profile) -> String {
     let (speed_mod_type, speed_mod) = match profile.scroll_speed {
-        crate::game::scroll::ScrollSpeedSetting::XMod(value) => (1, value),
-        crate::game::scroll::ScrollSpeedSetting::CMod(value) => (2, value),
-        crate::game::scroll::ScrollSpeedSetting::MMod(value) => (3, value),
+        ScrollSpeedSetting::XMod(value) => (1, value),
+        ScrollSpeedSetting::CMod(value) => (2, value),
+        ScrollSpeedSetting::MMod(value) => (3, value),
     };
     let mut options = JsonMap::with_capacity(18);
     options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
@@ -1073,7 +1074,7 @@ fn groovestats_payload_for_player(
         rescore_counts: groovestats_rescore_counts(gs, player_idx),
         used_cmod: matches!(
             gs.player_profiles[player_idx].scroll_speed,
-            crate::game::scroll::ScrollSpeedSetting::CMod(_)
+            ScrollSpeedSetting::CMod(_)
         ),
         comment: groovestats_comment_string(gs, player_idx),
         player_options: groovestats_player_options_json(&gs.player_profiles[player_idx]),
@@ -1364,7 +1365,7 @@ fn groovestats_retry_request(
 }
 
 pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         groovestats_reset_submit_ui_status(side, gs.charts[player_idx].short_hash.as_str());
         groovestats_reset_submit_event_ui(side, gs.charts[player_idx].short_hash.as_str());
@@ -1389,16 +1390,16 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         );
         return;
     }
-    let mut body = JsonMap::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
-    let mut headers = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
-    let mut query = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS) + 1);
-    let mut players = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
+    let mut body = JsonMap::with_capacity(gs.num_players.min(MAX_PLAYERS));
+    let mut headers = Vec::with_capacity(gs.num_players.min(MAX_PLAYERS));
+    let mut query = Vec::with_capacity(gs.num_players.min(MAX_PLAYERS) + 1);
+    let mut players = Vec::with_capacity(gs.num_players.min(MAX_PLAYERS));
     query.push((
         "maxLeaderboardResults".to_string(),
         GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
     ));
 
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let slot = if side == profile::PlayerSide::P1 {
             1
@@ -1718,8 +1719,7 @@ pub fn tick_groovestats_auto_retries() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use crate::game::scroll::ScrollSpeedSetting;
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use serde_json::json;
 
     fn sample_chart(chart_type: &str) -> ChartData {
@@ -2120,7 +2120,7 @@ mod tests {
     #[test]
     fn groovestats_player_options_include_submit_relevant_mods() {
         let mut profile = Profile {
-            scroll_speed: crate::game::scroll::ScrollSpeedSetting::CMod(650.0),
+            scroll_speed: ScrollSpeedSetting::CMod(650.0),
             hide_song_bg: true,
             show_fa_plus_window: true,
             ..Profile::default()

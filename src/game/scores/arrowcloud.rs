@@ -4,11 +4,16 @@ use super::{
     invalidate_player_leaderboards_for_side, log_body_snippet, lua_chart_submit_allowed,
     submit_side_ix,
 };
-use crate::engine::network;
 use crate::game::gameplay;
-use crate::game::judgment;
 use crate::game::online;
 use crate::game::profile::{self, Profile};
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_net as network;
+use deadsync_rules::{
+    judgment,
+    scroll::ScrollSpeedSetting,
+    timing::{self, ScatterPoint},
+};
 use log::{debug, warn};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -485,17 +490,17 @@ fn arrowcloud_scroll_label(scroll: profile::ScrollOption) -> Option<String> {
 }
 
 #[inline(always)]
-fn arrowcloud_speed_payload(speed: crate::game::scroll::ScrollSpeedSetting) -> ArrowCloudSpeed {
+fn arrowcloud_speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
     match speed {
-        crate::game::scroll::ScrollSpeedSetting::CMod(v) => ArrowCloudSpeed {
+        ScrollSpeedSetting::CMod(v) => ArrowCloudSpeed {
             value: v as f64,
             speed_type: "C",
         },
-        crate::game::scroll::ScrollSpeedSetting::MMod(v) => ArrowCloudSpeed {
+        ScrollSpeedSetting::MMod(v) => ArrowCloudSpeed {
             value: v as f64,
             speed_type: "M",
         },
-        crate::game::scroll::ScrollSpeedSetting::XMod(v) => ArrowCloudSpeed {
+        ScrollSpeedSetting::XMod(v) => ArrowCloudSpeed {
             value: ((v as f64) * 100.0).round() / 100.0,
             speed_type: "X",
         },
@@ -584,9 +589,7 @@ fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<Arr
 }
 
 #[inline(always)]
-fn arrowcloud_timing_data_from_scatter(
-    scatter: &[crate::game::timing::ScatterPoint],
-) -> Vec<ArrowCloudTimingDatum> {
+fn arrowcloud_timing_data_from_scatter(scatter: &[ScatterPoint]) -> Vec<ArrowCloudTimingDatum> {
     let mut out = Vec::with_capacity(scatter.len());
     for point in scatter {
         if !point.time_sec.is_finite() {
@@ -612,7 +615,7 @@ fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowC
     let note_times = &gs.note_time_cache_ns[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
     let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
-    let scatter = crate::game::timing::build_scatter_points(
+    let scatter = timing::build_scatter_points(
         notes,
         note_times,
         col_offset,
@@ -885,7 +888,7 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
 }
 
 pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         arrowcloud_reset_submit_ui_status(side, chart_hash);
@@ -904,8 +907,8 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
-    let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+    let mut jobs = Vec::with_capacity(gs.num_players.min(MAX_PLAYERS));
+    for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         if gs.song.has_lua && !lua_chart_submit_allowed(chart_hash) {
@@ -1193,7 +1196,6 @@ pub fn tick_arrowcloud_auto_retries() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::timing::ScatterPoint;
     use serde_json::{Value, json};
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {

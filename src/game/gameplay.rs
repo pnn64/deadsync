@@ -1,38 +1,38 @@
 use crate::config::DefaultFailType;
 use crate::engine::audio;
-use crate::engine::input::{InputEdge, InputSource};
 use crate::engine::space::{is_wide, screen_height, screen_width};
-use crate::game::chart::{ChartData, GameplayChartData};
-use crate::game::judgment::{
-    self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
-};
-use crate::game::note::{
-    HoldData, HoldResult, MineResult, Note, NoteType, recompute_player_totals,
-};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
+use crate::game::profile::{self, TimingTickMode as TickMode};
 use crate::game::scores;
-use crate::game::song::{self, SongData, SyncPref};
-use crate::game::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
-    TimingProfileNs, beat_to_note_row,
-};
-use crate::game::{
-    profile::{self, TimingTickMode as TickMode},
-    scroll::ScrollSpeedSetting,
-};
+use crate::game::song;
+use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::note::NoteType;
+pub(crate) use deadsync_core::song_time::SongTimeNs;
+use deadsync_input::{InputEdge, InputSource};
 use deadsync_rules::combo::{
     self as combo_rules, ComboState, apply_row_combo_state as apply_rules_row_combo_state,
+};
+use deadsync_rules::judgment::{
+    self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
 #[cfg(test)]
 use deadsync_rules::life::{
     LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
 };
 use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
+use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_rules::stream::{stream_sequences_threshold, zmod_stream_totals_full_measures};
+use deadsync_rules::timing::{
+    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
+    TimingProfileNs, beat_to_note_row,
+};
+use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -199,8 +199,6 @@ pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
-pub const MAX_COLS: usize = 8;
-pub const MAX_PLAYERS: usize = 2;
 const MAX_ACTIVE_INPUT_SLOTS: usize = 128;
 // ITGmania _fallback and Simply Love keep mine hits from incrementing miss combo.
 const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
@@ -639,8 +637,6 @@ const M_MOD_HIGH_CAP: f32 = 600.0;
 const SCOREBOX_NUM_ENTRIES: usize = 5;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
-// Timing windows now sourced from game::timing
-
 pub const RECEPTOR_Y_OFFSET_FROM_CENTER: f32 = -125.0;
 pub const RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE: f32 = 145.0;
 pub const DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER: f32 = 1.5;
@@ -705,8 +701,6 @@ const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
-pub use deadsync_rules::song_time::SongTimeNs;
-
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
     "0.5x",
@@ -3067,7 +3061,7 @@ const fn side_index(side: profile::PlayerSide) -> usize {
 pub fn scorebox_snapshot_for_side(
     state: &State,
     side: profile::PlayerSide,
-) -> Option<&scores::CachedPlayerLeaderboardData> {
+) -> Option<&score_data::CachedPlayerLeaderboardData> {
     state.scorebox_side_snapshot[side_index(side)].as_ref()
 }
 
@@ -3261,8 +3255,8 @@ fn health_state_for_player(p: &PlayerRuntime) -> HealthState {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct ExScoreInputs {
-    counts: crate::game::timing::WindowCounts,
-    counts_10ms: crate::game::timing::WindowCounts,
+    counts: deadsync_rules::timing::WindowCounts,
+    counts_10ms: deadsync_rules::timing::WindowCounts,
     holds_held_for_score: u32,
     holds_let_go_for_score: u32,
     rolls_held_for_score: u32,
@@ -3278,7 +3272,7 @@ pub struct PlayerRuntime {
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
-    pub current_combo_window_counts: crate::game::timing::WindowCounts,
+    pub current_combo_window_counts: deadsync_rules::timing::WindowCounts,
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
@@ -3328,7 +3322,7 @@ pub struct PlayerRuntime {
     pub error_bar_long_avg_total: f32,
     pub error_bar_long_avg_tick: Option<ErrorBarTick>,
     pub error_bar_long_avg_visible: bool,
-    pub live_timing_stats: crate::game::timing::LiveTimingStats,
+    pub live_timing_stats: deadsync_rules::timing::LiveTimingStats,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -3339,14 +3333,14 @@ pub struct CourseDisplayCarry {
     pub scoring_counts: [u32; 6],
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
-    pub current_combo_window_counts: crate::game::timing::WindowCounts,
+    pub current_combo_window_counts: deadsync_rules::timing::WindowCounts,
     pub first_fc_attempt_broken: bool,
     // Canonical FA+ split (15ms) used for EX scoring/evaluation.
-    pub window_counts: crate::game::timing::WindowCounts,
+    pub window_counts: deadsync_rules::timing::WindowCounts,
     // Canonical 10ms split used for H.EX scoring/evaluation.
-    pub window_counts_10ms_blue: crate::game::timing::WindowCounts,
+    pub window_counts_10ms_blue: deadsync_rules::timing::WindowCounts,
     // Display split used by gameplay counters (legacy 10ms or custom ms option).
-    pub window_counts_display_blue: crate::game::timing::WindowCounts,
+    pub window_counts_display_blue: deadsync_rules::timing::WindowCounts,
     pub holds_held: u32,
     pub rolls_held: u32,
     pub mines_avoided: u32,
@@ -3369,7 +3363,7 @@ fn init_player_runtime() -> PlayerRuntime {
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,
-        current_combo_window_counts: crate::game::timing::WindowCounts::default(),
+        current_combo_window_counts: deadsync_rules::timing::WindowCounts::default(),
         first_fc_attempt_broken: false,
         judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
@@ -3416,7 +3410,7 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_long_avg_total: 0.0,
         error_bar_long_avg_tick: None,
         error_bar_long_avg_visible: false,
-        live_timing_stats: crate::game::timing::LiveTimingStats::default(),
+        live_timing_stats: deadsync_rules::timing::LiveTimingStats::default(),
     }
 }
 
@@ -3627,7 +3621,7 @@ pub struct State {
     pub current_background_key: Option<Arc<str>>,
     pub background_path_dirty: bool,
     pub background_allow_video: bool,
-    pub background_changes: Vec<song::SongBackgroundChange>,
+    pub background_changes: Vec<SongBackgroundChange>,
     pub next_background_change_ix: usize,
     pub background_texture_key: Arc<str>,
     pub foreground_texture_keys: Vec<Arc<str>>,
@@ -3724,13 +3718,13 @@ pub struct State {
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     pub course_display_timing: Option<CourseDisplayTiming>,
-    pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
-    pub live_window_counts_10ms_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
-    pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
+    pub live_window_counts: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
+    pub live_window_counts_10ms_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
+    pub live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub scorebox_profile_snapshot: [scores::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-    pub scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     pub song_lua_overlays: Vec<SongLuaOverlayActor>,
@@ -5173,13 +5167,13 @@ fn get_reference_bpm_from_display_tag(
 ) -> Option<f32> {
     // 1. Try chart-level display BPM
     match &chart.display_bpm {
-        Some(crate::game::chart::ChartDisplayBpm::Specified { max, .. }) => {
+        Some(deadsync_chart::ChartDisplayBpm::Specified { max, .. }) => {
             let v = *max as f32;
             if v.is_finite() && v > 0.0 {
                 return Some(v);
             }
         }
-        Some(crate::game::chart::ChartDisplayBpm::Random) => return None,
+        Some(deadsync_chart::ChartDisplayBpm::Random) => return None,
         None => {}
     }
     // 2. Fall back to song-level display BPM string
@@ -6099,7 +6093,7 @@ pub fn init(
             );
     }
 
-    let mut scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
+    let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for p in 0..num_players {
         let side = player_side_for_index(play_style, player_side, p);
@@ -6357,9 +6351,10 @@ pub fn init(
         course_display_carry,
         course_display_totals,
         course_display_timing,
-        live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
-        live_window_counts_10ms_blue: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
-        live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
+        live_window_counts: [deadsync_rules::timing::WindowCounts::default(); MAX_PLAYERS],
+        live_window_counts_10ms_blue: [deadsync_rules::timing::WindowCounts::default();
+            MAX_PLAYERS],
+        live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts::default();
             MAX_PLAYERS],
         player_profiles,
         scorebox_profile_snapshot,
@@ -6761,7 +6756,7 @@ fn write_player_combo_state(p: &mut PlayerRuntime, state: ComboState) {
 #[inline(always)]
 fn apply_combo_update(p: &mut PlayerRuntime, update: combo_rules::ComboUpdate) {
     if update.combo_broken {
-        p.current_combo_window_counts = crate::game::timing::WindowCounts::default();
+        p.current_combo_window_counts = deadsync_rules::timing::WindowCounts::default();
     }
     if update.hit_thousand_milestone {
         trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
@@ -8766,15 +8761,16 @@ mod tests {
         trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
         update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
-    use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
-    use crate::game::chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
-    use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
-    use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
-    use crate::game::parsing::notes::ParsedNote;
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
-    use crate::game::song::SongData;
-    use crate::game::timing::{
+    use deadsync_chart::SongData;
+    use deadsync_chart::notes::ParsedNote;
+    use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
+    use deadsync_core::note::NoteType;
+    use deadsync_input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
+    use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
+    use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
+    use deadsync_rules::timing::{
         DelaySegment, FakeSegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile,
         TimingProfileNs, TimingSegments,
     };
@@ -11367,7 +11363,7 @@ return Def.ActorFrame{}
         let carry = super::CourseDisplayCarry {
             full_combo_grade: Some(JudgeGrade::Excellent),
             current_combo_grade: Some(JudgeGrade::Excellent),
-            current_combo_window_counts: crate::game::timing::WindowCounts {
+            current_combo_window_counts: deadsync_rules::timing::WindowCounts {
                 w0: 7,
                 ..Default::default()
             },
@@ -11445,7 +11441,7 @@ return Def.ActorFrame{}
         let mut player = super::init_player_runtime();
         let carry = super::CourseDisplayCarry {
             current_combo_grade: Some(JudgeGrade::Fantastic),
-            current_combo_window_counts: crate::game::timing::WindowCounts {
+            current_combo_window_counts: deadsync_rules::timing::WindowCounts {
                 w1: 1,
                 ..Default::default()
             },
@@ -11473,7 +11469,7 @@ return Def.ActorFrame{}
         let carry = super::CourseDisplayCarry {
             full_combo_grade: Some(JudgeGrade::Fantastic),
             current_combo_grade: Some(JudgeGrade::Fantastic),
-            current_combo_window_counts: crate::game::timing::WindowCounts {
+            current_combo_window_counts: deadsync_rules::timing::WindowCounts {
                 w0: 9,
                 ..Default::default()
             },
@@ -11602,12 +11598,12 @@ return Def.ActorFrame{}
 
         assert_eq!(
             player.provisional_scoring_counts
-                [crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)],
+                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Decent)],
             1
         );
         assert_eq!(
             player.provisional_scoring_counts
-                [crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)],
+                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::WayOff)],
             2
         );
 
@@ -11617,12 +11613,12 @@ return Def.ActorFrame{}
 
         assert_eq!(
             player.provisional_scoring_counts
-                [crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)],
+                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::Decent)],
             1
         );
         assert_eq!(
             player.provisional_scoring_counts
-                [crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)],
+                [deadsync_rules::judgment::judge_grade_ix(JudgeGrade::WayOff)],
             0
         );
     }
@@ -11631,13 +11627,13 @@ return Def.ActorFrame{}
     fn effective_ex_score_inputs_use_live_values_before_fail() {
         let player = super::init_player_runtime();
         let live = super::ExScoreInputs {
-            counts: crate::game::timing::WindowCounts {
+            counts: deadsync_rules::timing::WindowCounts {
                 w1: 3,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
-            counts_10ms: crate::game::timing::WindowCounts {
+            counts_10ms: deadsync_rules::timing::WindowCounts {
                 w0: 2,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
             holds_held_for_score: 4,
             holds_let_go_for_score: 1,
@@ -11658,13 +11654,13 @@ return Def.ActorFrame{}
     fn effective_ex_score_inputs_freeze_on_fail_snapshot() {
         let mut player = super::init_player_runtime();
         player.failed_ex_score_inputs = Some(super::ExScoreInputs {
-            counts: crate::game::timing::WindowCounts {
+            counts: deadsync_rules::timing::WindowCounts {
                 w2: 7,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
-            counts_10ms: crate::game::timing::WindowCounts {
+            counts_10ms: deadsync_rules::timing::WindowCounts {
                 w0: 1,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
             holds_held_for_score: 6,
             holds_let_go_for_score: 2,
@@ -11673,13 +11669,13 @@ return Def.ActorFrame{}
             mines_hit_for_score: 3,
         });
         let live = super::ExScoreInputs {
-            counts: crate::game::timing::WindowCounts {
+            counts: deadsync_rules::timing::WindowCounts {
                 w2: 9,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
-            counts_10ms: crate::game::timing::WindowCounts {
+            counts_10ms: deadsync_rules::timing::WindowCounts {
                 w0: 5,
-                ..crate::game::timing::WindowCounts::default()
+                ..deadsync_rules::timing::WindowCounts::default()
             },
             holds_held_for_score: 10,
             holds_let_go_for_score: 4,

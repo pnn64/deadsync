@@ -1,6 +1,6 @@
-use crate::engine::input::PadDir;
-pub use crate::engine::input::pad_dir_from_action;
 use crate::game::profile;
+use deadsync_input::PadDir;
+pub use deadsync_input::pad_dir_from_action;
 use std::time::{Duration, Instant};
 
 // Simply Love [ScreenSelectMusic] / [ScreenEvaluation] Code* metrics:

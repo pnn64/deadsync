@@ -1,6 +1,7 @@
 use super::{fmt_scan_time, process_song};
 use crate::config::dirs;
-use crate::game::song::{SongData, SongPack, SyncPref, get_song_cache, set_song_cache};
+use crate::game::song::{get_song_cache, set_song_cache};
+use deadsync_chart::{SongData, SongPack, SyncPref};
 use log::{debug, info, warn};
 use rssp::pack::{PackScan, SongScan};
 use std::collections::HashMap;
@@ -744,7 +745,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{collect_reload_pack_dirs, merge_pack_scans, replace_song_packs};
-    use crate::game::song::{SongPack, SyncPref};
+    use deadsync_chart::{SongPack, SyncPref};
     use std::fs;
     use std::path::{Path, PathBuf};
 

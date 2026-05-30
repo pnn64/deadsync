@@ -1,7 +1,8 @@
 use super::{App, CurrentScreen};
 use crate::engine::present::density;
-use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
+use crate::game::{profile, scores};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, warn};
 use std::error::Error;
 use std::path::PathBuf;

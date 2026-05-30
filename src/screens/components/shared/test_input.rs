@@ -3,12 +3,11 @@ use crate::assets::{FontRole, current_machine_font_key};
 pub use crate::engine::input::fsr::{
     BarView as FsrBarView, VIEW_SENSOR_COUNT as FSR_BAR_COUNT, View as FsrView,
 };
-use crate::engine::input::{
-    InputEvent, InputSource, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
-};
+use crate::engine::input::{RawKeyboardEvent, with_keymap};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, VirtualAction};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 use winit::keyboard::KeyCode;
@@ -477,7 +476,7 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) -> FsrEditResult 
 }
 
 pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
-    use crate::engine::input::PadEvent as PE;
+    use deadsync_input::PadEvent as PE;
 
     state.event_rate.record_pad(pad_event);
 
@@ -1390,7 +1389,7 @@ pub fn build_select_music_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::input::{InputEvent, InputSource, PadCode, PadId};
+    use deadsync_input::{InputEvent, InputSource, PadCode, PadId};
     use std::time::Duration;
 
     fn test_fsr_view() -> FsrView {

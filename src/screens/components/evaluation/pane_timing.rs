@@ -8,6 +8,7 @@ use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_rules::timing;
 
 use super::utils::pane_origin_x;
 
@@ -71,7 +72,7 @@ fn timing_bands_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
     let decent = color::JUDGMENT_RGBA[3];
     let wayoff = color::JUDGMENT_RGBA[4];
     let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
-    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w0 = timing::FA_PLUS_W0_MS;
     let w1 = timing_windows[0];
     let w2 = timing_windows[1];
     let w3 = timing_windows[2];
@@ -101,8 +102,8 @@ fn timing_bands_hard_ex(timing_windows: [f32; 5]) -> ([TimingBand; 7], usize) {
     let decent = color::JUDGMENT_RGBA[3];
     let wayoff = color::JUDGMENT_RGBA[4];
     let white = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
-    let w010 = crate::game::timing::FA_PLUS_W010_MS;
-    let w0 = crate::game::timing::FA_PLUS_W0_MS;
+    let w010 = timing::FA_PLUS_W010_MS;
+    let w0 = timing::FA_PLUS_W0_MS;
     let w1 = timing_windows[0];
     let w2 = timing_windows[1];
     let w3 = timing_windows[2];
@@ -186,7 +187,7 @@ pub fn build_timing_pane(
 
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
-    let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
+    let timing_windows: [f32; 5] = timing::effective_windows_ms(); // ms, with +1.5ms
     let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows);
     let legend_span_ms =
         super::eval_graphs::timing_display_window_ms(score_info.histogram.worst_window_ms, scale);

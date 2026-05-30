@@ -1,7 +1,8 @@
-use crate::game::chart::{ChartData, GameplayChartData};
-use crate::game::judgment;
 use crate::game::profile;
+use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_rules::judgment;
 use deadsync_rules::stream::{StreamSegment, zmod_stream_totals_full_measures};
+use deadsync_rules::timing::WindowCounts;
 
 use super::{
     CourseDisplayCarry, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
@@ -207,7 +208,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
                 (None, current) => current,
             }
         };
-        let window_counts = crate::game::timing::WindowCounts {
+        let window_counts = WindowCounts {
             w0: previous
                 .window_counts
                 .w0
@@ -237,7 +238,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
                 .miss
                 .saturating_add(stage_window_counts.miss),
         };
-        let window_counts_10ms_blue = crate::game::timing::WindowCounts {
+        let window_counts_10ms_blue = WindowCounts {
             w0: previous
                 .window_counts_10ms_blue
                 .w0
@@ -267,7 +268,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
                 .miss
                 .saturating_add(stage_window_counts_10ms.miss),
         };
-        let window_counts_display_blue = crate::game::timing::WindowCounts {
+        let window_counts_display_blue = WindowCounts {
             w0: previous
                 .window_counts_display_blue
                 .w0
@@ -306,7 +307,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             current_combo_window_counts: if p.combo > 0 {
                 p.current_combo_window_counts
             } else {
-                crate::game::timing::WindowCounts::default()
+                WindowCounts::default()
             },
             first_fc_attempt_broken,
             window_counts,

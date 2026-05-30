@@ -16,33 +16,36 @@ use crate::screens::components::{
         visual_style_bg,
     },
 };
+use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
 use crate::engine::present::font;
-use crate::game::chart::ChartData;
-use crate::game::gameplay::MAX_PLAYERS;
-use crate::game::judgment::{self, JudgeGrade};
-use crate::game::note::NoteType;
 use crate::game::online;
 use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
-use crate::game::scroll::ScrollSpeedSetting;
-use crate::game::song::SongData;
-use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
+use deadsync_chart::ChartData;
+use deadsync_chart::SongData;
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::note::NoteType;
+use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
+use deadsync_rules::note::Note;
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing as timing_stats;
 use log::warn;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::engine::input::{InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::RawKeyboardEvent;
 use crate::game::profile;
 use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
+use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
@@ -237,7 +240,7 @@ enum SubmitFooterStatus {
     },
     /// Terminal rejection — resubmitting will not change the outcome.
     Rejected {
-        reason: scores::RejectReason,
+        reason: score_data::RejectReason,
     },
 }
 
@@ -538,7 +541,7 @@ pub struct ScoreInfo {
     pub score_percent: f64,
     pub earned_grade_points: i32,
     pub possible_grade_points: i32,
-    pub grade: scores::Grade,
+    pub grade: score_data::Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub mods_text: Arc<str>,
     pub hands_achieved: u32,
@@ -588,9 +591,9 @@ pub struct ScoreInfo {
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
     pub disabled_timing_windows: [bool; 5],
-    pub machine_records: Vec<scores::LeaderboardEntry>,
+    pub machine_records: Vec<score_data::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
-    pub personal_records: Vec<scores::LeaderboardEntry>,
+    pub personal_records: Vec<score_data::LeaderboardEntry>,
     pub personal_record_highlight_rank: Option<u32>,
     pub show_machine_personal_split: bool,
 }
@@ -637,15 +640,8 @@ pub struct ColumnJudgments {
 }
 
 #[inline(always)]
-fn add_early_total(
-    slot: &mut ColumnJudgments,
-    judgment: &crate::game::judgment::Judgment,
-    include_bad: bool,
-) {
-    if matches!(
-        judgment.window,
-        Some(crate::game::judgment::TimingWindow::W0)
-    ) {
+fn add_early_total(slot: &mut ColumnJudgments, judgment: &Judgment, include_bad: bool) {
+    if matches!(judgment.window, Some(TimingWindow::W0)) {
         slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
         return;
     }
@@ -664,7 +660,7 @@ fn add_early_total(
 }
 
 fn compute_column_judgments(
-    notes: &[crate::game::note::Note],
+    notes: &[Note],
     cols_per_player: usize,
     col_offset: usize,
     show_fa_plus_window: bool,
@@ -690,9 +686,7 @@ fn compute_column_judgments(
 
         match j.grade {
             JudgeGrade::Fantastic => match j.window {
-                Some(crate::game::judgment::TimingWindow::W0) => {
-                    slot.w0 = slot.w0.saturating_add(1)
-                }
+                Some(TimingWindow::W0) => slot.w0 = slot.w0.saturating_add(1),
                 _ => {
                     slot.w1 = slot.w1.saturating_add(1);
                     if show_fa_plus_window && j.time_error_ms < 0.0 {
@@ -952,10 +946,12 @@ mod tests {
     };
     use crate::assets::i18n;
     use crate::engine::present::actors::Actor;
-    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
-    use crate::game::note::{Note, NoteType};
     use crate::game::scores;
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_core::note::NoteType;
+    use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use deadsync_rules::note::Note;
+    use deadsync_score as score_data;
     use std::sync::Arc;
 
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
@@ -1060,7 +1056,7 @@ mod tests {
     fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
         Judgment {
             time_error_ms,
-            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
+            time_error_music_ns: deadsync_rules::judgment::judgment_time_error_music_ns_from_ms(
                 time_error_ms,
                 1.0,
             ),
@@ -1206,7 +1202,7 @@ mod tests {
             true,
             false,
             Some(scores::GrooveStatsSubmitUiStatus::Rejected {
-                reason: scores::RejectReason::InvalidScore,
+                reason: score_data::RejectReason::InvalidScore,
             }),
             None,
             None,
@@ -1469,10 +1465,10 @@ mod tests {
             true,
             true,
             Some(scores::GrooveStatsSubmitUiStatus::Rejected {
-                reason: scores::RejectReason::InvalidScore,
+                reason: score_data::RejectReason::InvalidScore,
             }),
             Some(scores::ArrowCloudSubmitUiStatus::Rejected {
-                reason: scores::RejectReason::InvalidScore,
+                reason: score_data::RejectReason::InvalidScore,
             }),
             None,
             None,
@@ -1683,7 +1679,7 @@ mod tests {
     fn eval_grade_for_result_forces_failed_on_disqualification() {
         assert_eq!(
             eval_grade_for_result(false, true, true, 1.0),
-            scores::Grade::Failed
+            score_data::Grade::Failed
         );
     }
 }
@@ -2020,7 +2016,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
-    let mut machine_records_by_hash: HashMap<String, Vec<scores::LeaderboardEntry>> =
+    let mut machine_records_by_hash: HashMap<String, Vec<score_data::LeaderboardEntry>> =
         HashMap::new();
 
     if let Some(mut gs) = gameplay_results {
@@ -2188,14 +2184,14 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 records
             };
             let machine_record_highlight_rank =
-                scores::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
+                score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
             let personal_records = scores::get_personal_leaderboard_local_for_side(
                 &gs.charts[player_idx].short_hash,
                 side,
                 usize::MAX,
             );
             let personal_record_highlight_rank =
-                scores::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
+                score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
             let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
             // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
             // not by our broader local ranking-validity heuristics.
@@ -2203,15 +2199,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let local_score_valid = score_valid && !disqualified;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
-            let failed = scores::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
-            let passed = scores::gameplay_run_passed(
+            let failed = score_data::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
+            let passed = score_data::gameplay_run_passed(
                 gs.song_completed_naturally,
                 p.is_failing,
                 p.life,
                 p.fail_time.is_some(),
             );
             let chart_hash = gs.charts[player_idx].short_hash.as_str();
-            let lua_submit_allowed = scores::lua_submit_allowed(gs.song.has_lua, chart_hash);
+            let lua_submit_allowed = score_data::lua_submit_allowed(gs.song.has_lua, chart_hash);
             let course_life_submit_eligible =
                 crate::game::gameplay::course_stage_life_submit_eligible(&gs, player_idx);
             let expected_groovestats_submit = cfg.enable_groovestats
@@ -2257,14 +2253,14 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let window_counts_10ms = crate::game::gameplay::display_window_counts(
                 &gs,
                 player_idx,
-                Some(crate::game::timing::FA_PLUS_W010_MS),
+                Some(timing_stats::FA_PLUS_W010_MS),
             );
             let ex_data = crate::game::gameplay::display_scored_ex_score_data(&gs, player_idx);
             let ex_score_percent = judgment::ex_score_percent(&ex_data);
             let hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
 
             // Quint comes from the achieved result, not whether FA+ is displayed.
-            grade = scores::promote_quint_grade(grade, ex_score_percent);
+            grade = score_data::promote_quint_grade(grade, ex_score_percent);
 
             let column_judgments = compute_column_judgments(
                 notes,
@@ -2815,7 +2811,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
         {
             state.submit_groovestats_fallback[player_idx] =
                 Some(scores::GrooveStatsSubmitUiStatus::Rejected {
-                    reason: scores::RejectReason::InvalidScore,
+                    reason: score_data::RejectReason::InvalidScore,
                 });
             warn!(
                 "Missing {} submit status for {:?} ({}); rendering evaluation footer as failed.",
@@ -2831,7 +2827,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
         {
             state.submit_arrowcloud_fallback[player_idx] =
                 Some(scores::ArrowCloudSubmitUiStatus::Rejected {
-                    reason: scores::RejectReason::InvalidScore,
+                    reason: score_data::RejectReason::InvalidScore,
                 });
             warn!(
                 "Missing ArrowCloud submit status for {:?} ({}); rendering evaluation footer as failed.",
@@ -3070,11 +3066,11 @@ fn eval_grade_for_result(
     song_completed_naturally: bool,
     disqualified: bool,
     score_percent: f64,
-) -> scores::Grade {
+) -> score_data::Grade {
     if is_failing || !song_completed_naturally || disqualified {
-        scores::Grade::Failed
+        score_data::Grade::Failed
     } else {
-        scores::score_to_grade(score_percent * 10000.0)
+        score_data::score_to_grade(score_percent * 10000.0)
     }
 }
 
@@ -3096,7 +3092,7 @@ pub(crate) fn all_joined_players_failed(state: &State) -> bool {
             continue;
         };
         found_player = true;
-        if score.grade != scores::Grade::Failed {
+        if score.grade != score_data::Grade::Failed {
             return false;
         }
     }
@@ -3110,7 +3106,7 @@ pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     let mut any = false;
     for score in state.score_info.iter().flatten() {
         any = true;
-        if score.grade != scores::Grade::Failed {
+        if score.grade != score_data::Grade::Failed {
             return false;
         }
     }
@@ -3330,7 +3326,8 @@ fn life_record_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
 #[inline(always)]
 fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
     // ITGmania GraphDisplay only shows "Barely" if the chart was cleared.
-    if si.grade == scores::Grade::Failed || si.fail_time.is_some() || si.life_history.is_empty() {
+    if si.grade == score_data::Grade::Failed || si.fail_time.is_some() || si.life_history.is_empty()
+    {
         return None;
     }
 
@@ -3805,7 +3802,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
         let bpm_text = if matches!(
             score_info.chart.display_bpm,
-            Some(crate::game::chart::ChartDisplayBpm::Random)
+            Some(deadsync_chart::ChartDisplayBpm::Random)
         ) {
             Arc::<str>::from("??? bpm")
         } else {

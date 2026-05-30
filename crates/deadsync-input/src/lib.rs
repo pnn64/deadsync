@@ -108,6 +108,83 @@ pub struct GamepadCodeBinding {
     pub uuid: Option<[u8; 16]>,
 }
 
+pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
+    let mut s = String::new();
+    use std::fmt::Write;
+    let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
+    if let Some(device) = binding.device {
+        let _ = write!(&mut s, "@{device}");
+    }
+    if let Some(uuid) = binding.uuid {
+        s.push('#');
+        for b in &uuid {
+            let _ = write!(&mut s, "{b:02X}");
+        }
+    }
+    s
+}
+
+pub fn parse_gamepad_code_binding(t: &str) -> Option<GamepadCodeBinding> {
+    let rest = t.strip_prefix("PadCode[")?;
+    let end = rest.find(']')?;
+    let code_str = &rest[..end];
+    let mut tail = &rest[end + 1..];
+
+    let code_u32 = if let Some(hex) = code_str
+        .strip_prefix("0x")
+        .or_else(|| code_str.strip_prefix("0X"))
+    {
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        code_str.parse::<u32>().ok()?
+    };
+
+    let mut device = None;
+    let mut uuid = None;
+    loop {
+        if let Some(rest) = tail.strip_prefix('@') {
+            let digits_len = rest.bytes().take_while(u8::is_ascii_digit).count();
+            if digits_len == 0 {
+                break;
+            }
+            if let Ok(dev_idx) = rest[..digits_len].parse::<usize>() {
+                device = Some(dev_idx);
+            }
+            tail = &rest[digits_len..];
+            continue;
+        }
+        if let Some(rest) = tail.strip_prefix('#') {
+            let hex_len = rest.bytes().take_while(u8::is_ascii_hexdigit).count();
+            if hex_len == 32 {
+                let mut bytes = [0u8; 16];
+                let mut ok = true;
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    let start = i * 2;
+                    let end = start + 2;
+                    if let Ok(parsed) = u8::from_str_radix(&rest[start..end], 16) {
+                        *byte = parsed;
+                    } else {
+                        ok = false;
+                        break;
+                    }
+                }
+                if ok {
+                    uuid = Some(bytes);
+                }
+            }
+            tail = &rest[hex_len..];
+            continue;
+        }
+        break;
+    }
+
+    Some(GamepadCodeBinding {
+        code_u32,
+        device,
+        uuid,
+    })
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct InputEdge {
     pub lane: Lane,
@@ -512,8 +589,8 @@ mod tests {
     use super::{
         ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
         VirtualAction, action_from_ini_key_lower, action_to_ini_key, clamp_input_debounce_seconds,
-        emit_normalized_actions, lane_from_action, lane_from_column, pad_dir_from_action,
-        parse_pad_dir, secondary_menu_mask,
+        emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
+        pad_dir_from_action, parse_gamepad_code_binding, parse_pad_dir, secondary_menu_mask,
     };
     use std::time::Instant;
 
@@ -605,6 +682,68 @@ mod tests {
         assert_eq!(binding.code_u32, 42);
         assert_eq!(binding.device, Some(3));
         assert_eq!(binding.uuid, Some([1; 16]));
+    }
+
+    #[test]
+    fn gamepad_code_bindings_parse_config_tokens() {
+        assert_eq!(
+            parse_gamepad_code_binding("PadCode[42]"),
+            Some(GamepadCodeBinding {
+                code_u32: 42,
+                device: None,
+                uuid: None,
+            })
+        );
+        assert_eq!(
+            parse_gamepad_code_binding("PadCode[0x00000001]@2"),
+            Some(GamepadCodeBinding {
+                code_u32: 1,
+                device: Some(2),
+                uuid: None,
+            })
+        );
+        assert_eq!(
+            parse_gamepad_code_binding("PadCode[0xFF]#00112233AABBCCDDEEFF001122334455"),
+            Some(GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some([
+                    0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+                    0x33, 0x44, 0x55,
+                ]),
+            })
+        );
+        assert_eq!(parse_gamepad_code_binding("PadCode[]"), None);
+        assert_eq!(parse_gamepad_code_binding("PadCode[xyz]"), None);
+        assert_eq!(parse_gamepad_code_binding("NotPadCode[0x01]"), None);
+    }
+
+    #[test]
+    fn gamepad_code_bindings_round_trip_config_tokens() {
+        let cases = [
+            GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 42,
+                device: Some(0),
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some([
+                    0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+                    0x33, 0x44, 0x55,
+                ]),
+            },
+        ];
+        for binding in cases {
+            let token = gamepad_code_binding_to_token(binding);
+            assert_eq!(parse_gamepad_code_binding(&token), Some(binding));
+        }
     }
 
     #[test]

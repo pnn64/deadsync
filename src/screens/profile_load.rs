@@ -121,7 +121,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     None
 }
 
-pub fn handle_input(_: &mut State, _: &crate::engine::input::InputEvent) -> ScreenAction {
+pub fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 

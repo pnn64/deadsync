@@ -1,12 +1,13 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_score as score_data;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
@@ -34,11 +35,11 @@ const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
 pub struct LeaderboardSideState {
     joined: bool,
     loading: bool,
-    panes: Vec<scores::LeaderboardPane>,
+    panes: Vec<score_data::LeaderboardPane>,
     pane_index: usize,
     show_icons: bool,
     error_text: Option<String>,
-    machine_pane: Option<scores::LeaderboardPane>,
+    machine_pane: Option<score_data::LeaderboardPane>,
     chart_hash: Option<String>,
 }
 
@@ -62,11 +63,11 @@ pub enum LeaderboardInputOutcome {
     Closed,
 }
 
-fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
+fn gs_machine_pane(chart_hash: Option<&str>) -> score_data::LeaderboardPane {
     let entries = chart_hash
         .map(|h| scores::get_machine_leaderboard_local_with_names(h, GS_LEADERBOARD_NUM_ENTRIES))
         .unwrap_or_default();
-    scores::LeaderboardPane {
+    score_data::LeaderboardPane {
         name: GS_LEADERBOARD_MACHINE_BEST.to_string(),
         entries,
         is_ex: false,
@@ -77,7 +78,7 @@ fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
 }
 
 #[inline(always)]
-fn should_show_overlay_pane(pane: &scores::LeaderboardPane) -> bool {
+fn should_show_overlay_pane(pane: &score_data::LeaderboardPane) -> bool {
     !pane.is_arrowcloud() || pane.is_hard_ex() || pane.personalized || !pane.entries.is_empty()
 }
 
@@ -92,7 +93,7 @@ fn gs_error_text(error: &str) -> String {
 
 fn apply_leaderboard_side_snapshot(
     side: &mut LeaderboardSideState,
-    snapshot: scores::CachedPlayerLeaderboardData,
+    snapshot: score_data::CachedPlayerLeaderboardData,
 ) {
     let current_pane = side.panes.get(side.pane_index).map(|pane| {
         (
@@ -184,14 +185,17 @@ fn refresh_leaderboard_side_from_cache(
 }
 
 #[inline(always)]
-fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+fn same_leaderboard_entry(
+    a: &score_data::LeaderboardEntry,
+    b: &score_data::LeaderboardEntry,
+) -> bool {
     a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
 }
 
 #[inline(always)]
 fn overlay_selected_contains(
-    selected: &[&scores::LeaderboardEntry],
-    entry: &scores::LeaderboardEntry,
+    selected: &[&score_data::LeaderboardEntry],
+    entry: &score_data::LeaderboardEntry,
 ) -> bool {
     selected
         .iter()
@@ -199,12 +203,12 @@ fn overlay_selected_contains(
 }
 
 fn next_overlay_entry<'a, F>(
-    entries: &'a [scores::LeaderboardEntry],
-    selected: &[&'a scores::LeaderboardEntry],
+    entries: &'a [score_data::LeaderboardEntry],
+    selected: &[&'a score_data::LeaderboardEntry],
     include: F,
-) -> Option<&'a scores::LeaderboardEntry>
+) -> Option<&'a score_data::LeaderboardEntry>
 where
-    F: Fn(&scores::LeaderboardEntry) -> bool,
+    F: Fn(&score_data::LeaderboardEntry) -> bool,
 {
     entries
         .iter()
@@ -215,8 +219,8 @@ where
 fn overlay_display_entries(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    pane: &scores::LeaderboardPane,
-) -> Vec<scores::LeaderboardEntry> {
+    pane: &score_data::LeaderboardPane,
+) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(side, chart_hash, pane);
     if entries.len() <= GS_LEADERBOARD_NUM_ENTRIES {
         return entries;
@@ -766,13 +770,13 @@ mod tests {
 
     #[test]
     fn empty_arrowcloud_hard_ex_pane_is_still_shown() {
-        let pane = scores::LeaderboardPane {
+        let pane = score_data::LeaderboardPane {
             name: "ArrowCloud".to_string(),
             entries: Vec::new(),
             is_ex: false,
             disabled: false,
             personalized: false,
-            arrowcloud_kind: Some(scores::ArrowCloudPaneKind::HardEx),
+            arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::HardEx),
         };
 
         assert!(should_show_overlay_pane(&pane));

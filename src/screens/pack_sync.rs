@@ -3,18 +3,18 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config;
 use crate::engine::audio;
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::game::chart::ChartData;
-use crate::game::song::SongData;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::select_music::sync_analysis;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
+use deadsync_chart::ChartData;
+use deadsync_chart::SongData;
+use deadsync_input::{InputEvent, VirtualAction};
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1173,7 +1173,7 @@ mod tests {
     use super::{
         RowDisposition, RowPhase, RowState, result_text, review_choice_delta, row_disposition,
     };
-    use crate::engine::input::VirtualAction;
+    use deadsync_input::VirtualAction;
     use std::path::PathBuf;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {

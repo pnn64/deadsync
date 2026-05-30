@@ -1,10 +1,10 @@
 use crate::config;
 use crate::engine::audio;
-use crate::engine::input::{
-    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
-};
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
+use deadsync_input::{
+    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
+};
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;

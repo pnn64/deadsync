@@ -1,10 +1,13 @@
+use deadsync_score as score_data;
 use std::sync::Arc;
 
-use crate::game::chart::ChartData;
-use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::scores;
-use crate::game::song::SongData;
-use crate::game::timing::{HistogramMs, ScatterPoint, TimingStats, WindowCounts};
+use deadsync_chart::ChartData;
+use deadsync_chart::SongData;
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_rules::timing::{
+    ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
+};
 
 #[derive(Clone, Debug)]
 pub struct StageSummary {
@@ -22,7 +25,7 @@ pub struct PlayerStageSummary {
     pub disqualified: bool,
     pub groovestats: scores::GrooveStatsEvalState,
     pub itl: scores::ItlEvalState,
-    pub grade: scores::Grade,
+    pub grade: score_data::Grade,
     pub score_percent: f64,
     pub earned_grade_points: i32,
     pub possible_grade_points: i32,
@@ -45,7 +48,7 @@ pub struct PlayerStageSummary {
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
     pub timing: TimingStats,
-    pub arrow_timing: crate::game::timing::ArrowTimingStats,
+    pub arrow_timing: ArrowTimingStats,
     pub scatter: Vec<ScatterPoint>,
     pub scatter_worst_window_ms: f32,
     pub histogram: HistogramMs,

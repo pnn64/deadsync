@@ -3,8 +3,8 @@ use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::profile;
-use crate::game::timing::ArrowTimingBucket;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_rules::timing::ArrowTimingBucket;
 
 use super::pane_column::build_pane3_arrow_preview;
 use super::utils::pane_origin_x;

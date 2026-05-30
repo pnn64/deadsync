@@ -11,8 +11,8 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 // Keyboard handling is centralized in app via virtual actions
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;

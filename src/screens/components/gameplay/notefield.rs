@@ -10,7 +10,7 @@ use crate::engine::space::*;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
-    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, SongLuaColumnOffsetWindowRuntime,
     TRANSITION_IN_DURATION, VisualEffects,
 };
@@ -23,20 +23,25 @@ use crate::game::gameplay::{
     effective_visual_effects_for_player, receptor_glow_visual_for_col, row_hides_completed_note,
     scroll_receptor_y, song_lua_ease_factor,
 };
-use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
-use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
 use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
-    gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
+    gameplay::{ActiveHold, PlayerRuntime, State},
     profile, scores,
-    scroll::ScrollSpeedSetting,
-    timing::{TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat},
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
+use deadsync_core::input::MAX_COLS;
+use deadsync_core::note::NoteType;
+use deadsync_core::song_time::SongTimeNs;
+use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
+use deadsync_rules::note::{HoldResult, MineResult, Note};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
+use deadsync_rules::timing::{
+    self, TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat,
+};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::array::from_fn;
 use std::cell::RefCell;
@@ -698,10 +703,10 @@ fn error_bar_text_10ms_zoom(abs_ms: f32, w2_ms: f32) -> f32 {
     let ms = if abs_ms.is_finite() {
         abs_ms
     } else {
-        crate::game::timing::FA_PLUS_W010_MS
+        timing::FA_PLUS_W010_MS
     };
-    let smaller_white_ms = crate::game::timing::FA_PLUS_W010_MS;
-    let w1_ms = crate::game::timing::FA_PLUS_W0_MS;
+    let smaller_white_ms = timing::FA_PLUS_W010_MS;
+    let w1_ms = timing::FA_PLUS_W0_MS;
     let mut scale1 = 1.0;
     let mut scale2 = 1.0;
     if smaller_white_ms < ms && ms <= w1_ms && w1_ms > smaller_white_ms {
@@ -2482,8 +2487,8 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
         && profile.split_15_10ms
         && !profile.custom_fantastic_window
         && judgment.grade == JudgeGrade::Fantastic
-        && judgment.time_error_ms.abs() > crate::game::timing::FA_PLUS_W010_MS
-        && judgment.time_error_ms.abs() <= crate::game::timing::FA_PLUS_W0_MS
+        && judgment.time_error_ms.abs() > timing::FA_PLUS_W010_MS
+        && judgment.time_error_ms.abs() <= timing::FA_PLUS_W0_MS
 }
 
 #[inline(always)]
@@ -2498,7 +2503,7 @@ fn tap_judgment_is_blue_fantastic(profile: &profile::Profile, judgment: &Judgmen
         && !profile.split_15_10ms
         && !profile.custom_fantastic_window
     {
-        return judgment.time_error_ms.abs() <= crate::game::timing::FA_PLUS_W010_MS;
+        return judgment.time_error_ms.abs() <= timing::FA_PLUS_W010_MS;
     }
     judgment.window == Some(TimingWindow::W0)
 }
@@ -3175,39 +3180,37 @@ fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] 
 
 #[inline(always)]
 fn scoring_count(
-    scoring_counts: &crate::game::judgment::JudgeCounts,
-    provisional_counts: &crate::game::judgment::JudgeCounts,
+    scoring_counts: &judgment::JudgeCounts,
+    provisional_counts: &judgment::JudgeCounts,
     grade: JudgeGrade,
 ) -> u32 {
-    let grade_ix = crate::game::judgment::judge_grade_ix(grade);
+    let grade_ix = judgment::judge_grade_ix(grade);
     scoring_counts[grade_ix].saturating_add(provisional_counts[grade_ix])
 }
 
 #[inline(always)]
 fn actual_grade_points_with_provisional(
     actual_dp: i32,
-    provisional_counts: &crate::game::judgment::JudgeCounts,
+    provisional_counts: &judgment::JudgeCounts,
 ) -> i32 {
     actual_dp
-        .saturating_add(
-            crate::game::judgment::calculate_itg_grade_points_from_counts(
-                provisional_counts,
-                0,
-                0,
-                0,
-            ),
-        )
+        .saturating_add(judgment::calculate_itg_grade_points_from_counts(
+            provisional_counts,
+            0,
+            0,
+            0,
+        ))
         .max(0)
 }
 
 #[inline(always)]
 fn add_provisional_early_bad_counts_to_ex_score(
-    mut data: crate::game::judgment::ExScoreData,
-    provisional_counts: &crate::game::judgment::JudgeCounts,
-) -> crate::game::judgment::ExScoreData {
-    let decent = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)];
-    let way_off = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)];
-    let miss = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::Miss)];
+    mut data: judgment::ExScoreData,
+    provisional_counts: &judgment::JudgeCounts,
+) -> judgment::ExScoreData {
+    let decent = provisional_counts[judgment::judge_grade_ix(JudgeGrade::Decent)];
+    let way_off = provisional_counts[judgment::judge_grade_ix(JudgeGrade::WayOff)];
+    let miss = provisional_counts[judgment::judge_grade_ix(JudgeGrade::Miss)];
     data.counts.w4 = data.counts.w4.saturating_add(decent);
     data.counts.w5 = data.counts.w5.saturating_add(way_off);
     data.counts.miss = data.counts.miss.saturating_add(miss);
@@ -3306,12 +3309,10 @@ fn zmod_mini_indicator_progress(
             );
             let white_count = score.counts.w1;
             if score_type == profile::MiniIndicatorScoreType::Ex {
-                let (kept, lost, pace) =
-                    crate::game::judgment::predictive_ex_score_percents(&score);
+                let (kept, lost, pace) = judgment::predictive_ex_score_percents(&score);
                 (kept, lost, pace, white_count)
             } else {
-                let (kept, lost, pace) =
-                    crate::game::judgment::predictive_hard_ex_score_percents(&score);
+                let (kept, lost, pace) = judgment::predictive_hard_ex_score_percents(&score);
                 (kept, lost, pace, white_count)
             }
         }
@@ -9021,26 +9022,25 @@ mod tests {
         AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
         SongLuaColumnOffsetWindowRuntime, VisualEffects,
     };
-    use crate::game::judgment::{
-        ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
-        predictive_ex_score_percents,
-    };
-    use crate::game::note::{MineResult, Note, NoteType};
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
-    use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
+    use deadsync_core::note::NoteType;
+    use deadsync_rules::judgment::{
+        self, ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
+        predictive_ex_score_percents,
+    };
+    use deadsync_rules::note::{MineResult, Note};
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    use deadsync_rules::timing::{self, TimeSignatureSegment, beat_to_note_row};
     use std::sync::Arc;
 
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
         Judgment {
             time_error_ms,
-            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
-                time_error_ms,
-                1.0,
-            ),
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(time_error_ms, 1.0),
             grade: JudgeGrade::Fantastic,
             window: Some(window),
             miss_because_held: false,
@@ -9170,7 +9170,7 @@ mod tests {
             ..Default::default()
         };
         let effect_height = super::field_effect_height(0.0);
-        let raw_y = crate::game::scroll::ScrollSpeedSetting::ARROW_SPACING;
+        let raw_y = ScrollSpeedSetting::ARROW_SPACING;
         let scroll_speed = 2.0;
         let itg_order = super::apply_accel_y(raw_y, 0.0, 0.0, effect_height, accel) * scroll_speed;
         let pre_scaled_order =
@@ -9186,7 +9186,7 @@ mod tests {
         let raw = super::beat_scroll_travel(12.0, 8.0, 1.25);
         let field_zoom = 0.75;
         let player_speed = 5.0;
-        let expected = (12.0 - 8.0) * crate::game::scroll::ScrollSpeedSetting::ARROW_SPACING * 1.25;
+        let expected = (12.0 - 8.0) * ScrollSpeedSetting::ARROW_SPACING * 1.25;
 
         assert!((raw - expected).abs() <= 0.001);
 
@@ -9430,10 +9430,9 @@ mod tests {
             );
         }
 
-        let w2_ms =
-            crate::game::timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
-        let smaller_white_ms = crate::game::timing::FA_PLUS_W010_MS;
-        let w1_ms = crate::game::timing::FA_PLUS_W0_MS;
+        let w2_ms = timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
+        let smaller_white_ms = timing::FA_PLUS_W010_MS;
+        let w1_ms = timing::FA_PLUS_W0_MS;
         let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
         let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
 
@@ -10445,7 +10444,7 @@ mod tests {
             fa_plus_10ms_blue_window: true,
             ..profile::Profile::default()
         };
-        let blue = fantastic_judgment(TimingWindow::W0, crate::game::timing::FA_PLUS_W010_MS);
+        let blue = fantastic_judgment(TimingWindow::W0, timing::FA_PLUS_W010_MS);
         let white = fantastic_judgment(TimingWindow::W0, 12.0);
 
         assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
@@ -10454,16 +10453,16 @@ mod tests {
 
     #[test]
     fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
-        let windows = crate::game::timing::TimingProfile::default_itg_with_fa_plus().windows_s;
+        let windows = timing::TimingProfile::default_itg_with_fa_plus().windows_s;
         let (bounds, len) = error_bar_boundaries_s(
             windows,
-            Some(crate::game::timing::FA_PLUS_W010_MS / 1000.0),
+            Some(timing::FA_PLUS_W010_MS / 1000.0),
             true,
             profile::ErrorBarTrim::Fantastic,
         );
 
         assert_eq!(len, 2);
-        assert!((bounds[0] * 1000.0 - crate::game::timing::FA_PLUS_W010_MS).abs() <= 0.001);
+        assert!((bounds[0] * 1000.0 - timing::FA_PLUS_W010_MS).abs() <= 0.001);
         assert!((bounds[1] - windows[0]).abs() <= 0.000001);
     }
 
@@ -10514,9 +10513,7 @@ mod tests {
         let excellent = Judgment {
             grade: JudgeGrade::Excellent,
             time_error_ms: 18.0,
-            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
-                18.0, 1.0,
-            ),
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(18.0, 1.0),
             window: Some(TimingWindow::W1),
             miss_because_held: false,
         };
@@ -10532,7 +10529,7 @@ mod tests {
         };
         let base = predictive_ex_score_percents(&score);
         let mut provisional = [0u32; JUDGE_GRADE_COUNT];
-        provisional[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
+        provisional[judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
         let adjusted = add_provisional_early_bad_counts_to_ex_score(score, &provisional);
 
         assert_eq!(base, (100.0, 0.0, 0.0));
@@ -10543,7 +10540,7 @@ mod tests {
     #[test]
     fn provisional_early_wayoff_counts_toward_predictive_itg_loss() {
         let mut provisional = [0u32; JUDGE_GRADE_COUNT];
-        provisional[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
+        provisional[judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
         let actual = actual_grade_points_with_provisional(0, &provisional);
         let (kept, lost, pace) = predictive_itg_percents(5, 100, actual);
 

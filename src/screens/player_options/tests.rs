@@ -18,9 +18,9 @@ pub(super) mod tests {
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::{self, BackgroundFilter, PlayStyle, PlayerSide, Profile};
-    use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
+    use deadsync_rules::scroll::ScrollSpeedSetting;
     use std::time::Duration;
 
     fn ensure_i18n() {

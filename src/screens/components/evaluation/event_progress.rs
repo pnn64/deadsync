@@ -5,8 +5,10 @@ use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
 use crate::engine::present::color::{self, JUDGMENT_RGBA};
 use crate::engine::present::font;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
-use crate::game::{profile, scores, song::SongData};
+use crate::game::{profile, scores};
 use crate::screens::components::shared::banner as shared_banner;
+use deadsync_chart::SongData;
+use deadsync_score as score_data;
 
 use super::utils::format_machine_record_date;
 
@@ -154,7 +156,7 @@ fn active_overlay_page(
 }
 
 #[inline(always)]
-fn leaderboard_name(entry: &scores::LeaderboardEntry) -> String {
+fn leaderboard_name(entry: &score_data::LeaderboardEntry) -> String {
     let name = entry.name.trim();
     if name.is_empty() {
         "----".to_string()
@@ -539,7 +541,7 @@ fn build_body_text(
 }
 
 fn build_overlay_leaderboard(
-    entries: &[scores::LeaderboardEntry],
+    entries: &[score_data::LeaderboardEntry],
     pane_width: f32,
     single_player: bool,
     z: i16,

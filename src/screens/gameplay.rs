@@ -4,7 +4,6 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::gfx::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
@@ -14,7 +13,6 @@ use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
@@ -22,13 +20,17 @@ use crate::game::parsing::song_lua::{
     SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
     SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
-use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
+use crate::game::profile;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_chart::{ChartData, GameplayChartData, SongData};
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::RefCell;
@@ -52,7 +54,7 @@ pub struct ActorViewOverride {
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
-    GameplayAction, GameplayExit, LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot,
+    GameplayAction, GameplayExit, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
     TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
     TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
     handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,

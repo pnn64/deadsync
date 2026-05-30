@@ -1,6 +1,6 @@
 use super::*;
 use crate::assets::AssetManager;
-use crate::engine::input::{InputEvent, InputSource, VirtualAction};
+use deadsync_input::{InputEvent, InputSource, VirtualAction};
 use std::time::{Duration, Instant};
 
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {

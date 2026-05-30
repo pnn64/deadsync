@@ -1,7 +1,7 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
-use crate::game::judgment::{self, JudgeGrade};
-use crate::game::scores;
+use deadsync_rules::judgment::{self, JudgeGrade};
+use deadsync_score as score_data;
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
 const LETTER_ZOOM: f32 = 0.85;
@@ -249,22 +249,22 @@ const STARS_TIER04: [StarDef; 1] = [StarDef {
 }];
 
 #[inline(always)]
-fn letter_tex(grade: scores::Grade) -> &'static str {
+fn letter_tex(grade: score_data::Grade) -> &'static str {
     match grade {
-        scores::Grade::Tier05 => "grades/s-plus.png",
-        scores::Grade::Tier06 => "grades/s.png",
-        scores::Grade::Tier07 => "grades/s-minus.png",
-        scores::Grade::Tier08 => "grades/a-plus.png",
-        scores::Grade::Tier09 => "grades/a.png",
-        scores::Grade::Tier10 => "grades/a-minus.png",
-        scores::Grade::Tier11 => "grades/b-plus.png",
-        scores::Grade::Tier12 => "grades/b.png",
-        scores::Grade::Tier13 => "grades/b-minus.png",
-        scores::Grade::Tier14 => "grades/c-plus.png",
-        scores::Grade::Tier15 => "grades/c.png",
-        scores::Grade::Tier16 => "grades/c-minus.png",
-        scores::Grade::Tier17 => "grades/d.png",
-        scores::Grade::Failed => "grades/f.png",
+        score_data::Grade::Tier05 => "grades/s-plus.png",
+        score_data::Grade::Tier06 => "grades/s.png",
+        score_data::Grade::Tier07 => "grades/s-minus.png",
+        score_data::Grade::Tier08 => "grades/a-plus.png",
+        score_data::Grade::Tier09 => "grades/a.png",
+        score_data::Grade::Tier10 => "grades/a-minus.png",
+        score_data::Grade::Tier11 => "grades/b-plus.png",
+        score_data::Grade::Tier12 => "grades/b.png",
+        score_data::Grade::Tier13 => "grades/b-minus.png",
+        score_data::Grade::Tier14 => "grades/c-plus.png",
+        score_data::Grade::Tier15 => "grades/c.png",
+        score_data::Grade::Tier16 => "grades/c-minus.png",
+        score_data::Grade::Tier17 => "grades/d.png",
+        score_data::Grade::Failed => "grades/f.png",
         _ => "grades/f.png",
     }
 }
@@ -623,18 +623,18 @@ fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
 }
 
 #[inline(always)]
-fn stars_for(grade: scores::Grade) -> Option<&'static [StarDef]> {
+fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     match grade {
-        scores::Grade::Quint => Some(&STARS_QUINT),
-        scores::Grade::Tier01 => Some(&STARS_TIER01),
-        scores::Grade::Tier02 => Some(&STARS_TIER02),
-        scores::Grade::Tier03 => Some(&STARS_TIER03),
-        scores::Grade::Tier04 => Some(&STARS_TIER04),
+        score_data::Grade::Quint => Some(&STARS_QUINT),
+        score_data::Grade::Tier01 => Some(&STARS_TIER01),
+        score_data::Grade::Tier02 => Some(&STARS_TIER02),
+        score_data::Grade::Tier03 => Some(&STARS_TIER03),
+        score_data::Grade::Tier04 => Some(&STARS_TIER04),
         _ => None,
     }
 }
 
-pub fn actors(grade: scores::Grade, p: EvalGradeParams) -> Vec<Actor> {
+pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
     if let Some(stars) = stars_for(grade) {
         return stars
             .iter()
@@ -692,7 +692,7 @@ mod tests {
     #[test]
     fn exact_one_w2_adds_late_taunt_actors() {
         let actors = actors(
-            scores::Grade::Tier04,
+            score_data::Grade::Tier04,
             EvalGradeParams {
                 elapsed: 10.0,
                 taunt: grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
@@ -708,7 +708,7 @@ mod tests {
     #[test]
     fn exact_one_w2_goldstar_starts_black() {
         let actors = actors(
-            scores::Grade::Tier04,
+            score_data::Grade::Tier04,
             EvalGradeParams {
                 elapsed: 1.0,
                 taunt: grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
@@ -727,7 +727,7 @@ mod tests {
     #[test]
     fn one_w3_adds_black_flag_only() {
         let actors = actors(
-            scores::Grade::Tier04,
+            score_data::Grade::Tier04,
             EvalGradeParams {
                 elapsed: 10.0,
                 taunt: grade_star_taunt_from_counts(counts(7, 1, 0, 0, 0)),
@@ -746,7 +746,7 @@ mod tests {
     #[test]
     fn worse_than_one_w3_gets_no_taunt() {
         let actors = actors(
-            scores::Grade::Tier04,
+            score_data::Grade::Tier04,
             EvalGradeParams {
                 elapsed: 10.0,
                 taunt: grade_star_taunt_from_counts(counts(1, 2, 0, 0, 0)),

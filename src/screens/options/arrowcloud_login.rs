@@ -287,10 +287,10 @@ fn run_login_session<S, P>(
 ) where
     S: Fn(
         &ac_online::DeviceLoginStartReq,
-    ) -> Result<ac_online::DeviceLoginStartResp, crate::engine::network::NetworkError>,
+    ) -> Result<ac_online::DeviceLoginStartResp, deadsync_net::NetworkError>,
     P: Fn(
         &ac_online::DeviceLoginPollReq,
-    ) -> Result<ac_online::DeviceLoginPollResp, crate::engine::network::NetworkError>,
+    ) -> Result<ac_online::DeviceLoginPollResp, deadsync_net::NetworkError>,
 {
     if cancel.load(Ordering::Relaxed) {
         return;
@@ -720,7 +720,7 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::network::NetworkError;
+    use deadsync_net::NetworkError;
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 

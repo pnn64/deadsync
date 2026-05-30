@@ -8,11 +8,11 @@ use super::{
 };
 use crate::config::dirs;
 use crate::game::gameplay;
-use crate::game::judgment;
 use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::song::{get_song_cache, song_cache_generation};
 use chrono::Local;
+use deadsync_core::input::MAX_PLAYERS;
 use log::{debug, warn};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
 
 use bincode::{Decode, Encode};
+use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
@@ -492,7 +493,7 @@ pub fn get_cached_itl_score_for_side(
 }
 
 pub fn get_cached_itl_score_for_song(
-    song: &crate::game::song::SongData,
+    song: &deadsync_chart::SongData,
     side: profile::PlayerSide,
 ) -> Option<CachedItlScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
@@ -662,7 +663,7 @@ fn apply_online_itl_overall_ranks(
 }
 
 fn build_online_itl_overall_ranks(
-    song_cache: &[crate::game::song::SongPack],
+    song_cache: &[deadsync_chart::SongPack],
     by_chart_score: &HashMap<String, u32>,
 ) -> HashMap<String, u32> {
     if by_chart_score.is_empty() {
@@ -744,9 +745,8 @@ pub fn get_cached_itl_tournament_overall_ranks_for_side(
 
 pub fn save_itl_data_from_gameplay(
     gs: &gameplay::State,
-) -> [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] {
-    let mut progress: [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
+) -> [Option<ItlEventProgress>; MAX_PLAYERS] {
+    let mut progress: [Option<ItlEventProgress>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     if gs.autoplay_used {
         debug!("Skipping ITL save: autoplay or replay was used during this stage.");
         return progress;
@@ -756,7 +756,7 @@ pub fn save_itl_data_from_gameplay(
         .charts
         .iter()
         .enumerate()
-        .take(gs.num_players.min(gameplay::MAX_PLAYERS))
+        .take(gs.num_players.min(MAX_PLAYERS))
     {
         let side = gameplay_side_for_player(gs, player_idx);
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
@@ -1394,14 +1394,14 @@ fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
 }
 
 fn itl_score_for_song(
-    song: &crate::game::song::SongData,
+    song: &deadsync_chart::SongData,
     data: &ItlFileData,
 ) -> Option<CachedItlScore> {
     itl_entry_for_song(song, data).map(itl_score_from_entry)
 }
 
 fn itl_entry_for_song<'a>(
-    song: &crate::game::song::SongData,
+    song: &deadsync_chart::SongData,
     data: &'a ItlFileData,
 ) -> Option<&'a ItlHashEntry> {
     let song_dir = itl_song_dir(song)?;
@@ -1409,13 +1409,13 @@ fn itl_entry_for_song<'a>(
     data.hash_map.get(chart_hash)
 }
 
-fn itl_song_dir(song: &crate::game::song::SongData) -> Option<String> {
+fn itl_song_dir(song: &deadsync_chart::SongData) -> Option<String> {
     song.simfile_path
         .parent()
         .map(|dir| dir.to_string_lossy().into_owned())
 }
 
-fn itl_group_name(song: &crate::game::song::SongData) -> Option<String> {
+fn itl_group_name(song: &deadsync_chart::SongData) -> Option<String> {
     let song_cache = get_song_cache();
     for pack in song_cache.iter() {
         if pack
@@ -1436,7 +1436,7 @@ fn group_name_matches(group_name: &str) -> bool {
 }
 
 fn itl_is_song(
-    song: &crate::game::song::SongData,
+    song: &deadsync_chart::SongData,
     song_dir: Option<&str>,
     data: &ItlFileData,
 ) -> bool {
@@ -1450,7 +1450,7 @@ fn itl_is_song(
     group_name_matches(group_name.as_str())
 }
 
-fn chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEntry>) -> bool {
+fn chart_no_cmod(song: &deadsync_chart::SongData, prev: Option<&ItlHashEntry>) -> bool {
     prev.map_or_else(
         || {
             song.display_subtitle(false)
@@ -1462,12 +1462,12 @@ fn chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEntry>
 }
 
 #[inline(always)]
-fn itl_event_name(song: &crate::game::song::SongData) -> String {
+fn itl_event_name(song: &deadsync_chart::SongData) -> String {
     itl_group_name(song).unwrap_or_else(|| "ITL Online 2026".to_string())
 }
 
 #[inline(always)]
-fn itl_steps_type(chart: &crate::game::chart::ChartData) -> &'static str {
+fn itl_steps_type(chart: &deadsync_chart::ChartData) -> &'static str {
     if chart.chart_type.to_ascii_lowercase().contains("double") {
         "double"
     } else {
@@ -1568,11 +1568,11 @@ fn loaded_chart_no_cmod_for_gameplay(
 }
 
 pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
-    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS)
+    if player_idx >= gs.num_players.min(MAX_PLAYERS)
         || gs.course_display_totals.is_some()
         || !matches!(
             gs.player_profiles[player_idx].scroll_speed,
-            crate::game::scroll::ScrollSpeedSetting::CMod(_)
+            ScrollSpeedSetting::CMod(_)
         )
     {
         return false;
@@ -1600,10 +1600,7 @@ fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
     Some((nums.next()?, nums.next()?))
 }
 
-pub fn itl_points_for_chart(
-    chart: &crate::game::chart::ChartData,
-    ex_hundredths: u32,
-) -> Option<u32> {
+pub fn itl_points_for_chart(chart: &deadsync_chart::ChartData, ex_hundredths: u32) -> Option<u32> {
     let (passing_points, max_scoring_points) = parse_itl_points(chart.chart_name.as_str())?;
     Some(itl_points_for_song(
         passing_points,
@@ -1701,7 +1698,7 @@ fn itl_all_timing_windows_enabled(profile: &profile::Profile) -> bool {
 fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
     let used_cmod = matches!(
         gs.player_profiles[player_idx].scroll_speed,
-        crate::game::scroll::ScrollSpeedSetting::CMod(_)
+        ScrollSpeedSetting::CMod(_)
     );
     let Some(song_dir) = itl_song_dir(gs.song.as_ref()) else {
         return ItlEvalState {
@@ -1776,7 +1773,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
 }
 
 pub fn itl_eval_state_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlEvalState {
-    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
+    if player_idx >= gs.num_players.min(MAX_PLAYERS) {
         return ItlEvalState::default();
     }
     let side = gameplay_side_for_player(gs, player_idx);
@@ -1832,8 +1829,8 @@ pub fn get_or_fetch_itl_tournament_rank_for_side(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use crate::game::song::SongData;
+    use deadsync_chart::SongData;
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};

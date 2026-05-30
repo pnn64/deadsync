@@ -1,17 +1,16 @@
 use crate::engine::audio::decode;
-use crate::game::{
-    chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts},
-    note::NoteType,
-    parsing::notes::ParsedNote,
-    song::{
-        SongBackgroundChange, SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData,
-        SongForegroundChange, SongForegroundLuaChange, get_song_cache,
-    },
-    timing::{
-        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-        TimeSignatureSegment, TimingData, TimingSegments, WarpSegment, beat_to_note_row,
-        default_time_signatures,
-    },
+use crate::game::song::get_song_cache;
+use deadsync_chart::notes::ParsedNote;
+use deadsync_chart::{
+    ArrowStats, ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget,
+    SongBackgroundLuaChange, SongData, SongForegroundChange, SongForegroundLuaChange,
+    StaminaCounts, TechCounts,
+};
+use deadsync_core::note::NoteType;
+use deadsync_rules::timing::{
+    DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+    TimeSignatureSegment, TimingData, TimingSegments, WarpSegment, beat_to_note_row,
+    default_time_signatures,
 };
 use image::image_dimensions;
 use log::{debug, info, warn};
@@ -445,7 +444,7 @@ enum CachedChartDisplayBpm {
     Random,
 }
 
-impl From<CachedChartDisplayBpm> for crate::game::chart::ChartDisplayBpm {
+impl From<CachedChartDisplayBpm> for deadsync_chart::ChartDisplayBpm {
     fn from(c: CachedChartDisplayBpm) -> Self {
         match c {
             CachedChartDisplayBpm::Specified { min, max } => Self::Specified { min, max },
@@ -454,14 +453,14 @@ impl From<CachedChartDisplayBpm> for crate::game::chart::ChartDisplayBpm {
     }
 }
 
-impl From<&crate::game::chart::ChartDisplayBpm> for CachedChartDisplayBpm {
-    fn from(c: &crate::game::chart::ChartDisplayBpm) -> Self {
+impl From<&deadsync_chart::ChartDisplayBpm> for CachedChartDisplayBpm {
+    fn from(c: &deadsync_chart::ChartDisplayBpm) -> Self {
         match c {
-            crate::game::chart::ChartDisplayBpm::Specified { min, max } => Self::Specified {
+            deadsync_chart::ChartDisplayBpm::Specified { min, max } => Self::Specified {
                 min: *min,
                 max: *max,
             },
-            crate::game::chart::ChartDisplayBpm::Random => Self::Random,
+            deadsync_chart::ChartDisplayBpm::Random => Self::Random,
         }
     }
 }
@@ -865,8 +864,8 @@ fn build_chart_totals(
     rows.sort_unstable();
     rows.dedup();
     let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
-        + i64::from(holds_total) * i64::from(crate::game::judgment::HOLD_SCORE_HELD)
-        + i64::from(rolls_total) * i64::from(crate::game::judgment::HOLD_SCORE_HELD);
+        + i64::from(holds_total) * i64::from(deadsync_rules::judgment::HOLD_SCORE_HELD)
+        + i64::from(rolls_total) * i64::from(deadsync_rules::judgment::HOLD_SCORE_HELD);
     (
         possible_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
         holds_total,
@@ -2439,7 +2438,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, Stri
         .map(|c| {
             let lanes = step_type_lanes(&c.step_type_str);
             let parsed_notes =
-                crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
+                deadsync_simfile::notes::parse_chart_notes(&c.minimized_note_data, lanes);
             let chart_time_signatures = c
                 .chart_time_signatures
                 .as_deref()

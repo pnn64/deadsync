@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::online::downloads;
 use crate::screens::components::shared::loading_bar;
+use deadsync_input::{InputEvent, VirtualAction};
 
 const DOWNLOADS_Z: i16 = 1480;
 const DOWNLOADS_PANEL_W: f32 = 520.0;

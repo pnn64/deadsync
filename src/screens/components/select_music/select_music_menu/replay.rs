@@ -1,10 +1,11 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::scores;
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_score as score_data;
 
 use super::leaderboard::format_groovestats_date;
 
@@ -22,7 +23,7 @@ const GS_LEADERBOARD_Z: i16 = 1480;
 
 #[derive(Clone, Debug)]
 pub struct ReplayOverlayStateData {
-    pub entries: Vec<scores::MachineReplayEntry>,
+    pub entries: Vec<score_data::MachineReplayEntry>,
     pub selected_index: usize,
     pub prev_selected_index: usize,
     pub focus_anim_elapsed: f32,
@@ -45,7 +46,7 @@ pub enum ReplayInputOutcome {
 
 #[derive(Clone, Debug)]
 pub struct ReplayStartPayload {
-    pub replay: Vec<scores::ReplayEdge>,
+    pub replay: Vec<score_data::ReplayEdge>,
     pub name: String,
     pub score: f64,
     pub replay_beat0_time_ns: i64,

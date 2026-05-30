@@ -1,6 +1,4 @@
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::chart::{ChartData, GameplayChartData};
-use crate::game::note::Note;
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
     SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
@@ -9,9 +7,11 @@ use crate::game::parsing::song_lua::{
     compile_song_lua,
 };
 use crate::game::profile;
-use crate::game::scroll::ScrollSpeedSetting;
-use crate::game::song::SongData;
-use crate::game::timing::{ROWS_PER_BEAT, TimingData};
+use deadsync_chart::SongData;
+use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_rules::note::Note;
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData};
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
 use std::path::PathBuf;

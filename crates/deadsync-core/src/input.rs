@@ -1,3 +1,6 @@
+pub const MAX_PLAYERS: usize = 2;
+pub const MAX_COLS: usize = 8;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Lane {
@@ -26,7 +29,7 @@ pub enum InputSource {
 
 #[cfg(test)]
 mod tests {
-    use super::Lane;
+    use super::{Lane, MAX_COLS, MAX_PLAYERS};
 
     #[test]
     fn lane_indices_are_stable() {
@@ -38,5 +41,11 @@ mod tests {
         assert_eq!(Lane::P2Down.index(), 5);
         assert_eq!(Lane::P2Up.index(), 6);
         assert_eq!(Lane::P2Right.index(), 7);
+    }
+
+    #[test]
+    fn player_and_column_limits_match_lane_model() {
+        assert_eq!(MAX_PLAYERS, 2);
+        assert_eq!(MAX_COLS, 8);
     }
 }

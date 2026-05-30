@@ -8,7 +8,7 @@ use crate::config::{
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::engine::input::{InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -17,12 +17,11 @@ use crate::engine::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
-use crate::game::chart::{ChartData, ChartDisplayBpm};
 use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{SongData, SyncPref, get_song_cache};
+use crate::game::song::get_song_cache;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
@@ -37,6 +36,9 @@ use crate::screens::components::{
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
 };
+use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
+use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
+use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
@@ -1187,8 +1189,8 @@ pub struct State {
 }
 
 #[inline(always)]
-fn cached_score_exists(score: scores::CachedScore) -> bool {
-    score.grade != scores::Grade::Failed || score.score_percent > 0.0
+fn cached_score_exists(score: score_data::CachedScore) -> bool {
+    score.grade != score_data::Grade::Failed || score.score_percent > 0.0
 }
 
 fn song_has_cached_score(song: &SongData) -> bool {
@@ -1700,13 +1702,13 @@ fn selected_group_header_for_folder_stats(state: &State) -> Option<(String, Opti
 }
 
 #[inline(always)]
-fn folder_stats_grade_bucket(grade: scores::Grade) -> Option<usize> {
+fn folder_stats_grade_bucket(grade: score_data::Grade) -> Option<usize> {
     match grade {
-        scores::Grade::Quint => Some(0),
-        scores::Grade::Tier01 => Some(1),
-        scores::Grade::Tier02 => Some(2),
-        scores::Grade::Tier03 => Some(3),
-        scores::Grade::Tier04 => Some(4),
+        score_data::Grade::Quint => Some(0),
+        score_data::Grade::Tier01 => Some(1),
+        score_data::Grade::Tier02 => Some(2),
+        score_data::Grade::Tier03 => Some(3),
+        score_data::Grade::Tier04 => Some(4),
         _ => None,
     }
 }
@@ -1772,7 +1774,7 @@ fn build_folder_stats_summary(
                     else {
                         continue;
                     };
-                    if score.grade == scores::Grade::Failed {
+                    if score.grade == score_data::Grade::Failed {
                         continue;
                     }
                     summary.passes = summary.passes.saturating_add(1);
@@ -2445,10 +2447,10 @@ fn build_top_grades_grouped_entries(
         })
         .collect();
 
-    let mut graded_songs: Vec<(Arc<SongData>, Option<scores::Grade>)> =
+    let mut graded_songs: Vec<(Arc<SongData>, Option<score_data::Grade>)> =
         Vec::with_capacity(songs.len());
     for song in songs {
-        let mut best_grade: Option<scores::Grade> = None;
+        let mut best_grade: Option<score_data::Grade> = None;
         for chart in &song.charts {
             if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
                 continue;
@@ -2457,7 +2459,7 @@ fn build_top_grades_grouped_entries(
                 let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
                     continue;
                 };
-                if score.grade != scores::Grade::Failed || score.score_percent > 0.0 {
+                if score.grade != score_data::Grade::Failed || score.score_percent > 0.0 {
                     let grade = score.grade;
                     if best_grade.is_none()
                         || grade_sort_order(grade) < grade_sort_order(best_grade.unwrap())
@@ -2511,51 +2513,51 @@ fn build_top_grades_grouped_entries(
     entries
 }
 
-fn grade_sort_order(grade: scores::Grade) -> u8 {
+fn grade_sort_order(grade: score_data::Grade) -> u8 {
     match grade {
-        scores::Grade::Quint => 0,
-        scores::Grade::Tier01 => 1,
-        scores::Grade::Tier02 => 2,
-        scores::Grade::Tier03 => 3,
-        scores::Grade::Tier04 => 4,
-        scores::Grade::Tier05 => 5,
-        scores::Grade::Tier06 => 6,
-        scores::Grade::Tier07 => 7,
-        scores::Grade::Tier08 => 8,
-        scores::Grade::Tier09 => 9,
-        scores::Grade::Tier10 => 10,
-        scores::Grade::Tier11 => 11,
-        scores::Grade::Tier12 => 12,
-        scores::Grade::Tier13 => 13,
-        scores::Grade::Tier14 => 14,
-        scores::Grade::Tier15 => 15,
-        scores::Grade::Tier16 => 16,
-        scores::Grade::Tier17 => 17,
-        scores::Grade::Failed => 18,
+        score_data::Grade::Quint => 0,
+        score_data::Grade::Tier01 => 1,
+        score_data::Grade::Tier02 => 2,
+        score_data::Grade::Tier03 => 3,
+        score_data::Grade::Tier04 => 4,
+        score_data::Grade::Tier05 => 5,
+        score_data::Grade::Tier06 => 6,
+        score_data::Grade::Tier07 => 7,
+        score_data::Grade::Tier08 => 8,
+        score_data::Grade::Tier09 => 9,
+        score_data::Grade::Tier10 => 10,
+        score_data::Grade::Tier11 => 11,
+        score_data::Grade::Tier12 => 12,
+        score_data::Grade::Tier13 => 13,
+        score_data::Grade::Tier14 => 14,
+        score_data::Grade::Tier15 => 15,
+        score_data::Grade::Tier16 => 16,
+        score_data::Grade::Tier17 => 17,
+        score_data::Grade::Failed => 18,
     }
 }
 
-fn grade_group_name(grade: scores::Grade) -> String {
+fn grade_group_name(grade: score_data::Grade) -> String {
     match grade {
-        scores::Grade::Quint => "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
-        scores::Grade::Tier01 => "\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
-        scores::Grade::Tier02 => "\u{2605}\u{2605}\u{2605}".to_string(),
-        scores::Grade::Tier03 => "\u{2605}\u{2605}".to_string(),
-        scores::Grade::Tier04 => "\u{2605}".to_string(),
-        scores::Grade::Tier05 => "S+".to_string(),
-        scores::Grade::Tier06 => "S".to_string(),
-        scores::Grade::Tier07 => "S-".to_string(),
-        scores::Grade::Tier08 => "A+".to_string(),
-        scores::Grade::Tier09 => "A".to_string(),
-        scores::Grade::Tier10 => "A-".to_string(),
-        scores::Grade::Tier11 => "B+".to_string(),
-        scores::Grade::Tier12 => "B".to_string(),
-        scores::Grade::Tier13 => "B-".to_string(),
-        scores::Grade::Tier14 => "C+".to_string(),
-        scores::Grade::Tier15 => "C".to_string(),
-        scores::Grade::Tier16 => "C-".to_string(),
-        scores::Grade::Tier17 => "D".to_string(),
-        scores::Grade::Failed => "Failed".to_string(),
+        score_data::Grade::Quint => "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
+        score_data::Grade::Tier01 => "\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
+        score_data::Grade::Tier02 => "\u{2605}\u{2605}\u{2605}".to_string(),
+        score_data::Grade::Tier03 => "\u{2605}\u{2605}".to_string(),
+        score_data::Grade::Tier04 => "\u{2605}".to_string(),
+        score_data::Grade::Tier05 => "S+".to_string(),
+        score_data::Grade::Tier06 => "S".to_string(),
+        score_data::Grade::Tier07 => "S-".to_string(),
+        score_data::Grade::Tier08 => "A+".to_string(),
+        score_data::Grade::Tier09 => "A".to_string(),
+        score_data::Grade::Tier10 => "A-".to_string(),
+        score_data::Grade::Tier11 => "B+".to_string(),
+        score_data::Grade::Tier12 => "B".to_string(),
+        score_data::Grade::Tier13 => "B-".to_string(),
+        score_data::Grade::Tier14 => "C+".to_string(),
+        score_data::Grade::Tier15 => "C".to_string(),
+        score_data::Grade::Tier16 => "C-".to_string(),
+        score_data::Grade::Tier17 => "D".to_string(),
+        score_data::Grade::Failed => "Failed".to_string(),
     }
 }
 
@@ -2691,10 +2693,10 @@ fn build_top_grades_grouped_entries_for_side(
         })
         .collect();
 
-    let mut graded_songs: Vec<(Arc<SongData>, Option<scores::Grade>)> =
+    let mut graded_songs: Vec<(Arc<SongData>, Option<score_data::Grade>)> =
         Vec::with_capacity(songs.len());
     for song in songs {
-        let mut best_grade: Option<scores::Grade> = None;
+        let mut best_grade: Option<score_data::Grade> = None;
         for chart in &song.charts {
             if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
                 continue;
@@ -2702,7 +2704,7 @@ fn build_top_grades_grouped_entries_for_side(
             let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
                 continue;
             };
-            if score.grade != scores::Grade::Failed || score.score_percent > 0.0 {
+            if score.grade != score_data::Grade::Failed || score.score_percent > 0.0 {
                 let grade = score.grade;
                 if best_grade.is_none()
                     || grade_sort_order(grade) < grade_sort_order(best_grade.unwrap())
@@ -10777,7 +10779,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             let mut player_score = placeholder_score_percent();
             if let Some(c) = chart
                 && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
-                && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+                && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
             {
                 player_name = cached_str_ref(player_initials);
                 player_score = cached_score_percent_text(sc.score_percent);
@@ -10787,7 +10789,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             let mut machine_score = placeholder_score_percent();
             if let Some(c) = chart
                 && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
-                && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+                && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
             {
                 machine_name = cached_str_ref(initials.as_str());
                 machine_score = cached_score_percent_text(sc.score_percent);
@@ -11849,10 +11851,12 @@ mod tests {
         steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::engine::input::{PadDir, RawKeyboardEvent, VirtualAction};
-    use crate::game::song::SongData;
-    use crate::game::{profile, scores};
+    use crate::engine::input::RawKeyboardEvent;
+    use crate::game::profile;
     use crate::screens::ScreenAction;
+    use deadsync_chart::SongData;
+    use deadsync_input::{PadDir, VirtualAction};
+    use deadsync_score as score_data;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
@@ -11975,23 +11979,23 @@ mod tests {
     #[test]
     fn folder_stats_buckets_match_arrow_cloud_top_grades() {
         assert_eq!(
-            super::folder_stats_grade_bucket(scores::Grade::Quint),
+            super::folder_stats_grade_bucket(score_data::Grade::Quint),
             Some(0)
         );
         assert_eq!(
-            super::folder_stats_grade_bucket(scores::Grade::Tier01),
+            super::folder_stats_grade_bucket(score_data::Grade::Tier01),
             Some(1)
         );
         assert_eq!(
-            super::folder_stats_grade_bucket(scores::Grade::Tier04),
+            super::folder_stats_grade_bucket(score_data::Grade::Tier04),
             Some(4)
         );
         assert_eq!(
-            super::folder_stats_grade_bucket(scores::Grade::Tier05),
+            super::folder_stats_grade_bucket(score_data::Grade::Tier05),
             None
         );
         assert_eq!(
-            super::folder_stats_grade_bucket(scores::Grade::Failed),
+            super::folder_stats_grade_bucket(score_data::Grade::Failed),
             None
         );
     }
@@ -12653,7 +12657,7 @@ mod tests {
 
     // --- Regression tests for preferred_difficulty_index preservation ---
 
-    use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
 
     fn test_chart(difficulty: &str) -> ChartData {
         ChartData {

@@ -5,9 +5,10 @@ use crate::config::dirs;
 use crate::engine::gfx::TextureHandleMap;
 use crate::engine::present::actors::Actor;
 use crate::engine::space;
-use crate::game::{profile, scores};
+use crate::game::profile;
 use crate::screens::evaluation;
 use chrono::{Datelike, Local};
+use deadsync_score as score_data;
 use log::{info, warn};
 use std::error::Error;
 use std::path::PathBuf;
@@ -92,8 +93,8 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
     for info in eval.score_info.iter().flatten() {
         let is_fail = info.fail_time.is_some();
         let is_pb = info.personal_record_highlight_rank == Some(1);
-        let is_quad = matches!(info.grade, scores::Grade::Tier01);
-        let is_quint = matches!(info.grade, scores::Grade::Quint);
+        let is_quad = matches!(info.grade, score_data::Grade::Tier01);
+        let is_quint = matches!(info.grade, score_data::Grade::Quint);
         if (mask & crate::config::AUTO_SS_PBS) != 0 && is_pb {
             return true;
         }

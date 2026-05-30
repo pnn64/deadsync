@@ -1,8 +1,8 @@
-use crate::game::judgment::{
+use crate::game::profile;
+use deadsync_rules::judgment::{
     JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
-use crate::game::profile;
-use crate::game::timing::{
+use deadsync_rules::timing::{
     TimingProfile, TimingProfileNs, classify_offset_ns_with_disabled_windows,
     largest_enabled_tap_window_ns,
 };

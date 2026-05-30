@@ -1,5 +1,5 @@
-use crate::game::judgment::{self, JudgeGrade, Judgment};
-use crate::game::note::NoteType;
+use deadsync_core::note::NoteType;
+use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
 
 use super::{HeldMissRenderInfo, MAX_COLS, PlayerRuntime, State};
 

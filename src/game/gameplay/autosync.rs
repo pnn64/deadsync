@@ -1,4 +1,4 @@
-use crate::game::judgment::JudgeGrade;
+use deadsync_rules::judgment::JudgeGrade;
 
 use super::offset::{apply_global_offset_delta, apply_song_offset_delta};
 use super::{

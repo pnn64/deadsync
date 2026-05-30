@@ -4,6 +4,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::game::{profile, scores};
+use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -161,9 +162,9 @@ const fn select_music_filter_allows_kind(kind: PaneKind, filter: SelectMusicPane
 }
 
 fn select_music_filtered_panes(
-    panes: &[scores::LeaderboardPane],
+    panes: &[score_data::LeaderboardPane],
     filter: SelectMusicPaneFilter,
-) -> Vec<&scores::LeaderboardPane> {
+) -> Vec<&score_data::LeaderboardPane> {
     let mut out = Vec::with_capacity(panes.len());
     for pane in panes {
         if select_music_filter_allows_kind(pane_kind(pane), filter) {
@@ -174,7 +175,7 @@ fn select_music_filtered_panes(
 }
 
 #[inline(always)]
-fn pane_kind(pane: &scores::LeaderboardPane) -> PaneKind {
+fn pane_kind(pane: &score_data::LeaderboardPane) -> PaneKind {
     if pane.is_arrowcloud() {
         return if pane.is_hard_ex() {
             PaneKind::HardEx
@@ -204,7 +205,7 @@ fn pane_kind(pane: &scores::LeaderboardPane) -> PaneKind {
 }
 
 #[inline(always)]
-fn pane_mode_text(kind: PaneKind, pane: &scores::LeaderboardPane) -> &str {
+fn pane_mode_text(kind: PaneKind, pane: &score_data::LeaderboardPane) -> &str {
     match kind {
         PaneKind::Gs => "ITG",
         PaneKind::Ex => "EX",
@@ -308,7 +309,7 @@ fn local_self_scorebox_name(side: profile::PlayerSide) -> String {
 
 fn leaderboard_entry_matches_local_self(
     side: profile::PlayerSide,
-    entry: &scores::LeaderboardEntry,
+    entry: &score_data::LeaderboardEntry,
 ) -> bool {
     let profile = profile::get_for_side(side);
     let name = entry.name.trim();
@@ -335,7 +336,7 @@ fn local_self_score_10000(
             let score = scores::get_cached_local_score_for_side(chart_hash, side)?;
             Some((
                 score.score_percent * 10000.0,
-                score.grade == scores::Grade::Failed,
+                score.grade == score_data::Grade::Failed,
             ))
         }
         PaneKind::Ex => {
@@ -355,8 +356,8 @@ fn local_self_score_10000(
 pub(crate) fn entries_with_local_self_state(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    pane: &scores::LeaderboardPane,
-) -> Vec<scores::LeaderboardEntry> {
+    pane: &score_data::LeaderboardPane,
+) -> Vec<score_data::LeaderboardEntry> {
     let kind = pane_kind(pane);
     let mut entries = pane.entries.clone();
     let local_self = chart_hash.and_then(|hash| local_self_score_10000(side, hash, kind));
@@ -395,9 +396,9 @@ pub(crate) fn entries_with_local_self_state(
 }
 
 fn preferred_primary_pane<'a>(
-    panes: &'a [&'a scores::LeaderboardPane],
+    panes: &'a [&'a score_data::LeaderboardPane],
     show_ex: bool,
-) -> Option<&'a scores::LeaderboardPane> {
+) -> Option<&'a score_data::LeaderboardPane> {
     let want = if show_ex { PaneKind::Ex } else { PaneKind::Gs };
     panes
         .iter()
@@ -583,7 +584,7 @@ fn gameplay_status_pane_for_side(side: profile::PlayerSide, text: &str) -> Gamep
 }
 
 fn gameplay_row_from_entry(
-    entry: &scores::LeaderboardEntry,
+    entry: &score_data::LeaderboardEntry,
     kind: PaneKind,
 ) -> GameplayScoreboxRow {
     let mut rank_color = [1.0; 4];
@@ -626,13 +627,16 @@ fn gameplay_row_from_entry(
 }
 
 #[inline(always)]
-fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+fn same_leaderboard_entry(
+    a: &score_data::LeaderboardEntry,
+    b: &score_data::LeaderboardEntry,
+) -> bool {
     a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
 }
 
 fn selected_contains(
-    selected: &[Option<&scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
-    entry: &scores::LeaderboardEntry,
+    selected: &[Option<&score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    entry: &score_data::LeaderboardEntry,
 ) -> bool {
     selected
         .iter()
@@ -641,9 +645,9 @@ fn selected_contains(
 }
 
 fn push_selected_entry<'a>(
-    selected: &mut [Option<&'a scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    selected: &mut [Option<&'a score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
     len: &mut usize,
-    entry: &'a scores::LeaderboardEntry,
+    entry: &'a score_data::LeaderboardEntry,
 ) {
     if *len >= SCOREBOX_NUM_ENTRIES || selected_contains(selected, entry) {
         return;
@@ -653,10 +657,10 @@ fn push_selected_entry<'a>(
 }
 
 fn next_best_entry<'a>(
-    entries: &'a [scores::LeaderboardEntry],
-    selected: &[Option<&'a scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
-    include: impl Fn(&scores::LeaderboardEntry) -> bool,
-) -> Option<&'a scores::LeaderboardEntry> {
+    entries: &'a [score_data::LeaderboardEntry],
+    selected: &[Option<&'a score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    include: impl Fn(&score_data::LeaderboardEntry) -> bool,
+) -> Option<&'a score_data::LeaderboardEntry> {
     entries
         .iter()
         .filter(|entry| include(entry) && !selected_contains(selected, entry))
@@ -664,7 +668,7 @@ fn next_best_entry<'a>(
 }
 
 fn scorebox_rows_for_kind(
-    entries: &[scores::LeaderboardEntry],
+    entries: &[score_data::LeaderboardEntry],
     kind: PaneKind,
 ) -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     let mut rows = empty_rows();
@@ -673,7 +677,7 @@ fn scorebox_rows_for_kind(
         return rows;
     }
 
-    let mut selected: [Option<&scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES] =
+    let mut selected: [Option<&score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES] =
         [None; SCOREBOX_NUM_ENTRIES];
     let mut len = 0usize;
 
@@ -711,8 +715,8 @@ fn scorebox_rows_for_kind(
 }
 
 fn gameplay_pane_from_leaderboard(
-    pane: &scores::LeaderboardPane,
-    entries: &[scores::LeaderboardEntry],
+    pane: &score_data::LeaderboardPane,
+    entries: &[score_data::LeaderboardEntry],
 ) -> GameplayScoreboxPane {
     let kind = pane_kind(pane);
     GameplayScoreboxPane {
@@ -725,7 +729,7 @@ fn gameplay_pane_from_leaderboard(
 }
 
 fn gameplay_panes_from_snapshot(
-    snapshot: &scores::CachedPlayerLeaderboardData,
+    snapshot: &score_data::CachedPlayerLeaderboardData,
     profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
@@ -775,7 +779,7 @@ fn gameplay_panes_from_snapshot(
 }
 
 fn select_music_panes_from_snapshot(
-    snapshot: &scores::CachedPlayerLeaderboardData,
+    snapshot: &score_data::CachedPlayerLeaderboardData,
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
 ) -> Vec<GameplayScoreboxPane> {
@@ -1361,7 +1365,7 @@ pub fn select_music_scorebox_actors(
 }
 
 pub fn gameplay_scorebox_actors_from_snapshot(
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
     profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
@@ -1385,7 +1389,7 @@ pub fn gameplay_scorebox_actors_from_snapshot(
 }
 
 pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
-    snapshot: &scores::CachedPlayerLeaderboardData,
+    snapshot: &score_data::CachedPlayerLeaderboardData,
     profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
@@ -1475,8 +1479,8 @@ fn gameplay_scorebox_actors_from_panes(
 mod tests {
     use super::*;
 
-    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> scores::LeaderboardEntry {
-        scores::LeaderboardEntry {
+    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> score_data::LeaderboardEntry {
+        score_data::LeaderboardEntry {
             rank,
             name: name.to_string(),
             machine_tag: None,
@@ -1488,8 +1492,8 @@ mod tests {
         }
     }
 
-    fn pane(name: &str, entries: Vec<scores::LeaderboardEntry>) -> scores::LeaderboardPane {
-        scores::LeaderboardPane {
+    fn pane(name: &str, entries: Vec<score_data::LeaderboardEntry>) -> score_data::LeaderboardPane {
+        score_data::LeaderboardPane {
             name: name.to_string(),
             entries,
             is_ex: false,
@@ -1592,19 +1596,19 @@ mod tests {
         crate::config::update_select_music_scorebox_cycle_hard_ex(true);
         crate::config::update_select_music_scorebox_cycle_tournaments(false);
 
-        let snapshot = scores::CachedPlayerLeaderboardData {
+        let snapshot = score_data::CachedPlayerLeaderboardData {
             loading: false,
             error: None,
-            data: Some(scores::PlayerLeaderboardData {
+            data: Some(score_data::PlayerLeaderboardData {
                 panes: vec![
                     pane("GrooveStats", vec![entry(1, "itg", false, false)]),
-                    scores::LeaderboardPane {
+                    score_data::LeaderboardPane {
                         name: "ArrowCloud".to_string(),
                         entries: vec![entry(1, "hard-ex", false, false)],
                         is_ex: false,
                         disabled: false,
                         personalized: true,
-                        arrowcloud_kind: Some(scores::ArrowCloudPaneKind::HardEx),
+                        arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::HardEx),
                     },
                 ],
                 itl_self_score: None,

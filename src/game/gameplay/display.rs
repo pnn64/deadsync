@@ -1,5 +1,5 @@
-use crate::game::judgment::{self, JudgeGrade, Judgment};
-use crate::game::timing::{self, WindowCounts};
+use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
+use deadsync_rules::timing::{self, WindowCounts};
 
 use super::{
     CourseDisplayCarry, CourseDisplayTotals, ExScoreInputs, MAX_PLAYERS, PlayerRuntime, State,

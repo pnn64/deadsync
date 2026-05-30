@@ -19,11 +19,11 @@
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::updater::action::{self, ActionErrorKind, ActionPhase};
+use deadsync_input::{InputEvent, VirtualAction};
 
 use super::loading_bar;
 
@@ -924,7 +924,7 @@ mod tests {
     }
 
     fn make_event(action: VirtualAction, pressed: bool) -> InputEvent {
-        use crate::engine::input::InputSource;
+        use deadsync_input::InputSource;
         use std::time::Instant;
         let now = Instant::now();
         InputEvent {

@@ -382,7 +382,7 @@ pub const fn apply_supported_for_host() -> bool {
 /// Fetch the latest release from GitHub.
 ///
 /// `agent` is taken by reference so callers can plug in a configured ureq
-/// agent (we use the shared one from `engine::network` in production but
+/// agent (we use the shared one from `deadsync-net` in production but
 /// tests can construct a no-network agent if needed).
 ///
 /// Pass `etag = Some(prev)` to enable conditional requests; the server

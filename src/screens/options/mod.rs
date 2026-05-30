@@ -14,7 +14,6 @@ use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 #[cfg(target_os = "windows")]
 use crate::engine::input::WindowsPadBackend;
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode as LightsGameplayPadMode,
 };
@@ -25,6 +24,7 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

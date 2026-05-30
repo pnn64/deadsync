@@ -1,5 +1,6 @@
-use crate::note::{HoldResult, MineResult, Note, NoteType};
+use crate::note::{HoldResult, MineResult, Note};
 use crate::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
+use deadsync_core::note::NoteType;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -685,7 +686,8 @@ pub fn calculate_hard_ex_score_from_notes(
 mod tests {
     use super::*;
 
-    use crate::note::{HoldData, HoldResult, MineResult, Note, NoteType};
+    use crate::note::{HoldData, HoldResult, MineResult, Note};
+    use deadsync_core::note::NoteType;
 
     const BLUE_FANTASTIC: u32 = 713;
     const WHITE_FANTASTIC: u32 = 204;

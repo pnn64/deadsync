@@ -1,8 +1,7 @@
-use deadsync::engine::input::{
-    self, InputBinding, Keymap, PadDir, PadEvent, PadId, RawKeyboardEvent, VirtualAction,
-};
+use deadsync::engine::input::{self, InputBinding, Keymap, RawKeyboardEvent};
 use deadsync::game::gameplay::{self, GameplayAction, GameplayExit};
 use deadsync::test_support::notefield_bench;
+use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, PadId, VirtualAction};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
 use std::hint::black_box;
@@ -433,10 +432,10 @@ fn install_bench_keymap() {
 }
 
 #[inline(always)]
-fn checksum_input_event(ev: input::InputEvent, action: GameplayAction) -> u64 {
+fn checksum_input_event(ev: InputEvent, action: GameplayAction) -> u64 {
     (ev.action.ix() as u64)
         ^ ((ev.pressed as u64) << 8)
-        ^ ((matches!(ev.source, input::InputSource::Gamepad) as u64) << 16)
+        ^ ((matches!(ev.source, InputSource::Gamepad) as u64) << 16)
         ^ ev.timestamp_host_nanos.rotate_left(21)
         ^ gameplay_action_hash(action).rotate_left(7)
 }

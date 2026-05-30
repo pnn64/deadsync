@@ -1,17 +1,17 @@
 use crate::engine::present::actors::Actor;
-use crate::game::chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
-    MAX_COLS, MAX_PLAYERS,
 };
-use crate::game::judgment::{JudgeGrade, TimingWindow};
-use crate::game::note::NoteType;
-use crate::game::parsing::notes::ParsedNote;
 use crate::game::profile;
-use crate::game::scroll::ScrollSpeedSetting;
-use crate::game::song::SongData;
-use crate::game::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
 use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
+use deadsync_chart::SongData;
+use deadsync_chart::notes::ParsedNote;
+use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::note::NoteType;
+use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
 use std::path::PathBuf;
 use std::sync::Arc;
 

@@ -2,8 +2,8 @@ use crate::act;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::profile;
-use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use deadsync_score as score_data;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
 
@@ -30,7 +30,7 @@ enum RecordsPaneKind {
 
 impl RecordsPaneKind {
     #[inline(always)]
-    fn matches(self, pane: &scores::LeaderboardPane) -> bool {
+    fn matches(self, pane: &score_data::LeaderboardPane) -> bool {
         match self {
             Self::GrooveStatsItg => pane.is_groovestats() && !pane.is_ex,
             Self::GrooveStatsEx => pane.is_groovestats() && pane.is_ex,
@@ -71,7 +71,7 @@ fn format_gs_error_text(error: &str) -> String {
     }
 }
 
-fn gs_player_name(entry: &scores::LeaderboardEntry) -> String {
+fn gs_player_name(entry: &score_data::LeaderboardEntry) -> String {
     let trimmed_name = entry.name.trim();
     if !trimmed_name.is_empty() {
         return trimmed_name.to_string();
@@ -86,14 +86,17 @@ fn gs_player_name(entry: &scores::LeaderboardEntry) -> String {
 }
 
 #[inline(always)]
-fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+fn same_leaderboard_entry(
+    a: &score_data::LeaderboardEntry,
+    b: &score_data::LeaderboardEntry,
+) -> bool {
     a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
 }
 
 #[inline(always)]
 fn selected_contains(
-    selected: &[&scores::LeaderboardEntry],
-    entry: &scores::LeaderboardEntry,
+    selected: &[&score_data::LeaderboardEntry],
+    entry: &score_data::LeaderboardEntry,
 ) -> bool {
     selected
         .iter()
@@ -101,10 +104,10 @@ fn selected_contains(
 }
 
 fn next_record_entry<'a>(
-    entries: &'a [scores::LeaderboardEntry],
-    selected: &[&'a scores::LeaderboardEntry],
-    include: impl Fn(&scores::LeaderboardEntry) -> bool,
-) -> Option<&'a scores::LeaderboardEntry> {
+    entries: &'a [score_data::LeaderboardEntry],
+    selected: &[&'a score_data::LeaderboardEntry],
+    include: impl Fn(&score_data::LeaderboardEntry) -> bool,
+) -> Option<&'a score_data::LeaderboardEntry> {
     entries
         .iter()
         .filter(|entry| include(entry) && !selected_contains(selected, entry))
@@ -112,9 +115,9 @@ fn next_record_entry<'a>(
 }
 
 fn prioritized_record_entries(
-    entries: &[scores::LeaderboardEntry],
+    entries: &[score_data::LeaderboardEntry],
     max_rows: usize,
-) -> Vec<scores::LeaderboardEntry> {
+) -> Vec<score_data::LeaderboardEntry> {
     if max_rows == 0 {
         return Vec::new();
     }
@@ -150,8 +153,8 @@ fn prioritized_record_entries(
 fn pane_display_entries(
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    pane: &scores::LeaderboardPane,
-) -> Vec<scores::LeaderboardEntry> {
+    pane: &score_data::LeaderboardPane,
+) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(score_side, chart_hash, pane);
     prioritized_record_entries(entries.as_slice(), GS_RECORD_ROWS)
 }
@@ -160,7 +163,7 @@ fn build_records_pane(
     controller: profile::PlayerSide,
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
     kind: RecordsPaneKind,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
@@ -347,7 +350,7 @@ pub fn build_gs_records_pane(
     controller: profile::PlayerSide,
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
     build_records_pane(
         controller,
@@ -362,7 +365,7 @@ pub fn build_gs_ex_records_pane(
     controller: profile::PlayerSide,
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
     build_records_pane(
         controller,
@@ -377,7 +380,7 @@ pub fn build_itl_records_pane(
     controller: profile::PlayerSide,
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
     build_records_pane(
         controller,
@@ -392,7 +395,7 @@ pub fn build_arrowcloud_records_pane(
     controller: profile::PlayerSide,
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
-    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
     build_records_pane(
         controller,
@@ -407,8 +410,8 @@ pub fn build_arrowcloud_records_pane(
 mod tests {
     use super::*;
 
-    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> scores::LeaderboardEntry {
-        scores::LeaderboardEntry {
+    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> score_data::LeaderboardEntry {
+        score_data::LeaderboardEntry {
             rank,
             name: name.to_string(),
             machine_tag: None,
@@ -423,9 +426,9 @@ mod tests {
     fn pane(
         name: &str,
         is_ex: bool,
-        arrowcloud_kind: Option<scores::ArrowCloudPaneKind>,
-    ) -> scores::LeaderboardPane {
-        scores::LeaderboardPane {
+        arrowcloud_kind: Option<score_data::ArrowCloudPaneKind>,
+    ) -> score_data::LeaderboardPane {
+        score_data::LeaderboardPane {
             name: name.to_string(),
             entries: vec![entry(1, name, false, false)],
             is_ex,
@@ -459,7 +462,7 @@ mod tests {
             pane(
                 "ArrowCloud",
                 false,
-                Some(scores::ArrowCloudPaneKind::HardEx),
+                Some(score_data::ArrowCloudPaneKind::HardEx),
             ),
         ];
 

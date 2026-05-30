@@ -1,5 +1,6 @@
 use super::*;
 use crate::assets::{FontRole, current_machine_font_key};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpeedModType {
@@ -58,18 +59,18 @@ impl SpeedMod {
     }
 }
 
-impl From<crate::game::scroll::ScrollSpeedSetting> for SpeedMod {
-    fn from(setting: crate::game::scroll::ScrollSpeedSetting) -> Self {
+impl From<ScrollSpeedSetting> for SpeedMod {
+    fn from(setting: ScrollSpeedSetting) -> Self {
         match setting {
-            crate::game::scroll::ScrollSpeedSetting::XMod(mult) => Self {
+            ScrollSpeedSetting::XMod(mult) => Self {
                 mod_type: SpeedModType::X,
                 value: mult,
             },
-            crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => Self {
+            ScrollSpeedSetting::CMod(bpm) => Self {
                 mod_type: SpeedModType::C,
                 value: bpm,
             },
-            crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => Self {
+            ScrollSpeedSetting::MMod(bpm) => Self {
                 mod_type: SpeedModType::M,
                 value: bpm,
             },
@@ -78,13 +79,11 @@ impl From<crate::game::scroll::ScrollSpeedSetting> for SpeedMod {
 }
 
 #[inline(always)]
-pub(super) fn scroll_speed_for_mod(
-    speed_mod: &SpeedMod,
-) -> crate::game::scroll::ScrollSpeedSetting {
+pub(super) fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> ScrollSpeedSetting {
     match speed_mod.mod_type {
-        SpeedModType::C => crate::game::scroll::ScrollSpeedSetting::CMod(speed_mod.value),
-        SpeedModType::X => crate::game::scroll::ScrollSpeedSetting::XMod(speed_mod.value),
-        SpeedModType::M => crate::game::scroll::ScrollSpeedSetting::MMod(speed_mod.value),
+        SpeedModType::C => ScrollSpeedSetting::CMod(speed_mod.value),
+        SpeedModType::X => ScrollSpeedSetting::XMod(speed_mod.value),
+        SpeedModType::M => ScrollSpeedSetting::MMod(speed_mod.value),
     }
 }
 
@@ -299,12 +298,8 @@ pub(super) fn difficulty_display_name(index: usize) -> String {
 
 pub(super) fn music_rate_display_name(state: &State) -> String {
     let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
-    let is_random = p1_chart.is_some_and(|c| {
-        matches!(
-            c.display_bpm,
-            Some(crate::game::chart::ChartDisplayBpm::Random)
-        )
-    });
+    let is_random = p1_chart
+        .is_some_and(|c| matches!(c.display_bpm, Some(deadsync_chart::ChartDisplayBpm::Random)));
     let bpm_str = if is_random {
         "???".to_string()
     } else {

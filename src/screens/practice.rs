@@ -2,16 +2,18 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_for_player};
-use crate::game::{profile, scroll::ScrollSpeedSetting};
+use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
@@ -1322,12 +1324,8 @@ fn set_music_rate_flash(state: &mut State, key: &str, rate: f32) {
 fn effective_bpm_str(state: &State, rate: f32) -> String {
     let song = &state.gameplay.song;
     let chart = state.gameplay.charts.first().map(|c| c.as_ref());
-    let is_random = chart.is_some_and(|c| {
-        matches!(
-            c.display_bpm,
-            Some(crate::game::chart::ChartDisplayBpm::Random)
-        )
-    });
+    let is_random = chart
+        .is_some_and(|c| matches!(c.display_bpm, Some(deadsync_chart::ChartDisplayBpm::Random)));
     if is_random {
         return "???".to_string();
     }
@@ -2048,7 +2046,7 @@ mod tests {
         practice_nav_mode_from_config, quantized_music_rate,
     };
     use crate::assets::i18n;
-    use crate::engine::input::VirtualAction;
+    use deadsync_input::VirtualAction;
     use winit::keyboard::KeyCode;
 
     /// Every i18n key the practice screen looks up at runtime, outside of the

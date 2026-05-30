@@ -3,7 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -13,6 +12,8 @@ use crate::game::scores;
 use crate::game::stage_stats;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -111,7 +112,7 @@ struct PlayerEntry {
 #[derive(Clone, Debug)]
 struct ChartScoreCache {
     chart_hash: String,
-    entries: Vec<scores::LeaderboardEntry>,
+    entries: Vec<score_data::LeaderboardEntry>,
     used: Vec<bool>,
 }
 
@@ -398,7 +399,7 @@ fn find_chart_score_cache<'a>(
 }
 
 fn consume_highlight_rank(
-    entries: &[scores::LeaderboardEntry],
+    entries: &[score_data::LeaderboardEntry],
     used: &mut [bool],
     initials: &str,
     target_score_10000: f64,
@@ -424,7 +425,7 @@ fn consume_highlight_rank(
 }
 
 fn build_stage_highscores(
-    entries: &[scores::LeaderboardEntry],
+    entries: &[score_data::LeaderboardEntry],
     highlight_rank: Option<u32>,
 ) -> StageHighScores {
     let (lower, upper) = highscore_rank_window(highlight_rank);

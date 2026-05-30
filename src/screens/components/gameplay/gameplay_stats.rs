@@ -11,10 +11,12 @@ use crate::engine::present::density;
 use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay;
-use crate::game::judgment::{self, JudgeGrade};
 use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::State;
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_rules::judgment::{self, JudgeGrade};
+use deadsync_rules::timing::LiveTimingSnapshot;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -187,7 +189,7 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
 }
 
 fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, u32); 3] {
-    if player_idx >= state.num_players || player_idx >= gameplay::MAX_PLAYERS {
+    if player_idx >= state.num_players || player_idx >= MAX_PLAYERS {
         return [(0, 0, 0), (1, 0, 0), (2, 0, 0)];
     }
     let p = &state.players[player_idx];
@@ -517,7 +519,7 @@ fn live_timing_enabled_count(mask: profile::LiveTimingStatsMask) -> usize {
 }
 
 #[inline(always)]
-fn live_timing_value(stats: crate::game::timing::LiveTimingSnapshot, index: usize) -> Arc<str> {
+fn live_timing_value(stats: LiveTimingSnapshot, index: usize) -> Arc<str> {
     match index {
         0 => cached_live_timing_pair(stats.recent.mean_ms, stats.all.mean_ms),
         1 => cached_live_timing_pair(stats.recent.mean_abs_ms, stats.all.mean_abs_ms),

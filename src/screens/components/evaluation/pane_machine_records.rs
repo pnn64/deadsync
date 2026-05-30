@@ -2,8 +2,8 @@ use crate::act;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::profile;
-use crate::game::scores;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_score as score_data;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
 
@@ -56,7 +56,7 @@ fn machine_record_highlight_color(
 
 fn push_machine_record_row(
     children: &mut Vec<Actor>,
-    entry: Option<&scores::LeaderboardEntry>,
+    entry: Option<&score_data::LeaderboardEntry>,
     rank: u32,
     y: f32,
     rank_x: f32,

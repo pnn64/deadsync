@@ -12,7 +12,6 @@
 
 use std::sync::atomic::Ordering;
 
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
@@ -21,6 +20,7 @@ use crate::screens::options::qr_login::{
     create_arrowcloud_login_ui_for_profile, poll_qr_login_ui,
 };
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
 
 const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;

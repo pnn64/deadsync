@@ -6,7 +6,6 @@ pub mod idle_inhibit;
 pub mod input;
 pub mod lights;
 pub mod logging;
-pub mod network;
 pub mod open_path;
 pub mod present;
 pub mod space;

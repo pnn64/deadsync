@@ -1,15 +1,12 @@
 use crate::config::SimpleIni;
 use crate::config::dirs;
-use crate::engine::input::InputSource;
-use crate::engine::network;
-use crate::game::chart::ArrowStats;
 use crate::game::gameplay;
-use crate::game::judgment;
 use crate::game::online;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
 use chrono::{DateTime, Local, TimeZone, Utc};
+use deadsync_chart::ArrowStats;
 use log::{debug, warn};
 use serde::de::{DeserializeOwned, Deserializer};
 use serde::{Deserialize, Serialize};
@@ -23,6 +20,10 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
+use deadsync_core::song_time::SongTimeNs;
+use deadsync_input::InputSource;
+use deadsync_net as network;
+use deadsync_rules::judgment;
 
 mod arrowcloud;
 mod groovestats;
@@ -33,12 +34,12 @@ pub use arrowcloud::{
     get_arrowcloud_submit_ui_status_for_side, retry_arrowcloud_submit,
     submit_arrowcloud_payloads_from_gameplay, tick_arrowcloud_auto_retries,
 };
-pub use deadsync_score::{
+use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
     ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore, Grade, LeaderboardEntry,
     LeaderboardPane, LocalScalarScore, MachineReplayEntry, PlayerLeaderboardData, RejectReason,
-    ReplayEdge, gameplay_run_failed, gameplay_run_passed, leaderboard_rank_for_score,
-    lua_chart_submit_allowed, lua_submit_allowed, promote_quint_grade, score_to_grade,
+    ReplayEdge, gameplay_run_failed, gameplay_run_passed, lua_chart_submit_allowed,
+    promote_quint_grade, score_to_grade,
 };
 pub(crate) use deadsync_score::{
     SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
@@ -1381,7 +1382,7 @@ const LOCAL_SCORE_VERSION_V1: u16 = 1;
 
 #[derive(Debug, Clone, Copy, Encode, Decode)]
 struct LocalReplayEdgeV1 {
-    event_music_time_ns: gameplay::SongTimeNs,
+    event_music_time_ns: SongTimeNs,
     lane: u8,
     pressed: bool,
     // 0 = Keyboard, 1 = Gamepad
@@ -1409,7 +1410,7 @@ struct LocalScoreEntryHeaderV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
-    beat0_time_ns: gameplay::SongTimeNs,
+    beat0_time_ns: SongTimeNs,
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -1432,7 +1433,7 @@ struct LocalScoreEntryV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
-    beat0_time_ns: gameplay::SongTimeNs,
+    beat0_time_ns: SongTimeNs,
     replay: Vec<LocalReplayEdgeV1>,
 }
 
@@ -3713,7 +3714,7 @@ struct MachineReplayPlay {
     score_percent: f64,
     played_at_ms: i64,
     is_fail: bool,
-    replay_beat0_time_ns: gameplay::SongTimeNs,
+    replay_beat0_time_ns: SongTimeNs,
     replay: Vec<LocalReplayEdgeV1>,
 }
 
@@ -5055,6 +5056,7 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_score::{leaderboard_rank_for_score, lua_submit_allowed};
 
     #[test]
     fn lua_chart_submit_allowlist_matches_known_hashes() {

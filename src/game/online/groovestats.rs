@@ -1,4 +1,4 @@
-use crate::engine::network;
+use deadsync_net as network;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::sync::{LazyLock, Mutex};

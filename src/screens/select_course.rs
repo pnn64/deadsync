@@ -3,18 +3,16 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::{InputEvent, PadDir, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use crate::game::chart::ChartData;
 use crate::game::course::get_course_cache;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{SongData, get_song_cache};
+use crate::game::song::get_song_cache;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
@@ -24,6 +22,9 @@ use crate::screens::components::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_chart::{ChartData, SongData};
+use deadsync_input::{InputEvent, PadDir, VirtualAction};
+use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
@@ -2128,7 +2129,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         .map(|meta| course_score_hash(meta.path.as_path()));
     let fallback_player = if let Some(hash) = selected_course_hash.as_deref()
         && let Some(sc) = scores::get_cached_local_score_for_side(hash, pane_side)
-        && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+        && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
     {
         (
             pane_profile.player_initials.clone(),
@@ -2139,7 +2140,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let fallback_machine = if let Some(hash) = selected_course_hash.as_deref()
         && let Some((initials, sc)) = scores::get_machine_record_local(hash)
-        && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
+        && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
     {
         (initials, cached_score_percent_text(sc.score_percent))
     } else {

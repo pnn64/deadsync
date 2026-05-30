@@ -1,5 +1,6 @@
-use crate::game::note::{HoldData, HoldResult, NoteType};
-use crate::game::timing::TimingData;
+use deadsync_core::note::NoteType;
+use deadsync_rules::note::{HoldData, HoldResult};
+use deadsync_rules::timing::TimingData;
 
 use super::{
     ActiveHold, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, HoldJudgmentRenderInfo, LIFE_HELD,

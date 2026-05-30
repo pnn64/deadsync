@@ -9,12 +9,12 @@ use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::{SongData, SyncPref};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
+use deadsync_chart::{ChartData, SongData, SyncPref};
+use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -705,7 +705,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let lua_submit_allowed = has_lua
                         && if joined_sides == 0 {
                             wheel_chart_for_side(profile::PlayerSide::P1).is_some_and(|chart| {
-                                scores::lua_chart_submit_allowed(chart.short_hash.as_str())
+                                score_data::lua_chart_submit_allowed(chart.short_hash.as_str())
                             })
                         } else {
                             [profile::PlayerSide::P1, profile::PlayerSide::P2]
@@ -714,7 +714,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 .any(|side| {
                                     profile::is_session_side_joined(side)
                                         && wheel_chart_for_side(side).is_some_and(|chart| {
-                                            scores::lua_chart_submit_allowed(
+                                            score_data::lua_chart_submit_allowed(
                                                 chart.short_hash.as_str(),
                                             )
                                         })
@@ -827,7 +827,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             else {
                                 continue;
                             };
-                            let has_score = cached_score.grade != scores::Grade::Failed
+                            let has_score = cached_score.grade != score_data::Grade::Failed
                                 || cached_score.score_percent > 0.0;
                             if !has_score {
                                 continue;
@@ -865,7 +865,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                             (base, true, Some(idx))
                                         }
                                         Some(_) => (col_clear_lamp(), false, None),
-                                        None if cached_score.grade == scores::Grade::Failed => {
+                                        None if cached_score.grade == score_data::Grade::Failed => {
                                             (col_fail_lamp(), false, None)
                                         }
                                         None => (col_clear_lamp(), false, None),
@@ -1253,8 +1253,8 @@ mod tests {
     use crate::engine::present::color;
     use crate::game::profile;
     use crate::game::scores::CachedItlScore;
-    use crate::game::song::SongData;
     use crate::screens::select_music::MusicWheelEntry;
+    use deadsync_chart::SongData;
     use std::path::PathBuf;
     use std::sync::Arc;
 

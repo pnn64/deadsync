@@ -1,6 +1,7 @@
 use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
-use crate::note::{Note, NoteType};
+use crate::note::Note;
 use crate::stream::StreamSegment;
+use deadsync_core::note::NoteType;
 use log::debug;
 use std::cmp::Ordering;
 use std::sync::Arc;

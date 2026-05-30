@@ -1,9 +1,10 @@
-use deadsync::game::scores::{
+use deadsync_core::song_time::SongTimeNs;
+use deadsync_input::InputSource;
+use deadsync_score::{
     ArrowCloudPaneKind, Grade, LeaderboardEntry, LeaderboardPane, MachineReplayEntry, ReplayEdge,
     gameplay_run_failed, gameplay_run_passed, leaderboard_rank_for_score, lua_chart_submit_allowed,
     lua_submit_allowed, promote_quint_grade, score_to_grade,
 };
-use deadsync::{engine::input::InputSource, game::gameplay::SongTimeNs};
 
 fn entry(score: f64) -> LeaderboardEntry {
     LeaderboardEntry {
@@ -50,7 +51,7 @@ fn score_submit_helpers_keep_lua_and_fail_semantics() {
 }
 
 #[test]
-fn replay_and_leaderboard_dtos_stay_available_from_game_scores() {
+fn replay_and_leaderboard_dtos_stay_available_from_score_crate() {
     let event_music_time_ns: SongTimeNs = 1_250_000_000;
     let replay = ReplayEdge {
         event_music_time_ns,

@@ -1,6 +1,6 @@
 use crate::engine::gfx::MeshVertex;
 use crate::engine::present::color;
-use crate::game::timing::{HistogramMs, ScatterPoint};
+use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimingHistogramScale {
@@ -22,7 +22,7 @@ const HIST_BIN_MS: f32 = 1.0;
 
 #[inline(always)]
 fn hard_ex_display_window_ms(worst_window_ms: f32) -> f32 {
-    worst_window_ms.min(crate::game::timing::effective_windows_ms()[1])
+    worst_window_ms.min(timing::effective_windows_ms()[1])
 }
 
 #[inline(always)]
@@ -44,8 +44,8 @@ fn color_for_abs_ms(
     let w2 = timing_windows_ms[1];
     let w3 = timing_windows_ms[2];
     let w4 = timing_windows_ms[3];
-    let w0 = crate::game::timing::FA_PLUS_W0_MS;
-    let w010 = crate::game::timing::FA_PLUS_W010_MS;
+    let w0 = timing::FA_PLUS_W0_MS;
+    let w010 = timing::FA_PLUS_W010_MS;
 
     match scale {
         TimingHistogramScale::Itg => {
@@ -207,9 +207,9 @@ pub fn build_scatter_background_mesh(
     }
     .max(1.0);
 
-    let timing_windows_ms = crate::game::timing::effective_windows_ms();
-    let w0 = crate::game::timing::FA_PLUS_W0_MS;
-    let w010 = crate::game::timing::FA_PLUS_W010_MS;
+    let timing_windows_ms = timing::effective_windows_ms();
+    let w0 = timing::FA_PLUS_W0_MS;
+    let w010 = timing::FA_PLUS_W010_MS;
 
     // (outer_ms, color) ordered innermost to outermost. The inner edge of
     // each band is the outer edge of the previous band (0 for the first).
@@ -290,7 +290,7 @@ pub fn build_scatter_mesh(
         _ => worst_window_ms,
     }
     .max(1.0);
-    let timing_windows_ms = crate::game::timing::effective_windows_ms();
+    let timing_windows_ms = timing::effective_windows_ms();
     const POINT_W: f32 = 1.5;
     const POINT_H: f32 = 1.5;
     const MISS_W: f32 = 1.0;
@@ -432,7 +432,7 @@ pub fn build_offset_histogram_mesh(
     }
     let peak = histogram.max_count.max(1) as f32;
 
-    let timing_windows_ms = crate::game::timing::effective_windows_ms();
+    let timing_windows_ms = timing::effective_windows_ms();
     let height_max = ph * 0.75;
     let bottom_y = gh;
     let x_for = |bin: i32| (bin + worst_bin + 1) as f32 * w;

@@ -1,9 +1,9 @@
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
-use crate::game::scores::{
+use crate::screens::components::shared::gs_scorebox;
+use deadsync_score::{
     CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
 };
-use crate::screens::components::shared::gs_scorebox;
 
 pub const SCENARIO_NAME: &str = "gs-scorebox";
 

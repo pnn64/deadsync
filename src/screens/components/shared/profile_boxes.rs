@@ -4,14 +4,12 @@ use crate::assets::{self, AssetManager, visual_styles};
 use crate::config::dirs;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{self, Actor};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scores;
-use crate::game::scroll::ScrollSpeedSetting;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -19,6 +17,8 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;

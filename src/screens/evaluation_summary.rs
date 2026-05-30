@@ -2,14 +2,10 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_height, screen_width, widescale};
-use crate::game::chart::ChartData;
 use crate::game::profile;
-use crate::game::scores;
-use crate::game::song::SongData;
 use crate::game::stage_stats;
 use crate::screens::components::evaluation::eval_grades;
 use crate::screens::components::shared::screen_bar::{
@@ -21,6 +17,10 @@ use crate::screens::components::shared::{
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use chrono::Local;
+use deadsync_chart::ChartData;
+use deadsync_chart::SongData;
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_score as score_data;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -175,7 +175,7 @@ fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate
     if let Some(chart) = chart
         && matches!(
             chart.display_bpm,
-            Some(crate::game::chart::ChartDisplayBpm::Random)
+            Some(deadsync_chart::ChartDisplayBpm::Random)
         )
     {
         return "???".to_string();
@@ -293,7 +293,7 @@ fn build_player_stats(
 
     // Percent score (trim '%' and remove leading whitespace, like Simply Love)
     let percent_text = format!("{:.2}", (p.score_percent * 100.0).max(0.0));
-    let percent_rgba = if p.grade == scores::Grade::Failed {
+    let percent_rgba = if p.grade == score_data::Grade::Failed {
         [1.0, 0.0, 0.0, 1.0]
     } else {
         [1.0; 4]

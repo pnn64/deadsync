@@ -2,7 +2,7 @@ use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::space::screen_center_x;
-use crate::game::timing::{TimingData, TimingSegments};
+use deadsync_rules::timing::{TimingData, TimingSegments};
 use std::cell::RefCell;
 use std::sync::Arc;
 

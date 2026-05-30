@@ -1,9 +1,10 @@
 use super::{SimpleIni, save_without_keymaps};
-pub(crate) use crate::engine::input::{ALL_VIRTUAL_ACTIONS, action_to_ini_key, parse_pad_dir};
-use crate::engine::input::{
-    GamepadCodeBinding, InputBinding, Keymap, VirtualAction, action_from_ini_key_lower,
+use crate::engine::input::{InputBinding, Keymap};
+pub(crate) use deadsync_input::{ALL_VIRTUAL_ACTIONS, action_to_ini_key, parse_pad_dir};
+use deadsync_input::{
+    VirtualAction, action_from_ini_key_lower, gamepad_code_binding_to_token,
+    parse_gamepad_code_binding,
 };
-use std::str::FromStr;
 use winit::keyboard::KeyCode;
 
 fn default_keymap_local() -> Keymap {
@@ -90,21 +91,7 @@ pub(crate) fn binding_to_token(binding: InputBinding) -> String {
         InputBinding::PadDirOn { device, dir } => {
             format!("Pad{device}::Dir::{dir:?}")
         }
-        InputBinding::GamepadCode(binding) => {
-            let mut s = String::new();
-            use std::fmt::Write;
-            let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
-            if let Some(device) = binding.device {
-                let _ = write!(&mut s, "@{device}");
-            }
-            if let Some(uuid) = binding.uuid {
-                s.push('#');
-                for b in &uuid {
-                    let _ = write!(&mut s, "{b:02X}");
-                }
-            }
-            s
-        }
+        InputBinding::GamepadCode(binding) => gamepad_code_binding_to_token(binding),
     }
 }
 
@@ -321,78 +308,7 @@ pub(crate) fn parse_keycode(t: &str) -> Option<InputBinding> {
 
 #[inline(always)]
 pub(crate) fn parse_pad_code(t: &str) -> Option<InputBinding> {
-    let rest = t.strip_prefix("PadCode[")?;
-    let end = rest.find(']')?;
-    let code_str = &rest[..end];
-    let mut tail = &rest[end + 1..];
-
-    let code_u32 = if let Some(hex) = code_str
-        .strip_prefix("0x")
-        .or_else(|| code_str.strip_prefix("0X"))
-    {
-        u32::from_str_radix(hex, 16).ok()?
-    } else {
-        u32::from_str(code_str).ok()?
-    };
-
-    let mut device = None;
-    let mut uuid = None;
-    loop {
-        if let Some(rest) = tail.strip_prefix('@') {
-            let mut digits = String::new();
-            for ch in rest.chars() {
-                if ch.is_ascii_digit() {
-                    digits.push(ch);
-                } else {
-                    break;
-                }
-            }
-            if digits.is_empty() {
-                break;
-            }
-            if let Ok(dev_idx) = usize::from_str(&digits) {
-                device = Some(dev_idx);
-            }
-            tail = &rest[digits.len()..];
-            continue;
-        }
-        if let Some(rest) = tail.strip_prefix('#') {
-            let mut hex_digits = String::new();
-            for ch in rest.chars() {
-                if ch.is_ascii_hexdigit() {
-                    hex_digits.push(ch);
-                } else {
-                    break;
-                }
-            }
-            if hex_digits.len() == 32 {
-                let mut bytes = [0u8; 16];
-                let mut ok = true;
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    let start = i * 2;
-                    let end = start + 2;
-                    if let Ok(parsed) = u8::from_str_radix(&hex_digits[start..end], 16) {
-                        *byte = parsed;
-                    } else {
-                        ok = false;
-                        break;
-                    }
-                }
-                if ok {
-                    uuid = Some(bytes);
-                }
-            }
-            tail = &rest[hex_digits.len()..];
-            continue;
-        }
-        break;
-    }
-
-    Some(InputBinding::GamepadCode(GamepadCodeBinding {
-        code_u32,
-        device,
-        uuid,
-    }))
+    parse_gamepad_code_binding(t).map(InputBinding::GamepadCode)
 }
 
 #[inline(always)]

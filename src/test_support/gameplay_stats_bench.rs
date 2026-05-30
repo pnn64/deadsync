@@ -1,17 +1,17 @@
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
-use crate::game::scores::{
-    ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,
-    PlayerLeaderboardData,
-};
-use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::{
     gameplay_stats,
     notefield::{self, FieldPlacement},
 };
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_rules::timing::WindowCounts;
+use deadsync_score::{
+    ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,
+    PlayerLeaderboardData,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 

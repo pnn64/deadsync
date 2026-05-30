@@ -1,4 +1,4 @@
-use crate::game::timing::TimingData;
+use deadsync_rules::timing::TimingData;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::keyboard::KeyCode;

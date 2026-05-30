@@ -1,5 +1,5 @@
-use crate::game::judgment::{self, JudgeGrade};
-use crate::game::timing;
+use deadsync_rules::judgment::{self, JudgeGrade};
+use deadsync_rules::timing;
 
 use super::{
     FinalizedRowOutcome, RowEntry, SongTimeNs, State, active_hold_is_engaged,

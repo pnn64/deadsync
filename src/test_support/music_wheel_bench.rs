@@ -1,8 +1,8 @@
 use crate::engine::present::actors::Actor;
-use crate::game::chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-use crate::game::song::SongData;
 use crate::screens::components::select_music::music_wheel::{self, MusicWheelParams};
 use crate::screens::select_music::MusicWheelEntry;
+use deadsync_chart::SongData;
+use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;

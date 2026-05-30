@@ -1,6 +1,6 @@
 use crate::engine::audio::decode;
 use crate::game::parsing::simfile as song_loading;
-use crate::game::song::SongData;
+use deadsync_chart::SongData;
 use null_or_die::{
     BiasCfg, BiasEstimateWithPlot, BiasRuntime, BiasStreamCfg, BiasStreamEvent,
     estimate_bias_with_beat_fn_stream_reuse,

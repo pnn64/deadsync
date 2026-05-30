@@ -1,5 +1,5 @@
 use crate::judgment::Judgment;
-pub use deadsync_core::note::NoteType;
+use deadsync_core::note::NoteType;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HoldResult {

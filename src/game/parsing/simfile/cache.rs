@@ -5,7 +5,8 @@ use super::{
     build_song_meta_from_cache,
 };
 use crate::config::dirs;
-use crate::game::{chart::GameplayChartData, song::SongData};
+use deadsync_chart::GameplayChartData;
+use deadsync_chart::SongData;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::fs;

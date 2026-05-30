@@ -1,6 +1,6 @@
 use crate::config::{RandomBackgroundMode, dirs};
-use crate::game::song::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
-use crate::game::timing::{
+use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
+use deadsync_rules::timing::{
     ROWS_PER_BEAT, TimeSignatureSegment, TimingData, TimingSegments, beat_to_note_row,
     default_time_signature, note_row_to_beat,
 };

@@ -1,11 +1,10 @@
-use crate::engine::input::{
-    InputEvent, InputSource, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
-};
+use crate::engine::input::{RawKeyboardEvent, with_keymap};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, InputSource, PadEvent, VirtualAction};
 use std::time::{Duration, Instant};
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -353,8 +352,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{MenuLrChordTracker, menu_lr_side};
-    use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::game::profile::PlayerSide;
+    use deadsync_input::{InputEvent, InputSource, VirtualAction};
     use std::time::{Duration, Instant};
 
     fn input_event(action: VirtualAction, pressed: bool, timestamp: Instant) -> InputEvent {

@@ -1,8 +1,9 @@
-pub use super::scroll::ScrollSpeedSetting;
 use crate::config::{self, SimpleIni, dirs};
 use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing;
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::fs;
@@ -2338,9 +2339,9 @@ impl ScatterWindow {
     /// in deadsync, so it has its own constant).
     #[inline]
     pub fn ms(self) -> f32 {
-        let tw = crate::game::timing::effective_windows_ms();
+        let tw = timing::effective_windows_ms();
         match self {
-            ScatterWindow::FantasticPlus => crate::game::timing::FA_PLUS_W0_MS,
+            ScatterWindow::FantasticPlus => timing::FA_PLUS_W0_MS,
             ScatterWindow::Fantastic => tw[0],
             ScatterWindow::Excellent => tw[1],
             ScatterWindow::Great => tw[2],
