@@ -69,6 +69,12 @@ enum CursorHoldDir {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PageHoldDir {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum MusicRateHoldDir {
     Lower,
     Raise,
@@ -98,6 +104,11 @@ pub struct State {
     cursor_hold_down_count: u8,
     cursor_hold_delay_left: f32,
     cursor_hold_repeat_left: f32,
+    page_hold_dir: Option<PageHoldDir>,
+    page_hold_up_count: u8,
+    page_hold_down_count: u8,
+    page_hold_delay_left: f32,
+    page_hold_repeat_left: f32,
     music_rate_hold_dir: Option<MusicRateHoldDir>,
     music_rate_hold_lower_count: u8,
     music_rate_hold_raise_count: u8,
@@ -254,6 +265,11 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         cursor_hold_down_count: 0,
         cursor_hold_delay_left: 0.0,
         cursor_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
+        page_hold_dir: None,
+        page_hold_up_count: 0,
+        page_hold_down_count: 0,
+        page_hold_delay_left: 0.0,
+        page_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
         music_rate_hold_dir: None,
         music_rate_hold_lower_count: 0,
         music_rate_hold_raise_count: 0,
@@ -277,6 +293,7 @@ pub(crate) fn edit_snapshot(state: &State) -> EditSnapshot {
 
 pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     state.mode = Mode::Editing;
     state.menu = None;
     state.shift_anchor = None;
@@ -318,6 +335,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     else {
         state.gameplay.total_elapsed_in_screen += delta_time;
         update_cursor_hold(state, delta_time);
+        update_page_hold(state, delta_time);
         return ScreenAction::None;
     };
 
@@ -409,6 +427,10 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 
     if !raw_key.pressed {
+        if let Some(dir) = page_hold_dir_for_key(raw_key.code) {
+            release_page_hold_input(state, dir);
+            return (true, ScreenAction::None);
+        }
         if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
             release_music_rate_hold_input(state, dir);
             return (true, ScreenAction::None);
@@ -476,19 +498,19 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
             (true, ScreenAction::None)
         }
         KeyCode::Semicolon => {
-            move_cursor_from_button(state, -BEATS_PER_MEASURE);
+            press_page_hold_input_for_key(state, PageHoldDir::Up, raw_key.repeat);
             (true, ScreenAction::None)
         }
         KeyCode::PageUp => {
-            move_cursor_from_button(state, -BEATS_PER_MEASURE);
+            press_page_hold_input_for_key(state, PageHoldDir::Up, raw_key.repeat);
             (true, ScreenAction::None)
         }
         KeyCode::Quote => {
-            move_cursor_from_button(state, BEATS_PER_MEASURE);
+            press_page_hold_input_for_key(state, PageHoldDir::Down, raw_key.repeat);
             (true, ScreenAction::None)
         }
         KeyCode::PageDown => {
-            move_cursor_from_button(state, BEATS_PER_MEASURE);
+            press_page_hold_input_for_key(state, PageHoldDir::Down, raw_key.repeat);
             (true, ScreenAction::None)
         }
         KeyCode::Comma if !state.ctrl_held => {
@@ -598,6 +620,7 @@ fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 fn open_main_menu(state: &mut State) {
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     if state.menu.is_none() {
         audio::play_sfx("assets/sounds/start.ogg");
     }
@@ -609,6 +632,7 @@ fn open_main_menu(state: &mut State) {
 
 fn open_help_menu(state: &mut State) {
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     if state.menu.is_none() {
         audio::play_sfx("assets/sounds/start.ogg");
     }
@@ -653,6 +677,7 @@ fn activate_menu_item(state: &mut State) -> ScreenAction {
     };
     state.menu = None;
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     audio::play_sfx("assets/sounds/start.ogg");
     action(state)
 }
@@ -822,6 +847,7 @@ fn start_selection_like_itg(state: &mut State) {
 
 fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     let start_time = gameplay_core::music_time_for_beat(&state.gameplay, start_beat);
     gameplay_core::start_practice_music(
         &mut state.gameplay,
@@ -837,6 +863,7 @@ fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
 
 fn stop_playback(state: &mut State) {
     clear_cursor_hold_inputs(state);
+    clear_page_hold_inputs(state);
     audio::stop_music();
     let current_beat = state.gameplay.current_beat.max(MIN_CURSOR_BEAT);
     let current_time = gameplay_core::music_time_for_beat(&state.gameplay, current_beat);
@@ -904,6 +931,82 @@ fn clear_cursor_hold_inputs(state: &mut State) {
     state.cursor_hold_up_count = 0;
     state.cursor_hold_down_count = 0;
     clear_cursor_hold_timer(state);
+}
+
+const fn opposite_page_hold_dir(dir: PageHoldDir) -> PageHoldDir {
+    match dir {
+        PageHoldDir::Up => PageHoldDir::Down,
+        PageHoldDir::Down => PageHoldDir::Up,
+    }
+}
+
+const fn page_hold_dir_for_key(code: KeyCode) -> Option<PageHoldDir> {
+    match code {
+        KeyCode::Semicolon | KeyCode::PageUp => Some(PageHoldDir::Up),
+        KeyCode::Quote | KeyCode::PageDown => Some(PageHoldDir::Down),
+        _ => None,
+    }
+}
+
+fn page_hold_count(state: &State, dir: PageHoldDir) -> u8 {
+    match dir {
+        PageHoldDir::Up => state.page_hold_up_count,
+        PageHoldDir::Down => state.page_hold_down_count,
+    }
+}
+
+fn page_hold_count_mut(state: &mut State, dir: PageHoldDir) -> &mut u8 {
+    match dir {
+        PageHoldDir::Up => &mut state.page_hold_up_count,
+        PageHoldDir::Down => &mut state.page_hold_down_count,
+    }
+}
+
+fn press_page_hold_input_for_key(state: &mut State, dir: PageHoldDir, repeat: bool) {
+    if repeat {
+        return;
+    }
+    press_page_hold_input(state, dir);
+    move_cursor_by_page_dir(state, dir);
+}
+
+fn press_page_hold_input(state: &mut State, dir: PageHoldDir) {
+    let count = page_hold_count_mut(state, dir);
+    *count = count.saturating_add(1);
+    start_page_hold(state, dir);
+}
+
+fn release_page_hold_input(state: &mut State, dir: PageHoldDir) {
+    let count = page_hold_count_mut(state, dir);
+    *count = count.saturating_sub(1);
+    if state.page_hold_dir != Some(dir) || page_hold_count(state, dir) != 0 {
+        return;
+    }
+
+    let other = opposite_page_hold_dir(dir);
+    if page_hold_count(state, other) > 0 {
+        start_page_hold(state, other);
+    } else {
+        clear_page_hold_timer(state);
+    }
+}
+
+fn start_page_hold(state: &mut State, dir: PageHoldDir) {
+    state.page_hold_dir = Some(dir);
+    state.page_hold_delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
+    state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_page_hold_timer(state: &mut State) {
+    state.page_hold_dir = None;
+    state.page_hold_delay_left = 0.0;
+    state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_page_hold_inputs(state: &mut State) {
+    state.page_hold_up_count = 0;
+    state.page_hold_down_count = 0;
+    clear_page_hold_timer(state);
 }
 
 const fn opposite_music_rate_hold_dir(dir: MusicRateHoldDir) -> MusicRateHoldDir {
@@ -1026,6 +1129,39 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
     }
 }
 
+fn update_page_hold(state: &mut State, delta_time: f32) {
+    if state.menu.is_some() || delta_time <= 0.0 {
+        return;
+    }
+    let Some(dir) = state.page_hold_dir else {
+        return;
+    };
+    if page_hold_count(state, dir) == 0 {
+        clear_page_hold_timer(state);
+        return;
+    }
+
+    let mut remaining = delta_time;
+    if state.page_hold_delay_left > 0.0 {
+        let elapsed = remaining.min(state.page_hold_delay_left);
+        state.page_hold_delay_left -= elapsed;
+        remaining -= elapsed;
+        if state.page_hold_delay_left > 0.0 {
+            return;
+        }
+        move_cursor_by_page_dir(state, dir);
+        state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    }
+
+    state.page_hold_repeat_left -= remaining;
+    let mut repeats = 0;
+    while state.page_hold_repeat_left <= 0.0 && repeats < MAX_EDIT_CURSOR_REPEATS_PER_FRAME {
+        move_cursor_by_page_dir(state, dir);
+        state.page_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+        repeats += 1;
+    }
+}
+
 fn update_music_rate_hold(state: &mut State, delta_time: f32) {
     if delta_time <= 0.0 {
         return;
@@ -1074,6 +1210,13 @@ fn move_cursor_by_hold_dir(state: &mut State, dir: CursorHoldDir) {
     match dir {
         CursorHoldDir::Up => move_cursor_from_button(state, -snap),
         CursorHoldDir::Down => move_cursor_from_button(state, snap),
+    }
+}
+
+fn move_cursor_by_page_dir(state: &mut State, dir: PageHoldDir) {
+    match dir {
+        PageHoldDir::Up => move_cursor_from_button(state, -BEATS_PER_MEASURE),
+        PageHoldDir::Down => move_cursor_from_button(state, BEATS_PER_MEASURE),
     }
 }
 
@@ -1898,10 +2041,11 @@ fn append_help_section(
 mod tests {
     use super::{
         CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
-        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PracticeNavMode, clamp_selection,
-        edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
-        fmt_music_rate, menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
-        music_rate_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir, PracticeNavMode,
+        clamp_selection, edit_cursor_hold_dir_for_action_in_mode,
+        edit_snap_delta_for_action_in_mode, fmt_music_rate, menu_step_delta_for_action_in_mode,
+        music_rate_delta_for_dir, music_rate_hold_dir_for_key, page_hold_dir_for_key,
+        practice_nav_mode_from_config, quantized_music_rate,
     };
     use crate::assets::i18n;
     use crate::engine::input::VirtualAction;
@@ -2070,6 +2214,27 @@ mod tests {
             music_rate_delta_for_dir(MusicRateHoldDir::Raise),
             MUSIC_RATE_HOTKEY_STEP
         );
+    }
+
+    #[test]
+    fn page_keys_map_to_measure_hold_dirs() {
+        assert_eq!(
+            page_hold_dir_for_key(KeyCode::PageUp),
+            Some(PageHoldDir::Up)
+        );
+        assert_eq!(
+            page_hold_dir_for_key(KeyCode::Semicolon),
+            Some(PageHoldDir::Up)
+        );
+        assert_eq!(
+            page_hold_dir_for_key(KeyCode::PageDown),
+            Some(PageHoldDir::Down)
+        );
+        assert_eq!(
+            page_hold_dir_for_key(KeyCode::Quote),
+            Some(PageHoldDir::Down)
+        );
+        assert_eq!(page_hold_dir_for_key(KeyCode::Home), None);
     }
 
     #[test]
