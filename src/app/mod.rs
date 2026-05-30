@@ -115,19 +115,73 @@ const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
 const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
 const LIGHTS_QUARTER_ROWS: usize = ROWS_PER_BEAT as usize;
+const LIGHTS_CABINET_CHART_TYPE: &str = "lights-cabinet";
+const LIGHTS_PRIMARY_CHART_TYPE: &str = "dance-single";
+const LIGHTS_EXPLICIT_DIFFICULTY_INDEX: usize = 2; // Medium
+const LIGHTS_MARQUEE_DIFFICULTY_INDEX: usize = 3; // Hard
+const LIGHTS_BASS_DIFFICULTY_INDEX: usize = 2; // Medium
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct GameplayLightTracker {
-    notes_ptr: usize,
-    notes_len: usize,
-    cursor: usize,
-    last_time_ns: SongTimeNs,
+    pad_notes_ptr: usize,
+    pad_notes_len: usize,
+    pad_cursor: usize,
+    pad_last_time_ns: SongTimeNs,
+    cabinet_key: Option<GameplayLightChartKey>,
+    cabinet_events: Vec<CabinetLightEvent>,
+    cabinet_cursor: usize,
+    cabinet_last_time_ns: SongTimeNs,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GameplayLightChartKey {
+    simfile_path: PathBuf,
+    source_hashes: Vec<String>,
+    global_offset_us: i32,
+    pack_sync_offset_us: i32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CabinetLightEvent {
+    time_ns: SongTimeNs,
+    row_index: usize,
+    light: CabinetLight,
+    simplify_bass_candidate: bool,
+}
+
+#[derive(Clone, Debug)]
+enum CabinetLightPlan {
+    Explicit {
+        chart_ix: usize,
+        chart_hash: String,
+    },
+    Generated {
+        marquee_ix: usize,
+        marquee_hash: String,
+        bass_ix: usize,
+        bass_hash: String,
+    },
 }
 
 impl GameplayLightTracker {
     fn clear(&mut self) {
         *self = Self::default();
+    }
+
+    fn cabinet_key_matches(&self, key: &GameplayLightChartKey) -> bool {
+        self.cabinet_key.as_ref() == Some(key)
+    }
+
+    fn restart_cabinet_chart(&mut self) {
+        self.cabinet_cursor = 0;
+        self.cabinet_last_time_ns = i64::MAX;
+    }
+
+    fn set_cabinet_chart(&mut self, key: GameplayLightChartKey, events: Vec<CabinetLightEvent>) {
+        self.cabinet_key = Some(key);
+        self.cabinet_events = events;
+        self.restart_cabinet_chart();
     }
 
     fn queue_blinks(
@@ -137,33 +191,72 @@ impl GameplayLightTracker {
         simplify_bass: bool,
     ) {
         let now_ns = state.current_music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
-        let notes_ptr = state.notes.as_ptr() as usize;
-        let reset = self.notes_ptr != notes_ptr
-            || self.notes_len != state.notes.len()
-            || now_ns < self.last_time_ns
-            || now_ns.saturating_sub(self.last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
+        self.queue_cabinet_blinks(lights, now_ns, simplify_bass);
+        self.queue_pad_blinks(lights, state, now_ns);
+    }
+
+    fn queue_cabinet_blinks(
+        &mut self,
+        lights: &mut lights::Manager,
+        now_ns: SongTimeNs,
+        simplify_bass: bool,
+    ) {
+        let reset = now_ns < self.cabinet_last_time_ns
+            || now_ns.saturating_sub(self.cabinet_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
         if reset {
-            self.notes_ptr = notes_ptr;
-            self.notes_len = state.notes.len();
-            self.cursor = state.note_time_cache_ns.partition_point(|&t| t <= now_ns);
-            self.last_time_ns = now_ns;
+            self.cabinet_cursor = self
+                .cabinet_events
+                .partition_point(|event| event.time_ns <= now_ns);
+            self.cabinet_last_time_ns = now_ns;
             return;
         }
 
-        while self.cursor < state.notes.len() && state.note_time_cache_ns[self.cursor] <= now_ns {
-            let note = &state.notes[self.cursor];
-            if gameplay_note_lights(note) {
-                blink_note_lights(
-                    lights,
-                    state,
-                    note.column,
-                    gameplay_bass_lights(note, simplify_bass),
-                );
+        while self.cabinet_cursor < self.cabinet_events.len()
+            && self.cabinet_events[self.cabinet_cursor].time_ns <= now_ns
+        {
+            let event = self.cabinet_events[self.cabinet_cursor];
+            if cabinet_light_event_enabled(event, simplify_bass) {
+                lights.blink_cabinet(event.light);
             }
-            self.cursor += 1;
+            self.cabinet_cursor += 1;
         }
-        self.last_time_ns = now_ns;
+        self.cabinet_last_time_ns = now_ns;
     }
+
+    fn queue_pad_blinks(
+        &mut self,
+        lights: &mut lights::Manager,
+        state: &crate::game::gameplay::State,
+        now_ns: SongTimeNs,
+    ) {
+        let notes_ptr = state.notes.as_ptr() as usize;
+        let reset = self.pad_notes_ptr != notes_ptr
+            || self.pad_notes_len != state.notes.len()
+            || now_ns < self.pad_last_time_ns
+            || now_ns.saturating_sub(self.pad_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
+        if reset {
+            self.pad_notes_ptr = notes_ptr;
+            self.pad_notes_len = state.notes.len();
+            self.pad_cursor = state.note_time_cache_ns.partition_point(|&t| t <= now_ns);
+            self.pad_last_time_ns = now_ns;
+            return;
+        }
+
+        while self.pad_cursor < state.notes.len()
+            && state.note_time_cache_ns[self.pad_cursor] <= now_ns
+        {
+            let note = &state.notes[self.pad_cursor];
+            if gameplay_note_lights(note) {
+                blink_pad_lights(lights, state, note.column);
+            }
+            self.pad_cursor += 1;
+        }
+        self.pad_last_time_ns = now_ns;
+    }
+}
+
+fn cabinet_light_event_enabled(event: CabinetLightEvent, simplify_bass: bool) -> bool {
+    !simplify_bass || !event.simplify_bass_candidate || event.row_index % LIGHTS_QUARTER_ROWS == 0
 }
 
 fn gameplay_note_lights(note: &Note) -> bool {
@@ -175,40 +268,342 @@ fn gameplay_note_lights(note: &Note) -> bool {
         )
 }
 
-fn gameplay_bass_lights(note: &Note, simplify_bass: bool) -> bool {
-    gameplay_note_lights(note) && (!simplify_bass || note.row_index % LIGHTS_QUARTER_ROWS == 0)
-}
-
-fn blink_note_lights(
+fn blink_pad_lights(
     lights: &mut lights::Manager,
     state: &crate::game::gameplay::State,
     column: usize,
-    blink_bass: bool,
 ) {
-    if blink_bass {
-        lights.blink_cabinet(CabinetLight::BassLeft);
-        lights.blink_cabinet(CabinetLight::BassRight);
-    }
-    let Some(local_col) = physical_light_col(state, column) else {
-        return;
-    };
-    if let Some(cabinet) = cabinet_light_for_col(local_col) {
-        lights.blink_cabinet(cabinet);
-    }
     if let Some((player, button)) = pad_light_for_col(state, column) {
         lights.blink_button(player, button);
     }
 }
 
-fn physical_light_col(state: &crate::game::gameplay::State, column: usize) -> Option<usize> {
-    if state.cols_per_player == 0 {
+impl CabinetLightPlan {
+    fn request_chart_ixs(&self) -> Vec<usize> {
+        match self {
+            Self::Explicit { chart_ix, .. } => vec![*chart_ix],
+            Self::Generated {
+                marquee_ix,
+                bass_ix,
+                ..
+            } if marquee_ix == bass_ix => vec![*marquee_ix],
+            Self::Generated {
+                marquee_ix,
+                bass_ix,
+                ..
+            } => vec![*marquee_ix, *bass_ix],
+        }
+    }
+
+    fn source_hashes(&self) -> Vec<String> {
+        match self {
+            Self::Explicit { chart_hash, .. } => vec![chart_hash.clone()],
+            Self::Generated {
+                marquee_hash,
+                bass_hash,
+                ..
+            } => vec![marquee_hash.clone(), bass_hash.clone()],
+        }
+    }
+}
+
+fn cabinet_light_plan(
+    song: &deadsync_chart::SongData,
+    fallback_chart_ix: usize,
+) -> Option<CabinetLightPlan> {
+    if let Some(chart_ix) = closest_standard_chart_ix(
+        song,
+        LIGHTS_CABINET_CHART_TYPE,
+        LIGHTS_EXPLICIT_DIFFICULTY_INDEX,
+    ) {
+        return Some(CabinetLightPlan::Explicit {
+            chart_ix,
+            chart_hash: song.charts[chart_ix].short_hash.clone(),
+        });
+    }
+
+    let fallback = song
+        .charts
+        .get(fallback_chart_ix)
+        .filter(|chart| chart.has_note_data)
+        .map(|chart| (fallback_chart_ix, chart.short_hash.clone()))?;
+    let (marquee_ix, marquee_hash) = closest_standard_chart_ix(
+        song,
+        LIGHTS_PRIMARY_CHART_TYPE,
+        LIGHTS_MARQUEE_DIFFICULTY_INDEX,
+    )
+    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
+    .unwrap_or_else(|| fallback.clone());
+    let (bass_ix, bass_hash) = closest_standard_chart_ix(
+        song,
+        LIGHTS_PRIMARY_CHART_TYPE,
+        LIGHTS_BASS_DIFFICULTY_INDEX,
+    )
+    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
+    .unwrap_or_else(|| fallback);
+
+    Some(CabinetLightPlan::Generated {
+        marquee_ix,
+        marquee_hash,
+        bass_ix,
+        bass_hash,
+    })
+}
+
+fn closest_standard_chart_ix(
+    song: &deadsync_chart::SongData,
+    chart_type: &str,
+    preferred_difficulty_index: usize,
+) -> Option<usize> {
+    let preferred =
+        preferred_difficulty_index.min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+    let mut best = None;
+    let mut best_distance = usize::MAX;
+    for (chart_ix, chart) in song.charts.iter().enumerate() {
+        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+            continue;
+        }
+        let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES
+            .iter()
+            .position(|name| chart.difficulty.eq_ignore_ascii_case(name))
+        else {
+            continue;
+        };
+        let distance = diff_ix.abs_diff(preferred);
+        if distance < best_distance {
+            best = Some(chart_ix);
+            best_distance = distance;
+        }
+    }
+    best
+}
+
+fn cabinet_light_key(
+    song: &deadsync_chart::SongData,
+    plan: &CabinetLightPlan,
+    global_offset_seconds: f32,
+    pack_sync_offset_seconds: f32,
+) -> GameplayLightChartKey {
+    GameplayLightChartKey {
+        simfile_path: song.simfile_path.clone(),
+        source_hashes: plan.source_hashes(),
+        global_offset_us: offset_key_us(global_offset_seconds),
+        pack_sync_offset_us: offset_key_us(pack_sync_offset_seconds),
+    }
+}
+
+fn cabinet_light_chart_from_loaded(
+    song: &deadsync_chart::SongData,
+    plan: &CabinetLightPlan,
+    charts: &[deadsync_chart::GameplayChartData],
+    global_offset_seconds: f32,
+    pack_sync_offset_seconds: f32,
+) -> (GameplayLightChartKey, Vec<CabinetLightEvent>) {
+    (
+        cabinet_light_key(song, plan, global_offset_seconds, pack_sync_offset_seconds),
+        build_cabinet_light_events(plan, charts, pack_sync_offset_seconds),
+    )
+}
+
+fn load_cabinet_light_chart(
+    song: &deadsync_chart::SongData,
+    plan: &CabinetLightPlan,
+    global_offset_seconds: f32,
+    pack_sync_offset_seconds: f32,
+) -> Result<(GameplayLightChartKey, Vec<CabinetLightEvent>), String> {
+    let charts =
+        song_loading::load_gameplay_charts(song, &plan.request_chart_ixs(), global_offset_seconds)?;
+    Ok(cabinet_light_chart_from_loaded(
+        song,
+        plan,
+        &charts,
+        global_offset_seconds,
+        pack_sync_offset_seconds,
+    ))
+}
+
+fn offset_key_us(seconds: f32) -> i32 {
+    if seconds.is_finite() {
+        (seconds * 1_000_000.0).round() as i32
+    } else {
+        0
+    }
+}
+
+fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
+    let config = config::get();
+    if !config.machine_pack_ini_offsets {
+        return 0.0;
+    }
+    let Some(pack_group) = song
+        .simfile_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+    else {
+        return 0.0;
+    };
+    let pack_sync_pref = crate::game::song::get_song_cache()
+        .iter()
+        .find(|p| p.group_name == pack_group)
+        .map(|p| p.sync_pref)
+        .unwrap_or(deadsync_chart::SyncPref::Default);
+    crate::game::song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
+}
+
+fn build_cabinet_light_events(
+    plan: &CabinetLightPlan,
+    charts: &[deadsync_chart::GameplayChartData],
+    pack_sync_offset_seconds: f32,
+) -> Vec<CabinetLightEvent> {
+    let mut events = Vec::new();
+    match plan {
+        CabinetLightPlan::Explicit { .. } => {
+            if let Some(chart) = charts.first() {
+                push_explicit_cabinet_events(&mut events, chart, pack_sync_offset_seconds);
+            }
+        }
+        CabinetLightPlan::Generated {
+            marquee_ix,
+            bass_ix,
+            ..
+        } => {
+            let Some(marquee) = charts.first() else {
+                return events;
+            };
+            let bass = if marquee_ix == bass_ix {
+                marquee
+            } else {
+                charts.get(1).unwrap_or(marquee)
+            };
+            push_generated_marquee_events(&mut events, marquee, pack_sync_offset_seconds);
+            push_generated_bass_events(
+                &mut events,
+                bass,
+                pack_sync_offset_seconds,
+                marquee_ix == bass_ix,
+            );
+        }
+    }
+    events.sort_by_key(|event| event.time_ns);
+    events
+}
+
+fn push_explicit_cabinet_events(
+    events: &mut Vec<CabinetLightEvent>,
+    chart: &deadsync_chart::GameplayChartData,
+    pack_sync_offset_seconds: f32,
+) {
+    let timing = light_timing(chart, pack_sync_offset_seconds);
+    for note in &chart.parsed_notes {
+        if !explicit_light_note(note.note_type) {
+            continue;
+        }
+        let Some(light) = explicit_cabinet_light_for_col(note.column) else {
+            continue;
+        };
+        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, false) {
+            events.push(CabinetLightEvent {
+                time_ns,
+                row_index: note.row_index,
+                light,
+                simplify_bass_candidate: false,
+            });
+        }
+    }
+}
+
+fn push_generated_marquee_events(
+    events: &mut Vec<CabinetLightEvent>,
+    chart: &deadsync_chart::GameplayChartData,
+    pack_sync_offset_seconds: f32,
+) {
+    let timing = light_timing(chart, pack_sync_offset_seconds);
+    for note in &chart.parsed_notes {
+        if !generated_light_note(note.note_type) {
+            continue;
+        }
+        let Some(light) = cabinet_light_for_col(note.column % 4) else {
+            continue;
+        };
+        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) {
+            events.push(CabinetLightEvent {
+                time_ns,
+                row_index: note.row_index,
+                light,
+                simplify_bass_candidate: false,
+            });
+        }
+    }
+}
+
+fn push_generated_bass_events(
+    events: &mut Vec<CabinetLightEvent>,
+    chart: &deadsync_chart::GameplayChartData,
+    pack_sync_offset_seconds: f32,
+    simplify_candidate: bool,
+) {
+    let timing = light_timing(chart, pack_sync_offset_seconds);
+    let mut last_row = usize::MAX;
+    for note in &chart.parsed_notes {
+        if note.row_index == last_row || !generated_light_note(note.note_type) {
+            continue;
+        }
+        let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) else {
+            continue;
+        };
+        for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
+            events.push(CabinetLightEvent {
+                time_ns,
+                row_index: note.row_index,
+                light,
+                simplify_bass_candidate: simplify_candidate,
+            });
+        }
+        last_row = note.row_index;
+    }
+}
+
+fn light_timing(
+    chart: &deadsync_chart::GameplayChartData,
+    pack_sync_offset_seconds: f32,
+) -> deadsync_rules::timing::TimingData {
+    let mut timing = chart.timing.clone();
+    timing.shift_song_offset_seconds(pack_sync_offset_seconds);
+    timing
+}
+
+fn light_note_time_ns(
+    timing: &deadsync_rules::timing::TimingData,
+    row_index: usize,
+    skip_fake_rows: bool,
+) -> Option<SongTimeNs> {
+    let beat = timing.get_beat_for_row(row_index)?;
+    if skip_fake_rows && (!timing.is_judgable_at_beat(beat) || timing.is_fake_at_beat(beat)) {
         return None;
     }
-    let local = column % state.cols_per_player;
-    if state.cols_per_player >= 8 && state.num_players == 1 {
-        return Some(local % 4);
+    Some(timing.get_time_for_beat_ns(beat))
+}
+
+const fn generated_light_note(note_type: NoteType) -> bool {
+    matches!(note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
+}
+
+const fn explicit_light_note(note_type: NoteType) -> bool {
+    !matches!(note_type, NoteType::Fake)
+}
+
+const fn explicit_cabinet_light_for_col(column: usize) -> Option<CabinetLight> {
+    match column {
+        0 => Some(CabinetLight::MarqueeUpperLeft),
+        1 => Some(CabinetLight::MarqueeUpperRight),
+        2 => Some(CabinetLight::MarqueeLowerLeft),
+        3 => Some(CabinetLight::MarqueeLowerRight),
+        4 => Some(CabinetLight::BassLeft),
+        5 => Some(CabinetLight::BassRight),
+        _ => None,
     }
-    (local < 4).then_some(local)
 }
 
 const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
@@ -7693,11 +8088,20 @@ impl App {
                     }
                 };
 
+                let global_offset_seconds = config::get().global_offset_seconds;
+                let pack_sync_offset_seconds = gameplay_light_pack_sync_offset(song_arc.as_ref());
+                let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
+                let mut requested_chart_ixs = chart_ixs.to_vec();
+                let light_payload_start = requested_chart_ixs.len();
+                if let Some(plan) = cabinet_light_plan.as_ref() {
+                    requested_chart_ixs.extend(plan.request_chart_ixs());
+                }
+
                 let payload_started = Instant::now();
                 let gameplay_song = match song_loading::load_gameplay_charts(
                     song_arc.as_ref(),
-                    &chart_ixs,
-                    config::get().global_offset_seconds,
+                    &requested_chart_ixs,
+                    global_offset_seconds,
                 ) {
                     Ok(gameplay_song) => gameplay_song,
                     Err(e) => {
@@ -7714,6 +8118,16 @@ impl App {
                     Arc::new(gameplay_song[0].clone()),
                     Arc::new(gameplay_song[1].clone()),
                 ];
+                if let Some(plan) = cabinet_light_plan.as_ref() {
+                    let (key, events) = cabinet_light_chart_from_loaded(
+                        song_arc.as_ref(),
+                        plan,
+                        &gameplay_song[light_payload_start..],
+                        global_offset_seconds,
+                        pack_sync_offset_seconds,
+                    );
+                    self.gameplay_lights.set_cabinet_chart(key, events);
+                }
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 if play_style == profile::PlayStyle::Versus {
@@ -7969,6 +8383,17 @@ impl App {
                 };
 
                 let gameplay_entry_started = Instant::now();
+                let global_offset_seconds = config::get().global_offset_seconds;
+                let pack_sync_offset_seconds = gameplay_light_pack_sync_offset(song_arc.as_ref());
+                let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
+                let cabinet_light_key = cabinet_light_plan.as_ref().map(|plan| {
+                    cabinet_light_key(
+                        song_arc.as_ref(),
+                        plan,
+                        global_offset_seconds,
+                        pack_sync_offset_seconds,
+                    )
+                });
                 let reused_gameplay_charts =
                     if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_none() {
                         self.state
@@ -7997,12 +8422,40 @@ impl App {
                         "Reusing gameplay payload for quick restart '{}'",
                         song_arc.title
                     );
+                    match (cabinet_light_plan.as_ref(), cabinet_light_key.as_ref()) {
+                        (Some(_), Some(key)) if self.gameplay_lights.cabinet_key_matches(key) => {
+                            self.gameplay_lights.restart_cabinet_chart();
+                        }
+                        (Some(plan), _) => match load_cabinet_light_chart(
+                            song_arc.as_ref(),
+                            plan,
+                            global_offset_seconds,
+                            pack_sync_offset_seconds,
+                        ) {
+                            Ok((key, events)) => {
+                                self.gameplay_lights.set_cabinet_chart(key, events)
+                            }
+                            Err(error) => {
+                                warn!(
+                                    "Failed to load cabinet light chart for '{}': {}",
+                                    song_arc.title, error
+                                );
+                                self.gameplay_lights.clear();
+                            }
+                        },
+                        _ => self.gameplay_lights.clear(),
+                    }
                     gameplay_charts
                 } else {
+                    let mut requested_chart_ixs = chart_ixs.to_vec();
+                    let light_payload_start = requested_chart_ixs.len();
+                    if let Some(plan) = cabinet_light_plan.as_ref() {
+                        requested_chart_ixs.extend(plan.request_chart_ixs());
+                    }
                     let gameplay_song = match song_loading::load_gameplay_charts(
                         song_arc.as_ref(),
-                        &chart_ixs,
-                        config::get().global_offset_seconds,
+                        &requested_chart_ixs,
+                        global_offset_seconds,
                     ) {
                         Ok(gameplay_song) => gameplay_song,
                         Err(e) => {
@@ -8015,10 +8468,23 @@ impl App {
                             return commands;
                         }
                     };
-                    [
+                    let gameplay_charts = [
                         Arc::new(gameplay_song[0].clone()),
                         Arc::new(gameplay_song[1].clone()),
-                    ]
+                    ];
+                    if let Some(plan) = cabinet_light_plan.as_ref() {
+                        let (key, events) = cabinet_light_chart_from_loaded(
+                            song_arc.as_ref(),
+                            plan,
+                            &gameplay_song[light_payload_start..],
+                            global_offset_seconds,
+                            pack_sync_offset_seconds,
+                        );
+                        self.gameplay_lights.set_cabinet_chart(key, events);
+                    } else {
+                        self.gameplay_lights.clear();
+                    }
+                    gameplay_charts
                 };
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -9036,29 +9502,19 @@ mod tests {
     use crate::game::parsing::song_lua::{
         SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState,
     };
+    use deadsync_chart::GameplayChartData;
+    use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
-    use deadsync_rules::note::Note;
-
-    fn light_test_note(row_index: usize, note_type: NoteType) -> Note {
-        Note {
-            beat: row_index as f32 / LIGHTS_QUARTER_ROWS as f32,
-            quantization_idx: 0,
-            column: 0,
-            note_type,
-            row_index,
-            result: None,
-            early_result: None,
-            hold: None,
-            mine_result: None,
-            is_fake: false,
-            can_be_judged: true,
-        }
-    }
+    use deadsync_rules::timing::{TimingData, TimingSegments};
 
     fn test_chart(hash: &str) -> ChartData {
+        test_chart_with("dance-single", "Hard", hash)
+    }
+
+    fn test_chart_with(chart_type: &str, difficulty: &str, hash: &str) -> ChartData {
         ChartData {
-            chart_type: "dance-single".to_string(),
-            difficulty: "Hard".to_string(),
+            chart_type: chart_type.to_string(),
+            difficulty: difficulty.to_string(),
             description: String::new(),
             chart_name: String::new(),
             meter: 9,
@@ -9094,21 +9550,134 @@ mod tests {
         }
     }
 
-    #[test]
-    fn simplified_bass_lights_only_use_quarter_rows() {
-        let quarter = light_test_note(LIGHTS_QUARTER_ROWS * 2, NoteType::Tap);
-        let eighth = light_test_note(
-            LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
-            NoteType::Tap,
-        );
-        let hold = light_test_note(LIGHTS_QUARTER_ROWS * 3, NoteType::Hold);
-        let mine = light_test_note(LIGHTS_QUARTER_ROWS * 4, NoteType::Mine);
+    fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
+        ParsedNote {
+            row_index,
+            column,
+            note_type,
+            tail_row_index: None,
+        }
+    }
 
-        assert!(gameplay_bass_lights(&quarter, true));
-        assert!(gameplay_bass_lights(&hold, true));
-        assert!(!gameplay_bass_lights(&eighth, true));
-        assert!(gameplay_bass_lights(&eighth, false));
-        assert!(!gameplay_bass_lights(&mine, true));
+    fn test_gameplay_chart(parsed_notes: Vec<ParsedNote>) -> GameplayChartData {
+        let max_row = parsed_notes
+            .iter()
+            .map(|note| note.row_index)
+            .max()
+            .unwrap_or(0);
+        let row_to_beat = (0..=max_row)
+            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
+            .collect::<Vec<_>>();
+        let timing_segments = TimingSegments::default();
+        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
+        GameplayChartData {
+            notes: Vec::new(),
+            parsed_notes,
+            row_to_beat,
+            timing_segments,
+            timing,
+            chart_attacks: None,
+        }
+    }
+
+    #[test]
+    fn simplified_bass_light_events_only_use_quarter_rows() {
+        let quarter = CabinetLightEvent {
+            time_ns: 0,
+            row_index: LIGHTS_QUARTER_ROWS * 2,
+            light: CabinetLight::BassLeft,
+            simplify_bass_candidate: true,
+        };
+        let eighth = CabinetLightEvent {
+            time_ns: 0,
+            row_index: LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
+            light: CabinetLight::BassLeft,
+            simplify_bass_candidate: true,
+        };
+        let explicit = CabinetLightEvent {
+            time_ns: 0,
+            row_index: LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
+            light: CabinetLight::BassLeft,
+            simplify_bass_candidate: false,
+        };
+
+        assert!(cabinet_light_event_enabled(quarter, true));
+        assert!(!cabinet_light_event_enabled(eighth, true));
+        assert!(cabinet_light_event_enabled(eighth, false));
+        assert!(cabinet_light_event_enabled(explicit, true));
+    }
+
+    #[test]
+    fn cabinet_light_plan_prefers_explicit_lights() {
+        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["hard", "medium"]);
+        song.charts
+            .push(test_chart_with("lights-cabinet", "Medium", "lights"));
+
+        let plan = cabinet_light_plan(&song, 0).expect("light plan");
+
+        match plan {
+            CabinetLightPlan::Explicit {
+                chart_ix,
+                chart_hash,
+            } => {
+                assert_eq!(chart_ix, 2);
+                assert_eq!(chart_hash, "lights");
+            }
+            CabinetLightPlan::Generated { .. } => panic!("expected explicit lights"),
+        }
+    }
+
+    #[test]
+    fn cabinet_light_plan_muxes_hard_marquee_and_medium_bass() {
+        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["hard", "medium"]);
+        song.charts[0] = test_chart_with("dance-single", "Hard", "hard");
+        song.charts[1] = test_chart_with("dance-single", "Medium", "medium");
+
+        let plan = cabinet_light_plan(&song, 0).expect("light plan");
+
+        match plan {
+            CabinetLightPlan::Generated {
+                marquee_ix,
+                marquee_hash,
+                bass_ix,
+                bass_hash,
+            } => {
+                assert_eq!(marquee_ix, 0);
+                assert_eq!(marquee_hash, "hard");
+                assert_eq!(bass_ix, 1);
+                assert_eq!(bass_hash, "medium");
+            }
+            CabinetLightPlan::Explicit { .. } => panic!("expected generated lights"),
+        }
+    }
+
+    #[test]
+    fn generated_cabinet_events_take_bass_from_second_chart() {
+        let plan = CabinetLightPlan::Generated {
+            marquee_ix: 0,
+            marquee_hash: "hard".to_string(),
+            bass_ix: 1,
+            bass_hash: "medium".to_string(),
+        };
+        let hard = test_gameplay_chart(vec![parsed_note(ROWS_PER_BEAT as usize, 0, NoteType::Tap)]);
+        let medium = test_gameplay_chart(vec![parsed_note(
+            (ROWS_PER_BEAT * 2) as usize,
+            1,
+            NoteType::Tap,
+        )]);
+
+        let events = build_cabinet_light_events(&plan, &[hard, medium], 0.0);
+
+        assert!(events.iter().any(|event| {
+            event.row_index == ROWS_PER_BEAT as usize
+                && event.light == CabinetLight::MarqueeUpperLeft
+        }));
+        assert!(events.iter().any(|event| {
+            event.row_index == (ROWS_PER_BEAT * 2) as usize && event.light == CabinetLight::BassLeft
+        }));
+        assert!(!events.iter().any(|event| {
+            event.row_index == ROWS_PER_BEAT as usize && event.light == CabinetLight::BassLeft
+        }));
     }
 
     fn test_song(path: &str, offset: f32, hashes: [&str; 2]) -> SongData {
