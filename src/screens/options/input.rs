@@ -346,6 +346,9 @@ pub(super) fn apply_submenu_choice_delta(
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
         }
+        if row.id == SubRowId::SmxInput {
+            config::update_smx_input(yes_no_from_choice(new_index));
+        }
         if row.id == SubRowId::UseFsrs {
             config::update_use_fsrs(yes_no_from_choice(new_index));
         }

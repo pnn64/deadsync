@@ -44,6 +44,7 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxInput")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "UseFSRs")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "DebugFsrDump")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuNavigation")),
@@ -68,6 +69,15 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
         label: lookup_key("OptionsInput", "GamepadBackend"),
         choices: INPUT_BACKEND_CHOICES,
         inline: INPUT_BACKEND_INLINE,
+    },
+    SubRow {
+        id: SubRowId::SmxInput,
+        label: lookup_key("OptionsInput", "SmxInput"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
     },
     SubRow {
         id: SubRowId::UseFsrs,
@@ -126,6 +136,14 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "GamepadBackendHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxInput,
+        name: lookup_key("OptionsInput", "SmxInput"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxInputHelp",
         ))],
     },
     Item {

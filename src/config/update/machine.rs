@@ -80,6 +80,20 @@ pub fn update_use_fsrs(enabled: bool) {
     save_without_keymaps();
 }
 
+/// Persist the StepManiaX-pad input toggle. The SMX manager and listeners are
+/// wired at startup, so this takes effect on the next launch (mirroring the
+/// gamepad-backend option).
+pub fn update_smx_input(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_input == enabled {
+            return;
+        }
+        cfg.smx_input = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     let enabled = {
         let mut cfg = lock_config();

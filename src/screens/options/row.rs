@@ -49,6 +49,7 @@ pub enum SubRowId {
     InputOptions,
     // Input Backend Options
     GamepadBackend,
+    SmxInput,
     UseFsrs,
     DebugFsrDump,
     MenuNavigation,

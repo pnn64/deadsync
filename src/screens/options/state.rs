@@ -483,6 +483,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::SmxInput,
+        yes_no_choice_index(cfg.smx_input),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::UseFsrs,
         yes_no_choice_index(cfg.use_fsrs),
     );

@@ -58,6 +58,7 @@ pub enum ItemId {
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,
     InpMenuNavigation,

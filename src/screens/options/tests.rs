@@ -94,6 +94,7 @@ fn max_fps_hold_delta_accelerates() {
 fn input_backend_items_match_rows() {
     let expected = [
         (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
+        (SubRowId::SmxInput, ItemId::InpSmxInput),
         (SubRowId::UseFsrs, ItemId::InpUseFsrs),
         (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),
         (SubRowId::MenuNavigation, ItemId::InpMenuNavigation),
