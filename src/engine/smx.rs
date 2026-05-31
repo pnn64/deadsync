@@ -3,7 +3,7 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -24,6 +24,18 @@ struct SmxShared {
     sys_listeners: Mutex<Vec<Box<dyn Fn(GpSystemEvent) + Send>>>,
     /// Last dispatched input bitmask per pad, used to emit only changed panels.
     prev_input: [AtomicU16; 2],
+    /// Stable per-pad device UUID (derived from the serial), cached at connect.
+    ///
+    /// The SMX event callback fires while the SDK holds its internal state lock,
+    /// so the callback must never call back into `manager` (e.g. `get_info`) —
+    /// doing so re-locks the same mutex and deadlocks the USB polling thread.
+    /// We cache the serial-derived UUID here at connect time and read it from
+    /// the input/disconnect handlers instead. This is our own mutex, not the
+    /// SDK's, so locking it inside the callback is safe.
+    uuid: [Mutex<[u8; 16]>; 2],
+    /// Set while a deferred `set_serial_numbers()` is in flight, so a burst of
+    /// serial-less connect events only spawns one assignment at a time.
+    serial_assign_inflight: AtomicBool,
 }
 
 static SHARED: OnceLock<Arc<SmxShared>> = OnceLock::new();
@@ -45,14 +57,17 @@ pub fn init() -> bool {
             input_listeners: Mutex::new(Vec::new()),
             sys_listeners: Mutex::new(Vec::new()),
             prev_input: [AtomicU16::new(0), AtomicU16::new(0)],
+            uuid: [Mutex::new([0u8; 16]), Mutex::new([0u8; 16])],
+            serial_assign_inflight: AtomicBool::new(false),
         }),
         Err(e) => {
-            log::warn!("Failed to initialize SMX SDK: {e}");
+            log::warn!("SMX: failed to initialize SDK: {e}");
             return false;
         }
     };
 
     let _ = SHARED.set(shared);
+    log::info!("SMX: SDK initialized, polling for pads");
     true
 }
 
@@ -119,14 +134,38 @@ pub fn set_serial_numbers() {
 fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
     match event {
         SmxEvent::Connected { pad, ref info } => {
-            // Reset the delta baseline so a reconnected pad starts from "all released".
-            if pad < shared.prev_input.len() {
-                shared.prev_input[pad].store(0, Ordering::Relaxed);
+            if pad >= shared.uuid.len() {
+                return;
             }
+            // Reset the delta baseline so a reconnected pad starts from "all released".
+            shared.prev_input[pad].store(0, Ordering::Relaxed);
 
-            // Assign serial if missing.
-            if !info.has_serial_number {
-                shared.manager.set_serial_numbers();
+            // Cache the stable device UUID for the input/disconnect handlers.
+            *shared.uuid[pad].lock().unwrap() = uuid_from_bytes(info.serial.as_bytes());
+
+            log::info!(
+                "SMX: pad {pad} connected (P{}, fw {}, serial {}, has_serial={})",
+                if info.is_player2 { 2 } else { 1 },
+                info.firmware_version,
+                info.serial,
+                info.has_serial_number,
+            );
+
+            // Assign a serial if the pad lacks one. This must NOT run in the
+            // callback (it locks the SDK state we are already holding), so defer
+            // it to a short-lived thread that acquires the lock once the USB
+            // loop releases it. The in-flight guard collapses duplicate requests.
+            if !info.has_serial_number
+                && !shared.serial_assign_inflight.swap(true, Ordering::AcqRel)
+            {
+                log::info!("SMX: pad {pad} has no serial; scheduling assignment");
+                std::thread::spawn(|| {
+                    if let Some(s) = SHARED.get() {
+                        s.manager.set_serial_numbers();
+                        s.serial_assign_inflight.store(false, Ordering::Release);
+                        log::info!("SMX: serial assignment complete");
+                    }
+                });
             }
 
             let name = format!(
@@ -136,7 +175,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             );
             let sys_event = GpSystemEvent::Connected {
                 name,
-                id: pad_id_from_serial(&info.serial, pad),
+                id: pad_device_id(pad),
                 vendor_id: Some(0x2341),
                 product_id: Some(0x8037),
                 backend: PadBackend::Smx,
@@ -147,13 +186,14 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             }
         }
         SmxEvent::Disconnected { pad } => {
-            if pad < shared.prev_input.len() {
-                shared.prev_input[pad].store(0, Ordering::Relaxed);
+            if pad >= shared.uuid.len() {
+                return;
             }
-            let info = shared.manager.get_info(pad);
+            shared.prev_input[pad].store(0, Ordering::Relaxed);
+            log::info!("SMX: pad {pad} disconnected");
             let sys_event = GpSystemEvent::Disconnected {
                 name: format!("StepManiaX pad {pad}"),
-                id: pad_id_from_serial(&info.serial, pad),
+                id: pad_device_id(pad),
                 backend: PadBackend::Smx,
                 initial: false,
             };
@@ -162,7 +202,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             }
         }
         SmxEvent::InputState { pad, state } => {
-            if pad >= shared.prev_input.len() {
+            if pad >= shared.uuid.len() {
                 return;
             }
             // The SDK only fires InputState when the pad's bitmask changes, but it
@@ -173,12 +213,12 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             if changed == 0 {
                 return;
             }
+            log::debug!("SMX: pad {pad} input {prev:#06x} -> {state:#06x} (changed {changed:#06x})");
 
             let timestamp = Instant::now();
             let host_nanos = crate::engine::host_time::now_nanos();
-            let info = shared.manager.get_info(pad);
-            let id = pad_id_from_serial(&info.serial, pad);
-            let uuid = uuid_from_bytes(info.serial.as_bytes());
+            let id = pad_device_id(pad);
+            let uuid = *shared.uuid[pad].lock().unwrap();
 
             let listeners = shared.input_listeners.lock().unwrap();
             for panel in 0..PANEL_COUNT {
@@ -204,16 +244,16 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
     }
 }
 
-/// Derive a stable PadId from the device serial number.
-fn pad_id_from_serial(serial: &str, pad: usize) -> PadId {
-    if serial.is_empty() {
-        // Fallback if no serial (shouldn't happen after set_serial_numbers).
-        return PadId(0x534D5800 + pad as u32);
-    }
-    // Use a simple hash of the serial to get a stable u32 ID.
-    let mut hash: u32 = 0x534D_5800; // "SMX\0"
-    for byte in serial.as_bytes() {
-        hash = hash.wrapping_mul(31).wrapping_add(*byte as u32);
-    }
-    PadId(hash)
+/// Runtime device index for an SMX pad slot.
+///
+/// `PadId` is used by the input pipeline as a small per-device index into
+/// fixed-size slot arrays (`usize::from(id) * pad_stride`), so it must stay
+/// small — the pad slot (0 or 1) is the natural choice. Stable cross-run
+/// identity is carried separately by the device UUID, not the `PadId`.
+//
+// NOTE: this can collide with indices assigned by the native gamepad backends
+// if other pads are connected at the same time; a shared id allocator across
+// backends would be needed to fully disambiguate.
+fn pad_device_id(pad: usize) -> PadId {
+    PadId(pad as u32)
 }
