@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
@@ -43,6 +44,35 @@ pub enum ConnectionStatus {
     Pending,
     Connected(Services),
     Error(ConnectionError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionProbeError {
+    Timeout,
+    InvalidResponse(String),
+    CannotConnect(String),
+}
+
+impl std::fmt::Display for ConnectionProbeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Timeout => f.write_str("request timed out"),
+            Self::InvalidResponse(message) | Self::CannotConnect(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ConnectionProbeError {}
+
+impl ConnectionProbeError {
+    #[inline(always)]
+    pub const fn connection_error(&self) -> ConnectionError {
+        match self {
+            Self::Timeout => ConnectionError::TimedOut,
+            Self::InvalidResponse(_) => ConnectionError::InvalidResponse,
+            Self::CannotConnect(_) => ConnectionError::CannotConnect,
+        }
+    }
 }
 
 impl Service {
@@ -185,6 +215,46 @@ pub fn check_connection(service: Service) -> Result<ConnectionStatus, NetworkErr
         &new_session_url(service),
     )?;
     Ok(connection_status_from_new_session(&data))
+}
+
+pub fn probe_connection(service: Service) -> Result<ConnectionStatus, ConnectionProbeError> {
+    check_connection(service).map_err(ConnectionProbeError::from)
+}
+
+impl From<NetworkError> for ConnectionProbeError {
+    fn from(error: NetworkError) -> Self {
+        match error {
+            NetworkError::Timeout => Self::Timeout,
+            NetworkError::Decode(message) => Self::InvalidResponse(message),
+            other => Self::CannotConnect(other.to_string()),
+        }
+    }
+}
+
+pub fn fetch_player_leaderboards(
+    service: Service,
+    api_key: &str,
+    chart_hash: &str,
+    max_entries: Option<usize>,
+) -> Result<LeaderboardsApiResponse, OnlineRequestError> {
+    let api_url = player_leaderboards_url(service);
+    let mut request = network::get_groovestats_agent()
+        .get(&api_url)
+        .header("x-api-key-player-1", api_key)
+        .query("chartHashP1", chart_hash);
+    if let Some(max_entries) = max_entries {
+        let max_entries_str = max_entries.max(1).to_string();
+        request = request.query("maxLeaderboardResults", &max_entries_str);
+    }
+
+    let response = request
+        .call()
+        .map_err(network::error_from_ureq)
+        .map_err(OnlineRequestError::from)?;
+    if response.status().as_u16() != 200 {
+        return Err(OnlineRequestError::HttpStatus(response.status().as_u16()));
+    }
+    network::read_json_body(response).map_err(OnlineRequestError::from)
 }
 
 #[derive(Deserialize, Debug)]
@@ -526,6 +596,73 @@ impl GrooveStatsSubmitApiResponse {
             _ => None,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct GrooveStatsSubmitRequestSuccess {
+    pub response: GrooveStatsSubmitApiResponse,
+    pub body_snippet: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GrooveStatsSubmitRequestError {
+    Transport { message: String, timed_out: bool },
+    Http { status: u16, body_snippet: String },
+    Decode { message: String },
+    Api { message: String },
+}
+
+pub fn submit_score_request(
+    service: Service,
+    headers: &[(String, String)],
+    query: &[(String, String)],
+    body: &serde_json::Value,
+) -> Result<GrooveStatsSubmitRequestSuccess, GrooveStatsSubmitRequestError> {
+    let mut request = network::get_groovestats_agent()
+        .post(&score_submit_url(service))
+        .header("Content-Type", "application/json");
+    for (name, value) in headers {
+        request = request.header(name, value);
+    }
+    for (name, value) in query {
+        request = request.query(name, value);
+    }
+
+    let response = request.send_json(body).map_err(|error| {
+        let message = format!("network error: {error}");
+        GrooveStatsSubmitRequestError::Transport {
+            timed_out: network::is_timeout_message(message.as_str()),
+            message,
+        }
+    })?;
+
+    let status = response.status();
+    let status_code = status.as_u16();
+    let body_text = network::read_text_body_or_empty(response);
+    let body_snippet = network::log_body_snippet(body_text.as_str());
+    if !status.is_success() {
+        return Err(GrooveStatsSubmitRequestError::Http {
+            status: status_code,
+            body_snippet,
+        });
+    }
+
+    let response: GrooveStatsSubmitApiResponse =
+        serde_json::from_str(body_text.as_str()).map_err(|error| {
+            GrooveStatsSubmitRequestError::Decode {
+                message: network::log_body_snippet(error.to_string().as_str()),
+            }
+        })?;
+    if !response.error.trim().is_empty() {
+        return Err(GrooveStatsSubmitRequestError::Api {
+            message: response.error.trim().to_string(),
+        });
+    }
+
+    Ok(GrooveStatsSubmitRequestSuccess {
+        response,
+        body_snippet,
+    })
 }
 
 #[derive(Deserialize, Debug)]
@@ -900,6 +1037,21 @@ mod tests {
             connection_error_from_network_error(&NetworkError::Request("refused".to_string())),
             ConnectionError::CannotConnect
         );
+    }
+
+    #[test]
+    fn network_errors_map_to_probe_errors() {
+        assert_eq!(
+            ConnectionProbeError::from(NetworkError::Timeout),
+            ConnectionProbeError::Timeout
+        );
+        assert_eq!(
+            ConnectionProbeError::from(NetworkError::Decode("bad json".to_string())),
+            ConnectionProbeError::InvalidResponse("bad json".to_string())
+        );
+        let error = ConnectionProbeError::from(NetworkError::HttpStatus(500));
+        assert_eq!(error.connection_error(), ConnectionError::CannotConnect);
+        assert_eq!(error.to_string(), "http status 500");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use super::{
-    GrooveStatsSubmitPlayerJob, LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
+    GrooveStatsSubmitPlayerJob, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts, leaderboard_entries_from_api,
@@ -27,16 +27,10 @@ use std::sync::{Arc, Mutex};
 
 use bincode::{Decode, Encode};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
+use deadsync_score::{CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage};
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CachedItlScore {
-    pub ex_hundredths: u32,
-    pub clear_type: u8,
-    pub points: u32,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 struct OnlineItlSelfScoreKey {
@@ -101,43 +95,6 @@ struct OnlineItlOverallRankInput {
     profile_id: Option<String>,
     self_score_generation: u64,
     by_chart_score: HashMap<String, u32>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ItlEvalState {
-    pub active: bool,
-    pub eligible: bool,
-    pub chart_no_cmod: bool,
-    pub used_cmod: bool,
-    pub reason_lines: Vec<String>,
-}
-
-#[derive(Clone, Debug)]
-pub enum ItlOverlayPage {
-    Text(String),
-    Leaderboard(Vec<LeaderboardEntry>),
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ItlEventProgress {
-    pub name: String,
-    pub is_doubles: bool,
-    pub score_hundredths: u32,
-    pub score_delta_hundredths: i32,
-    pub current_points: u32,
-    pub point_delta: i32,
-    pub current_ranking_points: u32,
-    pub ranking_delta: i32,
-    pub current_song_points: u32,
-    pub song_delta: i32,
-    pub current_ex_points: u32,
-    pub ex_delta: i32,
-    pub current_total_points: u32,
-    pub total_delta: i32,
-    pub total_passes: u32,
-    pub clear_type_before: Option<u8>,
-    pub clear_type_after: Option<u8>,
-    pub overlay_pages: Vec<ItlOverlayPage>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

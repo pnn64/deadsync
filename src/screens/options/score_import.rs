@@ -22,7 +22,7 @@ pub(super) struct ScoreImportPackPicker {
 
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportSelection {
-    pub(super) endpoint: scores::ScoreImportEndpoint,
+    pub(super) endpoint: score_data::ScoreImportEndpoint,
     pub(super) profile: ScoreImportProfileConfig,
     pub(super) pack_groups: Vec<String>,
     pub(super) pack_label: String,
@@ -31,12 +31,12 @@ pub(super) struct ScoreImportSelection {
 
 #[derive(Debug)]
 pub(super) enum ScoreImportMsg {
-    Progress(scores::ScoreImportProgress),
-    Done(Result<scores::ScoreBulkImportSummary, String>),
+    Progress(score_data::ScoreImportProgress),
+    Done(Result<score_data::ScoreBulkImportSummary, String>),
 }
 
 pub(super) struct ScoreImportUiState {
-    pub(super) endpoint: scores::ScoreImportEndpoint,
+    pub(super) endpoint: score_data::ScoreImportEndpoint,
     pub(super) profile_name: String,
     pub(super) pack_label: String,
     pub(super) total_charts: usize,
@@ -59,7 +59,7 @@ pub(super) struct ScoreImportUiState {
 
 impl ScoreImportUiState {
     pub(super) fn new(
-        endpoint: scores::ScoreImportEndpoint,
+        endpoint: score_data::ScoreImportEndpoint,
         profile_name: String,
         pack_label: String,
         cancel_requested: Arc<AtomicBool>,
@@ -335,16 +335,16 @@ pub(super) struct ScoreImportConfirmState {
 #[inline(always)]
 pub(super) const fn score_import_endpoint_from_choice_index(
     idx: usize,
-) -> scores::ScoreImportEndpoint {
+) -> score_data::ScoreImportEndpoint {
     match idx {
-        1 => scores::ScoreImportEndpoint::BoogieStats,
-        2 => scores::ScoreImportEndpoint::ArrowCloud,
-        _ => scores::ScoreImportEndpoint::GrooveStats,
+        1 => score_data::ScoreImportEndpoint::BoogieStats,
+        2 => score_data::ScoreImportEndpoint::ArrowCloud,
+        _ => score_data::ScoreImportEndpoint::GrooveStats,
     }
 }
 
 #[inline(always)]
-pub(super) fn score_import_selected_endpoint(state: &State) -> scores::ScoreImportEndpoint {
+pub(super) fn score_import_selected_endpoint(state: &State) -> score_data::ScoreImportEndpoint {
     let idx = state.sub[SubmenuKind::ScoreImport]
         .choice_indices
         .get(SCORE_IMPORT_ROW_ENDPOINT_INDEX)
@@ -449,14 +449,15 @@ pub(super) fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
 }
 
 pub(super) fn score_import_profile_eligible(
-    endpoint: scores::ScoreImportEndpoint,
+    endpoint: score_data::ScoreImportEndpoint,
     profile_cfg: &ScoreImportProfileConfig,
 ) -> bool {
     match endpoint {
-        scores::ScoreImportEndpoint::GrooveStats | scores::ScoreImportEndpoint::BoogieStats => {
+        score_data::ScoreImportEndpoint::GrooveStats
+        | score_data::ScoreImportEndpoint::BoogieStats => {
             !profile_cfg.gs_api_key.is_empty() && !profile_cfg.gs_username.is_empty()
         }
-        scores::ScoreImportEndpoint::ArrowCloud => !profile_cfg.ac_api_key.is_empty(),
+        score_data::ScoreImportEndpoint::ArrowCloud => !profile_cfg.ac_api_key.is_empty(),
     }
 }
 
@@ -896,7 +897,7 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
         pack_label,
         if only_missing_gs_scores { "yes" } else { "no" },
         match endpoint {
-            scores::ScoreImportEndpoint::ArrowCloud =>
+            score_data::ScoreImportEndpoint::ArrowCloud =>
                 "Bulk-imported per pack at 3 requests/sec (up to 1000 charts per request).",
             _ =>
                 "Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",

@@ -1,15 +1,13 @@
 use super::groovestats;
 use crate::config;
 use crate::config::dirs;
-use deadsync_net as network;
 use deadsync_online::downloads::{
-    DownloadSnapshot, UnlockCache, UnlockCacheFile, cache_has_destination,
-    itl_unlock_pack_ini_content, mime_token, sanitize_pack_name,
+    DownloadSnapshot, DownloadZipError, UnlockCache, UnlockCacheFile, cache_has_destination,
+    download_zip_to_path, itl_unlock_pack_ini_content, sanitize_pack_name,
 };
 use deadsync_online::groovestats::ConnectionStatus;
 use log::{debug, warn};
 use std::fs::{self, File};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
@@ -127,62 +125,21 @@ fn begin_download(url: &str, name: String, destination: String) -> Option<u64> {
 
 fn download_worker(id: u64, url: String, destination: String) {
     let zip_path = dirs::app_dirs().downloads_dir().join(download_filename(id));
-    let result = download_one(id, url.as_str(), destination.as_str(), &zip_path)
+    let result = download_one(id, url.as_str(), &zip_path)
         .and_then(|_| extract_zip(id, &zip_path, destination.as_str(), url.as_str()));
     finish_download(id, result.err());
 }
 
-fn download_one(id: u64, url: &str, _destination: &str, zip_path: &Path) -> Result<(), String> {
-    if let Some(parent) = zip_path.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        return Err(format!("Failed to prepare Downloads dir: {error}"));
-    }
-
-    let agent = network::get_agent();
-    let response = agent.get(url).call().map_err(|error| error.to_string())?;
-    let status = response.status().as_u16();
-    if status != 200 {
-        return Err(format!("Network Error {status}"));
-    }
-
-    let content_type = response
-        .headers()
-        .get("Content-Type")
-        .and_then(|value| value.to_str().ok())
-        .map(|value| mime_token(value).to_string())
-        .unwrap_or_default();
-    let total_bytes = response
-        .headers()
-        .get("Content-Length")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|text| text.parse::<u64>().ok())
-        .unwrap_or(0);
-    set_download_total(id, total_bytes);
-
-    let mut file = File::create(zip_path).map_err(|error| error.to_string())?;
-    let mut body = response.into_body();
-    let mut reader = body.as_reader();
-    let mut buf = [0u8; 64 * 1024];
-    let mut downloaded = 0u64;
-    loop {
-        let read = reader.read(&mut buf).map_err(|error| error.to_string())?;
-        if read == 0 {
-            break;
+fn download_one(id: u64, url: &str, zip_path: &Path) -> Result<(), String> {
+    download_zip_to_path(url, zip_path, |downloaded, total| {
+        set_download_progress(id, downloaded, total);
+    })
+    .map_err(|error| {
+        if let DownloadZipError::NotZip { content_type } = &error {
+            warn!("Attempted to download non-zip unlock from '{url}' ({content_type}).");
         }
-        file.write_all(&buf[..read])
-            .map_err(|error| error.to_string())?;
-        downloaded = downloaded.saturating_add(read as u64);
-        set_download_progress(id, downloaded, total_bytes);
-    }
-    set_download_progress(id, downloaded, total_bytes.max(downloaded));
-
-    if content_type.as_str() != "application/zip" {
-        warn!("Attempted to download non-zip unlock from '{url}' ({content_type}).");
-        return Err("Download is not a Zip!".to_string());
-    }
-
-    Ok(())
+        error.to_string()
+    })
 }
 
 fn extract_zip(id: u64, zip_path: &Path, destination: &str, url: &str) -> Result<(), String> {
@@ -261,13 +218,6 @@ fn queue_ready_song_reload_dir(path: PathBuf) {
         return;
     }
     state.ready_song_reload_dirs.push(path);
-}
-
-fn set_download_total(id: u64, total_bytes: u64) {
-    let mut state = DOWNLOAD_STATE.lock().unwrap();
-    if let Some(entry) = state.entries.iter_mut().find(|entry| entry.id == id) {
-        entry.total_bytes = total_bytes;
-    }
 }
 
 fn set_download_progress(id: u64, current_bytes: u64, total_bytes: u64) {

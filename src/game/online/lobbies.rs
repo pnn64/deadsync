@@ -1,22 +1,20 @@
 use crate::game::profile;
 use deadsync_online::lobbies::{
-    ConnectionState, LOBBY_SERVICE_URL, LobbyInboundEffect, LobbyMachinePlayer, LobbySongInfo,
-    MachinePlayerStats, Snapshot, create_lobby_text, join_lobby_text, joined_lobby_from_state,
-    leave_lobby_text, lobby_left_clears_joined, lobby_machine_player, lobby_machine_state_value,
-    normalize_lobby_password, parse_inbound_text, public_lobbies_from_search,
-    response_status_clears_joined, response_status_from_data, search_lobby_text, select_song_text,
-    update_machine_text,
+    ConnectionState, LobbyInboundEffect, LobbyMachinePlayer, LobbySocket, LobbySocketError,
+    LobbySongInfo, MachinePlayerStats, Snapshot, close_lobby_socket, connect_lobby_socket,
+    create_lobby_text, flush_lobby_socket, is_transient_lobby_socket_error, join_lobby_text,
+    joined_lobby_from_state, leave_lobby_text, lobby_left_clears_joined, lobby_machine_player,
+    lobby_machine_state_value, normalize_lobby_password, parse_inbound_text,
+    public_lobbies_from_search, read_lobby_text, response_status_clears_joined,
+    response_status_from_data, search_lobby_text, select_song_text, send_lobby_ping,
+    send_lobby_text, update_machine_text,
 };
 use log::{debug, warn};
 use serde_json::Value;
-use std::io::ErrorKind;
-use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use tungstenite::stream::MaybeTlsStream;
-use tungstenite::{Message, WebSocket, connect};
 
 const SOCKET_POLL_SLEEP: Duration = Duration::from_millis(16);
 const SOCKET_PING_INTERVAL: Duration = Duration::from_secs(15);
@@ -329,18 +327,13 @@ fn handle_connection_loss(connection: ConnectionState) {
 }
 
 fn worker_main(rx: Receiver<Command>) {
-    let (mut socket, _) = match connect(LOBBY_SERVICE_URL) {
-        Ok(parts) => parts,
+    let mut socket = match connect_lobby_socket() {
+        Ok(socket) => socket,
         Err(error) => {
             handle_connection_loss(ConnectionState::Error(error.to_string()));
             return;
         }
     };
-
-    if let Err(error) = set_socket_nonblocking(&mut socket) {
-        handle_connection_loss(ConnectionState::Error(error.to_string()));
-        return;
-    }
 
     {
         let mut snapshot = SNAPSHOT.lock().unwrap();
@@ -352,45 +345,41 @@ fn worker_main(rx: Receiver<Command>) {
     loop {
         while let Ok(command) = rx.try_recv() {
             if let Err(error) = handle_command(&mut socket, command) {
-                if !is_transient_socket_error(&error) {
-                    handle_connection_loss(ConnectionState::Error(error.to_string()));
+                if !is_transient_lobby_socket_error(&error) {
+                    handle_connection_loss(connection_state_from_socket_error(&error));
                     return;
                 }
             }
         }
 
-        match socket.read() {
-            Ok(message) => {
-                if let Err(error) = handle_message(message) {
+        match read_lobby_text(&mut socket) {
+            Ok(Some(text)) => {
+                if let Err(error) = handle_text_message(text.as_str()) {
                     handle_connection_loss(ConnectionState::Error(error));
                     return;
                 }
             }
-            Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => {}
-            Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
-                handle_connection_loss(ConnectionState::Disconnected);
-                return;
-            }
+            Ok(None) => {}
             Err(error) => {
-                handle_connection_loss(ConnectionState::Error(error.to_string()));
+                handle_connection_loss(connection_state_from_socket_error(&error));
                 return;
             }
         }
 
         if last_ping_at.elapsed() >= SOCKET_PING_INTERVAL {
-            if let Err(error) = socket.send(Message::Ping(Vec::new().into())) {
-                if !is_transient_socket_error(&error) {
-                    handle_connection_loss(ConnectionState::Error(error.to_string()));
+            if let Err(error) = send_lobby_ping(&mut socket) {
+                if !is_transient_lobby_socket_error(&error) {
+                    handle_connection_loss(connection_state_from_socket_error(&error));
                     return;
                 }
             }
             last_ping_at = Instant::now();
         }
 
-        if let Err(error) = socket.flush()
-            && !is_transient_socket_error(&error)
+        if let Err(error) = flush_lobby_socket(&mut socket)
+            && !is_transient_lobby_socket_error(&error)
         {
-            handle_connection_loss(ConnectionState::Error(error.to_string()));
+            handle_connection_loss(connection_state_from_socket_error(&error));
             return;
         }
 
@@ -398,20 +387,17 @@ fn worker_main(rx: Receiver<Command>) {
     }
 }
 
-fn handle_command(
-    socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    command: Command,
-) -> Result<(), tungstenite::Error> {
+fn handle_command(socket: &mut LobbySocket, command: Command) -> Result<(), LobbySocketError> {
     match command {
-        Command::Search => send_text(socket, search_lobby_text()),
-        Command::Create { password } => send_text(
+        Command::Search => send_lobby_text(socket, search_lobby_text()),
+        Command::Create { password } => send_lobby_text(
             socket,
             create_lobby_text(
                 &local_machine_state_json("ScreenSelectMusic", true, true, None, None),
                 password.as_str(),
             ),
         ),
-        Command::Join { code, password } => send_text(
+        Command::Join { code, password } => send_lobby_text(
             socket,
             join_lobby_text(
                 &local_machine_state_json("ScreenSelectMusic", true, true, None, None),
@@ -419,7 +405,7 @@ fn handle_command(
                 password.as_str(),
             ),
         ),
-        Command::Leave => send_text(socket, leave_lobby_text()),
+        Command::Leave => send_lobby_text(socket, leave_lobby_text()),
         Command::UpdateMachine {
             screen_name,
             p1_ready,
@@ -434,30 +420,20 @@ fn handle_command(
                 p1_stats.as_ref(),
                 p2_stats.as_ref(),
             );
-            send_text(socket, update_machine_text(&machine))
+            send_lobby_text(socket, update_machine_text(&machine))
         }
-        Command::SelectSong { song_info } => send_text(socket, select_song_text(&song_info)),
+        Command::SelectSong { song_info } => send_lobby_text(socket, select_song_text(&song_info)),
         Command::Disconnect => {
-            let _ = socket.close(None);
-            Err(tungstenite::Error::ConnectionClosed)
+            close_lobby_socket(socket);
+            Err(LobbySocketError::Closed)
         }
     }
 }
 
-fn send_text(
-    socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    text: String,
-) -> Result<(), tungstenite::Error> {
-    socket.send(Message::Text(text.into()))
-}
-
-fn is_transient_socket_error(error: &tungstenite::Error) -> bool {
+fn connection_state_from_socket_error(error: &LobbySocketError) -> ConnectionState {
     match error {
-        tungstenite::Error::Io(error) => {
-            matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted)
-        }
-        tungstenite::Error::WriteBufferFull(_) => true,
-        _ => false,
+        LobbySocketError::Closed => ConnectionState::Disconnected,
+        _ => ConnectionState::Error(error.to_string()),
     }
 }
 
@@ -504,14 +480,6 @@ fn local_player(
         ready,
         stats,
     )
-}
-
-fn handle_message(message: Message) -> Result<(), String> {
-    match message {
-        Message::Text(text) => handle_text_message(text.as_str()),
-        Message::Close(_) => Err("Connection closed.".to_string()),
-        _ => Ok(()),
-    }
 }
 
 fn handle_text_message(text: &str) -> Result<(), String> {
@@ -588,15 +556,6 @@ fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
         None => warn!("Ignoring malformed lobby payload: {error}"),
     }
     debug!("Malformed lobby payload: {raw_text}");
-}
-
-fn set_socket_nonblocking(
-    socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-) -> Result<(), std::io::Error> {
-    match socket.get_mut() {
-        MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),
-        _ => Ok(()),
-    }
 }
 
 #[cfg(test)]

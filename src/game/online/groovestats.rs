@@ -1,7 +1,9 @@
-use deadsync_net as network;
-use deadsync_online::groovestats::{self as groovestats_api, ConnectionError, ConnectionStatus};
+use deadsync_online::groovestats::{
+    self as groovestats_api, ConnectionError, ConnectionProbeError, ConnectionStatus,
+};
 use log::{debug, info, warn};
 use std::sync::{LazyLock, Mutex};
+use std::thread;
 
 static STATUS: LazyLock<Mutex<ConnectionStatus>> =
     LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
@@ -36,7 +38,7 @@ pub fn init() {
     let service_name = groovestats_api::service_name(service);
     set_status(ConnectionStatus::Pending);
     debug!("Initializing {service_name} network check...");
-    network::spawn_request(perform_check);
+    thread::spawn(perform_check);
 }
 
 fn perform_check() {
@@ -44,7 +46,7 @@ fn perform_check() {
     let service_name = groovestats_api::service_name(service);
     debug!("Performing {service_name} connectivity check...");
 
-    match groovestats_api::check_connection(service) {
+    match groovestats_api::probe_connection(service) {
         Ok(status) => {
             match &status {
                 ConnectionStatus::Connected(services) => info!(
@@ -59,15 +61,17 @@ fn perform_check() {
             set_status(status);
         }
         Err(error) => {
-            let connection_error = groovestats_api::connection_error_from_network_error(&error);
-            match &error {
-                network::NetworkError::Timeout => {
+            let connection_error = error.connection_error();
+            match error {
+                ConnectionProbeError::Timeout => {
                     warn!("{service_name} connectivity check timed out.")
                 }
-                network::NetworkError::Decode(error) => {
+                ConnectionProbeError::InvalidResponse(error) => {
                     warn!("Failed to parse {service_name} response: {error}")
                 }
-                _ => warn!("HTTP error to {service_name}: {error}"),
+                ConnectionProbeError::CannotConnect(error) => {
+                    warn!("HTTP error to {service_name}: {error}")
+                }
             }
             set_status(ConnectionStatus::Error(connection_error));
         }

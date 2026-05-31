@@ -1,7 +1,7 @@
-use deadsync_net as network;
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ConnectionError, ConnectionStatus};
 use log::{debug, info, warn};
 use std::sync::{LazyLock, Mutex};
+use std::thread;
 
 static STATUS: LazyLock<Mutex<ConnectionStatus>> =
     LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
@@ -30,13 +30,13 @@ pub fn refresh_status() {
 
     set_status(ConnectionStatus::Pending);
     debug!("Initializing ArrowCloud network check...");
-    network::spawn_request(perform_check);
+    thread::spawn(perform_check);
 }
 
 fn perform_check() {
     debug!("Performing ArrowCloud connectivity check...");
 
-    match arrowcloud_api::check_connection() {
+    match arrowcloud_api::probe_connection() {
         Ok(ConnectionStatus::Connected) => {
             info!("Connected to ArrowCloud.");
             set_status(ConnectionStatus::Connected);
@@ -44,9 +44,7 @@ fn perform_check() {
         Ok(status) => set_status(status),
         Err(error) => {
             warn!("HTTP error to ArrowCloud: {error}");
-            set_status(ConnectionStatus::Error(
-                arrowcloud_api::connection_error_from_network_error(&error),
-            ));
+            set_status(ConnectionStatus::Error(error.connection_error));
         }
     }
 }

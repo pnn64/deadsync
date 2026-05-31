@@ -128,9 +128,17 @@ const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "ArrowCloudScore",
     "ArrowCloudScores",
     "ArrowCloudServerGrade",
+    "ArrowCloudSubmitUiStatus",
     "CachedPlayerLeaderboardData",
+    "CachedItlScore",
     "CachedScore",
     "Grade",
+    "GrooveStatsEvalState",
+    "GrooveStatsSubmitRecordBanner",
+    "GrooveStatsSubmitUiStatus",
+    "ItlEvalState",
+    "ItlEventProgress",
+    "ItlOverlayPage",
     "LeaderboardEntry",
     "LeaderboardPane",
     "LocalScalarScore",
@@ -138,6 +146,9 @@ const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "PlayerLeaderboardData",
     "RejectReason",
     "ReplayEdge",
+    "ScoreBulkImportSummary",
+    "ScoreImportEndpoint",
+    "ScoreImportProgress",
     "SUBMIT_RETRY_MAX_ATTEMPTS",
     "duration_to_ceil_secs",
     "gameplay_run_failed",
@@ -186,6 +197,7 @@ const CORE_NOTE_SCAN_DIRS: &[&str] = &[
 const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
     "ARROWCLOUD_BULK_MAX_HASHES",
     "ConnectionError",
+    "ConnectionProbeError",
     "ConnectionStatus",
     "DeviceLoginPollReq",
     "DeviceLoginPollResp",
@@ -207,6 +219,8 @@ const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
     "ArrowCloudRetrieveScoresRequest",
     "ArrowCloudRetrieveScoresResponse",
     "ArrowCloudSpeed",
+    "ArrowCloudSubmitRequestError",
+    "ArrowCloudSubmitRequestSuccess",
     "ArrowCloudTimingDatum",
     "ArrowCloudTimingOffset",
     "ArrowCloudUserApiResponse",
@@ -217,10 +231,17 @@ const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
     "connection_error_from_network_error",
     "device_login_poll",
     "device_login_start",
+    "fetch_leaderboards",
+    "fetch_player_leaderboards",
+    "fetch_user",
     "leaderboards_url",
     "legacy_leaderboards_url",
+    "player_leaderboards_url",
+    "probe_connection",
     "retrieve_scores_url",
+    "retrieve_scores",
     "run_device_login_session",
+    "submit_score_request",
     "submit_url",
     "user_url",
 ];
@@ -236,6 +257,7 @@ const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] = &[
 
 const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "ConnectionError",
+    "ConnectionProbeError",
     "ConnectionStatus",
     "GROOVESTATS_CHART_HASH_VERSION",
     "GROOVESTATS_COMMENT_PREFIX",
@@ -251,6 +273,8 @@ const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "GrooveStatsSubmitApiQuestReward",
     "GrooveStatsSubmitApiResponse",
     "GrooveStatsSubmitApiStatImprovement",
+    "GrooveStatsSubmitRequestError",
+    "GrooveStatsSubmitRequestSuccess",
     "GrooveStatsQrLoginEvent",
     "GrooveStatsQrLoginWsEffect",
     "GrooveStatsSubmitPlayerPayload",
@@ -273,7 +297,9 @@ const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "generate_qr_login_uuid",
     "manual_qr_url",
     "new_session_url",
+    "fetch_player_leaderboards",
     "player_leaderboards_url",
+    "probe_connection",
     "primary_api_base_url",
     "qr_base_url",
     "qr_login_url",
@@ -283,6 +309,7 @@ const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "score_submit_url",
     "service_name",
     "services_from_new_session",
+    "submit_score_request",
 ];
 
 const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] = &[
@@ -316,6 +343,8 @@ const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "LobbyMachinePlayer",
     "LobbyMachineState",
     "LobbyPlayer",
+    "LobbySocket",
+    "LobbySocketError",
     "LobbySearchedData",
     "LobbySongInfo",
     "LobbyStateData",
@@ -329,7 +358,11 @@ const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "ResponseStatus",
     "ResponseStatusData",
     "Snapshot",
+    "close_lobby_socket",
+    "connect_lobby_socket",
     "create_lobby_text",
+    "flush_lobby_socket",
+    "is_transient_lobby_socket_error",
     "joined_lobby_from_state",
     "join_lobby_text",
     "leave_lobby_text",
@@ -341,10 +374,13 @@ const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "outbound_event_text",
     "parse_inbound_text",
     "public_lobbies_from_search",
+    "read_lobby_text",
     "response_status_clears_joined",
     "response_status_from_data",
     "search_lobby_text",
     "select_song_text",
+    "send_lobby_ping",
+    "send_lobby_text",
     "update_machine_text",
 ];
 
@@ -359,9 +395,11 @@ const LOBBY_DATA_SCAN_DIRS: &[&str] = &[
 
 const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
     "DownloadSnapshot",
+    "DownloadZipError",
     "UnlockCache",
     "UnlockCacheFile",
     "cache_has_destination",
+    "download_zip_to_path",
     "itl_unlock_pack_ini_content",
     "mime_token",
     "sanitize_pack_name",
@@ -395,6 +433,8 @@ const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const GAME_TRANSPORT_CRATES: &[&str] = &["deadsync_net", "tungstenite", "ureq::"];
+
 #[test]
 fn game_upward_dependencies_do_not_grow() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -424,6 +464,32 @@ fn game_upward_dependencies_do_not_grow() {
     assert!(
         failures.is_empty(),
         "game layer gained upward dependencies:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn game_layer_does_not_import_transport_crates() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game_dir = root.join("src/game");
+    let mut failures = Vec::new();
+
+    for file in rust_files(&game_dir) {
+        let text = fs::read_to_string(&file).expect("source file should be readable");
+        let rel = rel_path(&root, &file);
+        for token in GAME_TRANSPORT_CRATES {
+            let count = text.match_indices(token).count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references transport crate token {token} {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "game layer should depend on deadsync-online DTO/client APIs, not raw transport crates:\n{}",
         failures.join("\n")
     );
 }
@@ -1179,6 +1245,7 @@ fn count_game_score_data_facade_refs(text: &str, symbol: &str) -> usize {
         + count_grouped_game_rule_uses(text, "use deadsync::game::scores::{", symbol)
         + count_grouped_game_score_data_uses(text, "use crate::game::{", symbol)
         + count_grouped_game_score_data_uses(text, "use deadsync::game::{", symbol)
+        + count_game_scores_alias_symbol_refs(text, symbol)
 }
 
 fn count_grouped_game_score_data_uses(text: &str, marker: &str, symbol: &str) -> usize {
@@ -1205,6 +1272,42 @@ fn count_grouped_game_score_data_uses(text: &str, marker: &str, symbol: &str) ->
     }
 
     count
+}
+
+fn count_game_scores_alias_symbol_refs(text: &str, symbol: &str) -> usize {
+    if !imports_game_scores_alias(text) {
+        return 0;
+    }
+    count_token_refs(text, &format!("scores::{symbol}"))
+}
+
+fn imports_game_scores_alias(text: &str) -> bool {
+    count_token_refs(text, "use crate::game::scores;") > 0
+        || count_token_refs(text, "use deadsync::game::scores;") > 0
+        || grouped_use_contains_token(text, "use crate::game::{", "scores")
+        || grouped_use_contains_token(text, "use deadsync::game::{", "scores")
+}
+
+fn grouped_use_contains_token(text: &str, marker: &str, target: &str) -> bool {
+    let mut rest = text;
+
+    while let Some(index) = rest.find(marker) {
+        let after = &rest[index + marker.len()..];
+        let end = after.find(';').unwrap_or(after.len());
+        let statement = &after[..end];
+        if statement
+            .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+            .any(|token| token == target)
+        {
+            return true;
+        }
+        rest = &after[end..];
+        if end == after.len() {
+            break;
+        }
+    }
+
+    false
 }
 
 fn count_gameplay_limit_facade_refs(text: &str, symbol: &str) -> usize {

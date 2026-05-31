@@ -1,6 +1,8 @@
+use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
 use deadsync_score::ArrowCloudLeaderboard;
 use serde::Deserializer;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,6 +30,20 @@ pub enum ConnectionStatus {
     Connected,
     Error(ConnectionError),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionProbeError {
+    pub connection_error: ConnectionError,
+    pub message: String,
+}
+
+impl std::fmt::Display for ConnectionProbeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message.as_str())
+    }
+}
+
+impl std::error::Error for ConnectionProbeError {}
 
 pub fn classify_connection_error(message: &str) -> ConnectionError {
     let lower = message.to_ascii_lowercase();
@@ -81,6 +97,90 @@ pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
+pub fn player_leaderboards_url() -> String {
+    format!(
+        "{}/player-leaderboards.php",
+        ARROWCLOUD_API_BASE_URL.trim_end_matches('/')
+    )
+}
+
+pub fn fetch_player_leaderboards(
+    api_key: &str,
+    chart_hash: &str,
+) -> Result<crate::groovestats::LeaderboardsApiResponse, OnlineRequestError> {
+    let api_url = player_leaderboards_url();
+    let response = network::get_agent()
+        .get(&api_url)
+        .header("x-api-key-player-1", api_key)
+        .query("chartHashP1", chart_hash)
+        .call()
+        .map_err(network::error_from_ureq)
+        .map_err(OnlineRequestError::from)?;
+    if response.status().as_u16() != 200 {
+        return Err(OnlineRequestError::HttpStatus(response.status().as_u16()));
+    }
+    network::read_json_body(response).map_err(OnlineRequestError::from)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrowCloudSubmitRequestSuccess {
+    pub status: u16,
+    pub body_snippet: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArrowCloudSubmitRequestError {
+    InvalidRequest { message: String },
+    Transport { message: String, timed_out: bool },
+    Http { status: u16, body_snippet: String },
+}
+
+pub fn submit_score_request(
+    api_key: &str,
+    payload: &ArrowCloudPayload,
+) -> Result<ArrowCloudSubmitRequestSuccess, ArrowCloudSubmitRequestError> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err(ArrowCloudSubmitRequestError::InvalidRequest {
+            message: "missing ArrowCloud API key".to_string(),
+        });
+    }
+    let Some(url) = submit_url(payload.hash.as_str()) else {
+        return Err(ArrowCloudSubmitRequestError::InvalidRequest {
+            message: "missing chart hash".to_string(),
+        });
+    };
+
+    let bearer = format!("Bearer {api_key}");
+    let response = network::get_agent()
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", &bearer)
+        .send_json(payload)
+        .map_err(|error| {
+            let message = format!("network error: {error}");
+            ArrowCloudSubmitRequestError::Transport {
+                timed_out: network::is_timeout_message(message.as_str()),
+                message,
+            }
+        })?;
+    let status = response.status();
+    let status_code = status.as_u16();
+    let body = network::read_text_body_or_empty(response);
+    let body_snippet = network::log_body_snippet(body.as_str());
+    if status.is_success() {
+        return Ok(ArrowCloudSubmitRequestSuccess {
+            status: status_code,
+            body_snippet,
+        });
+    }
+
+    Err(ArrowCloudSubmitRequestError::Http {
+        status: status_code,
+        body_snippet,
+    })
+}
+
 pub fn legacy_leaderboards_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -106,6 +206,60 @@ pub fn check_connection() -> Result<ConnectionStatus, NetworkError> {
         .call()
         .map_err(network::error_from_ureq)?;
     Ok(ConnectionStatus::Connected)
+}
+
+pub fn probe_connection() -> Result<ConnectionStatus, ConnectionProbeError> {
+    check_connection().map_err(ConnectionProbeError::from)
+}
+
+impl From<NetworkError> for ConnectionProbeError {
+    fn from(error: NetworkError) -> Self {
+        Self {
+            connection_error: connection_error_from_network_error(&error),
+            message: error.to_string(),
+        }
+    }
+}
+
+fn get_arrowcloud_json<T: DeserializeOwned>(
+    api_url: &str,
+    api_key: Option<&str>,
+    page: Option<u32>,
+) -> Result<Option<T>, OnlineRequestError> {
+    let mut request = network::get_agent().get(api_url);
+    if let Some(page) = page.filter(|page| *page > 1) {
+        let page = page.to_string();
+        request = request.query("page", &page);
+    }
+    if let Some(api_key) = api_key.map(str::trim).filter(|api_key| !api_key.is_empty()) {
+        let bearer = format!("Bearer {api_key}");
+        request = request.header("Authorization", &bearer);
+    }
+    let response = request
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .call()
+        .map_err(network::error_from_ureq)
+        .map_err(OnlineRequestError::from)?;
+    match response.status().as_u16() {
+        200 => network::read_json_body(response)
+            .map(Some)
+            .map_err(OnlineRequestError::from),
+        404 => Ok(None),
+        status => Err(OnlineRequestError::HttpStatus(status)),
+    }
+}
+
+pub fn fetch_leaderboards(
+    api_url: &str,
+    page: Option<u32>,
+) -> Result<Option<ArrowCloudLeaderboardsApiResponse>, OnlineRequestError> {
+    get_arrowcloud_json(api_url, None, page)
+}
+
+pub fn fetch_user(api_key: &str) -> Result<Option<ArrowCloudUserApiResponse>, OnlineRequestError> {
+    get_arrowcloud_json(user_url(), Some(api_key), None)
 }
 
 #[derive(Debug, Serialize)]
@@ -140,6 +294,31 @@ pub struct ArrowCloudRetrieveScoreEntry {
     pub play_id: Option<i64>,
     #[serde(default)]
     pub is_fail: bool,
+}
+
+pub fn retrieve_scores(
+    api_key: &str,
+    user_id: Option<&str>,
+    chart_hashes: &[String],
+    leaderboards: &[ArrowCloudLeaderboard],
+) -> Result<ArrowCloudRetrieveScoresResponse, OnlineRequestError> {
+    let body = ArrowCloudRetrieveScoresRequest {
+        chart_hashes,
+        leaderboard_ids: leaderboards,
+        user_id,
+    };
+    let bearer = format!("Bearer {}", api_key.trim());
+    let response = network::get_agent()
+        .post(&retrieve_scores_url())
+        .header("Content-Type", "application/json")
+        .header("Authorization", &bearer)
+        .send_json(&body)
+        .map_err(network::error_from_ureq)
+        .map_err(OnlineRequestError::from)?;
+    if response.status().as_u16() != 200 {
+        return Err(OnlineRequestError::HttpStatus(response.status().as_u16()));
+    }
+    network::read_json_body(response).map_err(OnlineRequestError::from)
 }
 
 #[derive(Deserialize, Debug)]
@@ -842,6 +1021,17 @@ mod tests {
             )),
             ConnectionError::HostBlocked
         );
+    }
+
+    #[test]
+    fn network_errors_map_to_probe_errors() {
+        let timeout = ConnectionProbeError::from(NetworkError::Timeout);
+        assert_eq!(timeout.connection_error, ConnectionError::TimedOut);
+        assert_eq!(timeout.to_string(), "request timed out");
+
+        let blocked = ConnectionProbeError::from(NetworkError::HttpStatus(403));
+        assert_eq!(blocked.connection_error, ConnectionError::HostBlocked);
+        assert_eq!(blocked.to_string(), "http status 403");
     }
 
     fn make_start_ok() -> DeviceLoginStartResp {

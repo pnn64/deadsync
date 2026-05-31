@@ -492,6 +492,128 @@ pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f
     Some((higher_scores as u32).saturating_add(1))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoreImportEndpoint {
+    GrooveStats,
+    BoogieStats,
+    ArrowCloud,
+}
+
+impl ScoreImportEndpoint {
+    #[inline(always)]
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::GrooveStats => "GrooveStats",
+            Self::BoogieStats => "BoogieStats",
+            Self::ArrowCloud => "ArrowCloud",
+        }
+    }
+
+    #[inline(always)]
+    pub const fn requires_username(self) -> bool {
+        !matches!(self, Self::ArrowCloud)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ScoreBulkImportSummary {
+    pub requested_charts: usize,
+    pub imported_scores: usize,
+    pub missing_scores: usize,
+    pub failed_requests: usize,
+    pub rate_limit_per_second: u32,
+    pub elapsed_seconds: f32,
+    pub canceled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScoreImportProgress {
+    pub processed_charts: usize,
+    pub total_charts: usize,
+    pub imported_scores: usize,
+    pub missing_scores: usize,
+    pub failed_requests: usize,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CachedItlScore {
+    pub ex_hundredths: u32,
+    pub clear_type: u8,
+    pub points: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ItlEvalState {
+    pub active: bool,
+    pub eligible: bool,
+    pub chart_no_cmod: bool,
+    pub used_cmod: bool,
+    pub reason_lines: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GrooveStatsEvalState {
+    pub valid: bool,
+    pub reason_lines: Vec<String>,
+    pub manual_qr_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrooveStatsSubmitUiStatus {
+    Submitting,
+    Submitted,
+    TimedOut,
+    NetworkError,
+    ServerError { http_status: u16 },
+    Rejected { reason: RejectReason },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowCloudSubmitUiStatus {
+    Submitting,
+    Submitted,
+    TimedOut,
+    NetworkError,
+    ServerError { http_status: u16 },
+    Rejected { reason: RejectReason },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GrooveStatsSubmitRecordBanner {
+    PersonalBest,
+    WorldRecord,
+    WorldRecordEx,
+}
+
+#[derive(Clone, Debug)]
+pub enum ItlOverlayPage {
+    Text(String),
+    Leaderboard(Vec<LeaderboardEntry>),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ItlEventProgress {
+    pub name: String,
+    pub is_doubles: bool,
+    pub score_hundredths: u32,
+    pub score_delta_hundredths: i32,
+    pub current_points: u32,
+    pub point_delta: i32,
+    pub current_ranking_points: u32,
+    pub ranking_delta: i32,
+    pub current_song_points: u32,
+    pub song_delta: i32,
+    pub current_ex_points: u32,
+    pub ex_delta: i32,
+    pub current_total_points: u32,
+    pub total_delta: i32,
+    pub total_passes: u32,
+    pub clear_type_before: Option<u8>,
+    pub clear_type_after: Option<u8>,
+    pub overlay_pages: Vec<ItlOverlayPage>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -648,5 +770,39 @@ mod tests {
         assert!(!gameplay_run_failed(false, false));
         assert!(gameplay_run_failed(true, false));
         assert!(gameplay_run_failed(false, true));
+    }
+
+    #[test]
+    fn score_import_endpoint_metadata_matches_backends() {
+        assert_eq!(
+            ScoreImportEndpoint::GrooveStats.display_name(),
+            "GrooveStats"
+        );
+        assert_eq!(
+            ScoreImportEndpoint::BoogieStats.display_name(),
+            "BoogieStats"
+        );
+        assert_eq!(ScoreImportEndpoint::ArrowCloud.display_name(), "ArrowCloud");
+        assert!(ScoreImportEndpoint::GrooveStats.requires_username());
+        assert!(ScoreImportEndpoint::BoogieStats.requires_username());
+        assert!(!ScoreImportEndpoint::ArrowCloud.requires_username());
+    }
+
+    #[test]
+    fn itl_eval_state_defaults_to_inactive() {
+        let state = ItlEvalState::default();
+        assert!(!state.active);
+        assert!(!state.eligible);
+        assert!(!state.chart_no_cmod);
+        assert!(!state.used_cmod);
+        assert!(state.reason_lines.is_empty());
+    }
+
+    #[test]
+    fn groovestats_eval_state_defaults_to_invalid() {
+        let state = GrooveStatsEvalState::default();
+        assert!(!state.valid);
+        assert!(state.reason_lines.is_empty());
+        assert!(state.manual_qr_url.is_none());
     }
 }

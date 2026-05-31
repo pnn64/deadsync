@@ -8,7 +8,6 @@ use crate::game::stage_stats;
 use chrono::{DateTime, Local, TimeZone, Utc};
 use deadsync_chart::ArrowStats;
 use log::{debug, warn};
-use serde::de::DeserializeOwned;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -21,11 +20,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use bincode::{Decode, Encode};
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_input::InputSource;
-use deadsync_net as network;
+use deadsync_online::OnlineRequestError;
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES, ArrowCloudLeaderboardEntry,
     ArrowCloudLeaderboardPane, ArrowCloudLeaderboardsApiResponse, ArrowCloudRetrieveScoreEntry,
-    ArrowCloudRetrieveScoresRequest, ArrowCloudRetrieveScoresResponse, ArrowCloudUserApiResponse,
     ArrowCloudUserApiUser,
 };
 use deadsync_online::groovestats::{
@@ -44,33 +42,33 @@ fn active_groovestats_service() -> groovestats_api::Service {
 }
 
 pub use arrowcloud::{
-    ArrowCloudSubmitUiStatus, arrowcloud_next_retry_is_auto, arrowcloud_next_retry_remaining_secs,
+    arrowcloud_next_retry_is_auto, arrowcloud_next_retry_remaining_secs,
     get_arrowcloud_submit_ui_status_for_side, retry_arrowcloud_submit,
     submit_arrowcloud_payloads_from_gameplay, tick_arrowcloud_auto_retries,
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore, Grade, LeaderboardEntry,
-    LeaderboardPane, LocalScalarScore, MachineReplayEntry, PlayerLeaderboardData, RejectReason,
-    ReplayEdge, gameplay_run_failed, gameplay_run_passed, lua_chart_submit_allowed,
-    promote_quint_grade, score_to_grade,
+    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore, Grade,
+    GrooveStatsSubmitRecordBanner, LeaderboardEntry, LeaderboardPane, LocalScalarScore,
+    MachineReplayEntry, PlayerLeaderboardData, ReplayEdge, ScoreBulkImportSummary,
+    ScoreImportEndpoint, ScoreImportProgress, gameplay_run_failed, gameplay_run_passed,
+    lua_chart_submit_allowed, promote_quint_grade, score_to_grade,
 };
+use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
-    GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
     get_groovestats_submit_itl_progress_for_side, get_groovestats_submit_record_banner_for_side,
     get_groovestats_submit_ui_status_for_side, groovestats_eval_state_from_gameplay,
     groovestats_next_retry_is_auto, groovestats_next_retry_remaining_secs,
     retry_groovestats_submit, submit_groovestats_payloads_from_gameplay,
     tick_groovestats_auto_retries,
 };
-use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use itl::{
-    CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage, get_cached_itl_score_for_side,
-    get_cached_itl_score_for_song, get_cached_itl_self_score_for_side,
-    get_cached_itl_tournament_overall_ranks_for_side, get_cached_itl_tournament_rank_for_side,
-    get_or_fetch_itl_self_score_for_side, get_or_fetch_itl_tournament_rank_for_side,
-    is_itl_song_folder_unlocked_for_side, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
-    itl_points_for_chart, save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
+    get_cached_itl_score_for_side, get_cached_itl_score_for_song,
+    get_cached_itl_self_score_for_side, get_cached_itl_tournament_overall_ranks_for_side,
+    get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
+    get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
+    is_itl_unlocks_pack, itl_eval_state_from_gameplay, itl_points_for_chart,
+    save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
 };
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
@@ -2638,49 +2636,28 @@ fn empty_arrowcloud_hard_ex_pane() -> LeaderboardPane {
     }
 }
 
-fn fetch_arrowcloud_json<T: DeserializeOwned>(
-    api_url: &str,
-    api_key: Option<&str>,
-    page: Option<u32>,
-) -> Result<Option<T>, network::NetworkError> {
-    let mut request = network::get_agent().get(api_url);
-    if let Some(page) = page.filter(|page| *page > 1) {
-        let page = page.to_string();
-        request = request.query("page", &page);
-    }
-    if let Some(api_key) = api_key.map(str::trim).filter(|api_key| !api_key.is_empty()) {
-        let bearer = format!("Bearer {api_key}");
-        request = request.header("Authorization", &bearer);
-    }
-    let response = request
-        .config()
-        .http_status_as_error(false)
-        .build()
-        .call()
-        .map_err(network::error_from_ureq)?;
-    match response.status().as_u16() {
-        200 => network::read_json_body(response).map(Some),
-        404 => Ok(None),
-        status => Err(network::NetworkError::HttpStatus(status)),
-    }
-}
-
 fn fetch_arrowcloud_leaderboards(
     api_url: &str,
     page: Option<u32>,
-) -> Result<Option<ArrowCloudLeaderboardsApiResponse>, network::NetworkError> {
-    fetch_arrowcloud_json(api_url, None, page)
+) -> Result<Option<ArrowCloudLeaderboardsApiResponse>, OnlineRequestError> {
+    arrowcloud_api::fetch_leaderboards(api_url, page)
 }
 
 fn fetch_arrowcloud_user_context(
     api_key: &str,
-) -> Result<Option<ArrowCloudUserContext>, network::NetworkError> {
-    fetch_arrowcloud_json::<ArrowCloudUserApiResponse>(
-        arrowcloud_api::user_url(),
-        Some(api_key),
-        None,
-    )
-    .map(|response| response.map(|response| arrowcloud_user_context_from_api(response.user)))
+) -> Result<Option<ArrowCloudUserContext>, OnlineRequestError> {
+    arrowcloud_api::fetch_user(api_key)
+        .map(|response| response.map(|response| arrowcloud_user_context_from_api(response.user)))
+}
+
+fn boxed_online_status_error(
+    prefix: &str,
+    error: OnlineRequestError,
+) -> Box<dyn Error + Send + Sync> {
+    if let Some(status) = error.http_status() {
+        return format!("{prefix} returned status {status}").into();
+    }
+    Box::new(error)
 }
 
 // --- ArrowCloud bulk score retrieval (POST /v1/retrieve-scores) ---
@@ -2757,28 +2734,7 @@ fn fetch_arrowcloud_bulk_scores(
         .into());
     }
 
-    let body = ArrowCloudRetrieveScoresRequest {
-        chart_hashes,
-        leaderboard_ids: leaderboards,
-        user_id,
-    };
-    let bearer = format!("Bearer {api_key}");
-    let url = arrowcloud_api::retrieve_scores_url();
-    let response = network::get_agent()
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .header("Authorization", &bearer)
-        .send_json(&body)?;
-
-    if response.status() != 200 {
-        return Err(format!(
-            "ArrowCloud /v1/retrieve-scores returned status {}",
-            response.status()
-        )
-        .into());
-    }
-
-    let decoded: ArrowCloudRetrieveScoresResponse = network::read_json_body(response)?;
+    let decoded = arrowcloud_api::retrieve_scores(api_key, user_id, chart_hashes, leaderboards)?;
     let mut out = HashMap::with_capacity(decoded.scores.len());
     for (chart_hash, leaderboards) in decoded.scores {
         let entries = arrowcloud_scores_from_entry_map(&leaderboards);
@@ -2883,21 +2839,13 @@ fn fetch_player_leaderboards_internal(
     }
 
     let max_entries = max_entries.max(1);
-    let max_entries_str = max_entries.to_string();
-    let agent = network::get_groovestats_agent();
-    let api_url = groovestats_api::player_leaderboards_url(active_groovestats_service());
-    let response = agent
-        .get(&api_url)
-        .header("x-api-key-player-1", api_key)
-        .query("chartHashP1", chart_hash)
-        .query("maxLeaderboardResults", &max_entries_str)
-        .call()?;
-
-    if response.status() != 200 {
-        return Err(format!("Leaderboard API returned status {}", response.status()).into());
-    }
-
-    let decoded: LeaderboardsApiResponse = network::read_json_body(response)?;
+    let decoded = groovestats_api::fetch_player_leaderboards(
+        active_groovestats_service(),
+        api_key,
+        chart_hash,
+        Some(max_entries),
+    )
+    .map_err(|error| boxed_online_status_error("Leaderboard API", error))?;
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
     let mut ex_entries = Vec::new();
@@ -4055,65 +4003,6 @@ const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
 const SCORE_IMPORT_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
 const SCORE_IMPORT_PROGRESS_LOG_EVERY: usize = 100;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScoreImportEndpoint {
-    GrooveStats,
-    BoogieStats,
-    ArrowCloud,
-}
-
-impl ScoreImportEndpoint {
-    #[inline(always)]
-    pub const fn display_name(self) -> &'static str {
-        match self {
-            Self::GrooveStats => "GrooveStats",
-            Self::BoogieStats => "BoogieStats",
-            Self::ArrowCloud => "ArrowCloud",
-        }
-    }
-
-    #[inline(always)]
-    pub const fn requires_username(self) -> bool {
-        !matches!(self, Self::ArrowCloud)
-    }
-
-    fn player_leaderboards_url(self) -> String {
-        match self {
-            Self::GrooveStats => {
-                groovestats_api::player_leaderboards_url(groovestats_api::Service::GrooveStats)
-            }
-            Self::BoogieStats => {
-                groovestats_api::player_leaderboards_url(groovestats_api::Service::BoogieStats)
-            }
-            Self::ArrowCloud => format!(
-                "{}/player-leaderboards.php",
-                arrowcloud_api::api_base_url().trim_end_matches('/')
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ScoreBulkImportSummary {
-    pub requested_charts: usize,
-    pub imported_scores: usize,
-    pub missing_scores: usize,
-    pub failed_requests: usize,
-    pub rate_limit_per_second: u32,
-    pub elapsed_seconds: f32,
-    pub canceled: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct ScoreImportProgress {
-    pub processed_charts: usize,
-    pub total_charts: usize,
-    pub imported_scores: usize,
-    pub missing_scores: usize,
-    pub failed_requests: usize,
-    pub detail: String,
-}
-
 struct ScoreImportFetchResult {
     score: Option<CachedScore>,
     score_proves_nonquint_ex: bool,
@@ -4221,24 +4110,24 @@ fn fetch_player_score_from_endpoint(
         .into());
     }
 
-    let agent = match endpoint {
-        ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
-            network::get_groovestats_agent()
+    let decoded = match endpoint {
+        ScoreImportEndpoint::GrooveStats => groovestats_api::fetch_player_leaderboards(
+            groovestats_api::Service::GrooveStats,
+            api_key,
+            chart_hash,
+            None,
+        ),
+        ScoreImportEndpoint::BoogieStats => groovestats_api::fetch_player_leaderboards(
+            groovestats_api::Service::BoogieStats,
+            api_key,
+            chart_hash,
+            None,
+        ),
+        ScoreImportEndpoint::ArrowCloud => {
+            arrowcloud_api::fetch_player_leaderboards(api_key, chart_hash)
         }
-        ScoreImportEndpoint::ArrowCloud => network::get_agent(),
-    };
-    let api_url = endpoint.player_leaderboards_url();
-    let response = agent
-        .get(&api_url)
-        .header("x-api-key-player-1", api_key)
-        .query("chartHashP1", chart_hash)
-        .call()?;
-
-    if response.status() != 200 {
-        return Err(format!("API returned status {}", response.status()).into());
     }
-
-    let decoded: LeaderboardsApiResponse = network::read_json_body(response)?;
+    .map_err(|error| boxed_online_status_error("API", error))?;
     Ok(score_import_result_from_response(
         decoded, endpoint, username, chart_hash,
     ))
@@ -6036,7 +5925,8 @@ mod tests {
                 }
             }
         }"#;
-        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
+            serde_json::from_str(raw).unwrap();
         assert_eq!(decoded.scores.len(), 2);
         assert!(decoded.scores["006fb5c4890e98a2"].contains_key("2"));
         assert!(decoded.scores["006fb5c4890e98a2"].contains_key("3"));
@@ -6046,7 +5936,8 @@ mod tests {
     #[test]
     fn arrowcloud_retrieve_response_ignores_unknown_top_level_fields() {
         let raw = r#"{ "scores": {}, "extra": 42, "meta": { "x": 1 } }"#;
-        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
+            serde_json::from_str(raw).unwrap();
         assert!(decoded.scores.is_empty());
     }
 
@@ -6057,7 +5948,8 @@ mod tests {
                 "abc": { "3": { "grade": "n/a" } }
             }
         }"#;
-        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
+            serde_json::from_str(raw).unwrap();
         assert_eq!(decoded.scores["abc"]["3"].score, None);
     }
 

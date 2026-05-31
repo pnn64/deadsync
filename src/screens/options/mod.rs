@@ -25,6 +25,7 @@ use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_score as score_data;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

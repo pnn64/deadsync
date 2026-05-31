@@ -1,16 +1,15 @@
 use super::{
-    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
     lua_chart_submit_allowed, submit_side_ix,
 };
 use crate::game::gameplay;
 use crate::game::profile::{self, Profile};
 use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
-use deadsync_net as network;
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ArrowCloudJudgmentCounts, ArrowCloudLifePoint, ArrowCloudModifiers,
     ArrowCloudNpsInfo, ArrowCloudNpsPoint, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSpeed,
-    ArrowCloudTimingDatum, ArrowCloudTimingOffset,
+    ArrowCloudSubmitRequestError, ArrowCloudTimingDatum, ArrowCloudTimingOffset,
 };
 use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_rules::{
@@ -19,7 +18,10 @@ use deadsync_rules::{
     scroll::ScrollSpeedSetting,
     timing::{self, ScatterPoint},
 };
-use deadsync_score::{SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs};
+use deadsync_score::{
+    ArrowCloudSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs,
+    submit_retry_delay_secs,
+};
 use log::{debug, warn};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -43,16 +45,6 @@ const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Beat",
 ];
 const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArrowCloudSubmitUiStatus {
-    Submitting,
-    Submitted,
-    TimedOut,
-    NetworkError,
-    ServerError { http_status: u16 },
-    Rejected { reason: RejectReason },
-}
 
 #[derive(Debug, Clone)]
 struct ArrowCloudSubmitUiEntry {
@@ -206,15 +198,6 @@ const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
             | ArrowCloudSubmitUiStatus::NetworkError
             | ArrowCloudSubmitUiStatus::ServerError { .. }
     )
-}
-
-#[inline(always)]
-fn arrowcloud_status_from_transport_error(message: &str) -> ArrowCloudSubmitUiStatus {
-    if network::is_timeout_message(message) {
-        ArrowCloudSubmitUiStatus::TimedOut
-    } else {
-        ArrowCloudSubmitUiStatus::NetworkError
-    }
 }
 
 #[inline(always)]
@@ -795,72 +778,68 @@ fn submit_arrowcloud_payload(
     api_key: &str,
     payload: &ArrowCloudPayload,
 ) -> Result<(), ArrowCloudSubmitError> {
-    let api_key = api_key.trim();
-    if api_key.is_empty() {
-        return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::Rejected {
-                reason: RejectReason::Unauthorized,
-            },
-            message: "missing ArrowCloud API key".to_string(),
-        });
-    }
-    let Some(url) = arrowcloud_api::submit_url(payload.hash.as_str()) else {
-        return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            },
-            message: "missing chart hash".to_string(),
-        });
-    };
-
-    let bearer = format!("Bearer {api_key}");
-    let agent = network::get_agent();
-    let response = agent
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .header("Authorization", &bearer)
-        .send_json(payload)
-        .map_err(|e| {
-            let msg = format!("network error: {e}");
-            ArrowCloudSubmitError {
-                status: arrowcloud_status_from_transport_error(msg.as_str()),
-                message: msg,
+    match arrowcloud_api::submit_score_request(api_key, payload) {
+        Ok(success) => {
+            if success.body_snippet.is_empty() {
+                debug!(
+                    "ArrowCloud submit success for {:?} ({}) status={}",
+                    side, payload.hash, success.status
+                );
+            } else {
+                debug!(
+                    "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
+                    side,
+                    payload.hash,
+                    success.status,
+                    success.body_snippet.as_str()
+                );
             }
-        })?;
-    let status = response.status();
-    let status_code = status.as_u16();
-    let body = network::read_text_body_or_empty(response);
-    if status.is_success() {
-        let snippet = network::log_body_snippet(body.as_str());
-        if snippet.is_empty() {
-            debug!(
-                "ArrowCloud submit success for {:?} ({}) status={}",
-                side, payload.hash, status_code
-            );
-        } else {
-            debug!(
-                "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
-                side,
-                payload.hash,
-                status_code,
-                snippet.as_str()
-            );
+            Ok(())
         }
-        return Ok(());
+        Err(error) => Err(arrowcloud_submit_error_from_online(error)),
     }
+}
 
-    let snippet = network::log_body_snippet(body.as_str());
-    let status_kind = arrowcloud_status_from_http(status_code);
-    if snippet.is_empty() {
-        Err(ArrowCloudSubmitError {
-            status: status_kind,
-            message: format!("HTTP {status_code}"),
-        })
-    } else {
-        Err(ArrowCloudSubmitError {
-            status: status_kind,
-            message: format!("HTTP {status_code}: {}", snippet.as_str()),
-        })
+fn arrowcloud_submit_error_from_online(
+    error: ArrowCloudSubmitRequestError,
+) -> ArrowCloudSubmitError {
+    match error {
+        ArrowCloudSubmitRequestError::InvalidRequest { message } => {
+            let reason = if message.contains("API key") {
+                RejectReason::Unauthorized
+            } else {
+                RejectReason::InvalidScore
+            };
+            ArrowCloudSubmitError {
+                status: ArrowCloudSubmitUiStatus::Rejected { reason },
+                message,
+            }
+        }
+        ArrowCloudSubmitRequestError::Transport { message, timed_out } => ArrowCloudSubmitError {
+            status: if timed_out {
+                ArrowCloudSubmitUiStatus::TimedOut
+            } else {
+                ArrowCloudSubmitUiStatus::NetworkError
+            },
+            message,
+        },
+        ArrowCloudSubmitRequestError::Http {
+            status,
+            body_snippet,
+        } => {
+            let status_kind = arrowcloud_status_from_http(status);
+            if body_snippet.is_empty() {
+                ArrowCloudSubmitError {
+                    status: status_kind,
+                    message: format!("HTTP {status}"),
+                }
+            } else {
+                ArrowCloudSubmitError {
+                    status: status_kind,
+                    message: format!("HTTP {status}: {}", body_snippet.as_str()),
+                }
+            }
+        }
     }
 }
 
@@ -1550,19 +1529,21 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_transport_error_maps_timeout_status() {
-        assert_eq!(
-            arrowcloud_status_from_transport_error("Timed Out"),
-            ArrowCloudSubmitUiStatus::TimedOut
-        );
-        assert_eq!(
-            arrowcloud_status_from_transport_error("network error: timed out while connecting"),
-            ArrowCloudSubmitUiStatus::TimedOut
-        );
-        assert_eq!(
-            arrowcloud_status_from_transport_error("Machine Offline"),
-            ArrowCloudSubmitUiStatus::NetworkError
-        );
+    fn arrowcloud_submit_error_maps_online_transport_errors() {
+        let timed_out =
+            arrowcloud_submit_error_from_online(ArrowCloudSubmitRequestError::Transport {
+                message: "network error: timed out".to_string(),
+                timed_out: true,
+            });
+        assert_eq!(timed_out.status, ArrowCloudSubmitUiStatus::TimedOut);
+        assert_eq!(timed_out.message, "network error: timed out");
+
+        let network =
+            arrowcloud_submit_error_from_online(ArrowCloudSubmitRequestError::Transport {
+                message: "network error: refused".to_string(),
+                timed_out: false,
+            });
+        assert_eq!(network.status, ArrowCloudSubmitUiStatus::NetworkError);
     }
 
     #[test]
@@ -1686,5 +1667,42 @@ mod tests {
                 reason: RejectReason::InvalidScore,
             }
         );
+    }
+
+    #[test]
+    fn arrowcloud_submit_error_maps_online_protocol_errors() {
+        let missing_key =
+            arrowcloud_submit_error_from_online(ArrowCloudSubmitRequestError::InvalidRequest {
+                message: "missing ArrowCloud API key".to_string(),
+            });
+        assert_eq!(
+            missing_key.status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+
+        let missing_hash =
+            arrowcloud_submit_error_from_online(ArrowCloudSubmitRequestError::InvalidRequest {
+                message: "missing chart hash".to_string(),
+            });
+        assert_eq!(
+            missing_hash.status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+
+        let http = arrowcloud_submit_error_from_online(ArrowCloudSubmitRequestError::Http {
+            status: 403,
+            body_snippet: "bad key".to_string(),
+        });
+        assert_eq!(
+            http.status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(http.message, "HTTP 403: bad key");
     }
 }

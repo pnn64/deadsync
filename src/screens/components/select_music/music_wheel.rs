@@ -312,7 +312,7 @@ fn itl_score_y(side: profile::PlayerSide, joined_sides: usize) -> f32 {
 
 #[inline(always)]
 fn choose_itl_wheel_score(
-    local_itl: Option<scores::CachedItlScore>,
+    local_itl: Option<score_data::CachedItlScore>,
     online_ex_hundredths: Option<u32>,
     online_points: Option<u32>,
 ) -> Option<(u32, Option<u32>)> {
@@ -1252,9 +1252,9 @@ mod tests {
     use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
     use crate::engine::present::color;
     use crate::game::profile;
-    use crate::game::scores::CachedItlScore;
     use crate::screens::select_music::MusicWheelEntry;
     use deadsync_chart::SongData;
+    use deadsync_score::CachedItlScore;
     use std::path::PathBuf;
     use std::sync::Arc;
 

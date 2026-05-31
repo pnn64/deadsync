@@ -1,5 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
+use std::io::ErrorKind;
+use std::net::TcpStream;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{Message, WebSocket};
 
 pub const LOBBY_SERVICE_URL: &str = "ws://syncservice.groovestats.com:1337";
 pub const LOBBY_PASSWORD_MAX_LEN: usize = 4;
@@ -15,6 +21,104 @@ pub const EVENT_LOBBY_LEFT: &str = "lobbyLeft";
 pub const EVENT_CLIENT_DISCONNECTED: &str = "clientDisconnected";
 pub const EVENT_RESPONSE_STATUS: &str = "responseStatus";
 const LOBBY_PROFILE_PREFIX: &str = "[DS] ";
+
+pub struct LobbySocket {
+    socket: WebSocket<MaybeTlsStream<TcpStream>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LobbySocketError {
+    Transient(String),
+    Closed,
+    Other(String),
+}
+
+impl Display for LobbySocketError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Transient(message) | Self::Other(message) => f.write_str(message),
+            Self::Closed => f.write_str("Connection closed."),
+        }
+    }
+}
+
+impl Error for LobbySocketError {}
+
+pub fn connect_lobby_socket() -> Result<LobbySocket, LobbySocketError> {
+    let (socket, _) =
+        tungstenite::connect(LOBBY_SERVICE_URL).map_err(LobbySocketError::from_tungstenite)?;
+    let mut socket = LobbySocket { socket };
+    set_socket_nonblocking(&mut socket)
+        .map_err(|error| LobbySocketError::Other(error.to_string()))?;
+    Ok(socket)
+}
+
+pub fn send_lobby_text(socket: &mut LobbySocket, text: String) -> Result<(), LobbySocketError> {
+    socket
+        .socket
+        .send(Message::Text(text.into()))
+        .map_err(LobbySocketError::from_tungstenite)
+}
+
+pub fn read_lobby_text(socket: &mut LobbySocket) -> Result<Option<String>, LobbySocketError> {
+    match socket.socket.read() {
+        Ok(Message::Text(text)) => Ok(Some(text.to_string())),
+        Ok(Message::Close(_)) => Err(LobbySocketError::Closed),
+        Ok(_) => Ok(None),
+        Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => Ok(None),
+        Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+            Err(LobbySocketError::Closed)
+        }
+        Err(error) => Err(LobbySocketError::from_tungstenite(error)),
+    }
+}
+
+pub fn send_lobby_ping(socket: &mut LobbySocket) -> Result<(), LobbySocketError> {
+    socket
+        .socket
+        .send(Message::Ping(Vec::new().into()))
+        .map_err(LobbySocketError::from_tungstenite)
+}
+
+pub fn flush_lobby_socket(socket: &mut LobbySocket) -> Result<(), LobbySocketError> {
+    socket
+        .socket
+        .flush()
+        .map_err(LobbySocketError::from_tungstenite)
+}
+
+pub fn close_lobby_socket(socket: &mut LobbySocket) {
+    let _ = socket.socket.close(None);
+}
+
+#[inline(always)]
+pub fn is_transient_lobby_socket_error(error: &LobbySocketError) -> bool {
+    matches!(error, LobbySocketError::Transient(_))
+}
+
+impl LobbySocketError {
+    fn from_tungstenite(error: tungstenite::Error) -> Self {
+        match error {
+            tungstenite::Error::Io(error)
+                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) =>
+            {
+                Self::Transient(error.to_string())
+            }
+            tungstenite::Error::WriteBufferFull(_) => Self::Transient(error.to_string()),
+            tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed => {
+                Self::Closed
+            }
+            other => Self::Other(other.to_string()),
+        }
+    }
+}
+
+fn set_socket_nonblocking(socket: &mut LobbySocket) -> Result<(), std::io::Error> {
+    match socket.socket.get_mut() {
+        MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),
+        _ => Ok(()),
+    }
+}
 
 pub fn normalize_lobby_password(raw: &str) -> String {
     let mut out = String::with_capacity(LOBBY_PASSWORD_MAX_LEN);
@@ -442,6 +546,19 @@ mod tests {
         assert!(snapshot.available_lobbies.is_empty());
         assert!(snapshot.joined_lobby.is_none());
         assert!(snapshot.last_status.is_none());
+    }
+
+    #[test]
+    fn lobby_socket_error_display_preserves_connection_text() {
+        assert_eq!(LobbySocketError::Closed.to_string(), "Connection closed.");
+        assert_eq!(
+            LobbySocketError::Other("bad handshake".to_string()).to_string(),
+            "bad handshake"
+        );
+        assert!(is_transient_lobby_socket_error(
+            &LobbySocketError::Transient("would block".to_string())
+        ));
+        assert!(!is_transient_lobby_socket_error(&LobbySocketError::Closed));
     }
 
     #[test]

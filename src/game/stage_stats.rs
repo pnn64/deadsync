@@ -1,7 +1,6 @@
 use deadsync_score as score_data;
 use std::sync::Arc;
 
-use crate::game::scores;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
@@ -23,8 +22,8 @@ pub struct PlayerStageSummary {
     pub chart: Arc<ChartData>,
     pub score_valid: bool,
     pub disqualified: bool,
-    pub groovestats: scores::GrooveStatsEvalState,
-    pub itl: scores::ItlEvalState,
+    pub groovestats: score_data::GrooveStatsEvalState,
+    pub itl: score_data::ItlEvalState,
     pub grade: score_data::Grade,
     pub score_percent: f64,
     pub earned_grade_points: i32,

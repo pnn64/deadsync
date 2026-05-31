@@ -198,11 +198,11 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> Arc<str> {
+fn submit_record_text(banner: score_data::GrooveStatsSubmitRecordBanner) -> Arc<str> {
     match banner {
-        scores::GrooveStatsSubmitRecordBanner::PersonalBest => tr("Records", "PersonalBest"),
-        scores::GrooveStatsSubmitRecordBanner::WorldRecord => tr("Records", "WorldRecord"),
-        scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => tr("Records", "WorldRecordEx"),
+        score_data::GrooveStatsSubmitRecordBanner::PersonalBest => tr("Records", "PersonalBest"),
+        score_data::GrooveStatsSubmitRecordBanner::WorldRecord => tr("Records", "WorldRecord"),
+        score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx => tr("Records", "WorldRecordEx"),
     }
 }
 
@@ -253,27 +253,27 @@ enum SubmitFooterStatus {
 
 #[inline(always)]
 fn footer_status_from_groovestats(
-    status: scores::GrooveStatsSubmitUiStatus,
+    status: score_data::GrooveStatsSubmitUiStatus,
     next_retry_remaining_secs: Option<u32>,
     next_retry_is_auto: bool,
 ) -> SubmitFooterStatus {
     match status {
-        scores::GrooveStatsSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
-        scores::GrooveStatsSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
-        scores::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+        score_data::GrooveStatsSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        score_data::GrooveStatsSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        score_data::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
             retry_in_secs: next_retry_remaining_secs,
             is_auto_retry: next_retry_is_auto,
         },
-        scores::GrooveStatsSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
+        score_data::GrooveStatsSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
             retry_in_secs: next_retry_remaining_secs,
         },
-        scores::GrooveStatsSubmitUiStatus::ServerError { http_status } => {
+        score_data::GrooveStatsSubmitUiStatus::ServerError { http_status } => {
             SubmitFooterStatus::ServerError {
                 http_status,
                 retry_in_secs: next_retry_remaining_secs,
             }
         }
-        scores::GrooveStatsSubmitUiStatus::Rejected { reason } => {
+        score_data::GrooveStatsSubmitUiStatus::Rejected { reason } => {
             SubmitFooterStatus::Rejected { reason }
         }
     }
@@ -281,27 +281,27 @@ fn footer_status_from_groovestats(
 
 #[inline(always)]
 fn footer_status_from_arrowcloud(
-    status: scores::ArrowCloudSubmitUiStatus,
+    status: score_data::ArrowCloudSubmitUiStatus,
     next_retry_remaining_secs: Option<u32>,
     next_retry_is_auto: bool,
 ) -> SubmitFooterStatus {
     match status {
-        scores::ArrowCloudSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
-        scores::ArrowCloudSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
-        scores::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+        score_data::ArrowCloudSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        score_data::ArrowCloudSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        score_data::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
             retry_in_secs: next_retry_remaining_secs,
             is_auto_retry: next_retry_is_auto,
         },
-        scores::ArrowCloudSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
+        score_data::ArrowCloudSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
             retry_in_secs: next_retry_remaining_secs,
         },
-        scores::ArrowCloudSubmitUiStatus::ServerError { http_status } => {
+        score_data::ArrowCloudSubmitUiStatus::ServerError { http_status } => {
             SubmitFooterStatus::ServerError {
                 http_status,
                 retry_in_secs: next_retry_remaining_secs,
             }
         }
-        scores::ArrowCloudSubmitUiStatus::Rejected { reason } => {
+        score_data::ArrowCloudSubmitUiStatus::Rejected { reason } => {
             SubmitFooterStatus::Rejected { reason }
         }
     }
@@ -466,8 +466,8 @@ fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32
 fn submit_footer_lines(
     expected_groovestats_submit: bool,
     expected_arrowcloud_submit: bool,
-    groovestats_status: Option<scores::GrooveStatsSubmitUiStatus>,
-    arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
+    groovestats_status: Option<score_data::GrooveStatsSubmitUiStatus>,
+    arrowcloud_status: Option<score_data::ArrowCloudSubmitUiStatus>,
     groovestats_next_retry_remaining_secs: Option<u32>,
     arrowcloud_next_retry_remaining_secs: Option<u32>,
     groovestats_next_retry_is_auto: bool,
@@ -542,8 +542,8 @@ pub struct ScoreInfo {
     pub disqualified: bool,
     pub expected_groovestats_submit: bool,
     pub expected_arrowcloud_submit: bool,
-    pub groovestats: scores::GrooveStatsEvalState,
-    pub itl: scores::ItlEvalState,
+    pub groovestats: score_data::GrooveStatsEvalState,
+    pub itl: score_data::ItlEvalState,
     pub judgment_counts: judgment::JudgeCounts,
     pub score_percent: f64,
     pub earned_grade_points: i32,
@@ -953,7 +953,6 @@ mod tests {
     };
     use crate::assets::i18n;
     use crate::engine::present::actors::Actor;
-    use crate::game::scores;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::note::NoteType;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
@@ -1170,7 +1169,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitting),
             None,
             None,
             None,
@@ -1189,7 +1188,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted),
             None,
             None,
             None,
@@ -1208,7 +1207,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+            Some(score_data::GrooveStatsSubmitUiStatus::Rejected {
                 reason: score_data::RejectReason::InvalidScore,
             }),
             None,
@@ -1229,7 +1228,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            Some(score_data::GrooveStatsSubmitUiStatus::TimedOut),
             None,
             None,
             None,
@@ -1248,7 +1247,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            Some(score_data::GrooveStatsSubmitUiStatus::TimedOut),
             None,
             Some(7),
             None,
@@ -1270,7 +1269,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            Some(score_data::GrooveStatsSubmitUiStatus::TimedOut),
             None,
             Some(0),
             None,
@@ -1289,7 +1288,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            Some(score_data::GrooveStatsSubmitUiStatus::TimedOut),
             None,
             Some(12),
             None,
@@ -1308,7 +1307,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            Some(score_data::GrooveStatsSubmitUiStatus::NetworkError),
             None,
             None,
             None,
@@ -1327,7 +1326,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            Some(score_data::GrooveStatsSubmitUiStatus::NetworkError),
             None,
             Some(4),
             None,
@@ -1348,7 +1347,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            Some(score_data::GrooveStatsSubmitUiStatus::NetworkError),
             None,
             Some(0),
             None,
@@ -1367,7 +1366,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }),
+            Some(score_data::GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }),
             None,
             None,
             None,
@@ -1386,7 +1385,7 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             false,
-            Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 502 }),
+            Some(score_data::GrooveStatsSubmitUiStatus::ServerError { http_status: 502 }),
             None,
             Some(8),
             None,
@@ -1405,8 +1404,8 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
-            Some(scores::ArrowCloudSubmitUiStatus::Submitting),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitting),
+            Some(score_data::ArrowCloudSubmitUiStatus::Submitting),
             None,
             None,
             false,
@@ -1427,8 +1426,8 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
-            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted),
+            Some(score_data::ArrowCloudSubmitUiStatus::Submitted),
             None,
             None,
             false,
@@ -1449,8 +1448,8 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
-            Some(scores::ArrowCloudSubmitUiStatus::TimedOut),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted),
+            Some(score_data::ArrowCloudSubmitUiStatus::TimedOut),
             None,
             Some(8),
             false,
@@ -1471,10 +1470,10 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+            Some(score_data::GrooveStatsSubmitUiStatus::Rejected {
                 reason: score_data::RejectReason::InvalidScore,
             }),
-            Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+            Some(score_data::ArrowCloudSubmitUiStatus::Rejected {
                 reason: score_data::RejectReason::InvalidScore,
             }),
             None,
@@ -1497,8 +1496,8 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
-            Some(scores::ArrowCloudSubmitUiStatus::NetworkError),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted),
+            Some(score_data::ArrowCloudSubmitUiStatus::NetworkError),
             None,
             None,
             false,
@@ -1519,8 +1518,8 @@ mod tests {
         let cells = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
-            Some(scores::ArrowCloudSubmitUiStatus::ServerError { http_status: 502 }),
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitting),
+            Some(score_data::ArrowCloudSubmitUiStatus::ServerError { http_status: 502 }),
             None,
             Some(4),
             false,
@@ -1542,7 +1541,7 @@ mod tests {
             false,
             true,
             None,
-            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+            Some(score_data::ArrowCloudSubmitUiStatus::Submitted),
             None,
             None,
             false,
@@ -1914,7 +1913,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
-    pub itl_progress: [Option<scores::ItlEventProgress>; MAX_PLAYERS],
+    pub itl_progress: [Option<score_data::ItlEventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -1935,8 +1934,8 @@ pub struct State {
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
     submit_record_sfx_played: bool,
-    submit_groovestats_fallback: [Option<scores::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
-    submit_arrowcloud_fallback: [Option<scores::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
+    submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
+    submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     lobby_disconnect_hold_p1: Option<Instant>,
     lobby_disconnect_hold_p2: Option<Instant>,
     itl_overlay_page: [usize; MAX_PLAYERS],
@@ -2773,7 +2772,7 @@ fn sync_submit_record_sfx(state: &mut State) {
     if state.submit_record_sfx_played {
         return;
     }
-    let mut best: Option<scores::GrooveStatsSubmitRecordBanner> = None;
+    let mut best: Option<score_data::GrooveStatsSubmitRecordBanner> = None;
     for player_idx in 0..MAX_PLAYERS {
         let Some(si) = state.score_info[player_idx].as_ref() else {
             continue;
@@ -2786,10 +2785,10 @@ fn sync_submit_record_sfx(state: &mut State) {
         };
         // WorldRecord{,Ex} beats PersonalBest if any joined player earned it.
         best = Some(match (best, banner) {
-            (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecord), _)
-            | (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecordEx), _) => best.unwrap(),
-            (_, scores::GrooveStatsSubmitRecordBanner::WorldRecord)
-            | (_, scores::GrooveStatsSubmitRecordBanner::WorldRecordEx) => banner,
+            (Some(score_data::GrooveStatsSubmitRecordBanner::WorldRecord), _)
+            | (Some(score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx), _) => best.unwrap(),
+            (_, score_data::GrooveStatsSubmitRecordBanner::WorldRecord)
+            | (_, score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx) => banner,
             _ => best.unwrap_or(banner),
         });
     }
@@ -2797,9 +2796,9 @@ fn sync_submit_record_sfx(state: &mut State) {
         return;
     };
     let folder = match banner {
-        scores::GrooveStatsSubmitRecordBanner::WorldRecord
-        | scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
-        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
+        score_data::GrooveStatsSubmitRecordBanner::WorldRecord
+        | score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
+        score_data::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
     };
     crate::engine::audio::folder::play_random_screen_sfx(folder);
     state.submit_record_sfx_played = true;
@@ -2817,7 +2816,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_groovestats_fallback[player_idx].is_none()
         {
             state.submit_groovestats_fallback[player_idx] =
-                Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                Some(score_data::GrooveStatsSubmitUiStatus::Rejected {
                     reason: score_data::RejectReason::InvalidScore,
                 });
             warn!(
@@ -2833,7 +2832,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_arrowcloud_fallback[player_idx].is_none()
         {
             state.submit_arrowcloud_fallback[player_idx] =
-                Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+                Some(score_data::ArrowCloudSubmitUiStatus::Rejected {
                     reason: score_data::RejectReason::InvalidScore,
                 });
             warn!(
@@ -2896,7 +2895,7 @@ pub fn update(state: &mut State, dt: f32) {
                 si.side,
             )
             .or(state.submit_groovestats_fallback[player_idx]),
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted)
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
             if play_style != profile::PlayStyle::Versus {
@@ -3233,8 +3232,8 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         )
         .or(state.submit_groovestats_fallback[player_idx]);
         match status {
-            None | Some(scores::GrooveStatsSubmitUiStatus::Submitting) => return true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted) => {
+            None | Some(score_data::GrooveStatsSubmitUiStatus::Submitting) => return true,
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted) => {
                 if scores::get_groovestats_submit_itl_progress_for_side(
                     si.chart.short_hash.as_str(),
                     si.side,
@@ -3565,7 +3564,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     si.side,
                 )
                 .or(state.submit_groovestats_fallback[player_idx]),
-                Some(scores::GrooveStatsSubmitUiStatus::Submitted)
+                Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
             );
         let has_itl = eval_has_itl_pane(has_online_panes, si);
         let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);

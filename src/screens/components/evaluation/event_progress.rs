@@ -5,7 +5,7 @@ use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
 use crate::engine::present::color::{self, JUDGMENT_RGBA};
 use crate::engine::present::font;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
-use crate::game::{profile, scores};
+use crate::game::profile;
 use crate::screens::components::shared::banner as shared_banner;
 use deadsync_chart::SongData;
 use deadsync_score as score_data;
@@ -75,7 +75,7 @@ fn clear_type_name(clear_type: u8) -> &'static str {
 }
 
 #[inline(always)]
-fn build_box_body(progress: &scores::ItlEventProgress) -> String {
+fn build_box_body(progress: &score_data::ItlEventProgress) -> String {
     format!(
         "EX Score: {} {}\n\
          Points: {} {}\n\n\
@@ -99,7 +99,7 @@ fn build_box_body(progress: &scores::ItlEventProgress) -> String {
 }
 
 #[inline(always)]
-fn build_stat_improvements(progress: &scores::ItlEventProgress) -> Option<String> {
+fn build_stat_improvements(progress: &score_data::ItlEventProgress) -> Option<String> {
     let (Some(before), Some(after)) = (progress.clear_type_before, progress.clear_type_after)
     else {
         return None;
@@ -114,7 +114,7 @@ fn build_stat_improvements(progress: &scores::ItlEventProgress) -> Option<String
 }
 
 #[inline(always)]
-fn build_overlay_body(progress: &scores::ItlEventProgress) -> String {
+fn build_overlay_body(progress: &score_data::ItlEventProgress) -> String {
     let mut text = format!(
         "EX Score: {} {}\n\
          Points: {} {}\n\n\
@@ -146,9 +146,9 @@ fn build_overlay_body(progress: &scores::ItlEventProgress) -> String {
 
 #[inline(always)]
 fn active_overlay_page(
-    progress: &scores::ItlEventProgress,
+    progress: &score_data::ItlEventProgress,
     page_idx: usize,
-) -> Option<&scores::ItlOverlayPage> {
+) -> Option<&score_data::ItlOverlayPage> {
     progress
         .overlay_pages
         .get(page_idx)
@@ -701,7 +701,7 @@ fn build_upper_panel(
     center_y: f32,
     pane_width: f32,
     pane_height: f32,
-    progress: &scores::ItlEventProgress,
+    progress: &score_data::ItlEventProgress,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
@@ -753,7 +753,7 @@ fn build_overlay_panel(
     pane_width: f32,
     pane_height: f32,
     song: Option<&SongData>,
-    progress: &scores::ItlEventProgress,
+    progress: &score_data::ItlEventProgress,
     page_idx: usize,
     z: i16,
 ) -> Actor {
@@ -815,7 +815,7 @@ fn build_overlay_panel(
         z(4)
     ));
     match active_overlay_page(progress, page_idx) {
-        Some(scores::ItlOverlayPage::Leaderboard(entries)) => {
+        Some(score_data::ItlOverlayPage::Leaderboard(entries)) => {
             children.extend(build_overlay_leaderboard(
                 entries.as_slice(),
                 pane_width,
@@ -826,7 +826,7 @@ fn build_overlay_panel(
                 children.extend(build_overlay_banner_and_song(song, 4));
             }
         }
-        Some(scores::ItlOverlayPage::Text(text)) => children.push(build_body_text(
+        Some(score_data::ItlOverlayPage::Text(text)) => children.push(build_body_text(
             asset_manager,
             text.clone(),
             pane_width,
@@ -890,7 +890,7 @@ pub fn build_itl_progress_box(
     asset_manager: &AssetManager,
     side: profile::PlayerSide,
     single_player: bool,
-    progress: &scores::ItlEventProgress,
+    progress: &score_data::ItlEventProgress,
 ) -> Vec<Actor> {
     let upper_origin_x = match side {
         profile::PlayerSide::P1 => screen_center_x() - 155.0,
@@ -921,7 +921,7 @@ pub fn build_itl_event_overlay(
     asset_manager: &AssetManager,
     single_player: bool,
     song: Option<&SongData>,
-    panels: &[(profile::PlayerSide, &scores::ItlEventProgress, usize)],
+    panels: &[(profile::PlayerSide, &score_data::ItlEventProgress, usize)],
 ) -> Vec<Actor> {
     if panels.is_empty() {
         return Vec::new();

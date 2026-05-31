@@ -1253,7 +1253,7 @@ pub fn get_actors(
             "No"
         };
         let pace_lines = match endpoint {
-            scores::ScoreImportEndpoint::ArrowCloud => {
+            score_data::ScoreImportEndpoint::ArrowCloud => {
                 "Uses the bulk endpoint (up to 1000 charts per request),\n\
                  so a full library typically completes in under a minute.\n\
                  Spamming APIs can be problematic."

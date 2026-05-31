@@ -1,52 +1,30 @@
 use super::{
     GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, ItlEventProgress, RejectReason, cache_gs_score_for_profile,
-    cached_score_from_gs, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
-    get_or_fetch_player_leaderboards_for_side, gs_ex_evidence_from_leaderboard,
-    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
-    submit_side_ix,
+    GS_INVALID_REMOVE_MASK, cache_gs_score_for_profile, cached_score_from_gs, gameplay_run_failed,
+    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
+    lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
 };
 use crate::game::gameplay;
 use crate::game::online;
 use crate::game::profile::{self, Profile, TimingWindowsOption};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_net as network;
 use deadsync_online::groovestats::{
     self as groovestats_api, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_SUBMIT_MAX_ENTRIES,
     GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts, GrooveStatsSubmitApiResponse,
-    GrooveStatsSubmitPlayerPayload,
+    GrooveStatsSubmitPlayerPayload, GrooveStatsSubmitRequestError,
 };
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
-use deadsync_score::{SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs};
+use deadsync_score::{
+    GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
+    ItlEventProgress, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs,
+    submit_retry_delay_secs,
+};
 use log::{debug, warn};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{Duration, Instant};
-
-#[derive(Clone, Debug, Default)]
-pub struct GrooveStatsEvalState {
-    pub valid: bool,
-    pub reason_lines: Vec<String>,
-    pub manual_qr_url: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GrooveStatsSubmitUiStatus {
-    Submitting,
-    Submitted,
-    TimedOut,
-    NetworkError,
-    ServerError { http_status: u16 },
-    Rejected { reason: RejectReason },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GrooveStatsSubmitRecordBanner {
-    PersonalBest,
-    WorldRecord,
-    WorldRecordEx,
-}
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
@@ -858,73 +836,61 @@ fn groovestats_status_from_http(status_code: u16) -> GrooveStatsSubmitUiStatus {
 fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
+    let service = active_groovestats_service();
     let service_name = active_groovestats_service_name();
-    let mut request = network::get_groovestats_agent()
-        .post(&groovestats_api::score_submit_url(
-            active_groovestats_service(),
-        ))
-        .header("Content-Type", "application/json");
-    for (name, value) in &job.headers {
-        request = request.header(name, value);
+    match groovestats_api::submit_score_request(service, &job.headers, &job.query, &job.body) {
+        Ok(success) => {
+            if success.body_snippet.is_empty() {
+                debug!("{service_name} submit success");
+            } else {
+                debug!(
+                    "{service_name} submit success body='{}'",
+                    success.body_snippet.as_str()
+                );
+            }
+            Ok(success.response)
+        }
+        Err(error) => Err(groovestats_submit_error_from_online(service_name, error)),
     }
-    for (name, value) in &job.query {
-        request = request.query(name, value);
-    }
+}
 
-    let response = request.send_json(&job.body).map_err(|e| {
-        let message = format!("network error: {e}");
-        GrooveStatsSubmitError {
-            status: if network::is_timeout_message(message.as_str()) {
+fn groovestats_submit_error_from_online(
+    service_name: &str,
+    error: GrooveStatsSubmitRequestError,
+) -> GrooveStatsSubmitError {
+    match error {
+        GrooveStatsSubmitRequestError::Transport { message, timed_out } => GrooveStatsSubmitError {
+            status: if timed_out {
                 GrooveStatsSubmitUiStatus::TimedOut
             } else {
                 GrooveStatsSubmitUiStatus::NetworkError
             },
             message,
-        }
-    })?;
-
-    let status = response.status();
-    let status_code = status.as_u16();
-    let body = network::read_text_body_or_empty(response);
-    if !status.is_success() {
-        let snippet = network::log_body_snippet(body.as_str());
-        let status_kind = groovestats_status_from_http(status_code);
-        return Err(GrooveStatsSubmitError {
-            status: status_kind,
-            message: if snippet.is_empty() {
-                format!("{service_name} submit returned HTTP {status_code}")
+        },
+        GrooveStatsSubmitRequestError::Http {
+            status,
+            body_snippet,
+        } => GrooveStatsSubmitError {
+            status: groovestats_status_from_http(status),
+            message: if body_snippet.is_empty() {
+                format!("{service_name} submit returned HTTP {status}")
             } else {
-                format!("{service_name} submit returned HTTP {status_code}: {snippet}")
+                format!("{service_name} submit returned HTTP {status}: {body_snippet}")
             },
-        });
-    }
-
-    let decoded: GrooveStatsSubmitApiResponse =
-        serde_json::from_str(body.as_str()).map_err(|error| GrooveStatsSubmitError {
+        },
+        GrooveStatsSubmitRequestError::Decode { message } => GrooveStatsSubmitError {
             status: GrooveStatsSubmitUiStatus::Rejected {
                 reason: RejectReason::InvalidScore,
             },
-            message: format!(
-                "failed to parse {service_name} submit response: {}",
-                network::log_body_snippet(error.to_string().as_str())
-            ),
-        })?;
-    if !decoded.error.trim().is_empty() {
-        return Err(GrooveStatsSubmitError {
+            message: format!("failed to parse {service_name} submit response: {message}"),
+        },
+        GrooveStatsSubmitRequestError::Api { message } => GrooveStatsSubmitError {
             status: GrooveStatsSubmitUiStatus::Rejected {
                 reason: RejectReason::InvalidScore,
             },
-            message: format!("{service_name} submit error: {}", decoded.error.trim()),
-        });
+            message: format!("{service_name} submit error: {message}"),
+        },
     }
-
-    let snippet = network::log_body_snippet(body.as_str());
-    if snippet.is_empty() {
-        debug!("{service_name} submit success");
-    } else {
-        debug!("{service_name} submit success body='{}'", snippet.as_str());
-    }
-    Ok(decoded)
 }
 
 fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
@@ -2052,6 +2018,66 @@ mod tests {
             GrooveStatsSubmitUiStatus::Rejected {
                 reason: RejectReason::InvalidScore,
             }
+        );
+    }
+
+    #[test]
+    fn groovestats_submit_error_maps_online_transport_errors() {
+        let timed_out = groovestats_submit_error_from_online(
+            "GrooveStats",
+            GrooveStatsSubmitRequestError::Transport {
+                message: "network error: timed out".to_string(),
+                timed_out: true,
+            },
+        );
+        assert_eq!(timed_out.status, GrooveStatsSubmitUiStatus::TimedOut);
+        assert_eq!(timed_out.message, "network error: timed out");
+
+        let network = groovestats_submit_error_from_online(
+            "GrooveStats",
+            GrooveStatsSubmitRequestError::Transport {
+                message: "network error: refused".to_string(),
+                timed_out: false,
+            },
+        );
+        assert_eq!(network.status, GrooveStatsSubmitUiStatus::NetworkError);
+    }
+
+    #[test]
+    fn groovestats_submit_error_maps_online_protocol_errors() {
+        let http = groovestats_submit_error_from_online(
+            "GrooveStats",
+            GrooveStatsSubmitRequestError::Http {
+                status: 403,
+                body_snippet: "bad key".to_string(),
+            },
+        );
+        assert_eq!(
+            http.status,
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            http.message,
+            "GrooveStats submit returned HTTP 403: bad key"
+        );
+
+        let api = groovestats_submit_error_from_online(
+            "GrooveStats",
+            GrooveStatsSubmitRequestError::Api {
+                message: "score-already-submitted".to_string(),
+            },
+        );
+        assert_eq!(
+            api.status,
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+        assert_eq!(
+            api.message,
+            "GrooveStats submit error: score-already-submitted"
         );
     }
 }
