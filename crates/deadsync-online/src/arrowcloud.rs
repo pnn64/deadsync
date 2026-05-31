@@ -3,10 +3,15 @@ use deadsync_score::ArrowCloudLeaderboard;
 use serde::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const ARROWCLOUD_API_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_USER_URL: &str = "https://api.arrowcloud.dance/user";
 const DEVICE_LOGIN_BASE: &str = "https://api.arrowcloud.dance/device-login";
+const DEVICE_LOGIN_POLL_INTERVAL_MIN_S: f32 = 1.0;
+const DEVICE_LOGIN_POLL_INTERVAL_MAX_S: f32 = 10.0;
+const DEVICE_LOGIN_POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
 pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +38,15 @@ pub fn classify_connection_error(message: &str) -> ConnectionError {
         return ConnectionError::HostBlocked;
     }
     ConnectionError::CannotConnect
+}
+
+pub fn connection_error_from_network_error(error: &NetworkError) -> ConnectionError {
+    match error {
+        NetworkError::Timeout => ConnectionError::TimedOut,
+        NetworkError::HttpStatus(403) => ConnectionError::HostBlocked,
+        NetworkError::HttpStatus(_) | NetworkError::Decode(_) => ConnectionError::CannotConnect,
+        NetworkError::Request(message) => classify_connection_error(message),
+    }
 }
 
 #[inline(always)]
@@ -84,6 +98,14 @@ pub fn retrieve_scores_url() -> String {
         "{}/v1/retrieve-scores",
         ARROWCLOUD_API_BASE_URL.trim_end_matches('/')
     )
+}
+
+pub fn check_connection() -> Result<ConnectionStatus, NetworkError> {
+    network::get_agent()
+        .get(api_base_url())
+        .call()
+        .map_err(network::error_from_ureq)?;
+    Ok(ConnectionStatus::Connected)
 }
 
 #[derive(Debug, Serialize)]
@@ -418,6 +440,21 @@ pub enum DeviceLoginStatus {
     Expired,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceLoginEvent {
+    Started {
+        short_code: String,
+        verification_url: String,
+    },
+    StatusUpdate,
+    Consumed {
+        api_key: String,
+    },
+    Failed {
+        reason: String,
+    },
+}
+
 /// `POST /device-login/start`. Asks ArrowCloud to mint a fresh
 /// device-login session and returns the short code plus poll token.
 pub fn device_login_start(
@@ -433,9 +470,135 @@ pub fn device_login_poll(body: &DeviceLoginPollReq) -> Result<DeviceLoginPollRes
     network::post_json(&format!("{DEVICE_LOGIN_BASE}/poll"), body)
 }
 
+pub fn run_device_login_session<F>(cancel: Arc<AtomicBool>, dispatch: F)
+where
+    F: FnMut(DeviceLoginEvent) -> bool,
+{
+    run_device_login_session_with(
+        cancel,
+        device_login_start,
+        device_login_poll,
+        dispatch,
+        sleep_device_login_with_cancel,
+    );
+}
+
+fn run_device_login_session_with<S, P, F, W>(
+    cancel: Arc<AtomicBool>,
+    start_fn: S,
+    poll_fn: P,
+    mut dispatch: F,
+    mut wait: W,
+) where
+    S: Fn(&DeviceLoginStartReq) -> Result<DeviceLoginStartResp, NetworkError>,
+    P: Fn(&DeviceLoginPollReq) -> Result<DeviceLoginPollResp, NetworkError>,
+    F: FnMut(DeviceLoginEvent) -> bool,
+    W: FnMut(f32, &Arc<AtomicBool>) -> bool,
+{
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let req = DeviceLoginStartReq {
+        machine_label: None,
+        client_version: Some(format!("deadsync {}", env!("CARGO_PKG_VERSION"))),
+        theme_version: None,
+    };
+    let start = match start_fn(&req) {
+        Ok(resp) => resp,
+        Err(err) => {
+            dispatch(DeviceLoginEvent::Failed {
+                reason: format!("{err}"),
+            });
+            return;
+        }
+    };
+
+    let mut interval_s = clamp_device_login_poll_interval(start.poll_interval_seconds);
+    let poll_req = DeviceLoginPollReq {
+        session_id: start.session_id.clone(),
+        poll_token: start.poll_token.clone(),
+    };
+
+    if !dispatch(DeviceLoginEvent::Started {
+        short_code: start.short_code.clone(),
+        verification_url: start.verification_url.clone(),
+    }) {
+        return;
+    }
+
+    loop {
+        if !wait(interval_s, &cancel) {
+            return;
+        }
+        match poll_fn(&poll_req) {
+            Ok(resp) => {
+                interval_s = clamp_device_login_poll_interval(resp.poll_interval_seconds);
+                match resp.status {
+                    DeviceLoginStatus::Consumed => {
+                        let api_key = resp.api_key.unwrap_or_default();
+                        let event = if api_key.trim().is_empty() {
+                            DeviceLoginEvent::Failed {
+                                reason: "server returned empty api key".to_string(),
+                            }
+                        } else {
+                            DeviceLoginEvent::Consumed { api_key }
+                        };
+                        dispatch(event);
+                        return;
+                    }
+                    DeviceLoginStatus::Cancelled | DeviceLoginStatus::Expired => {
+                        dispatch(DeviceLoginEvent::Failed {
+                            reason: format!("{:?}", resp.status).to_lowercase(),
+                        });
+                        return;
+                    }
+                    DeviceLoginStatus::Pending | DeviceLoginStatus::Approved => {
+                        if !dispatch(DeviceLoginEvent::StatusUpdate) {
+                            return;
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                dispatch(DeviceLoginEvent::Failed {
+                    reason: format!("{err}"),
+                });
+                return;
+            }
+        }
+    }
+}
+
+fn clamp_device_login_poll_interval(seconds: Option<u64>) -> f32 {
+    let raw = seconds
+        .map(|seconds| seconds as f32)
+        .unwrap_or(DEVICE_LOGIN_POLL_INTERVAL_DEFAULT_S);
+    raw.clamp(
+        DEVICE_LOGIN_POLL_INTERVAL_MIN_S,
+        DEVICE_LOGIN_POLL_INTERVAL_MAX_S,
+    )
+}
+
+fn sleep_device_login_with_cancel(seconds: f32, cancel: &Arc<AtomicBool>) -> bool {
+    let total = std::time::Duration::from_millis((seconds * 1000.0).max(50.0) as u64);
+    let mut elapsed = std::time::Duration::ZERO;
+    let tick = std::time::Duration::from_millis(100);
+    while elapsed < total {
+        if cancel.load(Ordering::Relaxed) {
+            return false;
+        }
+        let chunk = tick.min(total - elapsed);
+        std::thread::sleep(chunk);
+        elapsed += chunk;
+    }
+    !cancel.load(Ordering::Relaxed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     #[test]
     fn leaderboards_url_uses_v1_chart_route() {
@@ -657,6 +820,196 @@ mod tests {
             classify_connection_error("connection refused"),
             ConnectionError::CannotConnect
         );
+    }
+
+    #[test]
+    fn network_errors_map_to_connection_errors() {
+        assert_eq!(
+            connection_error_from_network_error(&NetworkError::Timeout),
+            ConnectionError::TimedOut
+        );
+        assert_eq!(
+            connection_error_from_network_error(&NetworkError::HttpStatus(403)),
+            ConnectionError::HostBlocked
+        );
+        assert_eq!(
+            connection_error_from_network_error(&NetworkError::HttpStatus(500)),
+            ConnectionError::CannotConnect
+        );
+        assert_eq!(
+            connection_error_from_network_error(&NetworkError::Request(
+                "connection blocked by firewall".to_string()
+            )),
+            ConnectionError::HostBlocked
+        );
+    }
+
+    fn make_start_ok() -> DeviceLoginStartResp {
+        DeviceLoginStartResp {
+            session_id: "sess-1".into(),
+            short_code: "ABCD2345".into(),
+            poll_token: "tok-1".into(),
+            poll_interval_seconds: Some(0),
+            verification_url: "https://arrowcloud.dance/device-login/sess-1".into(),
+        }
+    }
+
+    fn run_test_device_login<S, P>(start_fn: S, poll_fn: P) -> Vec<DeviceLoginEvent>
+    where
+        S: Fn(&DeviceLoginStartReq) -> Result<DeviceLoginStartResp, NetworkError>,
+        P: Fn(&DeviceLoginPollReq) -> Result<DeviceLoginPollResp, NetworkError>,
+    {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut events = Vec::new();
+        run_device_login_session_with(
+            cancel,
+            start_fn,
+            poll_fn,
+            |event| {
+                events.push(event);
+                true
+            },
+            |_, _| true,
+        );
+        events
+    }
+
+    #[test]
+    fn clamp_device_login_poll_interval_uses_default_when_missing() {
+        assert!(
+            (clamp_device_login_poll_interval(None) - DEVICE_LOGIN_POLL_INTERVAL_DEFAULT_S).abs()
+                < f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn clamp_device_login_poll_interval_clamps_to_min() {
+        assert!(
+            (clamp_device_login_poll_interval(Some(0)) - DEVICE_LOGIN_POLL_INTERVAL_MIN_S).abs()
+                < f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn clamp_device_login_poll_interval_clamps_to_max() {
+        assert!(
+            (clamp_device_login_poll_interval(Some(9999)) - DEVICE_LOGIN_POLL_INTERVAL_MAX_S).abs()
+                < f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn device_login_worker_emits_started_then_consumed() {
+        let polls = Arc::new(Mutex::new(0u32));
+        let polls_clone = Arc::clone(&polls);
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &DeviceLoginStartReq| -> Result<_, NetworkError> { Ok(start.clone()) };
+        let poll_fn = move |_req: &DeviceLoginPollReq| -> Result<_, NetworkError> {
+            let mut n = polls_clone.lock().unwrap();
+            *n += 1;
+            if *n == 1 {
+                Ok(DeviceLoginPollResp {
+                    status: DeviceLoginStatus::Pending,
+                    poll_interval_seconds: Some(0),
+                    api_key: None,
+                })
+            } else {
+                Ok(DeviceLoginPollResp {
+                    status: DeviceLoginStatus::Consumed,
+                    poll_interval_seconds: None,
+                    api_key: Some("AC-KEY-7".into()),
+                })
+            }
+        };
+
+        let events = run_test_device_login(start_fn, poll_fn);
+
+        assert!(matches!(
+            events.first(),
+            Some(DeviceLoginEvent::Started { .. })
+        ));
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, DeviceLoginEvent::StatusUpdate))
+        );
+        assert!(matches!(
+            events.last(),
+            Some(DeviceLoginEvent::Consumed { api_key }) if api_key == "AC-KEY-7"
+        ));
+        assert_eq!(*polls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn device_login_worker_reports_failure_on_expired() {
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &DeviceLoginStartReq| -> Result<_, NetworkError> { Ok(start.clone()) };
+        let poll_fn = move |_req: &DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(DeviceLoginPollResp {
+                status: DeviceLoginStatus::Expired,
+                poll_interval_seconds: None,
+                api_key: None,
+            })
+        };
+
+        let events = run_test_device_login(start_fn, poll_fn);
+
+        assert!(matches!(
+            events.last(),
+            Some(DeviceLoginEvent::Failed { reason }) if reason == "expired"
+        ));
+    }
+
+    #[test]
+    fn device_login_worker_reports_failure_when_start_errors() {
+        let start_fn = |_req: &DeviceLoginStartReq| -> Result<_, NetworkError> {
+            Err(NetworkError::Request("boom".into()))
+        };
+        let poll_fn = |_req: &DeviceLoginPollReq| -> Result<_, NetworkError> {
+            unreachable!("poll should not be called when start fails")
+        };
+
+        let events = run_test_device_login(start_fn, poll_fn);
+
+        assert!(matches!(
+            events.first(),
+            Some(DeviceLoginEvent::Failed { .. })
+        ));
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn device_login_worker_consumed_with_empty_key_is_failure() {
+        let start = make_start_ok();
+        let start_fn =
+            move |_req: &DeviceLoginStartReq| -> Result<_, NetworkError> { Ok(start.clone()) };
+        let poll_fn = move |_req: &DeviceLoginPollReq| -> Result<_, NetworkError> {
+            Ok(DeviceLoginPollResp {
+                status: DeviceLoginStatus::Consumed,
+                poll_interval_seconds: None,
+                api_key: Some("   ".into()),
+            })
+        };
+
+        let events = run_test_device_login(start_fn, poll_fn);
+
+        assert!(matches!(
+            events.last(),
+            Some(DeviceLoginEvent::Failed { .. })
+        ));
+    }
+
+    #[test]
+    fn sleep_device_login_with_cancel_returns_false_when_cancelled_mid_wait() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_for_thread = Arc::clone(&cancel);
+        let handle =
+            std::thread::spawn(move || sleep_device_login_with_cancel(5.0, &cancel_for_thread));
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        cancel.store(true, Ordering::Relaxed);
+        assert!(!handle.join().unwrap());
     }
 
     #[test]

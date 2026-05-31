@@ -90,6 +90,18 @@ pub fn read_text_body_or_empty(response: ureq::http::Response<ureq::Body>) -> St
     response.into_body().read_to_string().unwrap_or_default()
 }
 
+pub fn log_body_snippet(text: &str) -> String {
+    const MAX_LOG_CHARS: usize = 256;
+    if text.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
+    for ch in text.chars().take(MAX_LOG_CHARS) {
+        out.push(ch);
+    }
+    out
+}
+
 pub fn build_agent(config: AgentConfig) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(config.timeout))
@@ -216,5 +228,12 @@ mod tests {
             .expect("response");
 
         assert_eq!(read_text_body_or_empty(response), "ok");
+    }
+
+    #[test]
+    fn log_body_snippet_caps_long_text() {
+        let text = "a".repeat(300);
+        assert_eq!(log_body_snippet(text.as_str()).len(), 256);
+        assert!(log_body_snippet("").is_empty());
     }
 }

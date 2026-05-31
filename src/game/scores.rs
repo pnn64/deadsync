@@ -55,9 +55,6 @@ use deadsync_score::{
     ReplayEdge, gameplay_run_failed, gameplay_run_passed, lua_chart_submit_allowed,
     promote_quint_grade, score_to_grade,
 };
-pub(crate) use deadsync_score::{
-    SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
-};
 pub use groovestats::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
     get_groovestats_submit_itl_progress_for_side, get_groovestats_submit_record_banner_for_side,
@@ -2027,15 +2024,12 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     }
 }
 
-const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
-const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
 // Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
 const GS_INVALID_REMOVE_MASK: u8 =
     (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
 const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
 const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
 const GROOVESTATS_REASON_COUNT: usize = 13;
-const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
 
 #[inline(always)]
 pub(super) const fn submit_side_ix(side: profile::PlayerSide) -> usize {
@@ -2062,29 +2056,6 @@ pub(super) fn gameplay_side_for_player(
 }
 
 #[inline(always)]
-fn compact_f32_text(value: f32) -> String {
-    let mut text = format!("{value:.2}");
-    while text.contains('.') && text.ends_with('0') {
-        text.pop();
-    }
-    if text.ends_with('.') {
-        text.pop();
-    }
-    text
-}
-
-fn log_body_snippet(text: &str) -> String {
-    const MAX_LOG_CHARS: usize = 256;
-    if text.is_empty() {
-        return String::new();
-    }
-    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
-    for ch in text.chars().take(MAX_LOG_CHARS) {
-        out.push(ch);
-    }
-    out
-}
-
 pub fn save_local_summary_score_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,

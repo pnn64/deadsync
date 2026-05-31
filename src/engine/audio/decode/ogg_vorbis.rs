@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
 use symphonia::core::codecs::audio::{
-    well_known::CODEC_ID_VORBIS, AudioCodecParameters, AudioDecoder, AudioDecoderOptions,
+    AudioCodecParameters, AudioDecoder, AudioDecoderOptions, well_known::CODEC_ID_VORBIS,
 };
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
@@ -315,7 +315,7 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::{open_file, Reader};
+    use super::{Reader, open_file};
     use std::path::PathBuf;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;

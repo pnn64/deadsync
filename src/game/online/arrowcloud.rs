@@ -1,7 +1,5 @@
 use deadsync_net as network;
-use deadsync_online::arrowcloud::{
-    self as arrowcloud_api, ConnectionError, ConnectionStatus, classify_connection_error,
-};
+use deadsync_online::arrowcloud::{self as arrowcloud_api, ConnectionError, ConnectionStatus};
 use log::{debug, info, warn};
 use std::sync::{LazyLock, Mutex};
 
@@ -38,18 +36,17 @@ pub fn refresh_status() {
 fn perform_check() {
     debug!("Performing ArrowCloud connectivity check...");
 
-    match network::get_agent()
-        .get(arrowcloud_api::api_base_url())
-        .call()
-    {
-        Ok(_) => {
+    match arrowcloud_api::check_connection() {
+        Ok(ConnectionStatus::Connected) => {
             info!("Connected to ArrowCloud.");
             set_status(ConnectionStatus::Connected);
         }
+        Ok(status) => set_status(status),
         Err(error) => {
             warn!("HTTP error to ArrowCloud: {error}");
-            let message = error.to_string();
-            set_status(ConnectionStatus::Error(classify_connection_error(&message)));
+            set_status(ConnectionStatus::Error(
+                arrowcloud_api::connection_error_from_network_error(&error),
+            ));
         }
     }
 }

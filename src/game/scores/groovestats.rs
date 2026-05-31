@@ -1,11 +1,10 @@
 use super::{
-    GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
-    GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
+    GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
     GS_INVALID_REMOVE_MASK, ItlEventProgress, RejectReason, cache_gs_score_for_profile,
-    cached_score_from_gs, compact_f32_text, gameplay_run_failed, gameplay_run_passed,
-    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
-    log_body_snippet, lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
+    cached_score_from_gs, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    get_or_fetch_player_leaderboards_for_side, gs_ex_evidence_from_leaderboard,
+    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
+    submit_side_ix,
 };
 use crate::game::gameplay;
 use crate::game::online;
@@ -13,10 +12,12 @@ use crate::game::profile::{self, Profile, TimingWindowsOption};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_net as network;
 use deadsync_online::groovestats::{
-    self as groovestats_api, GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts,
-    GrooveStatsSubmitApiResponse, GrooveStatsSubmitPlayerPayload,
+    self as groovestats_api, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_SUBMIT_MAX_ENTRIES,
+    GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts, GrooveStatsSubmitApiResponse,
+    GrooveStatsSubmitPlayerPayload,
 };
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
+use deadsync_score::{SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs};
 use log::{debug, warn};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::sync::Mutex;
@@ -108,14 +109,14 @@ struct GrooveStatsSubmitRetryEntry {
 /// `F5 Retry`). For *manual-only* statuses the cooldown caps at
 /// `delay(MAX)` and stays there for subsequent failures.
 /// Maximum number of attempts before the backoff schedule saturates.
-/// Re-exported alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
-const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = crate::game::scores::SUBMIT_RETRY_MAX_ATTEMPTS;
+/// Alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
+const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
 
 /// Exponential backoff schedule shared with every other submission backend.
-/// See [`crate::game::scores::submit_retry_delay_secs`] for the schedule.
+/// See [`submit_retry_delay_secs`] for the schedule.
 #[inline(always)]
 const fn groovestats_retry_delay_secs(attempt: u8) -> u64 {
-    crate::game::scores::submit_retry_delay_secs(attempt)
+    submit_retry_delay_secs(attempt)
 }
 
 /// Returns true when the given failure status should be retried automatically
@@ -466,64 +467,6 @@ fn groovestats_eval_state(
     }
 }
 
-#[inline(always)]
-fn groovestats_qr_append_rescore(out: &mut String, label: char, value: u32) {
-    if value == 0 {
-        return;
-    }
-    out.push(label);
-    out.push_str(format!("{value:x}").as_str());
-}
-
-fn groovestats_manual_qr_url(
-    base_url: &str,
-    chart_hash: &str,
-    hash_version: u8,
-    counts: &GrooveStatsJudgmentCounts,
-    rescored: &GrooveStatsRescoreCounts,
-    rate: u32,
-    used_cmod: bool,
-) -> Option<String> {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return None;
-    }
-
-    let mut rescored_str = String::with_capacity(24);
-    for (label, value) in [
-        ('G', rescored.fantastic_plus),
-        ('H', rescored.fantastic),
-        ('I', rescored.excellent),
-        ('J', rescored.great),
-        ('K', rescored.decent),
-        ('L', rescored.way_off),
-    ] {
-        groovestats_qr_append_rescore(&mut rescored_str, label, value);
-    }
-
-    Some(format!(
-        "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F0R{:x}C{}V{:x}",
-        base_url.trim_end_matches('/'),
-        counts.total_steps,
-        counts.fantastic_plus,
-        counts.fantastic,
-        counts.excellent,
-        counts.great,
-        counts.decent_count(),
-        counts.way_off_count(),
-        counts.miss,
-        counts.holds_held,
-        counts.total_holds,
-        counts.rolls_held,
-        counts.total_rolls,
-        counts.mines_hit,
-        counts.total_mines,
-        rate,
-        if used_cmod { '1' } else { '0' },
-        hash_version,
-    ))
-}
-
 fn groovestats_manual_qr_url_from_gameplay(
     gs: &gameplay::State,
     player_idx: usize,
@@ -532,10 +475,9 @@ fn groovestats_manual_qr_url_from_gameplay(
         return None;
     }
     let payload = groovestats_payload_for_player(gs, player_idx)?;
-    groovestats_manual_qr_url(
+    groovestats_api::manual_qr_url(
         groovestats_api::qr_base_url(),
         gs.charts[player_idx].short_hash.as_str(),
-        GROOVESTATS_CHART_HASH_VERSION,
         &payload.judgment_counts,
         &payload.rescore_counts,
         payload.rate,
@@ -735,7 +677,7 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
         1.0
     };
     if (rate - 1.0).abs() > 0.0001 {
-        parts.push(format!("{}x Rate", compact_f32_text(rate)));
+        parts.push(format!("{}x Rate", groovestats_api::compact_f32_text(rate)));
     }
 
     for (count, suffix) in [
@@ -756,7 +698,7 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
     }
 
     if let ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
-        parts.push(format!("C{}", compact_f32_text(value)));
+        parts.push(format!("C{}", groovestats_api::compact_f32_text(value)));
     }
 
     if parts.is_empty() {
@@ -945,7 +887,7 @@ fn submit_groovestats_request(
     let status_code = status.as_u16();
     let body = network::read_text_body_or_empty(response);
     if !status.is_success() {
-        let snippet = log_body_snippet(body.as_str());
+        let snippet = network::log_body_snippet(body.as_str());
         let status_kind = groovestats_status_from_http(status_code);
         return Err(GrooveStatsSubmitError {
             status: status_kind,
@@ -964,7 +906,7 @@ fn submit_groovestats_request(
             },
             message: format!(
                 "failed to parse {service_name} submit response: {}",
-                log_body_snippet(error.to_string().as_str())
+                network::log_body_snippet(error.to_string().as_str())
             ),
         })?;
     if !decoded.error.trim().is_empty() {
@@ -976,7 +918,7 @@ fn submit_groovestats_request(
         });
     }
 
-    let snippet = log_body_snippet(body.as_str());
+    let snippet = network::log_body_snippet(body.as_str());
     if snippet.is_empty() {
         debug!("{service_name} submit success");
     } else {
@@ -1457,7 +1399,7 @@ pub fn groovestats_next_retry_remaining_secs(
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))?
         .next_retry_at?;
-    Some(crate::game::scores::duration_to_ceil_secs(
+    Some(duration_to_ceil_secs(
         target.saturating_duration_since(Instant::now()),
     ))
 }
@@ -1680,50 +1622,6 @@ mod tests {
         assert!(value.get("wayOff").is_none());
         assert_eq!(counts.decent_count(), 0);
         assert_eq!(counts.way_off_count(), 0);
-    }
-
-    #[test]
-    fn groovestats_manual_qr_url_preserves_base_url_case() {
-        let counts = GrooveStatsJudgmentCounts {
-            fantastic_plus: 0x0a,
-            fantastic: 0x0b,
-            excellent: 0x0c,
-            great: 0x0d,
-            decent: Some(0x0e),
-            way_off: Some(0x0f),
-            miss: 0x10,
-            total_steps: 0x1d,
-            holds_held: 0x11,
-            total_holds: 0x12,
-            mines_hit: 0x15,
-            total_mines: 0x16,
-            rolls_held: 0x13,
-            total_rolls: 0x14,
-        };
-        let rescored = GrooveStatsRescoreCounts {
-            fantastic_plus: 0x01,
-            fantastic: 0x02,
-            excellent: 0x03,
-            great: 0x04,
-            decent: 0x05,
-            way_off: 0x06,
-        };
-
-        let url = groovestats_manual_qr_url(
-            "https://www.groovestats.com",
-            "deadbeef",
-            3,
-            &counts,
-            &rescored,
-            150,
-            true,
-        )
-        .expect("manual qr url");
-
-        assert_eq!(
-            url,
-            "https://www.groovestats.com/QR/deadbeef/T1dGaHbIcJdKeLfM10H11T12R13T14M15T16G1H2I3J4K5L6/F0R96C1V3"
-        );
     }
 
     #[test]

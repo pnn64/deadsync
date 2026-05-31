@@ -1,12 +1,20 @@
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use deadsync_net::NetworkError;
+use deadsync_net::{self as network, NetworkError};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
 const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com";
+const GROOVESTATS_QR_LOGIN_WS_URL: &str = "ws://qrlogin.groovestats.com:3000";
+const GROOVESTATS_QR_LOGIN_URL: &str = "https://www.groovestats.com/qrlogin.php";
 const GROOVESTATS_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
+pub const GROOVESTATS_QR_LOGIN_WS_READ_TIMEOUT_MS: u64 = 100;
+pub const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
+pub const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
+pub const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Service {
@@ -80,6 +88,33 @@ pub const fn qr_base_url() -> &'static str {
 }
 
 #[inline(always)]
+pub const fn qr_login_ws_url() -> &'static str {
+    GROOVESTATS_QR_LOGIN_WS_URL
+}
+
+/// 32-character uppercase hex string mirroring Simply Love's
+/// `CRYPTMAN:GenerateRandomUUID():gsub("-",""):upper()`.
+pub fn generate_qr_login_uuid() -> String {
+    use rand::Rng;
+
+    let mut bytes = [0u8; 16];
+    rand::rng().fill_bytes(&mut bytes);
+    let mut out = String::with_capacity(32);
+    for b in bytes {
+        out.push_str(&format!("{b:02X}"));
+    }
+    out
+}
+
+pub fn qr_login_url(uuid: &str, side: u8) -> String {
+    format!("{GROOVESTATS_QR_LOGIN_URL}?UUID={uuid}&SIDE={side}")
+}
+
+pub fn qr_login_uuid_message(uuid: &str) -> String {
+    serde_json::json!({ "event": "uuid", "data": { "uuid": uuid } }).to_string()
+}
+
+#[inline(always)]
 pub fn player_leaderboards_url(service: Service) -> String {
     format!(
         "{}/player-leaderboards.php",
@@ -142,6 +177,14 @@ pub const fn connection_error_from_network_error(error: &NetworkError) -> Connec
         NetworkError::Decode(_) => ConnectionError::InvalidResponse,
         NetworkError::HttpStatus(_) | NetworkError::Request(_) => ConnectionError::CannotConnect,
     }
+}
+
+pub fn check_connection(service: Service) -> Result<ConnectionStatus, NetworkError> {
+    let data = network::get_json_with::<NewSessionResponse>(
+        &network::get_groovestats_agent(),
+        &new_session_url(service),
+    )?;
+    Ok(connection_status_from_new_session(&data))
 }
 
 #[derive(Deserialize, Debug)]
@@ -247,6 +290,210 @@ pub struct GrooveStatsRescoreCounts {
     pub great: u32,
     pub decent: u32,
     pub way_off: u32,
+}
+
+#[inline(always)]
+fn qr_append_rescore(out: &mut String, label: char, value: u32) {
+    if value == 0 {
+        return;
+    }
+    out.push(label);
+    out.push_str(format!("{value:x}").as_str());
+}
+
+pub fn manual_qr_url(
+    base_url: &str,
+    chart_hash: &str,
+    counts: &GrooveStatsJudgmentCounts,
+    rescored: &GrooveStatsRescoreCounts,
+    rate: u32,
+    used_cmod: bool,
+) -> Option<String> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+
+    let mut rescored_str = String::with_capacity(24);
+    for (label, value) in [
+        ('G', rescored.fantastic_plus),
+        ('H', rescored.fantastic),
+        ('I', rescored.excellent),
+        ('J', rescored.great),
+        ('K', rescored.decent),
+        ('L', rescored.way_off),
+    ] {
+        qr_append_rescore(&mut rescored_str, label, value);
+    }
+
+    Some(format!(
+        "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F0R{:x}C{}V{:x}",
+        base_url.trim_end_matches('/'),
+        counts.total_steps,
+        counts.fantastic_plus,
+        counts.fantastic,
+        counts.excellent,
+        counts.great,
+        counts.decent_count(),
+        counts.way_off_count(),
+        counts.miss,
+        counts.holds_held,
+        counts.total_holds,
+        counts.rolls_held,
+        counts.total_rolls,
+        counts.mines_hit,
+        counts.total_mines,
+        rate,
+        if used_cmod { '1' } else { '0' },
+        GROOVESTATS_CHART_HASH_VERSION,
+    ))
+}
+
+/// Effect to dispatch when a raw GrooveStats QR-login WebSocket text
+/// frame arrives.  The caller owns transport and channel routing.
+#[derive(Debug, PartialEq, Eq)]
+pub enum GrooveStatsQrLoginWsEffect {
+    Ignore,
+    DeliverApiKey {
+        side: u8,
+        api_key: String,
+        username: String,
+    },
+}
+
+#[derive(Deserialize, Debug)]
+struct GrooveStatsWsEnvelope {
+    event: String,
+    #[serde(default)]
+    data: Option<GrooveStatsApiKeyPayload>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsApiKeyPayload {
+    #[serde(default)]
+    uuid: Option<String>,
+    #[serde(default)]
+    api_key: Option<String>,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    side: Option<u8>,
+}
+
+pub fn classify_qr_login_ws_message(text: &str, expected_uuid: &str) -> GrooveStatsQrLoginWsEffect {
+    let Ok(env) = serde_json::from_str::<GrooveStatsWsEnvelope>(text) else {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    };
+    if env.event != "apiKey" {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    }
+    let Some(data) = env.data else {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    };
+    if data.uuid.as_deref() != Some(expected_uuid) {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    }
+    let api_key = data.api_key.unwrap_or_default();
+    if api_key.trim().is_empty() {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    }
+    let Some(side @ (1 | 2)) = data.side else {
+        return GrooveStatsQrLoginWsEffect::Ignore;
+    };
+    GrooveStatsQrLoginWsEffect::DeliverApiKey {
+        side,
+        api_key,
+        username: data.username.unwrap_or_default(),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GrooveStatsQrLoginEvent {
+    Failed {
+        reason: String,
+    },
+    Consumed {
+        side: u8,
+        api_key: String,
+        username: String,
+    },
+}
+
+/// WebSocket worker body for GrooveStats QR-login. The caller owns the
+/// thread, cancellation flag, and mapping transport events to UI state.
+pub fn run_qr_login_session<F>(uuid: String, cancel: Arc<AtomicBool>, mut dispatch: F)
+where
+    F: FnMut(GrooveStatsQrLoginEvent),
+{
+    use tungstenite::Message;
+    use tungstenite::stream::MaybeTlsStream;
+
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
+
+    let mut socket = match tungstenite::connect(qr_login_ws_url()) {
+        Ok((sock, _resp)) => sock,
+        Err(err) => {
+            dispatch(GrooveStatsQrLoginEvent::Failed {
+                reason: format!("{err}"),
+            });
+            return;
+        }
+    };
+
+    // Plaintext ws://; the maybe-tls stream is the plain branch. Set a
+    // short read timeout so the loop can poll the cancel flag.
+    if let MaybeTlsStream::Plain(tcp) = socket.get_mut() {
+        let _ = tcp.set_read_timeout(Some(std::time::Duration::from_millis(
+            GROOVESTATS_QR_LOGIN_WS_READ_TIMEOUT_MS,
+        )));
+    }
+
+    if socket
+        .send(Message::Text(qr_login_uuid_message(&uuid).into()))
+        .is_err()
+    {
+        return;
+    }
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = socket.close(None);
+            return;
+        }
+        match socket.read() {
+            Ok(Message::Text(text)) => {
+                if let GrooveStatsQrLoginWsEffect::DeliverApiKey {
+                    side,
+                    api_key,
+                    username,
+                } = classify_qr_login_ws_message(&text, &uuid)
+                {
+                    dispatch(GrooveStatsQrLoginEvent::Consumed {
+                        side,
+                        api_key,
+                        username,
+                    });
+                }
+            }
+            Ok(Message::Close(_)) => {
+                let _ = socket.close(None);
+                return;
+            }
+            Ok(_) => {}
+            Err(tungstenite::Error::Io(io))
+                if matches!(
+                    io.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut,
+                ) => {}
+            Err(_) => {
+                let _ = socket.close(None);
+                return;
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -462,7 +709,7 @@ where
     }
 }
 
-fn compact_f32_text(value: f32) -> String {
+pub fn compact_f32_text(value: f32) -> String {
     let mut text = format!("{value:.2}");
     while text.contains('.') && text.ends_with('0') {
         text.pop();
@@ -493,9 +740,67 @@ mod tests {
     }
 
     #[test]
+    fn compact_f32_text_strips_trailing_decimal_zeroes() {
+        assert_eq!(compact_f32_text(1.0), "1");
+        assert_eq!(compact_f32_text(1.25), "1.25");
+        assert_eq!(compact_f32_text(1.5), "1.5");
+    }
+
+    #[test]
+    fn submit_protocol_constants_match_legacy_api_shape() {
+        assert_eq!(GROOVESTATS_CHART_HASH_VERSION, 3);
+        assert_eq!(GROOVESTATS_COMMENT_PREFIX, "[DS]");
+        assert_eq!(GROOVESTATS_SUBMIT_MAX_ENTRIES, 10);
+    }
+
+    #[test]
     fn api_base_urls_match_backend() {
         assert_eq!(api_base_url(Service::GrooveStats), GROOVESTATS_API_BASE_URL);
         assert_eq!(api_base_url(Service::BoogieStats), BOOGIESTATS_API_BASE_URL);
+    }
+
+    #[test]
+    fn qr_login_ws_url_matches_legacy_socket() {
+        assert_eq!(qr_login_ws_url(), "ws://qrlogin.groovestats.com:3000");
+        assert_eq!(GROOVESTATS_QR_LOGIN_WS_READ_TIMEOUT_MS, 100);
+    }
+
+    #[test]
+    fn generate_qr_login_uuid_is_32_uppercase_hex() {
+        let id = generate_qr_login_uuid();
+        assert_eq!(id.len(), 32);
+        assert!(
+            id.chars()
+                .all(|c| c.is_ascii_digit() || ('A'..='F').contains(&c)),
+            "uuid contained a non-hex-uppercase char: {id}"
+        );
+    }
+
+    #[test]
+    fn generate_qr_login_uuid_returns_distinct_values() {
+        let a = generate_qr_login_uuid();
+        let b = generate_qr_login_uuid();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn qr_login_url_format_matches_simply_love() {
+        assert_eq!(
+            qr_login_url("ABCDEF", 1),
+            "https://www.groovestats.com/qrlogin.php?UUID=ABCDEF&SIDE=1"
+        );
+        assert_eq!(
+            qr_login_url("DEADBEEF", 2),
+            "https://www.groovestats.com/qrlogin.php?UUID=DEADBEEF&SIDE=2"
+        );
+    }
+
+    #[test]
+    fn qr_login_uuid_message_announces_uuid() {
+        assert_eq!(
+            qr_login_uuid_message("ABC"),
+            r#"{"data":{"uuid":"ABC"},"event":"uuid"}"#
+        );
     }
 
     #[test]
@@ -753,6 +1058,130 @@ mod tests {
         assert!(value.get("wayOff").is_none());
         assert_eq!(counts.decent_count(), 0);
         assert_eq!(counts.way_off_count(), 0);
+    }
+
+    #[test]
+    fn manual_qr_url_preserves_base_url_case_and_encodes_rescore() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 0x0a,
+            fantastic: 0x0b,
+            excellent: 0x0c,
+            great: 0x0d,
+            decent: Some(0x0e),
+            way_off: Some(0x0f),
+            miss: 0x10,
+            total_steps: 0x1d,
+            holds_held: 0x11,
+            total_holds: 0x12,
+            mines_hit: 0x15,
+            total_mines: 0x16,
+            rolls_held: 0x13,
+            total_rolls: 0x14,
+        };
+        let rescored = GrooveStatsRescoreCounts {
+            fantastic_plus: 0x01,
+            fantastic: 0x02,
+            excellent: 0x03,
+            great: 0x04,
+            decent: 0x05,
+            way_off: 0x06,
+        };
+
+        let url = manual_qr_url(
+            "https://www.groovestats.com",
+            "deadbeef",
+            &counts,
+            &rescored,
+            150,
+            true,
+        )
+        .expect("manual qr url");
+
+        assert_eq!(
+            url,
+            "https://www.groovestats.com/QR/deadbeef/T1dGaHbIcJdKeLfM10H11T12R13T14M15T16G1H2I3J4K5L6/F0R96C1V3"
+        );
+        assert!(
+            manual_qr_url(
+                "https://www.groovestats.com",
+                " ",
+                &counts,
+                &rescored,
+                150,
+                true,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_routes_matching_uuid() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"GS-1","username":"alice","side":1}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::DeliverApiKey {
+                side: 1,
+                api_key: "GS-1".into(),
+                username: "alice".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_ignores_mismatched_uuid() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"OTHER","apiKey":"GS-1","side":1}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_ignores_non_apikey_events() {
+        let payload = r#"{"event":"hello","data":{"uuid":"ABC"}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_ignores_empty_api_key() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"   ","side":1}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_ignores_unknown_side() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":7}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::Ignore,
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_defaults_missing_username_to_empty() {
+        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":2}}"#;
+        assert_eq!(
+            classify_qr_login_ws_message(payload, "ABC"),
+            GrooveStatsQrLoginWsEffect::DeliverApiKey {
+                side: 2,
+                api_key: "k".into(),
+                username: String::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn classify_qr_login_ws_message_ignores_malformed_json() {
+        assert_eq!(
+            classify_qr_login_ws_message("not json", "ABC"),
+            GrooveStatsQrLoginWsEffect::Ignore,
+        );
     }
 
     #[test]

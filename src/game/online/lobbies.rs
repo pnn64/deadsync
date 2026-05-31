@@ -1,18 +1,14 @@
 use crate::game::profile;
 use deadsync_online::lobbies::{
-    ConnectionState, EVENT_CLIENT_DISCONNECTED, EVENT_CREATE_LOBBY, EVENT_JOIN_LOBBY,
-    EVENT_LEAVE_LOBBY, EVENT_LOBBY_LEFT, EVENT_LOBBY_SEARCHED, EVENT_LOBBY_STATE,
-    EVENT_RESPONSE_STATUS, EVENT_SEARCH_LOBBY, EVENT_SELECT_SONG, EVENT_UPDATE_MACHINE,
-    InboundEnvelope, LOBBY_SERVICE_URL, LobbyLeftData, LobbyMachinePlayer, LobbySearchedData,
-    LobbySongInfo, LobbyStateData, MachinePlayerStats, ResponseStatusData, Snapshot,
-    joined_lobby_from_state, lobby_left_clears_joined, lobby_machine_player,
-    lobby_machine_state_value, normalize_lobby_password, outbound_event_text,
-    public_lobbies_from_search, response_status_clears_joined, response_status_from_data,
+    ConnectionState, LOBBY_SERVICE_URL, LobbyInboundEffect, LobbyMachinePlayer, LobbySongInfo,
+    MachinePlayerStats, Snapshot, create_lobby_text, join_lobby_text, joined_lobby_from_state,
+    leave_lobby_text, lobby_left_clears_joined, lobby_machine_player, lobby_machine_state_value,
+    normalize_lobby_password, parse_inbound_text, public_lobbies_from_search,
+    response_status_clears_joined, response_status_from_data, search_lobby_text, select_song_text,
+    update_machine_text,
 };
 use log::{debug, warn};
-use serde::Deserialize;
-use serde_json::{Value, json};
-use std::fmt::Display;
+use serde_json::Value;
 use std::io::ErrorKind;
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -407,51 +403,40 @@ fn handle_command(
     command: Command,
 ) -> Result<(), tungstenite::Error> {
     match command {
-        Command::Search => send_event(socket, EVENT_SEARCH_LOBBY, json!({})),
-        Command::Create { password } => send_event(
+        Command::Search => send_text(socket, search_lobby_text()),
+        Command::Create { password } => send_text(
             socket,
-            EVENT_CREATE_LOBBY,
-            json!({
-                "machine": local_machine_state_json("ScreenSelectMusic", true, true, None, None),
-                "password": password,
-            }),
+            create_lobby_text(
+                &local_machine_state_json("ScreenSelectMusic", true, true, None, None),
+                password.as_str(),
+            ),
         ),
-        Command::Join { code, password } => send_event(
+        Command::Join { code, password } => send_text(
             socket,
-            EVENT_JOIN_LOBBY,
-            json!({
-                "machine": local_machine_state_json("ScreenSelectMusic", true, true, None, None),
-                "code": code,
-                "password": password,
-            }),
+            join_lobby_text(
+                &local_machine_state_json("ScreenSelectMusic", true, true, None, None),
+                code.as_str(),
+                password.as_str(),
+            ),
         ),
-        Command::Leave => send_event(socket, EVENT_LEAVE_LOBBY, json!({})),
+        Command::Leave => send_text(socket, leave_lobby_text()),
         Command::UpdateMachine {
             screen_name,
             p1_ready,
             p2_ready,
             p1_stats,
             p2_stats,
-        } => send_event(
-            socket,
-            EVENT_UPDATE_MACHINE,
-            json!({
-                "machine": local_machine_state_json(
-                    screen_name.as_str(),
-                    p1_ready,
-                    p2_ready,
-                    p1_stats.as_ref(),
-                    p2_stats.as_ref(),
-                ),
-            }),
-        ),
-        Command::SelectSong { song_info } => send_event(
-            socket,
-            EVENT_SELECT_SONG,
-            json!({
-                "songInfo": song_info,
-            }),
-        ),
+        } => {
+            let machine = local_machine_state_json(
+                screen_name.as_str(),
+                p1_ready,
+                p2_ready,
+                p1_stats.as_ref(),
+                p2_stats.as_ref(),
+            );
+            send_text(socket, update_machine_text(&machine))
+        }
+        Command::SelectSong { song_info } => send_text(socket, select_song_text(&song_info)),
         Command::Disconnect => {
             let _ = socket.close(None);
             Err(tungstenite::Error::ConnectionClosed)
@@ -459,12 +444,11 @@ fn handle_command(
     }
 }
 
-fn send_event(
+fn send_text(
     socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    event: &str,
-    data: Value,
+    text: String,
 ) -> Result<(), tungstenite::Error> {
-    socket.send(Message::Text(outbound_event_text(event, &data).into()))
+    socket.send(Message::Text(text.into()))
 }
 
 fn is_transient_socket_error(error: &tungstenite::Error) -> bool {
@@ -531,31 +515,21 @@ fn handle_message(message: Message) -> Result<(), String> {
 }
 
 fn handle_text_message(text: &str) -> Result<(), String> {
-    let envelope: InboundEnvelope = match serde_json::from_str(text) {
-        Ok(envelope) => envelope,
+    let effect = match parse_inbound_text(text) {
+        Ok(effect) => effect,
         Err(error) => {
-            log_malformed_payload(None, &error, text);
+            log_malformed_payload(error.event.as_deref(), error.error.as_str(), text);
             return Ok(());
         }
     };
 
-    let event = envelope.event;
-    match event.as_str() {
-        EVENT_LOBBY_SEARCHED => {
-            let Some(data): Option<LobbySearchedData> =
-                parse_inbound_data(event.as_str(), envelope.data, text)
-            else {
-                return Ok(());
-            };
+    match effect {
+        LobbyInboundEffect::Ignore => {}
+        LobbyInboundEffect::LobbySearched(data) => {
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.available_lobbies = public_lobbies_from_search(data);
         }
-        EVENT_LOBBY_STATE => {
-            let Some(data): Option<LobbyStateData> =
-                parse_inbound_data(event.as_str(), envelope.data, text)
-            else {
-                return Ok(());
-            };
+        LobbyInboundEffect::LobbyState(data) => {
             {
                 let mut reconnect = RECONNECT_STATE.lock().unwrap();
                 let code = data.code.clone();
@@ -576,12 +550,7 @@ fn handle_text_message(text: &str) -> Result<(), String> {
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.joined_lobby = Some(joined_lobby_from_state(data));
         }
-        EVENT_LOBBY_LEFT => {
-            let Some(data): Option<LobbyLeftData> =
-                parse_inbound_data(event.as_str(), envelope.data, text)
-            else {
-                return Ok(());
-            };
+        LobbyInboundEffect::LobbyLeft(data) => {
             if lobby_left_clears_joined(&data) {
                 clear_reconnect_target();
                 *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
@@ -589,18 +558,13 @@ fn handle_text_message(text: &str) -> Result<(), String> {
                 snapshot.joined_lobby = None;
             }
         }
-        EVENT_CLIENT_DISCONNECTED => {
+        LobbyInboundEffect::ClientDisconnected => {
             clear_reconnect_target();
             *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.joined_lobby = None;
         }
-        EVENT_RESPONSE_STATUS => {
-            let Some(data): Option<ResponseStatusData> =
-                parse_inbound_data(event.as_str(), envelope.data, text)
-            else {
-                return Ok(());
-            };
+        LobbyInboundEffect::ResponseStatus(data) => {
             let clears_lobby = response_status_clears_joined(&data);
             let status = response_status_from_data(data);
             if clears_lobby {
@@ -614,25 +578,11 @@ fn handle_text_message(text: &str) -> Result<(), String> {
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.last_status = Some(status);
         }
-        _ => {}
     }
     Ok(())
 }
 
-fn parse_inbound_data<T>(event: &str, data: Value, raw_text: &str) -> Option<T>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    match serde_json::from_value(data) {
-        Ok(parsed) => Some(parsed),
-        Err(error) => {
-            log_malformed_payload(Some(event), &error, raw_text);
-            None
-        }
-    }
-}
-
-fn log_malformed_payload(event: Option<&str>, error: &impl Display, raw_text: &str) {
+fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
     match event {
         Some(event) => warn!("Ignoring malformed lobby payload for event '{event}': {error}"),
         None => warn!("Ignoring malformed lobby payload: {error}"),

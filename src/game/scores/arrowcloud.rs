@@ -1,8 +1,7 @@
 use super::{
-    GROOVESTATS_SUBMIT_MAX_ENTRIES, RejectReason, gameplay_run_failed, gameplay_run_passed,
-    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, log_body_snippet, lua_chart_submit_allowed,
-    submit_side_ix,
+    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
+    lua_chart_submit_allowed, submit_side_ix,
 };
 use crate::game::gameplay;
 use crate::game::profile::{self, Profile};
@@ -13,12 +12,14 @@ use deadsync_online::arrowcloud::{
     ArrowCloudNpsInfo, ArrowCloudNpsPoint, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSpeed,
     ArrowCloudTimingDatum, ArrowCloudTimingOffset,
 };
+use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_rules::{
     judgment,
     note::{HoldResult, MineResult, Note},
     scroll::ScrollSpeedSetting,
     timing::{self, ScatterPoint},
 };
+use deadsync_score::{SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs};
 use log::{debug, warn};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -89,14 +90,14 @@ struct ArrowCloudSubmitRetryEntry {
 /// For *auto-retryable* statuses this is also the auto-retry budget. For
 /// *manual-only* statuses the cooldown caps at `delay(MAX)`.
 /// Maximum number of attempts before the backoff schedule saturates.
-/// Re-exported alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
-const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = crate::game::scores::SUBMIT_RETRY_MAX_ATTEMPTS;
+/// Alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
+const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
 
 /// Exponential backoff schedule shared with every other submission backend.
-/// See [`crate::game::scores::submit_retry_delay_secs`] for the schedule.
+/// See [`submit_retry_delay_secs`] for the schedule.
 #[inline(always)]
 const fn arrowcloud_retry_delay_secs(attempt: u8) -> u64 {
-    crate::game::scores::submit_retry_delay_secs(attempt)
+    submit_retry_delay_secs(attempt)
 }
 
 /// Returns true when the given failure status should be retried automatically
@@ -830,7 +831,7 @@ fn submit_arrowcloud_payload(
     let status_code = status.as_u16();
     let body = network::read_text_body_or_empty(response);
     if status.is_success() {
-        let snippet = log_body_snippet(body.as_str());
+        let snippet = network::log_body_snippet(body.as_str());
         if snippet.is_empty() {
             debug!(
                 "ArrowCloud submit success for {:?} ({}) status={}",
@@ -848,7 +849,7 @@ fn submit_arrowcloud_payload(
         return Ok(());
     }
 
-    let snippet = log_body_snippet(body.as_str());
+    let snippet = network::log_body_snippet(body.as_str());
     let status_kind = arrowcloud_status_from_http(status_code);
     if snippet.is_empty() {
         Err(ArrowCloudSubmitError {
@@ -1157,7 +1158,7 @@ pub fn arrowcloud_next_retry_remaining_secs(
         .iter()
         .find(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))?
         .next_retry_at?;
-    Some(crate::game::scores::duration_to_ceil_secs(
+    Some(duration_to_ceil_secs(
         target.saturating_duration_since(Instant::now()),
     ))
 }

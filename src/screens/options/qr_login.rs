@@ -22,10 +22,7 @@ use crate::game::online::arrowcloud as ac_online;
 use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use deadsync_online::arrowcloud as ac_api;
-
-const POLL_INTERVAL_MIN_S: f32 = 1.0;
-const POLL_INTERVAL_MAX_S: f32 = 10.0;
-const POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
+use deadsync_online::groovestats as gs_api;
 
 const ALL_SIDES: [profile::PlayerSide; 2] = [profile::PlayerSide::P1, profile::PlayerSide::P2];
 
@@ -229,16 +226,10 @@ impl Drop for QrLoginUiState {
 /// and return a fresh UI state ready to be rendered.
 pub fn create_arrowcloud_login_ui() -> QrLoginUiState {
     let cancel = Arc::new(AtomicBool::new(false));
-    let slots = build_initial_slots(&cancel, BackendKind::ArrowCloud, |side, tx| {
+    let slots = build_initial_slots(&cancel, BackendKind::ArrowCloud, |_side, tx| {
         let cancel_for_thread = Arc::clone(&cancel);
         std::thread::spawn(move || {
-            run_login_session(
-                side,
-                tx,
-                cancel_for_thread,
-                ac_api::device_login_start,
-                ac_api::device_login_poll,
-            );
+            run_arrowcloud_login_worker(tx, cancel_for_thread);
         });
     });
     QrLoginUiState { slots, cancel }
@@ -258,13 +249,7 @@ pub fn create_arrowcloud_login_ui_for_profile(
     let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
     let cancel_for_thread = Arc::clone(&cancel);
     std::thread::spawn(move || {
-        run_login_session(
-            profile::PlayerSide::P1, // unused when target_profile_id is Some
-            tx,
-            cancel_for_thread,
-            ac_api::device_login_start,
-            ac_api::device_login_poll,
-        );
+        run_arrowcloud_login_worker(tx, cancel_for_thread);
     });
     let p1_slot = LoginSlot {
         side: profile::PlayerSide::P1,
@@ -351,118 +336,28 @@ where
     }
 }
 
-fn run_login_session<S, P>(
-    _side: profile::PlayerSide,
-    tx: std::sync::mpsc::Sender<LoginMsg>,
-    cancel: Arc<AtomicBool>,
-    start_fn: S,
-    poll_fn: P,
-) where
-    S: Fn(
-        &ac_api::DeviceLoginStartReq,
-    ) -> Result<ac_api::DeviceLoginStartResp, deadsync_net::NetworkError>,
-    P: Fn(
-        &ac_api::DeviceLoginPollReq,
-    ) -> Result<ac_api::DeviceLoginPollResp, deadsync_net::NetworkError>,
-{
-    if cancel.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let req = ac_api::DeviceLoginStartReq {
-        machine_label: None,
-        client_version: Some(format!("deadsync {}", env!("CARGO_PKG_VERSION"))),
-        theme_version: None,
-    };
-    let start = match start_fn(&req) {
-        Ok(resp) => resp,
-        Err(err) => {
-            let _ = tx.send(LoginMsg::Failed {
-                reason: format!("{err}"),
-            });
-            return;
-        }
-    };
-
-    let mut interval_s = clamp_poll_interval(start.poll_interval_seconds);
-    let poll_req = ac_api::DeviceLoginPollReq {
-        session_id: start.session_id.clone(),
-        poll_token: start.poll_token.clone(),
-    };
-
-    if tx
-        .send(LoginMsg::Started {
-            short_code: start.short_code.clone(),
-            verification_url: start.verification_url.clone(),
-        })
-        .is_err()
-    {
-        return;
-    }
-
-    loop {
-        if !sleep_with_cancel(interval_s, &cancel) {
-            return;
-        }
-        match poll_fn(&poll_req) {
-            Ok(resp) => {
-                interval_s = clamp_poll_interval(resp.poll_interval_seconds);
-                match resp.status {
-                    ac_api::DeviceLoginStatus::Consumed => {
-                        let api_key = resp.api_key.unwrap_or_default();
-                        if api_key.trim().is_empty() {
-                            let _ = tx.send(LoginMsg::Failed {
-                                reason: "server returned empty api key".to_string(),
-                            });
-                        } else {
-                            let _ = tx.send(LoginMsg::Consumed {
-                                api_key,
-                                username: None,
-                            });
-                        }
-                        return;
-                    }
-                    ac_api::DeviceLoginStatus::Cancelled | ac_api::DeviceLoginStatus::Expired => {
-                        let _ = tx.send(LoginMsg::Failed {
-                            reason: format!("{:?}", resp.status).to_lowercase(),
-                        });
-                        return;
-                    }
-                    ac_api::DeviceLoginStatus::Pending | ac_api::DeviceLoginStatus::Approved => {
-                        if tx.send(LoginMsg::StatusUpdate).is_err() {
-                            return;
-                        }
-                    }
-                }
-            }
-            Err(err) => {
-                let _ = tx.send(LoginMsg::Failed {
-                    reason: format!("{err}"),
-                });
-                return;
-            }
-        }
-    }
+fn run_arrowcloud_login_worker(tx: std::sync::mpsc::Sender<LoginMsg>, cancel: Arc<AtomicBool>) {
+    ac_api::run_device_login_session(cancel, |event| {
+        tx.send(login_msg_from_arrowcloud_event(event)).is_ok()
+    });
 }
 
-fn clamp_poll_interval(seconds: Option<u64>) -> f32 {
-    let raw = seconds.map(|s| s as f32).unwrap_or(POLL_INTERVAL_DEFAULT_S);
-    raw.clamp(POLL_INTERVAL_MIN_S, POLL_INTERVAL_MAX_S)
-}
-
-fn sleep_with_cancel(seconds: f32, cancel: &Arc<AtomicBool>) -> bool {
-    let total = std::time::Duration::from_millis((seconds * 1000.0).max(50.0) as u64);
-    let mut elapsed = std::time::Duration::ZERO;
-    let tick = std::time::Duration::from_millis(100);
-    while elapsed < total {
-        if cancel.load(Ordering::Relaxed) {
-            return false;
-        }
-        let chunk = tick.min(total - elapsed);
-        std::thread::sleep(chunk);
-        elapsed += chunk;
+fn login_msg_from_arrowcloud_event(event: ac_api::DeviceLoginEvent) -> LoginMsg {
+    match event {
+        ac_api::DeviceLoginEvent::Started {
+            short_code,
+            verification_url,
+        } => LoginMsg::Started {
+            short_code,
+            verification_url,
+        },
+        ac_api::DeviceLoginEvent::StatusUpdate => LoginMsg::StatusUpdate,
+        ac_api::DeviceLoginEvent::Consumed { api_key } => LoginMsg::Consumed {
+            api_key,
+            username: None,
+        },
+        ac_api::DeviceLoginEvent::Failed { reason } => LoginMsg::Failed { reason },
     }
-    !cancel.load(Ordering::Relaxed)
 }
 
 /// Drain pending channel messages for every slot, updating slot state
@@ -838,115 +733,14 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
 // per-slot sender.  Mirrors Simply Love's
 // `ScreenGrooveStatsLogin underlay/default.lua`.
 
-const GROOVESTATS_QR_LOGIN_WS_URL: &str = "ws://qrlogin.groovestats.com:3000";
-const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com/qrlogin.php";
-const GROOVESTATS_WS_READ_TIMEOUT_MS: u64 = 100;
-
-/// 32-character uppercase hex string mirroring SL's
-/// `CRYPTMAN:GenerateRandomUUID():gsub("-",""):upper()`.  Stable across
-/// the lifetime of one overlay so the server can correlate an `apiKey`
-/// push back to the right machine.
-#[allow(dead_code)]
-pub(crate) fn generate_qr_uuid() -> String {
-    use rand::Rng;
-    let mut bytes = [0u8; 16];
-    rand::rng().fill_bytes(&mut bytes);
-    let mut out = String::with_capacity(32);
-    for b in bytes {
-        out.push_str(&format!("{:02X}", b));
-    }
-    out
-}
-
-#[allow(dead_code)]
-pub(crate) fn groovestats_qr_url(uuid: &str, side: u8) -> String {
-    format!("{GROOVESTATS_QR_BASE_URL}?UUID={uuid}&SIDE={side}")
-}
-
-/// Parsed envelope from the GrooveStats QR-login server.  Mirrors
-/// SL's `data.uuid / data.apiKey / data.username / data.side` payload.
-#[derive(serde::Deserialize, Debug)]
-struct GrooveStatsWsEnvelope {
-    event: String,
-    #[serde(default)]
-    data: Option<GrooveStatsApiKeyPayload>,
-}
-
-#[derive(serde::Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GrooveStatsApiKeyPayload {
-    #[serde(default)]
-    uuid: Option<String>,
-    #[serde(default)]
-    api_key: Option<String>,
-    #[serde(default)]
-    username: Option<String>,
-    #[serde(default)]
-    side: Option<u8>,
-}
-
-/// Decide what to dispatch when a raw text frame arrives off the ws.
-/// Pure function so it can be unit-tested without a live socket.
-#[derive(Debug, PartialEq, Eq)]
-enum GrooveStatsWsEffect {
-    Ignore,
-    DeliverApiKey {
-        side: u8,
-        api_key: String,
-        username: String,
-    },
-}
-
-#[allow(dead_code)]
-fn classify_ws_message(text: &str, expected_uuid: &str) -> GrooveStatsWsEffect {
-    let Ok(env) = serde_json::from_str::<GrooveStatsWsEnvelope>(text) else {
-        return GrooveStatsWsEffect::Ignore;
-    };
-    if env.event != "apiKey" {
-        return GrooveStatsWsEffect::Ignore;
-    }
-    let Some(data) = env.data else {
-        return GrooveStatsWsEffect::Ignore;
-    };
-    if data.uuid.as_deref() != Some(expected_uuid) {
-        return GrooveStatsWsEffect::Ignore;
-    }
-    let api_key = data.api_key.unwrap_or_default();
-    if api_key.trim().is_empty() {
-        return GrooveStatsWsEffect::Ignore;
-    }
-    let side = match data.side {
-        Some(1) | Some(2) => data.side.unwrap(),
-        _ => return GrooveStatsWsEffect::Ignore,
-    };
-    GrooveStatsWsEffect::DeliverApiKey {
-        side,
-        api_key,
-        username: data.username.unwrap_or_default(),
-    }
-}
-
-/// WebSocket worker: opens one connection for the whole overlay,
-/// announces the UUID, then routes each incoming `apiKey` push to the
-/// per-side sender.  Exits on cancel, server close, or send error.
-#[allow(dead_code)]
-fn run_groovestats_session(
+fn run_groovestats_login_worker(
     uuid: String,
     p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
     p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
     cancel: Arc<AtomicBool>,
 ) {
-    use tungstenite::Message;
-    use tungstenite::stream::MaybeTlsStream;
-
-    if cancel.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let mut socket = match tungstenite::connect(GROOVESTATS_QR_LOGIN_WS_URL) {
-        Ok((sock, _resp)) => sock,
-        Err(err) => {
-            let reason = format!("{err}");
+    gs_api::run_qr_login_session(uuid, cancel, |event| match event {
+        gs_api::GrooveStatsQrLoginEvent::Failed { reason } => {
             if let Some(tx) = &p1_tx {
                 let _ = tx.send(LoginMsg::Failed {
                     reason: reason.clone(),
@@ -955,73 +749,25 @@ fn run_groovestats_session(
             if let Some(tx) = &p2_tx {
                 let _ = tx.send(LoginMsg::Failed { reason });
             }
-            return;
         }
-    };
-
-    // Plaintext ws://; the maybe-tls stream is the plain branch.  Set a
-    // short read timeout so the loop can poll the cancel flag.
-    if let MaybeTlsStream::Plain(tcp) = socket.get_mut() {
-        let _ = tcp.set_read_timeout(Some(std::time::Duration::from_millis(
-            GROOVESTATS_WS_READ_TIMEOUT_MS,
-        )));
-    }
-
-    // Announce the UUID once Open.
-    let hello = serde_json::json!({ "event": "uuid", "data": { "uuid": &uuid } });
-    if socket
-        .send(Message::Text(hello.to_string().into()))
-        .is_err()
-    {
-        return;
-    }
-
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = socket.close(None);
-            return;
-        }
-        match socket.read() {
-            Ok(Message::Text(text)) => {
-                let effect = classify_ws_message(&text, &uuid);
-                if let GrooveStatsWsEffect::DeliverApiKey {
-                    side,
+        gs_api::GrooveStatsQrLoginEvent::Consumed {
+            side,
+            api_key,
+            username,
+        } => {
+            let tx = match side {
+                1 => p1_tx.as_ref(),
+                2 => p2_tx.as_ref(),
+                _ => None,
+            };
+            if let Some(tx) = tx {
+                let _ = tx.send(LoginMsg::Consumed {
                     api_key,
-                    username,
-                } = effect
-                {
-                    let tx = match side {
-                        1 => p1_tx.as_ref(),
-                        2 => p2_tx.as_ref(),
-                        _ => None,
-                    };
-                    if let Some(tx) = tx {
-                        let _ = tx.send(LoginMsg::Consumed {
-                            api_key,
-                            username: Some(username),
-                        });
-                    }
-                }
-            }
-            Ok(Message::Close(_)) => {
-                let _ = socket.close(None);
-                return;
-            }
-            Ok(_) => {} // ping/pong/binary frames ignored
-            Err(tungstenite::Error::Io(io))
-                if matches!(
-                    io.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut,
-                ) =>
-            {
-                // Read-timeout — loop back so we can re-check the cancel flag.
-            }
-            Err(_) => {
-                let _ = socket.close(None);
-                return;
+                    username: Some(username),
+                });
             }
         }
-    }
+    });
 }
 
 /// Spawn GrooveStats QR-login workers for every joined Local side
@@ -1029,7 +775,7 @@ fn run_groovestats_session(
 #[allow(dead_code)]
 pub fn create_groovestats_login_ui() -> QrLoginUiState {
     let cancel = Arc::new(AtomicBool::new(false));
-    let uuid = generate_qr_uuid();
+    let uuid = gs_api::generate_qr_login_uuid();
     let mut p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
     let mut p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
     let slots = build_initial_slots(&cancel, BackendKind::GrooveStats, |side, tx| {
@@ -1038,7 +784,7 @@ pub fn create_groovestats_login_ui() -> QrLoginUiState {
         // Pending with the per-side URL embedded.
         let _ = tx.send(LoginMsg::Started {
             short_code: String::new(),
-            verification_url: groovestats_qr_url(&uuid, gs_side_byte(side)),
+            verification_url: gs_api::qr_login_url(&uuid, gs_side_byte(side)),
         });
         match side {
             profile::PlayerSide::P1 => p1_tx = Some(tx),
@@ -1048,7 +794,7 @@ pub fn create_groovestats_login_ui() -> QrLoginUiState {
     if p1_tx.is_some() || p2_tx.is_some() {
         let cancel_for_thread = Arc::clone(&cancel);
         std::thread::spawn(move || {
-            run_groovestats_session(uuid, p1_tx, p2_tx, cancel_for_thread);
+            run_groovestats_login_worker(uuid, p1_tx, p2_tx, cancel_for_thread);
         });
     }
     QrLoginUiState { slots, cancel }
@@ -1062,18 +808,18 @@ pub fn create_groovestats_login_ui_for_profile(
     display_name: String,
 ) -> QrLoginUiState {
     let cancel = Arc::new(AtomicBool::new(false));
-    let uuid = generate_qr_uuid();
+    let uuid = gs_api::generate_qr_login_uuid();
     let had_existing_key = profile::get_groovestats_api_key_for_id(&profile_id).is_some();
     let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
     // Push the QR URL straight away — no server roundtrip required.
     let _ = tx.send(LoginMsg::Started {
         short_code: String::new(),
-        verification_url: groovestats_qr_url(&uuid, 1),
+        verification_url: gs_api::qr_login_url(&uuid, 1),
     });
     let cancel_for_thread = Arc::clone(&cancel);
     let tx_for_thread = tx.clone();
     std::thread::spawn(move || {
-        run_groovestats_session(uuid, Some(tx_for_thread), None, cancel_for_thread);
+        run_groovestats_login_worker(uuid, Some(tx_for_thread), None, cancel_for_thread);
     });
     drop(tx);
     let p1_slot = LoginSlot {
@@ -1129,155 +875,7 @@ pub(crate) fn any_joined_local_side_missing_gs_key() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_net::NetworkError;
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
-
-    fn drain_msgs(rx: &mpsc::Receiver<LoginMsg>) -> Vec<LoginMsg> {
-        let mut out = Vec::new();
-        while let Ok(msg) = rx.try_recv() {
-            out.push(msg);
-        }
-        out
-    }
-
-    fn make_start_ok() -> ac_api::DeviceLoginStartResp {
-        ac_api::DeviceLoginStartResp {
-            session_id: "sess-1".into(),
-            short_code: "ABCD2345".into(),
-            poll_token: "tok-1".into(),
-            poll_interval_seconds: Some(0),
-            verification_url: "https://arrowcloud.dance/device-login/sess-1".into(),
-        }
-    }
-
-    #[test]
-    fn clamp_poll_interval_uses_default_when_missing() {
-        assert!((clamp_poll_interval(None) - POLL_INTERVAL_DEFAULT_S).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn clamp_poll_interval_clamps_to_min() {
-        assert!((clamp_poll_interval(Some(0)) - POLL_INTERVAL_MIN_S).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn clamp_poll_interval_clamps_to_max() {
-        assert!((clamp_poll_interval(Some(9999)) - POLL_INTERVAL_MAX_S).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn worker_emits_started_then_consumed() {
-        let (tx, rx) = mpsc::channel::<LoginMsg>();
-        let cancel = Arc::new(AtomicBool::new(false));
-        let polls = Arc::new(Mutex::new(0u32));
-        let polls_clone = Arc::clone(&polls);
-
-        let start = make_start_ok();
-        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
-            Ok(start.clone())
-        };
-        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            let mut n = polls_clone.lock().unwrap();
-            *n += 1;
-            if *n == 1 {
-                Ok(ac_api::DeviceLoginPollResp {
-                    status: ac_api::DeviceLoginStatus::Pending,
-                    poll_interval_seconds: Some(0),
-                    api_key: None,
-                })
-            } else {
-                Ok(ac_api::DeviceLoginPollResp {
-                    status: ac_api::DeviceLoginStatus::Consumed,
-                    poll_interval_seconds: None,
-                    api_key: Some("AC-KEY-7".into()),
-                })
-            }
-        };
-
-        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
-
-        let msgs = drain_msgs(&rx);
-        assert!(matches!(msgs.first(), Some(LoginMsg::Started { .. })));
-        assert!(
-            msgs.iter()
-                .any(|m| matches!(m, LoginMsg::StatusUpdate { .. }))
-        );
-        assert!(matches!(
-            msgs.last(),
-            Some(LoginMsg::Consumed { api_key, username: None }) if api_key == "AC-KEY-7"
-        ));
-        assert_eq!(*polls.lock().unwrap(), 2);
-    }
-
-    #[test]
-    fn worker_reports_failure_on_expired() {
-        let (tx, rx) = mpsc::channel::<LoginMsg>();
-        let cancel = Arc::new(AtomicBool::new(false));
-        let start = make_start_ok();
-        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
-            Ok(start.clone())
-        };
-        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            Ok(ac_api::DeviceLoginPollResp {
-                status: ac_api::DeviceLoginStatus::Expired,
-                poll_interval_seconds: None,
-                api_key: None,
-            })
-        };
-
-        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
-        let msgs = drain_msgs(&rx);
-        assert!(matches!(msgs.last(), Some(LoginMsg::Failed { reason }) if reason == "expired"));
-    }
-
-    #[test]
-    fn worker_reports_failure_when_start_errors() {
-        let (tx, rx) = mpsc::channel::<LoginMsg>();
-        let cancel = Arc::new(AtomicBool::new(false));
-        let start_fn = |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
-            Err(NetworkError::Request("boom".into()))
-        };
-        let poll_fn = |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            unreachable!("poll should not be called when start fails")
-        };
-
-        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
-        let msgs = drain_msgs(&rx);
-        assert!(matches!(msgs.first(), Some(LoginMsg::Failed { .. })));
-        assert_eq!(msgs.len(), 1);
-    }
-
-    #[test]
-    fn worker_consumed_with_empty_key_is_failure() {
-        let (tx, rx) = mpsc::channel::<LoginMsg>();
-        let cancel = Arc::new(AtomicBool::new(false));
-        let start = make_start_ok();
-        let start_fn = move |_req: &ac_api::DeviceLoginStartReq| -> Result<_, NetworkError> {
-            Ok(start.clone())
-        };
-        let poll_fn = move |_req: &ac_api::DeviceLoginPollReq| -> Result<_, NetworkError> {
-            Ok(ac_api::DeviceLoginPollResp {
-                status: ac_api::DeviceLoginStatus::Consumed,
-                poll_interval_seconds: None,
-                api_key: Some("   ".into()),
-            })
-        };
-
-        run_login_session(profile::PlayerSide::P1, tx, cancel, start_fn, poll_fn);
-        let msgs = drain_msgs(&rx);
-        assert!(matches!(msgs.last(), Some(LoginMsg::Failed { .. })));
-    }
-
-    #[test]
-    fn sleep_with_cancel_returns_false_when_cancelled_mid_wait() {
-        let cancel = Arc::new(AtomicBool::new(false));
-        let cancel_for_thread = Arc::clone(&cancel);
-        let handle = std::thread::spawn(move || sleep_with_cancel(5.0, &cancel_for_thread));
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        cancel.store(true, Ordering::Relaxed);
-        assert!(!handle.join().unwrap());
-    }
 
     fn slot(side: profile::PlayerSide, state: SlotState) -> LoginSlot {
         LoginSlot {
@@ -1460,106 +1058,6 @@ mod tests {
     }
 
     /* -------------------- GrooveStats backend -------------------- */
-
-    #[test]
-    fn generate_qr_uuid_is_32_uppercase_hex() {
-        let id = generate_qr_uuid();
-        assert_eq!(id.len(), 32);
-        assert!(
-            id.chars()
-                .all(|c| c.is_ascii_digit() || ('A'..='F').contains(&c)),
-            "uuid contained a non-hex-uppercase char: {id}"
-        );
-    }
-
-    #[test]
-    fn generate_qr_uuid_returns_distinct_values() {
-        let a = generate_qr_uuid();
-        let b = generate_qr_uuid();
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn groovestats_qr_url_format_matches_simply_love() {
-        assert_eq!(
-            groovestats_qr_url("ABCDEF", 1),
-            "https://www.groovestats.com/qrlogin.php?UUID=ABCDEF&SIDE=1"
-        );
-        assert_eq!(
-            groovestats_qr_url("DEADBEEF", 2),
-            "https://www.groovestats.com/qrlogin.php?UUID=DEADBEEF&SIDE=2"
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_routes_matching_uuid() {
-        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"GS-1","username":"alice","side":1}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::DeliverApiKey {
-                side: 1,
-                api_key: "GS-1".into(),
-                username: "alice".into(),
-            }
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_ignores_mismatched_uuid() {
-        let payload = r#"{"event":"apiKey","data":{"uuid":"OTHER","apiKey":"GS-1","side":1}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::Ignore,
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_ignores_non_apikey_events() {
-        let payload = r#"{"event":"hello","data":{"uuid":"ABC"}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::Ignore,
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_ignores_empty_api_key() {
-        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"   ","side":1}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::Ignore,
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_ignores_unknown_side() {
-        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":7}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::Ignore,
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_defaults_missing_username_to_empty() {
-        let payload = r#"{"event":"apiKey","data":{"uuid":"ABC","apiKey":"k","side":2}}"#;
-        assert_eq!(
-            classify_ws_message(payload, "ABC"),
-            GrooveStatsWsEffect::DeliverApiKey {
-                side: 2,
-                api_key: "k".into(),
-                username: String::new(),
-            }
-        );
-    }
-
-    #[test]
-    fn classify_ws_message_ignores_malformed_json() {
-        assert_eq!(
-            classify_ws_message("not json", "ABC"),
-            GrooveStatsWsEffect::Ignore,
-        );
-    }
 
     #[test]
     fn apply_consumed_with_username_passes_through_for_groovestats_slot() {

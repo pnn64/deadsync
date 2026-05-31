@@ -48,6 +48,104 @@ pub fn outbound_event_text(event: &str, data: &Value) -> String {
         .expect("serialize lobby outbound envelope")
 }
 
+#[inline]
+pub fn search_lobby_text() -> String {
+    outbound_event_text(EVENT_SEARCH_LOBBY, &serde_json::json!({}))
+}
+
+pub fn create_lobby_text(machine: &Value, password: &str) -> String {
+    outbound_event_text(
+        EVENT_CREATE_LOBBY,
+        &serde_json::json!({
+            "machine": machine,
+            "password": password,
+        }),
+    )
+}
+
+pub fn join_lobby_text(machine: &Value, code: &str, password: &str) -> String {
+    outbound_event_text(
+        EVENT_JOIN_LOBBY,
+        &serde_json::json!({
+            "machine": machine,
+            "code": code,
+            "password": password,
+        }),
+    )
+}
+
+#[inline]
+pub fn leave_lobby_text() -> String {
+    outbound_event_text(EVENT_LEAVE_LOBBY, &serde_json::json!({}))
+}
+
+pub fn update_machine_text(machine: &Value) -> String {
+    outbound_event_text(
+        EVENT_UPDATE_MACHINE,
+        &serde_json::json!({
+            "machine": machine,
+        }),
+    )
+}
+
+pub fn select_song_text(song_info: &LobbySongInfo) -> String {
+    outbound_event_text(
+        EVENT_SELECT_SONG,
+        &serde_json::json!({
+            "songInfo": song_info,
+        }),
+    )
+}
+
+#[derive(Debug)]
+pub enum LobbyInboundEffect {
+    Ignore,
+    LobbySearched(LobbySearchedData),
+    LobbyState(LobbyStateData),
+    LobbyLeft(LobbyLeftData),
+    ClientDisconnected,
+    ResponseStatus(ResponseStatusData),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LobbyInboundParseError {
+    pub event: Option<String>,
+    pub error: String,
+}
+
+pub fn parse_inbound_text(text: &str) -> Result<LobbyInboundEffect, LobbyInboundParseError> {
+    let envelope: InboundEnvelope =
+        serde_json::from_str(text).map_err(|error| LobbyInboundParseError {
+            event: None,
+            error: error.to_string(),
+        })?;
+
+    match envelope.event.as_str() {
+        EVENT_LOBBY_SEARCHED => parse_inbound_data(&envelope.event, envelope.data)
+            .map(LobbyInboundEffect::LobbySearched),
+        EVENT_LOBBY_STATE => {
+            parse_inbound_data(&envelope.event, envelope.data).map(LobbyInboundEffect::LobbyState)
+        }
+        EVENT_LOBBY_LEFT => {
+            parse_inbound_data(&envelope.event, envelope.data).map(LobbyInboundEffect::LobbyLeft)
+        }
+        EVENT_CLIENT_DISCONNECTED => Ok(LobbyInboundEffect::ClientDisconnected),
+        EVENT_RESPONSE_STATUS => parse_inbound_data(&envelope.event, envelope.data)
+            .map(LobbyInboundEffect::ResponseStatus),
+        _ => Ok(LobbyInboundEffect::Ignore),
+    }
+}
+
+fn parse_inbound_data<T>(event: &str, data: Value) -> Result<T, LobbyInboundParseError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    serde_json::from_value(data).map_err(|error| LobbyInboundParseError {
+        event: Some(event.to_string()),
+        error: error.to_string(),
+    })
+}
+
 pub fn lobby_profile_name(name: &str) -> String {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -428,6 +526,159 @@ mod tests {
         assert_eq!(value["event"], EVENT_JOIN_LOBBY);
         assert_eq!(value["data"]["code"], "ABCD");
         assert_eq!(value["data"]["password"], "1234");
+    }
+
+    #[test]
+    fn outbound_lobby_text_helpers_serialize_event_shapes() {
+        let machine = serde_json::json!({
+            "player1": {
+                "playerId": "P1",
+                "profileName": "[DS] Alice",
+                "screenName": "ScreenSelectMusic",
+                "ready": true
+            },
+            "player2": null
+        });
+
+        let search: serde_json::Value =
+            serde_json::from_str(search_lobby_text().as_str()).expect("search json");
+        assert_eq!(search["event"], EVENT_SEARCH_LOBBY);
+        assert_eq!(search["data"], serde_json::json!({}));
+
+        let create: serde_json::Value =
+            serde_json::from_str(create_lobby_text(&machine, "ABCD").as_str())
+                .expect("create json");
+        assert_eq!(create["event"], EVENT_CREATE_LOBBY);
+        assert_eq!(create["data"]["machine"], machine);
+        assert_eq!(create["data"]["password"], "ABCD");
+
+        let join: serde_json::Value =
+            serde_json::from_str(join_lobby_text(&machine, "ROOM", "WXYZ").as_str())
+                .expect("join json");
+        assert_eq!(join["event"], EVENT_JOIN_LOBBY);
+        assert_eq!(join["data"]["machine"], machine);
+        assert_eq!(join["data"]["code"], "ROOM");
+        assert_eq!(join["data"]["password"], "WXYZ");
+
+        let leave: serde_json::Value =
+            serde_json::from_str(leave_lobby_text().as_str()).expect("leave json");
+        assert_eq!(leave["event"], EVENT_LEAVE_LOBBY);
+        assert_eq!(leave["data"], serde_json::json!({}));
+
+        let update: serde_json::Value =
+            serde_json::from_str(update_machine_text(&machine).as_str()).expect("update json");
+        assert_eq!(update["event"], EVENT_UPDATE_MACHINE);
+        assert_eq!(update["data"]["machine"], machine);
+    }
+
+    #[test]
+    fn select_song_text_serializes_song_info() {
+        let song = LobbySongInfo {
+            song_path: "Songs/Pack/Song".to_string(),
+            title: Some("Song".to_string()),
+            artist: Some("Artist".to_string()),
+            song_length_seconds: Some(123.5),
+            chart_hash: Some("deadbeef".to_string()),
+            chart_type: Some("dance-single".to_string()),
+            chart_label: Some("Hard".to_string()),
+            rate: Some(1.25),
+        };
+
+        let value: serde_json::Value =
+            serde_json::from_str(select_song_text(&song).as_str()).expect("song json");
+        assert_eq!(value["event"], EVENT_SELECT_SONG);
+        assert_eq!(value["data"]["songInfo"]["songPath"], "Songs/Pack/Song");
+        assert_eq!(value["data"]["songInfo"]["songLength"], 123.5);
+        assert_eq!(value["data"]["songInfo"]["chartHash"], "deadbeef");
+    }
+
+    #[test]
+    fn parse_inbound_text_routes_lobby_searched() {
+        let text = r#"{
+            "event":"lobbySearched",
+            "data":{
+                "lobbies":[{"code":"ABCD","playerCount":2,"isPasswordProtected":true}]
+            }
+        }"#;
+
+        let effect = parse_inbound_text(text).expect("parse");
+        let LobbyInboundEffect::LobbySearched(data) = effect else {
+            panic!("expected lobby searched");
+        };
+        assert_eq!(data.lobbies[0].code, "ABCD");
+        assert!(data.lobbies[0].is_password_protected);
+    }
+
+    #[test]
+    fn parse_inbound_text_routes_lobby_state() {
+        let text = r#"{
+            "event":"lobbyState",
+            "data":{
+                "code":"ROOM",
+                "players":[{"profileName":"Alice","ready":true}]
+            }
+        }"#;
+
+        let effect = parse_inbound_text(text).expect("parse");
+        let LobbyInboundEffect::LobbyState(data) = effect else {
+            panic!("expected lobby state");
+        };
+        assert_eq!(data.code, "ROOM");
+        assert_eq!(data.players[0].profile_name.as_deref(), Some("Alice"));
+    }
+
+    #[test]
+    fn parse_inbound_text_routes_lobby_left() {
+        let effect =
+            parse_inbound_text(r#"{"event":"lobbyLeft","data":{"left":false}}"#).expect("parse");
+        let LobbyInboundEffect::LobbyLeft(data) = effect else {
+            panic!("expected lobby left");
+        };
+        assert_eq!(data.left, Some(false));
+    }
+
+    #[test]
+    fn parse_inbound_text_routes_client_disconnected() {
+        let effect =
+            parse_inbound_text(r#"{"event":"clientDisconnected","data":{}}"#).expect("parse");
+        assert!(matches!(effect, LobbyInboundEffect::ClientDisconnected));
+    }
+
+    #[test]
+    fn parse_inbound_text_routes_response_status() {
+        let text = r#"{
+            "event":"responseStatus",
+            "data":{"event":"joinLobby","success":false,"message":"Bad password"}
+        }"#;
+
+        let effect = parse_inbound_text(text).expect("parse");
+        let LobbyInboundEffect::ResponseStatus(data) = effect else {
+            panic!("expected response status");
+        };
+        assert_eq!(data.event, EVENT_JOIN_LOBBY);
+        assert!(!data.success);
+        assert_eq!(data.message.as_deref(), Some("Bad password"));
+    }
+
+    #[test]
+    fn parse_inbound_text_ignores_unknown_events() {
+        let effect = parse_inbound_text(r#"{"event":"unknown","data":{"x":1}}"#).expect("parse");
+        assert!(matches!(effect, LobbyInboundEffect::Ignore));
+    }
+
+    #[test]
+    fn parse_inbound_text_reports_envelope_errors_without_event() {
+        let err = parse_inbound_text("not json").expect_err("parse should fail");
+        assert_eq!(err.event, None);
+        assert!(!err.error.is_empty());
+    }
+
+    #[test]
+    fn parse_inbound_text_reports_data_errors_with_event() {
+        let err = parse_inbound_text(r#"{"event":"lobbyState","data":{"players":"bad"}}"#)
+            .expect_err("parse should fail");
+        assert_eq!(err.event.as_deref(), Some(EVENT_LOBBY_STATE));
+        assert!(!err.error.is_empty());
     }
 
     #[test]

@@ -7,8 +7,10 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-net = { path = "../deadsync-net" }
 deadsync-score = { path = "../deadsync-score" }
+rand = "0.10.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+tungstenite = "0.29.0"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

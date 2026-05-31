@@ -44,12 +44,8 @@ fn perform_check() {
     let service_name = groovestats_api::service_name(service);
     debug!("Performing {service_name} connectivity check...");
 
-    match network::get_json_with::<groovestats_api::NewSessionResponse>(
-        &network::get_groovestats_agent(),
-        &groovestats_api::new_session_url(service),
-    ) {
-        Ok(data) => {
-            let status = groovestats_api::connection_status_from_new_session(&data);
+    match groovestats_api::check_connection(service) {
+        Ok(status) => {
             match &status {
                 ConnectionStatus::Connected(services) => info!(
                     "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
