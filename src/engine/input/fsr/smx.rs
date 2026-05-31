@@ -161,7 +161,7 @@ impl Monitor {
                         let raw_value = test_data
                             .as_ref()
                             .filter(|d| d.have_data_from_panel[panel])
-                            .map_or(0, |d| d.sensor_level[panel][s].max(0) as u16);
+                            .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s]));
                         let raw_threshold = u16::from(settings.fsr_high_threshold[s]);
                         SensorView {
                             raw_value,
@@ -352,6 +352,16 @@ fn panel_max_sensor(data: &rustmaniax_sdk::SensorTestData, panel: usize) -> u16 
         .map(|&v| v.max(0) as u16)
         .max()
         .unwrap_or(0)
+}
+
+/// Scale a raw calibrated FSR sensor reading to the 0-250 range used by the
+/// FSR thresholds, matching the official SMX config tool: clamp noise to zero,
+/// then `value >> 2` (divide by 4).
+fn calibrate_fsr(value: i16) -> u16 {
+    if value <= 0 {
+        return 0;
+    }
+    (value >> 2) as u16
 }
 
 fn normalize(value: u16, max: u16) -> f32 {

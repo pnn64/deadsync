@@ -4601,7 +4601,10 @@ impl App {
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state = options::init();
         self.state.screens.options_state.active_color_index = current_color_index;
-        if matches!(from, CurrentScreen::Mappings | CurrentScreen::Input) {
+        if matches!(
+            from,
+            CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
+        ) {
             options::open_input_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::TestLights {
             options::open_lights_submenu(&mut self.state.screens.options_state);
@@ -6034,6 +6037,7 @@ impl App {
             CurrentScreen::ConfigurePads => crate::screens::pad_config::handle_input(
                 &mut self.state.screens.pad_config_state,
                 &ev,
+                self.state.shell.shift_held,
             ),
             CurrentScreen::TestLights => crate::screens::test_lights::handle_input(
                 &mut self.state.screens.test_lights_state,

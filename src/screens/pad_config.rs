@@ -27,14 +27,16 @@ const BAR_HEIGHT: f32 = 160.0;
 const PAD_GAP: f32 = 56.0;
 const PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
 const PANEL_BORDER_H: f32 = 3.0;
+/// Muted background of an unfilled bar.
+const TRACK_COLOR: [f32; 4] = [0.12, 0.12, 0.16, 0.85];
+/// Fill color when the panel is currently activated (real pad input state).
+const ACTIVE_FILL: [f32; 4] = [0.30, 0.95, 0.45, 0.95];
+/// The activation-threshold line.
+const THRESHOLD_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 struct Theme {
     frame: [f32; 4],
-    track_top: [f32; 4],
-    track_active_bottom: [f32; 4],
-    track_idle_bottom: [f32; 4],
-    fill_top: [f32; 4],
-    fill_bottom: [f32; 4],
+    fill_idle: [f32; 4],
 }
 
 /// A pending threshold edit for the app loop to apply via `Monitor::set_threshold`.
@@ -88,7 +90,8 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (Vec::new(), TRANSITION_OUT_DURATION)
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+/// `fine` (Shift held) adjusts thresholds by 1 instead of `THRESHOLD_STEP`.
+pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
@@ -104,6 +107,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if total == 0 {
         return ScreenAction::None;
     }
+    let step = if fine { 1 } else { THRESHOLD_STEP as i32 };
     match ui_action(ev.action) {
         Some(UiAction::PrevBar) => {
             state.selected = (state.selected + total - 1) % total;
@@ -111,8 +115,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         Some(UiAction::NextBar) => {
             state.selected = (state.selected + 1) % total;
         }
-        Some(UiAction::Raise) => adjust_threshold(state, THRESHOLD_STEP as i32),
-        Some(UiAction::Lower) => adjust_threshold(state, -(THRESHOLD_STEP as i32)),
+        Some(UiAction::Raise) => adjust_threshold(state, step),
+        Some(UiAction::Lower) => adjust_threshold(state, -step),
         None => {}
     }
     ScreenAction::None
@@ -290,7 +294,7 @@ fn normalize(value: u16, max: u16) -> f32 {
 fn push_footer(actors: &mut Vec<Actor>) {
     actors.push(act!(text:
         font("miso"):
-        settext(format!("Left/Right select   Up/Down threshold +/-{THRESHOLD_STEP}   Back to return")):
+        settext(format!("Left/Right select   Up/Down threshold +/-{THRESHOLD_STEP} (Shift +/-1)   Back to return")):
         align(0.5, 1.0):
         xy(screen_center_x(), screen_height() - 24.0):
         zoom(0.55):
@@ -301,30 +305,13 @@ fn push_footer(actors: &mut Vec<Actor>) {
 }
 
 fn theme(active_color_index: i32) -> Theme {
-    let fill_bottom = color::decorative_rgba(active_color_index);
-    let fill_top = color::lighten_rgba(color::decorative_rgba(active_color_index + 1));
-    let track_top = color::decorative_rgba(active_color_index + 4);
-    let track_active_bottom = color::decorative_rgba(active_color_index + 2);
-    let frame = color::decorative_rgba(active_color_index - 2);
     Theme {
-        frame: with_alpha(frame, 0.95),
-        track_top: with_alpha(track_top, 0.95),
-        track_active_bottom: with_alpha(track_active_bottom, 0.92),
-        track_idle_bottom: scale_rgb(track_active_bottom, 0.28, 0.78),
-        fill_top: scale_rgb(fill_top, 1.0, 0.98),
-        fill_bottom: with_alpha(fill_bottom, 0.98),
+        frame: with_alpha(color::decorative_rgba(active_color_index - 2), 0.95),
+        fill_idle: with_alpha(color::decorative_rgba(active_color_index), 0.95),
     }
 }
 
 fn with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
-    rgba[3] = alpha;
-    rgba
-}
-
-fn scale_rgb(mut rgba: [f32; 4], scale: f32, alpha: f32) -> [f32; 4] {
-    rgba[0] = (rgba[0] * scale).clamp(0.0, 1.0);
-    rgba[1] = (rgba[1] * scale).clamp(0.0, 1.0);
-    rgba[2] = (rgba[2] * scale).clamp(0.0, 1.0);
     rgba[3] = alpha;
     rgba
 }
@@ -397,34 +384,23 @@ fn push_bar(
 ) {
     let value_norm = value_norm.clamp(0.0, 1.0);
     let threshold_norm = threshold_norm.clamp(0.0, 1.0);
-    let track_bottom = if active {
-        theme.track_active_bottom
-    } else {
-        theme.track_idle_bottom
-    };
-    let half_h = BAR_HEIGHT * 0.5;
-    push_quad(actors, x, y, BAR_WIDTH, half_h, theme.track_top, z);
-    push_quad(actors, x, y + half_h, BAR_WIDTH, BAR_HEIGHT - half_h, track_bottom, z);
 
+    // Single muted track background.
+    push_quad(actors, x, y, BAR_WIDTH, BAR_HEIGHT, TRACK_COLOR, z);
+
+    // Value fill rising from the bottom; turns green while the panel is
+    // actually activated (real pad input state, which uses the firmware's
+    // low/high hysteresis).
     let fill_h = value_norm * BAR_HEIGHT;
     if fill_h > 0.0 {
-        let fill_y = y + BAR_HEIGHT - fill_h;
-        let fill_top_h = fill_h * 0.45;
-        push_quad(actors, x, fill_y, BAR_WIDTH * 0.5, fill_top_h, theme.fill_top, z + 1.0);
-        push_quad(
-            actors,
-            x,
-            fill_y + fill_top_h,
-            BAR_WIDTH * 0.5,
-            fill_h - fill_top_h,
-            theme.fill_bottom,
-            z + 1.0,
-        );
+        let fill_color = if active { ACTIVE_FILL } else { theme.fill_idle };
+        push_quad(actors, x, y + BAR_HEIGHT - fill_h, BAR_WIDTH, fill_h, fill_color, z + 1.0);
     }
 
-    let threshold_h = 3.0_f32.max(2.0);
+    // Activation-threshold line.
+    let threshold_h = 3.0_f32;
     let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
-    push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, [1.0, 1.0, 1.0, 1.0], z + 2.0);
+    push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
 
     if selected {
         let ox = x - (BAR_WIDTH + 10.0) * 0.5;
@@ -460,9 +436,10 @@ fn push_bar(
         xy(x, threshold_y - 10.0): zoom(0.48): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
+    let label_color = if active { ACTIVE_FILL } else { text_color };
     actors.push(act!(text:
         font("miso"): settext(label.to_string()): align(0.5, 0.0):
-        xy(x, y + BAR_HEIGHT + 6.0): zoom(0.65): horizalign(center):
-        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+        xy(x, y + BAR_HEIGHT + 6.0): zoom(0.7): horizalign(center):
+        diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
 }
