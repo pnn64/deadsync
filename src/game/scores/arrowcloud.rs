@@ -6,7 +6,7 @@ use super::{
 };
 use crate::game::gameplay;
 use crate::game::profile::{self, Profile};
-use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
 use deadsync_net as network;
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ArrowCloudJudgmentCounts, ArrowCloudLifePoint, ArrowCloudModifiers,
@@ -15,6 +15,7 @@ use deadsync_online::arrowcloud::{
 };
 use deadsync_rules::{
     judgment,
+    note::{HoldResult, MineResult, Note},
     scroll::ScrollSpeedSetting,
     timing::{self, ScatterPoint},
 };
@@ -472,10 +473,18 @@ fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<Arr
 }
 
 #[inline(always)]
-fn arrowcloud_timing_data_from_scatter(scatter: &[ScatterPoint]) -> Vec<ArrowCloudTimingDatum> {
+fn arrowcloud_timing_data_from_scatter(
+    scatter: &[ScatterPoint],
+    fail_time_s: Option<f32>,
+) -> Vec<ArrowCloudTimingDatum> {
     let mut out = Vec::with_capacity(scatter.len());
     for point in scatter {
         if !point.time_sec.is_finite() {
+            continue;
+        }
+        if let Some(fail_time) = fail_time_s
+            && point.time_sec > fail_time
+        {
             continue;
         }
         let value = if let Some(offset_ms) = point.offset_ms {
@@ -492,7 +501,11 @@ fn arrowcloud_timing_data_from_scatter(scatter: &[ScatterPoint]) -> Vec<ArrowClo
 }
 
 #[inline(always)]
-fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowCloudTimingDatum> {
+fn arrowcloud_timing_data(
+    gs: &gameplay::State,
+    player_idx: usize,
+    fail_time_ns: Option<i64>,
+) -> Vec<ArrowCloudTimingDatum> {
     let (start, end) = gs.note_ranges[player_idx];
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache_ns[start..end];
@@ -505,7 +518,8 @@ fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowC
         gs.cols_per_player,
         &stream_segments,
     );
-    arrowcloud_timing_data_from_scatter(&scatter)
+    let fail_time_s = fail_time_ns.map(gameplay::song_time_ns_to_seconds);
+    arrowcloud_timing_data_from_scatter(&scatter, fail_time_s)
 }
 
 #[inline(always)]
@@ -555,11 +569,144 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
     ArrowCloudNpsInfo { peak_nps, points }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct ArrowCloudSubmitStats {
+    judgment_counts: judgment::JudgeCounts,
+    window_counts: timing::WindowCounts,
+    holds_held: u32,
+    mines_hit: u32,
+    mines_avoided: u32,
+    rolls_held: u32,
+}
+
 #[inline(always)]
-fn arrowcloud_judgment_counts(gs: &gameplay::State, player_idx: usize) -> ArrowCloudJudgmentCounts {
+fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
+    match fail_time_ns {
+        Some(fail_time) => !gameplay::song_time_ns_invalid(time_ns) && time_ns <= fail_time,
+        None => true,
+    }
+}
+
+fn arrowcloud_stats_from_results(
+    notes: &[Note],
+    note_times: &[i64],
+    hold_end_times: &[Option<i64>],
+    fail_time_ns: Option<i64>,
+) -> ArrowCloudSubmitStats {
+    let mut stats = ArrowCloudSubmitStats::default();
+    let mut idx = 0usize;
+    while idx < notes.len() {
+        let row_index = notes[idx].row_index;
+        let row_start = idx;
+        let row_time = note_times.get(idx).copied().unwrap_or(i64::MIN);
+        while idx < notes.len() && notes[idx].row_index == row_index {
+            idx += 1;
+        }
+        if !arrowcloud_time_in_submit_window(row_time, fail_time_ns) {
+            continue;
+        }
+        let Some(row_judgment) =
+            judgment::aggregate_row_final_judgment(notes[row_start..idx].iter().filter_map(|n| {
+                if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
+                    None
+                } else {
+                    n.result.as_ref()
+                }
+            }))
+        else {
+            continue;
+        };
+        stats.judgment_counts[judgment::judge_grade_ix(row_judgment.grade)] =
+            stats.judgment_counts[judgment::judge_grade_ix(row_judgment.grade)].saturating_add(1);
+        judgment::add_judgment_to_window_counts(
+            &mut stats.window_counts,
+            row_judgment,
+            timing::FA_PLUS_W0_MS,
+        );
+    }
+
+    for (i, note) in notes.iter().enumerate() {
+        if note.is_fake || !note.can_be_judged {
+            continue;
+        }
+        let note_time = note_times.get(i).copied().unwrap_or(i64::MIN);
+        match note.note_type {
+            NoteType::Hold | NoteType::Roll => {
+                let result_time = hold_end_times
+                    .get(i)
+                    .and_then(|time| *time)
+                    .unwrap_or(note_time);
+                if !arrowcloud_time_in_submit_window(result_time, fail_time_ns) {
+                    continue;
+                }
+                if note.hold.as_ref().and_then(|h| h.result) == Some(HoldResult::Held) {
+                    if note.note_type == NoteType::Hold {
+                        stats.holds_held = stats.holds_held.saturating_add(1);
+                    } else {
+                        stats.rolls_held = stats.rolls_held.saturating_add(1);
+                    }
+                }
+            }
+            NoteType::Mine => {
+                if !arrowcloud_time_in_submit_window(note_time, fail_time_ns) {
+                    continue;
+                }
+                match note.mine_result {
+                    Some(MineResult::Hit) => {
+                        stats.mines_hit = stats.mines_hit.saturating_add(1);
+                    }
+                    Some(MineResult::Avoided) => {
+                        stats.mines_avoided = stats.mines_avoided.saturating_add(1);
+                    }
+                    None => {}
+                }
+            }
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {}
+        }
+    }
+
+    stats
+}
+
+#[inline(always)]
+fn arrowcloud_live_submit_stats(gs: &gameplay::State, player_idx: usize) -> ArrowCloudSubmitStats {
     let player = &gs.players[player_idx];
-    let counts = player.judgment_counts;
-    let windows = gs.live_window_counts[player_idx];
+    ArrowCloudSubmitStats {
+        judgment_counts: player.judgment_counts,
+        window_counts: gs.live_window_counts[player_idx],
+        holds_held: player.holds_held,
+        mines_hit: player.mines_hit,
+        mines_avoided: player.mines_avoided,
+        rolls_held: player.rolls_held,
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_submit_stats(
+    gs: &gameplay::State,
+    player_idx: usize,
+    fail_time_ns: Option<i64>,
+) -> ArrowCloudSubmitStats {
+    let Some(fail_time_ns) = fail_time_ns else {
+        return arrowcloud_live_submit_stats(gs, player_idx);
+    };
+    let (start, end) = gs.note_ranges[player_idx];
+    arrowcloud_stats_from_results(
+        &gs.notes[start..end],
+        &gs.note_time_cache_ns[start..end],
+        &gs.hold_end_time_cache_ns[start..end],
+        Some(fail_time_ns),
+    )
+}
+
+#[inline(always)]
+fn arrowcloud_judgment_counts(
+    stats: ArrowCloudSubmitStats,
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> ArrowCloudJudgmentCounts {
+    let counts = stats.judgment_counts;
+    let windows = stats.window_counts;
     let fantastic_total = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)];
     let fantastic_plus = windows.w0;
     let fantastic = fantastic_total.saturating_sub(fantastic_plus);
@@ -582,11 +729,11 @@ fn arrowcloud_judgment_counts(gs: &gameplay::State, player_idx: usize) -> ArrowC
         way_off,
         miss,
         total_steps,
-        holds_held: player.holds_held,
+        holds_held: stats.holds_held,
         total_holds: gs.holds_total[player_idx],
-        mines_hit: player.mines_hit,
+        mines_hit: stats.mines_hit,
         total_mines: gs.mines_total[player_idx],
-        rolls_held: player.rolls_held,
+        rolls_held: stats.rolls_held,
         total_rolls: gs.rolls_total[player_idx],
     }
 }
@@ -602,6 +749,8 @@ fn arrowcloud_payload_for_player(
     let chart = gs.charts[player_idx].as_ref();
     let profile = &gs.player_profiles[player_idx];
     let player = &gs.players[player_idx];
+    let fail_time_ns = player.fail_time.map(gameplay::song_time_ns_from_seconds);
+    let submit_stats = arrowcloud_submit_stats(gs, player_idx, fail_time_ns);
     let pack = gs.pack_group.trim().to_string();
     let song_name = gs.song.display_full_title(true);
     let music_rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
@@ -617,15 +766,15 @@ fn arrowcloud_payload_for_player(
         pack,
         length: arrowcloud_format_length(gs.song.music_length_seconds),
         hash: chart.short_hash.clone(),
-        timing_data: arrowcloud_timing_data(gs, player_idx),
+        timing_data: arrowcloud_timing_data(gs, player_idx, fail_time_ns),
         difficulty: chart.meter,
         stepartist: chart.step_artist.clone(),
         radar: ArrowCloudRadar {
-            holds: [player.holds_held, gs.holds_total[player_idx]],
-            mines: [player.mines_avoided, gs.mines_total[player_idx]],
-            rolls: [player.rolls_held, gs.rolls_total[player_idx]],
+            holds: [submit_stats.holds_held, gs.holds_total[player_idx]],
+            mines: [submit_stats.mines_avoided, gs.mines_total[player_idx]],
+            rolls: [submit_stats.rolls_held, gs.rolls_total[player_idx]],
         },
-        judgment_counts: arrowcloud_judgment_counts(gs, player_idx),
+        judgment_counts: arrowcloud_judgment_counts(submit_stats, gs, player_idx),
         nps_info: arrowcloud_nps_info(gs, player_idx),
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
         modifiers: arrowcloud_modifiers(profile),
@@ -811,6 +960,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             gs.players[player_idx].life,
             gs.players[player_idx].fail_time.is_some(),
         );
+        let allow_failed_submit = failed && cfg.submit_arrowcloud_fails;
         let finished = gs.song_completed_naturally || failed;
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if !finished {
@@ -821,12 +971,12 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             continue;
         }
         if api_key.is_empty() {
-            if passed || (failed && cfg.submit_arrowcloud_fails) {
+            if passed || allow_failed_submit {
                 arrowcloud_warn_submit_skip(side, chart_hash, "profile is missing API key");
             }
             continue;
         }
-        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) && !allow_failed_submit {
             arrowcloud_warn_submit_skip(
                 side,
                 chart_hash,
@@ -838,7 +988,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };
-        if failed && !cfg.submit_arrowcloud_fails {
+        if failed && !allow_failed_submit {
             debug!(
                 "Skipping ArrowCloud submit for {:?} ({}): failed-stage submits are disabled.",
                 side, payload.hash
@@ -1092,6 +1242,52 @@ mod tests {
         }
     }
 
+    fn sample_judgment(grade: judgment::JudgeGrade, offset_ms: f32) -> judgment::Judgment {
+        judgment::Judgment {
+            time_error_ms: offset_ms,
+            time_error_music_ns: 0,
+            grade,
+            window: None,
+            miss_because_held: false,
+        }
+    }
+
+    fn sample_note(
+        row_index: usize,
+        note_type: NoteType,
+        result: Option<judgment::Judgment>,
+        hold_result: Option<HoldResult>,
+        mine_result: Option<MineResult>,
+    ) -> Note {
+        let hold = if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+            Some(deadsync_rules::note::HoldData {
+                end_row_index: row_index,
+                end_beat: row_index as f32,
+                result: hold_result,
+                life: 1.0,
+                let_go_started_at: None,
+                let_go_starting_life: 0.0,
+                last_held_row_index: row_index,
+                last_held_beat: row_index as f32,
+            })
+        } else {
+            None
+        };
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column: row_index % 4,
+            note_type,
+            row_index,
+            result,
+            early_result: None,
+            hold,
+            mine_result,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
     fn sample_payload(hash: &str) -> ArrowCloudPayload {
         ArrowCloudPayload {
             song_name: "Test Song".to_string(),
@@ -1176,7 +1372,7 @@ mod tests {
             sample_scatter(12.75, None),
             sample_scatter(f32::NAN, Some(2.0)),
         ];
-        let timing_data = arrowcloud_timing_data_from_scatter(&scatter);
+        let timing_data = arrowcloud_timing_data_from_scatter(&scatter, None);
         assert_eq!(timing_data.len(), 2);
 
         let value = serde_json::to_value(&timing_data).expect("serialize timingData");
@@ -1187,6 +1383,97 @@ mod tests {
         assert!((first_offset - 0.008).abs() < 1e-6);
         assert_eq!(value[1][0], json!(12.75));
         assert_eq!(value[1][1], json!("Miss"));
+    }
+
+    #[test]
+    fn arrowcloud_timing_data_caps_failed_runs_at_fail_time() {
+        let scatter = [
+            sample_scatter(1.0, Some(8.0)),
+            sample_scatter(2.0, None),
+            sample_scatter(3.0, Some(12.0)),
+        ];
+        let timing_data = arrowcloud_timing_data_from_scatter(&scatter, Some(2.0));
+
+        let value = serde_json::to_value(&timing_data).expect("serialize timingData");
+        assert_eq!(value.as_array().map(Vec::len), Some(2));
+        assert_eq!(value[0][0], json!(1.0));
+        assert_eq!(value[1][0], json!(2.0));
+        assert_eq!(value[1][1], json!("Miss"));
+    }
+
+    #[test]
+    fn arrowcloud_submit_stats_caps_failed_runs_at_fail_time() {
+        let ns = gameplay::song_time_ns_from_seconds;
+        let notes = vec![
+            sample_note(
+                0,
+                NoteType::Tap,
+                Some(sample_judgment(judgment::JudgeGrade::Fantastic, 5.0)),
+                None,
+                None,
+            ),
+            sample_note(
+                1,
+                NoteType::Hold,
+                Some(sample_judgment(judgment::JudgeGrade::Fantastic, 8.0)),
+                Some(HoldResult::Held),
+                None,
+            ),
+            sample_note(
+                2,
+                NoteType::Roll,
+                Some(sample_judgment(judgment::JudgeGrade::Fantastic, 10.0)),
+                Some(HoldResult::Held),
+                None,
+            ),
+            sample_note(3, NoteType::Mine, None, None, Some(MineResult::Hit)),
+            sample_note(
+                4,
+                NoteType::Tap,
+                Some(sample_judgment(judgment::JudgeGrade::Miss, 180.0)),
+                None,
+                None,
+            ),
+            sample_note(
+                5,
+                NoteType::Tap,
+                Some(sample_judgment(judgment::JudgeGrade::Great, 55.0)),
+                None,
+                None,
+            ),
+            sample_note(6, NoteType::Mine, None, None, Some(MineResult::Hit)),
+        ];
+        let note_times = vec![
+            ns(1.0),
+            ns(1.2),
+            ns(1.4),
+            ns(1.5),
+            ns(2.0),
+            ns(3.0),
+            ns(3.5),
+        ];
+        let hold_end_times = vec![None, Some(ns(1.8)), Some(ns(2.4)), None, None, None, None];
+
+        let stats =
+            arrowcloud_stats_from_results(&notes, &note_times, &hold_end_times, Some(ns(2.0)));
+
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)],
+            3
+        );
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)],
+            1
+        );
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Great)],
+            0
+        );
+        assert_eq!(stats.window_counts.w0, 3);
+        assert_eq!(stats.window_counts.miss, 1);
+        assert_eq!(stats.holds_held, 1);
+        assert_eq!(stats.rolls_held, 0);
+        assert_eq!(stats.mines_hit, 1);
     }
 
     #[test]
