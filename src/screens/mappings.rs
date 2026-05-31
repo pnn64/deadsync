@@ -1020,8 +1020,8 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             // belongs to a connected StepManiaX pad; otherwise fall back to the
             // generic "Pad N Btn 0x.." form.
             if let Some(label) = binding
-                .uuid
-                .and_then(|uuid| crate::engine::smx::trigger_label(uuid, binding.code_u32))
+                .device
+                .and_then(|dev| crate::engine::smx::trigger_label(dev, binding.code_u32))
             {
                 return label;
             }

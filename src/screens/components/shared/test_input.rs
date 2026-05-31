@@ -293,7 +293,8 @@ impl UnmappedTracker {
             let line = match *k {
                 UnmappedKey::Dir { dev, dir } => format!("Gamepad {dev}: Dir::{dir:?}"),
                 UnmappedKey::RawButton { dev, code_u32 } => {
-                    format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]")
+                    crate::engine::smx::trigger_label(dev, code_u32)
+                        .unwrap_or_else(|| format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]"))
                 }
                 UnmappedKey::RawAxis { dev, code_u32 } => {
                     let value = self.axis_value.get(k).copied().unwrap_or(0.0);

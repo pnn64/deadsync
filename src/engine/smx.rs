@@ -266,21 +266,28 @@ fn pad_device_id(pad: usize) -> PadId {
 /// SMX panel index → 3x3-grid label, matching the SDK's panel naming.
 const PANEL_NAMES: [&str; PANEL_COUNT] = ["UL", "U", "UR", "L", "C", "R", "DL", "D", "DR"];
 
-/// Friendly label for an SMX trigger binding, e.g. `SMX[40ea] R`.
+/// Friendly label for an SMX trigger, e.g. `SMX[40ea] R`.
 ///
-/// `uuid` is the per-device id carried by the binding and `code` is the panel
-/// index. Returns `None` if the uuid doesn't match a currently-connected SMX
-/// pad (or the code is out of range), so callers can fall back to a generic
-/// label. The serial prefix (first 4 hex chars) disambiguates two pads even
-/// when both are assigned to the same player.
-pub fn trigger_label(uuid: [u8; 16], code: u32) -> Option<String> {
+/// `device` is the pad slot (the `PadId`/device index carried by a binding or
+/// raw event) and `code` is the panel index. Returns `None` unless that slot
+/// currently has a connected SMX pad and the code is in range, so callers can
+/// fall back to a generic label. The serial prefix (first 4 hex chars)
+/// disambiguates two pads even when both are assigned to the same player.
+///
+/// NOTE: identification is by slot index, which can collide with a native
+/// gamepad sharing that index (see `pad_device_id`); the label is best-effort.
+pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     let s = SHARED.get()?;
     let panel = PANEL_NAMES.get(code as usize)?;
-    let pad = (0..s.uuid.len()).find(|&i| {
-        let cached = *s.uuid[i].lock().unwrap();
-        cached != [0u8; 16] && cached == uuid
-    })?;
-    let prefix: String = s.serial[pad].lock().unwrap().chars().take(4).collect();
+    if device >= s.uuid.len() {
+        return None;
+    }
+    // Only label slots that currently hold a connected SMX pad: the uuid is
+    // zeroed until a pad connects and caches its identity.
+    if *s.uuid[device].lock().unwrap() == [0u8; 16] {
+        return None;
+    }
+    let prefix: String = s.serial[device].lock().unwrap().chars().take(4).collect();
     if prefix.is_empty() {
         Some(format!("SMX {panel}"))
     } else {
