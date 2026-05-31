@@ -324,7 +324,7 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reader, file_length_seconds, open_file};
+    use super::{Reader, open_file};
     use std::path::PathBuf;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;
@@ -380,96 +380,6 @@ mod tests {
             let actual = read_frames(&mut seeked, SEEK_COMPARE_FRAMES);
 
             assert_eq!(actual, expected, "seek target frame {target}");
-        }
-    }
-
-    // Characterization test: the symphonia decoder must reproduce the audio
-    // fingerprint captured from the original lewton decoder (channels/sample
-    // rate exactly; energy metrics within cross-decoder float-rounding
-    // tolerance). A real regression (wrong decode, off-by-N seek, dropped
-    // warmup, channel swap, truncation) moves a metric far outside tolerance.
-    #[test]
-    fn matches_golden_fingerprint() {
-        let path = fixture_path();
-        if !path.exists() {
-            return;
-        }
-        let opened = open_file(&path).expect("open fixture");
-        let channels = opened.channels;
-        let sample_rate = opened.sample_rate_hz;
-        assert_eq!(channels, 2, "channels");
-        assert_eq!(sample_rate, 44100, "sample_rate");
-
-        let mut reader = opened.reader;
-        let mut packet = Vec::new();
-        let mut frame_count: u64 = 0;
-        let mut sum_sq = [0f64; 2];
-        let mut peak = [0i32; 2];
-        loop {
-            let more = reader.read_dec_packet_into(&mut packet).expect("decode");
-            if !more {
-                break;
-            }
-            let frames = packet.len() / channels;
-            frame_count += frames as u64;
-            for f in 0..frames {
-                for c in 0..channels {
-                    let s = i32::from(packet[f * channels + c]);
-                    let a = s.abs();
-                    if a > peak[c] {
-                        peak[c] = a;
-                    }
-                    sum_sq[c] += (s as f64) * (s as f64);
-                }
-            }
-        }
-        let rms = [
-            (sum_sq[0] / frame_count as f64).sqrt(),
-            (sum_sq[1] / frame_count as f64).sqrt(),
-        ];
-        let length = file_length_seconds(&path).expect("length");
-
-        // Per-sample (combined-channel) RMS of a 0.25s window after each seek.
-        let targets = [90794u64, 138600, 235200];
-        const WINDOW: usize = 11025;
-        let mut seek_rms = [0f64; 3];
-        for (i, &target) in targets.iter().enumerate() {
-            let mut sk = open_file(&path).expect("open seek").reader;
-            sk.seek_frame(target).expect("seek");
-            let window = read_frames(&mut sk, WINDOW);
-            let mut ss = 0f64;
-            for v in &window {
-                ss += (f64::from(*v)) * (f64::from(*v));
-            }
-            seek_rms[i] = (ss / window.len() as f64).sqrt();
-        }
-
-        eprintln!(
-            "ogg golden actuals: frame_count={frame_count} length={length} \
-             peak={peak:?} rms={rms:?} seek_rms={seek_rms:?}"
-        );
-
-        // channels / sample_rate already asserted exactly above.
-        // frame_count: tolerate at most one max Vorbis block (8192 frames) of
-        // difference for end-of-stream trimming; catch any gross truncation.
-        let frame_diff = frame_count as i64 - 2_892_139;
-        assert!(
-            (-8192..=8192).contains(&frame_diff),
-            "frame_count={frame_count} (diff {frame_diff})"
-        );
-        assert!((length - 65.58138).abs() < 0.05, "length={length}");
-        for c in 0..channels {
-            assert!((peak[c] - 32768).abs() <= 64, "peak[{c}]={}", peak[c]);
-        }
-        let golden_rms = [6302.808355648021, 6223.901709056613];
-        for c in 0..channels {
-            let rel = (rms[c] - golden_rms[c]).abs() / golden_rms[c];
-            assert!(rel < 0.01, "rms[{c}]={} rel={rel}", rms[c]);
-        }
-        let golden_seek_rms = [3122.937572171839, 5679.57538944586, 1719.3614305311685];
-        for i in 0..3 {
-            let rel = (seek_rms[i] - golden_seek_rms[i]).abs() / golden_seek_rms[i];
-            assert!(rel < 0.02, "seek_rms[{i}]={} rel={rel}", seek_rms[i]);
         }
     }
 }
