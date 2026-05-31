@@ -1,12 +1,14 @@
 use std::fs::File;
 use std::path::Path;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_VORBIS, Decoder, DecoderOptions};
+use symphonia::core::codecs::audio::{
+    well_known::CODEC_ID_VORBIS, AudioCodecParameters, AudioDecoder, AudioDecoderOptions,
+};
 use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
+use symphonia::core::units::{Duration, Timestamp};
 
 // Decode at least this many frames before a seek target so the Vorbis MDCT
 // overlap is primed and post-seek audio matches a linear decode. Vorbis blocks
@@ -22,18 +24,16 @@ pub(crate) struct OpenFile {
 
 pub(crate) struct Reader {
     format: Box<dyn FormatReader>,
-    decoder: Box<dyn Decoder>,
+    decoder: Box<dyn AudioDecoder>,
     track_id: u32,
     channels: usize,
     // Absolute timestamp of the stream's first sample (codec params start_ts);
     // used as the floor for seek positions.
-    start_ts: u64,
+    start_ts: Timestamp,
     // Absolute timestamp of the first *emitted* audio frame. Frame 0 in our
     // cursor space maps to this timestamp, so seek arithmetic is independent of
     // any encoder pre-skip.
-    base_ts: u64,
-    sample_buf: Option<SampleBuffer<i16>>,
-    sample_buf_frames: u64,
+    base_ts: Timestamp,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
 }
@@ -57,28 +57,30 @@ fn probe_format(
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
     hint.with_extension("ogg");
-    let probed = symphonia::default::get_probe()
-        .format(
+    symphonia::default::get_probe()
+        .probe(
             &hint,
             mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
-        .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()))?;
-    Ok(probed.format)
+        .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()).into())
+}
+
+fn vorbis_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
+    tracks.iter().find_map(|track| {
+        let params = track.codec_params.as_ref()?.audio()?;
+        (params.codec == CODEC_ID_VORBIS).then_some((track, params))
+    })
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     let format = probe_format(path)?;
 
     let (track_id, channels, sample_rate_hz, start_ts, decoder) = {
-        let track = format
-            .tracks()
-            .iter()
-            .find(|t| t.codec_params.codec == CODEC_TYPE_VORBIS)
+        let (track, cp) = vorbis_track(format.tracks())
             .ok_or_else(|| format!("OGG '{}' has no Vorbis track", path.display()))?;
-        let cp = &track.codec_params;
-        let channels = cp.channels.map(|c| c.count() as usize).unwrap_or(0);
+        let channels = cp.channels.as_ref().map(|c| c.count()).unwrap_or(0);
         if channels == 0 {
             return Err(format!("OGG '{}' has unknown channel layout", path.display()).into());
         }
@@ -86,9 +88,9 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
             .sample_rate
             .ok_or_else(|| format!("OGG '{}' has unknown sample rate", path.display()))?;
         let decoder = symphonia::default::get_codecs()
-            .make(cp, &DecoderOptions::default())
+            .make_audio_decoder(cp, &AudioDecoderOptions::default())
             .map_err(|e| format!("Cannot create Vorbis decoder for '{}': {e}", path.display()))?;
-        (track.id, channels, sample_rate_hz, cp.start_ts, decoder)
+        (track.id, channels, sample_rate_hz, track.start_ts, decoder)
     };
 
     let mut reader = Reader {
@@ -98,8 +100,6 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         channels,
         start_ts,
         base_ts: start_ts,
-        sample_buf: None,
-        sample_buf_frames: 0,
         pending: None,
         cursor_frames: 0,
     };
@@ -132,16 +132,12 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     let mut format = probe_format(path).map_err(|e| format!("Cannot open OGG file: {e}"))?;
 
     let (track_id, sample_rate, start_ts, n_frames) = {
-        let track = format
-            .tracks()
-            .iter()
-            .find(|t| t.codec_params.codec == CODEC_TYPE_VORBIS)
+        let (track, cp) = vorbis_track(format.tracks())
             .ok_or_else(|| "OGG file has no Vorbis track".to_string())?;
-        let cp = &track.codec_params;
         let sample_rate = cp
             .sample_rate
             .ok_or_else(|| "OGG sample rate is invalid".to_string())?;
-        (track.id, sample_rate, cp.start_ts, cp.n_frames)
+        (track.id, sample_rate, track.start_ts, track.num_frames)
     };
     if sample_rate == 0 {
         return Err("OGG sample rate is invalid (0)".to_string());
@@ -155,21 +151,20 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     let mut last_end = start_ts;
     loop {
         match format.next_packet() {
-            Ok(packet) => {
-                if packet.track_id() == track_id {
-                    last_end = last_end.max(packet.ts().saturating_add(packet.dur()));
+            Ok(Some(packet)) => {
+                if packet.track_id == track_id {
+                    last_end = last_end.max(packet.pts.saturating_add(packet.dur));
                 }
             }
-            Err(SymphoniaError::IoError(e))
-                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
+            Ok(None) => break,
+            Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 break;
             }
             Err(SymphoniaError::ResetRequired) => break,
             Err(e) => return Err(format!("OGG decode failed: {e}")),
         }
     }
-    let total = last_end.saturating_sub(start_ts);
+    let total = last_end.duration_from(start_ts).map_or(0, Duration::get);
     Ok((total as f64 / f64::from(sample_rate)) as f32)
 }
 
@@ -203,12 +198,14 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let target_ts = self.base_ts.saturating_add(target_frame);
+        let target_ts = self.base_ts.saturating_add(Duration::new(target_frame));
 
         // Try progressively larger prerolls; a larger window guarantees we land
         // before the target so the post-seek audio reproduces a linear decode.
         for preroll in [SEEK_PREROLL_FRAMES, SEEK_PREROLL_FRAMES * 4] {
-            let seek_ts = target_ts.saturating_sub(preroll).max(self.start_ts);
+            let seek_ts = target_ts
+                .saturating_sub(Duration::new(preroll))
+                .max(self.start_ts);
             match self.seek_and_collect(seek_ts, target_ts, target_frame)? {
                 SeekOutcome::Landed => return Ok(()),
                 SeekOutcome::Overshoot => continue,
@@ -228,14 +225,14 @@ impl Reader {
 
     fn seek_and_collect(
         &mut self,
-        seek_ts: u64,
-        target_ts: u64,
+        seek_ts: Timestamp,
+        target_ts: Timestamp,
         target_frame: u64,
     ) -> Result<SeekOutcome, Box<dyn std::error::Error + Send + Sync>> {
         self.format
             .seek(
                 SeekMode::Accurate,
-                SeekTo::TimeStamp {
+                SeekTo::Timestamp {
                     ts: seek_ts,
                     track_id: self.track_id,
                 },
@@ -256,14 +253,14 @@ impl Reader {
                 }
             };
             let frames = (scratch.len() / self.channels) as u64;
-            if ts.saturating_add(frames) <= target_ts {
+            if ts.saturating_add(Duration::new(frames)) <= target_ts {
                 continue; // Entirely before the target.
             }
             if ts > target_ts {
                 // Seek landed after the target; caller retries with more preroll.
                 return Ok(SeekOutcome::Overshoot);
             }
-            let skip = (target_ts - ts) as usize;
+            let skip = target_ts.duration_from(ts).map_or(0, Duration::get) as usize;
             let drop_samples = skip * self.channels;
             self.pending = Some(scratch[drop_samples..].to_vec());
             self.cursor_frames = target_frame;
@@ -278,10 +275,11 @@ impl Reader {
     fn next_audio_packet(
         &mut self,
         out: &mut Vec<i16>,
-    ) -> Result<Option<u64>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<Timestamp>, Box<dyn std::error::Error + Send + Sync>> {
         loop {
             let packet = match self.format.next_packet() {
-                Ok(packet) => packet,
+                Ok(Some(packet)) => packet,
+                Ok(None) => return Ok(None),
                 Err(SymphoniaError::IoError(e))
                     if e.kind() == std::io::ErrorKind::UnexpectedEof =>
                 {
@@ -293,30 +291,23 @@ impl Reader {
                 Err(SymphoniaError::ResetRequired) => return Ok(None),
                 Err(e) => return Err(format!("OGG read error: {e}").into()),
             };
-            if packet.track_id() != self.track_id {
+            if packet.track_id != self.track_id {
                 continue;
             }
-            let ts = packet.ts();
+            let ts = packet.pts;
             let audio = match self.decoder.decode(&packet) {
                 Ok(audio) => audio,
                 // Recoverable per symphonia's contract: skip and continue.
                 Err(SymphoniaError::DecodeError(_)) => continue,
                 Err(e) => return Err(format!("OGG decode error: {e}").into()),
             };
-            let spec = *audio.spec();
-            let frames = audio.capacity() as u64;
+            let frames = audio.frames() as u64;
             if frames == 0 {
-                // Vorbis warmup / priming packet — produces no output frames.
+                // Vorbis warmup / priming packet - produces no output frames.
                 continue;
             }
-            if self.sample_buf.is_none() || self.sample_buf_frames < frames {
-                self.sample_buf = Some(SampleBuffer::<i16>::new(frames, spec));
-                self.sample_buf_frames = frames;
-            }
-            let buf = self.sample_buf.as_mut().expect("sample buffer present");
-            buf.copy_interleaved_ref(audio);
             out.clear();
-            out.extend_from_slice(buf.samples());
+            audio.copy_to_vec_interleaved::<i16>(out);
             return Ok(Some(ts));
         }
     }
@@ -324,7 +315,7 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reader, open_file};
+    use super::{open_file, Reader};
     use std::path::PathBuf;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;
