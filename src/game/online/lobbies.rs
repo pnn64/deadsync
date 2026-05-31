@@ -9,6 +9,7 @@ use deadsync_online::lobbies::{
     response_status_from_data, search_lobby_text, select_song_text, send_lobby_ping,
     send_lobby_text, update_machine_text,
 };
+use deadsync_profile as profile_data;
 use log::{debug, warn};
 use serde_json::Value;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -444,33 +445,59 @@ fn local_machine_state_json(
     p1_stats: Option<&MachinePlayerStats>,
     p2_stats: Option<&MachinePlayerStats>,
 ) -> Value {
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         let side = profile::get_session_player_side();
         return lobby_machine_state_value(
-            (side == profile::PlayerSide::P1)
-                .then(|| local_player(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats)),
-            (side == profile::PlayerSide::P2)
-                .then(|| local_player(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats)),
+            (side == profile_data::PlayerSide::P1).then(|| {
+                local_player(
+                    profile_data::PlayerSide::P1,
+                    screen_name,
+                    p1_ready,
+                    p1_stats,
+                )
+            }),
+            (side == profile_data::PlayerSide::P2).then(|| {
+                local_player(
+                    profile_data::PlayerSide::P2,
+                    screen_name,
+                    p2_ready,
+                    p2_stats,
+                )
+            }),
         );
     }
 
     lobby_machine_state_value(
-        p1_joined.then(|| local_player(profile::PlayerSide::P1, screen_name, p1_ready, p1_stats)),
-        p2_joined.then(|| local_player(profile::PlayerSide::P2, screen_name, p2_ready, p2_stats)),
+        p1_joined.then(|| {
+            local_player(
+                profile_data::PlayerSide::P1,
+                screen_name,
+                p1_ready,
+                p1_stats,
+            )
+        }),
+        p2_joined.then(|| {
+            local_player(
+                profile_data::PlayerSide::P2,
+                screen_name,
+                p2_ready,
+                p2_stats,
+            )
+        }),
     )
 }
 
 fn local_player(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     screen_name: &str,
     ready: bool,
     stats: Option<&MachinePlayerStats>,
 ) -> LobbyMachinePlayer {
     let player_id = match side {
-        profile::PlayerSide::P1 => "P1",
-        profile::PlayerSide::P2 => "P2",
+        profile_data::PlayerSide::P1 => "P1",
+        profile_data::PlayerSide::P2 => "P2",
     };
     let profile = profile::get_for_side(side);
     lobby_machine_player(

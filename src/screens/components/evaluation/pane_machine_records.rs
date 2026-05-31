@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
@@ -34,13 +34,13 @@ fn format_machine_record_score(score_10000: f64) -> String {
 
 #[inline(always)]
 fn machine_record_highlight_color(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     active_color_index: i32,
     elapsed_s: f32,
 ) -> [f32; 4] {
     let base = match side {
-        profile::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
-        profile::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
+        profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
+        profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
     };
     let phase =
         ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU).sin() * 0.5
@@ -129,7 +129,7 @@ fn push_machine_record_row(
 
 pub fn build_machine_records_pane(
     score_info: &ScoreInfo,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
     active_color_index: i32,
     elapsed_s: f32,
 ) -> Vec<Actor> {

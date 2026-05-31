@@ -5,6 +5,7 @@ use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_profile as profile_data;
 use deadsync_rules::timing::WindowCounts;
 use deadsync_score::{
     ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,
@@ -34,8 +35,8 @@ impl GameplayStatsDoubleBenchFixture {
 }
 
 pub fn fixture() -> GameplayStatsDoubleBenchFixture {
-    profile::set_session_play_style(profile::PlayStyle::Double);
-    profile::set_session_player_side(profile::PlayerSide::P1);
+    profile::set_session_play_style(profile_data::PlayStyle::Double);
+    profile::set_session_player_side(profile_data::PlayerSide::P1);
     profile::set_session_joined(true, false);
 
     let mut base = notefield_bench::fixture();

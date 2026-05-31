@@ -2,6 +2,7 @@ use super::{App, CurrentScreen};
 use crate::engine::present::density;
 use crate::game::{profile, scores};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
+use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, warn};
 use std::error::Error;
@@ -30,14 +31,14 @@ pub(super) enum Command {
     StopMusic,
     SetDynamicBackground(Option<PathBuf>),
     UpdateScrollSpeed {
-        side: profile::PlayerSide,
+        side: profile_data::PlayerSide,
         setting: ScrollSpeedSetting,
     },
     UpdateSessionMusicRate(f32),
     UpdatePreferredDifficulty(usize),
     UpdateLastPlayed {
-        side: profile::PlayerSide,
-        play_style: profile::PlayStyle,
+        side: profile_data::PlayerSide,
+        play_style: profile_data::PlayStyle,
         music_path: Option<PathBuf>,
         chart_hash: Option<String>,
         difficulty_index: usize,
@@ -268,7 +269,7 @@ impl App {
     fn spawn_grade_fetch(&self, hash: String) {
         debug!("Fetching online grade for chart hash: {hash}");
         let mut spawned = 0;
-        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
                 continue;
             }

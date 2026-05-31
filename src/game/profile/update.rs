@@ -1,18 +1,21 @@
 use super::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
-    ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
-    HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
-    LifeMeterType, LiveTimingStatsMask, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter,
-    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
-    NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX,
-    NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide, RemoveMask,
-    SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting, TapExplosionMask,
+    ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType,
+    HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
+    LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorScoreType, MiniIndicatorSize, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
+    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle,
+    PlayerSide, RemoveMask, ScrollOption, ScrollSpeedSetting, TapExplosionMask,
     TargetScoreSetting, TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
     VisualEffectsMask, clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms,
     error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
     save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
+use deadsync_profile::{
+    HUD_OFFSET_MAX, HUD_OFFSET_MIN, MINI_PERCENT_MAX, MINI_PERCENT_MIN, SPACING_PERCENT_MAX,
+    SPACING_PERCENT_MIN,
+};
 use std::path::Path;
 
 pub fn update_last_played_for_side(

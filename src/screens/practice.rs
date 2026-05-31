@@ -13,6 +13,7 @@ use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
@@ -1520,15 +1521,15 @@ fn max_play_beat(state: &State) -> f32 {
 fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
     let hud = profile::gameplay_hud_snapshot();
     let play_style = hud.play_style;
-    let is_p2_single =
-        play_style == profile::PlayStyle::Single && hud.player_side == profile::PlayerSide::P2;
+    let is_p2_single = play_style == profile_data::PlayStyle::Single
+        && hud.player_side == profile_data::PlayerSide::P2;
 
     match play_style {
-        profile::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus => {
             append_player_markers(state, actors, 0, MarkerPlacement::P1, play_style, false);
             append_player_markers(state, actors, 1, MarkerPlacement::P2, play_style, false);
         }
-        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let placement = if is_p2_single {
                 MarkerPlacement::P2
             } else {
@@ -1544,7 +1545,7 @@ fn append_player_markers(
     actors: &mut Vec<Actor>,
     player_idx: usize,
     placement: MarkerPlacement,
-    play_style: profile::PlayStyle,
+    play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
 ) {
     if player_idx >= state.gameplay.num_players {
@@ -1569,10 +1570,10 @@ fn append_player_markers(
     let offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let clamped_width = screen_width().clamp(640.0, 854.0);
     let centered_one_side = state.gameplay.num_players == 1
-        && play_style == profile::PlayStyle::Single
+        && play_style == profile_data::PlayStyle::Single
         && center_1player_notefield;
     let centered_both_sides =
-        state.gameplay.num_players == 1 && play_style == profile::PlayStyle::Double;
+        state.gameplay.num_players == 1 && play_style == profile_data::PlayStyle::Double;
     let base_x = if state.gameplay.num_players == 2 {
         match placement {
             MarkerPlacement::P1 => screen_center_x() - clamped_width * 0.25,

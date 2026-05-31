@@ -9,6 +9,7 @@ use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
@@ -54,7 +55,7 @@ impl NotefieldBenchFixture {
             &self.state,
             &self.profile,
             FieldPlacement::P1,
-            profile::PlayStyle::Single,
+            profile_data::PlayStyle::Single,
             false,
             notefield::ProxyCaptureRequests::default(),
             notefield::ViewOverride::default(),
@@ -66,8 +67,8 @@ impl NotefieldBenchFixture {
 }
 
 pub fn fixture() -> NotefieldBenchFixture {
-    profile::set_session_play_style(profile::PlayStyle::Single);
-    profile::set_session_player_side(profile::PlayerSide::P1);
+    profile::set_session_play_style(profile_data::PlayStyle::Single);
+    profile::set_session_player_side(profile_data::PlayerSide::P1);
     profile::set_session_joined(true, false);
 
     let song = Arc::new(bench_song());

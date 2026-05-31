@@ -5,9 +5,9 @@ use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
 use crate::engine::present::color::{self, JUDGMENT_RGBA};
 use crate::engine::present::font;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
-use crate::game::profile;
 use crate::screens::components::shared::banner as shared_banner;
 use deadsync_chart::SongData;
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
 use super::utils::format_machine_record_date;
@@ -888,15 +888,15 @@ fn build_overlay_panel(
 
 pub fn build_itl_progress_box(
     asset_manager: &AssetManager,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     single_player: bool,
     progress: &score_data::ItlEventProgress,
 ) -> Vec<Actor> {
     let upper_origin_x = match side {
-        profile::PlayerSide::P1 => screen_center_x() - 155.0,
-        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+        profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
     };
-    let dir = if side == profile::PlayerSide::P1 {
+    let dir = if side == profile_data::PlayerSide::P1 {
         -1.0
     } else {
         1.0
@@ -921,7 +921,11 @@ pub fn build_itl_event_overlay(
     asset_manager: &AssetManager,
     single_player: bool,
     song: Option<&SongData>,
-    panels: &[(profile::PlayerSide, &score_data::ItlEventProgress, usize)],
+    panels: &[(
+        profile_data::PlayerSide,
+        &score_data::ItlEventProgress,
+        usize,
+    )],
 ) -> Vec<Actor> {
     if panels.is_empty() {
         return Vec::new();
@@ -942,11 +946,11 @@ pub fn build_itl_event_overlay(
     for (idx, (side, progress, page_idx)) in panels.iter().enumerate() {
         let center_x = if single_player {
             screen_center_x()
-        } else if idx == 0 && *side == profile::PlayerSide::P1 {
+        } else if idx == 0 && *side == profile_data::PlayerSide::P1 {
             screen_center_x() - 160.0
-        } else if idx == 0 && *side == profile::PlayerSide::P2 {
+        } else if idx == 0 && *side == profile_data::PlayerSide::P2 {
             screen_center_x() + 160.0
-        } else if *side == profile::PlayerSide::P1 {
+        } else if *side == profile_data::PlayerSide::P1 {
             screen_center_x() - 160.0
         } else {
             screen_center_x() + 160.0

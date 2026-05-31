@@ -977,7 +977,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.364"
+version = "0.4.375"
 dependencies = [
  "alsa",
  "ash",
@@ -993,6 +993,7 @@ dependencies = [
  "deadsync-input",
  "deadsync-net",
  "deadsync-online",
+ "deadsync-profile",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
@@ -1098,6 +1099,10 @@ dependencies = [
  "serde_json",
  "tungstenite",
 ]
+
+[[package]]
+name = "deadsync-profile"
+version = "0.1.0"
 
 [[package]]
 name = "deadsync-rules"

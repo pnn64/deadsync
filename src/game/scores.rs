@@ -30,6 +30,7 @@ use deadsync_online::groovestats::{
     self as groovestats_api, GrooveStatsSubmitApiPlayer, LeaderboardApiEntry, LeaderboardApiPlayer,
     LeaderboardsApiResponse,
 };
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment;
 
 mod arrowcloud;
@@ -48,11 +49,11 @@ pub use arrowcloud::{
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore, Grade,
-    GrooveStatsSubmitRecordBanner, LeaderboardEntry, LeaderboardPane, LocalScalarScore,
-    MachineReplayEntry, PlayerLeaderboardData, ReplayEdge, ScoreBulkImportSummary,
-    ScoreImportEndpoint, ScoreImportProgress, gameplay_run_failed, gameplay_run_passed,
-    lua_chart_submit_allowed, promote_quint_grade, score_to_grade,
+    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore,
+    GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner, LeaderboardEntry,
+    LeaderboardPane, LocalScalarScore, MachineReplayEntry, PlayerLeaderboardData, ReplayEdge,
+    ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress, gameplay_run_failed,
+    gameplay_run_passed, lua_chart_submit_allowed, promote_quint_grade, score_to_grade,
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
@@ -197,7 +198,7 @@ fn get_cached_gs_score_for_profile(profile_id: &str, chart_hash: &str) -> Option
 
 pub fn get_cached_gs_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<CachedScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
     ensure_gs_score_cache_loaded_for_profile(&profile_id);
@@ -326,7 +327,7 @@ fn get_cached_ac_scores_for_profile(
 /// Public side-aware accessor for the wheel/gameplay layer to read AC scores.
 pub fn get_cached_ac_scores_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<ArrowCloudScores> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
     get_cached_ac_scores_for_profile(&profile_id, chart_hash)
@@ -585,7 +586,7 @@ pub fn total_songs_played_for_profile(profile_id: &str) -> u32 {
     total
 }
 
-pub fn total_songs_played_for_side(side: profile::PlayerSide) -> u32 {
+pub fn total_songs_played_for_side(side: profile_data::PlayerSide) -> u32 {
     let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
         return 0;
     };
@@ -982,8 +983,8 @@ fn ensure_machine_local_score_cache_loaded() {
 pub fn prewarm_select_music_score_caches() {
     let started = Instant::now();
 
-    let p1_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P1);
-    let p2_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P2);
+    let p1_profile_id = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1);
+    let p2_profile_id = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2);
 
     if let Some(profile_id) = p1_profile_id.as_deref() {
         ensure_local_score_cache_loaded(profile_id);
@@ -1030,7 +1031,7 @@ fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials
 
 pub fn get_cached_local_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<CachedScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
     ensure_local_score_cache_loaded(&profile_id);
@@ -1044,7 +1045,7 @@ pub fn get_cached_local_score_for_side(
 
 pub fn get_cached_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<CachedScore> {
     let local = get_cached_local_score_for_side(chart_hash, side);
     let gs = get_cached_gs_score_for_side(chart_hash, side);
@@ -1062,7 +1063,7 @@ pub fn get_cached_score_for_side(
 
 fn get_cached_local_scalar_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     hard_ex: bool,
 ) -> Option<LocalScalarScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
@@ -1082,14 +1083,14 @@ fn get_cached_local_scalar_score_for_side(
 
 pub fn get_cached_local_ex_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<LocalScalarScore> {
     get_cached_local_scalar_score_for_side(chart_hash, side, false)
 }
 
 pub fn get_cached_local_hard_ex_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<LocalScalarScore> {
     get_cached_local_scalar_score_for_side(chart_hash, side, true)
 }
@@ -1100,7 +1101,7 @@ pub fn is_gs_get_scores_service_allowed() -> bool {
 }
 
 #[inline(always)]
-pub fn is_gs_active_for_side(side: profile::PlayerSide) -> bool {
+pub fn is_gs_active_for_side(side: profile_data::PlayerSide) -> bool {
     if !is_gs_get_scores_service_allowed() || !profile::is_session_side_joined(side) {
         return false;
     }
@@ -1901,9 +1902,9 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     for player_idx in 0..gs.num_players {
         let side = if gs.num_players >= 2 {
             if player_idx == 0 {
-                profile::PlayerSide::P1
+                profile_data::PlayerSide::P1
             } else {
-                profile::PlayerSide::P2
+                profile_data::PlayerSide::P2
             }
         } else {
             profile::get_session_player_side()
@@ -2030,10 +2031,10 @@ const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
 const GROOVESTATS_REASON_COUNT: usize = 13;
 
 #[inline(always)]
-pub(super) const fn submit_side_ix(side: profile::PlayerSide) -> usize {
+pub(super) const fn submit_side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
@@ -2041,12 +2042,12 @@ pub(super) const fn submit_side_ix(side: profile::PlayerSide) -> usize {
 pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
-) -> profile::PlayerSide {
+) -> profile_data::PlayerSide {
     if gs.num_players >= 2 {
         if player_idx == 0 {
-            profile::PlayerSide::P1
+            profile_data::PlayerSide::P1
         } else {
-            profile::PlayerSide::P2
+            profile_data::PlayerSide::P2
         }
     } else {
         profile::get_session_player_side()
@@ -2056,7 +2057,7 @@ pub(super) fn gameplay_side_for_player(
 #[inline(always)]
 pub fn save_local_summary_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     music_rate: f32,
     summary: &stage_stats::PlayerStageSummary,
 ) {
@@ -2138,51 +2139,35 @@ struct PlayerLeaderboardCacheKey {
     show_ex_score: bool,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct GameplayScoreboxProfileSnapshot {
-    pub display_scorebox: bool,
-    pub gs_active: bool,
-    pub show_ex_score: bool,
-    api_key: String,
-    arrowcloud_api_key: String,
-    include_arrowcloud: bool,
-    gs_username: String,
+pub fn scorebox_profile_snapshot(
+    player_profile: &profile::Profile,
+    side_joined: bool,
     persistent_profile_id: Option<String>,
-    auto_profile_id: Option<String>,
-    should_auto_populate: bool,
-}
-
-impl GameplayScoreboxProfileSnapshot {
-    pub fn from_profile(
-        player_profile: &profile::Profile,
-        side_joined: bool,
-        persistent_profile_id: Option<String>,
-    ) -> Self {
-        let cfg = crate::config::get();
-        let api_key = player_profile.groovestats_api_key.trim().to_string();
-        let arrowcloud_api_key = player_profile.arrowcloud_api_key.trim().to_string();
-        let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
-        let gs_username = player_profile.groovestats_username.trim().to_string();
-        let auto_profile_id = if cfg.auto_populate_gs_scores {
-            persistent_profile_id.clone()
-        } else {
-            None
-        };
-        let should_auto_populate =
-            cfg.auto_populate_gs_scores && auto_profile_id.is_some() && !gs_username.is_empty();
-        Self {
-            display_scorebox: player_profile.display_scorebox,
-            gs_active: cfg.enable_groovestats && side_joined && !api_key.is_empty(),
-            show_ex_score: player_profile.show_ex_score,
-            api_key,
-            arrowcloud_api_key,
-            include_arrowcloud,
-            gs_username,
-            persistent_profile_id,
-            auto_profile_id,
-            should_auto_populate,
-        }
-    }
+) -> GameplayScoreboxProfileSnapshot {
+    let cfg = crate::config::get();
+    let api_key = player_profile.groovestats_api_key.trim().to_string();
+    let arrowcloud_api_key = player_profile.arrowcloud_api_key.trim().to_string();
+    let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
+    let gs_username = player_profile.groovestats_username.trim().to_string();
+    let auto_profile_id = if cfg.auto_populate_gs_scores {
+        persistent_profile_id.clone()
+    } else {
+        None
+    };
+    let should_auto_populate =
+        cfg.auto_populate_gs_scores && auto_profile_id.is_some() && !gs_username.is_empty();
+    GameplayScoreboxProfileSnapshot::new(
+        player_profile.display_scorebox,
+        cfg.enable_groovestats && side_joined && !api_key.is_empty(),
+        player_profile.show_ex_score,
+        api_key,
+        arrowcloud_api_key,
+        include_arrowcloud,
+        gs_username,
+        persistent_profile_id,
+        auto_profile_id,
+        should_auto_populate,
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -3156,10 +3141,10 @@ fn spawn_player_leaderboard_fetch(
 
 #[inline(always)]
 fn player_leaderboard_profile_snapshot_for_side(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> GameplayScoreboxProfileSnapshot {
     let side_profile = profile::get_for_side(side);
-    GameplayScoreboxProfileSnapshot::from_profile(
+    scorebox_profile_snapshot(
         &side_profile,
         profile::is_session_side_joined(side),
         profile::active_local_profile_id_for_side(side),
@@ -3178,16 +3163,16 @@ fn player_leaderboard_cache_key_for_profile(
 
     Some(PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
-        api_key: profile_snapshot.api_key.clone(),
-        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key.clone(),
-        include_arrowcloud: profile_snapshot.include_arrowcloud,
+        api_key: profile_snapshot.api_key().to_string(),
+        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key().to_string(),
+        include_arrowcloud: profile_snapshot.include_arrowcloud(),
         show_ex_score: profile_snapshot.show_ex_score,
     })
 }
 
 fn get_cached_player_leaderboard_itl_self_rank_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
     let key = player_leaderboard_cache_key_for_profile(chart_hash, &profile_snapshot)?;
@@ -3210,10 +3195,10 @@ fn get_or_fetch_player_leaderboards_for_profile_inner(
         return None;
     }
     let key = player_leaderboard_cache_key_for_profile(chart_hash, profile_snapshot)?;
-    let gs_username = profile_snapshot.gs_username.clone();
-    let persistent_profile_id = profile_snapshot.persistent_profile_id.clone();
-    let auto_profile_id = profile_snapshot.auto_profile_id.clone();
-    let should_auto_populate = profile_snapshot.should_auto_populate;
+    let gs_username = profile_snapshot.gs_username().to_string();
+    let persistent_profile_id = profile_snapshot.persistent_profile_id().map(str::to_string);
+    let auto_profile_id = profile_snapshot.auto_profile_id().map(str::to_string);
+    let should_auto_populate = profile_snapshot.should_auto_populate();
 
     let mut should_spawn = false;
     let mut requested_max_entries = max_entries;
@@ -3266,7 +3251,7 @@ fn get_or_fetch_player_leaderboards_for_profile_inner(
 
 pub fn get_or_fetch_player_leaderboards_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
     let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
@@ -3293,7 +3278,7 @@ pub fn get_or_fetch_player_leaderboards_for_profile(
 
 pub fn refresh_player_leaderboards_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
     let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
@@ -3305,7 +3290,7 @@ pub fn refresh_player_leaderboards_for_side(
     )
 }
 
-pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::PlayerSide) {
+pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile_data::PlayerSide) {
     let chart_hash = chart_hash.trim();
     if chart_hash.is_empty() {
         return;
@@ -3535,7 +3520,7 @@ pub fn get_machine_leaderboard_local_with_names(
 
 pub fn get_personal_leaderboard_local_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     max_entries: usize,
 ) -> Vec<LeaderboardEntry> {
     if chart_hash.trim().is_empty() || max_entries == 0 {

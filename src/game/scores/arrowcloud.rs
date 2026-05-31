@@ -12,6 +12,7 @@ use deadsync_online::arrowcloud::{
     ArrowCloudSubmitRequestError, ArrowCloudTimingDatum, ArrowCloudTimingOffset,
 };
 use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
+use deadsync_profile as profile_data;
 use deadsync_rules::{
     judgment,
     note::{HoldResult, MineResult, Note},
@@ -59,7 +60,7 @@ static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 struct ArrowCloudSubmitRetryEntry {
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     api_key: String,
     payload: ArrowCloudPayload,
     profile_id: Option<String>,
@@ -113,7 +114,7 @@ fn arrowcloud_trim_submit_retry_entries(entries: &mut Vec<ArrowCloudSubmitRetryE
 }
 
 #[inline(always)]
-fn arrowcloud_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str) {
+fn arrowcloud_reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -123,7 +124,7 @@ fn arrowcloud_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str
 }
 
 #[inline(always)]
-fn arrowcloud_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
+fn arrowcloud_reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -134,7 +135,7 @@ fn arrowcloud_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
 
 #[inline(always)]
 fn arrowcloud_set_submit_ui_status(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
     status: ArrowCloudSubmitUiStatus,
@@ -162,7 +163,7 @@ fn arrowcloud_set_submit_ui_status(
 
 #[inline(always)]
 fn arrowcloud_update_submit_ui_status_if_token(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
     status: ArrowCloudSubmitUiStatus,
@@ -220,7 +221,7 @@ fn arrowcloud_status_from_http(status_code: u16) -> ArrowCloudSubmitUiStatus {
 }
 
 #[inline(always)]
-fn arrowcloud_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reason: &str) {
+fn arrowcloud_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str, reason: &str) {
     warn!(
         "Skipping ArrowCloud submit for {:?} ({}): {}.",
         side, chart_hash, reason
@@ -249,7 +250,7 @@ fn arrowcloud_store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
 
 pub fn get_arrowcloud_submit_ui_status_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<ArrowCloudSubmitUiStatus> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -263,7 +264,7 @@ pub fn get_arrowcloud_submit_ui_status_for_side(
 
 #[derive(Debug)]
 struct ArrowCloudSubmitJob {
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     api_key: String,
     token: u64,
     payload: ArrowCloudPayload,
@@ -774,7 +775,7 @@ fn arrowcloud_payload_for_player(
 
 #[inline(always)]
 fn submit_arrowcloud_payload(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     api_key: &str,
     payload: &ArrowCloudPayload,
 ) -> Result<(), ArrowCloudSubmitError> {
@@ -1019,13 +1020,13 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     spawn_arrowcloud_submit_jobs(jobs);
 }
 
-pub fn retry_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn retry_arrowcloud_submit(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
     retry_arrowcloud_submit_inner(chart_hash, side, true)
 }
 
 fn retry_arrowcloud_submit_inner(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     manual: bool,
 ) -> bool {
     let hash = chart_hash.trim();
@@ -1091,7 +1092,7 @@ fn retry_arrowcloud_submit_inner(
 /// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
 /// as a manual F5 cooldown gate.
 fn arrowcloud_record_submit_failure(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     status: ArrowCloudSubmitUiStatus,
 ) {
@@ -1116,7 +1117,7 @@ fn arrowcloud_record_submit_failure(
 
 /// Clears retry/backoff bookkeeping after a successful submit. Called from the
 /// worker's success path when the status update was accepted.
-fn arrowcloud_record_submit_success(side: profile::PlayerSide, chart_hash: &str) {
+fn arrowcloud_record_submit_success(side: profile_data::PlayerSide, chart_hash: &str) {
     let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
     lock[submit_side_ix(side)].retain(|entry| !entry.payload.hash.eq_ignore_ascii_case(chart_hash));
 }
@@ -1126,7 +1127,7 @@ fn arrowcloud_record_submit_success(side: profile::PlayerSide, chart_hash: &str)
 /// elapsed. `None` means no gate is currently armed (bare `F5 Retry`).
 pub fn arrowcloud_next_retry_remaining_secs(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -1145,7 +1146,7 @@ pub fn arrowcloud_next_retry_remaining_secs(
 /// Returns true when the next scheduled retry will be fired automatically by
 /// the tick driver. When false, any pending `next_retry_at` is acting purely
 /// as a manual F5 cooldown gate.
-pub fn arrowcloud_next_retry_is_auto(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn arrowcloud_next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -1176,7 +1177,7 @@ pub fn arrowcloud_next_retry_is_auto(chart_hash: &str, side: profile::PlayerSide
 /// use `next_retry_at` purely as a manual cooldown gate. Returns true if at
 /// least one retry was fired.
 pub fn tick_arrowcloud_auto_retries() -> bool {
-    let due: Vec<(String, profile::PlayerSide, u8)> = {
+    let due: Vec<(String, profile_data::PlayerSide, u8)> = {
         let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
         let now = Instant::now();
         lock.iter()
@@ -1330,7 +1331,10 @@ mod tests {
         }
     }
 
-    fn sample_retry_entry(hash: &str, side: profile::PlayerSide) -> ArrowCloudSubmitRetryEntry {
+    fn sample_retry_entry(
+        hash: &str,
+        side: profile_data::PlayerSide,
+    ) -> ArrowCloudSubmitRetryEntry {
         ArrowCloudSubmitRetryEntry {
             side,
             api_key: "test-api-key".to_string(),
@@ -1548,7 +1552,7 @@ mod tests {
 
     #[test]
     fn arrowcloud_submit_ui_tracks_multiple_hashes_per_side() {
-        let side = profile::PlayerSide::P1;
+        let side = profile_data::PlayerSide::P1;
         let first = "ac-course-status-first";
         let second = "ac-course-status-second";
         arrowcloud_reset_submit_ui_status(side, first);
@@ -1592,7 +1596,7 @@ mod tests {
 
     #[test]
     fn arrowcloud_submit_retry_tracks_multiple_hashes_per_side() {
-        let side = profile::PlayerSide::P1;
+        let side = profile_data::PlayerSide::P1;
         let first = "ac-course-retry-first";
         let second = "ac-course-retry-second";
         arrowcloud_reset_submit_ui_status(side, first);

@@ -35,6 +35,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor_fro
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -3951,7 +3952,7 @@ pub fn build_bundles(
     state: &State,
     profile: &profile::Profile,
     placement: FieldPlacement,
-    play_style: profile::PlayStyle,
+    play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
     view: ViewOverride,
@@ -4047,28 +4048,29 @@ pub fn build_bundles(
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let judgment_extra_x = profile
         .judgment_offset_x
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let judgment_extra_y = profile
         .judgment_offset_y
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let combo_extra_x = profile
         .combo_offset_x
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let combo_extra_y = profile
         .combo_offset_y
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let error_bar_extra_x = profile
         .error_bar_offset_x
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let error_bar_extra_y = profile
         .error_bar_offset_y
-        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let centered_one_side = state.num_players == 1
-        && play_style == profile::PlayStyle::Single
+        && play_style == profile_data::PlayStyle::Single
         && center_1player_notefield;
-    let centered_both_sides = state.num_players == 1 && play_style == profile::PlayStyle::Double;
+    let centered_both_sides =
+        state.num_players == 1 && play_style == profile_data::PlayStyle::Double;
     let base_playfield_center_x = if state.num_players == 2 {
         match placement {
             FieldPlacement::P1 => screen_center_x() - (clamped_width * 0.25),

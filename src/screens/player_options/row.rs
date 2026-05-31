@@ -1,6 +1,7 @@
 use super::state::PlayerOptionMasks;
 use super::*;
-use crate::game::profile::{PlayerSide, Profile};
+use crate::game::profile::Profile;
+use deadsync_profile::PlayerSide;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]

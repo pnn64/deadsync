@@ -48,6 +48,7 @@ use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_online::groovestats as groovestats_api;
+use deadsync_profile as profile_data;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
@@ -536,7 +537,7 @@ pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
     pub course_graph_stages: Vec<CourseGraphStage>,
-    pub side: profile::PlayerSide,
+    pub side: profile_data::PlayerSide,
     pub profile_name: String,
     pub score_valid: bool,
     pub disqualified: bool,
@@ -1724,7 +1725,7 @@ fn eval_has_gs_pane(has_online_panes: bool) -> bool {
 }
 
 #[inline(always)]
-fn eval_has_arrowcloud_pane(has_online_panes: bool, side: profile::PlayerSide) -> bool {
+fn eval_has_arrowcloud_pane(has_online_panes: bool, side: profile_data::PlayerSide) -> bool {
     if !has_online_panes {
         return false;
     }
@@ -1856,7 +1857,7 @@ fn eval_pane_skip_duplicate(
 }
 
 #[inline(always)]
-fn warm_eval_leaderboards(has_online_panes: bool, chart_hash: &str, side: profile::PlayerSide) {
+fn warm_eval_leaderboards(has_online_panes: bool, chart_hash: &str, side: profile_data::PlayerSide) {
     if has_online_panes {
         let _ = scores::get_or_fetch_player_leaderboards_for_side(chart_hash, side, GS_RECORD_ROWS);
     }
@@ -2169,9 +2170,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             );
             let side = if gs.num_players >= 2 {
                 if player_idx == 0 {
-                    profile::PlayerSide::P1
+                    profile_data::PlayerSide::P1
                 } else {
-                    profile::PlayerSide::P2
+                    profile_data::PlayerSide::P2
                 }
             } else {
                 profile::get_session_player_side()
@@ -2343,7 +2344,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
 
         let play_style = profile::get_session_play_style();
-        let graph_width: f32 = if play_style == profile::PlayStyle::Versus {
+        let graph_width: f32 = if play_style == profile_data::PlayStyle::Versus {
             300.0
         } else {
             610.0
@@ -2500,7 +2501,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
 
         match play_style {
-            profile::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus => {
                 active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -2514,7 +2515,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
                 });
             }
-            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
@@ -2527,15 +2528,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     }
                 });
                 active_pane = match joined {
-                    profile::PlayerSide::P1 => [primary, secondary],
-                    profile::PlayerSide::P2 => [secondary, primary],
+                    profile_data::PlayerSide::P1 => [primary, secondary],
+                    profile_data::PlayerSide::P2 => [secondary, primary],
                 };
                 let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
                     eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
                 });
                 active_graph = match joined {
-                    profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
-                    profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
+                    profile_data::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                    profile_data::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
                 };
             }
         }
@@ -2592,7 +2593,7 @@ pub fn init_from_score_info(
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = profile::get_session_play_style();
     match play_style {
-        profile::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -2606,27 +2607,27 @@ pub fn init_from_score_info(
                 eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
             });
         }
-        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let joined = profile::get_session_player_side();
             let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
             let secondary = EvalPane::Timing;
             active_pane = match joined {
-                profile::PlayerSide::P1 => [primary, secondary],
-                profile::PlayerSide::P2 => [secondary, primary],
+                profile_data::PlayerSide::P1 => [primary, secondary],
+                profile_data::PlayerSide::P2 => [secondary, primary],
             };
             let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
                 eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
             });
             active_graph = match joined {
-                profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
-                profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
+                profile_data::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                profile_data::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
             };
         }
     }
 
-    let graph_width = if play_style == profile::PlayStyle::Versus {
+    let graph_width = if play_style == profile_data::PlayStyle::Versus {
         300.0
     } else {
         610.0
@@ -2853,8 +2854,8 @@ pub fn update(state: &mut State, dt: f32) {
         "ScreenEvaluationStage",
         true,
         true,
-        evaluation_lobby_player_stats(state, profile::PlayerSide::P1),
-        evaluation_lobby_player_stats(state, profile::PlayerSide::P2),
+        evaluation_lobby_player_stats(state, profile_data::PlayerSide::P1),
+        evaluation_lobby_player_stats(state, profile_data::PlayerSide::P2),
     );
     if evaluation_lobby_lock_text().is_some() {
         if lobby_disconnect_hold_elapsed(state)
@@ -2876,7 +2877,7 @@ pub fn update(state: &mut State, dt: f32) {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
             continue;
         }
-        let player_idx = if play_style == profile::PlayStyle::Versus {
+        let player_idx = if play_style == profile_data::PlayStyle::Versus {
             controller_idx
         } else {
             0
@@ -2884,8 +2885,8 @@ pub fn update(state: &mut State, dt: f32) {
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             continue;
         };
-        let gs_side = if play_style == profile::PlayStyle::Versus {
-            [profile::PlayerSide::P1, profile::PlayerSide::P2][controller_idx]
+        let gs_side = if play_style == profile_data::PlayStyle::Versus {
+            [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2][controller_idx]
         } else {
             profile::get_session_player_side()
         };
@@ -2898,7 +2899,7 @@ pub fn update(state: &mut State, dt: f32) {
             Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
-            if play_style != profile::PlayStyle::Versus {
+            if play_style != profile_data::PlayStyle::Versus {
                 let panes = eval_pane_cycle(
                     si.show_hard_ex_score,
                     false,
@@ -2922,7 +2923,7 @@ pub fn update(state: &mut State, dt: f32) {
 
 fn local_lobby_player_count() -> usize {
     let mut count = 0usize;
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if profile::is_session_side_joined(side) {
             count += 1;
         }
@@ -2930,21 +2931,21 @@ fn local_lobby_player_count() -> usize {
     if count == 0 { 1 } else { count }
 }
 
-fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         return profile::get_session_player_side() == side;
     }
     match side {
-        profile::PlayerSide::P1 => p1_joined,
-        profile::PlayerSide::P2 => p2_joined,
+        profile_data::PlayerSide::P1 => p1_joined,
+        profile_data::PlayerSide::P2 => p2_joined,
     }
 }
 
 fn evaluation_lobby_player_stats(
     state: &State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<lobby_data::MachinePlayerStats> {
     let score_info = state
         .score_info
@@ -2983,14 +2984,14 @@ fn clear_lobby_disconnect_holds(state: &mut State) {
 
 fn set_lobby_disconnect_hold(
     state: &mut State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     started_at: Option<Instant>,
 ) {
     match side {
-        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -3059,10 +3060,10 @@ pub fn test_input_pane_active(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn eval_player_color_rgba(side: profile::PlayerSide, active_color_index: i32) -> [f32; 4] {
+fn eval_player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
-        profile::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
-        profile::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
+        profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
+        profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
     }
 }
 
@@ -3082,14 +3083,14 @@ fn eval_grade_for_result(
 
 pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     let play_style = profile::get_session_play_style();
-    let side_to_idx = |side: profile::PlayerSide| match (play_style, side) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P1) => 0,
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => 1,
+    let side_to_idx = |side: profile_data::PlayerSide| match (play_style, side) {
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P1) => 0,
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     };
 
     let mut found_player = false;
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
@@ -3391,9 +3392,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     } else {
         None
     };
-    let side_idx = |side: profile::PlayerSide| match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+    let side_idx = |side: profile_data::PlayerSide| match side {
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     };
     if !ev.pressed
         && let Some(side) = screen_input::menu_lr_side(ev.action)
@@ -3423,16 +3424,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
             }
             VirtualAction::p2_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
             }
             _ => {}
@@ -3447,8 +3448,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.itl_overlay_visible {
         let play_style = profile::get_session_play_style();
-        let mut shift_itl_page = |controller: profile::PlayerSide, dir: i32| {
-            let player_idx = if play_style == profile::PlayStyle::Versus {
+        let mut shift_itl_page = |controller: profile_data::PlayerSide, dir: i32| {
+            let player_idx = if play_style == profile_data::PlayStyle::Versus {
                 side_idx(controller)
             } else {
                 0
@@ -3489,8 +3490,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
-                    if shift_itl_page(profile::PlayerSide::P1, -1) {
+                state.menu_lr_undo[side_idx(profile_data::PlayerSide::P1)] =
+                    if shift_itl_page(profile_data::PlayerSide::P1, -1) {
                         1
                     } else {
                         0
@@ -3498,8 +3499,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
-                    if shift_itl_page(profile::PlayerSide::P1, 1) {
+                state.menu_lr_undo[side_idx(profile_data::PlayerSide::P1)] =
+                    if shift_itl_page(profile_data::PlayerSide::P1, 1) {
                         -1
                     } else {
                         0
@@ -3507,8 +3508,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
-                    if shift_itl_page(profile::PlayerSide::P2, -1) {
+                state.menu_lr_undo[side_idx(profile_data::PlayerSide::P2)] =
+                    if shift_itl_page(profile_data::PlayerSide::P2, -1) {
                         1
                     } else {
                         0
@@ -3516,8 +3517,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
-                    if shift_itl_page(profile::PlayerSide::P2, 1) {
+                state.menu_lr_undo[side_idx(profile_data::PlayerSide::P2)] =
+                    if shift_itl_page(profile_data::PlayerSide::P2, 1) {
                         -1
                     } else {
                         0
@@ -3534,14 +3535,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     };
 
     let play_style = profile::get_session_play_style();
-    let player_idx_for_controller = |controller: profile::PlayerSide| {
-        if play_style == profile::PlayStyle::Versus {
+    let player_idx_for_controller = |controller: profile_data::PlayerSide| {
+        if play_style == profile_data::PlayStyle::Versus {
             side_idx(controller)
         } else {
             0
         }
     };
-    let mut shift_pane_for = |controller: profile::PlayerSide, dir: i32| {
+    let mut shift_pane_for = |controller: profile_data::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
@@ -3550,7 +3551,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         let old_pane = state.active_pane[controller_idx];
         let has_hard_ex = si.show_hard_ex_score;
         let has_online_panes = state.allow_online_panes;
-        let gs_side = if play_style == profile::PlayStyle::Versus {
+        let gs_side = if play_style == profile_data::PlayStyle::Versus {
             controller
         } else {
             profile::get_session_player_side()
@@ -3582,7 +3583,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
         // Don't allow duplicate panes in single/double.
-        if play_style != profile::PlayStyle::Versus {
+        if play_style != profile_data::PlayStyle::Versus {
             let other_idx = 1 - controller_idx;
             state.active_pane[controller_idx] = eval_pane_skip_duplicate(
                 state.active_pane[controller_idx],
@@ -3593,7 +3594,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         state.active_pane[controller_idx] != old_pane
     };
-    let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
+    let mut shift_graph_for = |controller: profile_data::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
@@ -3608,7 +3609,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         );
 
         // Single/double have one lower graph; keep both controller slots in sync.
-        if play_style != profile::PlayStyle::Versus {
+        if play_style != profile_data::PlayStyle::Versus {
             let other_idx = 1 - controller_idx;
             state.active_graph[other_idx] = state.active_graph[controller_idx];
         }
@@ -3633,8 +3634,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::Navigate(return_target)
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
-                if shift_pane_for(profile::PlayerSide::P1, 1) {
+            state.menu_lr_undo[side_idx(profile_data::PlayerSide::P1)] =
+                if shift_pane_for(profile_data::PlayerSide::P1, 1) {
                     -1
                 } else {
                     0
@@ -3642,8 +3643,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
-                if shift_pane_for(profile::PlayerSide::P1, -1) {
+            state.menu_lr_undo[side_idx(profile_data::PlayerSide::P1)] =
+                if shift_pane_for(profile_data::PlayerSide::P1, -1) {
                     1
                 } else {
                     0
@@ -3651,16 +3652,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            shift_graph_for(profile::PlayerSide::P1, -1);
+            shift_graph_for(profile_data::PlayerSide::P1, -1);
             ScreenAction::None
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            shift_graph_for(profile::PlayerSide::P1, 1);
+            shift_graph_for(profile_data::PlayerSide::P1, 1);
             ScreenAction::None
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-            state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
-                if shift_pane_for(profile::PlayerSide::P2, 1) {
+            state.menu_lr_undo[side_idx(profile_data::PlayerSide::P2)] =
+                if shift_pane_for(profile_data::PlayerSide::P2, 1) {
                     -1
                 } else {
                     0
@@ -3668,8 +3669,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-            state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
-                if shift_pane_for(profile::PlayerSide::P2, -1) {
+            state.menu_lr_undo[side_idx(profile_data::PlayerSide::P2)] =
+                if shift_pane_for(profile_data::PlayerSide::P2, -1) {
                     1
                 } else {
                     0
@@ -3677,11 +3678,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-            shift_graph_for(profile::PlayerSide::P2, -1);
+            shift_graph_for(profile_data::PlayerSide::P2, -1);
             ScreenAction::None
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-            shift_graph_for(profile::PlayerSide::P2, 1);
+            shift_graph_for(profile_data::PlayerSide::P2, 1);
             ScreenAction::None
         }
         _ => ScreenAction::None,
@@ -3747,7 +3748,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let pane_bg_color = color::rgba_hex("#1E282F");
 
         let pane_x_left = screen_center_x() - 305.0;
-        if play_style == profile::PlayStyle::Versus {
+        if play_style == profile_data::PlayStyle::Versus {
             let pane_w = 300.0;
             let pane_x_right = screen_center_x() + 5.0;
             for x in [pane_x_left, pane_x_right] {
@@ -3858,14 +3859,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- Upper Content (Simply Love PerPlayer/Upper) ---
     {
         let style_label = match play_style {
-            profile::PlayStyle::Double => "Double",
-            profile::PlayStyle::Single | profile::PlayStyle::Versus => "Single",
+            profile_data::PlayStyle::Double => "Double",
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => "Single",
         };
 
         let upper_single = [(0, player_side)];
-        let upper_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
-        let upper_players: &[(usize, profile::PlayerSide)] =
-            if play_style == profile::PlayStyle::Versus {
+        let upper_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let upper_players: &[(usize, profile_data::PlayerSide)] =
+            if play_style == profile_data::PlayStyle::Versus {
                 &upper_vs
             } else {
                 &upper_single
@@ -3877,10 +3878,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             let upper_origin_x = match side {
-                profile::PlayerSide::P1 => screen_center_x() - 155.0,
-                profile::PlayerSide::P2 => screen_center_x() + 155.0,
+                profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
+                profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
             };
-            let dir = if side == profile::PlayerSide::P1 {
+            let dir = if side == profile_data::PlayerSide::P1 {
                 -1.0
             } else {
                 1.0
@@ -3905,7 +3906,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 // RecordTexts frame @ x(-45|95), y(54), zoom(0.225)
                 // MachineRecord child @ xy(-110,-18), PersonalRecord @ xy(-110,24)
                 // Final world pos = frame + child * frame_zoom.
-                let record_frame_x = if side == profile::PlayerSide::P1 {
+                let record_frame_x = if side == profile_data::PlayerSide::P1 {
                     upper_origin_x - 45.0
                 } else {
                     upper_origin_x + 95.0
@@ -4005,13 +4006,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         cached_difficulty_text(style_label, difficulty_display_name);
                     let text_x = upper_origin_x + 115.0 * dir;
                     let box_x = upper_origin_x + 134.5 * dir;
-                    let align_x = if side == profile::PlayerSide::P1 {
+                    let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
                         1.0
                     };
 
-                    if side == profile::PlayerSide::P1 {
+                    if side == profile_data::PlayerSide::P1 {
                         actors.push(act!(text: font("miso"): settext(difficulty_text):
                             align(align_x, 0.5): xy(text_x, cy - 65.0): zoom(0.7): z(101):
                             diffuse(1.0, 1.0, 1.0, 1.0)
@@ -4068,7 +4069,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // StepMania's trailing BitmapText height, so Arrow Cloud's
                     // raw cy-42/cy-43 anchor must be compensated here.
                     let y_base = if line_count > 2 { cy - 58.0 } else { cy - 59.0 };
-                    let align_x = if side == profile::PlayerSide::P1 {
+                    let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
                         1.0
@@ -4106,7 +4107,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let bg_x = zmod_diff_box_x - 19.5 * dir;
                     let bg_y = cy - 56.0;
                     let bg_h = (bg_y - y + text_h_px - 3.0).max(1.0);
-                    let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
+                    let (fadeleft, faderight) = if side == profile_data::PlayerSide::P1 {
                         (0.0, 0.1)
                     } else {
                         (0.1, 0.0)
@@ -4119,7 +4120,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         z(102)
                     ));
 
-                    if side == profile::PlayerSide::P1 {
+                    if side == profile_data::PlayerSide::P1 {
                         actors.push(act!(text: font("miso"): settext(step_artist_text):
                             align(align_x, 1.0): xy(x, y): zoom(text_zoom): z(103):
                             diffuse(1.0, 1.0, 1.0, 1.0)
@@ -4142,12 +4143,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 if !step_artist_text.is_empty() {
                     let x = upper_origin_x + 115.0 * dir;
-                    let align_x = if side == profile::PlayerSide::P1 {
+                    let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
                         1.0
                     };
-                    if side == profile::PlayerSide::P1 {
+                    if side == profile_data::PlayerSide::P1 {
                         actors.push(act!(text: font("miso"): settext(step_artist_text):
                             align(align_x, 0.5): xy(x, cy - 81.0): zoom(0.7): z(101):
                             diffuse(1.0, 1.0, 1.0, 1.0)
@@ -4227,7 +4228,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     } else {
                         cy - 95.0
                     };
-                    let align_x = if side == profile::PlayerSide::P1 {
+                    let align_x = if side == profile_data::PlayerSide::P1 {
                         0.0
                     } else {
                         1.0
@@ -4251,7 +4252,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             .unwrap_or((breakdown_width, 14.0));
                         let bg_x = upper_origin_x + 150.0 * dir;
                         let bg_y = cy - 95.5;
-                        let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
+                        let (fadeleft, faderight) = if side == profile_data::PlayerSide::P1 {
                             (0.0, 0.1)
                         } else {
                             (0.1, 0.0)
@@ -4265,7 +4266,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     }
                     let text_z = if cfg.zmod_rating_box_text { 103 } else { 101 };
-                    if side == profile::PlayerSide::P1 {
+                    if side == profile_data::PlayerSide::P1 {
                         actors.push(act!(text: font("miso"): settext(breakdown_text):
                             align(align_x, align_y): xy(x, y): zoom(0.7):
                             maxwidth(breakdown_width): horizalign(left): z(text_z):
@@ -4285,9 +4286,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if !state.itl_overlay_visible {
         let progress_single = [(0, player_side)];
-        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
-        let progress_players: &[(usize, profile::PlayerSide)] =
-            if play_style == profile::PlayStyle::Versus {
+        let progress_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let progress_players: &[(usize, profile_data::PlayerSide)] =
+            if play_style == profile_data::PlayStyle::Versus {
                 &progress_vs
             } else {
                 &progress_single
@@ -4299,7 +4300,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.extend(eval_panes::build_itl_progress_box(
                 asset_manager,
                 side,
-                play_style != profile::PlayStyle::Versus,
+                play_style != profile_data::PlayStyle::Versus,
                 progress,
             ));
         }
@@ -4307,13 +4308,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
-        for controller in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-            let controller_idx = if controller == profile::PlayerSide::P1 {
+        for controller in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            let controller_idx = if controller == profile_data::PlayerSide::P1 {
                 0
             } else {
                 1
             };
-            let player_idx = if play_style == profile::PlayStyle::Versus {
+            let player_idx = if play_style == profile_data::PlayStyle::Versus {
                 controller_idx
             } else {
                 0
@@ -4321,7 +4322,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let gs_side = if play_style == profile::PlayStyle::Versus {
+            let gs_side = if play_style == profile_data::PlayStyle::Versus {
                 controller
             } else {
                 player_side
@@ -4416,7 +4417,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     state.screen_elapsed,
                 )),
                 EvalPane::Column => {
-                    let pane3_player_side = if play_style == profile::PlayStyle::Versus {
+                    let pane3_player_side = if play_style == profile_data::PlayStyle::Versus {
                         controller
                     } else {
                         player_side
@@ -4461,7 +4462,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let title = tr("Evaluation", "TestInputTitle");
                     let instructions = tr("Evaluation", "TestInputInstructions");
 
-                    if play_style == profile::PlayStyle::Double {
+                    if play_style == profile_data::PlayStyle::Double {
                         let pad_scale = 0.75_f32 * panel_scale;
                         let pad_half = test_input::evaluation_pad_half_width(pad_scale);
                         let gap = pad_half + 6.0;
@@ -4481,8 +4482,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                     } else {
                         let slot = match controller {
-                            profile::PlayerSide::P1 => test_input::PlayerSlot::P1,
-                            profile::PlayerSide::P2 => test_input::PlayerSlot::P2,
+                            profile_data::PlayerSide::P1 => test_input::PlayerSlot::P1,
+                            profile_data::PlayerSide::P2 => test_input::PlayerSlot::P2,
                         };
                         actors.extend(test_input::build_evaluation_panel(
                             &state.test_input_state,
@@ -4503,13 +4504,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Player Modifiers Bar (Simply Love PerPlayer/Lower/PlayerModifiers) ---
     {
-        let graph_width = if play_style == profile::PlayStyle::Versus {
+        let graph_width = if play_style == profile_data::PlayStyle::Versus {
             300.0
         } else {
             610.0
         };
 
-        if play_style == profile::PlayStyle::Versus {
+        if play_style == profile_data::PlayStyle::Versus {
             for (player_idx, center_x) in [
                 (0, screen_center_x() - 155.0),
                 (1, screen_center_x() + 155.0),
@@ -4529,7 +4530,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Graphs (density + scatter + life) ---
     {
-        let graph_width = if play_style == profile::PlayStyle::Versus {
+        let graph_width = if play_style == profile_data::PlayStyle::Versus {
             300.0
         } else {
             610.0
@@ -4540,7 +4541,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let cx = screen_center_x();
         let graph_single = [(0, cx)];
         let graph_vs = [(0, cx - 155.0), (1, cx + 155.0)];
-        let graph_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+        let graph_players: &[(usize, f32)] = if play_style == profile_data::PlayStyle::Versus {
             &graph_vs
         } else {
             &graph_single
@@ -4551,9 +4552,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             };
 
-            let graph_controller_idx = if play_style == profile::PlayStyle::Versus {
+            let graph_controller_idx = if play_style == profile_data::PlayStyle::Versus {
                 player_idx
-            } else if player_side == profile::PlayerSide::P1 {
+            } else if player_side == profile_data::PlayerSide::P1 {
                 0
             } else {
                 1
@@ -4918,7 +4919,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (0, screen_center_x() - 155.0),
             (1, screen_center_x() + 155.0),
         ];
-        let label_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+        let label_players: &[(usize, f32)] = if play_style == profile_data::PlayStyle::Versus {
             &label_vs
         } else {
             &label_single
@@ -4953,12 +4954,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // When both GrooveStats/BoogieStats and ArrowCloud resolve to submitted/failed,
     // collapse them into one summary line; keep stacked lines for pending/timeouts.
     {
-        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
                 continue;
             }
-            let player_idx = if play_style == profile::PlayStyle::Versus {
-                if side == profile::PlayerSide::P1 {
+            let player_idx = if play_style == profile_data::PlayStyle::Versus {
+                if side == profile_data::PlayerSide::P1 {
                     0
                 } else {
                     1
@@ -4973,7 +4974,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 si.chart.short_hash.as_str(),
                 side,
             ) {
-                let x = if side == profile::PlayerSide::P1 {
+                let x = if side == profile_data::PlayerSide::P1 {
                     screen_center_x() - 225.0
                 } else {
                     screen_center_x() + 225.0
@@ -5037,7 +5038,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if lines.is_empty() {
                 continue;
             }
-            let submit_center_x = if side == profile::PlayerSide::P1 {
+            let submit_center_x = if side == profile_data::PlayerSide::P1 {
                 screen_width() * 0.25
             } else {
                 screen_width() * 0.75
@@ -5159,8 +5160,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
 
-    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -5170,10 +5171,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
 
@@ -5203,7 +5204,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
 
     let (footer_left, footer_right, left_avatar, right_avatar) =
-        if play_style == profile::PlayStyle::Versus {
+        if play_style == profile_data::PlayStyle::Versus {
             (
                 p1_footer_text,
                 p2_footer_text,
@@ -5212,8 +5213,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         } else {
             match player_side {
-                profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+                profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
             }
         };
     actors.push(screen_bar::build_no_background(ScreenBarParams {
@@ -5260,9 +5261,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if state.itl_overlay_visible {
         let progress_single = [(0, player_side)];
-        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
-        let progress_players: &[(usize, profile::PlayerSide)] =
-            if play_style == profile::PlayStyle::Versus {
+        let progress_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let progress_players: &[(usize, profile_data::PlayerSide)] =
+            if play_style == profile_data::PlayStyle::Versus {
                 &progress_vs
             } else {
                 &progress_single
@@ -5282,7 +5283,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .map(|si| si.song.as_ref());
         actors.extend(eval_panes::build_itl_event_overlay(
             asset_manager,
-            play_style != profile::PlayStyle::Versus,
+            play_style != profile_data::PlayStyle::Versus,
             overlay_song,
             panels.as_slice(),
         ));

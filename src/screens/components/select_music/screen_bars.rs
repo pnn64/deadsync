@@ -7,10 +7,11 @@ use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use deadsync_profile as profile_data;
 
 pub fn push(out: &mut Vec<Actor>, top_title: &str) {
-    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -20,10 +21,10 @@ pub fn push(out: &mut Vec<Actor>, top_title: &str) {
         .as_deref()
         .map(|k| AvatarParams { texture_key: k });
 
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");

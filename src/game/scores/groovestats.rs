@@ -14,6 +14,7 @@ use deadsync_online::groovestats::{
     GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts, GrooveStatsSubmitApiResponse,
     GrooveStatsSubmitPlayerPayload, GrooveStatsSubmitRequestError,
 };
+use deadsync_profile as profile_data;
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
@@ -62,7 +63,7 @@ static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
 
 #[derive(Debug, Clone)]
 struct GrooveStatsSubmitRetryEntry {
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     slot: u8,
     chart_hash: String,
     username: String,
@@ -119,7 +120,7 @@ fn groovestats_trim_submit_retry_entries(entries: &mut Vec<GrooveStatsSubmitRetr
 
 #[derive(Debug)]
 pub(super) struct GrooveStatsSubmitPlayerJob {
-    pub(super) side: profile::PlayerSide,
+    pub(super) side: profile_data::PlayerSide,
     pub(super) slot: u8,
     pub(super) chart_hash: String,
     pub(super) username: String,
@@ -147,7 +148,7 @@ struct GrooveStatsSubmitError {
 }
 
 #[inline(always)]
-fn groovestats_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str) {
+fn groovestats_reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -157,7 +158,7 @@ fn groovestats_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &st
 }
 
 #[inline(always)]
-fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str) {
+fn groovestats_reset_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -167,7 +168,7 @@ fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str
 }
 
 #[inline(always)]
-fn groovestats_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
+fn groovestats_reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -178,7 +179,7 @@ fn groovestats_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
 
 #[inline(always)]
 fn groovestats_set_submit_ui_status(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
     status: GrooveStatsSubmitUiStatus,
@@ -206,7 +207,7 @@ fn groovestats_set_submit_ui_status(
 
 #[inline(always)]
 fn groovestats_update_submit_ui_status_if_token(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
     status: GrooveStatsSubmitUiStatus,
@@ -230,7 +231,7 @@ fn groovestats_update_submit_ui_status_if_token(
 }
 
 #[inline(always)]
-fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, token: u64) {
+fn groovestats_arm_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str, token: u64) {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return;
@@ -256,7 +257,7 @@ fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, 
 
 #[inline(always)]
 fn groovestats_update_submit_event_ui_if_token(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
     itl_progress: Option<ItlEventProgress>,
@@ -317,7 +318,7 @@ fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
 
 pub fn get_groovestats_submit_ui_status_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<GrooveStatsSubmitUiStatus> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -331,7 +332,7 @@ pub fn get_groovestats_submit_ui_status_for_side(
 
 pub fn get_groovestats_submit_itl_progress_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<ItlEventProgress> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -345,7 +346,7 @@ pub fn get_groovestats_submit_itl_progress_for_side(
 
 pub fn get_groovestats_submit_record_banner_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -597,7 +598,7 @@ fn groovestats_final_result_counts_as_rescore_target(j: &judgment::Judgment) -> 
 }
 
 #[inline(always)]
-fn groovestats_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reason: &str) {
+fn groovestats_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str, reason: &str) {
     warn!(
         "Skipping {} submit for {:?} ({}): {}.",
         active_groovestats_service_name(),
@@ -1123,7 +1124,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
 
     for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
-        let slot = if side == profile::PlayerSide::P1 {
+        let slot = if side == profile_data::PlayerSide::P1 {
             1
         } else {
             2
@@ -1248,13 +1249,13 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     spawn_groovestats_submit(job);
 }
 
-pub fn retry_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn retry_groovestats_submit(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
     retry_groovestats_submit_inner(chart_hash, side, true)
 }
 
 fn retry_groovestats_submit_inner(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     manual: bool,
 ) -> bool {
     let hash = chart_hash.trim();
@@ -1317,7 +1318,7 @@ fn retry_groovestats_submit_inner(
 /// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
 /// as a manual F5 cooldown gate.
 fn groovestats_record_submit_failure(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     status: GrooveStatsSubmitUiStatus,
 ) {
@@ -1343,7 +1344,7 @@ fn groovestats_record_submit_failure(
 
 /// Clears retry/backoff bookkeeping after a successful submit. Called from the
 /// worker's success path when the status update was accepted.
-fn groovestats_record_submit_success(side: profile::PlayerSide, chart_hash: &str) {
+fn groovestats_record_submit_success(side: profile_data::PlayerSide, chart_hash: &str) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
     lock[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(chart_hash));
 }
@@ -1354,7 +1355,7 @@ fn groovestats_record_submit_success(side: profile::PlayerSide, chart_hash: &str
 /// is currently armed (bare `F5 Retry`).
 pub fn groovestats_next_retry_remaining_secs(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -1374,7 +1375,7 @@ pub fn groovestats_next_retry_remaining_secs(
 /// the tick driver (i.e., the current UI status is auto-retryable AND the
 /// auto-retry budget hasn't been exhausted). When false, any pending
 /// `next_retry_at` is acting purely as a manual F5 cooldown gate.
-pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -1406,7 +1407,7 @@ pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile::PlayerSid
 /// auto-fired by the tick. Should be called once per frame from the
 /// evaluation screen update loop. Returns true if at least one retry fired.
 pub fn tick_groovestats_auto_retries() -> bool {
-    let due: Vec<(String, profile::PlayerSide, u8)> = {
+    let due: Vec<(String, profile_data::PlayerSide, u8)> = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
         let now = Instant::now();
         lock.iter()
@@ -1518,8 +1519,11 @@ mod tests {
         }
     }
 
-    fn sample_retry_entry(hash: &str, side: profile::PlayerSide) -> GrooveStatsSubmitRetryEntry {
-        let slot = if side == profile::PlayerSide::P1 {
+    fn sample_retry_entry(
+        hash: &str,
+        side: profile_data::PlayerSide,
+    ) -> GrooveStatsSubmitRetryEntry {
+        let slot = if side == profile_data::PlayerSide::P1 {
             1
         } else {
             2
@@ -1673,7 +1677,7 @@ mod tests {
 
     #[test]
     fn groovestats_submit_ui_tracks_multiple_hashes_per_side() {
-        let side = profile::PlayerSide::P1;
+        let side = profile_data::PlayerSide::P1;
         let first = "gs-course-status-first";
         let second = "gs-course-status-second";
         groovestats_reset_submit_ui_status(side, first);
@@ -1745,7 +1749,7 @@ mod tests {
 
     #[test]
     fn groovestats_submit_retry_tracks_multiple_hashes_per_side() {
-        let side = profile::PlayerSide::P1;
+        let side = profile_data::PlayerSide::P1;
         let first = "gs-course-retry-first";
         let second = "gs-course-retry-second";
         groovestats_reset_submit_ui_status(side, first);
@@ -1819,7 +1823,7 @@ mod tests {
 
     fn sample_submit_job(show_ex_score: bool) -> GrooveStatsSubmitPlayerJob {
         GrooveStatsSubmitPlayerJob {
-            side: profile::PlayerSide::P1,
+            side: profile_data::PlayerSide::P1,
             slot: 1,
             chart_hash: "deadbeef".to_string(),
             username: "PerfectTaste".to_string(),

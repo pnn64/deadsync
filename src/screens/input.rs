@@ -1,10 +1,10 @@
 use crate::engine::input::{RawKeyboardEvent, with_keymap};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, InputSource, PadEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -70,10 +70,10 @@ pub enum ThreeKeyMenuAction {
 }
 
 #[inline(always)]
-pub const fn player_side_ix(side: profile::PlayerSide) -> usize {
+pub const fn player_side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
@@ -84,16 +84,16 @@ pub fn dedicated_three_key_nav_enabled() -> bool {
 }
 
 #[inline(always)]
-pub const fn menu_lr_side(action: VirtualAction) -> Option<profile::PlayerSide> {
+pub const fn menu_lr_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     match action {
         VirtualAction::p1_left
         | VirtualAction::p1_menu_left
         | VirtualAction::p1_right
-        | VirtualAction::p1_menu_right => Some(profile::PlayerSide::P1),
+        | VirtualAction::p1_menu_right => Some(profile_data::PlayerSide::P1),
         VirtualAction::p2_left
         | VirtualAction::p2_menu_left
         | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => Some(profile::PlayerSide::P2),
+        | VirtualAction::p2_menu_right => Some(profile_data::PlayerSide::P2),
         _ => None,
     }
 }
@@ -127,22 +127,22 @@ fn menu_lr_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> boo
 
 impl MenuLrChordTracker {
     #[inline(always)]
-    fn side_state(&self, side: profile::PlayerSide) -> &MenuLrChordSideState {
+    fn side_state(&self, side: profile_data::PlayerSide) -> &MenuLrChordSideState {
         match side {
-            profile::PlayerSide::P1 => &self.p1,
-            profile::PlayerSide::P2 => &self.p2,
+            profile_data::PlayerSide::P1 => &self.p1,
+            profile_data::PlayerSide::P2 => &self.p2,
         }
     }
 
     #[inline(always)]
-    fn side_state_mut(&mut self, side: profile::PlayerSide) -> &mut MenuLrChordSideState {
+    fn side_state_mut(&mut self, side: profile_data::PlayerSide) -> &mut MenuLrChordSideState {
         match side {
-            profile::PlayerSide::P1 => &mut self.p1,
-            profile::PlayerSide::P2 => &mut self.p2,
+            profile_data::PlayerSide::P1 => &mut self.p1,
+            profile_data::PlayerSide::P2 => &mut self.p2,
         }
     }
 
-    pub fn update(&mut self, ev: &InputEvent) -> Option<profile::PlayerSide> {
+    pub fn update(&mut self, ev: &InputEvent) -> Option<profile_data::PlayerSide> {
         let Some(side) = menu_lr_side(ev.action) else {
             return None;
         };
@@ -187,7 +187,7 @@ impl MenuLrChordTracker {
     }
 
     #[inline(always)]
-    pub fn both_held(&self, side: profile::PlayerSide) -> bool {
+    pub fn both_held(&self, side: profile_data::PlayerSide) -> bool {
         self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
     }
 }
@@ -195,7 +195,7 @@ impl MenuLrChordTracker {
 pub fn three_key_menu_action(
     chord: &mut MenuLrChordTracker,
     ev: &InputEvent,
-) -> Option<(profile::PlayerSide, ThreeKeyMenuAction)> {
+) -> Option<(profile_data::PlayerSide, ThreeKeyMenuAction)> {
     if !dedicated_three_key_nav_enabled() {
         return None;
     }
@@ -207,19 +207,23 @@ pub fn three_key_menu_action(
     }
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            Some((profile::PlayerSide::P1, ThreeKeyMenuAction::Prev))
+            Some((profile_data::PlayerSide::P1, ThreeKeyMenuAction::Prev))
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            Some((profile::PlayerSide::P1, ThreeKeyMenuAction::Next))
+            Some((profile_data::PlayerSide::P1, ThreeKeyMenuAction::Next))
         }
-        VirtualAction::p1_start => Some((profile::PlayerSide::P1, ThreeKeyMenuAction::Confirm)),
+        VirtualAction::p1_start => {
+            Some((profile_data::PlayerSide::P1, ThreeKeyMenuAction::Confirm))
+        }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-            Some((profile::PlayerSide::P2, ThreeKeyMenuAction::Prev))
+            Some((profile_data::PlayerSide::P2, ThreeKeyMenuAction::Prev))
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-            Some((profile::PlayerSide::P2, ThreeKeyMenuAction::Next))
+            Some((profile_data::PlayerSide::P2, ThreeKeyMenuAction::Next))
         }
-        VirtualAction::p2_start => Some((profile::PlayerSide::P2, ThreeKeyMenuAction::Confirm)),
+        VirtualAction::p2_start => {
+            Some((profile_data::PlayerSide::P2, ThreeKeyMenuAction::Confirm))
+        }
         _ => None,
     }
 }
@@ -230,7 +234,7 @@ pub fn track_menu_lr_chord(chord: &mut MenuLrChordTracker, ev: &InputEvent) {
 }
 
 #[inline(always)]
-pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: profile::PlayerSide) -> bool {
+pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: profile_data::PlayerSide) -> bool {
     chord.both_held(side)
 }
 
@@ -352,8 +356,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{MenuLrChordTracker, menu_lr_side};
-    use crate::game::profile::PlayerSide;
     use deadsync_input::{InputEvent, InputSource, VirtualAction};
+    use deadsync_profile::PlayerSide;
     use std::time::{Duration, Instant};
 
     fn input_event(action: VirtualAction, pressed: bool, timestamp: Instant) -> InputEvent {

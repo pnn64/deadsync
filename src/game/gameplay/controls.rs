@@ -1,4 +1,5 @@
-use crate::game::profile::{self, TimingTickMode as TickMode};
+use crate::game::profile;
+use deadsync_profile::TimingTickMode as TickMode;
 use log::debug;
 use std::time::Instant;
 use winit::keyboard::KeyCode;

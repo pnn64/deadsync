@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile as profile_data;
 
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
@@ -693,15 +694,15 @@ fn move_options_selection_vertical(
     }
 }
 
-fn start_side(action: VirtualAction) -> Option<profile::PlayerSide> {
+fn start_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     match action {
-        VirtualAction::p1_start => Some(profile::PlayerSide::P1),
-        VirtualAction::p2_start => Some(profile::PlayerSide::P2),
+        VirtualAction::p1_start => Some(profile_data::PlayerSide::P1),
+        VirtualAction::p2_start => Some(profile_data::PlayerSide::P2),
         _ => None,
     }
 }
 
-fn on_start_press(state: &mut State, side: profile::PlayerSide) {
+fn on_start_press(state: &mut State, side: profile_data::PlayerSide) {
     let idx = screen_input::player_side_ix(side);
     state.start_input[idx].held = true;
     let start_input = &mut state.start_input[idx];
@@ -712,7 +713,7 @@ fn on_start_press(state: &mut State, side: profile::PlayerSide) {
     );
 }
 
-fn clear_start_hold(state: &mut State, side: profile::PlayerSide) {
+fn clear_start_hold(state: &mut State, side: profile_data::PlayerSide) {
     let idx = screen_input::player_side_ix(side);
     state.start_input[idx] = OptionsStartInput::default();
 }
@@ -750,7 +751,7 @@ fn handle_dedicated_three_key_start_nav(
     state: &mut State,
     asset_manager: &AssetManager,
     kind: SubmenuKind,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     repeated: bool,
 ) -> ScreenAction {
     if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
@@ -790,7 +791,7 @@ fn handle_dedicated_three_key_start_nav(
 pub(super) fn repeat_held_dedicated_three_key_start(
     state: &mut State,
     asset_manager: &AssetManager,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     dt: f32,
 ) -> Option<ScreenAction> {
     let OptionsView::Submenu(kind) = state.view else {
@@ -847,8 +848,8 @@ pub(super) fn handle_dedicated_three_key_options_input(
                     on_lr_release(state, 1);
                 }
             }
-            VirtualAction::p1_start => clear_start_hold(state, profile::PlayerSide::P1),
-            VirtualAction::p2_start => clear_start_hold(state, profile::PlayerSide::P2),
+            VirtualAction::p1_start => clear_start_hold(state, profile_data::PlayerSide::P1),
+            VirtualAction::p2_start => clear_start_hold(state, profile_data::PlayerSide::P2),
             _ => {}
         }
         return ScreenAction::None;

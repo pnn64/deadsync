@@ -7,9 +7,9 @@ use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::screen_center_y;
 use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
-use crate::game::profile;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
+use deadsync_profile as profile_data;
 use image::{Rgba, RgbaImage};
 use std::hash::Hasher;
 use std::path::Path;
@@ -151,8 +151,8 @@ fn row_disabled(disabled_windows: [bool; 5], kind: RowKind) -> bool {
 
 pub fn build_column_judgments_pane(
     score_info: &ScoreInfo,
-    controller: profile::PlayerSide,
-    player_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
     asset_manager: &AssetManager,
     preview_elapsed: f32,
     arrow_glow_active: bool,
@@ -261,7 +261,7 @@ pub fn build_column_judgments_pane(
     let base_y = cy - 40.0;
 
     // Judgment label column (Simply Love): frame at (50, cy-36), labels at x=-130 for P1 and -28 for P2.
-    let labels_frame_x = (if player_side == profile::PlayerSide::P1 {
+    let labels_frame_x = (if player_side == profile_data::PlayerSide::P1 {
         50.0_f32
     } else {
         -50.0_f32
@@ -269,7 +269,7 @@ pub fn build_column_judgments_pane(
     .mul_add(1.0_f32, pane_origin_x);
     let labels_frame_y = cy - 36.0;
     let labels_right_x = labels_frame_x
-        + if player_side == profile::PlayerSide::P1 {
+        + if player_side == profile_data::PlayerSide::P1 {
             -130.0
         } else {
             -28.0

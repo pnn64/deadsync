@@ -1,6 +1,6 @@
-use crate::game::profile;
 use deadsync_input::PadDir;
 pub use deadsync_input::pad_dir_from_action;
+use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 
 // Simply Love [ScreenSelectMusic] / [ScreenEvaluation] Code* metrics:
@@ -47,7 +47,7 @@ impl Default for FavoriteCodeTracker {
 impl FavoriteCodeTracker {
     /// Feed a pad direction press. Returns `Some(side)` when a code sequence
     /// completes, indicating which player's favorite should be toggled.
-    pub fn check(&mut self, dir: PadDir, timestamp: Instant) -> Option<profile::PlayerSide> {
+    pub fn check(&mut self, dir: PadDir, timestamp: Instant) -> Option<profile_data::PlayerSide> {
         let p1_result = Self::check_one(
             &CODE_P1,
             &mut self.p1_index,
@@ -63,9 +63,9 @@ impl FavoriteCodeTracker {
             timestamp,
         );
         if p1_result {
-            Some(profile::PlayerSide::P1)
+            Some(profile_data::PlayerSide::P1)
         } else if p2_result {
-            Some(profile::PlayerSide::P2)
+            Some(profile_data::PlayerSide::P2)
         } else {
             None
         }

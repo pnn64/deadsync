@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
@@ -151,7 +151,7 @@ fn prioritized_record_entries(
 }
 
 fn pane_display_entries(
-    score_side: profile::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
@@ -160,8 +160,8 @@ fn pane_display_entries(
 }
 
 fn build_records_pane(
-    controller: profile::PlayerSide,
-    score_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
     kind: RecordsPaneKind,
@@ -347,8 +347,8 @@ fn build_records_pane(
 }
 
 pub fn build_gs_records_pane(
-    controller: profile::PlayerSide,
-    score_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
@@ -362,8 +362,8 @@ pub fn build_gs_records_pane(
 }
 
 pub fn build_gs_ex_records_pane(
-    controller: profile::PlayerSide,
-    score_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
@@ -377,8 +377,8 @@ pub fn build_gs_ex_records_pane(
 }
 
 pub fn build_itl_records_pane(
-    controller: profile::PlayerSide,
-    score_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
@@ -392,8 +392,8 @@ pub fn build_itl_records_pane(
 }
 
 pub fn build_arrowcloud_records_pane(
-    controller: profile::PlayerSide,
-    score_side: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
+    score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {

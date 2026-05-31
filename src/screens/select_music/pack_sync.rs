@@ -1,5 +1,6 @@
 use super::*;
 use crate::screens::pack_sync as shared_pack_sync;
+use deadsync_profile as profile_data;
 
 pub(super) fn build_overlay(
     state: &crate::screens::pack_sync::OverlayState,
@@ -34,7 +35,7 @@ fn preferred_difficulty_index(state: &State) -> usize {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     ) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => {
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_preferred_difficulty_index
         }
         _ => state.preferred_difficulty_index,

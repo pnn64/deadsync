@@ -6,8 +6,8 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::screen_center_y;
-use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::timing::WindowCounts;
 use std::sync::{Arc, LazyLock};
@@ -193,14 +193,14 @@ fn actor_capacity(show_fa_plus_pane: bool, show_10ms_blue: bool, digits_to_fmt: 
 pub(crate) fn build_stats_pane(
     score_info: &ScoreInfo,
     pane: EvalPane,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
     asset_manager: &AssetManager,
     elapsed_s: f32,
 ) -> Vec<Actor> {
     let cy = screen_center_y();
 
     let pane_origin_x = pane_origin_x(controller);
-    let side_sign = if controller == profile::PlayerSide::P1 {
+    let side_sign = if controller == profile_data::PlayerSide::P1 {
         1.0_f32
     } else {
         -1.0_f32
@@ -254,7 +254,7 @@ pub(crate) fn build_stats_pane(
         let labels_frame_origin_x = (50.0 * side_sign).mul_add(1.0, pane_origin_x);
         let numbers_frame_origin_x = (90.0 * side_sign).mul_add(1.0, pane_origin_x);
         let frame_origin_y = cy - 24.0;
-        let number_local_x = if controller == profile::PlayerSide::P1 {
+        let number_local_x = if controller == profile_data::PlayerSide::P1 {
             64.0
         } else {
             94.0
@@ -387,7 +387,7 @@ pub(crate) fn build_stats_pane(
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
         for (i, (_, achieved, possible)) in radar_categories.iter().copied().enumerate() {
-            let label_local_x = if controller == profile::PlayerSide::P1 {
+            let label_local_x = if controller == profile_data::PlayerSide::P1 {
                 -160.0
             } else {
                 90.0
@@ -406,7 +406,7 @@ pub(crate) fn build_stats_pane(
 
             // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
             // Matches Lua: x = { P1=-180 }, aligned right.
-            let achieved_anchor_x = (if controller == profile::PlayerSide::P1 {
+            let achieved_anchor_x = (if controller == profile_data::PlayerSide::P1 {
                 -180.0_f32
             } else {
                 218.0_f32
@@ -434,7 +434,7 @@ pub(crate) fn build_stats_pane(
 
             // --- Group 2: "Slash + Possible" Numbers (Anchored at -114) ---
             // Matches Lua: x = { P1=-114 }, aligned right.
-            let possible_anchor_x = (if controller == profile::PlayerSide::P1 {
+            let possible_anchor_x = (if controller == profile_data::PlayerSide::P1 {
                 -114.0_f32
             } else {
                 286.0_f32

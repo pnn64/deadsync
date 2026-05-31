@@ -1,6 +1,7 @@
 use super::*;
 use crate::engine::audio;
-use crate::game::profile::{self as gp, PlayerSide};
+use crate::game::profile as gp;
+use deadsync_profile::{PlayStyle, PlayerSide};
 
 // ============================ Dispatchers ============================
 // Dispatch reads `row.behavior` to decide how to apply input.
@@ -15,7 +16,7 @@ use crate::game::profile::{self as gp, PlayerSide};
 pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
     let persisted_idx = super::session_persisted_player_idx();
-    let should_persist = play_style == gp::PlayStyle::Versus || player_idx == persisted_idx;
+    let should_persist = play_style == PlayStyle::Versus || player_idx == persisted_idx;
     let side = if player_idx == P1 {
         PlayerSide::P1
     } else {

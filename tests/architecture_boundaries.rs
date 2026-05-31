@@ -84,6 +84,27 @@ const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
 
 const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["ScrollSpeedSetting"];
 
+const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
+    "ActiveProfile",
+    "GameplayHudPlayerSnapshot",
+    "GameplayHudSnapshot",
+    "LocalProfileSummary",
+    "DEFAULT_BIRTH_YEAR",
+    "DEFAULT_WEIGHT_POUNDS",
+    "HUD_OFFSET_MAX",
+    "HUD_OFFSET_MIN",
+    "MINI_PERCENT_MAX",
+    "MINI_PERCENT_MIN",
+    "PLAYER_SLOTS",
+    "PLAYER_INITIALS_MAX_LEN",
+    "PlayMode",
+    "PlayStyle",
+    "PlayerSide",
+    "SPACING_PERCENT_MAX",
+    "SPACING_PERCENT_MIN",
+    "TimingTickMode",
+];
+
 const GAME_CHART_FACADE_SCAN_DIRS: &[&str] = &[
     "src/app",
     "src/config",
@@ -133,6 +154,7 @@ const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "CachedItlScore",
     "CachedScore",
     "Grade",
+    "GameplayScoreboxProfileSnapshot",
     "GrooveStatsEvalState",
     "GrooveStatsSubmitRecordBanner",
     "GrooveStatsSubmitUiStatus",
@@ -599,6 +621,57 @@ fn profile_rule_imports_do_not_use_game_facade() {
     assert!(
         failures.is_empty(),
         "profile rule types should be imported from deadsync_rules:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn game_profile_data_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in rust_files(&root.join("src/game")) {
+        scan_game_profile_data_file(&root, &file, &mut failures);
+    }
+
+    assert!(
+        failures.is_empty(),
+        "game layer profile data should be imported from deadsync_profile:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn app_helper_profile_data_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in rust_files(&root.join("src/app")) {
+        scan_game_profile_data_file(&root, &file, &mut failures);
+    }
+    for file in rust_files(&root.join("src/test_support")) {
+        scan_game_profile_data_file(&root, &file, &mut failures);
+    }
+
+    assert!(
+        failures.is_empty(),
+        "app helper and test-support profile data should be imported from deadsync_profile:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn screen_profile_data_imports_do_not_use_game_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in rust_files(&root.join("src/screens")) {
+        scan_game_profile_data_file(&root, &file, &mut failures);
+    }
+
+    assert!(
+        failures.is_empty(),
+        "screen profile data should be imported from deadsync_profile:\n{}",
         failures.join("\n")
     );
 }
@@ -1140,6 +1213,99 @@ fn count_game_profile_rule_facade_refs(text: &str, symbol: &str) -> usize {
         + count_grouped_game_rule_uses(text, "use deadsync::game::profile::{", symbol)
         + count_grouped_profile_rule_uses(text, "use crate::game::{", symbol)
         + count_grouped_profile_rule_uses(text, "use deadsync::game::{", symbol)
+}
+
+fn scan_game_profile_data_file(root: &Path, file: &Path, failures: &mut Vec<String>) {
+    let rel = rel_path(root, file);
+    if rel == "tests/architecture_boundaries.rs" {
+        return;
+    }
+    let text = fs::read_to_string(file).expect("source file should be readable");
+    for symbol in GAME_PROFILE_DATA_SYMBOLS {
+        let count = count_game_profile_data_facade_refs(&text, symbol);
+        if count != 0 {
+            failures.push(format!(
+                "{rel} references profile data {symbol} through game::profile {count} times"
+            ));
+        }
+    }
+}
+
+fn count_game_profile_data_facade_refs(text: &str, symbol: &str) -> usize {
+    count_token_refs(text, &format!("crate::game::profile::{symbol}"))
+        + count_token_refs(text, &format!("deadsync::game::profile::{symbol}"))
+        + count_grouped_game_rule_uses(text, "use crate::game::profile::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::game::profile::{", symbol)
+        + count_grouped_profile_rule_uses(text, "use crate::game::{", symbol)
+        + count_grouped_profile_rule_uses(text, "use deadsync::game::{", symbol)
+        + count_game_profile_alias_symbol_refs(text, symbol)
+}
+
+fn count_game_profile_alias_symbol_refs(text: &str, symbol: &str) -> usize {
+    let mut count = 0;
+    if imports_game_profile_alias(text) {
+        count += count_ident_prefixed_refs(text, &format!("profile::{symbol}"));
+    }
+    for alias in game_profile_aliases(text) {
+        count += count_ident_prefixed_refs(text, &format!("{alias}::{symbol}"));
+    }
+    count
+}
+
+fn imports_game_profile_alias(text: &str) -> bool {
+    count_token_refs(text, "use crate::game::profile;") > 0
+        || count_token_refs(text, "use deadsync::game::profile;") > 0
+        || grouped_use_contains_token(text, "use crate::game::{", "profile")
+        || grouped_use_contains_token(text, "use deadsync::game::{", "profile")
+}
+
+fn game_profile_aliases(text: &str) -> Vec<String> {
+    let mut aliases = Vec::new();
+    for marker in [
+        "use crate::game::profile as ",
+        "use deadsync::game::profile as ",
+        "use crate::game::profile::{self as ",
+        "use deadsync::game::profile::{self as ",
+    ] {
+        collect_aliases_after(text, marker, &mut aliases);
+    }
+    aliases
+}
+
+fn collect_aliases_after(text: &str, marker: &str, aliases: &mut Vec<String>) {
+    let mut offset = 0;
+    while let Some(index) = text[offset..].find(marker) {
+        let start = offset + index + marker.len();
+        let alias: String = text[start..]
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect();
+        let len = alias.len();
+        if !alias.is_empty() && !aliases.contains(&alias) {
+            aliases.push(alias);
+        }
+        offset = start + len;
+    }
+}
+
+fn count_ident_prefixed_refs(text: &str, token: &str) -> usize {
+    let mut count = 0;
+    let mut offset = 0;
+
+    while let Some(index) = text[offset..].find(token) {
+        let start = offset + index;
+        let end = start + token.len();
+        let before = text[..start].chars().next_back();
+        let after = text[end..].chars().next();
+        let before_ok = before.is_none_or(|ch| !ch.is_ascii_alphanumeric() && ch != '_');
+        let after_ok = after.is_none_or(|ch| !ch.is_ascii_alphanumeric() && ch != '_');
+        if before_ok && after_ok {
+            count += 1;
+        }
+        offset = end;
+    }
+
+    count
 }
 
 fn count_grouped_profile_rule_uses(text: &str, marker: &str, symbol: &str) -> usize {

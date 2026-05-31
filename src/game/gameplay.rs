@@ -5,7 +5,7 @@ use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, 
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
-use crate::game::profile::{self, TimingTickMode as TickMode};
+use crate::game::profile;
 use crate::game::scores;
 use crate::game::song;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
@@ -13,6 +13,8 @@ use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_input::{InputEdge, InputSource};
+use deadsync_profile as profile_data;
+use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{
     self as combo_rules, ComboState, apply_row_combo_state as apply_rules_row_combo_state,
 };
@@ -3018,15 +3020,15 @@ fn compute_column_scroll_dirs(
 
 #[inline(always)]
 fn player_side_for_index(
-    play_style: profile::PlayStyle,
-    session_side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    session_side: profile_data::PlayerSide,
     player_idx: usize,
-) -> profile::PlayerSide {
-    if play_style == profile::PlayStyle::Versus {
+) -> profile_data::PlayerSide {
+    if play_style == profile_data::PlayStyle::Versus {
         if player_idx == 0 {
-            profile::PlayerSide::P1
+            profile_data::PlayerSide::P1
         } else {
-            profile::PlayerSide::P2
+            profile_data::PlayerSide::P2
         }
     } else {
         session_side
@@ -3035,30 +3037,30 @@ fn player_side_for_index(
 
 #[inline(always)]
 const fn single_runtime_player_is_p2(
-    play_style: profile::PlayStyle,
-    session_side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    session_side: profile_data::PlayerSide,
 ) -> bool {
     matches!(
         (play_style, session_side),
         (
-            profile::PlayStyle::Single | profile::PlayStyle::Double,
-            profile::PlayerSide::P2
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P2
         )
     )
 }
 
 #[inline(always)]
-const fn side_index(side: profile::PlayerSide) -> usize {
+const fn side_index(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
 #[inline(always)]
 pub fn scorebox_snapshot_for_side(
     state: &State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<&score_data::CachedPlayerLeaderboardData> {
     state.scorebox_side_snapshot[side_index(side)].as_ref()
 }
@@ -3066,8 +3068,8 @@ pub fn scorebox_snapshot_for_side(
 #[inline(always)]
 pub fn scorebox_profile_for_side(
     state: &State,
-    side: profile::PlayerSide,
-) -> &scores::GameplayScoreboxProfileSnapshot {
+    side: profile_data::PlayerSide,
+) -> &score_data::GameplayScoreboxProfileSnapshot {
     &state.scorebox_profile_snapshot[side_index(side)]
 }
 
@@ -3719,7 +3721,7 @@ pub struct State {
     pub live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
-    pub scorebox_profile_snapshot: [scores::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
@@ -5206,23 +5208,23 @@ fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
     Some(cols_per_player as f32 * 64.0)
 }
 
-fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
+fn upper_density_graph_width(play_style: profile_data::PlayStyle) -> f32 {
     // zmod UpperNPSGraph parity:
     //   width = GetNotefieldWidth()
     //   if OnePlayerTwoSides then width = width / 2
     //   width = width - 30
     let mut width = match play_style {
-        profile::PlayStyle::Double => 512.0_f32,
-        profile::PlayStyle::Single | profile::PlayStyle::Versus => 256.0_f32,
+        profile_data::PlayStyle::Double => 512.0_f32,
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => 256.0_f32,
     };
-    if play_style == profile::PlayStyle::Double {
+    if play_style == profile_data::PlayStyle::Double {
         width *= 0.5_f32;
     }
     (width - 30.0_f32).max(0.0_f32)
 }
 
 fn step_stats_density_graph_width(
-    play_style: profile::PlayStyle,
+    play_style: profile_data::PlayStyle,
     cols_per_player: usize,
     num_players: usize,
     screen_w: f32,
@@ -5232,9 +5234,9 @@ fn step_stats_density_graph_width(
 ) -> f32 {
     let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
     let note_field_is_centered = match play_style {
-        profile::PlayStyle::Double => true,
-        profile::PlayStyle::Single => num_players == 1 && center_1player_notefield,
-        profile::PlayStyle::Versus => false,
+        profile_data::PlayStyle::Double => true,
+        profile_data::PlayStyle::Single => num_players == 1 && center_1player_notefield,
+        profile_data::PlayStyle::Versus => false,
     };
 
     let mut sidepane_width = screen_w * 0.5_f32;
@@ -5250,7 +5252,7 @@ fn step_stats_density_graph_width(
 
     // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
     // to 95% of the side pane and positions it in the right dark pane.
-    if play_style == profile::PlayStyle::Double {
+    if play_style == profile_data::PlayStyle::Double {
         return (sidepane_width * 0.95_f32).max(1.0_f32);
     }
     sidepane_width.round().max(1.0_f32)
@@ -5286,9 +5288,9 @@ pub fn init(
     let player_side = profile::get_session_player_side();
     let p2_runtime_player = single_runtime_player_is_p2(play_style, player_side);
     let (cols_per_player, num_players, num_cols) = match play_style {
-        profile::PlayStyle::Single => (4, 1, 4),
-        profile::PlayStyle::Double => (8, 1, 8),
-        profile::PlayStyle::Versus => (4, 2, 8),
+        profile_data::PlayStyle::Single => (4, 1, 4),
+        profile_data::PlayStyle::Double => (8, 1, 8),
+        profile_data::PlayStyle::Versus => (4, 2, 8),
     };
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
@@ -6077,16 +6079,15 @@ pub fn init(
             .max(personal_best.unwrap_or(0.0));
     }
 
-    let mut scorebox_profile_snapshot: [scores::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
-        std::array::from_fn(|_| scores::GameplayScoreboxProfileSnapshot::default());
+    let mut scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
+        std::array::from_fn(|_| score_data::GameplayScoreboxProfileSnapshot::default());
     for p in 0..num_players {
         let side = player_side_for_index(play_style, player_side, p);
-        scorebox_profile_snapshot[side_index(side)] =
-            scores::GameplayScoreboxProfileSnapshot::from_profile(
-                &player_profiles[p],
-                profile::is_session_side_joined(side),
-                profile::active_local_profile_id_for_side(side),
-            );
+        scorebox_profile_snapshot[side_index(side)] = scores::scorebox_profile_snapshot(
+            &player_profiles[p],
+            profile::is_session_side_joined(side),
+            profile::active_local_profile_id_for_side(side),
+        );
     }
 
     let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
@@ -8763,6 +8764,7 @@ mod tests {
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
     use deadsync_core::note::NoteType;
     use deadsync_input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
+    use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{
@@ -8786,7 +8788,7 @@ mod tests {
     #[test]
     fn step_stats_density_graph_width_matches_sl_double() {
         let width = step_stats_density_graph_width(
-            profile::PlayStyle::Double,
+            profile_data::PlayStyle::Double,
             8,
             1,
             854.0,
@@ -8810,8 +8812,8 @@ mod tests {
     }
 
     struct SessionRestore {
-        play_style: profile::PlayStyle,
-        player_side: profile::PlayerSide,
+        play_style: profile_data::PlayStyle,
+        player_side: profile_data::PlayerSide,
         p1_joined: bool,
         p2_joined: bool,
     }
@@ -8825,8 +8827,8 @@ mod tests {
     }
 
     fn with_session<R>(
-        play_style: profile::PlayStyle,
-        player_side: profile::PlayerSide,
+        play_style: profile_data::PlayStyle,
+        player_side: profile_data::PlayerSide,
         p1_joined: bool,
         p2_joined: bool,
         f: impl FnOnce() -> R,
@@ -8835,8 +8837,8 @@ mod tests {
         let _restore = SessionRestore {
             play_style: profile::get_session_play_style(),
             player_side: profile::get_session_player_side(),
-            p1_joined: profile::is_session_side_joined(profile::PlayerSide::P1),
-            p2_joined: profile::is_session_side_joined(profile::PlayerSide::P2),
+            p1_joined: profile::is_session_side_joined(profile_data::PlayerSide::P1),
+            p2_joined: profile::is_session_side_joined(profile_data::PlayerSide::P2),
         };
         profile::set_session_play_style(play_style);
         profile::set_session_player_side(player_side);
@@ -9200,8 +9202,8 @@ return Def.ActorFrame{}
                 player_profiles[1].scroll_speed = ScrollSpeedSetting::CMod(516.0);
 
                 with_session(
-                    profile::PlayStyle::Single,
-                    profile::PlayerSide::P1,
+                    profile_data::PlayStyle::Single,
+                    profile_data::PlayerSide::P1,
                     true,
                     false,
                     || {
@@ -9376,32 +9378,32 @@ return Def.ActorFrame{}
     #[test]
     fn single_runtime_p2_helper_includes_double() {
         assert!(!single_runtime_player_is_p2(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1
         ));
         assert!(single_runtime_player_is_p2(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P2
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P2
         ));
         assert!(!single_runtime_player_is_p2(
-            profile::PlayStyle::Double,
-            profile::PlayerSide::P1
+            profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P1
         ));
         assert!(single_runtime_player_is_p2(
-            profile::PlayStyle::Double,
-            profile::PlayerSide::P2
+            profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P2
         ));
         assert!(!single_runtime_player_is_p2(
-            profile::PlayStyle::Versus,
-            profile::PlayerSide::P2
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P2
         ));
     }
 
     #[test]
     fn gameplay_init_uses_p2_modifiers_for_double_p2() {
         with_session(
-            profile::PlayStyle::Double,
-            profile::PlayerSide::P2,
+            profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P2,
             false,
             true,
             || {
@@ -9438,8 +9440,8 @@ return Def.ActorFrame{}
     #[test]
     fn gameplay_handle_input_uses_p2_menu_buttons_for_double_p2() {
         with_session(
-            profile::PlayStyle::Double,
-            profile::PlayerSide::P2,
+            profile_data::PlayStyle::Double,
+            profile_data::PlayerSide::P2,
             false,
             true,
             || {
@@ -9459,8 +9461,8 @@ return Def.ActorFrame{}
     #[test]
     fn gameplay_handle_input_uses_p2_menu_buttons_for_versus() {
         with_session(
-            profile::PlayStyle::Versus,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P1,
             true,
             true,
             || {
@@ -9484,8 +9486,8 @@ return Def.ActorFrame{}
     #[test]
     fn gameplay_lane_input_keeps_back_hold_active() {
         with_session(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
             true,
             false,
             || {
@@ -9522,8 +9524,8 @@ return Def.ActorFrame{}
     #[test]
     fn delayed_back_false_exits_song_on_first_press() {
         with_session(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
             true,
             false,
             || {
@@ -9560,8 +9562,8 @@ return Def.ActorFrame{}
     #[test]
     fn delayed_back_true_preserves_hold_arming() {
         with_session(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
             true,
             false,
             || {
@@ -10383,8 +10385,8 @@ return Def.ActorFrame{}
     #[test]
     fn jump_row_finalization_uses_row_judgment_for_error_bar_hud() {
         with_session(
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
             true,
             false,
             || {

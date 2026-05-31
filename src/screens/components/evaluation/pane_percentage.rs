@@ -3,8 +3,8 @@ use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::MachineFont;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
+use deadsync_profile as profile_data;
 
 use super::utils::pane_origin_x;
 
@@ -29,7 +29,7 @@ const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> 
 pub(crate) fn build_pane_percentage_display(
     score_info: &ScoreInfo,
     pane: EvalPane,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
 ) -> Vec<Actor> {
     if matches!(
         pane,
@@ -64,7 +64,7 @@ pub(crate) fn build_pane_percentage_display(
         COMPANION_SCORE_ZOOM_MEGA,
     );
 
-    let (bg_align_x, bg_x, percent_x) = if controller == profile::PlayerSide::P1 {
+    let (bg_align_x, bg_x, percent_x) = if controller == profile_data::PlayerSide::P1 {
         (0.0, -150.0, 1.5)
     } else {
         (1.0, 150.0, 141.0)
@@ -146,7 +146,7 @@ pub(crate) fn build_pane_percentage_display(
             // JudgmentLabels.lua and JudgmentNumbers.lua. These are the final
             // pane-local anchors after converting the label frame and the
             // number frame's 0.8 zoom into this shared percentage frame.
-            let (bottom_label_x, bottom_value_x) = if controller == profile::PlayerSide::P1 {
+            let (bottom_label_x, bottom_value_x) = if controller == profile_data::PlayerSide::P1 {
                 (-110.0, -1.2)
             } else {
                 (32.0, 138.8)
@@ -190,7 +190,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
             ));
 
-            let bottom_value_x = if controller == profile::PlayerSide::P1 {
+            let bottom_value_x = if controller == profile_data::PlayerSide::P1 {
                 0.0
             } else {
                 percent_x

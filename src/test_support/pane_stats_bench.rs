@@ -1,11 +1,11 @@
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
-use crate::game::profile;
 use crate::screens::components::evaluation::pane_stats;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use crate::test_support::compose_scenarios;
 use deadsync_chart::SongData;
 use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{HistogramMs, TimingStats, WindowCounts};
 use deadsync_score::{Grade, GrooveStatsEvalState, ItlEvalState};
@@ -17,7 +17,7 @@ pub const SCENARIO_NAME: &str = "pane-stats";
 pub struct PaneStatsBenchFixture {
     score_info: ScoreInfo,
     pane: EvalPane,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
     asset_manager: AssetManager,
     elapsed_s: f32,
 }
@@ -43,7 +43,7 @@ pub fn fixture() -> PaneStatsBenchFixture {
     PaneStatsBenchFixture {
         score_info: bench_score_info(),
         pane: EvalPane::HardEx,
-        controller: profile::PlayerSide::P1,
+        controller: profile_data::PlayerSide::P1,
         asset_manager,
         elapsed_s: 0.41,
     }
@@ -58,7 +58,7 @@ fn bench_score_info() -> ScoreInfo {
         song,
         chart,
         course_graph_stages: Vec::new(),
-        side: profile::PlayerSide::P1,
+        side: profile_data::PlayerSide::P1,
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,
         disqualified: false,

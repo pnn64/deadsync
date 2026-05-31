@@ -23,8 +23,12 @@ use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use deadsync_online::arrowcloud as ac_api;
 use deadsync_online::groovestats as gs_api;
+use deadsync_profile as profile_data;
 
-const ALL_SIDES: [profile::PlayerSide; 2] = [profile::PlayerSide::P1, profile::PlayerSide::P2];
+const ALL_SIDES: [profile_data::PlayerSide; 2] = [
+    profile_data::PlayerSide::P1,
+    profile_data::PlayerSide::P2,
+];
 
 /// Returns `true` when the ArrowCloud QR-login screen should be
 /// auto-shown after Select Profile, given the current pref and live
@@ -87,19 +91,19 @@ fn any_joined_local_side_missing_key() -> bool {
 }
 
 #[inline]
-fn side_ix(side: profile::PlayerSide) -> usize {
+fn side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
 #[inline]
-fn side_label(kind: BackendKind, side: profile::PlayerSide) -> Arc<str> {
+fn side_label(kind: BackendKind, side: profile_data::PlayerSide) -> Arc<str> {
     let section = i18n_section(kind);
     match side {
-        profile::PlayerSide::P1 => tr(section, "Player1"),
-        profile::PlayerSide::P2 => tr(section, "Player2"),
+        profile_data::PlayerSide::P1 => tr(section, "Player1"),
+        profile_data::PlayerSide::P2 => tr(section, "Player2"),
     }
 }
 
@@ -187,7 +191,7 @@ impl SlotState {
 }
 
 pub(crate) struct LoginSlot {
-    pub(crate) side: profile::PlayerSide,
+    pub(crate) side: profile_data::PlayerSide,
     pub(crate) state: SlotState,
     /// Which online service this slot is talking to.  Drives backend
     /// dispatch in [`apply_login_msg`].
@@ -252,7 +256,7 @@ pub fn create_arrowcloud_login_ui_for_profile(
         run_arrowcloud_login_worker(tx, cancel_for_thread);
     });
     let p1_slot = LoginSlot {
-        side: profile::PlayerSide::P1,
+        side: profile_data::PlayerSide::P1,
         state: SlotState::Starting,
         kind: BackendKind::ArrowCloud,
         display_name,
@@ -261,7 +265,7 @@ pub fn create_arrowcloud_login_ui_for_profile(
         rx: Some(rx),
     };
     let p2_slot = LoginSlot {
-        side: profile::PlayerSide::P2,
+        side: profile_data::PlayerSide::P2,
         state: SlotState::NotJoined,
         kind: BackendKind::ArrowCloud,
         display_name: String::new(),
@@ -284,16 +288,16 @@ fn build_initial_slots<F>(
     mut spawn: F,
 ) -> [LoginSlot; 2]
 where
-    F: FnMut(profile::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
+    F: FnMut(profile_data::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
 {
-    let p1 = build_one_slot(profile::PlayerSide::P1, kind, &mut spawn);
-    let p2 = build_one_slot(profile::PlayerSide::P2, kind, &mut spawn);
+    let p1 = build_one_slot(profile_data::PlayerSide::P1, kind, &mut spawn);
+    let p2 = build_one_slot(profile_data::PlayerSide::P2, kind, &mut spawn);
     [p1, p2]
 }
 
-fn build_one_slot<F>(side: profile::PlayerSide, kind: BackendKind, spawn: &mut F) -> LoginSlot
+fn build_one_slot<F>(side: profile_data::PlayerSide, kind: BackendKind, spawn: &mut F) -> LoginSlot
 where
-    F: FnMut(profile::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
+    F: FnMut(profile_data::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
 {
     if !profile::is_session_side_joined(side) {
         return LoginSlot {
@@ -456,7 +460,7 @@ pub(crate) fn build_qr_login_overlay_actors(
 
     let cx = screen_center_x();
     let cy = screen_center_y();
-    let visible_sides: Vec<profile::PlayerSide> = ALL_SIDES
+    let visible_sides: Vec<profile_data::PlayerSide> = ALL_SIDES
         .iter()
         .copied()
         .filter(|s| ui.slots[side_ix(*s)].state.is_visible())
@@ -787,8 +791,8 @@ pub fn create_groovestats_login_ui() -> QrLoginUiState {
             verification_url: gs_api::qr_login_url(&uuid, gs_side_byte(side)),
         });
         match side {
-            profile::PlayerSide::P1 => p1_tx = Some(tx),
-            profile::PlayerSide::P2 => p2_tx = Some(tx),
+            profile_data::PlayerSide::P1 => p1_tx = Some(tx),
+            profile_data::PlayerSide::P2 => p2_tx = Some(tx),
         }
     });
     if p1_tx.is_some() || p2_tx.is_some() {
@@ -823,7 +827,7 @@ pub fn create_groovestats_login_ui_for_profile(
     });
     drop(tx);
     let p1_slot = LoginSlot {
-        side: profile::PlayerSide::P1,
+        side: profile_data::PlayerSide::P1,
         state: SlotState::Starting,
         kind: BackendKind::GrooveStats,
         display_name,
@@ -832,7 +836,7 @@ pub fn create_groovestats_login_ui_for_profile(
         rx: Some(rx),
     };
     let p2_slot = LoginSlot {
-        side: profile::PlayerSide::P2,
+        side: profile_data::PlayerSide::P2,
         state: SlotState::NotJoined,
         kind: BackendKind::GrooveStats,
         display_name: String::new(),
@@ -847,10 +851,10 @@ pub fn create_groovestats_login_ui_for_profile(
 }
 
 #[inline]
-fn gs_side_byte(side: profile::PlayerSide) -> u8 {
+fn gs_side_byte(side: profile_data::PlayerSide) -> u8 {
     match side {
-        profile::PlayerSide::P1 => 1,
-        profile::PlayerSide::P2 => 2,
+        profile_data::PlayerSide::P1 => 1,
+        profile_data::PlayerSide::P2 => 2,
     }
 }
 
@@ -877,7 +881,7 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
 
-    fn slot(side: profile::PlayerSide, state: SlotState) -> LoginSlot {
+    fn slot(side: profile_data::PlayerSide, state: SlotState) -> LoginSlot {
         LoginSlot {
             side,
             state,
@@ -894,8 +898,8 @@ mod tests {
         let ui = QrLoginUiState {
             cancel: Arc::new(AtomicBool::new(false)),
             slots: [
-                slot(profile::PlayerSide::P1, SlotState::Success),
-                slot(profile::PlayerSide::P2, SlotState::NotJoined),
+                slot(profile_data::PlayerSide::P1, SlotState::Success),
+                slot(profile_data::PlayerSide::P2, SlotState::NotJoined),
             ],
         };
         assert!(login_overlay_is_terminal(&ui));
@@ -906,9 +910,9 @@ mod tests {
         let ui = QrLoginUiState {
             cancel: Arc::new(AtomicBool::new(false)),
             slots: [
-                slot(profile::PlayerSide::P1, SlotState::Success),
+                slot(profile_data::PlayerSide::P1, SlotState::Success),
                 slot(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     SlotState::Pending {
                         short_code: "X".into(),
                         verification_url: "u".into(),
@@ -921,7 +925,7 @@ mod tests {
 
     #[test]
     fn apply_started_message_moves_slot_to_pending() {
-        let mut s = slot(profile::PlayerSide::P1, SlotState::Starting);
+        let mut s = slot(profile_data::PlayerSide::P1, SlotState::Starting);
         apply_login_msg(
             &mut s,
             LoginMsg::Started {
@@ -939,7 +943,7 @@ mod tests {
     fn apply_failed_message_clears_rx_and_records_reason() {
         let (_tx, rx) = mpsc::channel::<LoginMsg>();
         let mut s = LoginSlot {
-            side: profile::PlayerSide::P2,
+            side: profile_data::PlayerSide::P2,
             state: SlotState::Pending {
                 short_code: "X".into(),
                 verification_url: "u".into(),
@@ -967,8 +971,8 @@ mod tests {
             let _ui = QrLoginUiState {
                 cancel: Arc::clone(&cancel),
                 slots: [
-                    slot(profile::PlayerSide::P1, SlotState::Starting),
-                    slot(profile::PlayerSide::P2, SlotState::NotJoined),
+                    slot(profile_data::PlayerSide::P1, SlotState::Starting),
+                    slot(profile_data::PlayerSide::P2, SlotState::NotJoined),
                 ],
             };
             assert!(!cancel.load(Ordering::Relaxed));
@@ -1066,7 +1070,7 @@ mod tests {
         // without panicking, regardless of slot.kind.
         let (_tx, rx) = mpsc::channel::<LoginMsg>();
         let mut s = LoginSlot {
-            side: profile::PlayerSide::P1,
+            side: profile_data::PlayerSide::P1,
             state: SlotState::Pending {
                 short_code: String::new(),
                 verification_url: "u".into(),

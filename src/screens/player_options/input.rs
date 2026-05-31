@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile as profile_data;
 
 pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ScreenAction> {
     // Keep options-screen noteskin previews on a stable clock.
@@ -418,11 +419,11 @@ pub(super) fn clear_nav_hold(state: &mut State, player_idx: usize) {
 }
 
 #[inline(always)]
-pub(super) fn player_side_for_idx(player_idx: usize) -> crate::game::profile::PlayerSide {
+pub(super) fn player_side_for_idx(player_idx: usize) -> profile_data::PlayerSide {
     if player_idx == P2 {
-        crate::game::profile::PlayerSide::P2
+        profile_data::PlayerSide::P2
     } else {
-        crate::game::profile::PlayerSide::P1
+        profile_data::PlayerSide::P1
     }
 }
 

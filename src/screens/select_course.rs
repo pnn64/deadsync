@@ -24,6 +24,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -1350,7 +1351,7 @@ fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) 
 
 fn handle_rating_dir(
     state: &mut State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
@@ -1359,11 +1360,11 @@ fn handle_rating_dir(
         return ScreenAction::None;
     }
     let (last_dir, last_time) = match side {
-        profile::PlayerSide::P1 => (
+        profile_data::PlayerSide::P1 => (
             &mut state.last_rating_nav_dir_p1,
             &mut state.last_rating_nav_time_p1,
         ),
-        profile::PlayerSide::P2 => (
+        profile_data::PlayerSide::P2 => (
             &mut state.last_rating_nav_dir_p2,
             &mut state.last_rating_nav_time_p2,
         ),
@@ -1624,7 +1625,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     let play_style = profile::get_session_play_style();
-    if play_style == profile::PlayStyle::Versus {
+    if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 handle_wheel_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
@@ -1640,28 +1641,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_rating_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_rating_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_rating_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_rating_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
@@ -1678,7 +1679,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     match profile::get_session_player_side() {
-        profile::PlayerSide::P1 => match ev.action {
+        profile_data::PlayerSide::P1 => match ev.action {
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 handle_wheel_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
@@ -1687,14 +1688,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_rating_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_rating_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
@@ -1706,7 +1707,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => ScreenAction::None,
         },
-        profile::PlayerSide::P2 => match ev.action {
+        profile_data::PlayerSide::P2 => match ev.action {
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
                 handle_wheel_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
             }
@@ -1715,14 +1716,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_rating_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_rating_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
@@ -1985,7 +1986,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = profile::get_session_player_side();
     let play_style = profile::get_session_play_style();
-    let is_p2_single = play_style == profile::PlayStyle::Single && side == profile::PlayerSide::P2;
+    let is_p2_single = play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
     let selected_rating = selected_meta
@@ -2013,7 +2014,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         state.session_elapsed,
     )));
 
-    let mode_text = gs_scorebox::select_music_mode_text(profile::PlayerSide::P1, None);
+    let mode_text = gs_scorebox::select_music_mode_text(profile_data::PlayerSide::P1, None);
     actors.push(mode_pads::build_label(mode_text));
     actors.extend(mode_pads::build());
 
@@ -2113,9 +2114,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let pane_sel_col =
         selected_diff_col.unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
     let pane_side = if is_p2_single {
-        profile::PlayerSide::P2
+        profile_data::PlayerSide::P2
     } else {
-        profile::PlayerSide::P1
+        profile_data::PlayerSide::P1
     };
     let pane_profile = profile::get_for_side(pane_side);
     let pane_cx = if is_p2_single {

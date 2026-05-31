@@ -1,10 +1,11 @@
 use super::*;
+use deadsync_profile as profile_data;
 
 #[inline(always)]
-pub(super) fn noteskin_cols_per_player(play_style: crate::game::profile::PlayStyle) -> usize {
+pub(super) fn noteskin_cols_per_player(play_style: profile_data::PlayStyle) -> usize {
     match play_style {
-        crate::game::profile::PlayStyle::Double => 8,
-        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Versus => 4,
+        profile_data::PlayStyle::Double => 8,
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => 4,
     }
 }
 

@@ -4,6 +4,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_width, widescale};
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
+use deadsync_profile as profile_data;
 
 pub fn build_label(text: String) -> Actor {
     act!(text:
@@ -18,12 +19,12 @@ pub fn build_label(text: String) -> Actor {
 }
 
 fn states() -> [bool; 2] {
-    if profile::get_session_play_style() == profile::PlayStyle::Double {
+    if profile::get_session_play_style() == profile_data::PlayStyle::Double {
         return [true, true];
     }
     [
-        profile::is_session_side_joined(profile::PlayerSide::P1),
-        profile::is_session_side_joined(profile::PlayerSide::P2),
+        profile::is_session_side_joined(profile_data::PlayerSide::P1),
+        profile::is_session_side_joined(profile_data::PlayerSide::P2),
     ]
 }
 

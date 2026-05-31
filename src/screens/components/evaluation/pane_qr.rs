@@ -2,9 +2,9 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_profile as profile_data;
 
 use super::utils::pane_origin_x;
 
@@ -15,7 +15,10 @@ const GS_QR_HELP_TEXT_VALID: &str =
     "Scan with your phone\nto upload this score\nto your GrooveStats\naccount.";
 const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
 
-pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide) -> Vec<Actor> {
+pub fn build_gs_qr_pane(
+    score_info: &ScoreInfo,
+    controller: profile_data::PlayerSide,
+) -> Vec<Actor> {
     let gs_valid = score_info.groovestats.valid;
     let help_text = if gs_valid {
         GS_QR_HELP_TEXT_VALID.to_string()

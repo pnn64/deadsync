@@ -2,8 +2,8 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_profile as profile_data;
 use deadsync_rules::timing::ArrowTimingBucket;
 
 use super::pane_column::build_pane3_arrow_preview;
@@ -29,7 +29,7 @@ fn fmt_ms(v: f32) -> String {
 /// arrow directions plus the player's left and right foot.
 pub fn build_timing_arrows_pane(
     score_info: &ScoreInfo,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
     preview_elapsed: f32,
 ) -> Vec<Actor> {
     let arrows = &score_info.arrow_timing;

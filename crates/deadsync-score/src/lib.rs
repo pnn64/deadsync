@@ -149,6 +149,83 @@ pub struct CachedPlayerLeaderboardData {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct GameplayScoreboxProfileSnapshot {
+    pub display_scorebox: bool,
+    pub gs_active: bool,
+    pub show_ex_score: bool,
+    api_key: String,
+    arrowcloud_api_key: String,
+    include_arrowcloud: bool,
+    gs_username: String,
+    persistent_profile_id: Option<String>,
+    auto_profile_id: Option<String>,
+    should_auto_populate: bool,
+}
+
+impl GameplayScoreboxProfileSnapshot {
+    pub fn new(
+        display_scorebox: bool,
+        gs_active: bool,
+        show_ex_score: bool,
+        api_key: String,
+        arrowcloud_api_key: String,
+        include_arrowcloud: bool,
+        gs_username: String,
+        persistent_profile_id: Option<String>,
+        auto_profile_id: Option<String>,
+        should_auto_populate: bool,
+    ) -> Self {
+        Self {
+            display_scorebox,
+            gs_active,
+            show_ex_score,
+            api_key,
+            arrowcloud_api_key,
+            include_arrowcloud,
+            gs_username,
+            persistent_profile_id,
+            auto_profile_id,
+            should_auto_populate,
+        }
+    }
+
+    #[inline(always)]
+    pub fn api_key(&self) -> &str {
+        self.api_key.as_str()
+    }
+
+    #[inline(always)]
+    pub fn arrowcloud_api_key(&self) -> &str {
+        self.arrowcloud_api_key.as_str()
+    }
+
+    #[inline(always)]
+    pub const fn include_arrowcloud(&self) -> bool {
+        self.include_arrowcloud
+    }
+
+    #[inline(always)]
+    pub fn gs_username(&self) -> &str {
+        self.gs_username.as_str()
+    }
+
+    #[inline(always)]
+    pub fn persistent_profile_id(&self) -> Option<&str> {
+        self.persistent_profile_id.as_deref()
+    }
+
+    #[inline(always)]
+    pub fn auto_profile_id(&self) -> Option<&str> {
+        self.auto_profile_id.as_deref()
+    }
+
+    #[inline(always)]
+    pub const fn should_auto_populate(&self) -> bool {
+        self.should_auto_populate
+    }
+}
+
 /// Maximum number of attempts before the backoff schedule saturates. For
 /// auto-retryable statuses this is also the auto-retry budget. For manual-only
 /// statuses the cooldown caps here and stays there for subsequent failures.
@@ -804,5 +881,20 @@ mod tests {
         assert!(!state.valid);
         assert!(state.reason_lines.is_empty());
         assert!(state.manual_qr_url.is_none());
+    }
+
+    #[test]
+    fn scorebox_profile_snapshot_defaults_to_inactive() {
+        let snapshot = GameplayScoreboxProfileSnapshot::default();
+        assert!(!snapshot.display_scorebox);
+        assert!(!snapshot.gs_active);
+        assert!(!snapshot.show_ex_score);
+        assert!(snapshot.api_key().is_empty());
+        assert!(snapshot.arrowcloud_api_key().is_empty());
+        assert!(!snapshot.include_arrowcloud());
+        assert!(snapshot.gs_username().is_empty());
+        assert!(snapshot.persistent_profile_id().is_none());
+        assert!(snapshot.auto_profile_id().is_none());
+        assert!(!snapshot.should_auto_populate());
     }
 }

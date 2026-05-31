@@ -13,6 +13,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
@@ -83,10 +84,10 @@ const fn choice_cursor_label_width(choice: Choice) -> f32 {
 }
 
 #[inline(always)]
-const fn choice_play_mode(choice: Choice) -> crate::game::profile::PlayMode {
+const fn choice_play_mode(choice: Choice) -> profile_data::PlayMode {
     match choice {
-        Choice::Regular => crate::game::profile::PlayMode::Regular,
-        Choice::Marathon => crate::game::profile::PlayMode::Marathon,
+        Choice::Regular => profile_data::PlayMode::Regular,
+        Choice::Marathon => profile_data::PlayMode::Marathon,
     }
 }
 
@@ -116,8 +117,8 @@ pub fn init() -> State {
 
 pub fn on_enter(state: &mut State) {
     state.selected_index = match crate::game::profile::get_session_play_mode() {
-        crate::game::profile::PlayMode::Regular => 0,
-        crate::game::profile::PlayMode::Marathon => 1,
+        profile_data::PlayMode::Regular => 0,
+        profile_data::PlayMode::Marathon => 1,
     };
     // Match SL behavior where switching mode requeues FirstLoopRegular/Marathon.
     state.demo_time = 0.0;
@@ -346,8 +347,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -357,14 +358,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
-    let p2_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
-    let p1_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P1);
-    let p2_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
+    let p1_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");

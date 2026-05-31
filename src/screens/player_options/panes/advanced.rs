@@ -13,6 +13,7 @@ use super::super::state::{
 };
 use super::*;
 use crate::game::profile as gp;
+use deadsync_profile::PlayerSide;
 
 // =============================== Bindings ===============================
 
@@ -673,7 +674,7 @@ fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut gp::Profile, _b: u32, mas
     p.split_15_10ms = mask.contains(FaPlusMask::SPLIT_15_10MS);
 }
 
-fn persist_fa_plus(s: gp::PlayerSide, p: &gp::Profile) {
+fn persist_fa_plus(s: PlayerSide, p: &gp::Profile) {
     gp::update_show_fa_plus_window_for_side(s, p.show_fa_plus_window);
     gp::update_show_ex_score_for_side(s, p.show_ex_score);
     gp::update_show_hard_ex_score_for_side(s, p.show_hard_ex_score);

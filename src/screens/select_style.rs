@@ -11,6 +11,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 
 /* ------------------------------ layout ------------------------------- */
 const CHOICE_COUNT: usize = 3;
@@ -61,11 +62,11 @@ fn choice_label(choice: Choice) -> String {
 }
 
 #[inline(always)]
-const fn choice_play_style(choice: Choice) -> crate::game::profile::PlayStyle {
+const fn choice_play_style(choice: Choice) -> profile_data::PlayStyle {
     match choice {
-        Choice::Single => crate::game::profile::PlayStyle::Single,
-        Choice::Versus => crate::game::profile::PlayStyle::Versus,
-        Choice::Double => crate::game::profile::PlayStyle::Double,
+        Choice::Single => profile_data::PlayStyle::Single,
+        Choice::Versus => profile_data::PlayStyle::Versus,
+        Choice::Double => profile_data::PlayStyle::Double,
     }
 }
 
@@ -283,8 +284,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -294,14 +295,10 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
-    let p2_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
-    let p1_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P1);
-    let p2_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
+    let p1_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");

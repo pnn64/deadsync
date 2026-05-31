@@ -39,6 +39,7 @@ use crate::screens::{
 use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
@@ -853,20 +854,20 @@ impl ExitCodeSideState {
 
 impl ExitCodeTracker {
     #[inline(always)]
-    fn side_mut(&mut self, side: profile::PlayerSide) -> &mut ExitCodeSideState {
+    fn side_mut(&mut self, side: profile_data::PlayerSide) -> &mut ExitCodeSideState {
         match side {
-            profile::PlayerSide::P1 => &mut self.p1,
-            profile::PlayerSide::P2 => &mut self.p2,
+            profile_data::PlayerSide::P1 => &mut self.p1,
+            profile_data::PlayerSide::P2 => &mut self.p2,
         }
     }
 
     #[inline(always)]
-    fn reset(&mut self, side: profile::PlayerSide) {
+    fn reset(&mut self, side: profile_data::PlayerSide) {
         self.side_mut(side).reset();
     }
 
     #[inline(always)]
-    fn check(&mut self, side: profile::PlayerSide, dir: NavDirection, timestamp: Instant) -> bool {
+    fn check(&mut self, side: profile_data::PlayerSide, dir: NavDirection, timestamp: Instant) -> bool {
         self.side_mut(side).check(dir, timestamp)
     }
 }
@@ -1195,7 +1196,7 @@ fn cached_score_exists(score: score_data::CachedScore) -> bool {
 }
 
 fn song_has_cached_score(song: &SongData) -> bool {
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
@@ -1212,7 +1213,7 @@ fn song_has_cached_score(song: &SongData) -> bool {
 
 fn joined_local_profile_ids() -> Vec<String> {
     let mut profile_ids = Vec::with_capacity(2);
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
@@ -1751,7 +1752,7 @@ fn build_folder_stats_summary(
     group_name: &str,
     target_chart_type: &str,
     difficulty: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> FolderStatsSummary {
     let mut summary = FolderStatsSummary::default();
     let mut in_group = false;
@@ -2456,7 +2457,7 @@ fn build_top_grades_grouped_entries(
             if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
                 continue;
             }
-            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                 let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
                     continue;
                 };
@@ -2684,7 +2685,7 @@ fn build_recent_grouped_entries_for_profile(
 fn build_top_grades_grouped_entries_for_side(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
@@ -2768,14 +2769,14 @@ fn build_favorites_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<M
         .collect();
 
     // Collect all chart hashes that are favorited by any joined player
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
 
     let mut favorite_songs: Vec<Arc<SongData>> = Vec::new();
     for song in &songs {
         let is_fav = song.charts.iter().any(|chart| {
-            (p1_joined && profile::is_favorite(profile::PlayerSide::P1, &chart.short_hash))
-                || (p2_joined && profile::is_favorite(profile::PlayerSide::P2, &chart.short_hash))
+            (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &chart.short_hash))
+                || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &chart.short_hash))
         });
         if is_fav {
             favorite_songs.push(song.clone());
@@ -3070,7 +3071,7 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
     }
 
     let mut seen_profiles = HashSet::new();
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
             continue;
         };
@@ -3441,8 +3442,8 @@ pub fn init() -> State {
     let top_grades_entries = build_top_grades_grouped_entries(&all_entries, target_chart_type);
 
     // Per-player sort entries (keyed by profile ID for popularity/recent, by side for grades)
-    let p1_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P1);
-    let p2_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P2);
+    let p1_profile_id = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1);
+    let p2_profile_id = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2);
 
     let popularity_p1_entries = p1_profile_id
         .as_deref()
@@ -3463,12 +3464,12 @@ pub fn init() -> State {
     let top_grades_p1_entries = build_top_grades_grouped_entries_for_side(
         &all_entries,
         target_chart_type,
-        profile::PlayerSide::P1,
+        profile_data::PlayerSide::P1,
     );
     let top_grades_p2_entries = build_top_grades_grouped_entries_for_side(
         &all_entries,
         target_chart_type,
-        profile::PlayerSide::P2,
+        profile_data::PlayerSide::P2,
     );
     let favorites_entries = build_favorites_grouped_entries(&all_entries);
     let playlist_library = build_playlist_library(&all_entries);
@@ -4021,7 +4022,7 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
     nav_hold_started(state)
 }
 
-fn toggle_favorite_for_selected_song(state: &mut State, side: profile::PlayerSide) {
+fn toggle_favorite_for_selected_song(state: &mut State, side: profile_data::PlayerSide) {
     if let Some(song) = selected_song_arc(state) {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(chart) =
@@ -4115,7 +4116,7 @@ const fn wheel_lr_dir(dir: PadDir) -> Option<NavDirection> {
 }
 
 #[inline(always)]
-const fn input_side(action: VirtualAction) -> Option<profile::PlayerSide> {
+const fn input_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     match action {
         VirtualAction::p1_up
         | VirtualAction::p1_down
@@ -4129,7 +4130,7 @@ const fn input_side(action: VirtualAction) -> Option<profile::PlayerSide> {
         | VirtualAction::p1_menu_right
         | VirtualAction::p1_select
         | VirtualAction::p1_operator
-        | VirtualAction::p1_restart => Some(profile::PlayerSide::P1),
+        | VirtualAction::p1_restart => Some(profile_data::PlayerSide::P1),
         VirtualAction::p2_up
         | VirtualAction::p2_down
         | VirtualAction::p2_left
@@ -4142,7 +4143,7 @@ const fn input_side(action: VirtualAction) -> Option<profile::PlayerSide> {
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_select
         | VirtualAction::p2_operator
-        | VirtualAction::p2_restart => Some(profile::PlayerSide::P2),
+        | VirtualAction::p2_restart => Some(profile_data::PlayerSide::P2),
     }
 }
 
@@ -4264,8 +4265,8 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::PackHeader { .. })
     );
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
 
     let mut standalone = Vec::with_capacity(8);
@@ -4288,9 +4289,9 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let sorts = select_music_menu::SORT_ITEMS.iter().cloned().collect();
 
     let p1_has_profile =
-        p1_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P1).is_some();
+        p1_joined && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1).is_some();
     let p2_has_profile =
-        p2_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P2).is_some();
+        p2_joined && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2).is_some();
     let profile_items = if p1_has_profile || p2_has_profile {
         let mut items = Vec::with_capacity(8);
         if p1_has_profile {
@@ -4333,8 +4334,8 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     }
 
     let styles = match (profile::get_session_play_style(), single_player_joined) {
-        (profile::PlayStyle::Single, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE]),
-        (profile::PlayStyle::Double, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
+        (profile_data::PlayStyle::Single, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE]),
+        (profile_data::PlayStyle::Double, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
         _ => None,
     };
     let playlists = if state.playlist_library.is_empty() {
@@ -4463,8 +4464,8 @@ fn show_profile_switch_overlay(state: &mut State) {
     overlay.active_color_index = state.active_color_index;
     profile_boxes::set_joined(
         &mut overlay,
-        profile::is_session_side_joined(profile::PlayerSide::P1),
-        profile::is_session_side_joined(profile::PlayerSide::P2),
+        profile::is_session_side_joined(profile_data::PlayerSide::P1),
+        profile::is_session_side_joined(profile_data::PlayerSide::P2),
     );
     state.profile_switch_overlay = Some(overlay);
     state.profile_switch_overlay_is_late_join = false;
@@ -4475,7 +4476,7 @@ fn show_profile_switch_overlay(state: &mut State) {
 /// current profile; only `joining_side` needs to pick a profile. If the
 /// joining player cancels, `handle_profile_switch_overlay_input` will revert
 /// the late-join via `cancel_late_join_profile_overlay`.
-pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile::PlayerSide) {
+pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile_data::PlayerSide) {
     profile::set_fast_profile_switch_from_select_music(false);
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
@@ -5977,26 +5978,26 @@ fn update_overlay_nav_hold(state: &mut State) {
 
 #[inline(always)]
 const fn steps_index_for_side(
-    play_style: profile::PlayStyle,
-    side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    side: profile_data::PlayerSide,
     selected_steps_index: usize,
     p2_selected_steps_index: usize,
 ) -> usize {
     match (play_style, side) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => p2_selected_steps_index,
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => p2_selected_steps_index,
         _ => selected_steps_index,
     }
 }
 
 fn set_steps_index_for_side(
     state: &mut State,
-    play_style: profile::PlayStyle,
-    side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    side: profile_data::PlayerSide,
     steps_index: usize,
 ) {
     if matches!(
         (play_style, side),
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2)
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2)
     ) {
         state.p2_selected_steps_index = steps_index;
         if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
@@ -6014,7 +6015,7 @@ fn set_steps_index_for_side(
 fn selected_chart_hash_for_side(
     state: &State,
     song: &SongData,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<String> {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let steps_index = steps_index_for_side(
@@ -6031,8 +6032,8 @@ fn show_leaderboard_overlay(state: &mut State) {
         return;
     };
 
-    let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P1);
-    let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
+    let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile_data::PlayerSide::P1);
+    let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile_data::PlayerSide::P2);
     if let Some(overlay) = select_music_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2)
     {
         state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
@@ -6166,7 +6167,7 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     ) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => state.p2_selected_steps_index,
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => state.p2_selected_steps_index,
         _ => state.selected_steps_index,
     }
 }
@@ -6177,7 +6178,7 @@ fn preferred_steps_index_for_sync(state: &State) -> usize {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     ) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => {
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_preferred_difficulty_index
         }
         _ => state.preferred_difficulty_index,
@@ -6190,7 +6191,7 @@ fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     ) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => {
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
             state.p2_selected_steps_index = steps_index;
             if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
                 state.p2_preferred_difficulty_index = steps_index;
@@ -6316,14 +6317,14 @@ fn debug_screen_name(screen_name: &str) -> String {
 fn local_lobby_machine_signature() -> String {
     let mut parts = vec!["ScreenSelectMusic".to_string()];
     let mut any_joined = false;
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
         any_joined = true;
         let player_id = match side {
-            profile::PlayerSide::P1 => "P1",
-            profile::PlayerSide::P2 => "P2",
+            profile_data::PlayerSide::P1 => "P1",
+            profile_data::PlayerSide::P2 => "P2",
         };
         let player = profile::get_for_side(side);
         parts.push(format!("{player_id}:{}", player.display_name));
@@ -6331,8 +6332,8 @@ fn local_lobby_machine_signature() -> String {
     if !any_joined {
         let side = profile::get_session_player_side();
         let player_id = match side {
-            profile::PlayerSide::P1 => "P1",
-            profile::PlayerSide::P2 => "P2",
+            profile_data::PlayerSide::P1 => "P1",
+            profile_data::PlayerSide::P2 => "P2",
         };
         let player = profile::get_for_side(side);
         parts.push(format!("{player_id}:{}", player.display_name));
@@ -6342,7 +6343,7 @@ fn local_lobby_machine_signature() -> String {
 
 fn local_lobby_player_count() -> usize {
     let mut count = 0usize;
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if profile::is_session_side_joined(side) {
             count += 1;
         }
@@ -6350,15 +6351,15 @@ fn local_lobby_player_count() -> usize {
     if count == 0 { 1 } else { count }
 }
 
-fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         return profile::get_session_player_side() == side;
     }
     match side {
-        profile::PlayerSide::P1 => p1_joined,
-        profile::PlayerSide::P2 => p2_joined,
+        profile_data::PlayerSide::P1 => p1_joined,
+        profile_data::PlayerSide::P2 => p2_joined,
     }
 }
 
@@ -6374,14 +6375,14 @@ fn clear_lobby_disconnect_holds(state: &mut State) {
 
 fn set_lobby_disconnect_hold(
     state: &mut State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     started_at: Option<Instant>,
 ) {
     match side {
-        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -7941,19 +7942,19 @@ fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction
     }
 }
 
-fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) {
+fn switch_single_player_style(state: &mut State, new_style: profile_data::PlayStyle) {
     hide_select_music_menu(state);
 
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     let side = match (p1_joined, p2_joined) {
-        (true, false) => profile::PlayerSide::P1,
-        (false, true) => profile::PlayerSide::P2,
+        (true, false) => profile_data::PlayerSide::P1,
+        (false, true) => profile_data::PlayerSide::P2,
         _ => profile::get_session_player_side(),
     };
     match side {
-        profile::PlayerSide::P1 => profile::set_session_joined(true, false),
-        profile::PlayerSide::P2 => profile::set_session_joined(false, true),
+        profile_data::PlayerSide::P1 => profile::set_session_joined(true, false),
+        profile_data::PlayerSide::P2 => profile::set_session_joined(false, true),
     }
     profile::set_session_player_side(side);
     profile::set_session_play_style(new_style);
@@ -8046,17 +8047,17 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Sc
 fn cancel_late_join_session() {
     let staying_side = profile::get_session_player_side();
     match staying_side {
-        profile::PlayerSide::P1 => profile::set_session_joined(true, false),
-        profile::PlayerSide::P2 => profile::set_session_joined(false, true),
+        profile_data::PlayerSide::P1 => profile::set_session_joined(true, false),
+        profile_data::PlayerSide::P2 => profile::set_session_joined(false, true),
     }
-    profile::set_session_play_style(profile::PlayStyle::Single);
+    profile::set_session_play_style(profile_data::PlayStyle::Single);
 }
 
 fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     test_input::apply_virtual_input(&mut state.test_input_overlay, ev);
     let close_side = match ev.action {
-        VirtualAction::p1_start | VirtualAction::p1_back => Some(profile::PlayerSide::P1),
-        VirtualAction::p2_start | VirtualAction::p2_back => Some(profile::PlayerSide::P2),
+        VirtualAction::p1_start | VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
+        VirtualAction::p2_start | VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
         _ => None,
     };
     if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
@@ -8269,11 +8270,11 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             ScreenAction::None
         }
         select_music_menu::Action::SwitchToSingle => {
-            switch_single_player_style(state, profile::PlayStyle::Single);
+            switch_single_player_style(state, profile_data::PlayStyle::Single);
             ScreenAction::None
         }
         select_music_menu::Action::SwitchToDouble => {
-            switch_single_player_style(state, profile::PlayStyle::Double);
+            switch_single_player_style(state, profile_data::PlayStyle::Double);
             ScreenAction::None
         }
         select_music_menu::Action::TestInput => {
@@ -8459,7 +8460,7 @@ fn collapse_expanded_pack(state: &mut State, pack: String) {
 
 pub fn handle_pad_dir(
     state: &mut State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
@@ -8665,7 +8666,7 @@ fn handle_pad_dir_p2(
                 let list_len = steps_len(song, target_chart_type);
                 let cur = steps_index_for_side(
                     play_style,
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     state.selected_steps_index,
                     state.p2_selected_steps_index,
                 )
@@ -8689,7 +8690,7 @@ fn handle_pad_dir_p2(
                 }
 
                 if let Some(new_idx) = new_idx {
-                    set_steps_index_for_side(state, play_style, profile::PlayerSide::P2, new_idx);
+                    set_steps_index_for_side(state, play_style, profile_data::PlayerSide::P2, new_idx);
                     state.step_artist_cycle_base = state.session_elapsed;
                     audio::play_sfx(if is_up {
                         "assets/sounds/easier.ogg"
@@ -9021,16 +9022,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
             }
             VirtualAction::p2_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
             }
             _ => {}
@@ -9064,35 +9065,35 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let only_dedicated_menu_buttons = config::get().only_dedicated_menu_buttons;
 
     let play_style = crate::game::profile::get_session_play_style();
-    if play_style == crate::game::profile::PlayStyle::Versus {
+    if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ScreenAction::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Left,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Right,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
@@ -9115,14 +9116,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Left,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Right,
                 ev.pressed,
                 ev.timestamp,
@@ -9153,20 +9154,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 
     match crate::game::profile::get_session_player_side() {
-        crate::game::profile::PlayerSide::P2 => match ev.action {
+        profile_data::PlayerSide::P2 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ScreenAction::None
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Left,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
                 state,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 PadDir::Right,
                 ev.pressed,
                 ev.timestamp,
@@ -9194,34 +9195,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => ScreenAction::None,
         },
-        crate::game::profile::PlayerSide::P1 => match ev.action {
+        profile_data::PlayerSide::P1 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ScreenAction::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Left,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Right,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Up,
                 ev.pressed,
                 ev.timestamp,
             ),
             VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
                 state,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 PadDir::Down,
                 ev.pressed,
                 ev.timestamp,
@@ -9435,7 +9436,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state,
             &song,
             play_style.chart_type(),
-            play_style == profile::PlayStyle::Versus,
+            play_style == profile_data::PlayStyle::Versus,
         );
     }
 
@@ -9555,7 +9556,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 || cfg.select_music_scorebox_cycle_tournaments);
 
         if let Some(song) = selected_song.as_ref() {
-            let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
+            let is_versus = play_style == profile_data::PlayStyle::Versus;
             ensure_chart_cache_for_song(state, song, target_chart_type, is_versus);
 
             if !displayed_chart_matches(
@@ -9609,7 +9610,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 if show_select_music_leaderboards {
                     maybe_refresh_select_music_leaderboard(
                         &mut state.last_refreshed_leaderboard_hash_p2,
-                        profile::PlayerSide::P2,
+                        profile_data::PlayerSide::P2,
                         desired_hash_p2,
                     );
                 }
@@ -9634,7 +9635,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             }
             if show_select_music_leaderboards {
                 let primary_side = if is_versus {
-                    profile::PlayerSide::P1
+                    profile_data::PlayerSide::P1
                 } else {
                     profile::get_session_player_side()
                 };
@@ -9714,7 +9715,7 @@ pub fn prime_displayed_chart_data(state: &mut State) {
     let song = song.clone();
     let play_style = profile::get_session_play_style();
     let target_chart_type = play_style.chart_type();
-    let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
+    let is_versus = play_style == profile_data::PlayStyle::Versus;
     ensure_chart_cache_for_song(state, &song, target_chart_type, is_versus);
 
     state.displayed_chart_p1 = state.cached_chart_ix_p1.map(|chart_ix| DisplayedChart {
@@ -9824,7 +9825,7 @@ fn delayed_selection_updates_blocked(state: &State) -> bool {
 #[inline(always)]
 fn maybe_refresh_select_music_leaderboard(
     last_refreshed_hash: &mut Option<String>,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
 ) {
     let Some(chart_hash) = chart_hash else {
@@ -9949,7 +9950,7 @@ fn push_folder_stats_overlay(
     actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     side_profile: &profile::Profile,
     target_chart_type: &str,
     chart: Option<&ChartData>,
@@ -9977,7 +9978,7 @@ fn push_folder_stats_overlay(
     let scale = 0.45;
     let frame_w = source_w * scale;
     let frame_h = source_h * scale;
-    let x = if is_versus && side == profile::PlayerSide::P1 {
+    let x = if is_versus && side == profile_data::PlayerSide::P1 {
         screen_center_x() * 1.305
     } else {
         screen_center_x() * 1.77
@@ -10119,9 +10120,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
-    let is_p2_single = play_style == crate::game::profile::PlayStyle::Single
-        && side == crate::game::profile::PlayerSide::P2;
-    let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
+    let is_p2_single = play_style == profile_data::PlayStyle::Single
+        && side == profile_data::PlayerSide::P2;
+    let is_versus = play_style == profile_data::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
     let selected_song = match selected_entry {
@@ -10177,8 +10178,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(&mut actors, select_music_label.as_ref());
 
-    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
 
     let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
         || cfg.select_music_scorebox_cycle_ex
@@ -10290,7 +10291,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 &mut actors,
                 state,
                 asset_manager,
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 &p1_profile,
                 target_chart_type,
                 immediate_chart_p1,
@@ -10301,7 +10302,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 &mut actors,
                 state,
                 asset_manager,
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 &p2_profile,
                 target_chart_type,
                 immediate_chart_p2,
@@ -10310,9 +10311,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             );
         } else {
             let active_side = if is_p2_single {
-                profile::PlayerSide::P2
+                profile_data::PlayerSide::P2
             } else {
-                profile::PlayerSide::P1
+                profile_data::PlayerSide::P1
             };
             let active_profile = if is_p2_single {
                 &p2_profile
@@ -10695,7 +10696,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let push_pane = |out: &mut Vec<Actor>,
                      pane_cx: f32,
                      sel_col: [f32; 4],
-                     side: profile::PlayerSide,
+                     side: profile_data::PlayerSide,
                      player_initials: &str,
                      steps: Arc<str>,
                      mines: Arc<str>,
@@ -10798,7 +10799,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             &mut actors,
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             p1_profile.player_initials.as_str(),
             steps,
             mines,
@@ -10813,7 +10814,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             &mut actors,
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
-            profile::PlayerSide::P2,
+            profile_data::PlayerSide::P2,
             p2_profile.player_initials.as_str(),
             steps_p2,
             mines_p2,
@@ -10835,9 +10836,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             pane_cx,
             sel_col_p1,
             if is_p2_single {
-                profile::PlayerSide::P2
+                profile_data::PlayerSide::P2
             } else {
-                profile::PlayerSide::P1
+                profile_data::PlayerSide::P1
             },
             if is_p2_single {
                 p2_profile.player_initials.as_str()
@@ -11274,17 +11275,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
             pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
-        let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
-        let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
+        let p1_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P1);
+        let p2_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox =
-            |side: profile::PlayerSide, center_x: f32, center_y: f32, zoom: f32, z_boost: i16| {
+            |side: profile_data::PlayerSide, center_x: f32, center_y: f32, zoom: f32, z_boost: i16| {
                 let chart_hash =
                     if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
                         let slot = match (play_style, side) {
-                            (profile::PlayStyle::Versus, profile::PlayerSide::P2) => 1,
+                            (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
                             _ => 0,
                         };
                         selected_chart_hashes[slot]
@@ -11324,14 +11325,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         if both_gs_versus || force_step_pane {
             if is_versus {
                 push_scorebox(
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     pane_box_center_x(screen_width() * 0.25 - 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
                     60,
                 );
                 push_scorebox(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     pane_box_center_x(screen_width() * 0.75 + 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -11339,7 +11340,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 );
             } else if is_p2_single {
                 push_scorebox(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     pane_box_center_x(screen_width() * 0.75 + 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -11347,7 +11348,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 );
             } else {
                 push_scorebox(
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     pane_box_center_x(screen_width() * 0.25 - 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -11356,16 +11357,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             }
         } else if is_versus {
             let incumbent = profile::get_session_player_side();
-            if incumbent == profile::PlayerSide::P2 {
+            if incumbent == profile_data::PlayerSide::P2 {
                 push_scorebox(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     scorebox_center_p1,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
                     0,
                 );
                 push_scorebox(
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     scorebox_center_p2,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -11373,14 +11374,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 );
             } else {
                 push_scorebox(
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     scorebox_center_p1,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
                     0,
                 );
                 push_scorebox(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     scorebox_center_p2,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -11389,7 +11390,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             }
         } else if is_p2_single {
             push_scorebox(
-                profile::PlayerSide::P2,
+                profile_data::PlayerSide::P2,
                 scorebox_center_p1,
                 scorebox_center_y_above_pane,
                 scorebox_zoom,
@@ -11397,7 +11398,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             );
         } else {
             push_scorebox(
-                profile::PlayerSide::P1,
+                profile_data::PlayerSide::P1,
                 scorebox_center_p1,
                 scorebox_center_y_p1_single,
                 scorebox_zoom,
@@ -11494,17 +11495,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     if state.test_input_overlay_visible {
         let play_style = profile::get_session_play_style();
         let (mut show_p1, mut show_p2, pad_spacing) = match play_style {
-            profile::PlayStyle::Double => (true, true, 105.0),
-            profile::PlayStyle::Single | profile::PlayStyle::Versus => (
-                profile::is_session_side_joined(profile::PlayerSide::P1),
-                profile::is_session_side_joined(profile::PlayerSide::P2),
+            profile_data::PlayStyle::Double => (true, true, 105.0),
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => (
+                profile::is_session_side_joined(profile_data::PlayerSide::P1),
+                profile::is_session_side_joined(profile_data::PlayerSide::P2),
                 125.0,
             ),
         };
         if !show_p1 && !show_p2 {
             match profile::get_session_player_side() {
-                profile::PlayerSide::P1 => show_p1 = true,
-                profile::PlayerSide::P2 => show_p2 = true,
+                profile_data::PlayerSide::P1 => show_p1 = true,
+                profile_data::PlayerSide::P2 => show_p2 = true,
             }
         }
         actors.extend(test_input::build_select_music_overlay(
@@ -11842,11 +11843,11 @@ mod tests {
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::engine::input::RawKeyboardEvent;
-    use crate::game::profile;
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
     use deadsync_input::{PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
+    use deadsync_profile as profile_data;
     use deadsync_score as score_data;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -12186,7 +12187,7 @@ mod tests {
         let now = Instant::now();
         super::handle_pad_dir(
             &mut state,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             PadDir::Right,
             true,
             now,
@@ -12199,7 +12200,7 @@ mod tests {
 
         super::handle_pad_dir(
             &mut state,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             PadDir::Left,
             true,
             now + Duration::from_millis(60),
@@ -12209,7 +12210,7 @@ mod tests {
 
         super::handle_pad_dir(
             &mut state,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             PadDir::Right,
             false,
             now + Duration::from_millis(70),
@@ -12241,12 +12242,12 @@ mod tests {
         let sequence_len = sequence.len();
         for (idx, dir) in sequence.into_iter().enumerate() {
             let t = now + Duration::from_millis(idx as u64 * 100);
-            super::handle_pad_dir(&mut state, profile::PlayerSide::P1, dir, true, t);
+            super::handle_pad_dir(&mut state, profile_data::PlayerSide::P1, dir, true, t);
             if idx + 1 < sequence_len {
                 assert_eq!(state.exit_prompt, super::ExitPromptState::None);
                 super::handle_pad_dir(
                     &mut state,
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     dir,
                     false,
                     t + Duration::from_millis(20),
@@ -12279,10 +12280,10 @@ mod tests {
         state.prev_selected_index = 0;
 
         let now = Instant::now();
-        super::handle_pad_dir(&mut state, profile::PlayerSide::P1, PadDir::Up, true, now);
+        super::handle_pad_dir(&mut state, profile_data::PlayerSide::P1, PadDir::Up, true, now);
         super::handle_pad_dir(
             &mut state,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             PadDir::Down,
             true,
             now + Duration::from_millis(10),
@@ -12464,7 +12465,7 @@ mod tests {
     #[test]
     fn steps_index_for_side_uses_primary_slot_for_single_p2() {
         assert_eq!(
-            steps_index_for_side(profile::PlayStyle::Single, profile::PlayerSide::P2, 3, 5),
+            steps_index_for_side(profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, 3, 5),
             3
         );
     }
@@ -12472,7 +12473,7 @@ mod tests {
     #[test]
     fn steps_index_for_side_uses_p2_slot_for_versus_p2() {
         assert_eq!(
-            steps_index_for_side(profile::PlayStyle::Versus, profile::PlayerSide::P2, 3, 5),
+            steps_index_for_side(profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2, 3, 5),
             5
         );
     }
@@ -12487,8 +12488,8 @@ mod tests {
 
         super::set_steps_index_for_side(
             &mut state,
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P2,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P2,
             4,
         );
 
@@ -12508,8 +12509,8 @@ mod tests {
 
         super::set_steps_index_for_side(
             &mut state,
-            profile::PlayStyle::Versus,
-            profile::PlayerSide::P2,
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P2,
             4,
         );
 

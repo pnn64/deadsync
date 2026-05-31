@@ -20,6 +20,7 @@ use chrono::Local;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -61,10 +62,10 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
-const fn side_ix(side: profile::PlayerSide) -> usize {
+const fn side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
@@ -238,7 +239,7 @@ fn should_display_profile_names(stages: &[stage_stats::StageSummary]) -> bool {
 }
 
 fn build_player_stats(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     p: &stage_stats::PlayerStageSummary,
     show_profile_names: bool,
     active_color_index: i32,
@@ -247,7 +248,7 @@ fn build_player_stats(
 ) -> Vec<Actor> {
     let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
     {
-        profile::PlayerSide::P1 => (
+        profile_data::PlayerSide::P1 => (
             -90.0,
             -(screen_width() / 2.5),
             -widescale(194.0, 250.0),
@@ -257,7 +258,7 @@ fn build_player_stats(
             crate::engine::present::actors::TextAlign::Left,
             -1.0,
         ),
-        profile::PlayerSide::P2 => (
+        profile_data::PlayerSide::P2 => (
             90.0,
             screen_width() / 2.5,
             widescale(194.0, 250.0),
@@ -549,7 +550,7 @@ fn build_row(
         horizalign(center)
     ));
 
-    for (idx, side) in [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)] {
+    for (idx, side) in [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)] {
         let Some(p) = stage.players.get(idx).and_then(|p| p.as_ref()) else {
             continue;
         };
@@ -668,13 +669,13 @@ pub fn get_actors(
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
 
-        let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-        let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+        let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
+        let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
 
-        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-        let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
-        let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
+        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+        let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
+        let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
         let p1_avatar_key = if p1_joined && !p1_guest {
             p1_profile.avatar_texture_key
@@ -687,12 +688,12 @@ pub fn get_actors(
             None
         };
 
-        let (left_avatar, right_avatar) = if play_style == profile::PlayStyle::Versus {
+        let (left_avatar, right_avatar) = if play_style == profile_data::PlayStyle::Versus {
             (p1_avatar_key.as_deref(), p2_avatar_key.as_deref())
         } else {
             match player_side {
-                profile::PlayerSide::P1 => (p1_avatar_key.as_deref(), None),
-                profile::PlayerSide::P2 => (None, p2_avatar_key.as_deref()),
+                profile_data::PlayerSide::P1 => (p1_avatar_key.as_deref(), None),
+                profile_data::PlayerSide::P2 => (None, p2_avatar_key.as_deref()),
             }
         };
 

@@ -15,6 +15,7 @@ use deadsync_online::groovestats::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, LeaderboardApiEntry,
 };
+use deadsync_profile as profile_data;
 use log::{debug, warn};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -185,7 +186,7 @@ struct ItlPointTotals {
 
 fn online_itl_self_score_key_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<OnlineItlSelfScoreKey> {
     let chart_hash = chart_hash.trim();
     if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
@@ -264,10 +265,10 @@ fn save_online_itl_self_rank_index(path: &Path, by_key: &HashMap<OnlineItlSelfSc
 #[inline(always)]
 fn online_itl_overall_rank_entry_for_side(
     state: &OnlineItlOverallRankCacheState,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<&OnlineItlOverallRankCacheEntry> {
     match side {
-        profile::PlayerSide::P2 => state.p2.as_ref(),
+        profile_data::PlayerSide::P2 => state.p2.as_ref(),
         _ => state.p1.as_ref(),
     }
 }
@@ -275,10 +276,10 @@ fn online_itl_overall_rank_entry_for_side(
 #[inline(always)]
 fn online_itl_overall_rank_entry_for_side_mut(
     state: &mut OnlineItlOverallRankCacheState,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> &mut Option<OnlineItlOverallRankCacheEntry> {
     match side {
-        profile::PlayerSide::P2 => &mut state.p2,
+        profile_data::PlayerSide::P2 => &mut state.p2,
         _ => &mut state.p1,
     }
 }
@@ -438,7 +439,7 @@ pub(super) fn set_cached_online_self_rank(
 
 pub fn get_cached_itl_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<CachedItlScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
     ensure_itl_score_cache_loaded(&profile_id);
@@ -453,7 +454,7 @@ pub fn get_cached_itl_score_for_side(
 
 pub fn get_cached_itl_score_for_song(
     song: &deadsync_chart::SongData,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<CachedItlScore> {
     let profile_id = profile::active_local_profile_id_for_side(side)?;
     ensure_itl_score_cache_loaded(&profile_id);
@@ -467,7 +468,10 @@ pub fn get_cached_itl_score_for_song(
 
 /// Returns true if the song folder is unlocked for this player's ITL profile.
 /// Songs not present in the unlock map are treated as locked, matching SL.
-pub fn is_itl_song_folder_unlocked_for_side(song_folder: &str, side: profile::PlayerSide) -> bool {
+pub fn is_itl_song_folder_unlocked_for_side(
+    song_folder: &str,
+    side: profile_data::PlayerSide,
+) -> bool {
     let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
         return false;
     };
@@ -502,7 +506,7 @@ pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
 
 pub fn get_cached_itl_tournament_rank_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     get_cached_player_leaderboard_itl_self_rank_for_side(chart_hash, side)
         .or_else(|| get_cached_online_self_rank_for_side(chart_hash, side))
@@ -510,7 +514,7 @@ pub fn get_cached_itl_tournament_rank_for_side(
 
 fn get_cached_online_self_rank_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let key = online_itl_self_score_key_for_side(chart_hash, side)?;
     let profile_id = profile::active_local_profile_id_for_side(side);
@@ -526,7 +530,7 @@ fn get_cached_online_self_rank_for_side(
 }
 
 fn online_itl_overall_rank_cache_key_for_side(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<OnlineItlOverallRankCacheKey> {
     if !profile::is_session_side_joined(side) {
         return None;
@@ -558,7 +562,7 @@ fn online_itl_overall_rank_cache_key_for_side(
 }
 
 fn cached_online_itl_scores_by_chart_for_side(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<OnlineItlOverallRankInput> {
     if !profile::is_session_side_joined(side) {
         return None;
@@ -663,7 +667,7 @@ fn build_online_itl_overall_ranks(
 }
 
 pub fn get_cached_itl_tournament_overall_ranks_for_side(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Arc<HashMap<String, u32>> {
     let Some(cache_key) = online_itl_overall_rank_cache_key_for_side(side) else {
         return EMPTY_ONLINE_ITL_OVERALL_RANKS.clone();
@@ -1745,7 +1749,7 @@ pub fn itl_eval_state_from_gameplay(gs: &gameplay::State, player_idx: usize) -> 
 
 pub fn get_cached_itl_self_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let key = online_itl_self_score_key_for_side(chart_hash, side)?;
     let profile_id = profile::active_local_profile_id_for_side(side);
@@ -1762,7 +1766,7 @@ pub fn get_cached_itl_self_score_for_side(
 
 pub fn get_or_fetch_itl_self_score_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     if let Some(score) = get_cached_itl_self_score_for_side(chart_hash, side) {
         return Some(score);
@@ -1776,7 +1780,7 @@ pub fn get_or_fetch_itl_self_score_for_side(
 
 pub fn get_or_fetch_itl_tournament_rank_for_side(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<u32> {
     if let Some(rank) = get_cached_itl_tournament_rank_for_side(chart_hash, side) {
         return Some(rank);

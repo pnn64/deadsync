@@ -3,6 +3,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use deadsync_online::lobbies;
+use deadsync_profile as profile_data;
 use std::cmp::Ordering;
 
 const PANEL_WIDTH: f32 = 200.0;
@@ -225,12 +226,12 @@ fn panel_placement(screen_name: &str) -> PanelPlacement {
 }
 
 fn joined_sides() -> (bool, bool) {
-    let mut p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let mut p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let mut p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let mut p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         match profile::get_session_player_side() {
-            profile::PlayerSide::P1 => p1_joined = true,
-            profile::PlayerSide::P2 => p2_joined = true,
+            profile_data::PlayerSide::P1 => p1_joined = true,
+            profile_data::PlayerSide::P2 => p2_joined = true,
         }
     }
     (p1_joined, p2_joined)

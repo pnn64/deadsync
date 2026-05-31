@@ -8,6 +8,7 @@ use crate::engine::space;
 use crate::game::profile;
 use crate::screens::evaluation;
 use chrono::{Datelike, Local};
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use log::{info, warn};
 use std::error::Error;
@@ -76,7 +77,7 @@ fn current_song_title(state: &super::AppState) -> Option<(String, Option<u32>)> 
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
-    Player(profile::PlayerSide),
+    Player(profile_data::PlayerSide),
     Machine,
 }
 
@@ -234,7 +235,9 @@ impl App {
     }
 
     #[inline(always)]
-    fn screenshot_preview_target(side: Option<profile::PlayerSide>) -> ScreenshotPreviewTarget {
+    fn screenshot_preview_target(
+        side: Option<profile_data::PlayerSide>,
+    ) -> ScreenshotPreviewTarget {
         if let Some(side) = side
             && profile::is_session_side_joined(side)
             && !profile::is_session_side_guest(side)
@@ -303,8 +306,10 @@ impl App {
         let start_y = screen_h * 0.5;
 
         let (target_x, target_y) = match preview.target {
-            ScreenshotPreviewTarget::Player(profile::PlayerSide::P1) => (20.0, screen_h + 10.0),
-            ScreenshotPreviewTarget::Player(profile::PlayerSide::P2) => {
+            ScreenshotPreviewTarget::Player(profile_data::PlayerSide::P1) => {
+                (20.0, screen_h + 10.0)
+            }
+            ScreenshotPreviewTarget::Player(profile_data::PlayerSide::P2) => {
                 (screen_w - 20.0, screen_h + 10.0)
             }
             ScreenshotPreviewTarget::Machine => (screen_w * 0.5, screen_h + 10.0),

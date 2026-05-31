@@ -19,6 +19,7 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -94,8 +95,8 @@ pub fn init(
     let session_music_rate = crate::game::profile::get_session_music_rate();
     let allow_per_player_global_offsets =
         crate::config::get().machine_allow_per_player_global_offsets;
-    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
+    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
 
     let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
     let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
@@ -325,25 +326,25 @@ fn session_active_players() -> [bool; PLAYER_SLOTS] {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
     let joined = [
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1),
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2),
+        crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P1),
+        crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P2),
     ];
     let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
     match play_style {
-        crate::game::profile::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus => {
             if joined_count > 0 {
                 joined
             } else {
                 [true, true]
             }
         }
-        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             if joined_count == 1 {
                 joined
             } else {
                 match side {
-                    crate::game::profile::PlayerSide::P1 => [true, false],
-                    crate::game::profile::PlayerSide::P2 => [false, true],
+                    profile_data::PlayerSide::P1 => [true, false],
+                    profile_data::PlayerSide::P2 => [false, true],
                 }
             }
         }
@@ -365,11 +366,11 @@ fn session_persisted_player_idx() -> usize {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
     match play_style {
-        crate::game::profile::PlayStyle::Versus => P1,
-        crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Versus => P1,
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             match side {
-                crate::game::profile::PlayerSide::P1 => P1,
-                crate::game::profile::PlayerSide::P2 => P2,
+                profile_data::PlayerSide::P1 => P1,
+                profile_data::PlayerSide::P2 => P2,
             }
         }
     }

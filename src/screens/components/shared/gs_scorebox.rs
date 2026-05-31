@@ -4,6 +4,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::game::{profile, scores};
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -282,7 +283,7 @@ fn owned_text(text: &str) -> Arc<str> {
     Arc::<str>::from(text)
 }
 
-fn local_self_machine_tag(side: profile::PlayerSide) -> Option<String> {
+fn local_self_machine_tag(side: profile_data::PlayerSide) -> Option<String> {
     let initials = profile::get_for_side(side).player_initials;
     let initials = initials.trim();
     if initials.is_empty() {
@@ -292,7 +293,7 @@ fn local_self_machine_tag(side: profile::PlayerSide) -> Option<String> {
     }
 }
 
-fn local_self_scorebox_name(side: profile::PlayerSide) -> String {
+fn local_self_scorebox_name(side: profile_data::PlayerSide) -> String {
     let profile = profile::get_for_side(side);
     let fallback = [
         profile.display_name.as_str(),
@@ -308,7 +309,7 @@ fn local_self_scorebox_name(side: profile::PlayerSide) -> String {
 }
 
 fn leaderboard_entry_matches_local_self(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     entry: &score_data::LeaderboardEntry,
 ) -> bool {
     let profile = profile::get_for_side(side);
@@ -327,7 +328,7 @@ fn leaderboard_entry_matches_local_self(
 }
 
 fn local_self_score_10000(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: &str,
     kind: PaneKind,
 ) -> Option<(f64, bool)> {
@@ -354,7 +355,7 @@ fn local_self_score_10000(
 }
 
 pub(crate) fn entries_with_local_self_state(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
@@ -425,12 +426,12 @@ fn default_mode_text(show_ex_score: bool) -> &'static str {
 }
 
 #[inline(always)]
-fn default_mode_text_for_side(side: profile::PlayerSide) -> &'static str {
+fn default_mode_text_for_side(side: profile_data::PlayerSide) -> &'static str {
     default_mode_text(profile::get_for_side(side).show_ex_score)
 }
 
 pub fn select_music_scorebox_view(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     fallback_machine: (String, Arc<str>),
     fallback_player: (String, Arc<str>),
@@ -524,7 +525,7 @@ pub fn select_music_scorebox_view(
     view
 }
 
-pub fn select_music_mode_text(side: profile::PlayerSide, chart_hash: Option<&str>) -> String {
+pub fn select_music_mode_text(side: profile_data::PlayerSide, chart_hash: Option<&str>) -> String {
     select_music_scorebox_view(
         side,
         chart_hash,
@@ -579,7 +580,7 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
     }
 }
 
-fn gameplay_status_pane_for_side(side: profile::PlayerSide, text: &str) -> GameplayScoreboxPane {
+fn gameplay_status_pane_for_side(side: profile_data::PlayerSide, text: &str) -> GameplayScoreboxPane {
     gameplay_status_pane(profile::get_for_side(side).show_ex_score, text)
 }
 
@@ -730,7 +731,7 @@ fn gameplay_pane_from_leaderboard(
 
 fn gameplay_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
-    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
+    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
         return vec![gameplay_status_pane(
@@ -780,7 +781,7 @@ fn gameplay_panes_from_snapshot(
 
 fn select_music_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
@@ -1341,7 +1342,7 @@ fn push_rows(
 }
 
 pub fn select_music_scorebox_actors(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     show_scorebox: bool,
     center_x: f32,
@@ -1366,7 +1367,7 @@ pub fn select_music_scorebox_actors(
 
 pub fn gameplay_scorebox_actors_from_snapshot(
     snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
-    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
+    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1390,7 +1391,7 @@ pub fn gameplay_scorebox_actors_from_snapshot(
 
 pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
-    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
+    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1503,11 +1504,11 @@ mod tests {
         }
     }
 
-    fn scorebox_profile(show_ex_score: bool) -> scores::GameplayScoreboxProfileSnapshot {
+    fn scorebox_profile(show_ex_score: bool) -> score_data::GameplayScoreboxProfileSnapshot {
         let mut player_profile = profile::Profile::default();
         player_profile.show_ex_score = show_ex_score;
         player_profile.display_scorebox = true;
-        scores::GameplayScoreboxProfileSnapshot::from_profile(&player_profile, true, None)
+        scores::scorebox_profile_snapshot(&player_profile, true, None)
     }
 
     #[test]
@@ -1553,7 +1554,7 @@ mod tests {
 
     #[test]
     fn entries_with_local_self_state_marks_matching_online_name_as_self() {
-        let side = profile::PlayerSide::P1;
+        let side = profile_data::PlayerSide::P1;
         let profile = profile::get_for_side(side);
         let name = [
             profile.groovestats_username.trim(),
@@ -1582,7 +1583,7 @@ mod tests {
             ],
         );
 
-        let entries = entries_with_local_self_state(profile::PlayerSide::P1, None, &pane);
+        let entries = entries_with_local_self_state(profile_data::PlayerSide::P1, None, &pane);
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));

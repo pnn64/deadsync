@@ -3,6 +3,7 @@ use crate::engine::present::actors::Actor;
 use crate::screens::ScreenAction;
 use crate::screens::components::shared::profile_boxes;
 use deadsync_input::InputEvent;
+use deadsync_profile as profile_data;
 
 pub type State = profile_boxes::State;
 
@@ -22,7 +23,7 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
-pub fn enter_late_join(state: &mut State, joining_side: crate::game::profile::PlayerSide) {
+pub fn enter_late_join(state: &mut State, joining_side: profile_data::PlayerSide) {
     profile_boxes::enter_late_join(state, joining_side);
 }
 

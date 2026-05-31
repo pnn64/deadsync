@@ -1,3 +1,4 @@
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 mod commands;
 mod dynamic_media;
@@ -1486,7 +1487,7 @@ pub struct ShellState {
     window_occluded: bool,
     surface_active: bool,
     screenshot_pending: bool,
-    screenshot_request_side: Option<profile::PlayerSide>,
+    screenshot_request_side: Option<profile_data::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
 }
@@ -2004,25 +2005,25 @@ impl SessionState {
 }
 
 #[inline(always)]
-const fn side_ix(side: profile::PlayerSide) -> usize {
+const fn side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
 #[inline(always)]
 fn combo_carry_from_profiles() -> [u32; MAX_PLAYERS] {
     [
-        profile::get_for_side(profile::PlayerSide::P1).current_combo,
-        profile::get_for_side(profile::PlayerSide::P2).current_combo,
+        profile::get_for_side(profile_data::PlayerSide::P1).current_combo,
+        profile::get_for_side(profile_data::PlayerSide::P2).current_combo,
     ]
 }
 
 #[inline(always)]
 fn preferred_difficulty_for_side(
-    side: profile::PlayerSide,
-    play_style: profile::PlayStyle,
+    side: profile_data::PlayerSide,
+    play_style: profile_data::PlayStyle,
 ) -> usize {
     let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
         .len()
@@ -2207,7 +2208,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
 
     let mut players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         let idx = side_ix(side);
         let course_totals = course.course_display_totals[idx];
         let mut earned_grade_points = 0i32;
@@ -2434,7 +2435,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
 
 fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<evaluation::ScoreInfo> {
     let idx = side_ix(side);
     let player = stage.players[idx].as_ref()?;
@@ -2539,7 +2540,10 @@ fn score_info_from_stage(
     })
 }
 
-fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSetting) -> Arc<str> {
+fn fallback_eval_mods_text(
+    side: profile_data::PlayerSide,
+    speed_mod: ScrollSpeedSetting,
+) -> Arc<str> {
     let profile = profile::get_for_side(side);
     let mut parts = vec![speed_mod.to_string()];
     if profile.mini_percent != 0 {
@@ -2616,7 +2620,7 @@ fn merge_column_judgments(
 
 fn score_info_for_side(
     score_info: &[Option<evaluation::ScoreInfo>; MAX_PLAYERS],
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<&evaluation::ScoreInfo> {
     score_info.iter().flatten().find(|si| si.side == side)
 }
@@ -2654,8 +2658,8 @@ fn build_course_summary_eval_state(
     let mut score_info: [Option<evaluation::ScoreInfo>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     match profile::get_session_play_style() {
-        profile::PlayStyle::Versus => {
-            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        profile_data::PlayStyle::Versus => {
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                 let idx = side_ix(side);
                 score_info[idx] = score_info_from_stage(stage, side);
                 if let Some(si) = score_info[idx].as_mut() {
@@ -2663,7 +2667,7 @@ fn build_course_summary_eval_state(
                 }
             }
         }
-        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let side = profile::get_session_player_side();
             let idx = side_ix(side);
             score_info[0] = score_info_from_stage(stage, side);
@@ -3235,8 +3239,11 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     };
 
     match play_style {
-        profile::PlayStyle::Versus => {
-            for (idx, side) in [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)] {
+        profile_data::PlayStyle::Versus => {
+            for (idx, side) in [
+                (0, profile_data::PlayerSide::P1),
+                (1, profile_data::PlayerSide::P2),
+            ] {
                 let Some(si) = eval.score_info.get(idx).and_then(|s| s.as_ref()) else {
                     continue;
                 };
@@ -3245,7 +3252,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
                 players[side_ix(side)] = Some(to_player(si));
             }
         }
-        profile::PlayStyle::Single | profile::PlayStyle::Double => {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let si = eval.score_info.first().and_then(|s| s.as_ref())?;
             song_opt = Some(si.song.clone());
             music_rate = si.music_rate;
@@ -3648,7 +3655,7 @@ impl ScreensState {
 
                     let play_style = profile::get_session_play_style();
                     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-                    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+                    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
                     let p2_pref = p2_profile
                         .last_played(play_style)
                         .difficulty_index
@@ -3903,8 +3910,8 @@ impl App {
             self.lights.set_mode(light_mode_for_screen(screen));
         }
         self.lights.set_joined([
-            profile::is_session_side_joined(profile::PlayerSide::P1),
-            profile::is_session_side_joined(profile::PlayerSide::P2),
+            profile::is_session_side_joined(profile_data::PlayerSide::P1),
+            profile::is_session_side_joined(profile_data::PlayerSide::P2),
         ]);
         self.lights.set_hide_flags(self.current_light_hide_flags());
         self.sync_gameplay_light_blinks(config.lights_simplify_bass);
@@ -4647,13 +4654,13 @@ impl App {
                     self.dynamic_media.set_profile_avatar_for_side(
                         &mut self.asset_manager,
                         backend,
-                        profile::PlayerSide::P1,
+                        profile_data::PlayerSide::P1,
                         profile_data[0].avatar_path.clone(),
                     );
                     self.dynamic_media.set_profile_avatar_for_side(
                         &mut self.asset_manager,
                         backend,
-                        profile::PlayerSide::P2,
+                        profile_data::PlayerSide::P2,
                         profile_data[1].avatar_path.clone(),
                     );
                 }
@@ -4680,8 +4687,8 @@ impl App {
                 };
                 let side = profile::get_session_player_side();
                 let preferred_active = match side {
-                    profile::PlayerSide::P1 => preferred_p1,
-                    profile::PlayerSide::P2 => preferred_p2,
+                    profile_data::PlayerSide::P1 => preferred_p1,
+                    profile_data::PlayerSide::P2 => preferred_p2,
                 };
                 self.state.session.preferred_difficulty_index = preferred_active;
 
@@ -5236,19 +5243,19 @@ impl App {
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
         match play_style {
-            profile::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus => {
                 for idx in 0..gs.num_players.min(MAX_PLAYERS) {
                     let combo = gs.players[idx].combo;
                     self.state.session.combo_carry[idx] = combo;
                     let side = if idx == 0 {
-                        profile::PlayerSide::P1
+                        profile_data::PlayerSide::P1
                     } else {
-                        profile::PlayerSide::P2
+                        profile_data::PlayerSide::P2
                     };
                     profile::update_current_combo_for_side(side, combo);
                 }
             }
-            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 if gs.num_players == 0 {
                     return;
                 }
@@ -5262,21 +5269,21 @@ impl App {
     fn update_last_played_course(&self, course_path: &Path, difficulty_name: &str) {
         let play_style = profile::get_session_play_style();
         match play_style {
-            profile::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus => {
                 profile::update_last_played_course_for_side(
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     play_style,
                     course_path,
                     Some(difficulty_name),
                 );
                 profile::update_last_played_course_for_side(
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     play_style,
                     course_path,
                     Some(difficulty_name),
                 );
             }
-            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 profile::update_last_played_course_for_side(
                     profile::get_session_player_side(),
                     play_style,
@@ -5351,8 +5358,8 @@ impl App {
                 .unwrap_or(fallback_steps);
 
         let chart_steps_index = match play_style {
-            profile::PlayStyle::Versus => [p1_steps, p2_steps],
-            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            profile_data::PlayStyle::Versus => [p1_steps, p2_steps],
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 let idx = side_ix(player_side);
                 let selected = [p1_steps, p2_steps][idx];
                 [selected; 2]
@@ -5522,7 +5529,7 @@ impl App {
         let in_course_run = self.state.session.course_run.is_some();
         let stage_summary = stage_summary_from_eval(eval_state);
         if let Some(stage) = stage_summary.as_ref() {
-            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                 if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
                     profile::add_stage_calories_for_side(side, p.calories_burned);
                 }
@@ -5591,7 +5598,7 @@ impl App {
                 self.state.session.course_eval_page_index = 0;
 
                 if let Some(course_stage) = course_summary {
-                    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                         if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
                             scores::save_local_summary_score_for_side(
                                 score_hash.as_str(),
@@ -5683,11 +5690,11 @@ impl App {
         crate::engine::audio::play_sfx("assets/sounds/change.ogg");
     }
 
-    fn apply_select_music_join(&mut self, join_side: profile::PlayerSide) {
+    fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
         let play_style = profile::get_session_play_style();
         let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-        let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-        let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+        let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
+        let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
         let p1_pref = p1_profile
             .last_played(play_style)
             .difficulty_index
@@ -5699,7 +5706,7 @@ impl App {
 
         let side = profile::get_session_player_side();
         let sm = &mut self.state.screens.select_music_state;
-        if side == profile::PlayerSide::P2 && join_side == profile::PlayerSide::P1 {
+        if side == profile_data::PlayerSide::P2 && join_side == profile_data::PlayerSide::P1 {
             sm.p2_selected_steps_index = sm.selected_steps_index;
             sm.p2_preferred_difficulty_index = sm.preferred_difficulty_index;
             sm.selected_steps_index = p1_pref;
@@ -5745,8 +5752,8 @@ impl App {
             return false;
         }
         let join_side = match ev.action {
-            VirtualAction::p1_start => profile::PlayerSide::P1,
-            VirtualAction::p2_start => profile::PlayerSide::P2,
+            VirtualAction::p1_start => profile_data::PlayerSide::P1,
+            VirtualAction::p2_start => profile_data::PlayerSide::P2,
             _ => return false,
         };
 
@@ -5776,17 +5783,17 @@ impl App {
             return false;
         }
 
-        if profile::get_session_play_style() == profile::PlayStyle::Double {
+        if profile::get_session_play_style() == profile_data::PlayStyle::Double {
             return false;
         }
 
-        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
         if p1_joined && p2_joined {
             return false;
         }
-        if (join_side == profile::PlayerSide::P1 && p1_joined)
-            || (join_side == profile::PlayerSide::P2 && p2_joined)
+        if (join_side == profile_data::PlayerSide::P1 && p1_joined)
+            || (join_side == profile_data::PlayerSide::P2 && p2_joined)
         {
             return false;
         }
@@ -5795,9 +5802,9 @@ impl App {
         }
 
         profile::set_session_joined(true, true);
-        profile::set_session_play_style(profile::PlayStyle::Versus);
+        profile::set_session_play_style(profile_data::PlayStyle::Versus);
         let guest_profile =
-            profile::set_active_profile_for_side(join_side, profile::ActiveProfile::Guest);
+            profile::set_active_profile_for_side(join_side, profile_data::ActiveProfile::Guest);
         self.state.session.combo_carry[side_ix(join_side)] = guest_profile.current_combo;
 
         if screen == CurrentScreen::SelectStyle {
@@ -5821,17 +5828,17 @@ impl App {
     }
 
     fn reset_operator_game_state(&mut self) {
-        const RESET_STYLE: profile::PlayStyle = profile::PlayStyle::Single;
+        const RESET_STYLE: profile_data::PlayStyle = profile_data::PlayStyle::Single;
 
         profile::set_session_play_style(RESET_STYLE);
-        profile::set_session_play_mode(profile::PlayMode::Regular);
-        profile::set_session_player_side(profile::PlayerSide::P1);
+        profile::set_session_play_mode(profile_data::PlayMode::Regular);
+        profile::set_session_player_side(profile_data::PlayerSide::P1);
         profile::set_session_joined(false, false);
         profile::set_session_music_rate(1.0);
-        profile::set_session_timing_tick_mode(profile::TimingTickMode::Off);
+        profile::set_session_timing_tick_mode(profile_data::TimingTickMode::Off);
         profile::set_fast_profile_switch_from_select_music(false);
 
-        let preferred = preferred_difficulty_for_side(profile::PlayerSide::P1, RESET_STYLE);
+        let preferred = preferred_difficulty_for_side(profile_data::PlayerSide::P1, RESET_STYLE);
         self.state.session = SessionState::new(preferred, combo_carry_from_profiles());
         self.state.gameplay_offset_save_prompt = None;
     }
@@ -5894,8 +5901,8 @@ impl App {
         {
             self.state.shell.screenshot_pending = true;
             self.state.shell.screenshot_request_side = match ev.action {
-                VirtualAction::p1_select => Some(profile::PlayerSide::P1),
-                VirtualAction::p2_select => Some(profile::PlayerSide::P2),
+                VirtualAction::p1_select => Some(profile_data::PlayerSide::P1),
+                VirtualAction::p2_select => Some(profile_data::PlayerSide::P2),
                 _ => None,
             };
             return Ok(());
@@ -7639,7 +7646,7 @@ impl App {
                 let player_side = profile::get_session_player_side();
                 let update_scroll_speed =
                     |commands: &mut Vec<Command>,
-                     side: profile::PlayerSide,
+                     side: profile_data::PlayerSide,
                      speed_mod: &player_options::SpeedMod| {
                         let setting = match speed_mod.mod_type {
                             player_options::SpeedModType::C => {
@@ -7658,22 +7665,22 @@ impl App {
                     };
 
                 match play_style {
-                    profile::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus => {
                         update_scroll_speed(
                             &mut commands,
-                            profile::PlayerSide::P1,
+                            profile_data::PlayerSide::P1,
                             &po_state.speed_mod[0],
                         );
                         update_scroll_speed(
                             &mut commands,
-                            profile::PlayerSide::P2,
+                            profile_data::PlayerSide::P2,
                             &po_state.speed_mod[1],
                         );
                     }
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                    profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                         let persisted_idx = match player_side {
-                            profile::PlayerSide::P1 => 0,
-                            profile::PlayerSide::P2 => 1,
+                            profile_data::PlayerSide::P1 => 0,
+                            profile_data::PlayerSide::P2 => 1,
                         };
                         update_scroll_speed(
                             &mut commands,
@@ -7687,11 +7694,11 @@ impl App {
                 debug!("Session music rate set to {:.2}x", po_state.music_rate);
 
                 let preferred_idx = match play_style {
-                    profile::PlayStyle::Versus => po_state.chart_difficulty_index[0],
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                    profile_data::PlayStyle::Versus => po_state.chart_difficulty_index[0],
+                    profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                         let persisted_idx = match player_side {
-                            profile::PlayerSide::P1 => 0,
-                            profile::PlayerSide::P2 => 1,
+                            profile_data::PlayerSide::P1 => 0,
+                            profile_data::PlayerSide::P2 => 1,
                         };
                         po_state.chart_difficulty_index[persisted_idx]
                     }
@@ -7775,8 +7782,8 @@ impl App {
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
                 profile::set_fast_profile_switch_from_select_music(false);
             } else if prev == CurrentScreen::SelectMusic {
-                let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-                let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+                let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+                let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
                 select_profile::set_joined(
                     &mut self.state.screens.select_profile_state,
                     p1_joined,
@@ -7789,8 +7796,8 @@ impl App {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-            let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+            let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+            let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
             self.state.screens.select_style_state.selected_index = if p1_joined && p2_joined {
                 1 // "2 Players"
             } else {
@@ -7854,7 +7861,7 @@ impl App {
                     };
                     let play_style = profile::get_session_play_style();
                     let (steps, pref) = match play_style {
-                        profile::PlayStyle::Versus => (
+                        profile_data::PlayStyle::Versus => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -7864,7 +7871,7 @@ impl App {
                                 sm_state.p2_preferred_difficulty_index,
                             ],
                         ),
-                        profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -7924,7 +7931,7 @@ impl App {
                     };
                     let play_style = profile::get_session_play_style();
                     let (steps, pref) = match play_style {
-                        profile::PlayStyle::Versus => (
+                        profile_data::PlayStyle::Versus => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -7934,7 +7941,7 @@ impl App {
                                 sm_state.p2_preferred_difficulty_index,
                             ],
                         ),
-                        profile::PlayStyle::Single | profile::PlayStyle::Double => (
+                        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -8061,7 +8068,7 @@ impl App {
                         .expect("selected chart ref must come from selected song")
                 };
                 let (charts, chart_ixs, last_played_idx) = match play_style {
-                    profile::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus => {
                         let chart_ref_p1 = resolve_chart(0);
                         let chart_ref_p2 = resolve_chart(1);
                         (
@@ -8076,10 +8083,10 @@ impl App {
                             0usize,
                         )
                     }
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                    profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                         let idx = match player_side {
-                            profile::PlayerSide::P1 => 0,
-                            profile::PlayerSide::P2 => 1,
+                            profile_data::PlayerSide::P1 => 0,
+                            profile_data::PlayerSide::P2 => 1,
                         };
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
@@ -8130,7 +8137,7 @@ impl App {
                 }
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
-                if play_style == profile::PlayStyle::Versus {
+                if play_style == profile_data::PlayStyle::Versus {
                     self.state
                         .screens
                         .select_music_state
@@ -8354,7 +8361,7 @@ impl App {
                         .expect("selected chart ref must come from selected song")
                 };
                 let (charts, chart_ixs, last_played_chart_ref, last_played_idx) = match play_style {
-                    profile::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus => {
                         let chart_ref_p1 = resolve_chart(0);
                         let chart_ref_p2 = resolve_chart(1);
                         (
@@ -8370,10 +8377,10 @@ impl App {
                             0usize,
                         )
                     }
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                    profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                         let idx = match player_side {
-                            profile::PlayerSide::P1 => 0,
-                            profile::PlayerSide::P2 => 1,
+                            profile_data::PlayerSide::P1 => 0,
+                            profile_data::PlayerSide::P2 => 1,
                         };
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
@@ -8489,7 +8496,7 @@ impl App {
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
-                if play_style == profile::PlayStyle::Versus {
+                if play_style == profile_data::PlayStyle::Versus {
                     self.state
                         .screens
                         .select_music_state
@@ -8515,23 +8522,23 @@ impl App {
                 }
 
                 match play_style {
-                    profile::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus => {
                         commands.push(Command::UpdateLastPlayed {
-                            side: profile::PlayerSide::P1,
+                            side: profile_data::PlayerSide::P1,
                             play_style,
                             music_path: song_arc.music_path.clone(),
                             chart_hash: Some(charts[0].short_hash.clone()),
                             difficulty_index: po_state.chart_difficulty_index[0],
                         });
                         commands.push(Command::UpdateLastPlayed {
-                            side: profile::PlayerSide::P2,
+                            side: profile_data::PlayerSide::P2,
                             play_style,
                             music_path: song_arc.music_path.clone(),
                             chart_hash: Some(charts[1].short_hash.clone()),
                             difficulty_index: po_state.chart_difficulty_index[1],
                         });
                     }
-                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                    profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                         commands.push(Command::UpdateLastPlayed {
                             side: player_side,
                             play_style,
@@ -8822,7 +8829,7 @@ impl App {
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
                         let play_style = profile::get_session_play_style();
                         match play_style {
-                            profile::PlayStyle::Versus => {
+                            profile_data::PlayStyle::Versus => {
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[0];
                                 self.state
@@ -8838,11 +8845,11 @@ impl App {
                                     .select_music_state
                                     .p2_preferred_difficulty_index = po.chart_difficulty_index[1];
                             }
-                            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                                 let side = profile::get_session_player_side();
                                 let idx = match side {
-                                    profile::PlayerSide::P1 => 0,
-                                    profile::PlayerSide::P2 => 1,
+                                    profile_data::PlayerSide::P1 => 0,
+                                    profile_data::PlayerSide::P2 => 1,
                                 };
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[idx];
@@ -8922,7 +8929,7 @@ impl App {
 
                     let play_style = profile::get_session_play_style();
                     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-                    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+                    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
                     let p2_pref = p2_profile
                         .last_played(play_style)
                         .difficulty_index
@@ -9007,7 +9014,7 @@ impl App {
                 chart_opt: chart_to_graph,
             });
 
-            if profile::get_session_play_style() == profile::PlayStyle::Versus {
+            if profile::get_session_play_style() == profile_data::PlayStyle::Versus {
                 let chart_to_graph_p2 = match self
                     .state
                     .screens
@@ -9875,7 +9882,7 @@ mod tests {
 
     fn test_score_info(
         song: Arc<SongData>,
-        side: profile::PlayerSide,
+        side: profile_data::PlayerSide,
         hash: &str,
         speed_mod: ScrollSpeedSetting,
         music_rate: f32,
@@ -10121,9 +10128,10 @@ mod tests {
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
 
         let course_page =
-            score_info_from_stage(&summary, profile::PlayerSide::P1).expect("course page");
-        let song_page = score_info_from_stage(&course.stage_summaries[0], profile::PlayerSide::P1)
-            .expect("song page");
+            score_info_from_stage(&summary, profile_data::PlayerSide::P1).expect("course page");
+        let song_page =
+            score_info_from_stage(&course.stage_summaries[0], profile_data::PlayerSide::P1)
+                .expect("song page");
         assert!((course_page.score_percent - 0.5).abs() <= f64::EPSILON);
         assert!((song_page.score_percent - 1.0).abs() <= f64::EPSILON);
         assert!(!course_page.histogram.bins.is_empty());
@@ -10133,7 +10141,7 @@ mod tests {
     #[test]
     fn course_summary_merges_column_judgments_from_song_pages() {
         let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
-        let side = profile::PlayerSide::P2;
+        let side = profile_data::PlayerSide::P2;
         let mut course_score = std::array::from_fn(|_| None);
         course_score[0] = Some(test_score_info(
             song.clone(),
@@ -10172,7 +10180,7 @@ mod tests {
         first[0] = Some(first_p2);
         let mut ignored_p1 = test_score_info(
             song.clone(),
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             "ignored",
             ScrollSpeedSetting::default(),
             1.0,
@@ -10313,7 +10321,7 @@ mod tests {
         let mut score_info = std::array::from_fn(|_| None);
         score_info[0] = Some(test_score_info(
             song.clone(),
-            profile::PlayerSide::P2,
+            profile_data::PlayerSide::P2,
             "p2hash",
             ScrollSpeedSetting::MMod(777.0),
             1.5,

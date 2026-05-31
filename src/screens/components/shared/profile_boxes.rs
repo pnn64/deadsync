@@ -8,7 +8,7 @@ use crate::engine::present::actors::{self, Actor};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
-use crate::game::profile::{self, ActiveProfile};
+use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
@@ -18,6 +18,7 @@ use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -87,7 +88,7 @@ const SHAKE_DUR: f32 = SHAKE_STEP_DUR * 3.0;
 
 #[derive(Clone)]
 struct Choice {
-    kind: ActiveProfile,
+    kind: profile_data::ActiveProfile,
     display_name: String,
     speed_mod: String,
     avatar_key: Option<String>,
@@ -178,8 +179,8 @@ fn preview_noteskin_for_choice(
 ) -> Option<Arc<Noteskin>> {
     let choice = choices.get(selected_index)?;
     match choice.kind {
-        ActiveProfile::Guest => None,
-        ActiveProfile::Local { .. } => cache.get(&choice.noteskin),
+        profile_data::ActiveProfile::Guest => None,
+        profile_data::ActiveProfile::Local { .. } => cache.get(&choice.noteskin),
     }
 }
 
@@ -286,7 +287,7 @@ fn build_choices() -> Vec<Choice> {
     let default_scroll_option = default_profile.scroll_option;
     let player_options_section = profile::player_options_section(profile::get_session_play_style());
     out.push(Choice {
-        kind: ActiveProfile::Guest,
+        kind: profile_data::ActiveProfile::Guest,
         display_name: tr("SelectProfile", "GuestLabel").to_string(),
         speed_mod: guest_speed_mod,
         avatar_key: None,
@@ -366,7 +367,7 @@ fn build_choices() -> Vec<Choice> {
         }
 
         out.push(Choice {
-            kind: ActiveProfile::Local { id: p.id },
+            kind: profile_data::ActiveProfile::Local { id: p.id },
             display_name: p.display_name,
             speed_mod,
             avatar_key: p
@@ -387,23 +388,23 @@ pub fn init() -> State {
     let noteskin_cache = NoteskinCache::new(&choices);
     let active_color_index = crate::config::get().simply_love_color;
 
-    let selected_index_for = |active: ActiveProfile| -> usize {
+    let selected_index_for = |active: profile_data::ActiveProfile| -> usize {
         match active {
-            ActiveProfile::Guest => 0,
-            ActiveProfile::Local { id } => choices
+            profile_data::ActiveProfile::Guest => 0,
+            profile_data::ActiveProfile::Local { id } => choices
                 .iter()
                 .position(|c| match &c.kind {
-                    ActiveProfile::Local { id: cid } => cid == &id,
-                    ActiveProfile::Guest => false,
+                    profile_data::ActiveProfile::Local { id: cid } => cid == &id,
+                    profile_data::ActiveProfile::Guest => false,
                 })
                 .unwrap_or(0),
         }
     };
     let p1_selected_index = selected_index_for(profile::get_active_profile_for_side(
-        profile::PlayerSide::P1,
+        profile_data::PlayerSide::P1,
     ));
     let p2_selected_index = selected_index_for(profile::get_active_profile_for_side(
-        profile::PlayerSide::P2,
+        profile_data::PlayerSide::P2,
     ));
 
     let mut state = State {
@@ -466,9 +467,9 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 /// pre-readied with their current profile, and only `joining_side` needs to
 /// pick a profile. Used when a second player presses Start mid-set on a
 /// screen with an embedded profile-select overlay.
-pub fn enter_late_join(state: &mut State, joining_side: profile::PlayerSide) {
+pub fn enter_late_join(state: &mut State, joining_side: profile_data::PlayerSide) {
     match joining_side {
-        profile::PlayerSide::P1 => {
+        profile_data::PlayerSide::P1 => {
             state.p1_joined = true;
             state.p1_ready = false;
             state.p1_join_pulse_t = 0.0;
@@ -476,7 +477,7 @@ pub fn enter_late_join(state: &mut State, joining_side: profile::PlayerSide) {
             state.p2_ready = true;
             state.p2_join_pulse_t = JOIN_PULSE_DURATION;
         }
-        profile::PlayerSide::P2 => {
+        profile_data::PlayerSide::P2 => {
             state.p1_joined = true;
             state.p1_ready = true;
             state.p1_join_pulse_t = JOIN_PULSE_DURATION;
@@ -524,22 +525,22 @@ const fn both_ready(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn active_choices(state: &State) -> (ActiveProfile, ActiveProfile) {
+fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::ActiveProfile) {
     let p1 = if state.p1_joined {
         state
             .choices
             .get(state.p1_selected_index)
-            .map_or(ActiveProfile::Guest, |c| c.kind.clone())
+            .map_or(profile_data::ActiveProfile::Guest, |c| c.kind.clone())
     } else {
-        ActiveProfile::Guest
+        profile_data::ActiveProfile::Guest
     };
     let p2 = if state.p2_joined {
         state
             .choices
             .get(state.p2_selected_index)
-            .map_or(ActiveProfile::Guest, |c| c.kind.clone())
+            .map_or(profile_data::ActiveProfile::Guest, |c| c.kind.clone())
     } else {
-        ActiveProfile::Guest
+        profile_data::ActiveProfile::Guest
     };
     (p1, p2)
 }
@@ -558,22 +559,22 @@ fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
 }
 
 #[inline(always)]
-const fn side_ix(side: profile::PlayerSide) -> usize {
+const fn side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
-fn shift_choice(state: &mut State, side: profile::PlayerSide, dir: i32, play_sound: bool) -> bool {
+fn shift_choice(state: &mut State, side: profile_data::PlayerSide, dir: i32, play_sound: bool) -> bool {
     let (joined, ready, selected_index, preview_slot) = match side {
-        profile::PlayerSide::P1 => (
+        profile_data::PlayerSide::P1 => (
             state.p1_joined,
             state.p1_ready,
             &mut state.p1_selected_index,
             &mut state.p1_preview_noteskin,
         ),
-        profile::PlayerSide::P2 => (
+        profile_data::PlayerSide::P2 => (
             state.p2_joined,
             state.p2_ready,
             &mut state.p2_selected_index,
@@ -602,9 +603,9 @@ fn shift_choice(state: &mut State, side: profile::PlayerSide, dir: i32, play_sou
     true
 }
 
-fn handle_cancel(state: &mut State, side: profile::PlayerSide) -> ScreenAction {
+fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ScreenAction {
     match side {
-        profile::PlayerSide::P1 => {
+        profile_data::PlayerSide::P1 => {
             if state.p1_joined && state.p1_ready {
                 state.p1_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
@@ -627,7 +628,7 @@ fn handle_cancel(state: &mut State, side: profile::PlayerSide) -> ScreenAction {
             }
             ScreenAction::Navigate(Screen::Menu)
         }
-        profile::PlayerSide::P2 => {
+        profile_data::PlayerSide::P2 => {
             if state.p2_joined && state.p2_ready {
                 state.p2_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
@@ -682,8 +683,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_up
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_left => {
-            state.menu_lr_undo[side_ix(profile::PlayerSide::P1)] =
-                if shift_choice(state, profile::PlayerSide::P1, -1, true) {
+            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+                if shift_choice(state, profile_data::PlayerSide::P1, -1, true) {
                     1
                 } else {
                     0
@@ -694,8 +695,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_down
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
-            state.menu_lr_undo[side_ix(profile::PlayerSide::P1)] =
-                if shift_choice(state, profile::PlayerSide::P1, 1, true) {
+            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+                if shift_choice(state, profile_data::PlayerSide::P1, 1, true) {
                     -1
                 } else {
                     0
@@ -723,7 +724,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if state.p2_joined
                 && state.p2_ready
                 && state.choices.get(state.p1_selected_index).is_some_and(|c| {
-                    !matches!(&c.kind, ActiveProfile::Guest)
+                    !matches!(&c.kind, profile_data::ActiveProfile::Guest)
                         && state
                             .choices
                             .get(state.p2_selected_index)
@@ -740,9 +741,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
                 profile::set_session_player_side(if state.p1_joined {
-                    profile::PlayerSide::P1
+                    profile_data::PlayerSide::P1
                 } else {
-                    profile::PlayerSide::P2
+                    profile_data::PlayerSide::P2
                 });
                 profile::set_session_joined(state.p1_joined, state.p2_joined);
                 let (p1, p2) = active_choices(state);
@@ -751,14 +752,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_back | VirtualAction::p1_select => {
-            handle_cancel(state, profile::PlayerSide::P1)
+            handle_cancel(state, profile_data::PlayerSide::P1)
         }
         VirtualAction::p2_up
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            state.menu_lr_undo[side_ix(profile::PlayerSide::P2)] =
-                if shift_choice(state, profile::PlayerSide::P2, -1, true) {
+            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+                if shift_choice(state, profile_data::PlayerSide::P2, -1, true) {
                     1
                 } else {
                     0
@@ -769,8 +770,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            state.menu_lr_undo[side_ix(profile::PlayerSide::P2)] =
-                if shift_choice(state, profile::PlayerSide::P2, 1, true) {
+            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+                if shift_choice(state, profile_data::PlayerSide::P2, 1, true) {
                     -1
                 } else {
                     0
@@ -798,7 +799,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if state.p1_joined
                 && state.p1_ready
                 && state.choices.get(state.p2_selected_index).is_some_and(|c| {
-                    !matches!(&c.kind, ActiveProfile::Guest)
+                    !matches!(&c.kind, profile_data::ActiveProfile::Guest)
                         && state
                             .choices
                             .get(state.p1_selected_index)
@@ -815,9 +816,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
                 profile::set_session_player_side(if state.p1_joined {
-                    profile::PlayerSide::P1
+                    profile_data::PlayerSide::P1
                 } else {
-                    profile::PlayerSide::P2
+                    profile_data::PlayerSide::P2
                 });
                 profile::set_session_joined(state.p1_joined, state.p2_joined);
                 let (p1, p2) = active_choices(state);
@@ -826,7 +827,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_back | VirtualAction::p2_select => {
-            handle_cancel(state, profile::PlayerSide::P2)
+            handle_cancel(state, profile_data::PlayerSide::P2)
         }
         _ => ScreenAction::None,
     }
@@ -1334,7 +1335,7 @@ fn push_scroller_frame(
 
     let selected = choices.get(selected_index);
     let selected_is_local =
-        selected.is_some_and(|c| matches!(&c.kind, ActiveProfile::Local { .. }));
+        selected.is_some_and(|c| matches!(&c.kind, profile_data::ActiveProfile::Local { .. }));
 
     // Avatar slot (SL-style): show profile.png if present, else heart + text.
     let avatar_dim = INFO_PAD.mul_add(-2.25, INFO_W);
@@ -1342,7 +1343,7 @@ fn push_scroller_frame(
     let avatar_y = frame_cy + AVATAR_Y_OFF;
 
     if let Some(choice) = selected {
-        let is_guest = matches!(&choice.kind, ActiveProfile::Guest);
+        let is_guest = matches!(&choice.kind, profile_data::ActiveProfile::Guest);
         let show_fallback = is_guest || choice.avatar_key.is_none();
         if show_fallback {
             let bg = color::rgba_hex(AVATAR_BG_HEX);

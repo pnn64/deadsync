@@ -4,6 +4,7 @@ use crate::engine::present::actors::Actor;
 use crate::game::{gameplay, profile};
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_profile as profile_data;
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "gameplay";
@@ -32,8 +33,8 @@ impl GameplayBenchFixture {
 }
 
 pub fn fixture() -> GameplayBenchFixture {
-    profile::set_session_play_style(profile::PlayStyle::Single);
-    profile::set_session_player_side(profile::PlayerSide::P1);
+    profile::set_session_play_style(profile_data::PlayStyle::Single);
+    profile::set_session_player_side(profile_data::PlayerSide::P1);
     profile::set_session_joined(true, false);
 
     let mut base = notefield_bench::fixture();

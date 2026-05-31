@@ -1,15 +1,15 @@
 use crate::engine::space::screen_center_x;
-use crate::game::profile;
+use deadsync_profile as profile_data;
 
 const MONTH_ABBR: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 #[inline(always)]
-pub(crate) fn pane_origin_x(controller: profile::PlayerSide) -> f32 {
+pub(crate) fn pane_origin_x(controller: profile_data::PlayerSide) -> f32 {
     match controller {
-        profile::PlayerSide::P1 => screen_center_x() - 155.0,
-        profile::PlayerSide::P2 => screen_center_x() + 155.0,
+        profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
+        profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
     }
 }
 

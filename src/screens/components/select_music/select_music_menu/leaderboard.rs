@@ -7,6 +7,7 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
@@ -161,7 +162,7 @@ fn apply_leaderboard_side_snapshot(
 
 fn refresh_leaderboard_side_from_cache(
     side: &mut LeaderboardSideState,
-    player: profile::PlayerSide,
+    player: profile_data::PlayerSide,
 ) {
     let Some(chart_hash) = side.chart_hash.as_deref() else {
         return;
@@ -217,7 +218,7 @@ where
 }
 
 fn overlay_display_entries(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
@@ -258,8 +259,8 @@ pub fn show_leaderboard_overlay(
     chart_hash_p1: Option<String>,
     chart_hash_p2: Option<String>,
 ) -> Option<LeaderboardOverlayState> {
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !p1_joined && !p2_joined {
         return None;
     }
@@ -276,10 +277,10 @@ pub fn show_leaderboard_overlay(
     };
 
     if p1_joined {
-        let profile = profile::get_for_side(profile::PlayerSide::P1);
+        let profile = profile::get_for_side(profile_data::PlayerSide::P1);
         if !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
             p1.chart_hash = chart_hash_p1;
-            refresh_leaderboard_side_from_cache(&mut p1, profile::PlayerSide::P1);
+            refresh_leaderboard_side_from_cache(&mut p1, profile_data::PlayerSide::P1);
         } else if let Some(machine) = p1.machine_pane.clone() {
             p1.panes.push(machine);
             p1.show_icons = false;
@@ -287,10 +288,10 @@ pub fn show_leaderboard_overlay(
     }
 
     if p2_joined {
-        let profile = profile::get_for_side(profile::PlayerSide::P2);
+        let profile = profile::get_for_side(profile_data::PlayerSide::P2);
         if !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
             p2.chart_hash = chart_hash_p2;
-            refresh_leaderboard_side_from_cache(&mut p2, profile::PlayerSide::P2);
+            refresh_leaderboard_side_from_cache(&mut p2, profile_data::PlayerSide::P2);
         } else if let Some(machine) = p2.machine_pane.clone() {
             p2.panes.push(machine);
             p2.show_icons = false;
@@ -317,10 +318,10 @@ pub fn update_leaderboard_overlay(state: &mut LeaderboardOverlayState, dt: f32) 
     };
     overlay.elapsed += dt.max(0.0);
     if overlay.p1.joined && overlay.p1.chart_hash.is_some() {
-        refresh_leaderboard_side_from_cache(&mut overlay.p1, profile::PlayerSide::P1);
+        refresh_leaderboard_side_from_cache(&mut overlay.p1, profile_data::PlayerSide::P1);
     }
     if overlay.p2.joined && overlay.p2.chart_hash.is_some() {
-        refresh_leaderboard_side_from_cache(&mut overlay.p2, profile::PlayerSide::P2);
+        refresh_leaderboard_side_from_cache(&mut overlay.p2, profile_data::PlayerSide::P2);
     }
 }
 
@@ -464,7 +465,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 
     let mut draw_panel = |side: &LeaderboardSideState,
                           center_x: f32,
-                          player: profile::PlayerSide| {
+                          player: profile_data::PlayerSide| {
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
@@ -744,20 +745,20 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 
     if joined_count <= 1 {
         if overlay.p1.joined {
-            draw_panel(&overlay.p1, screen_center_x(), profile::PlayerSide::P1);
+            draw_panel(&overlay.p1, screen_center_x(), profile_data::PlayerSide::P1);
         } else if overlay.p2.joined {
-            draw_panel(&overlay.p2, screen_center_x(), profile::PlayerSide::P2);
+            draw_panel(&overlay.p2, screen_center_x(), profile_data::PlayerSide::P2);
         }
     } else {
         draw_panel(
             &overlay.p1,
             screen_center_x() - GS_LEADERBOARD_PANE_SIDE_OFFSET,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
         );
         draw_panel(
             &overlay.p2,
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
-            profile::PlayerSide::P2,
+            profile_data::PlayerSide::P2,
         );
     }
 

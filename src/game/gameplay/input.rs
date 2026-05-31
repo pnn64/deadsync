@@ -5,6 +5,7 @@ use crate::game::profile;
 use deadsync_input::{
     INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
+use deadsync_profile as profile_data;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
@@ -383,20 +384,22 @@ pub fn queue_input_edge(
     let lane = match (play_style, player_side, lane) {
         // Single-player: reject the "other side" entirely so only one set of bindings can play.
         (
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P1,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
             Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right,
         ) => return,
         (
-            profile::PlayStyle::Single,
-            profile::PlayerSide::P2,
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P2,
             Lane::Left | Lane::Down | Lane::Up | Lane::Right,
         ) => return,
         // P2-only single: remap P2 lanes into the 4-col field.
-        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Left) => Lane::Left,
-        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Down) => Lane::Down,
-        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Up) => Lane::Up,
-        (profile::PlayStyle::Single, profile::PlayerSide::P2, Lane::P2Right) => Lane::Right,
+        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Left) => Lane::Left,
+        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Down) => Lane::Down,
+        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Up) => Lane::Up,
+        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Right) => {
+            Lane::Right
+        }
         _ => lane,
     };
     if lane.index() >= state.num_cols {

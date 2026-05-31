@@ -5,6 +5,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_profile as profile_data;
 use std::sync::mpsc;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
@@ -45,18 +46,18 @@ pub fn on_enter(state: &mut State) {
     state.prepared_select_course = None;
     state.rx = None;
     state.next_screen = match profile::get_session_play_mode() {
-        profile::PlayMode::Marathon => Screen::SelectCourse,
-        profile::PlayMode::Regular => Screen::SelectMusic,
+        profile_data::PlayMode::Marathon => Screen::SelectCourse,
+        profile_data::PlayMode::Regular => Screen::SelectMusic,
     };
 
     let (tx, rx) = mpsc::channel();
     let play_mode = profile::get_session_play_mode();
     std::thread::spawn(move || {
         let prepared = match play_mode {
-            profile::PlayMode::Marathon => {
+            profile_data::PlayMode::Marathon => {
                 PreparedState::Course(crate::screens::select_course::init())
             }
-            profile::PlayMode::Regular => {
+            profile_data::PlayMode::Regular => {
                 crate::game::scores::prewarm_select_music_score_caches();
                 PreparedState::Music(crate::screens::select_music::init())
             }

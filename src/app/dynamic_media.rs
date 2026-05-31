@@ -5,6 +5,7 @@ use crate::engine::{
     video,
 };
 use crate::game::profile;
+use deadsync_profile as profile_data;
 use image::RgbaImage;
 use log::warn;
 use std::{
@@ -161,7 +162,7 @@ impl DynamicMedia {
         self.pending_gameplay_background_preps.clear();
         self.failed_gameplay_background_key = None;
         self.clear_gameplay_background_results();
-        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
             let ix = Self::side_ix(side);
             if let Some((key, _)) = self.current_profile_avatars[ix].take() {
                 keys.push(key);
@@ -837,7 +838,7 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        side: profile::PlayerSide,
+        side: profile_data::PlayerSide,
         path_opt: Option<PathBuf>,
     ) {
         let ix = Self::side_ix(side);
@@ -903,10 +904,10 @@ impl DynamicMedia {
     }
 
     #[inline(always)]
-    fn side_ix(side: profile::PlayerSide) -> usize {
+    fn side_ix(side: profile_data::PlayerSide) -> usize {
         match side {
-            profile::PlayerSide::P1 => 0,
-            profile::PlayerSide::P2 => 1,
+            profile_data::PlayerSide::P1 => 0,
+            profile_data::PlayerSide::P2 => 1,
         }
     }
 
@@ -1158,7 +1159,7 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        side: profile::PlayerSide,
+        side: profile_data::PlayerSide,
     ) {
         let ix = Self::side_ix(side);
         let key = self.current_profile_avatars[ix].take().map(|(key, _)| key);

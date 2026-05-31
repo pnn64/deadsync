@@ -15,22 +15,12 @@ use std::time::Instant;
 
 mod update;
 
+use deadsync_profile::{
+    ActiveProfile, GameplayHudPlayerSnapshot, GameplayHudSnapshot, LocalProfileSummary,
+    DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, PLAYER_INITIALS_MAX_LEN, PLAYER_SLOTS, PlayMode,
+    PlayStyle, PlayerSide, TimingTickMode,
+};
 pub use update::*;
-
-pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
-pub const DEFAULT_BIRTH_YEAR: i32 = 1995;
-pub const PLAYER_INITIALS_MAX_LEN: usize = 4;
-// Shared player-option HUD offset range, in logical pixels.
-pub const HUD_OFFSET_MIN: i32 = -250;
-pub const HUD_OFFSET_MAX: i32 = 250;
-
-/// Min/max for the per-player Spacing modifier (zmod parity, step 1).
-pub const SPACING_PERCENT_MIN: i32 = -100;
-pub const SPACING_PERCENT_MAX: i32 = 100;
-
-/// Min/max for the Mini player option (Simply Love parity).
-pub const MINI_PERCENT_MIN: i32 = -100;
-pub const MINI_PERCENT_MAX: i32 = 150;
 
 /// Min/max for judgment tilt thresholds, in milliseconds.
 pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
@@ -4007,8 +3997,6 @@ impl Profile {
     }
 }
 
-pub const PLAYER_SLOTS: usize = 2;
-
 #[inline(always)]
 const fn side_ix(side: PlayerSide) -> usize {
     match side {
@@ -4021,58 +4009,12 @@ const fn side_ix(side: PlayerSide) -> usize {
 static PROFILES: std::sync::LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
     std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
 
-// --- Session-scoped state (not persisted) ---
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ActiveProfile {
-    Guest,
-    Local { id: String },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PlayStyle {
-    #[default]
-    Single,
-    Versus,
-    Double,
-}
-
-impl PlayStyle {
-    pub const fn chart_type(self) -> &'static str {
-        match self {
-            Self::Single | Self::Versus => "dance-single",
-            Self::Double => "dance-double",
-        }
-    }
-}
-
 #[inline(always)]
 pub(crate) const fn player_options_section(style: PlayStyle) -> &'static str {
     match style {
         PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
         PlayStyle::Double => "PlayerOptionsDoubles",
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PlayMode {
-    #[default]
-    Regular,
-    Marathon,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PlayerSide {
-    #[default]
-    P1,
-    P2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TimingTickMode {
-    #[default]
-    Off,
-    Assist,
-    Hit,
 }
 
 pub const GUEST_SCROLL_SPEED: ScrollSpeedSetting = ScrollSpeedSetting::MMod(250.0);
@@ -4983,22 +4925,6 @@ pub fn get_for_side(side: PlayerSide) -> Profile {
     lock_profiles()[side_ix(side)].clone()
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct GameplayHudPlayerSnapshot {
-    pub joined: bool,
-    pub guest: bool,
-    pub display_name: String,
-    pub avatar_texture_key: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct GameplayHudSnapshot {
-    pub play_style: PlayStyle,
-    pub player_side: PlayerSide,
-    pub p1: GameplayHudPlayerSnapshot,
-    pub p2: GameplayHudPlayerSnapshot,
-}
-
 pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
     let (play_style, player_side, joined_mask, p1_guest, p2_guest) = {
         let session = lock_session();
@@ -5222,12 +5148,6 @@ pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PL
     let _ = set_active_profile_for_side(PlayerSide::P1, p1);
     let _ = set_active_profile_for_side(PlayerSide::P2, p2);
     [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
-}
-
-pub struct LocalProfileSummary {
-    pub id: String,
-    pub display_name: String,
-    pub avatar_path: Option<PathBuf>,
 }
 
 #[inline(always)]

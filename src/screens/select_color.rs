@@ -13,6 +13,7 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 // Keyboard handling is centralized in app via virtual actions
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -154,8 +155,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         fg_color: FG,
     }));
 
-    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -165,10 +166,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = profile::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = profile::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");

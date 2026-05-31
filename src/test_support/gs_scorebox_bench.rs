@@ -1,15 +1,17 @@
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
+use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox;
 use deadsync_score::{
-    CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
+    CachedPlayerLeaderboardData, GameplayScoreboxProfileSnapshot, LeaderboardEntry,
+    LeaderboardPane, PlayerLeaderboardData,
 };
 
 pub const SCENARIO_NAME: &str = "gs-scorebox";
 
 pub struct GsScoreboxBenchFixture {
     snapshot: CachedPlayerLeaderboardData,
-    profile_snapshot: crate::game::scores::GameplayScoreboxProfileSnapshot,
+    profile_snapshot: GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -48,9 +50,7 @@ pub fn fixture() -> GsScoreboxBenchFixture {
                 itl_self_rank: None,
             }),
         },
-        profile_snapshot: crate::game::scores::GameplayScoreboxProfileSnapshot::from_profile(
-            &profile, true, None,
-        ),
+        profile_snapshot: scores::scorebox_profile_snapshot(&profile, true, None),
         center_x: 704.0,
         center_y: 108.0,
         zoom: 1.0,

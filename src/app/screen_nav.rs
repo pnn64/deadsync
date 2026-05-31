@@ -10,6 +10,7 @@ use crate::config;
 use crate::config::dirs;
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
+use deadsync_profile as profile_data;
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
@@ -48,19 +49,21 @@ const fn machine_startup_screen_enabled(cfg: &config::Config, screen: CurrentScr
 }
 
 #[inline(always)]
-const fn machine_preferred_style(style: config::MachinePreferredPlayStyle) -> profile::PlayStyle {
+const fn machine_preferred_style(
+    style: config::MachinePreferredPlayStyle,
+) -> profile_data::PlayStyle {
     match style {
-        config::MachinePreferredPlayStyle::Single => profile::PlayStyle::Single,
-        config::MachinePreferredPlayStyle::Versus => profile::PlayStyle::Versus,
-        config::MachinePreferredPlayStyle::Double => profile::PlayStyle::Double,
+        config::MachinePreferredPlayStyle::Single => profile_data::PlayStyle::Single,
+        config::MachinePreferredPlayStyle::Versus => profile_data::PlayStyle::Versus,
+        config::MachinePreferredPlayStyle::Double => profile_data::PlayStyle::Double,
     }
 }
 
 #[inline(always)]
-const fn machine_preferred_mode(mode: config::MachinePreferredPlayMode) -> profile::PlayMode {
+const fn machine_preferred_mode(mode: config::MachinePreferredPlayMode) -> profile_data::PlayMode {
     match mode {
-        config::MachinePreferredPlayMode::Regular => profile::PlayMode::Regular,
-        config::MachinePreferredPlayMode::Marathon => profile::PlayMode::Marathon,
+        config::MachinePreferredPlayMode::Regular => profile_data::PlayMode::Regular,
+        config::MachinePreferredPlayMode::Marathon => profile_data::PlayMode::Marathon,
     }
 }
 
@@ -240,8 +243,8 @@ impl App {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state = select_style::init();
             self.state.screens.select_style_state.active_color_index = current_color_index;
-            let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-            let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+            let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+            let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
             self.state.screens.select_style_state.selected_index =
                 if p1_joined && p2_joined { 1 } else { 0 };
         } else if target_screen == CurrentScreen::Mappings {
@@ -353,9 +356,9 @@ impl App {
         {
             let p2_started = self.state.screens.menu_state.started_by_p2;
             profile::set_session_player_side(if p2_started {
-                profile::PlayerSide::P2
+                profile_data::PlayerSide::P2
             } else {
-                profile::PlayerSide::P1
+                profile_data::PlayerSide::P1
             });
             profile::set_session_joined(!p2_started, p2_started);
             profile::set_fast_profile_switch_from_select_music(false);

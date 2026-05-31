@@ -2,6 +2,7 @@ use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
+use deadsync_profile::{MINI_PERCENT_MAX, MINI_PERCENT_MIN, PlayerSide};
 
 // =============================== Bindings ===============================
 
@@ -170,7 +171,7 @@ fn apply_noteskin_delta(
     row_id: RowId,
     delta: isize,
     wrap: NavWrap,
-    apply: fn(&mut State, usize, &str, bool, gp::PlayerSide),
+    apply: fn(&mut State, usize, &str, bool, PlayerSide),
 ) -> Outcome {
     let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
         return Outcome::NONE;
@@ -562,7 +563,7 @@ fn push_mini_row(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "Mini"),
         lookup_key("PlayerOptionsHelp", "MiniHelp"),
         MINI,
-        (gp::MINI_PERCENT_MIN..=gp::MINI_PERCENT_MAX)
+        (MINI_PERCENT_MIN..=MINI_PERCENT_MAX)
             .map(|v| format!("{v}%"))
             .collect(),
     ));

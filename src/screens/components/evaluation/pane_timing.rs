@@ -5,9 +5,9 @@ use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::profile;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 
 use super::utils::pane_origin_x;
@@ -140,7 +140,7 @@ fn timing_bands_ms(
 pub fn build_timing_pane(
     score_info: &ScoreInfo,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
-    controller: profile::PlayerSide,
+    controller: profile_data::PlayerSide,
     scale: TimingHistogramScale,
 ) -> Vec<Actor> {
     let pane_width: f32 = 300.0;

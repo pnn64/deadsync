@@ -15,6 +15,7 @@ use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::State;
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
 use std::cell::RefCell;
@@ -142,9 +143,9 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 #[inline(always)]
-fn step_stats_player_idx(state: &State, player_side: profile::PlayerSide) -> usize {
+fn step_stats_player_idx(state: &State, player_side: profile_data::PlayerSide) -> usize {
     match (state.num_players, player_side) {
-        (2, profile::PlayerSide::P2) => 1,
+        (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     }
 }
@@ -825,7 +826,7 @@ pub fn push_step_stats(
     state: &State,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     let wide = is_wide();
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
@@ -851,7 +852,7 @@ struct StepStatsPaneLayout {
 fn step_stats_pane_layout(
     state: &State,
     playfield_center_x: f32,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) -> StepStatsPaneLayout {
     let sw = screen_width();
     let sh = screen_height().max(1.0);
@@ -861,8 +862,8 @@ fn step_stats_pane_layout(
 
     let mut sidepane_width = sw * 0.5;
     let mut sidepane_center_x = match player_side {
-        profile::PlayerSide::P1 => sw * 0.75,
-        profile::PlayerSide::P2 => sw * 0.25,
+        profile_data::PlayerSide::P1 => sw * 0.75,
+        profile_data::PlayerSide::P2 => sw * 0.25,
     };
 
     // zmod StepStatistics/default.lua:
@@ -872,10 +873,10 @@ fn step_stats_pane_layout(
         let nf_width = notefield_width(state).unwrap_or(256.0).max(1.0);
         sidepane_width = ((sw - nf_width) * 0.5).max(1.0);
         sidepane_center_x = match player_side {
-            profile::PlayerSide::P1 => {
+            profile_data::PlayerSide::P1 => {
                 screen_center_x() + nf_width + (sidepane_width - nf_width) * 0.5
             }
-            profile::PlayerSide::P2 => {
+            profile_data::PlayerSide::P2 => {
                 screen_center_x() - nf_width - (sidepane_width - nf_width) * 0.5
             }
         };
@@ -885,8 +886,8 @@ fn step_stats_pane_layout(
     if is_ultrawide && state.num_players > 1 {
         sidepane_width = sw * 0.2;
         sidepane_center_x = match player_side {
-            profile::PlayerSide::P1 => sidepane_width * 0.5,
-            profile::PlayerSide::P2 => sw - (sidepane_width * 0.5),
+            profile_data::PlayerSide::P1 => sidepane_width * 0.5,
+            profile_data::PlayerSide::P2 => sw - (sidepane_width * 0.5),
         };
     }
 
@@ -1549,7 +1550,7 @@ pub fn push_double_step_stats(
             actors,
             state,
             0,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             timing_label_x,
             timing_label_x + (156.0 * number_zoom),
             base_y,
@@ -1604,7 +1605,7 @@ fn build_banner(
     state: &State,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if let Some(banner_key) = &state.song_banner_key {
         let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players);
@@ -1623,7 +1624,7 @@ fn build_banner(
 fn song_banner_local_x(
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
     num_players: usize,
 ) -> f32 {
     let mut x = if layout.note_field_is_centered && wide {
@@ -1631,7 +1632,7 @@ fn song_banner_local_x(
     } else {
         70.0
     };
-    if player_side == profile::PlayerSide::P2 {
+    if player_side == profile_data::PlayerSide::P2 {
         x *= -1.0;
     }
     if layout.is_ultrawide && num_players > 1 {
@@ -1645,7 +1646,7 @@ fn build_pack_banner(
     state: &State,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if !wide {
         return;
@@ -1667,8 +1668,8 @@ fn build_pack_banner(
         -160.0
     };
     let side_sign = match player_side {
-        profile::PlayerSide::P1 => 1.0,
-        profile::PlayerSide::P2 => -1.0,
+        profile_data::PlayerSide::P1 => 1.0,
+        profile_data::PlayerSide::P2 => -1.0,
     };
     let x = layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom;
     let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
@@ -1687,7 +1688,7 @@ fn build_steps_info(
     state: &State,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if !wide {
         return;
@@ -1706,7 +1707,7 @@ fn build_steps_info(
     let banner_data_zoom = layout.banner_data_zoom;
 
     let player_idx = match (state.num_players, player_side) {
-        (2, profile::PlayerSide::P2) => 1,
+        (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     };
     let chart = &state.charts[player_idx];
@@ -1732,8 +1733,8 @@ fn build_steps_info(
 
     let ar = screen_width() / screen_height().max(1.0);
     let pnum = match player_side {
-        profile::PlayerSide::P1 => 1,
-        profile::PlayerSide::P2 => 2,
+        profile_data::PlayerSide::P1 => 1,
+        profile_data::PlayerSide::P2 => 2,
     };
     let pos_sign = if pnum == 1 { -1.0 } else { 1.0 };
 
@@ -1927,7 +1928,7 @@ fn build_holds_mines_rolls_pane(
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if !wide {
         return;
@@ -1935,8 +1936,8 @@ fn build_holds_mines_rolls_pane(
     let player_idx = step_stats_player_idx(state, player_side);
     let banner_data_zoom = layout.banner_data_zoom;
     let local_x = match player_side {
-        profile::PlayerSide::P1 => 155.0,
-        profile::PlayerSide::P2 => -85.0,
+        profile_data::PlayerSide::P1 => 155.0,
+        profile_data::PlayerSide::P2 => -85.0,
     };
     let local_y = -112.0;
     let frame_cx = layout.sidepane_center_x + (local_x * banner_data_zoom);
@@ -1978,8 +1979,8 @@ fn build_holds_mines_rolls_pane(
         for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
             let item_y = frame_cy + (i as f32 - 1.0) * row_height;
             let right_anchor_x = match player_side {
-                profile::PlayerSide::P1 => frame_cx,
-                profile::PlayerSide::P2 => frame_cx + 100.0 * frame_zoom,
+                profile_data::PlayerSide::P1 => frame_cx,
+                profile_data::PlayerSide::P2 => frame_cx + 100.0 * frame_zoom,
             };
             let mut cursor_x = right_anchor_x;
 
@@ -2045,15 +2046,15 @@ fn build_scorebox_pane(
     state: &State,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if !wide {
         return;
     }
 
     let x_sign = match player_side {
-        profile::PlayerSide::P1 => 1.0,
-        profile::PlayerSide::P2 => -1.0,
+        profile_data::PlayerSide::P1 => 1.0,
+        profile_data::PlayerSide::P2 => -1.0,
     };
     let mut local_x = 70.0 * x_sign;
     if layout.note_field_is_centered && wide {
@@ -2080,7 +2081,7 @@ fn push_live_timing_stats_at(
     actors: &mut Vec<Actor>,
     state: &State,
     player_idx: usize,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
     label_x: f32,
     value_x: f32,
     first_y: f32,
@@ -2125,7 +2126,7 @@ fn push_live_timing_stats_at(
         let value = live_timing_value(stats, index);
         row += 1;
 
-        if player_side == profile::PlayerSide::P1 {
+        if player_side == profile_data::PlayerSide::P1 {
             actors.push(act!(text: font("miso"): settext(label):
                 align(0.0, 0.5): xy(label_x, y):
                 zoom(zoom): maxwidth(label_max_w): horizalign(left):
@@ -2157,15 +2158,15 @@ fn build_side_pane(
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     wide: bool,
-    player_side: profile::PlayerSide,
+    player_side: profile_data::PlayerSide,
 ) {
     if !wide {
         return;
     }
 
     let x_sign = match player_side {
-        profile::PlayerSide::P1 => 1.0,
-        profile::PlayerSide::P2 => -1.0,
+        profile_data::PlayerSide::P1 => 1.0,
+        profile_data::PlayerSide::P2 => -1.0,
     };
     let player_idx = step_stats_player_idx(state, player_side);
     let judgments_local_x = if layout.is_ultrawide && state.num_players > 1 {
@@ -2246,7 +2247,7 @@ fn build_side_pane(
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 
-                if player_side == profile::PlayerSide::P1 {
+                if player_side == profile_data::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
                             font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
@@ -2286,7 +2287,7 @@ fn build_side_pane(
                 let label_zoom = final_text_base_zoom * 0.833;
                 let label = info.label.get();
 
-                if player_side == profile::PlayerSide::P1 {
+                if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:
                         font("miso"): settext(label): align(0.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
@@ -2357,7 +2358,7 @@ fn build_side_pane(
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 
-                if player_side == profile::PlayerSide::P1 {
+                if player_side == profile_data::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
                             font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
@@ -2399,7 +2400,7 @@ fn build_side_pane(
                 let sublabel_zoom = final_text_base_zoom * 0.6;
                 let label = judgment_label(*label_index);
 
-                if player_side == profile::PlayerSide::P1 {
+                if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:
                         font("miso"): settext(label): align(0.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
@@ -2489,14 +2490,14 @@ fn build_side_pane(
                 label_offset
             };
 
-            let (time_x, label_dir) = if player_side == profile::PlayerSide::P1 {
+            let (time_x, label_dir) = if player_side == profile_data::PlayerSide::P1 {
                 (numbers_left_x, 1.0_f32)
             } else {
                 let numbers_right_x = numbers_cx + numbers_block_width - 2.0;
                 (numbers_right_x, -1.0_f32)
             };
 
-            if player_side == profile::PlayerSide::P1 {
+            if player_side == profile_data::PlayerSide::P1 {
                 actors.push(act!(text: font(font_name): settext(total_time_str):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x, y_pos_total):
@@ -2534,7 +2535,7 @@ fn build_side_pane(
                 label_offset
             };
 
-            if player_side == profile::PlayerSide::P1 {
+            if player_side == profile_data::PlayerSide::P1 {
                 actors.push(act!(text: font(font_name): settext(remaining_time_str):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x, y_pos_remaining):
@@ -2564,7 +2565,7 @@ fn build_side_pane(
 
             let timing_gap = 104.0 * layout.banner_data_zoom;
             let timing_value_gap = 156.0 * layout.banner_data_zoom;
-            let timing_label_anchor = if player_side == profile::PlayerSide::P1 {
+            let timing_label_anchor = if player_side == profile_data::PlayerSide::P1 {
                 time_x + label_offset_total.max(label_offset_remaining) + timing_gap
             } else {
                 time_x - label_offset_total.max(label_offset_remaining) - timing_gap
@@ -2604,8 +2605,8 @@ fn build_side_pane(
         // Positioned based on visual parity with Simply Love's Step Statistics pane
         // for Player 1, which is on the right side of the screen.
         let peak_nps_x = match player_side {
-            profile::PlayerSide::P1 => screen_width() - 59.0,
-            profile::PlayerSide::P2 => widescale(6.0, 130.0),
+            profile_data::PlayerSide::P1 => screen_width() - 59.0,
+            profile_data::PlayerSide::P2 => widescale(6.0, 130.0),
         };
         let peak_nps_y = screen_center_y() + 126.0;
 

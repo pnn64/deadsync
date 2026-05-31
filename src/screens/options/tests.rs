@@ -1,6 +1,7 @@
 use super::*;
 use crate::assets::AssetManager;
 use deadsync_input::{InputEvent, InputSource, VirtualAction};
+use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
@@ -29,7 +30,7 @@ fn dedicated_press(
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
 }
 
-fn age_start_hold(state: &mut State, side: profile::PlayerSide) {
+fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
     let idx = screen_input::player_side_ix(side);
     state.start_input[idx].held = true;
     state.start_input[idx].held_for = NAV_INITIAL_HOLD_DELAY;
@@ -415,12 +416,12 @@ fn service_child_three_key_held_start_repeats_down() {
     dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
     assert_eq!(state.sub_selected, 1);
 
-    age_start_hold(&mut state, profile::PlayerSide::P1);
+    age_start_hold(&mut state, profile_data::PlayerSide::P1);
     assert!(
         repeat_held_dedicated_three_key_start(
             &mut state,
             &asset_manager,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             repeat_tick_dt(),
         )
         .is_none()
@@ -444,12 +445,12 @@ fn service_child_three_key_held_left_right_start_repeats_up() {
         &input_event(VirtualAction::p1_right, true),
     );
 
-    age_start_hold(&mut state, profile::PlayerSide::P1);
+    age_start_hold(&mut state, profile_data::PlayerSide::P1);
     assert!(
         repeat_held_dedicated_three_key_start(
             &mut state,
             &asset_manager,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             repeat_tick_dt(),
         )
         .is_none()
@@ -466,12 +467,12 @@ fn service_child_three_key_held_start_stops_at_exit() {
     let exit_row = submenu_total_rows(&state, SubmenuKind::Graphics).saturating_sub(1);
     state.sub_selected = exit_row;
 
-    age_start_hold(&mut state, profile::PlayerSide::P1);
+    age_start_hold(&mut state, profile_data::PlayerSide::P1);
     assert!(
         repeat_held_dedicated_three_key_start(
             &mut state,
             &asset_manager,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             repeat_tick_dt(),
         )
         .is_none()
@@ -488,12 +489,12 @@ fn input_launcher_three_key_held_start_does_not_repeat_rows() {
     state.view = OptionsView::Submenu(SubmenuKind::Input);
     state.sub_selected = 0;
 
-    age_start_hold(&mut state, profile::PlayerSide::P1);
+    age_start_hold(&mut state, profile_data::PlayerSide::P1);
     assert!(
         repeat_held_dedicated_three_key_start(
             &mut state,
             &asset_manager,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
             repeat_tick_dt(),
         )
         .is_none()

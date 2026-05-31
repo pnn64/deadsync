@@ -9,6 +9,7 @@ use crate::game::parsing::song_lua::{
 use crate::game::profile;
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData};
@@ -2688,16 +2689,17 @@ fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,
     profile: &profile::Profile,
-    play_style: profile::PlayStyle,
-    player_side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
     let clamped_width = screen_width().clamp(640.0, 854.0);
-    let centered_one_side =
-        num_players == 1 && play_style == profile::PlayStyle::Single && center_1player_notefield;
-    let centered_both_sides = num_players == 1 && play_style == profile::PlayStyle::Double;
+    let centered_one_side = num_players == 1
+        && play_style == profile_data::PlayStyle::Single
+        && center_1player_notefield;
+    let centered_both_sides = num_players == 1 && play_style == profile_data::PlayStyle::Double;
     let p2_side = if num_players == 1 {
-        play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2
+        play_style == profile_data::PlayStyle::Single && player_side == profile_data::PlayerSide::P2
     } else {
         player_index == 1
     };
@@ -2752,9 +2754,9 @@ fn build_song_lua_compile_context(
     };
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
-        profile::PlayStyle::Single => "single",
-        profile::PlayStyle::Versus => "versus",
-        profile::PlayStyle::Double => "double",
+        profile_data::PlayStyle::Single => "single",
+        profile_data::PlayStyle::Versus => "versus",
+        profile_data::PlayStyle::Double => "double",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
@@ -5400,8 +5402,11 @@ pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize)
 
 #[inline(always)]
 pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
-    1.0 + (spacing_percent.clamp(profile::SPACING_PERCENT_MIN, profile::SPACING_PERCENT_MAX) as f32)
-        / 100.0
+    let clamped = spacing_percent.clamp(
+        profile_data::SPACING_PERCENT_MIN,
+        profile_data::SPACING_PERCENT_MAX,
+    );
+    1.0 + clamped as f32 / 100.0
 }
 
 #[inline(always)]

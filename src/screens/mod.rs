@@ -30,7 +30,7 @@ use std::path::PathBuf;
 
 use crate::config::DisplayMode;
 use crate::engine::gfx::{BackendType, PresentModePolicy};
-use crate::game::profile::{ActiveProfile, PlayerSide};
+use deadsync_profile::{ActiveProfile, PlayerSide};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DensityGraphSlot {

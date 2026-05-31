@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile as profile_data;
 
 /// Refresh cached translated labels when the UI language changes.
 pub(super) fn sync_i18n_cache(state: &mut State) {
@@ -509,7 +510,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
     }
 
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if pending_action.is_none() {
             pending_action = repeat_held_dedicated_three_key_start(state, asset_manager, side, dt);
         } else {

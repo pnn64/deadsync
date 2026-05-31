@@ -4,6 +4,7 @@ use crate::game::profile;
 use crate::screens::player_options::RowId;
 use crate::screens::{Screen, player_options};
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_profile as profile_data;
 
 pub const SCENARIO_NAME: &str = "player-options";
 
@@ -26,8 +27,8 @@ pub fn fixture() -> PlayerOptionsBenchFixture {
     let base = notefield_bench::fixture();
     let song = base.state().song.clone();
 
-    profile::set_session_play_style(profile::PlayStyle::Versus);
-    profile::set_session_player_side(profile::PlayerSide::P1);
+    profile::set_session_play_style(profile_data::PlayStyle::Versus);
+    profile::set_session_player_side(profile_data::PlayerSide::P1);
     profile::set_session_joined(true, true);
 
     let mut asset_manager = AssetManager::new();

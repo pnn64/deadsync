@@ -1,12 +1,12 @@
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
-use crate::game::profile;
 use crate::screens::components::gameplay::{
     gameplay_stats,
     notefield::{self, FieldPlacement},
 };
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_profile as profile_data;
 use deadsync_rules::timing::WindowCounts;
 use deadsync_score::{
     ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,
@@ -31,7 +31,7 @@ impl GameplayStatsBenchFixture {
             &self.state,
             &self.asset_manager,
             self.playfield_center_x,
-            profile::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
         );
         actors
     }
@@ -127,7 +127,7 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         &state,
         &bench_profile,
         FieldPlacement::P1,
-        profile::PlayStyle::Single,
+        profile_data::PlayStyle::Single,
         false,
         notefield::ProxyCaptureRequests::default(),
         notefield::ViewOverride::default(),

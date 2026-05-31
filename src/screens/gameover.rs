@@ -11,6 +11,7 @@ use crate::game::stage_stats;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -34,17 +35,17 @@ const AVATAR_DIM: f32 = 110.0;
 const AVATAR_Y: f32 = 12.0;
 
 #[inline(always)]
-const fn side_ix(side: profile::PlayerSide) -> usize {
+const fn side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
+        profile_data::PlayerSide::P1 => 0,
+        profile_data::PlayerSide::P2 => 1,
     }
 }
 
-fn player_color_rgba(side: profile::PlayerSide, active_color_index: i32) -> [f32; 4] {
+fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
-        profile::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
-        profile::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
+        profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
+        profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
     }
 }
 
@@ -65,7 +66,7 @@ fn is_course_summary_stage(stage: &stage_stats::StageSummary) -> bool {
 }
 
 fn session_stats_for_side(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     stages: &[stage_stats::StageSummary],
 ) -> SessionStats {
     let mut out = SessionStats::default();
@@ -114,7 +115,7 @@ fn format_time_spent(seconds_total: f32) -> String {
 }
 
 fn build_player_lines(
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     stages: &[stage_stats::StageSummary],
     total_songs_played: u32,
 ) -> (Vec<String>, Vec<String>) {
@@ -174,8 +175,8 @@ pub struct State {
 fn init_inner(scan_totals: bool) -> State {
     let total_songs_played = if scan_totals {
         [
-            scores::total_songs_played_for_side(profile::PlayerSide::P1),
-            scores::total_songs_played_for_side(profile::PlayerSide::P2),
+            scores::total_songs_played_for_side(profile_data::PlayerSide::P1),
+            scores::total_songs_played_for_side(profile_data::PlayerSide::P2),
         ]
     } else {
         [0, 0]
@@ -285,15 +286,15 @@ pub fn get_actors(
         ));
     }
 
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
 
         let pc = player_color_rgba(side, state.active_color_index);
         let x_pos = match side {
-            profile::PlayerSide::P1 => SIDE_BG_X_PAD,
-            profile::PlayerSide::P2 => screen_width() - SIDE_BG_X_PAD,
+            profile_data::PlayerSide::P1 => SIDE_BG_X_PAD,
+            profile_data::PlayerSide::P2 => screen_width() - SIDE_BG_X_PAD,
         };
 
         // Avatar (persistent profiles only)

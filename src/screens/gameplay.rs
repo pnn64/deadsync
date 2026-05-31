@@ -31,6 +31,7 @@ use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
@@ -342,15 +343,15 @@ const fn map_gameplay_action(action: GameplayAction) -> ScreenAction {
     }
 }
 
-fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+fn local_lobby_side_is_active(side: profile_data::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
         return profile::get_session_player_side() == side;
     }
     match side {
-        profile::PlayerSide::P1 => p1_joined,
-        profile::PlayerSide::P2 => p2_joined,
+        profile_data::PlayerSide::P1 => p1_joined,
+        profile_data::PlayerSide::P2 => p2_joined,
     }
 }
 
@@ -370,13 +371,13 @@ fn intro_text_target_x(
     state: &State,
     asset_manager: &AssetManager,
     text: &str,
-    play_style: profile::PlayStyle,
-    player_side: profile::PlayerSide,
+    play_style: profile_data::PlayStyle,
+    player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
     let centered_notefield = state.num_players == 1
-        && (play_style == profile::PlayStyle::Double
-            || (play_style == profile::PlayStyle::Single && center_1player_notefield));
+        && (play_style == profile_data::PlayStyle::Double
+            || (play_style == profile_data::PlayStyle::Single && center_1player_notefield));
     if !centered_notefield || state.cols_per_player == 0 {
         return screen_center_x();
     }
@@ -384,8 +385,8 @@ fn intro_text_target_x(
     // Simply Love ScreenGameplay in/default.lua: when one human player's
     // notefield is centered, move the Stage/Event text outside GetNotefieldWidth().
     let side_sign = match player_side {
-        profile::PlayerSide::P1 => -1.0,
-        profile::PlayerSide::P2 => 1.0,
+        profile_data::PlayerSide::P1 => -1.0,
+        profile_data::PlayerSide::P2 => 1.0,
     };
     let notefield_width = state.cols_per_player as f32 * 64.0;
     screen_center_x()
@@ -393,11 +394,11 @@ fn intro_text_target_x(
             * side_sign
 }
 
-fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
+fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide) -> Option<usize> {
     if state.num_players >= 2 {
         return Some(match side {
-            profile::PlayerSide::P1 => 0,
-            profile::PlayerSide::P2 => 1,
+            profile_data::PlayerSide::P1 => 0,
+            profile_data::PlayerSide::P2 => 1,
         });
     }
     if state.num_players == 0 || profile::get_session_player_side() != side {
@@ -408,7 +409,7 @@ fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> O
 
 fn gameplay_lobby_player_stats(
     state: &State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
 ) -> Option<lobby_data::MachinePlayerStats> {
     let player_idx = gameplay_player_index_for_side(state, side)?;
     let ex_data = crate::game::gameplay::display_ex_score_data(state, player_idx);
@@ -439,8 +440,8 @@ fn gameplay_lobby_player_stats(
 
 fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
     (
-        local_lobby_side_is_active(profile::PlayerSide::P1) && state.lobby_ready_p1,
-        local_lobby_side_is_active(profile::PlayerSide::P2) && state.lobby_ready_p2,
+        local_lobby_side_is_active(profile_data::PlayerSide::P1) && state.lobby_ready_p1,
+        local_lobby_side_is_active(profile_data::PlayerSide::P2) && state.lobby_ready_p2,
     )
 }
 
@@ -448,11 +449,11 @@ fn local_lobby_players_ready(state: &State) -> bool {
     let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
     let mut any_active = false;
     let mut all_ready = true;
-    if local_lobby_side_is_active(profile::PlayerSide::P1) {
+    if local_lobby_side_is_active(profile_data::PlayerSide::P1) {
         any_active = true;
         all_ready &= p1_ready;
     }
-    if local_lobby_side_is_active(profile::PlayerSide::P2) {
+    if local_lobby_side_is_active(profile_data::PlayerSide::P2) {
         any_active = true;
         all_ready &= p2_ready;
     }
@@ -460,16 +461,16 @@ fn local_lobby_players_ready(state: &State) -> bool {
 }
 
 fn set_all_local_lobby_players_ready(state: &mut State, ready: bool) {
-    state.lobby_ready_p1 = local_lobby_side_is_active(profile::PlayerSide::P1) && ready;
-    state.lobby_ready_p2 = local_lobby_side_is_active(profile::PlayerSide::P2) && ready;
+    state.lobby_ready_p1 = local_lobby_side_is_active(profile_data::PlayerSide::P1) && ready;
+    state.lobby_ready_p2 = local_lobby_side_is_active(profile_data::PlayerSide::P2) && ready;
 }
 
-fn set_local_lobby_player_ready(state: &mut State, side: profile::PlayerSide) {
+fn set_local_lobby_player_ready(state: &mut State, side: profile_data::PlayerSide) {
     match side {
-        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
             state.lobby_ready_p1 = true;
         }
-        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
             state.lobby_ready_p2 = true;
         }
         _ => {}
@@ -483,14 +484,14 @@ fn clear_lobby_disconnect_holds(state: &mut State) {
 
 fn set_lobby_disconnect_hold(
     state: &mut State,
-    side: profile::PlayerSide,
+    side: profile_data::PlayerSide,
     started_at: Option<Instant>,
 ) {
     match side {
-        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -626,8 +627,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             "ScreenGameplay",
             p1_ready,
             p2_ready,
-            gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
-            gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
+            gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
+            gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
         );
 
         if gameplay_lobby_wait_text(state).is_some() {
@@ -644,8 +645,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         "ScreenGameplay",
         p1_ready,
         p2_ready,
-        gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
-        gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
+        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
+        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
     );
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time);
@@ -719,18 +720,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
-                    set_local_lobby_player_ready(state, profile::PlayerSide::P1);
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                    set_local_lobby_player_ready(state, profile_data::PlayerSide::P1);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
             }
             VirtualAction::p2_start => {
                 if ev.pressed {
-                    set_local_lobby_player_ready(state, profile::PlayerSide::P2);
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                    set_local_lobby_player_ready(state, profile_data::PlayerSide::P2);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
                 } else {
-                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
             }
             _ => {}
@@ -7024,10 +7025,10 @@ pub fn push_actors(
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
-        play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
+        play_style == profile_data::PlayStyle::Single && player_side == profile_data::PlayerSide::P2;
     let center_1player_notefield =
         cfg.center_1player_notefield || notefield_view.force_center_1player;
-    let centered_single_notefield = play_style == profile::PlayStyle::Single
+    let centered_single_notefield = play_style == profile_data::PlayStyle::Single
         && state.num_players == 1
         && center_1player_notefield;
     let song_lua_space_width = song_lua_overlay_space_width(state);
@@ -7495,7 +7496,7 @@ pub fn push_actors(
         f32,
         [(usize, f32); 2],
     ) = match play_style {
-        profile::PlayStyle::Versus => {
+        profile_data::PlayStyle::Versus => {
             let (p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
@@ -7574,15 +7575,15 @@ pub fn push_actors(
                 continue;
             };
             let (x, w, fl, fr) = match play_style {
-                profile::PlayStyle::Double => (0.0, sw, 0.0, 0.0),
-                profile::PlayStyle::Versus => {
+                profile_data::PlayStyle::Double => (0.0, sw, 0.0, 0.0),
+                profile_data::PlayStyle::Versus => {
                     if player_idx == 0 {
                         (0.0, cx, 0.0, 0.1)
                     } else {
                         (cx, sw - cx, 0.1, 0.0)
                     }
                 }
-                profile::PlayStyle::Single => {
+                profile_data::PlayStyle::Single => {
                     if centered_single_notefield {
                         (0.0, sw, 0.0, 0.0)
                     } else if is_p2_single {
@@ -7662,12 +7663,12 @@ pub fn push_actors(
         let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
         let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-        let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
+        let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
         let player_count = match play_style {
-            profile::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus => {
                 players[0] = (
                     0,
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     per_player_fields[0].1,
                     diff_x_p1,
                     score_x_p1,
@@ -7675,7 +7676,7 @@ pub fn push_actors(
                 );
                 players[1] = (
                     1,
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     per_player_fields[1].1,
                     diff_x_p2,
                     score_x_p2,
@@ -7686,7 +7687,7 @@ pub fn push_actors(
             _ if is_p2_single => {
                 players[0] = (
                     0,
-                    profile::PlayerSide::P2,
+                    profile_data::PlayerSide::P2,
                     per_player_fields[0].1,
                     diff_x_p2,
                     score_x_p2,
@@ -7697,7 +7698,7 @@ pub fn push_actors(
             _ => {
                 players[0] = (
                     0,
-                    profile::PlayerSide::P1,
+                    profile_data::PlayerSide::P1,
                     per_player_fields[0].1,
                     diff_x_p1,
                     score_x_p1,
@@ -7724,7 +7725,7 @@ pub fn push_actors(
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
             let x = if note_field_is_centered {
                 screen_center_x() - graph_w * 0.5
-            } else if player_side == profile::PlayerSide::P1 {
+            } else if player_side == profile_data::PlayerSide::P1 {
                 screen_center_x() - graph_w - graph_center_shift
             } else {
                 screen_center_x() + graph_center_shift
@@ -7813,7 +7814,7 @@ pub fn push_actors(
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
             let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
             let single_score_swapped = state.num_players == 1
-                && play_style != profile::PlayStyle::Double
+                && play_style != profile_data::PlayStyle::Double
                 && nps_graph_at_top
                 && !note_field_is_centered;
             let score_x = if single_score_swapped {
@@ -7843,7 +7844,7 @@ pub fn push_actors(
                     (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
                 };
 
-                let is_p2_side = player_side == profile::PlayerSide::P2;
+                let is_p2_side = player_side == profile_data::PlayerSide::P2;
                 // Arrow Cloud parity: EX remains the "normal" score position/anchor.
                 // H.EX is placed at a different x on P2 so it appears to the left of EX.
                 actors.push(act!(text:
@@ -7925,7 +7926,7 @@ pub fn push_actors(
                 && note_field_is_centered
                 && state.player_profiles[0].nps_graph_at_top
             {
-                let side_shift = if player_side == profile::PlayerSide::P1 {
+                let side_shift = if player_side == profile_data::PlayerSide::P1 {
                     0.3
                 } else {
                     -0.3
@@ -7984,7 +7985,7 @@ pub fn push_actors(
         {
             let player_life_color = |player_idx: usize| -> [f32; 4] {
                 match play_style {
-                    profile::PlayStyle::Versus => {
+                    profile_data::PlayStyle::Versus => {
                         if player_idx == 0 {
                             color::decorative_rgba(state.active_color_index)
                         } else {
@@ -8035,19 +8036,19 @@ pub fn push_actors(
             let show_standard_life_percent =
                 screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
 
-            let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
+            let mut life_players = [(0usize, profile_data::PlayerSide::P1); 2];
             let life_player_count = match play_style {
-                profile::PlayStyle::Versus => {
-                    life_players[0] = (0, profile::PlayerSide::P1);
-                    life_players[1] = (1, profile::PlayerSide::P2);
+                profile_data::PlayStyle::Versus => {
+                    life_players[0] = (0, profile_data::PlayerSide::P1);
+                    life_players[1] = (1, profile_data::PlayerSide::P2);
                     2
                 }
                 _ if is_p2_single => {
-                    life_players[0] = (0, profile::PlayerSide::P2);
+                    life_players[0] = (0, profile_data::PlayerSide::P2);
                     1
                 }
                 _ => {
-                    life_players[0] = (0, profile::PlayerSide::P1);
+                    life_players[0] = (0, profile_data::PlayerSide::P1);
                     1
                 }
             };
@@ -8077,13 +8078,13 @@ pub fn push_actors(
                         let meter_cy = 20.0;
                         let meter_cx = screen_center_x()
                             + match play_style {
-                                profile::PlayStyle::Versus => match side {
-                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                profile_data::PlayStyle::Versus => match side {
+                                    profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                 },
                                 _ => match side {
-                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                    profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                 },
                             };
 
@@ -8139,7 +8140,7 @@ pub fn push_actors(
                         {
                             let life_text_color = player_life_color(player_idx);
                             let (outer_x, inner_x, text_x, align_x) =
-                                if side == profile::PlayerSide::P1 {
+                                if side == profile_data::PlayerSide::P1 {
                                     (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
                                 } else {
                                     (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
@@ -8173,7 +8174,7 @@ pub fn push_actors(
                         let y = 80.0;
                         let croptop = 1.0 - life_for_render;
 
-                        if play_style == profile::PlayStyle::Double {
+                        if play_style == profile_data::PlayStyle::Double {
                             // Double: two quads flanking left/right, moving in unison.
                             actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
@@ -8214,7 +8215,7 @@ pub fn push_actors(
                         }
 
                         match side {
-                            profile::PlayerSide::P1 => {
+                            profile_data::PlayerSide::P1 => {
                                 actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
                                 zoomto(w, h):
@@ -8224,7 +8225,7 @@ pub fn push_actors(
                                 z(-98)
                             ));
                             }
-                            profile::PlayerSide::P2 => {
+                            profile_data::PlayerSide::P2 => {
                                 actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
                                 zoomto(w, h):
@@ -8244,17 +8245,17 @@ pub fn push_actors(
                             // SL: default to _screen.cx +/- SL_WideScale(302, 400).
                             let mut x = screen_center_x()
                                 + match side {
-                                    profile::PlayerSide::P1 => -widescale(302.0, 400.0),
-                                    profile::PlayerSide::P2 => widescale(302.0, 400.0),
+                                    profile_data::PlayerSide::P1 => -widescale(302.0, 400.0),
+                                    profile_data::PlayerSide::P2 => widescale(302.0, 400.0),
                                 };
 
                             // SL: if double style, position next to notefield.
-                            if play_style == profile::PlayStyle::Double {
+                            if play_style == profile_data::PlayStyle::Double {
                                 let half_nf = notefield_width(player_idx) * 0.5;
                                 x = screen_center_x()
                                     + match side {
-                                        profile::PlayerSide::P1 => -(half_nf + 10.0),
-                                        profile::PlayerSide::P2 => half_nf + 10.0,
+                                        profile_data::PlayerSide::P1 => -(half_nf + 10.0),
+                                        profile_data::PlayerSide::P2 => half_nf + 10.0,
                                     };
                             }
 
@@ -8311,7 +8312,7 @@ pub fn push_actors(
                             let life_text_color = player_life_color(player_idx);
                             let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
                             let (outer_x, inner_x, text_x, align_x) =
-                                if side == profile::PlayerSide::P1 {
+                                if side == profile_data::PlayerSide::P1 {
                                     (x + 10.0, x + 11.0, x + 12.0, 0.0)
                                 } else {
                                     (x - 11.0, x - 12.0, x - 13.0, 1.0)
@@ -8407,7 +8408,7 @@ pub fn push_actors(
         };
 
         let (footer_left, footer_right, left_avatar, right_avatar) =
-            if play_style == profile::PlayStyle::Versus {
+            if play_style == profile_data::PlayStyle::Versus {
                 (
                     p1_footer_text,
                     p2_footer_text,
@@ -8416,8 +8417,8 @@ pub fn push_actors(
                 )
             } else {
                 match player_side {
-                    profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                    profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+                    profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                    profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
                 }
             };
         actors.push(screen_bar::build_no_background(ScreenBarParams {
@@ -8433,12 +8434,12 @@ pub fn push_actors(
             right_avatar,
         }));
         let show_step_stats = match play_style {
-            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 state.player_profiles.first().is_some_and(|p| {
                     p.data_visualizations == profile::DataVisualizations::StepStatistics
                 })
             }
-            profile::PlayStyle::Versus => {
+            profile_data::PlayStyle::Versus => {
                 state.player_profiles.first().is_some_and(|p| {
                     p.data_visualizations == profile::DataVisualizations::StepStatistics
                 }) || state.player_profiles.get(1).is_some_and(|p| {
@@ -8447,7 +8448,7 @@ pub fn push_actors(
             }
         };
         if show_step_stats {
-            if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
+            if state.num_cols <= 4 && play_style != profile_data::PlayStyle::Versus {
                 gameplay_stats::push_step_stats(
                     &mut actors,
                     state,
@@ -8455,9 +8456,9 @@ pub fn push_actors(
                     playfield_center_x,
                     player_side,
                 );
-            } else if play_style == profile::PlayStyle::Versus {
+            } else if play_style == profile_data::PlayStyle::Versus {
                 gameplay_stats::push_versus_step_stats(&mut actors, state, asset_manager);
-            } else if play_style == profile::PlayStyle::Double {
+            } else if play_style == profile_data::PlayStyle::Double {
                 gameplay_stats::push_double_step_stats(
                     &mut actors,
                     state,
