@@ -21,10 +21,10 @@ const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 const THRESHOLD_STEP: u16 = 5;
 
-const BAR_WIDTH: f32 = 42.0;
-const BAR_GAP: f32 = 18.0;
+const BAR_WIDTH: f32 = 48.0;
+const BAR_GAP: f32 = 24.0;
 const BAR_HEIGHT: f32 = 160.0;
-const PAD_GAP: f32 = 56.0;
+const PAD_GAP: f32 = 70.0;
 const PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
 const PANEL_BORDER_H: f32 = 3.0;
 /// Muted background of an unfilled bar.
@@ -33,6 +33,8 @@ const TRACK_COLOR: [f32; 4] = [0.12, 0.12, 0.16, 0.85];
 const ACTIVE_FILL: [f32; 4] = [0.30, 0.95, 0.45, 0.95];
 /// The activation-threshold line.
 const THRESHOLD_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+/// Highlight color for the currently selected bar's text (reads on black and green).
+const SELECTED_TEXT: [f32; 4] = [1.0, 0.55, 0.1, 1.0];
 
 struct Theme {
     frame: [f32; 4],
@@ -130,8 +132,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         font("miso"):
         settext("CONFIGURE PADS"):
         align(0.5, 0.0):
-        xy(screen_center_x(), 40.0):
-        zoom(0.9):
+        xy(screen_center_x(), 36.0):
+        zoom(1.2):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.95):
         z(20)
@@ -143,7 +145,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             settext("No FSR pads detected."):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
-            zoom(0.8):
+            zoom(1.0):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(20)
@@ -166,7 +168,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             settext(pad.device_name.clone()):
             align(0.5, 0.0):
             xy(panel_cx, top_y + 12.0):
-            zoom(0.6):
+            zoom(0.82):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.9):
             z(12)
@@ -296,8 +298,8 @@ fn push_footer(actors: &mut Vec<Actor>) {
         font("miso"):
         settext(format!("Left/Right select   Up/Down threshold +/-{THRESHOLD_STEP} (Shift +/-1)   Back to return")):
         align(0.5, 1.0):
-        xy(screen_center_x(), screen_height() - 24.0):
-        zoom(0.55):
+        xy(screen_center_x(), screen_height() - 22.0):
+        zoom(0.72):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.85):
         z(20)
@@ -403,10 +405,10 @@ fn push_bar(
     push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
 
     if selected {
-        let ox = x - (BAR_WIDTH + 10.0) * 0.5;
-        let oy = y - 14.0;
-        let ow = BAR_WIDTH + 10.0;
-        let oh = BAR_HEIGHT + 42.0;
+        let ox = x - (BAR_WIDTH + 12.0) * 0.5;
+        let oy = y - 34.0;
+        let ow = BAR_WIDTH + 12.0;
+        let oh = BAR_HEIGHT + 70.0;
         let t = 2.0_f32;
         let outline = [1.0, 1.0, 1.0, 1.0];
         push_quad(actors, x, oy, ow, t, outline, z + 2.5);
@@ -422,24 +424,24 @@ fn push_bar(
     }
 
     let text_color = if selected {
-        theme.frame
+        SELECTED_TEXT
     } else {
         [1.0, 1.0, 1.0, 0.95]
     };
     actors.push(act!(text:
         font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
-        xy(x, y - 6.0): zoom(0.65): horizalign(center):
+        xy(x, y - 10.0): zoom(0.92): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext(format!("T{raw_threshold}")): align(0.5, 0.5):
-        xy(x, threshold_y - 10.0): zoom(0.48): horizalign(center):
+        font("miso"): settext(raw_threshold.to_string()): align(0.0, 0.5):
+        xy(x + BAR_WIDTH * 0.5 + 6.0, threshold_y): zoom(0.7): horizalign(left):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     let label_color = if active { ACTIVE_FILL } else { text_color };
     actors.push(act!(text:
         font("miso"): settext(label.to_string()): align(0.5, 0.0):
-        xy(x, y + BAR_HEIGHT + 6.0): zoom(0.7): horizalign(center):
+        xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
 }
