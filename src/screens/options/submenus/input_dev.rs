@@ -14,6 +14,12 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        id: SubRowId::ConfigurePads,
+        label: lookup_key("OptionsInput", "ConfigurePads"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::InputOptions,
         label: lookup_key("OptionsInput", "InputOptions"),
         choices: &[localized_choice("Common", "Open")],
@@ -36,6 +42,14 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "TestInputHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpConfigurePads,
+        name: lookup_key("OptionsInput", "ConfigurePads"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "ConfigurePadsHelp",
         ))],
     },
     Item {

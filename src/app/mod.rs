@@ -680,7 +680,8 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         | CurrentScreen::SelectMusic
         | CurrentScreen::SelectCourse
         | CurrentScreen::Sandbox
-        | CurrentScreen::PlayerOptions => LightMode::MenuStartAndDirections,
+        | CurrentScreen::PlayerOptions
+        | CurrentScreen::ConfigurePads => LightMode::MenuStartAndDirections,
     }
 }
 
@@ -1570,6 +1571,7 @@ pub struct ScreensState {
     manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
+    pad_config_state: crate::screens::pad_config::State,
     test_lights_state: test_lights::State,
     overscan_adjustment_state: overscan_adjustment::State,
     player_options_state: Option<player_options::State>,
@@ -3540,6 +3542,11 @@ impl ScreensState {
             manage_local_profiles_state,
             mappings_state,
             input_state,
+            pad_config_state: {
+                let mut s = crate::screens::pad_config::init();
+                s.active_color_index = color_index;
+                s
+            },
             test_lights_state,
             overscan_adjustment_state,
             player_options_state: None,
@@ -3598,6 +3605,10 @@ impl ScreensState {
             }
             CurrentScreen::Input => (
                 input_screen::update(&mut self.input_state, delta_time),
+                false,
+            ),
+            CurrentScreen::ConfigurePads => (
+                crate::screens::pad_config::update(&mut self.pad_config_state, delta_time),
                 false,
             ),
             CurrentScreen::TestLights => (
@@ -3791,6 +3802,9 @@ pub struct App {
     backend_type: BackendType,
     _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor,
     fsr_monitor: input::fsr::Monitor,
+    /// Whether the Configure Pads screen currently has FSR live-reads enabled,
+    /// so `set_active` only toggles on screen enter/leave (not every frame).
+    fsr_pads_active: bool,
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
@@ -3908,6 +3922,36 @@ impl App {
             &mut self.state.screens.select_music_state,
             on_select_music.then_some(view).flatten(),
         );
+    }
+
+    /// Drive the Configure Pads screen: enable live FSR reads while it's open,
+    /// apply queued threshold edits, and refresh the pad snapshot.
+    #[inline(always)]
+    fn sync_pad_config_fsr(&mut self) {
+        if self.state.screens.current_screen == CurrentScreen::ConfigurePads {
+            if !self.fsr_pads_active {
+                self.fsr_monitor.set_active(true);
+                self.fsr_pads_active = true;
+            }
+            if let Some(cmd) = crate::screens::pad_config::take_command(
+                &mut self.state.screens.pad_config_state,
+            ) {
+                let _ = self.fsr_monitor.set_threshold(
+                    cmd.device,
+                    cmd.button,
+                    cmd.sensor,
+                    cmd.threshold,
+                );
+            }
+            let pads = self.fsr_monitor.poll_pads();
+            crate::screens::pad_config::set_pads(
+                &mut self.state.screens.pad_config_state,
+                pads,
+            );
+        } else if self.fsr_pads_active {
+            self.fsr_monitor.set_active(false);
+            self.fsr_pads_active = false;
+        }
     }
 
     fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
@@ -4151,6 +4195,7 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.sync_input_fsr_view();
+        self.sync_pad_config_fsr();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
         let mut upload_us: u32 = 0;
@@ -4579,6 +4624,7 @@ impl App {
             backend_type,
             _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
+            fsr_pads_active: false,
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),
@@ -5985,6 +6031,10 @@ impl App {
             CurrentScreen::Input => {
                 crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev)
             }
+            CurrentScreen::ConfigurePads => crate::screens::pad_config::handle_input(
+                &mut self.state.screens.pad_config_state,
+                &ev,
+            ),
             CurrentScreen::TestLights => crate::screens::test_lights::handle_input(
                 &mut self.state.screens.test_lights_state,
                 &ev,
@@ -6333,6 +6383,9 @@ impl App {
                 screen_alpha_multiplier,
             ),
             CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
+            CurrentScreen::ConfigurePads => {
+                crate::screens::pad_config::get_actors(&self.state.screens.pad_config_state)
+            }
             CurrentScreen::TestLights => test_lights::get_actors(
                 &self.state.screens.test_lights_state,
                 self.lights.state_snapshot(),
@@ -8022,6 +8075,7 @@ impl App {
             .manage_local_profiles_state
             .active_color_index = idx;
         self.state.screens.input_state.active_color_index = idx;
+        self.state.screens.pad_config_state.active_color_index = idx;
         self.state.screens.test_lights_state.active_color_index = idx;
         self.state
             .screens

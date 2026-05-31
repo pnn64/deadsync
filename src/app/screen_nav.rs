@@ -571,6 +571,7 @@ impl App {
             CurrentScreen::Initials => initials::out_transition(),
             CurrentScreen::GameOver => gameover::out_transition(),
             CurrentScreen::Input => input_screen::out_transition(),
+            CurrentScreen::ConfigurePads => crate::screens::pad_config::out_transition(),
         }
     }
 
@@ -613,6 +614,7 @@ impl App {
             CurrentScreen::Initials => initials::in_transition(),
             CurrentScreen::GameOver => gameover::in_transition(),
             CurrentScreen::Input => input_screen::in_transition(),
+            CurrentScreen::ConfigurePads => crate::screens::pad_config::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
     }

@@ -1177,6 +1177,10 @@ pub(super) fn activate_current_selection(
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::Input);
                         }
+                        SubRowId::ConfigurePads => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::Navigate(Screen::ConfigurePads);
+                        }
                         SubRowId::InputOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::InputBackend);

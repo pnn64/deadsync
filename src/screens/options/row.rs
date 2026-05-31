@@ -46,6 +46,7 @@ pub enum SubRowId {
     // Input Options (launcher)
     ConfigureMappings,
     TestInput,
+    ConfigurePads,
     InputOptions,
     // Input Backend Options
     GamepadBackend,

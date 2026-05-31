@@ -1,0 +1,468 @@
+//! Generic FSR pad configuration screen.
+//!
+//! Shows every connected FSR pad (SMX, FSRIO, …) side by side as groups of
+//! L/D/U/R bars with live sensor values and an editable threshold. Navigation
+//! is keyboard / dedicated-menu-button only (Left/Right moves the cursor across
+//! all bars, Up/Down adjusts the focused threshold) so stepping on the pad to
+//! test a sensor never moves the selection.
+//!
+//! Phase 1 renders one bar per button using the button's aggregate value /
+//! threshold (Simple mode). Per-sensor (Advanced) rendering is a later phase.
+
+use crate::act;
+use crate::engine::input::fsr::{PAD_BUTTON_COUNT, PadDeviceId, PadView};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
+use crate::screens::{Screen, ScreenAction};
+use deadsync_input::{InputEvent, InputSource, VirtualAction};
+
+const TRANSITION_IN_DURATION: f32 = 0.4;
+const TRANSITION_OUT_DURATION: f32 = 0.4;
+const THRESHOLD_STEP: u16 = 5;
+
+const BAR_WIDTH: f32 = 42.0;
+const BAR_GAP: f32 = 18.0;
+const BAR_HEIGHT: f32 = 160.0;
+const PAD_GAP: f32 = 56.0;
+const PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
+const PANEL_BORDER_H: f32 = 3.0;
+
+struct Theme {
+    frame: [f32; 4],
+    track_top: [f32; 4],
+    track_active_bottom: [f32; 4],
+    track_idle_bottom: [f32; 4],
+    fill_top: [f32; 4],
+    fill_bottom: [f32; 4],
+}
+
+/// A pending threshold edit for the app loop to apply via `Monitor::set_threshold`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThresholdCommand {
+    pub device: PadDeviceId,
+    pub button: usize,
+    pub sensor: Option<usize>,
+    pub threshold: u16,
+}
+
+#[derive(Default)]
+pub struct State {
+    pub active_color_index: i32,
+    pads: Vec<PadView>,
+    /// Flat bar index across every pad: `pad = selected / 4`, `button = selected % 4`.
+    selected: usize,
+    pending: Option<ThresholdCommand>,
+}
+
+pub fn init() -> State {
+    State::default()
+}
+
+/// Replace the live pad snapshot (called by the app loop each frame while this
+/// screen is active). Keeps the selection in range.
+pub fn set_pads(state: &mut State, pads: Vec<PadView>) {
+    state.pads = pads;
+    let total = total_bars(state);
+    if total == 0 {
+        state.selected = 0;
+    } else if state.selected >= total {
+        state.selected = total - 1;
+    }
+}
+
+/// Take any pending threshold edit so the app loop can apply it to hardware.
+pub fn take_command(state: &mut State) -> Option<ThresholdCommand> {
+    state.pending.take()
+}
+
+pub fn update(_state: &mut State, _dt: f32) -> Option<ScreenAction> {
+    None
+}
+
+pub fn in_transition() -> (Vec<Actor>, f32) {
+    (Vec::new(), TRANSITION_IN_DURATION)
+}
+
+pub fn out_transition() -> (Vec<Actor>, f32) {
+    (Vec::new(), TRANSITION_OUT_DURATION)
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+    if matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
+        return ScreenAction::Navigate(Screen::Options);
+    }
+    // Only keyboard or dedicated menu buttons drive the UI; ignore raw pad
+    // panels so testing a sensor doesn't move the cursor.
+    if ev.source == InputSource::Gamepad && !is_dedicated_menu_action(ev.action) {
+        return ScreenAction::None;
+    }
+    let total = total_bars(state);
+    if total == 0 {
+        return ScreenAction::None;
+    }
+    match ui_action(ev.action) {
+        Some(UiAction::PrevBar) => {
+            state.selected = (state.selected + total - 1) % total;
+        }
+        Some(UiAction::NextBar) => {
+            state.selected = (state.selected + 1) % total;
+        }
+        Some(UiAction::Raise) => adjust_threshold(state, THRESHOLD_STEP as i32),
+        Some(UiAction::Lower) => adjust_threshold(state, -(THRESHOLD_STEP as i32)),
+        None => {}
+    }
+    ScreenAction::None
+}
+
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(128);
+    let theme = theme(state.active_color_index);
+
+    actors.push(act!(text:
+        font("miso"):
+        settext("CONFIGURE PADS"):
+        align(0.5, 0.0):
+        xy(screen_center_x(), 40.0):
+        zoom(0.9):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95):
+        z(20)
+    ));
+
+    if state.pads.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext("No FSR pads detected."):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(0.8):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.85):
+            z(20)
+        ));
+        push_footer(&mut actors);
+        return actors;
+    }
+
+    let group_w = BAR_WIDTH * PAD_BUTTON_COUNT as f32 + BAR_GAP * (PAD_BUTTON_COUNT - 1) as f32;
+    let panel_w = group_w + 34.0;
+    let total_w = panel_w * state.pads.len() as f32 + PAD_GAP * (state.pads.len() - 1) as f32;
+    let panel_h = BAR_HEIGHT + 116.0;
+    let top_y = screen_center_y() - panel_h * 0.5;
+    let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
+
+    for (pad_idx, pad) in state.pads.iter().enumerate() {
+        push_frame(&mut actors, panel_cx, top_y, panel_w, panel_h, theme.frame, 10.0);
+        actors.push(act!(text:
+            font("miso"):
+            settext(pad.device_name.clone()):
+            align(0.5, 0.0):
+            xy(panel_cx, top_y + 12.0):
+            zoom(0.6):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.9):
+            z(12)
+        ));
+
+        let track_y = top_y + 56.0;
+        let left = panel_cx - group_w * 0.5 + BAR_WIDTH * 0.5;
+        for (btn_idx, button) in pad.buttons.iter().enumerate() {
+            let x = left + btn_idx as f32 * (BAR_WIDTH + BAR_GAP);
+            let selected = state.selected == pad_idx * PAD_BUTTON_COUNT + btn_idx;
+            let threshold = pending_threshold(state, pad.device_id, btn_idx)
+                .unwrap_or(button.aggregate_threshold);
+            push_bar(
+                &mut actors,
+                button.label,
+                button.aggregate_value,
+                normalize(button.aggregate_value, button.max_raw_threshold),
+                threshold,
+                normalize(threshold, button.max_raw_threshold),
+                button.active,
+                x,
+                track_y,
+                &theme,
+                selected,
+                11.0,
+            );
+        }
+        panel_cx += panel_w + PAD_GAP;
+    }
+
+    push_footer(&mut actors);
+    actors
+}
+
+// ─── Internal ────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy)]
+enum UiAction {
+    PrevBar,
+    NextBar,
+    Raise,
+    Lower,
+}
+
+const fn ui_action(act: VirtualAction) -> Option<UiAction> {
+    match act {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(UiAction::PrevBar),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(UiAction::NextBar),
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => Some(UiAction::Raise),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => Some(UiAction::Lower),
+        _ => None,
+    }
+}
+
+const fn is_dedicated_menu_action(act: VirtualAction) -> bool {
+    matches!(
+        act,
+        VirtualAction::p1_menu_up
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_menu_up
+            | VirtualAction::p2_menu_down
+            | VirtualAction::p2_menu_left
+            | VirtualAction::p2_menu_right
+    )
+}
+
+fn total_bars(state: &State) -> usize {
+    state.pads.len() * PAD_BUTTON_COUNT
+}
+
+/// Current pending threshold for a specific pad+button, if one is queued.
+fn pending_threshold(state: &State, device: PadDeviceId, button: usize) -> Option<u16> {
+    state
+        .pending
+        .filter(|c| c.device == device && c.button == button)
+        .map(|c| c.threshold)
+}
+
+fn adjust_threshold(state: &mut State, delta: i32) {
+    let pad_idx = state.selected / PAD_BUTTON_COUNT;
+    let button = state.selected % PAD_BUTTON_COUNT;
+    let Some(pad) = state.pads.get(pad_idx) else {
+        return;
+    };
+    let bar = &pad.buttons[button];
+    let device = pad.device_id;
+    let current = pending_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
+    let next = (i32::from(current) + delta).clamp(
+        i32::from(bar.min_raw_threshold),
+        i32::from(bar.max_raw_threshold),
+    ) as u16;
+    if next == current {
+        return;
+    }
+    // Simple mode: apply to every sensor in the button (`sensor: None`).
+    state.pending = Some(ThresholdCommand {
+        device,
+        button,
+        sensor: None,
+        threshold: next,
+    });
+}
+
+fn normalize(value: u16, max: u16) -> f32 {
+    if max == 0 {
+        return 0.0;
+    }
+    (value as f32 / max as f32).clamp(0.0, 1.0)
+}
+
+fn push_footer(actors: &mut Vec<Actor>) {
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("Left/Right select   Up/Down threshold +/-{THRESHOLD_STEP}   Back to return")):
+        align(0.5, 1.0):
+        xy(screen_center_x(), screen_height() - 24.0):
+        zoom(0.55):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.85):
+        z(20)
+    ));
+}
+
+fn theme(active_color_index: i32) -> Theme {
+    let fill_bottom = color::decorative_rgba(active_color_index);
+    let fill_top = color::lighten_rgba(color::decorative_rgba(active_color_index + 1));
+    let track_top = color::decorative_rgba(active_color_index + 4);
+    let track_active_bottom = color::decorative_rgba(active_color_index + 2);
+    let frame = color::decorative_rgba(active_color_index - 2);
+    Theme {
+        frame: with_alpha(frame, 0.95),
+        track_top: with_alpha(track_top, 0.95),
+        track_active_bottom: with_alpha(track_active_bottom, 0.92),
+        track_idle_bottom: scale_rgb(track_active_bottom, 0.28, 0.78),
+        fill_top: scale_rgb(fill_top, 1.0, 0.98),
+        fill_bottom: with_alpha(fill_bottom, 0.98),
+    }
+}
+
+fn with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
+    rgba[3] = alpha;
+    rgba
+}
+
+fn scale_rgb(mut rgba: [f32; 4], scale: f32, alpha: f32) -> [f32; 4] {
+    rgba[0] = (rgba[0] * scale).clamp(0.0, 1.0);
+    rgba[1] = (rgba[1] * scale).clamp(0.0, 1.0);
+    rgba[2] = (rgba[2] * scale).clamp(0.0, 1.0);
+    rgba[3] = alpha;
+    rgba
+}
+
+fn push_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4], z: f32) {
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    actors.push(act!(quad:
+        align(0.5, 0.0):
+        xy(x, y):
+        zoomto(w, h):
+        diffuse(color[0], color[1], color[2], color[3]):
+        z(z)
+    ));
+}
+
+fn push_frame(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    top_y: f32,
+    panel_w: f32,
+    panel_h: f32,
+    frame_color: [f32; 4],
+    z: f32,
+) {
+    let left = center_x - panel_w * 0.5;
+    let right = center_x + panel_w * 0.5;
+    push_quad(actors, center_x, top_y, panel_w, panel_h, PANEL_BG, z);
+    push_quad(actors, center_x, top_y, panel_w, PANEL_BORDER_H, frame_color, z + 1.0);
+    push_quad(
+        actors,
+        center_x,
+        top_y + panel_h - PANEL_BORDER_H,
+        panel_w,
+        PANEL_BORDER_H,
+        frame_color,
+        z + 1.0,
+    );
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(left, top_y):
+        zoomto(PANEL_BORDER_H, panel_h):
+        diffuse(frame_color[0], frame_color[1], frame_color[2], frame_color[3]):
+        z(z + 1.0)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(right - PANEL_BORDER_H, top_y):
+        zoomto(PANEL_BORDER_H, panel_h):
+        diffuse(frame_color[0], frame_color[1], frame_color[2], frame_color[3]):
+        z(z + 1.0)
+    ));
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_bar(
+    actors: &mut Vec<Actor>,
+    label: &str,
+    raw_value: u16,
+    value_norm: f32,
+    raw_threshold: u16,
+    threshold_norm: f32,
+    active: bool,
+    x: f32,
+    y: f32,
+    theme: &Theme,
+    selected: bool,
+    z: f32,
+) {
+    let value_norm = value_norm.clamp(0.0, 1.0);
+    let threshold_norm = threshold_norm.clamp(0.0, 1.0);
+    let track_bottom = if active {
+        theme.track_active_bottom
+    } else {
+        theme.track_idle_bottom
+    };
+    let half_h = BAR_HEIGHT * 0.5;
+    push_quad(actors, x, y, BAR_WIDTH, half_h, theme.track_top, z);
+    push_quad(actors, x, y + half_h, BAR_WIDTH, BAR_HEIGHT - half_h, track_bottom, z);
+
+    let fill_h = value_norm * BAR_HEIGHT;
+    if fill_h > 0.0 {
+        let fill_y = y + BAR_HEIGHT - fill_h;
+        let fill_top_h = fill_h * 0.45;
+        push_quad(actors, x, fill_y, BAR_WIDTH * 0.5, fill_top_h, theme.fill_top, z + 1.0);
+        push_quad(
+            actors,
+            x,
+            fill_y + fill_top_h,
+            BAR_WIDTH * 0.5,
+            fill_h - fill_top_h,
+            theme.fill_bottom,
+            z + 1.0,
+        );
+    }
+
+    let threshold_h = 3.0_f32.max(2.0);
+    let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
+    push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, [1.0, 1.0, 1.0, 1.0], z + 2.0);
+
+    if selected {
+        let ox = x - (BAR_WIDTH + 10.0) * 0.5;
+        let oy = y - 14.0;
+        let ow = BAR_WIDTH + 10.0;
+        let oh = BAR_HEIGHT + 42.0;
+        let t = 2.0_f32;
+        let outline = [1.0, 1.0, 1.0, 1.0];
+        push_quad(actors, x, oy, ow, t, outline, z + 2.5);
+        push_quad(actors, x, oy + oh - t, ow, t, outline, z + 2.5);
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox, oy): zoomto(t, oh):
+            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox + ow - t, oy): zoomto(t, oh):
+            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
+        ));
+    }
+
+    let text_color = if selected {
+        theme.frame
+    } else {
+        [1.0, 1.0, 1.0, 0.95]
+    };
+    actors.push(act!(text:
+        font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
+        xy(x, y - 6.0): zoom(0.65): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext(format!("T{raw_threshold}")): align(0.5, 0.5):
+        xy(x, threshold_y - 10.0): zoom(0.48): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext(label.to_string()): align(0.5, 0.0):
+        xy(x, y + BAR_HEIGHT + 6.0): zoom(0.65): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
+}

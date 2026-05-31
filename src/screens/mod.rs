@@ -16,6 +16,7 @@ pub mod menu;
 pub mod options;
 pub mod overscan_adjustment;
 pub(crate) mod pack_sync;
+pub mod pad_config;
 pub mod player_options;
 pub mod practice;
 pub mod profile_load;
@@ -144,6 +145,7 @@ pub enum Screen {
     PlayerOptions,
     TestLights,
     OverscanAdjustment,
+    ConfigurePads,
 }
 
 impl Screen {
@@ -176,6 +178,7 @@ impl Screen {
             Self::PlayerOptions => "ScreenPlayerOptions",
             Self::TestLights => "ScreenTestLights",
             Self::OverscanAdjustment => "ScreenOverscanConfig",
+            Self::ConfigurePads => "ScreenConfigurePads",
         }
     }
 }

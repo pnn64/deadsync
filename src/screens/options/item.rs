@@ -54,6 +54,7 @@ pub enum ItemId {
     // Input Options submenu (launcher)
     InpConfigureMappings,
     InpTestInput,
+    InpConfigurePads,
     InpInputOptions,
 
     // Input Backend Options submenu
