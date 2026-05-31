@@ -1026,6 +1026,7 @@ dependencies = [
  "rubato",
  "rust-ini",
  "rustc-hash 2.1.2",
+ "rustmaniax-sdk",
  "semver",
  "serde",
  "serde_json",
@@ -3912,6 +3913,17 @@ dependencies = [
  "ring",
  "rustls-pki-types",
  "untrusted",
+]
+
+[[package]]
+name = "rustmaniax-sdk"
+version = "0.1.1"
+dependencies = [
+ "bitflags 2.11.1",
+ "bytemuck",
+ "hidapi",
+ "image",
+ "log",
 ]
 
 [[package]]

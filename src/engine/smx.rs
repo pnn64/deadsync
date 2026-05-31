@@ -9,7 +9,8 @@ use std::time::Instant;
 
 use rustmaniax_sdk::{SmxConfig, SmxEvent, SmxInfo, SmxManager, SensorTestData, SensorTestMode};
 
-use crate::engine::input::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, uuid_from_bytes};
+use crate::engine::input::{GpSystemEvent, PadBackend, uuid_from_bytes};
+use deadsync_input::{PadCode, PadEvent, PadId};
 
 /// Number of panels per SMX pad.
 pub const PANEL_COUNT: usize = 9;
