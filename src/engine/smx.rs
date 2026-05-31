@@ -3,6 +3,7 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -20,6 +21,8 @@ struct SmxShared {
     input_listeners: Mutex<Vec<Box<dyn Fn(PadEvent) + Send>>>,
     /// Listeners for system events (connect/disconnect).
     sys_listeners: Mutex<Vec<Box<dyn Fn(GpSystemEvent) + Send>>>,
+    /// Last dispatched input bitmask per pad, used to emit only changed panels.
+    prev_input: [AtomicU16; 2],
 }
 
 static SHARED: OnceLock<Arc<SmxShared>> = OnceLock::new();
@@ -40,6 +43,7 @@ pub fn init() -> bool {
             manager: mgr,
             input_listeners: Mutex::new(Vec::new()),
             sys_listeners: Mutex::new(Vec::new()),
+            prev_input: [AtomicU16::new(0), AtomicU16::new(0)],
         }),
         Err(e) => {
             log::warn!("Failed to initialize SMX SDK: {e}");
@@ -114,6 +118,11 @@ pub fn set_serial_numbers() {
 fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
     match event {
         SmxEvent::Connected { pad, ref info } => {
+            // Reset the delta baseline so a reconnected pad starts from "all released".
+            if pad < shared.prev_input.len() {
+                shared.prev_input[pad].store(0, Ordering::Relaxed);
+            }
+
             // Assign serial if missing.
             if !info.has_serial_number {
                 shared.manager.set_serial_numbers();
@@ -137,6 +146,9 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             }
         }
         SmxEvent::Disconnected { pad } => {
+            if pad < shared.prev_input.len() {
+                shared.prev_input[pad].store(0, Ordering::Relaxed);
+            }
             let info = shared.manager.get_info(pad);
             let sys_event = GpSystemEvent::Disconnected {
                 name: format!("StepManiaX pad {pad}"),
@@ -149,6 +161,18 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             }
         }
         SmxEvent::InputState { pad, state } => {
+            if pad >= shared.prev_input.len() {
+                return;
+            }
+            // The SDK only fires InputState when the pad's bitmask changes, but it
+            // reports the whole mask. Emit events only for panels that actually
+            // flipped since the last dispatch.
+            let prev = shared.prev_input[pad].swap(state, Ordering::Relaxed);
+            let changed = prev ^ state;
+            if changed == 0 {
+                return;
+            }
+
             let timestamp = Instant::now();
             let host_nanos = crate::engine::host_time::now_nanos();
             let info = shared.manager.get_info(pad);
@@ -157,6 +181,9 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
 
             let listeners = shared.input_listeners.lock().unwrap();
             for panel in 0..PANEL_COUNT {
+                if changed & (1 << panel) == 0 {
+                    continue;
+                }
                 let pressed = (state & (1 << panel)) != 0;
                 let event = PadEvent::RawButton {
                     id,
