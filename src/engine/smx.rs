@@ -33,6 +33,8 @@ struct SmxShared {
     /// the input/disconnect handlers instead. This is our own mutex, not the
     /// SDK's, so locking it inside the callback is safe.
     uuid: [Mutex<[u8; 16]>; 2],
+    /// Per-pad serial string, cached at connect, used for friendly trigger labels.
+    serial: [Mutex<String>; 2],
     /// Set while a deferred `set_serial_numbers()` is in flight, so a burst of
     /// serial-less connect events only spawns one assignment at a time.
     serial_assign_inflight: AtomicBool,
@@ -58,6 +60,7 @@ pub fn init() -> bool {
             sys_listeners: Mutex::new(Vec::new()),
             prev_input: [AtomicU16::new(0), AtomicU16::new(0)],
             uuid: [Mutex::new([0u8; 16]), Mutex::new([0u8; 16])],
+            serial: [Mutex::new(String::new()), Mutex::new(String::new())],
             serial_assign_inflight: AtomicBool::new(false),
         }),
         Err(e) => {
@@ -140,8 +143,10 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             // Reset the delta baseline so a reconnected pad starts from "all released".
             shared.prev_input[pad].store(0, Ordering::Relaxed);
 
-            // Cache the stable device UUID for the input/disconnect handlers.
+            // Cache the stable device UUID + serial for the input/disconnect
+            // handlers and friendly trigger labels.
             *shared.uuid[pad].lock().unwrap() = uuid_from_bytes(info.serial.as_bytes());
+            *shared.serial[pad].lock().unwrap() = info.serial.clone();
 
             log::info!(
                 "SMX: pad {pad} connected (P{}, fw {}, serial {}, has_serial={})",
@@ -256,4 +261,29 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
 // backends would be needed to fully disambiguate.
 fn pad_device_id(pad: usize) -> PadId {
     PadId(pad as u32)
+}
+
+/// SMX panel index → 3x3-grid label, matching the SDK's panel naming.
+const PANEL_NAMES: [&str; PANEL_COUNT] = ["UL", "U", "UR", "L", "C", "R", "DL", "D", "DR"];
+
+/// Friendly label for an SMX trigger binding, e.g. `SMX[40ea] R`.
+///
+/// `uuid` is the per-device id carried by the binding and `code` is the panel
+/// index. Returns `None` if the uuid doesn't match a currently-connected SMX
+/// pad (or the code is out of range), so callers can fall back to a generic
+/// label. The serial prefix (first 4 hex chars) disambiguates two pads even
+/// when both are assigned to the same player.
+pub fn trigger_label(uuid: [u8; 16], code: u32) -> Option<String> {
+    let s = SHARED.get()?;
+    let panel = PANEL_NAMES.get(code as usize)?;
+    let pad = (0..s.uuid.len()).find(|&i| {
+        let cached = *s.uuid[i].lock().unwrap();
+        cached != [0u8; 16] && cached == uuid
+    })?;
+    let prefix: String = s.serial[pad].lock().unwrap().chars().take(4).collect();
+    if prefix.is_empty() {
+        Some(format!("SMX {panel}"))
+    } else {
+        Some(format!("SMX[{prefix}] {panel}"))
+    }
 }
