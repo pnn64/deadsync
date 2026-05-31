@@ -5,7 +5,10 @@
     target_os = "macos"
 ))]
 mod imp {
-    use crate::engine::input::fsr::{BarView as FsrBarView, VIEW_SENSOR_COUNT, View as FsrView};
+    use crate::engine::input::fsr::{
+        BackendKind, BarView as FsrBarView, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS,
+        PadDeviceId, PadView, SensorView, VIEW_SENSOR_COUNT, View as FsrView,
+    };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
     use std::fmt::Write as _;
@@ -93,6 +96,109 @@ mod imp {
             }
             self.drop_device();
             false
+        }
+
+        /// FSRIO streams sensor values continuously, so there's no test mode to
+        /// toggle; live reads happen in `poll_pads`.
+        pub fn set_active(&mut self, _active: bool) {}
+
+        /// Expose the connected FSRIO board as a single `PadView`, grouping
+        /// sensors into L/D/U/R by the board's sensor→button mapping.
+        pub fn poll_pads(&mut self) -> Vec<PadView> {
+            self.ensure_device();
+            self.read_pending_reports();
+            if self.device.is_none() {
+                return Vec::new();
+            }
+            let buttons = std::array::from_fn(|b| {
+                let sensors: Vec<SensorView> = self
+                    .button_sensor_indices(b)
+                    .into_iter()
+                    .map(|i| {
+                        let raw_value = self.input.sensor_values[i];
+                        let raw_threshold = self.config.sensor_thresholds[i];
+                        SensorView {
+                            raw_value,
+                            value_norm: normalize_sensor_value(raw_value),
+                            raw_threshold,
+                            threshold_norm: normalize_sensor_value(raw_threshold),
+                            active: raw_value >= raw_threshold && raw_threshold > 0,
+                        }
+                    })
+                    .collect();
+                let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+                let aggregate_threshold =
+                    sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+                ButtonView {
+                    label: PAD_BUTTON_LABELS[b],
+                    sensors,
+                    min_raw_threshold: 0,
+                    max_raw_threshold: MAX_SENSOR_VALUE,
+                    aggregate_value,
+                    aggregate_threshold,
+                    active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
+                }
+            });
+            vec![PadView {
+                device_id: PadDeviceId {
+                    backend: BackendKind::Fsrio,
+                    index: 0,
+                },
+                device_name: self
+                    .device_name
+                    .clone()
+                    .unwrap_or_else(|| "FSR Pad".to_owned()),
+                buttons,
+            }]
+        }
+
+        /// Set the threshold for one or all hardware sensors mapped to a button.
+        pub fn set_threshold(
+            &mut self,
+            device: PadDeviceId,
+            button: usize,
+            sensor: Option<usize>,
+            value: u16,
+        ) -> bool {
+            if device.backend != BackendKind::Fsrio
+                || button >= PAD_BUTTON_COUNT
+                || value > MAX_SENSOR_VALUE
+            {
+                return false;
+            }
+            self.ensure_device();
+            let indices = self.button_sensor_indices(button);
+            let targets: Vec<usize> = match sensor {
+                Some(k) => match indices.get(k) {
+                    Some(&i) => vec![i],
+                    None => return false,
+                },
+                None => indices,
+            };
+            if targets.is_empty() {
+                return false;
+            }
+            let Some(device) = self.device.as_ref() else {
+                return false;
+            };
+            for i in &targets {
+                self.config.sensor_thresholds[*i] = value;
+            }
+            if write_config(device, &self.config).is_ok() {
+                return true;
+            }
+            self.drop_device();
+            false
+        }
+
+        /// Hardware sensor indices mapped to button `b`, in ascending order.
+        fn button_sensor_indices(&self, b: usize) -> Vec<usize> {
+            (0..SENSOR_COUNT)
+                .filter(|&i| {
+                    let m = self.config.sensor_to_button_mapping[i];
+                    m >= 0 && m as usize == b
+                })
+                .collect()
         }
 
         pub fn debug_dump(&mut self) -> String {
