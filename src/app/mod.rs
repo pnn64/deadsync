@@ -8425,8 +8425,12 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
+                CurrentScreen::EvaluationSummary => {
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
+                }
                 CurrentScreen::ProfileLoad => {
-                    // SelectMusic state is prepared asynchronously while ProfileLoad is displayed.
                     select_music::trigger_immediate_refresh(
                         &mut self.state.screens.select_music_state,
                     );
@@ -8602,7 +8606,7 @@ impl App {
             }
 
             match prev {
-                CurrentScreen::ProfileLoad => {
+                CurrentScreen::ProfileLoad | CurrentScreen::EvaluationSummary => {
                     select_course::trigger_immediate_refresh(
                         &mut self.state.screens.select_course_state,
                     );
