@@ -15,26 +15,6 @@ mod fsrio;
 ))]
 mod smx;
 
-pub const VIEW_SENSOR_COUNT: usize = 4;
-
-#[derive(Clone, Copy, Debug)]
-pub struct BarView {
-    pub label: &'static str,
-    pub raw_value: u16,
-    pub value_norm: f32,
-    pub raw_threshold: u16,
-    pub threshold_norm: f32,
-    pub min_raw_threshold: u16,
-    pub max_raw_threshold: u16,
-    pub active: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct View {
-    pub device_name: Option<String>,
-    pub bars: [BarView; VIEW_SENSOR_COUNT],
-}
-
 /// Number of playable buttons deadsync configures per FSR pad (L/D/U/R).
 pub const PAD_BUTTON_COUNT: usize = 4;
 /// Button labels in fixed order, shared by every FSR backend.
@@ -94,23 +74,9 @@ pub struct PadView {
     target_os = "freebsd",
     target_os = "macos"
 ))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ActiveMonitor {
-    None,
-    Fsrio,
-    Smx,
-}
-
-#[cfg(any(
-    windows,
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "macos"
-))]
 pub struct Monitor {
     fsrio: fsrio::Monitor,
     smx: smx::Monitor,
-    active: ActiveMonitor,
 }
 
 #[cfg(any(
@@ -124,31 +90,6 @@ impl Monitor {
         Self {
             fsrio: fsrio::Monitor::new(),
             smx: smx::Monitor::new(),
-            active: ActiveMonitor::None,
-        }
-    }
-
-    pub fn poll_view(&mut self) -> Option<View> {
-        if let Some(view) = self.fsrio.poll_view() {
-            self.active = ActiveMonitor::Fsrio;
-            return Some(view);
-        }
-        if let Some(view) = self.smx.poll_view() {
-            self.active = ActiveMonitor::Smx;
-            return Some(view);
-        }
-        self.active = ActiveMonitor::None;
-        None
-    }
-
-    pub fn update_threshold(&mut self, sensor_index: usize, threshold: u16) -> bool {
-        match self.active {
-            ActiveMonitor::Fsrio => self.fsrio.update_threshold(sensor_index, threshold),
-            ActiveMonitor::Smx => self.smx.update_threshold(sensor_index, threshold),
-            ActiveMonitor::None => {
-                self.fsrio.update_threshold(sensor_index, threshold)
-                    || self.smx.update_threshold(sensor_index, threshold)
-            }
         }
     }
 
@@ -197,7 +138,7 @@ impl Monitor {
     target_os = "macos"
 )))]
 mod unsupported {
-    use super::{PadDeviceId, PadView, View};
+    use super::{PadDeviceId, PadView};
     use std::fmt::Write as _;
     use std::path::Path;
     use std::time::SystemTime;
@@ -208,14 +149,6 @@ mod unsupported {
     impl Monitor {
         pub const fn new() -> Self {
             Self
-        }
-
-        pub fn poll_view(&mut self) -> Option<View> {
-            None
-        }
-
-        pub fn update_threshold(&mut self, _sensor_index: usize, _threshold: u16) -> bool {
-            false
         }
 
         pub fn poll_pads(&mut self) -> Vec<PadView> {

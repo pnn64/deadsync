@@ -6,8 +6,8 @@
 ))]
 mod imp {
     use crate::engine::input::fsr::{
-        BackendKind, BarView as FsrBarView, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS,
-        PadDeviceId, PadView, SensorView, VIEW_SENSOR_COUNT, View as FsrView,
+        BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView,
+        SensorView,
     };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
@@ -61,41 +61,6 @@ mod imp {
     impl Monitor {
         pub fn new() -> Self {
             Self::default()
-        }
-
-        pub fn poll_view(&mut self) -> Option<FsrView> {
-            self.ensure_device();
-            self.read_pending_reports();
-            self.device.as_ref()?;
-            Some(FsrView {
-                device_name: self.device_name.clone(),
-                bars: std::array::from_fn(|i| FsrBarView {
-                    label: sensor_label(i),
-                    raw_value: self.input.sensor_values[i],
-                    value_norm: normalize_sensor_value(self.input.sensor_values[i]),
-                    raw_threshold: self.config.sensor_thresholds[i],
-                    threshold_norm: normalize_sensor_value(self.config.sensor_thresholds[i]),
-                    min_raw_threshold: 0,
-                    max_raw_threshold: MAX_SENSOR_VALUE,
-                    active: self.input.sensor_values[i] >= self.config.sensor_thresholds[i],
-                }),
-            })
-        }
-
-        pub fn update_threshold(&mut self, sensor_index: usize, threshold: u16) -> bool {
-            if sensor_index >= VIEW_SENSOR_COUNT || threshold > MAX_SENSOR_VALUE {
-                return false;
-            }
-            self.ensure_device();
-            let Some(device) = self.device.as_ref() else {
-                return false;
-            };
-            self.config.sensor_thresholds[sensor_index] = threshold;
-            if write_config(device, &self.config).is_ok() {
-                return true;
-            }
-            self.drop_device();
-            false
         }
 
         /// FSRIO streams sensor values continuously, so there's no test mode to
@@ -540,16 +505,6 @@ mod imp {
 
     fn opt_owned_str(value: Option<String>) -> String {
         value.unwrap_or_else(|| "<none>".to_owned())
-    }
-
-    fn sensor_label(index: usize) -> &'static str {
-        match index {
-            0 => "S0",
-            1 => "S1",
-            2 => "S2",
-            3 => "S3",
-            _ => "FSR",
-        }
     }
 
     fn read_name_from_device(device: &HidDevice) -> Result<String, ()> {
