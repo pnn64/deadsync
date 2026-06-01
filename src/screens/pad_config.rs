@@ -157,7 +157,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let group_w = BAR_WIDTH * PAD_BUTTON_COUNT as f32 + BAR_GAP * (PAD_BUTTON_COUNT - 1) as f32;
     let panel_w = group_w + 34.0;
     let total_w = panel_w * state.pads.len() as f32 + PAD_GAP * (state.pads.len() - 1) as f32;
-    let panel_h = BAR_HEIGHT + 116.0;
+    let panel_h = BAR_HEIGHT + 140.0;
     let top_y = screen_center_y() - panel_h * 0.5;
     let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
 
@@ -167,14 +167,14 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             font("miso"):
             settext(pad.device_name.clone()):
             align(0.5, 0.0):
-            xy(panel_cx, top_y + 12.0):
+            xy(panel_cx, top_y + 14.0):
             zoom(0.82):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.9):
             z(12)
         ));
 
-        let track_y = top_y + 56.0;
+        let track_y = top_y + 84.0;
         let left = panel_cx - group_w * 0.5 + BAR_WIDTH * 0.5;
         for (btn_idx, button) in pad.buttons.iter().enumerate() {
             let x = left + btn_idx as f32 * (BAR_WIDTH + BAR_GAP);
@@ -434,8 +434,8 @@ fn push_bar(
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext(raw_threshold.to_string()): align(0.0, 0.5):
-        xy(x + BAR_WIDTH * 0.5 + 6.0, threshold_y): zoom(0.7): horizalign(left):
+        font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
+        xy(x, threshold_y - 3.0): zoom(0.68): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     let label_color = if active { ACTIVE_FILL } else { text_color };
