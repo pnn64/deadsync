@@ -17,10 +17,10 @@ pub(super) mod tests {
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
-    use crate::game::profile::{self, BackgroundFilter, Profile};
+    use crate::game::profile::{self, Profile};
     use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
-    use deadsync_profile::{PlayStyle, PlayerSide};
+    use deadsync_profile::{BackgroundFilter, Perspective, PlayStyle, PlayerSide};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use std::time::Duration;
 
@@ -2427,9 +2427,9 @@ pub(super) mod tests {
         // Mutate every profile field whose Main pane row was migrated to the
         // CycleInit / NumericInit contract.
         let p = &mut state.player_profiles[P1];
-        p.perspective = profile::Perspective::Distant;
+        p.perspective = Perspective::Distant;
         p.combo_font = profile::ComboFont::Wendy;
-        p.background_filter = profile::BackgroundFilter::from_i32(42);
+        p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
 
@@ -2476,9 +2476,9 @@ pub(super) mod tests {
         let (mut state, _asset_manager) = setup_state();
 
         let p = &mut state.player_profiles[P1];
-        p.perspective = profile::Perspective::Distant;
+        p.perspective = Perspective::Distant;
         p.combo_font = profile::ComboFont::Wendy;
-        p.background_filter = profile::BackgroundFilter::from_i32(42);
+        p.background_filter = BackgroundFilter::from_i32(42);
         p.spacing_percent = 95;
         p.judgment_offset_x = -25;
         p.judgment_offset_y = 30;

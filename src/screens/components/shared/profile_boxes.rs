@@ -566,7 +566,12 @@ const fn side_ix(side: profile_data::PlayerSide) -> usize {
     }
 }
 
-fn shift_choice(state: &mut State, side: profile_data::PlayerSide, dir: i32, play_sound: bool) -> bool {
+fn shift_choice(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    dir: i32,
+    play_sound: bool,
+) -> bool {
     let (joined, ready, selected_index, preview_slot) = match side {
         profile_data::PlayerSide::P1 => (
             state.p1_joined,

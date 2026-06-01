@@ -882,17 +882,17 @@ fn build_random_attack_windows(
 
 fn build_attack_windows_for_player(
     chart_attacks: Option<&str>,
-    attack_mode: profile::AttackMode,
+    attack_mode: profile_data::AttackMode,
     player: usize,
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<ChartAttackWindow> {
     match attack_mode {
-        profile::AttackMode::Off => Vec::new(),
-        profile::AttackMode::On => chart_attacks
+        profile_data::AttackMode::Off => Vec::new(),
+        profile_data::AttackMode::On => chart_attacks
             .map(parse_chart_attack_windows)
             .unwrap_or_default(),
-        profile::AttackMode::Random => {
+        profile_data::AttackMode::Random => {
             build_random_attack_windows(song_length_seconds, player, base_seed)
         }
     }
@@ -900,7 +900,7 @@ fn build_attack_windows_for_player(
 
 fn select_attack_mods(
     attacks: &[ChartAttackWindow],
-    _attack_mode: profile::AttackMode,
+    _attack_mode: profile_data::AttackMode,
     _player: usize,
     _base_seed: u64,
 ) -> Vec<ParsedAttackMods> {
@@ -915,7 +915,7 @@ fn select_attack_mods(
 
 pub(super) fn build_attack_mask_windows_for_player(
     chart_attacks: Option<&str>,
-    attack_mode: profile::AttackMode,
+    attack_mode: profile_data::AttackMode,
     player: usize,
     base_seed: u64,
     song_length_seconds: f32,
@@ -3888,7 +3888,7 @@ fn apply_chart_attack_window(
 fn apply_chart_attacks_for_player(
     notes: &mut Vec<Note>,
     chart_attacks: Option<&str>,
-    attack_mode: profile::AttackMode,
+    attack_mode: profile_data::AttackMode,
     timing_player: &TimingData,
     col_offset: usize,
     cols: usize,
@@ -3908,7 +3908,7 @@ fn apply_chart_attacks_for_player(
     }
     let selected_mods = select_attack_mods(&attacks, attack_mode, player, base_seed);
     if selected_mods.is_empty() {
-        if attack_mode == profile::AttackMode::Random {
+        if attack_mode == profile_data::AttackMode::Random {
             debug!(
                 "Player {} selected RandomAttacks, but no random attack windows were generated.",
                 player + 1,
@@ -3951,12 +3951,12 @@ fn apply_chart_attacks_for_player(
 #[inline(always)]
 pub(super) fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
     match profile.attack_mode {
-        profile::AttackMode::Off => false,
-        profile::AttackMode::On => chart
+        profile_data::AttackMode::Off => false,
+        profile_data::AttackMode::On => chart
             .chart_attacks
             .as_deref()
             .is_some_and(|raw| !raw.trim().is_empty()),
-        profile::AttackMode::Random => true,
+        profile_data::AttackMode::Random => true,
     }
 }
 

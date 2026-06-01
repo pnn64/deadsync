@@ -13,7 +13,10 @@ use super::super::state::{
 };
 use super::*;
 use crate::game::profile as gp;
-use deadsync_profile::PlayerSide;
+use deadsync_profile::{
+    DataVisualizations, ErrorBarTrim, LifeMeterType, MeasureCounter, MeasureLines,
+    MiniIndicatorSize, PlayerSide, ScatterplotMaxWindow, TimingWindowsOption,
+};
 
 // =============================== Bindings ===============================
 
@@ -34,7 +37,7 @@ const TURN: ChoiceBinding<usize> = index_binding!(
 );
 const LIFE_METER_TYPE: ChoiceBinding<usize> = index_binding!(
     LIFE_METER_TYPE_VARIANTS,
-    gp::LifeMeterType::Standard,
+    LifeMeterType::Standard,
     lifemeter_type,
     gp::update_lifemeter_type_for_side,
     false,
@@ -49,7 +52,7 @@ const LIFE_METER_TYPE: ChoiceBinding<usize> = index_binding!(
 );
 const DATA_VISUALIZATIONS: ChoiceBinding<usize> = index_binding!(
     DATA_VISUALIZATIONS_VARIANTS,
-    gp::DataVisualizations::None,
+    DataVisualizations::None,
     data_visualizations,
     gp::update_data_visualizations_for_side,
     true,
@@ -64,7 +67,7 @@ const DATA_VISUALIZATIONS: ChoiceBinding<usize> = index_binding!(
 );
 const SCATTERPLOT_MAX_WINDOW: ChoiceBinding<usize> = index_binding!(
     SCATTERPLOT_MAX_WINDOW_VARIANTS,
-    gp::ScatterplotMaxWindow::Off,
+    ScatterplotMaxWindow::Off,
     scatterplot_max_window,
     gp::update_scatterplot_max_window_for_side,
     false,
@@ -109,7 +112,7 @@ const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
 );
 const MINI_INDICATOR_SIZE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SIZE_VARIANTS,
-    gp::MiniIndicatorSize::Default,
+    MiniIndicatorSize::Default,
     mini_indicator_size,
     gp::update_mini_indicator_size_for_side,
     false,
@@ -169,7 +172,7 @@ const COMBO_COLOR_MODE: ChoiceBinding<usize> = index_binding!(
 );
 const ERROR_BAR_TRIM: ChoiceBinding<usize> = index_binding!(
     ERROR_BAR_TRIM_VARIANTS,
-    gp::ErrorBarTrim::Off,
+    ErrorBarTrim::Off,
     error_bar_trim,
     gp::update_error_bar_trim_for_side,
     false,
@@ -184,7 +187,7 @@ const ERROR_BAR_TRIM: ChoiceBinding<usize> = index_binding!(
 );
 const MEASURE_COUNTER: ChoiceBinding<usize> = index_binding!(
     MEASURE_COUNTER_VARIANTS,
-    gp::MeasureCounter::None,
+    MeasureCounter::None,
     measure_counter,
     gp::update_measure_counter_for_side,
     true,
@@ -199,7 +202,7 @@ const MEASURE_COUNTER: ChoiceBinding<usize> = index_binding!(
 );
 const MEASURE_LINES: ChoiceBinding<usize> = index_binding!(
     MEASURE_LINES_VARIANTS,
-    gp::MeasureLines::Off,
+    MeasureLines::Off,
     measure_lines,
     gp::update_measure_lines_for_side,
     false,
@@ -214,7 +217,7 @@ const MEASURE_LINES: ChoiceBinding<usize> = index_binding!(
 );
 const TIMING_WINDOWS: ChoiceBinding<usize> = index_binding!(
     TIMING_WINDOWS_VARIANTS,
-    gp::TimingWindowsOption::None,
+    TimingWindowsOption::None,
     timing_windows,
     gp::update_timing_windows_for_side,
     false,

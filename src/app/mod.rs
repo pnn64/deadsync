@@ -770,24 +770,24 @@ fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 
     })
 }
 
-const fn hide_flags_from_profile(hide: profile::HideLightType) -> HideFlags {
+const fn hide_flags_from_profile(hide: profile_data::HideLightType) -> HideFlags {
     match hide {
-        profile::HideLightType::NoHideLights => HideFlags {
+        profile_data::HideLightType::NoHideLights => HideFlags {
             all: false,
             marquee: false,
             bass: false,
         },
-        profile::HideLightType::HideAllLights => HideFlags {
+        profile_data::HideLightType::HideAllLights => HideFlags {
             all: true,
             marquee: true,
             bass: true,
         },
-        profile::HideLightType::HideMarqueeLights => HideFlags {
+        profile_data::HideLightType::HideMarqueeLights => HideFlags {
             all: false,
             marquee: true,
             bass: false,
         },
-        profile::HideLightType::HideBassLights => HideFlags {
+        profile_data::HideLightType::HideBassLights => HideFlags {
             all: false,
             marquee: false,
             bass: true,

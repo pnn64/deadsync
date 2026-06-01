@@ -580,7 +580,10 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
     }
 }
 
-fn gameplay_status_pane_for_side(side: profile_data::PlayerSide, text: &str) -> GameplayScoreboxPane {
+fn gameplay_status_pane_for_side(
+    side: profile_data::PlayerSide,
+    text: &str,
+) -> GameplayScoreboxPane {
     gameplay_status_pane(profile::get_for_side(side).show_ex_score, text)
 }
 

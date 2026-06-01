@@ -2,13 +2,15 @@ use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
-use deadsync_profile::{MINI_PERCENT_MAX, MINI_PERCENT_MIN, PlayerSide};
+use deadsync_profile::{
+    BackgroundFilter, MINI_PERCENT_MAX, MINI_PERCENT_MIN, Perspective, PlayerSide,
+};
 
 // =============================== Bindings ===============================
 
 const PERSPECTIVE: ChoiceBinding<usize> = index_binding!(
     PERSPECTIVE_VARIANTS,
-    gp::Perspective::Overhead,
+    Perspective::Overhead,
     perspective,
     gp::update_perspective_for_side,
     false,
@@ -39,7 +41,7 @@ const COMBO_FONT: ChoiceBinding<usize> = index_binding!(
 const BACKGROUND_FILTER: NumericBinding = NumericBinding {
     parse: parse_i32_percent,
     apply: |p, v| {
-        p.background_filter = gp::BackgroundFilter::from_i32(v);
+        p.background_filter = BackgroundFilter::from_i32(v);
         Outcome::persisted()
     },
     persist_for_side: gp::update_background_filter_for_side,
@@ -772,11 +774,11 @@ fn push_background_filter_row(b: &mut RowBuilder) {
             lookup_key("PlayerOptions", "BackgroundFilter"),
             lookup_key("PlayerOptionsHelp", "BackgroundFilterHelp"),
             BACKGROUND_FILTER,
-            (0..=gp::BackgroundFilter::MAX_PERCENT)
+            (0..=BackgroundFilter::MAX_PERCENT)
                 .map(|v| format!("{v}%"))
                 .collect(),
         )
-        .with_initial_choice_index(gp::BackgroundFilter::DEFAULT.percent() as usize),
+        .with_initial_choice_index(BackgroundFilter::DEFAULT.percent() as usize),
     );
 }
 

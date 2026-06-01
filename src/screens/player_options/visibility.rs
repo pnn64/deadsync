@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile::DataVisualizations;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowVisibility {
@@ -375,7 +376,7 @@ pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS
         any_active = true;
         if selected_choice(row_map, RowId::DataVisualizations, player_idx)
             .and_then(|idx| DATA_VISUALIZATIONS_VARIANTS.get(idx))
-            .is_some_and(|&v| v == crate::game::profile::DataVisualizations::TargetScoreGraph)
+            .is_some_and(|&v| v == DataVisualizations::TargetScoreGraph)
         {
             return true;
         }

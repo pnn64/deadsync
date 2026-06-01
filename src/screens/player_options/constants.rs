@@ -110,10 +110,12 @@ pub(super) const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
 use crate::game::profile::{
-    AttackMode, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim, HideLightType,
-    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, Perspective, ScatterplotMaxWindow,
-    TargetScoreSetting, TimingWindowsOption, TurnOption,
+    ComboColors, ComboFont, ComboMode, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
+    TargetScoreSetting, TurnOption,
+};
+use deadsync_profile::{
+    AttackMode, DataVisualizations, ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter,
+    MeasureLines, MiniIndicatorSize, Perspective, ScatterplotMaxWindow, TimingWindowsOption,
 };
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).

@@ -68,7 +68,7 @@ pub fn fixture() -> GameplayBenchFixture {
         state.player_profiles[0].hide_score = false;
         state.player_profiles[0].hide_lifebar = false;
         state.player_profiles[0].hide_song_bg = false;
-        state.player_profiles[0].data_visualizations = profile::DataVisualizations::None;
+        state.player_profiles[0].data_visualizations = profile_data::DataVisualizations::None;
     }
     let (state, _) = base.into_parts();
     let mut state = gameplay_screen::State::from_gameplay(state);

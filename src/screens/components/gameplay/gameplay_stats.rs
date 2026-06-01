@@ -927,8 +927,10 @@ pub fn push_versus_step_stats(
         return;
     }
     let show_for: [bool; 2] = [
-        state.player_profiles[0].data_visualizations == profile::DataVisualizations::StepStatistics,
-        state.player_profiles[1].data_visualizations == profile::DataVisualizations::StepStatistics,
+        state.player_profiles[0].data_visualizations
+            == profile_data::DataVisualizations::StepStatistics,
+        state.player_profiles[1].data_visualizations
+            == profile_data::DataVisualizations::StepStatistics,
     ];
     if !show_for[0] && !show_for[1] {
         return;

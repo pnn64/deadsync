@@ -867,7 +867,12 @@ impl ExitCodeTracker {
     }
 
     #[inline(always)]
-    fn check(&mut self, side: profile_data::PlayerSide, dir: NavDirection, timestamp: Instant) -> bool {
+    fn check(
+        &mut self,
+        side: profile_data::PlayerSide,
+        dir: NavDirection,
+        timestamp: Instant,
+    ) -> bool {
         self.side_mut(side).check(dir, timestamp)
     }
 }
@@ -2776,7 +2781,8 @@ fn build_favorites_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<M
     for song in &songs {
         let is_fav = song.charts.iter().any(|chart| {
             (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &chart.short_hash))
-                || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &chart.short_hash))
+                || (p2_joined
+                    && profile::is_favorite(profile_data::PlayerSide::P2, &chart.short_hash))
         });
         if is_fav {
             favorite_songs.push(song.clone());
@@ -4288,10 +4294,10 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 
     let sorts = select_music_menu::SORT_ITEMS.iter().cloned().collect();
 
-    let p1_has_profile =
-        p1_joined && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1).is_some();
-    let p2_has_profile =
-        p2_joined && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2).is_some();
+    let p1_has_profile = p1_joined
+        && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1).is_some();
+    let p2_has_profile = p2_joined
+        && profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2).is_some();
     let profile_items = if p1_has_profile || p2_has_profile {
         let mut items = Vec::with_capacity(8);
         if p1_has_profile {
@@ -4334,8 +4340,12 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     }
 
     let styles = match (profile::get_session_play_style(), single_player_joined) {
-        (profile_data::PlayStyle::Single, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE]),
-        (profile_data::PlayStyle::Double, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
+        (profile_data::PlayStyle::Single, true) => {
+            Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
+        }
+        (profile_data::PlayStyle::Double, true) => {
+            Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
+        }
         _ => None,
     };
     let playlists = if state.playlist_library.is_empty() {
@@ -5997,7 +6007,10 @@ fn set_steps_index_for_side(
 ) {
     if matches!(
         (play_style, side),
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2)
+        (
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P2
+        )
     ) {
         state.p2_selected_steps_index = steps_index;
         if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
@@ -6167,7 +6180,9 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     ) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => state.p2_selected_steps_index,
+        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => {
+            state.p2_selected_steps_index
+        }
         _ => state.selected_steps_index,
     }
 }
@@ -6379,10 +6394,14 @@ fn set_lobby_disconnect_hold(
     started_at: Option<Instant>,
 ) {
     match side {
-        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1
+            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+        {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2
+            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+        {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -8690,7 +8709,12 @@ fn handle_pad_dir_p2(
                 }
 
                 if let Some(new_idx) = new_idx {
-                    set_steps_index_for_side(state, play_style, profile_data::PlayerSide::P2, new_idx);
+                    set_steps_index_for_side(
+                        state,
+                        play_style,
+                        profile_data::PlayerSide::P2,
+                        new_idx,
+                    );
                     state.step_artist_cycle_base = state.session_elapsed;
                     audio::play_sfx(if is_up {
                         "assets/sounds/easier.ogg"
@@ -9022,14 +9046,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P1,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
             }
             VirtualAction::p2_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P2,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
@@ -10120,8 +10152,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
-    let is_p2_single = play_style == profile_data::PlayStyle::Single
-        && side == profile_data::PlayerSide::P2;
+    let is_p2_single =
+        play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
     let is_versus = play_style == profile_data::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
@@ -11280,40 +11312,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         let both_gs_versus = is_versus && p1_gs && p2_gs;
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
-        let mut push_scorebox =
-            |side: profile_data::PlayerSide, center_x: f32, center_y: f32, zoom: f32, z_boost: i16| {
-                let chart_hash =
-                    if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
-                        let slot = match (play_style, side) {
-                            (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
-                            _ => 0,
-                        };
-                        selected_chart_hashes[slot]
-                    } else {
-                        None
+        let mut push_scorebox = |side: profile_data::PlayerSide,
+                                 center_x: f32,
+                                 center_y: f32,
+                                 zoom: f32,
+                                 z_boost: i16| {
+            let chart_hash =
+                if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
+                    let slot = match (play_style, side) {
+                        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
+                        _ => 0,
                     };
-                let scorebox = gs_scorebox::select_music_scorebox_actors(
-                    side,
-                    chart_hash,
-                    cfg.show_select_music_scorebox && scorebox_cycle_enabled,
-                    center_x,
-                    center_y,
-                    zoom,
-                    state.selection_animation_timer,
-                );
-                if z_boost == 0 || scorebox.is_empty() {
-                    actors.extend(scorebox);
+                    selected_chart_hashes[slot]
                 } else {
-                    actors.push(Actor::Frame {
-                        align: [0.0, 0.0],
-                        offset: [0.0, 0.0],
-                        size: [SizeSpec::Fill, SizeSpec::Fill],
-                        background: None,
-                        z: z_boost,
-                        children: scorebox,
-                    });
-                }
-            };
+                    None
+                };
+            let scorebox = gs_scorebox::select_music_scorebox_actors(
+                side,
+                chart_hash,
+                cfg.show_select_music_scorebox && scorebox_cycle_enabled,
+                center_x,
+                center_y,
+                zoom,
+                state.selection_animation_timer,
+            );
+            if z_boost == 0 || scorebox.is_empty() {
+                actors.extend(scorebox);
+            } else {
+                actors.push(Actor::Frame {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Fill, SizeSpec::Fill],
+                    background: None,
+                    z: z_boost,
+                    children: scorebox,
+                });
+            }
+        };
         let pane_scorebox_zoom = widescale(0.60, 0.64);
         let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
         let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
@@ -12280,7 +12315,13 @@ mod tests {
         state.prev_selected_index = 0;
 
         let now = Instant::now();
-        super::handle_pad_dir(&mut state, profile_data::PlayerSide::P1, PadDir::Up, true, now);
+        super::handle_pad_dir(
+            &mut state,
+            profile_data::PlayerSide::P1,
+            PadDir::Up,
+            true,
+            now,
+        );
         super::handle_pad_dir(
             &mut state,
             profile_data::PlayerSide::P1,
@@ -12465,7 +12506,12 @@ mod tests {
     #[test]
     fn steps_index_for_side_uses_primary_slot_for_single_p2() {
         assert_eq!(
-            steps_index_for_side(profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, 3, 5),
+            steps_index_for_side(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2,
+                3,
+                5
+            ),
             3
         );
     }
@@ -12473,7 +12519,12 @@ mod tests {
     #[test]
     fn steps_index_for_side_uses_p2_slot_for_versus_p2() {
         assert_eq!(
-            steps_index_for_side(profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2, 3, 5),
+            steps_index_for_side(
+                profile_data::PlayStyle::Versus,
+                profile_data::PlayerSide::P2,
+                3,
+                5
+            ),
             5
         );
     }

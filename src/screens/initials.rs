@@ -502,8 +502,12 @@ fn build_side_highscore_lists(
 }
 
 pub fn set_highscore_lists(state: &mut State, stages: &[stage_stats::StageSummary]) {
-    let p1_initials = state.players[side_ix(profile_data::PlayerSide::P1)].name.clone();
-    let p2_initials = state.players[side_ix(profile_data::PlayerSide::P2)].name.clone();
+    let p1_initials = state.players[side_ix(profile_data::PlayerSide::P1)]
+        .name
+        .clone();
+    let p2_initials = state.players[side_ix(profile_data::PlayerSide::P2)]
+        .name
+        .clone();
 
     state.highscore_lists[side_ix(profile_data::PlayerSide::P1)] =
         build_side_highscore_lists(profile_data::PlayerSide::P1, p1_initials.as_str(), stages);

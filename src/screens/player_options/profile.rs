@@ -379,13 +379,13 @@ pub(super) fn format_speed_bpm_pair(lo: f32, hi: f32) -> String {
 }
 
 #[inline(always)]
-pub(super) fn perspective_speed_mult(perspective: crate::game::profile::Perspective) -> f32 {
+pub(super) fn perspective_speed_mult(perspective: deadsync_profile::Perspective) -> f32 {
     match perspective {
-        crate::game::profile::Perspective::Overhead => 1.0,
-        crate::game::profile::Perspective::Hallway => 0.75,
-        crate::game::profile::Perspective::Distant => 33.0 / 39.0,
-        crate::game::profile::Perspective::Incoming => 33.0 / 43.0,
-        crate::game::profile::Perspective::Space => 0.825,
+        deadsync_profile::Perspective::Overhead => 1.0,
+        deadsync_profile::Perspective::Hallway => 0.75,
+        deadsync_profile::Perspective::Distant => 33.0 / 39.0,
+        deadsync_profile::Perspective::Incoming => 33.0 / 43.0,
+        deadsync_profile::Perspective::Space => 0.825,
     }
 }
 

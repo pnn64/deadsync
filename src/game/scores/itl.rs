@@ -1926,9 +1926,9 @@ mod tests {
         assert!(itl_all_timing_windows_enabled(&profile));
 
         for setting in [
-            profile::TimingWindowsOption::WayOffs,
-            profile::TimingWindowsOption::DecentsAndWayOffs,
-            profile::TimingWindowsOption::FantasticsAndExcellents,
+            profile_data::TimingWindowsOption::WayOffs,
+            profile_data::TimingWindowsOption::DecentsAndWayOffs,
+            profile_data::TimingWindowsOption::FantasticsAndExcellents,
         ] {
             profile.timing_windows = setting;
             assert!(!itl_all_timing_windows_enabled(&profile));
