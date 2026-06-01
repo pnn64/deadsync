@@ -869,6 +869,43 @@ impl Keymap {
 
 // INI parsing and default emission moved to config.rs
 
+/* ------------------------------ Pointer (mouse) events ------------------------------ */
+
+/// Physical mouse button distinguished by the pointer event stream.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Other(u16),
+}
+
+/// What happened on the pointer this tick. Position is in SM logical
+/// (top-left origin) coordinates, or `None` when the cursor is outside the
+/// window or its position is otherwise unknown.
+#[derive(Clone, Copy, Debug)]
+pub enum PointerKind {
+    /// The pointer moved (or first entered) the window.
+    Move,
+    /// A button transitioned to pressed.
+    Down(MouseButton),
+    /// A button transitioned to released.
+    Up(MouseButton),
+    /// The pointer left the window.
+    Leave,
+    /// A scroll-wheel notch in logical lines (positive = up / away from user).
+    Wheel { dx: f32, dy: f32 },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PointerEvent {
+    /// Logical pointer position. `None` for `Leave`, or for `Move`/`Wheel`
+    /// events before the window has a valid surface size.
+    pub pos: Option<crate::engine::space::LogicalPos>,
+    pub kind: PointerKind,
+    pub timestamp: Instant,
+}
+
 #[inline(always)]
 fn collect_key_binding_from_compiled(
     km: &CompiledKeymap,

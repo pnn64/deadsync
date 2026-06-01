@@ -25,6 +25,8 @@ impl Lane {
 pub enum InputSource {
     Keyboard,
     Gamepad,
+    /// Synthesized from a window-level mouse interaction.
+    Mouse,
 }
 
 #[cfg(test)]
