@@ -22,6 +22,11 @@ const MAX_DEBOUNCE_US: u16 = 25000;
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
+/// Edge label for each of a panel's four FSR sensors, by firmware index.
+const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
+/// Firmware-index order to display the sensors in so they read L, D, U, R.
+const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
+
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
     read_active: bool,
@@ -80,14 +85,19 @@ impl Monitor {
             let buttons = std::array::from_fn(|i| {
                 let (panel, label) = VIEW_PANELS[i];
                 let settings = &config.panel_settings[panel];
-                let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
-                    .map(|s| {
+                // Display the four edge sensors in L, D, U, R order to mirror the
+                // panel layout, keeping each sensor's firmware index for edits.
+                let sensors: Vec<SensorView> = SENSOR_DISPLAY_ORDER
+                    .iter()
+                    .map(|&s| {
                         let raw_value = test_data
                             .as_ref()
                             .filter(|d| d.have_data_from_panel[panel])
                             .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s]));
                         let raw_threshold = u16::from(settings.fsr_high_threshold[s]);
                         SensorView {
+                            firmware_index: s,
+                            label: Some(SENSOR_EDGE_LABELS[s]),
                             raw_value,
                             value_norm: normalize(raw_value, MAX_FSR_THRESHOLD),
                             raw_threshold,

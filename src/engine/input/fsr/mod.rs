@@ -35,8 +35,17 @@ pub struct PadDeviceId {
 }
 
 /// One physical sensor within a button group.
+///
+/// Sensors are listed in display order (left-to-right in the UI), which is not
+/// necessarily the firmware index order — `firmware_index` is what threshold /
+/// enable edits target.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorView {
+    /// Index used when addressing this sensor for edits (`set_threshold` /
+    /// `set_sensor_enabled`). May differ from the display position.
+    pub firmware_index: usize,
+    /// Short edge label (e.g. SMX "L"/"D"/"U"/"R"); `None` shows a 1-based number.
+    pub label: Option<&'static str>,
     pub raw_value: u16,
     pub value_norm: f32,
     pub raw_threshold: u16,

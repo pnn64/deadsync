@@ -36,7 +36,7 @@ const DEBOUNCE_FINE_US: u16 = 100; //  fine = 0.1 ms
 // ── Simple-view bar geometry ──
 const BAR_WIDTH: f32 = 48.0;
 const BAR_GAP: f32 = 24.0;
-const BAR_HEIGHT: f32 = 160.0;
+const BAR_HEIGHT: f32 = 140.0;
 const PAD_GAP: f32 = 70.0;
 
 // ── Advanced-view geometry ──
@@ -353,7 +353,8 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
     let panel_w = group_w + 34.0;
     let total_w = panel_w * state.pads.len() as f32 + PAD_GAP * (state.pads.len() - 1) as f32;
     let panel_h = BAR_HEIGHT + 140.0;
-    let top_y = screen_center_y() - panel_h * 0.5;
+    // Nudge up so the 4-line footer ("...Select Panel") never clips the boxes.
+    let top_y = screen_center_y() - panel_h * 0.5 - 14.0;
     let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
 
     for (pad_idx, pad) in state.pads.iter().enumerate() {
@@ -456,15 +457,17 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
 
         for (s, sensor) in button.sensors.iter().enumerate() {
             let x = group_left + ADV_BAR_W * 0.5 + s as f32 * (ADV_BAR_W + ADV_BAR_GAP);
-            let threshold = current_sensor_threshold(state, device, btn_idx, s)
-                .unwrap_or(sensor.raw_threshold);
-            let enabled = current_sensor_enabled(state, device, btn_idx, s, sensor.enabled);
+            let fw = sensor.firmware_index;
+            let threshold =
+                current_sensor_threshold(state, device, btn_idx, fw).unwrap_or(sensor.raw_threshold);
+            let enabled = current_sensor_enabled(state, device, btn_idx, fw, sensor.enabled);
             let is_focused = focused == Some(AdvTarget::Sensor { button: btn_idx, sensor: s });
+            let bar_label = sensor.label.map_or_else(|| (s + 1).to_string(), str::to_owned);
             push_sensor_bar(
                 actors,
                 x,
                 top_y,
-                s,
+                bar_label,
                 sensor.value_norm,
                 sensor.active && enabled,
                 threshold,
@@ -515,7 +518,7 @@ fn push_sensor_bar(
     actors: &mut Vec<Actor>,
     x: f32,
     y: f32,
-    sensor_index: usize,
+    sensor_label: String,
     value_norm: f32,
     active: bool,
     raw_threshold: u16,
@@ -568,9 +571,9 @@ fn push_sensor_bar(
         xy(x, y - 2.0): zoom(0.5): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
-    // Sensor identifier (1-based) directly below the bar.
+    // Sensor identifier (edge label, or 1-based number) directly below the bar.
     actors.push(act!(text:
-        font("miso"): settext((sensor_index + 1).to_string()): align(0.5, 0.0):
+        font("miso"): settext(sensor_label): align(0.5, 0.0):
         xy(x, y + ADV_BAR_HEIGHT + 4.0): zoom(0.5): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
@@ -718,24 +721,22 @@ fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool
 
 fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
     match target {
-        AdvTarget::Sensor { button, sensor } => {
+        AdvTarget::Sensor { button, sensor: disp } => {
             let Some(pad) = pad_by_device(state, dev) else { return };
             if !pad.supports_sensor_toggle {
                 return;
             }
-            let live = pad
-                .buttons
-                .get(button)
-                .and_then(|b| b.sensors.get(sensor))
-                .map(|s| s.enabled)
-                .unwrap_or(true);
-            let current = current_sensor_enabled(state, dev, button, sensor, live);
+            let Some(sv) = pad.buttons.get(button).and_then(|b| b.sensors.get(disp)) else {
+                return;
+            };
+            let fw = sv.firmware_index;
+            let current = current_sensor_enabled(state, dev, button, fw, sv.enabled);
             queue_unique(
                 state,
                 PadCommand::SensorEnabled {
                     device: dev,
                     button,
-                    sensor,
+                    sensor: fw,
                     enabled: !current,
                 },
             );
@@ -787,7 +788,7 @@ fn adjust_sensor_threshold(
     state: &mut State,
     dev: PadDeviceId,
     button: usize,
-    sensor: usize,
+    disp: usize,
     delta: i32,
 ) {
     let Some(pad) = pad_by_device(state, dev) else {
@@ -797,12 +798,12 @@ fn adjust_sensor_threshold(
         return;
     };
     let (min, max) = (bar.min_raw_threshold, bar.max_raw_threshold);
-    let live = bar
-        .sensors
-        .get(sensor)
-        .map(|s| s.raw_threshold)
-        .unwrap_or(0);
-    let current = current_sensor_threshold(state, dev, button, sensor).unwrap_or(live);
+    let Some(sv) = bar.sensors.get(disp) else {
+        return;
+    };
+    let fw = sv.firmware_index;
+    let live = sv.raw_threshold;
+    let current = current_sensor_threshold(state, dev, button, fw).unwrap_or(live);
     let next = (i32::from(current) + delta).clamp(i32::from(min), i32::from(max)) as u16;
     if next == current {
         return;
@@ -812,7 +813,7 @@ fn adjust_sensor_threshold(
         PadCommand::Threshold {
             device: dev,
             button,
-            sensor: Some(sensor),
+            sensor: Some(fw),
             value: next,
         },
     );

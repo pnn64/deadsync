@@ -79,10 +79,15 @@ mod imp {
                 let sensors: Vec<SensorView> = self
                     .button_sensor_indices(b)
                     .into_iter()
-                    .map(|i| {
+                    .enumerate()
+                    .map(|(k, i)| {
                         let raw_value = self.input.sensor_values[i];
                         let raw_threshold = self.config.sensor_thresholds[i];
                         SensorView {
+                            // `set_threshold` addresses FSRIO sensors by their
+                            // position within the button, not the HID index.
+                            firmware_index: k,
+                            label: None,
                             raw_value,
                             value_norm: normalize_sensor_value(raw_value),
                             raw_threshold,
