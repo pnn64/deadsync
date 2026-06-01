@@ -50,6 +50,16 @@ pub struct ThresholdCommand {
     pub threshold: u16,
 }
 
+/// Which pads to show, based on play context when opened.
+#[derive(Clone, Copy, Default)]
+pub enum PadFilter {
+    /// Show every connected pad (e.g. opened from Options).
+    #[default]
+    All,
+    /// Show only the pads for the given player sides (e.g. opened mid-play).
+    Sides { p1: bool, p2: bool },
+}
+
 #[derive(Default)]
 pub struct State {
     pub active_color_index: i32,
@@ -57,6 +67,19 @@ pub struct State {
     /// Flat bar index across every pad: `pad = selected / 4`, `button = selected % 4`.
     selected: usize,
     pending: Option<ThresholdCommand>,
+    /// Screen to return to on Back. Set when navigating in; defaults to Options.
+    return_screen: Option<Screen>,
+    filter: PadFilter,
+}
+
+/// Set where Back returns to (e.g. Song Select when opened from its menu).
+pub fn set_return_screen(state: &mut State, screen: Screen) {
+    state.return_screen = Some(screen);
+}
+
+/// Set which pads to show (defaults to all). Apply before the next `set_pads`.
+pub fn set_filter(state: &mut State, filter: PadFilter) {
+    state.filter = filter;
 }
 
 pub fn init() -> State {
@@ -64,9 +87,21 @@ pub fn init() -> State {
 }
 
 /// Replace the live pad snapshot (called by the app loop each frame while this
-/// screen is active). Keeps the selection in range.
+/// screen is active), applying the active pad filter. Keeps the selection in range.
 pub fn set_pads(state: &mut State, pads: Vec<PadView>) {
-    state.pads = pads;
+    state.pads = pads
+        .into_iter()
+        .filter(|p| match state.filter {
+            PadFilter::All => true,
+            PadFilter::Sides { p1, p2 } => {
+                if p.is_player2 {
+                    p2
+                } else {
+                    p1
+                }
+            }
+        })
+        .collect();
     let total = total_bars(state);
     if total == 0 {
         state.selected = 0;
@@ -98,7 +133,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         return ScreenAction::None;
     }
     if matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
-        return ScreenAction::Navigate(Screen::Options);
+        return ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options));
     }
     // Only keyboard or dedicated menu buttons drive the UI; ignore raw pad
     // panels so testing a sensor doesn't move the cursor.

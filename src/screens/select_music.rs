@@ -4329,6 +4329,9 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 
     let mut advanced = Vec::with_capacity(10);
     advanced.push(select_music_menu::ITEM_TEST_INPUT);
+    if config::get().use_fsrs {
+        advanced.push(select_music_menu::ITEM_CONFIGURE_PADS);
+    }
     advanced.push(select_music_menu::ITEM_RELOAD_SONGS_COURSES);
     advanced.push(select_music_menu::ITEM_SHOW_LOBBIES);
     if downloads_enabled {
@@ -8322,6 +8325,10 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             hide_select_music_menu(state);
             show_test_input_overlay(state);
             ScreenAction::None
+        }
+        select_music_menu::Action::ConfigurePads => {
+            hide_select_music_menu(state);
+            ScreenAction::Navigate(Screen::ConfigurePads)
         }
         select_music_menu::Action::SongSearch => {
             hide_select_music_menu(state);

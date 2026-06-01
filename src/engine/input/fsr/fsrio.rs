@@ -113,6 +113,7 @@ mod imp {
                     .device_name
                     .clone()
                     .unwrap_or_else(|| "FSR Pad".to_owned()),
+                is_player2: false,
                 buttons,
             }]
         }

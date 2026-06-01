@@ -65,6 +65,8 @@ pub struct ButtonView {
 pub struct PadView {
     pub device_id: PadDeviceId,
     pub device_name: String,
+    /// Player side the pad maps to (P2 vs P1), used to filter by play style.
+    pub is_player2: bool,
     pub buttons: [ButtonView; PAD_BUTTON_COUNT],
 }
 

@@ -42,6 +42,7 @@ pub enum Action {
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
+    ConfigurePads,
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
@@ -157,6 +158,11 @@ pub const ITEM_TEST_INPUT: Item = Item {
     top_label: TextContent::Static("Feeling salty?"),
     bottom_label: TextContent::Static("Test Input"),
     action: Action::TestInput,
+};
+pub const ITEM_CONFIGURE_PADS: Item = Item {
+    top_label: TextContent::Static("Dial It In"),
+    bottom_label: TextContent::Static("Configure Pads"),
+    action: Action::ConfigurePads,
 };
 pub const ITEM_SONG_SEARCH: Item = Item {
     top_label: TextContent::Static("Wherefore Art Thou?"),

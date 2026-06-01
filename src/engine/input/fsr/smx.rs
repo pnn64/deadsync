@@ -111,6 +111,7 @@ impl Monitor {
                     index: pad,
                 },
                 device_name,
+                is_player2: info.is_player2,
                 buttons,
             });
         }
