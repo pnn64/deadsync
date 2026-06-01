@@ -14,7 +14,7 @@
 //!   pad-level controls (auto-recalibration, panel debounce).
 
 use crate::act;
-use crate::engine::input::fsr::{PAD_BUTTON_COUNT, PadDeviceId, PadView};
+use crate::engine::input::fsr::{PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
@@ -319,7 +319,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.8):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay }, zb);
+        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false }, zb);
         return actors;
     }
 
@@ -334,7 +334,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay }, zb);
+        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false }, zb);
         return actors;
     }
 
@@ -375,11 +375,12 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
         for (btn_idx, button) in pad.buttons.iter().enumerate() {
             let x = left + btn_idx as f32 * (BAR_WIDTH + BAR_GAP);
             let selected = state.selected == pad_idx * PAD_BUTTON_COUNT + btn_idx;
+            let scale = button.value_scale;
             // A pending whole-button edit shows a single value; otherwise show the
             // live per-sensor range ("200-230") so Advanced edits are visible here.
             let (threshold_label, threshold_norm) =
                 if let Some(v) = pending_simple_threshold(state, pad.device_id, btn_idx) {
-                    (v.to_string(), normalize(v, button.max_raw_threshold))
+                    (v.to_string(), normalize(v, scale))
                 } else {
                     let (mn, mx) = sensor_threshold_range(button);
                     let label = if mn == mx {
@@ -387,27 +388,54 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     } else {
                         format!("{mn}-{mx}")
                     };
-                    (label, normalize(mx, button.max_raw_threshold))
+                    (label, normalize(mx, scale))
                 };
-            push_bar(
-                actors,
-                button.label,
-                button.aggregate_value,
-                normalize(button.aggregate_value, button.max_raw_threshold),
-                threshold_label,
-                threshold_norm,
-                button.active,
-                x,
-                track_y,
-                theme,
-                selected,
-                11.0 + zb,
-            );
+            if pad.simple_per_sensor_bars {
+                // Load cells: show all four corner readings (numbered) sharing one threshold.
+                push_value_cluster(
+                    actors,
+                    x,
+                    track_y,
+                    button.label,
+                    &button.sensors,
+                    scale,
+                    threshold_label,
+                    threshold_norm,
+                    button.active,
+                    theme,
+                    selected,
+                    11.0 + zb,
+                );
+            } else {
+                push_bar(
+                    actors,
+                    button.label,
+                    button.aggregate_value,
+                    normalize(button.aggregate_value, scale),
+                    threshold_label,
+                    threshold_norm,
+                    button.active,
+                    x,
+                    track_y,
+                    theme,
+                    selected,
+                    11.0 + zb,
+                );
+            }
         }
         panel_cx += panel_w + PAD_GAP;
     }
 
-    push_footer(actors, Footer::Simple { as_overlay }, zb);
+    let selected_pad = state.pads.get(state.selected / PAD_BUTTON_COUNT);
+    let advanced_available = selected_pad.is_some_and(|p| p.supports_advanced);
+    push_footer(
+        actors,
+        Footer::Simple {
+            as_overlay,
+            advanced_available,
+        },
+        zb,
+    );
 }
 
 // ─── Advanced view ───────────────────────────────────────────────────────────
@@ -639,6 +667,10 @@ enum AdvTarget {
 fn enter_advanced(state: &mut State) {
     let pad_idx = state.selected / PAD_BUTTON_COUNT;
     if let Some(pad) = state.pads.get(pad_idx) {
+        // Load-cell pads are Simple-only.
+        if !pad.supports_advanced {
+            return;
+        }
         state.advanced = Some(pad.device_id);
         state.adv_sel = 0;
     }
@@ -1020,7 +1052,10 @@ const fn is_menu_control(act: VirtualAction) -> bool {
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 enum Footer {
-    Simple { as_overlay: bool },
+    Simple {
+        as_overlay: bool,
+        advanced_available: bool,
+    },
     Advanced { supports_toggle: bool },
 }
 
@@ -1040,18 +1075,23 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         ));
     };
     match footer {
-        Footer::Simple { as_overlay } => {
+        Footer::Simple {
+            as_overlay,
+            advanced_available,
+        } => {
             line(actors, "Left/Right - Select Panel".to_owned(), bottom - 94.0);
             line(
                 actors,
                 format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
                 bottom - 70.0,
             );
-            line(
-                actors,
-                "Press &START; for Advanced (per-sensor)".to_owned(),
-                bottom - 46.0,
-            );
+            if advanced_available {
+                line(
+                    actors,
+                    "Press &START; for Advanced (per-sensor)".to_owned(),
+                    bottom - 46.0,
+                );
+            }
             let back = if as_overlay {
                 "Press &BACK; to return to Song Select"
             } else {
@@ -1139,6 +1179,87 @@ fn push_frame(
         zoomto(PANEL_BORDER_H, panel_h):
         diffuse(frame_color[0], frame_color[1], frame_color[2], frame_color[3]):
         z(z + 1.0)
+    ));
+}
+
+/// Simple-view renderer for load-cell panels: draws each corner sensor as a
+/// thin value bar (numbered 1-N) sharing one panel threshold line, inside the
+/// same slot a single Simple bar would occupy.
+#[allow(clippy::too_many_arguments)]
+fn push_value_cluster(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    label: &str,
+    sensors: &[SensorView],
+    value_scale: u16,
+    threshold_label: String,
+    threshold_norm: f32,
+    button_active: bool,
+    theme: &Theme,
+    selected: bool,
+    z: f32,
+) {
+    let threshold_norm = threshold_norm.clamp(0.0, 1.0);
+    let n = sensors.len().max(1);
+    let thin_w = 9.0_f32;
+    let gap = 3.0_f32;
+    let total = n as f32 * thin_w + (n - 1) as f32 * gap;
+    let start_left = x_center - total * 0.5;
+
+    for (i, sensor) in sensors.iter().enumerate() {
+        let bx = start_left + thin_w * 0.5 + i as f32 * (thin_w + gap);
+        push_quad(actors, bx, y, thin_w, BAR_HEIGHT, TRACK_COLOR, z);
+        let vn = normalize(sensor.raw_value, value_scale);
+        let fill_h = vn * BAR_HEIGHT;
+        if fill_h > 0.0 {
+            let fill = if sensor.active { ACTIVE_FILL } else { theme.fill_idle };
+            push_quad(actors, bx, y + BAR_HEIGHT - fill_h, thin_w, fill_h, fill, z + 1.0);
+        }
+        // Sensor number (1-based) below its bar.
+        let nc = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.9] };
+        actors.push(act!(text:
+            font("miso"): settext((i + 1).to_string()): align(0.5, 0.0):
+            xy(bx, y + BAR_HEIGHT + 6.0): zoom(0.5): horizalign(center):
+            diffuse(nc[0], nc[1], nc[2], nc[3]): z(z + 3.0)
+        ));
+    }
+
+    // One shared threshold line across the whole cluster.
+    let threshold_h = 3.0_f32;
+    let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
+    push_quad(actors, x_center, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
+
+    if selected {
+        let ox = x_center - (BAR_WIDTH + 12.0) * 0.5;
+        let oy = y - 34.0;
+        let ow = BAR_WIDTH + 12.0;
+        let oh = BAR_HEIGHT + 70.0;
+        let t = 2.0_f32;
+        let o = [1.0, 1.0, 1.0, 1.0];
+        push_quad(actors, x_center, oy, ow, t, o, z + 2.5);
+        push_quad(actors, x_center, oy + oh - t, ow, t, o, z + 2.5);
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox, oy): zoomto(t, oh): diffuse(o[0], o[1], o[2], o[3]): z(z + 2.5)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox + ow - t, oy): zoomto(t, oh): diffuse(o[0], o[1], o[2], o[3]): z(z + 2.5)
+        ));
+    }
+
+    let text_color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.95] };
+    // Shared threshold value above the line.
+    actors.push(act!(text:
+        font("miso"): settext(threshold_label): align(0.5, 1.0):
+        xy(x_center, threshold_y - 3.0): zoom(0.68): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
+    // Button label below the cluster.
+    let label_color = if button_active { ACTIVE_FILL } else { text_color };
+    actors.push(act!(text:
+        font("miso"): settext(label.to_string()): align(0.5, 0.0):
+        xy(x_center, y + BAR_HEIGHT + 20.0): zoom(1.0): horizalign(center):
+        diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
 }
 

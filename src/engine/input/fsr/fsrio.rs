@@ -108,6 +108,7 @@ mod imp {
                     aggregate_value,
                     aggregate_threshold,
                     active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
+                    value_scale: MAX_SENSOR_VALUE,
                 }
             });
             vec![PadView {
@@ -121,6 +122,8 @@ mod imp {
                     .unwrap_or_else(|| "FSR Pad".to_owned()),
                 is_player2: false,
                 buttons,
+                supports_advanced: true,
+                simple_per_sensor_bars: false,
                 supports_sensor_toggle: false,
                 auto_recalibration: None,
                 debounce_micros: None,

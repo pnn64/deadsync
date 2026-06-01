@@ -70,6 +70,9 @@ pub struct ButtonView {
     pub aggregate_value: u16,
     pub aggregate_threshold: u16,
     pub active: bool,
+    /// Full-scale value for normalizing the live bars (FSR 250, load cell 500).
+    /// May exceed `max_raw_threshold` (load-cell readings outrun their threshold range).
+    pub value_scale: u16,
 }
 
 /// A single connected FSR pad, exposed to the config screen.
@@ -80,6 +83,12 @@ pub struct PadView {
     /// Player side the pad maps to (P2 vs P1), used to filter by play style.
     pub is_player2: bool,
     pub buttons: [ButtonView; PAD_BUTTON_COUNT],
+    /// Whether the Advanced view is available for this pad. Load-cell pads are
+    /// Simple-only (per-sensor config isn't possible on them).
+    pub supports_advanced: bool,
+    /// Whether the Simple view should draw each sensor as its own thin bar
+    /// (load cells: show all 4 corner readings) vs a single aggregate bar (FSR).
+    pub simple_per_sensor_bars: bool,
     /// Whether this backend supports enabling/disabling individual sensors.
     pub supports_sensor_toggle: bool,
     /// Current auto-recalibration state, if the backend exposes it (SMX).

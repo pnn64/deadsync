@@ -4,7 +4,7 @@ use crate::engine::input::fsr::{
     BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
 };
 use crate::engine::smx;
-use rustmaniax_sdk::{ConfigFlags, SensorTestMode, SmxConfig};
+use rustmaniax_sdk::{ConfigFlags, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
@@ -18,6 +18,13 @@ const MAX_FSR_THRESHOLD: u16 = 250;
 /// we never let the user drop below 0.5ms.
 const MIN_DEBOUNCE_US: u16 = 500;
 const MAX_DEBOUNCE_US: u16 = 25000;
+
+// Pre-v5 load-cell pads: 8-bit thresholds (20-200) and live values that scale
+// to 500 (no >>2), matching the official SMX config tool.
+const MIN_LOADCELL_THRESHOLD: u16 = 20;
+const MAX_LOADCELL_THRESHOLD: u16 = 200;
+const FSR_VALUE_SCALE: u16 = 250;
+const LOADCELL_VALUE_SCALE: u16 = 500;
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
@@ -56,7 +63,7 @@ impl Monitor {
         }
     }
 
-    /// Enumerate every connected FSR-capable StepManiaX pad as a `PadView`.
+    /// Enumerate every connected StepManiaX pad (FSR or load cell) as a `PadView`.
     pub fn poll_pads(&mut self) -> Vec<PadView> {
         let mut pads = Vec::new();
         for pad in 0..2 {
@@ -67,9 +74,7 @@ impl Monitor {
             let Some(config) = smx::get_config(pad) else {
                 continue;
             };
-            if !is_fsr(&config) {
-                continue;
-            }
+            let fsr = is_fsr(&config);
             // Ensure test mode is on so sensor levels are populated.
             if !self.read_active {
                 smx::set_test_mode(pad, SensorTestMode::CalibratedValues);
@@ -84,46 +89,18 @@ impl Monitor {
 
             let buttons = std::array::from_fn(|i| {
                 let (panel, label) = VIEW_PANELS[i];
-                let settings = &config.panel_settings[panel];
-                // Display the four edge sensors in L, D, U, R order to mirror the
-                // panel layout, keeping each sensor's firmware index for edits.
-                let sensors: Vec<SensorView> = SENSOR_DISPLAY_ORDER
-                    .iter()
-                    .map(|&s| {
-                        let raw_value = test_data
-                            .as_ref()
-                            .filter(|d| d.have_data_from_panel[panel])
-                            .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s]));
-                        let raw_threshold = u16::from(settings.fsr_high_threshold[s]);
-                        SensorView {
-                            firmware_index: s,
-                            label: Some(SENSOR_EDGE_LABELS[s]),
-                            raw_value,
-                            value_norm: normalize(raw_value, MAX_FSR_THRESHOLD),
-                            raw_threshold,
-                            threshold_norm: normalize(raw_threshold, MAX_FSR_THRESHOLD),
-                            active: raw_value >= raw_threshold && raw_threshold > 0,
-                            enabled: sensor_enabled(&config, panel, s),
-                        }
-                    })
-                    .collect();
-                let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-                let aggregate_threshold =
-                    sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
-                ButtonView {
-                    label,
-                    sensors,
-                    min_raw_threshold: MIN_FSR_THRESHOLD,
-                    max_raw_threshold: MAX_FSR_THRESHOLD,
-                    aggregate_value,
-                    aggregate_threshold,
-                    active: input_state & (1u16 << panel) != 0,
+                if fsr {
+                    fsr_button(&config, panel, label, test_data.as_ref(), input_state)
+                } else {
+                    load_cell_button(&config, panel, label, test_data.as_ref(), input_state)
                 }
             });
 
             // Read packed u16 fields by copy (no references into a packed struct).
             let max_tare = config.auto_calibration_max_tare;
             let debounce_us = config.panel_debounce_us;
+            // Load-cell pads are Simple-only (no per-sensor config); they show
+            // their four corner readings as separate bars but share one threshold.
             pads.push(PadView {
                 device_id: PadDeviceId {
                     backend: BackendKind::Smx,
@@ -132,16 +109,19 @@ impl Monitor {
                 device_name,
                 is_player2: info.is_player2,
                 buttons,
-                supports_sensor_toggle: true,
-                auto_recalibration: Some(max_tare != 0),
-                debounce_micros: Some(debounce_us),
+                supports_advanced: fsr,
+                simple_per_sensor_bars: !fsr,
+                supports_sensor_toggle: fsr,
+                auto_recalibration: if fsr { Some(max_tare != 0) } else { None },
+                debounce_micros: if fsr { Some(debounce_us) } else { None },
             });
         }
         pads
     }
 
-    /// Set a panel threshold for one or all of its sensors. SMX stores both a
-    /// low and high FSR threshold; we write `high = value`, `low = value - 1`.
+    /// Set a panel threshold. SMX stores a low + high; we write `high = value`,
+    /// `low = value - 1`. FSR pads allow per-sensor edits (`sensor = Some(i)`);
+    /// load-cell pads have a single per-panel threshold (`sensor` is ignored).
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
@@ -149,39 +129,49 @@ impl Monitor {
         sensor: Option<usize>,
         value: u16,
     ) -> bool {
-        if device.backend != BackendKind::Smx
-            || button >= PAD_BUTTON_COUNT
-            || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value)
-        {
+        if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
             return false;
         }
         let pad = device.index;
         let info = smx::get_info(pad);
-        if !info.connected || info.firmware_version < 5 {
+        if !info.connected {
             return false;
         }
         let Some(mut config) = smx::get_config(pad) else {
             return false;
         };
-        if !is_fsr(&config) {
-            return false;
-        }
         let (panel, _) = VIEW_PANELS[button];
-        let high = value as u8;
-        let low = high.saturating_sub(1);
+        let fsr = is_fsr(&config);
         let settings = &mut config.panel_settings[panel];
-        match sensor {
-            Some(s) if s < PANEL_SENSOR_COUNT => {
-                settings.fsr_high_threshold[s] = high;
-                settings.fsr_low_threshold[s] = low;
+
+        if fsr {
+            if info.firmware_version < 5
+                || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value)
+            {
+                return false;
             }
-            Some(_) => return false,
-            None => {
-                for s in 0..PANEL_SENSOR_COUNT {
+            let high = value as u8;
+            let low = high.saturating_sub(1);
+            match sensor {
+                Some(s) if s < PANEL_SENSOR_COUNT => {
                     settings.fsr_high_threshold[s] = high;
                     settings.fsr_low_threshold[s] = low;
                 }
+                Some(_) => return false,
+                None => {
+                    for s in 0..PANEL_SENSOR_COUNT {
+                        settings.fsr_high_threshold[s] = high;
+                        settings.fsr_low_threshold[s] = low;
+                    }
+                }
             }
+        } else {
+            // Load cell: one threshold per panel; the sensor index is ignored.
+            if !(MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD).contains(&value) {
+                return false;
+            }
+            settings.load_cell_high_threshold = value as u8;
+            settings.load_cell_low_threshold = (value as u8).saturating_sub(1);
         }
         smx::set_config(pad, config);
         true
@@ -341,6 +331,90 @@ fn serial_prefix(serial: &str) -> String {
     }
 }
 
+/// Build an FSR panel's button view: four edge sensors (displayed L,D,U,R),
+/// each with its own threshold and enable bit.
+fn fsr_button(
+    config: &SmxConfig,
+    panel: usize,
+    label: &'static str,
+    test_data: Option<&SensorTestData>,
+    input_state: u16,
+) -> ButtonView {
+    let settings = &config.panel_settings[panel];
+    let sensors: Vec<SensorView> = SENSOR_DISPLAY_ORDER
+        .iter()
+        .map(|&s| {
+            let raw_value = test_data
+                .filter(|d| d.have_data_from_panel[panel])
+                .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s]));
+            let raw_threshold = u16::from(settings.fsr_high_threshold[s]);
+            SensorView {
+                firmware_index: s,
+                label: Some(SENSOR_EDGE_LABELS[s]),
+                raw_value,
+                value_norm: normalize(raw_value, FSR_VALUE_SCALE),
+                raw_threshold,
+                threshold_norm: normalize(raw_threshold, FSR_VALUE_SCALE),
+                active: raw_value >= raw_threshold && raw_threshold > 0,
+                enabled: sensor_enabled(config, panel, s),
+            }
+        })
+        .collect();
+    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+    let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+    ButtonView {
+        label,
+        sensors,
+        min_raw_threshold: MIN_FSR_THRESHOLD,
+        max_raw_threshold: MAX_FSR_THRESHOLD,
+        aggregate_value,
+        aggregate_threshold,
+        active: input_state & (1u16 << panel) != 0,
+        value_scale: FSR_VALUE_SCALE,
+    }
+}
+
+/// Build a load-cell panel's button view: four corner readings (numbered 1-4)
+/// that all share the panel's single load-cell threshold.
+fn load_cell_button(
+    config: &SmxConfig,
+    panel: usize,
+    label: &'static str,
+    test_data: Option<&SensorTestData>,
+    input_state: u16,
+) -> ButtonView {
+    let settings = &config.panel_settings[panel];
+    let threshold = u16::from(settings.load_cell_high_threshold);
+    let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
+        .map(|s| {
+            let raw_value = test_data
+                .filter(|d| d.have_data_from_panel[panel])
+                .map_or(0, |d| calibrate_load_cell(d.sensor_level[panel][s]));
+            SensorView {
+                firmware_index: s,
+                label: None, // corners, not edges -> numbered 1-4 in the UI
+                raw_value,
+                value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
+                raw_threshold: threshold,
+                threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
+                active: raw_value >= threshold && threshold > 0,
+                enabled: true,
+            }
+        })
+        .collect();
+    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+    ButtonView {
+        label,
+        sensors,
+        min_raw_threshold: MIN_LOADCELL_THRESHOLD,
+        max_raw_threshold: MAX_LOADCELL_THRESHOLD,
+        aggregate_value,
+        aggregate_threshold: threshold,
+        active: input_state & (1u16 << panel) != 0,
+        value_scale: LOADCELL_VALUE_SCALE,
+    }
+}
+
 /// `enabled_sensors` packs one panel per nibble: panel `p` uses byte `p / 2`,
 /// the high nibble (`0xF0`) for even panels and the low nibble (`0x0F`) for odd
 /// panels, matching the official SMX config tool (`Widgets.cs`). The four
@@ -368,6 +442,15 @@ fn calibrate_fsr(value: i16) -> u16 {
         return 0;
     }
     (value >> 2) as u16
+}
+
+/// Load-cell readings are used unscaled (0-500 range, no `>>2`), clamping
+/// noise at/below zero to zero.
+fn calibrate_load_cell(value: i16) -> u16 {
+    if value <= 0 {
+        return 0;
+    }
+    (value as u16).min(LOADCELL_VALUE_SCALE)
 }
 
 fn normalize(value: u16, max: u16) -> f32 {
