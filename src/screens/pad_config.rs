@@ -174,6 +174,31 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         z(20)
     ));
 
+    if !crate::config::get().use_fsrs {
+        actors.push(act!(text:
+            font("miso"):
+            settext("FSR support is off."):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y() - 16.0):
+            zoom(1.0):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.9):
+            z(20)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext("If you have FSR pads, enable \"Use FSRs\" in Options > Input."):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y() + 14.0):
+            zoom(0.7):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.8):
+            z(20)
+        ));
+        push_footer(&mut actors);
+        return actors;
+    }
+
     if state.pads.is_empty() {
         actors.push(act!(text:
             font("miso"):

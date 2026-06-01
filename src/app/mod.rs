@@ -3896,7 +3896,9 @@ impl App {
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
     fn sync_pad_config_fsr(&mut self) {
-        if self.state.screens.current_screen == CurrentScreen::ConfigurePads {
+        if self.state.screens.current_screen == CurrentScreen::ConfigurePads
+            && config::get().use_fsrs
+        {
             if !self.fsr_pads_active {
                 self.fsr_monitor.set_active(true);
                 self.fsr_pads_active = true;
