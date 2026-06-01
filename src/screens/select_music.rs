@@ -8169,7 +8169,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
     ScreenAction::None
 }
 
-fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
     let close_side = match ev.action {
         VirtualAction::p1_start | VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
         VirtualAction::p2_start | VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
@@ -8180,7 +8180,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
         audio::play_sfx("assets/sounds/start.ogg");
         return ScreenAction::None;
     }
-    pad_config::apply_edit(&mut state.pad_config_overlay, ev, false);
+    pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine);
     ScreenAction::None
 }
 
@@ -9056,7 +9056,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
     update_select_hold_state(state, ev);
 
     if state.reload_ui.is_some() {
@@ -9127,7 +9127,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_replay_overlay_input(state, ev);
     }
     if state.pad_config_overlay_visible {
-        return handle_pad_config_overlay_input(state, ev);
+        return handle_pad_config_overlay_input(state, ev, fine);
     }
     if state.test_input_overlay_visible {
         return handle_test_input_overlay_input(state, ev);

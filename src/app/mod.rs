@@ -6022,6 +6022,7 @@ impl App {
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
+                self.state.shell.shift_held,
             ),
             CurrentScreen::SelectCourse => crate::screens::select_course::handle_input(
                 &mut self.state.screens.select_course_state,
