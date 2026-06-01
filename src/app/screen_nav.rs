@@ -226,35 +226,14 @@ impl App {
         } else if target_screen == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
         } else if target_screen == CurrentScreen::ConfigurePads {
+            // The full screen is reached only from Options (Song Select uses an
+            // in-place overlay instead): return there and show all pads.
             let pad_state = &mut self.state.screens.pad_config_state;
-            if prev == CurrentScreen::SelectMusic {
-                // Opened mid-play: Back returns to Song Select, and only the
-                // pads for the active player sides are shown (mirrors Test Input).
-                crate::screens::pad_config::set_return_screen(pad_state, CurrentScreen::SelectMusic);
-                let (mut p1, mut p2) = match profile::get_session_play_style() {
-                    profile::PlayStyle::Double => (true, true),
-                    profile::PlayStyle::Single | profile::PlayStyle::Versus => (
-                        profile::is_session_side_joined(profile::PlayerSide::P1),
-                        profile::is_session_side_joined(profile::PlayerSide::P2),
-                    ),
-                };
-                if !p1 && !p2 {
-                    match profile::get_session_player_side() {
-                        profile::PlayerSide::P1 => p1 = true,
-                        profile::PlayerSide::P2 => p2 = true,
-                    }
-                }
-                crate::screens::pad_config::set_filter(
-                    pad_state,
-                    crate::screens::pad_config::PadFilter::Sides { p1, p2 },
-                );
-            } else {
-                crate::screens::pad_config::set_return_screen(pad_state, CurrentScreen::Options);
-                crate::screens::pad_config::set_filter(
-                    pad_state,
-                    crate::screens::pad_config::PadFilter::All,
-                );
-            }
+            crate::screens::pad_config::set_return_screen(pad_state, CurrentScreen::Options);
+            crate::screens::pad_config::set_filter(
+                pad_state,
+                crate::screens::pad_config::PadFilter::All,
+            );
         } else if target_screen == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();

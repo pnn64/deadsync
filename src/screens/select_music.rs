@@ -33,6 +33,7 @@ use crate::screens::components::{
         timers, transitions, visual_style_bg,
     },
 };
+use crate::screens::pad_config;
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
     input as screen_input,
@@ -1098,6 +1099,8 @@ pub struct State {
     pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
+    pub pad_config_overlay_visible: bool,
+    pub pad_config_overlay: pad_config::State,
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
@@ -3532,6 +3535,8 @@ pub fn init() -> State {
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
+        pad_config_overlay_visible: false,
+        pad_config_overlay: pad_config::State::default(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3720,6 +3725,8 @@ pub fn init_placeholder() -> State {
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
+        pad_config_overlay_visible: false,
+        pad_config_overlay: pad_config::State::default(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -4423,6 +4430,48 @@ fn show_test_input_overlay(state: &mut State) {
 #[inline(always)]
 fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
+}
+
+fn show_pad_config_overlay(state: &mut State) {
+    clear_preview(state);
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    state.profile_switch_overlay = None;
+    clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
+    clear_nav_hold(state);
+    state.test_input_overlay_visible = false;
+    state.pad_config_overlay_visible = true;
+    state.pad_config_overlay.active_color_index = state.active_color_index;
+
+    // Show only the pads for the active player sides (mirrors Test Input).
+    let (mut p1, mut p2) = match profile::get_session_play_style() {
+        profile_data::PlayStyle::Double => (true, true),
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => (
+            profile::is_session_side_joined(profile_data::PlayerSide::P1),
+            profile::is_session_side_joined(profile_data::PlayerSide::P2),
+        ),
+    };
+    if !p1 && !p2 {
+        match profile::get_session_player_side() {
+            profile_data::PlayerSide::P1 => p1 = true,
+            profile_data::PlayerSide::P2 => p2 = true,
+        }
+    }
+    pad_config::set_filter(
+        &mut state.pad_config_overlay,
+        pad_config::PadFilter::Sides { p1, p2 },
+    );
+}
+
+#[inline(always)]
+fn hide_pad_config_overlay(state: &mut State) {
+    state.pad_config_overlay_visible = false;
 }
 
 fn show_lobby_overlay(state: &mut State) {
@@ -8120,6 +8169,21 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
     ScreenAction::None
 }
 
+fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let close_side = match ev.action {
+        VirtualAction::p1_start | VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
+        VirtualAction::p2_start | VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
+        _ => None,
+    };
+    if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
+        hide_pad_config_overlay(state);
+        audio::play_sfx("assets/sounds/start.ogg");
+        return ScreenAction::None;
+    }
+    pad_config::apply_edit(&mut state.pad_config_overlay, ev, false);
+    ScreenAction::None
+}
+
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if modal_blocks_arrow(ev.action) {
         return ScreenAction::None;
@@ -8328,7 +8392,8 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::ConfigurePads => {
             hide_select_music_menu(state);
-            ScreenAction::Navigate(Screen::ConfigurePads)
+            show_pad_config_overlay(state);
+            ScreenAction::None
         }
         select_music_menu::Action::SongSearch => {
             hide_select_music_menu(state);
@@ -8888,6 +8953,10 @@ pub fn handle_raw_key_event(
         }
         return ScreenAction::None;
     }
+    if state.pad_config_overlay_visible {
+        // Editing is driven by mapped (virtual) actions; swallow raw keys.
+        return ScreenAction::None;
+    }
     if state.test_input_overlay_visible {
         if let Some(key) = key {
             test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
@@ -9056,6 +9125,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         select_music_menu::ReplayOverlayState::Hidden
     ) {
         return handle_replay_overlay_input(state, ev);
+    }
+    if state.pad_config_overlay_visible {
+        return handle_pad_config_overlay_input(state, ev);
     }
     if state.test_input_overlay_visible {
         return handle_test_input_overlay_input(state, ev);
@@ -9805,6 +9877,7 @@ pub fn allows_late_join(state: &State) -> bool {
         )
         && state.profile_switch_overlay.is_none()
         && !state.test_input_overlay_visible
+        && !state.pad_config_overlay_visible
 }
 
 // Fast non-allocating formatters where possible
@@ -9874,6 +9947,7 @@ fn delayed_selection_updates_blocked(state: &State) -> bool {
         )
         || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible
+        || state.pad_config_overlay_visible
 }
 
 #[inline(always)]
@@ -11547,6 +11621,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     }
     if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
         actors.extend(sync_overlay);
+        return actors;
+    }
+    if state.pad_config_overlay_visible {
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.7):
+            z(1451)
+        ));
+        actors.extend(pad_config::build_content(&state.pad_config_overlay, true));
         return actors;
     }
     if state.test_input_overlay_visible {

@@ -131,20 +131,27 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /// `fine` (Shift held) adjusts thresholds by 1 instead of `THRESHOLD_STEP`.
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    if matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
+    if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
         return ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options));
+    }
+    apply_edit(state, ev, fine);
+    ScreenAction::None
+}
+
+/// Apply selection / threshold edits for a press (no Back handling). Shared by
+/// the full screen and the Song Select overlay.
+pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) {
+    if !ev.pressed {
+        return;
     }
     // Only keyboard or dedicated menu buttons drive the UI; ignore raw pad
     // panels so testing a sensor doesn't move the cursor.
     if ev.source == InputSource::Gamepad && !is_dedicated_menu_action(ev.action) {
-        return ScreenAction::None;
+        return;
     }
     let total = total_bars(state);
     if total == 0 {
-        return ScreenAction::None;
+        return;
     }
     let step = if fine { 1 } else { THRESHOLD_STEP as i32 };
     match ui_action(ev.action) {
@@ -158,18 +165,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         Some(UiAction::Lower) => adjust_threshold(state, -step),
         None => {}
     }
-    ScreenAction::None
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(128);
-    let theme = theme(state.active_color_index);
-
-    actors.extend(state.bg.build(visual_style_bg::Params {
+    let mut actors = state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
-    }));
+    });
+    actors.extend(build_content(state, false));
+    actors
+}
+
+/// Render the title, pads/messages, and instructions without a background.
+/// `as_overlay` adjusts the footer's return hint for the Song Select overlay.
+pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(128);
+    let theme = theme(state.active_color_index);
+    // As an overlay we draw above Song Select; as a screen we start near 0.
+    let zb = if as_overlay { 1450.0 } else { 0.0 };
 
     actors.push(act!(text:
         font("miso"):
@@ -179,7 +193,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         zoom(1.2):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.95):
-        z(20)
+        z(20.0 + zb)
     ));
 
     if !crate::config::get().use_fsrs {
@@ -191,7 +205,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             zoom(1.0):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.9):
-            z(20)
+            z(20.0 + zb)
         ));
         actors.push(act!(text:
             font("miso"):
@@ -201,9 +215,9 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             zoom(0.7):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.8):
-            z(20)
+            z(20.0 + zb)
         ));
-        push_footer(&mut actors);
+        push_footer(&mut actors, as_overlay, zb);
         return actors;
     }
 
@@ -216,9 +230,9 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             zoom(1.0):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.85):
-            z(20)
+            z(20.0 + zb)
         ));
-        push_footer(&mut actors);
+        push_footer(&mut actors, as_overlay, zb);
         return actors;
     }
 
@@ -230,7 +244,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
 
     for (pad_idx, pad) in state.pads.iter().enumerate() {
-        push_frame(&mut actors, panel_cx, top_y, panel_w, panel_h, theme.frame, 10.0);
+        push_frame(&mut actors, panel_cx, top_y, panel_w, panel_h, theme.frame, 10.0 + zb);
         actors.push(act!(text:
             font("miso"):
             settext(pad.device_name.clone()):
@@ -239,7 +253,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             zoom(0.82):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.9):
-            z(12)
+            z(12.0 + zb)
         ));
 
         let track_y = top_y + 84.0;
@@ -261,13 +275,13 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
                 track_y,
                 &theme,
                 selected,
-                11.0,
+                11.0 + zb,
             );
         }
         panel_cx += panel_w + PAD_GAP;
     }
 
-    push_footer(&mut actors);
+    push_footer(&mut actors, as_overlay, zb);
     actors
 }
 
@@ -361,7 +375,7 @@ fn normalize(value: u16, max: u16) -> f32 {
     (value as f32 / max as f32).clamp(0.0, 1.0)
 }
 
-fn push_footer(actors: &mut Vec<Actor>) {
+fn push_footer(actors: &mut Vec<Actor>, as_overlay: bool, zb: f32) {
     let cx = screen_center_x();
     let bottom = screen_height();
     let line = |actors: &mut Vec<Actor>, text: String, y: f32| {
@@ -373,7 +387,7 @@ fn push_footer(actors: &mut Vec<Actor>) {
             zoom(0.7):
             horizalign(center):
             diffuse(1.0, 1.0, 1.0, 0.85):
-            z(20)
+            z(20.0 + zb)
         ));
     };
     line(actors, "Left/Right - Select Panel".to_owned(), bottom - 70.0);
@@ -382,11 +396,12 @@ fn push_footer(actors: &mut Vec<Actor>) {
         format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
         bottom - 46.0,
     );
-    line(
-        actors,
-        "Press &BACK; to return to Options".to_owned(),
-        bottom - 22.0,
-    );
+    let back_line = if as_overlay {
+        "Press &BACK; or &START; to return to Song Select"
+    } else {
+        "Press &BACK; to return to Options"
+    };
+    line(actors, back_line.to_owned(), bottom - 22.0);
 }
 
 fn theme(active_color_index: i32) -> Theme {

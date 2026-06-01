@@ -3896,28 +3896,31 @@ impl App {
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
     fn sync_pad_config_fsr(&mut self) {
-        if self.state.screens.current_screen == CurrentScreen::ConfigurePads
-            && config::get().use_fsrs
-        {
+        use crate::screens::pad_config;
+        let use_fsrs = config::get().use_fsrs;
+        let screen = self.state.screens.current_screen;
+        let on_screen = screen == CurrentScreen::ConfigurePads && use_fsrs;
+        let on_overlay = screen == CurrentScreen::SelectMusic
+            && self.state.screens.select_music_state.pad_config_overlay_visible
+            && use_fsrs;
+
+        if on_screen || on_overlay {
             if !self.fsr_pads_active {
                 self.fsr_monitor.set_active(true);
                 self.fsr_pads_active = true;
             }
-            if let Some(cmd) = crate::screens::pad_config::take_command(
-                &mut self.state.screens.pad_config_state,
-            ) {
-                let _ = self.fsr_monitor.set_threshold(
-                    cmd.device,
-                    cmd.button,
-                    cmd.sensor,
-                    cmd.threshold,
-                );
-            }
             let pads = self.fsr_monitor.poll_pads();
-            crate::screens::pad_config::set_pads(
-                &mut self.state.screens.pad_config_state,
-                pads,
-            );
+            let target = if on_screen {
+                &mut self.state.screens.pad_config_state
+            } else {
+                &mut self.state.screens.select_music_state.pad_config_overlay
+            };
+            if let Some(cmd) = pad_config::take_command(target) {
+                let _ =
+                    self.fsr_monitor
+                        .set_threshold(cmd.device, cmd.button, cmd.sensor, cmd.threshold);
+            }
+            pad_config::set_pads(target, pads);
         } else if self.fsr_pads_active {
             self.fsr_monitor.set_active(false);
             self.fsr_pads_active = false;
