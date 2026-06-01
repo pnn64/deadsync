@@ -407,6 +407,9 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     11.0 + zb,
                 );
             } else {
+                // A panel with every sensor disabled in Advanced reads as off.
+                let disabled =
+                    !button.sensors.is_empty() && button.sensors.iter().all(|s| !s.enabled);
                 push_bar(
                     actors,
                     button.label,
@@ -415,6 +418,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     threshold_label,
                     threshold_norm,
                     button.active,
+                    disabled,
                     x,
                     track_y,
                     theme,
@@ -1272,6 +1276,7 @@ fn push_bar(
     threshold_label: String,
     threshold_norm: f32,
     active: bool,
+    disabled: bool,
     x: f32,
     y: f32,
     theme: &Theme,
@@ -1280,9 +1285,49 @@ fn push_bar(
 ) {
     let value_norm = value_norm.clamp(0.0, 1.0);
     let threshold_norm = threshold_norm.clamp(0.0, 1.0);
+    let text_color = if selected {
+        SELECTED_TEXT
+    } else {
+        [1.0, 1.0, 1.0, 0.95]
+    };
 
     // Single muted track background.
     push_quad(actors, x, y, BAR_WIDTH, BAR_HEIGHT, TRACK_COLOR, z);
+
+    if selected {
+        let ox = x - (BAR_WIDTH + 12.0) * 0.5;
+        let oy = y - 42.0;
+        let ow = BAR_WIDTH + 12.0;
+        let oh = BAR_HEIGHT + 78.0;
+        let t = 2.0_f32;
+        let outline = [1.0, 1.0, 1.0, 1.0];
+        push_quad(actors, x, oy, ow, t, outline, z + 2.5);
+        push_quad(actors, x, oy + oh - t, ow, t, outline, z + 2.5);
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox, oy): zoomto(t, oh):
+            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(ox + ow - t, oy): zoomto(t, oh):
+            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
+        ));
+    }
+
+    // Whole panel disabled (every sensor turned off in Advanced): just say so.
+    if disabled {
+        let off = if selected { SELECTED_TEXT } else { CAUTION_TEXT };
+        actors.push(act!(text:
+            font("miso"): settext("OFF"): align(0.5, 0.5):
+            xy(x, y + BAR_HEIGHT * 0.5): zoom(0.82): horizalign(center):
+            diffuse(off[0], off[1], off[2], off[3]): z(z + 3.0)
+        ));
+        actors.push(act!(text:
+            font("miso"): settext(label.to_string()): align(0.5, 0.0):
+            xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
+            diffuse(0.6, 0.6, 0.65, 0.9): z(z + 3.0)
+        ));
+        return;
+    }
 
     // Value fill rising from the bottom; turns green while the panel is
     // actually activated (real pad input state, which uses the firmware's
@@ -1298,40 +1343,28 @@ fn push_bar(
     let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
     push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
 
-    if selected {
-        let ox = x - (BAR_WIDTH + 12.0) * 0.5;
-        let oy = y - 34.0;
-        let ow = BAR_WIDTH + 12.0;
-        let oh = BAR_HEIGHT + 70.0;
-        let t = 2.0_f32;
-        let outline = [1.0, 1.0, 1.0, 1.0];
-        push_quad(actors, x, oy, ow, t, outline, z + 2.5);
-        push_quad(actors, x, oy + oh - t, ow, t, outline, z + 2.5);
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(ox, oy): zoomto(t, oh):
-            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
-        ));
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(ox + ow - t, oy): zoomto(t, oh):
-            diffuse(outline[0], outline[1], outline[2], outline[3]): z(z + 2.5)
-        ));
-    }
-
-    let text_color = if selected {
-        SELECTED_TEXT
-    } else {
-        [1.0, 1.0, 1.0, 0.95]
-    };
+    // Current pressure value, kept high above the bar so a near-max threshold
+    // number doesn't clip into it.
     actors.push(act!(text:
         font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
-        xy(x, y - 10.0): zoom(0.92): horizalign(center):
+        xy(x, y - 20.0): zoom(0.92): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
-    actors.push(act!(text:
-        font("miso"): settext(threshold_label): align(0.5, 1.0):
-        xy(x, threshold_y - 3.0): zoom(0.68): horizalign(center):
-        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
-    ));
+    // Threshold number sits above its line, except near the top where it would
+    // collide with the pressure value — then drop it just below the line.
+    if threshold_norm > 0.9 {
+        actors.push(act!(text:
+            font("miso"): settext(threshold_label): align(0.5, 0.0):
+            xy(x, threshold_y + threshold_h + 2.0): zoom(0.68): horizalign(center):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+        ));
+    } else {
+        actors.push(act!(text:
+            font("miso"): settext(threshold_label): align(0.5, 1.0):
+            xy(x, threshold_y - 3.0): zoom(0.68): horizalign(center):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+        ));
+    }
     let label_color = if active { ACTIVE_FILL } else { text_color };
     actors.push(act!(text:
         font("miso"): settext(label.to_string()): align(0.5, 0.0):
