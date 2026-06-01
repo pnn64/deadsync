@@ -14,6 +14,7 @@ use crate::engine::input::fsr::{PAD_BUTTON_COUNT, PadDeviceId, PadView};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
+use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, InputSource, VirtualAction};
 
@@ -70,6 +71,7 @@ pub struct State {
     /// Screen to return to on Back. Set when navigating in; defaults to Options.
     return_screen: Option<Screen>,
     filter: PadFilter,
+    bg: visual_style_bg::State,
 }
 
 /// Set where Back returns to (e.g. Song Select when opened from its menu).
@@ -162,6 +164,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
     let theme = theme(state.active_color_index);
+
+    actors.extend(state.bg.build(visual_style_bg::Params {
+        active_color_index: state.active_color_index,
+        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+        alpha_mul: 1.0,
+    }));
 
     actors.push(act!(text:
         font("miso"):
@@ -354,16 +362,31 @@ fn normalize(value: u16, max: u16) -> f32 {
 }
 
 fn push_footer(actors: &mut Vec<Actor>) {
-    actors.push(act!(text:
-        font("miso"):
-        settext(format!("Left/Right select   Up/Down threshold +/-{THRESHOLD_STEP} (Shift +/-1)   Back to return")):
-        align(0.5, 1.0):
-        xy(screen_center_x(), screen_height() - 22.0):
-        zoom(0.72):
-        horizalign(center):
-        diffuse(1.0, 1.0, 1.0, 0.85):
-        z(20)
-    ));
+    let cx = screen_center_x();
+    let bottom = screen_height();
+    let line = |actors: &mut Vec<Actor>, text: String, y: f32| {
+        actors.push(act!(text:
+            font("miso"):
+            settext(text):
+            align(0.5, 0.5):
+            xy(cx, y):
+            zoom(0.7):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.85):
+            z(20)
+        ));
+    };
+    line(actors, "Left/Right - Select Panel".to_owned(), bottom - 70.0);
+    line(
+        actors,
+        format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
+        bottom - 46.0,
+    );
+    line(
+        actors,
+        "Press &BACK; to return to Options".to_owned(),
+        bottom - 22.0,
+    );
 }
 
 fn theme(active_color_index: i32) -> Theme {
