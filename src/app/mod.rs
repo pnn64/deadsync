@@ -1490,6 +1490,14 @@ pub struct ShellState {
     screenshot_request_side: Option<profile_data::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
+    /// Last known pointer position in logical (top-left origin) coords.
+    /// `None` when the cursor is outside the window, the surface is
+    /// inactive, or we haven't received a `CursorMoved` yet.
+    pointer_pos_logical: Option<space::LogicalPos>,
+    /// Last known raw pointer position in window pixels. Cached so we can
+    /// re-derive logical coords after a resize without waiting for the next
+    /// move.
+    pointer_pos_window: Option<space::WindowPos>,
 }
 
 /// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
@@ -1671,6 +1679,8 @@ impl ShellState {
             screenshot_request_side: None,
             screenshot_flash_started_at: None,
             screenshot_preview: None,
+            pointer_pos_logical: None,
+            pointer_pos_window: None,
         }
     }
 
@@ -3792,6 +3802,13 @@ pub struct App {
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
+    /// Lazily-created custom cursors. `None` if the asset PNGs were missing
+    /// or the platform refused to create them.
+    cursor_default: Option<winit::window::CustomCursor>,
+    cursor_hover: Option<winit::window::CustomCursor>,
+    /// Whether the cursor is currently the hover variant. Used to avoid
+    /// re-calling `set_cursor` on every mouse-move frame.
+    cursor_is_hover: bool,
 }
 
 impl App {
@@ -3863,6 +3880,174 @@ impl App {
             self.clear_gameplay_input_events();
         } else if let Some(w) = window {
             self.request_redraw(w, "focus");
+        }
+    }
+
+    /// Re-project the cached raw pointer pixel position to logical coords.
+    /// Called whenever the window size or metrics change so that screens
+    /// querying `pointer_pos_logical` aren't using stale projections.
+    #[inline]
+    pub(super) fn refresh_pointer_logical_coords(&mut self) {
+        if let Some(window_pos) = self.state.shell.pointer_pos_window {
+            self.state.shell.pointer_pos_logical = window_pos.to_logical();
+        }
+    }
+
+    fn handle_pointer_moved(&mut self, event_loop: &ActiveEventLoop, px_x: f64, px_y: f64) {
+        let window_pos = space::WindowPos::new(px_x, px_y);
+        let logical = window_pos.to_logical();
+        self.state.shell.pointer_pos_window = Some(window_pos);
+        self.state.shell.pointer_pos_logical = logical;
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let ev = input::PointerEvent {
+            pos: logical,
+            kind: input::PointerKind::Move,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(event_loop, &ev);
+    }
+
+    fn handle_pointer_left(&mut self, event_loop: &ActiveEventLoop) {
+        self.state.shell.pointer_pos_window = None;
+        self.state.shell.pointer_pos_logical = None;
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let ev = input::PointerEvent {
+            pos: None,
+            kind: input::PointerKind::Leave,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(event_loop, &ev);
+    }
+
+    fn handle_pointer_button(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        state: winit::event::ElementState,
+        button: winit::event::MouseButton,
+    ) {
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        let mb = match button {
+            winit::event::MouseButton::Left => input::MouseButton::Left,
+            winit::event::MouseButton::Right => input::MouseButton::Right,
+            winit::event::MouseButton::Middle => input::MouseButton::Middle,
+            winit::event::MouseButton::Other(code) => input::MouseButton::Other(code),
+            // Back/Forward are not currently mapped to anything; treat as Other.
+            winit::event::MouseButton::Back => input::MouseButton::Other(u16::MAX - 1),
+            winit::event::MouseButton::Forward => input::MouseButton::Other(u16::MAX),
+        };
+        let kind = match state {
+            winit::event::ElementState::Pressed => input::PointerKind::Down(mb),
+            winit::event::ElementState::Released => input::PointerKind::Up(mb),
+        };
+        let ev = input::PointerEvent {
+            pos: self.state.shell.pointer_pos_logical,
+            kind,
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(event_loop, &ev);
+    }
+
+    fn handle_pointer_wheel(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        delta: winit::event::MouseScrollDelta,
+    ) {
+        if !config::get().enable_mouse_input {
+            return;
+        }
+        // Normalize line + pixel delta sources to "logical lines". One pixel
+        // line on most platforms is ~20 device pixels; this keeps wheel
+        // behaviour consistent across touchpads and discrete wheels.
+        const PIXEL_PER_LINE: f32 = 20.0;
+        let (dx, dy) = match delta {
+            winit::event::MouseScrollDelta::LineDelta(dx, dy) => (dx, dy),
+            winit::event::MouseScrollDelta::PixelDelta(p) => (
+                (p.x as f32) / PIXEL_PER_LINE,
+                (p.y as f32) / PIXEL_PER_LINE,
+            ),
+        };
+        let ev = input::PointerEvent {
+            pos: self.state.shell.pointer_pos_logical,
+            kind: input::PointerKind::Wheel { dx, dy },
+            timestamp: Instant::now(),
+        };
+        self.dispatch_pointer_event(event_loop, &ev);
+    }
+
+    #[inline]
+    fn dispatch_pointer_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: &input::PointerEvent,
+    ) {
+        trace!(
+            "pointer: kind={:?} pos={:?} screen={:?}",
+            ev.kind, ev.pos, self.state.screens.current_screen
+        );
+
+        // Route the event to the active screen. The match arm produces
+        // both the action to dispatch *and* the cursor-hover state in a
+        // single step, so the cursor logic can't drift from the screen's
+        // own notion of "is the pointer over something interactive".
+        let (action, hovers_interactive) = match self.state.screens.current_screen {
+            CurrentScreen::Menu => {
+                let s = &mut self.state.screens.menu_state;
+                let action = crate::screens::menu::handle_pointer(s, ev);
+                let hovers = crate::screens::menu::pointer_hovers_interactive(s);
+                (action, hovers)
+            }
+            _ => (ScreenAction::None, false),
+        };
+
+        // Apply the cursor change first so a click that navigates away
+        // still leaves the cursor in a consistent state.
+        self.apply_cursor_for_pointer(ev, hovers_interactive);
+
+        if matches!(action, ScreenAction::None) {
+            return;
+        }
+        if let Err(e) = self.handle_action(action, event_loop) {
+            error!("pointer dispatch failed: {e}");
+        }
+    }
+
+    /// Decide which cursor variant to show based on this pointer event and
+    /// the hover-interactive flag reported by the active screen. Honours
+    /// the `hide_mouse_cursor` preference.
+    fn apply_cursor_for_pointer(&mut self, ev: &input::PointerEvent, hovers_interactive: bool) {
+        if config::get().hide_mouse_cursor {
+            return;
+        }
+        // A Leave event always restores the default cursor, even if the
+        // screen reported a stale hover state.
+        let hovered = !matches!(ev.kind, input::PointerKind::Leave) && hovers_interactive;
+        self.apply_cursor_hover(hovered);
+    }
+
+    /// Apply the cached default/hover cursor to the window if the variant
+    /// changed since the last call. Cheap no-op when both cursors are absent
+    /// (e.g. asset load failed) or when the state is unchanged.
+    fn apply_cursor_hover(&mut self, hovered: bool) {
+        if hovered == self.cursor_is_hover {
+            return;
+        }
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
+        let cursor = if hovered {
+            self.cursor_hover.clone()
+        } else {
+            self.cursor_default.clone()
+        };
+        if let Some(cursor) = cursor {
+            window.set_cursor(cursor);
+            self.cursor_is_hover = hovered;
         }
     }
 
@@ -4586,6 +4771,9 @@ impl App {
             state,
             software_renderer_threads,
             gfx_debug_enabled,
+            cursor_default: None,
+            cursor_hover: None,
+            cursor_is_hover: false,
         }
     }
 
@@ -4974,6 +5162,18 @@ impl App {
             ScreenAction::UpdateMouseCursorHidden(hidden) => {
                 if let Some(window) = &self.window {
                     window.set_cursor_visible(!hidden);
+                    // Re-assert the themed cursor when re-showing it; the
+                    // OS resets to its default while invisible.
+                    if !hidden {
+                        let cursor = if self.cursor_is_hover {
+                            self.cursor_hover.clone()
+                        } else {
+                            self.cursor_default.clone()
+                        };
+                        if let Some(cursor) = cursor {
+                            window.set_cursor(cursor);
+                        }
+                    }
                 }
                 config::update_hide_mouse_cursor(hidden);
                 options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
@@ -9291,6 +9491,7 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 self.sync_window_size(new_size);
+                self.refresh_pointer_logical_coords();
                 if surface_changed && self.state.shell.surface_active {
                     self.request_redraw(&window, "surface_active");
                 }
@@ -9327,6 +9528,18 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.handle_pointer_moved(event_loop, position.x, position.y);
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.handle_pointer_left(event_loop);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.handle_pointer_button(event_loop, state, button);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.handle_pointer_wheel(event_loop, delta);
             }
             WindowEvent::RedrawRequested => {
                 let redraw_started = Instant::now();

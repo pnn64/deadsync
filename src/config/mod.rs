@@ -324,6 +324,9 @@ pub struct Config {
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
+    /// Master switch for mouse-driven menu navigation. Defaults off while the
+    /// feature is rolled out screen-by-screen — see plan.md for status.
+    pub enable_mouse_input: bool,
 }
 
 impl Default for Config {
@@ -467,6 +470,7 @@ impl Default for Config {
             lights_simplify_bass: false,
             lights_com_port: SerialPortName::default(),
             only_dedicated_menu_buttons: false,
+            enable_mouse_input: false,
         }
     }
 }

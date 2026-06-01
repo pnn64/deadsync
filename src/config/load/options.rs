@@ -555,6 +555,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "OnlyDedicatedMenuButtons")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.only_dedicated_menu_buttons, |v| v != 0);
+    cfg.enable_mouse_input = conf
+        .get("Options", "EnableMouseInput")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.enable_mouse_input);
     cfg.theme_flag = conf
         .get("Options", "Theme")
         .and_then(|v| ThemeFlag::from_str(&v).ok())

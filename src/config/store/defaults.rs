@@ -311,6 +311,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "OnlyDedicatedMenuButtons",
         default.only_dedicated_menu_buttons,
     );
+    push_bool(content, "EnableMouseInput", default.enable_mouse_input);
     push_line(content, "SongParsingThreads", default.song_parsing_threads);
     push_line(
         content,
