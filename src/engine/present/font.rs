@@ -25,6 +25,7 @@ use log::{debug, trace, warn};
 use crate::assets;
 
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
+const DEFAULT_FONT_IMPORT: &str = "Common default";
 const INTERNAL_ALIAS_START: u32 = 0xE000;
 const M_SKIP_CODEPOINT: u32 = 0xFEFF;
 const DEFAULT_STROKE_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
@@ -2140,13 +2141,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
 
     fn gather_import_specs(
         ini_map_lower: &HashMap<String, HashMap<String, String>>,
-        is_top_level: bool,
     ) -> Vec<String> {
         let mut specs: Vec<String> = Vec::new();
-        if is_top_level {
-            // SM implicitly seeds "Common default" for top-level fonts.
-            specs.push("Common default".to_string());
-        }
         if let Some(map) = ini_map_lower.get("main")
             && let Some(v) = map.get("import")
         {
@@ -2237,7 +2233,20 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
     let mut all_glyphs: HashMap<char, Glyph> = HashMap::new();
     let mut stroke_texture_map: HashMap<String, String> = HashMap::new();
     let mut texture_hints_map: HashMap<String, String> = HashMap::new();
-    for spec in gather_import_specs(&ini_map_lower, is_top_level) {
+
+    // The implicit default layer (`is_implicit == true`) comes first so local
+    // pages and explicit imports can override it.
+    let mut import_specs: Vec<(String, bool)> = Vec::new();
+    if is_top_level {
+        import_specs.push((DEFAULT_FONT_IMPORT.to_string(), true));
+    }
+    import_specs.extend(
+        gather_import_specs(&ini_map_lower)
+            .into_iter()
+            .map(|spec| (spec, false)),
+    );
+
+    for (spec, is_implicit) in import_specs {
         if let Some(import_ini) = resolve_import_path(ini_path, &spec) {
             match parse(import_ini.to_string_lossy().as_ref()) {
                 Ok(imported) => {
@@ -2255,10 +2264,15 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
                     }
                     debug!("Imported font '{spec}' merged.");
                 }
+                Err(e) if is_implicit => {
+                    debug!("Default font layer '{spec}' failed to load: {e}");
+                }
                 Err(e) => {
                     warn!("Failed to import font '{spec}': {e}");
                 }
             }
+        } else if is_implicit {
+            debug!("Default font layer '{spec}' not present; skipping.");
         } else {
             warn!("Import '{spec}' not found relative to '{ini_path_str}'");
         }
@@ -2670,7 +2684,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
 
     if !font.glyph_map.contains_key(&' ') {
         let adv = font.default_glyph.as_ref().map_or(0.0, |g| g.advance);
-        warn!(
+        debug!(
             "Font '{ini_path_str}' is missing SPACE (U+0020). Falling back to default glyph (advance {adv:.1})."
         );
     } else if let Some(g) = font.glyph_map.get(&' ') {
