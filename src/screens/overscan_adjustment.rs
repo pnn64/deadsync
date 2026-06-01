@@ -155,22 +155,30 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             apply_preview(state);
             ScreenAction::Navigate(Screen::Options)
         }
-        VirtualAction::p1_up | VirtualAction::p1_menu_up | VirtualAction::p2_up
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             state.selected = (state.selected + FIELD_COUNT - 1) % FIELD_COUNT;
             ScreenAction::None
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down | VirtualAction::p2_down
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             state.selected = (state.selected + 1) % FIELD_COUNT;
             ScreenAction::None
         }
-        VirtualAction::p1_left | VirtualAction::p1_menu_left | VirtualAction::p2_left
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
             adjust(state, state.selected, -1);
             ScreenAction::None
         }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right | VirtualAction::p2_right
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
             adjust(state, state.selected, 1);
             ScreenAction::None

@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bitflags = "2.11.1"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

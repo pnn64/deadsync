@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_profile::DataVisualizations;
+use deadsync_profile::{DataVisualizations, ErrorBarMask, MiniIndicator};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowVisibility {
@@ -382,7 +382,7 @@ pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS
         }
         if selected_choice(row_map, RowId::MiniIndicator, player_idx)
             .and_then(|idx| MINI_INDICATOR_VARIANTS.get(idx))
-            .is_some_and(|&v| v == crate::game::profile::MiniIndicator::Pacemaker)
+            .is_some_and(|&v| v == MiniIndicator::Pacemaker)
         {
             return true;
         }
@@ -465,17 +465,15 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
     mini_indicator_visible_for(row_map, active, |mode| {
         matches!(
             mode,
-            crate::game::profile::MiniIndicator::SubtractiveScoring
-                | crate::game::profile::MiniIndicator::PredictiveScoring
-                | crate::game::profile::MiniIndicator::PaceScoring
+            MiniIndicator::SubtractiveScoring
+                | MiniIndicator::PredictiveScoring
+                | MiniIndicator::PaceScoring
         )
     })
 }
 
 pub(super) fn mini_indicator_size_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
-    mini_indicator_visible_for(row_map, active, |mode| {
-        mode != crate::game::profile::MiniIndicator::None
-    })
+    mini_indicator_visible_for(row_map, active, |mode| mode != MiniIndicator::None)
 }
 
 pub(super) fn mini_indicator_color_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
@@ -485,7 +483,7 @@ pub(super) fn mini_indicator_color_visible(row_map: &RowMap, active: [bool; PLAY
 fn mini_indicator_visible_for(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
-    visible_for: impl Fn(crate::game::profile::MiniIndicator) -> bool,
+    visible_for: impl Fn(MiniIndicator) -> bool,
 ) -> bool {
     let Some(row) = row_map.get(RowId::MiniIndicator) else {
         return true;

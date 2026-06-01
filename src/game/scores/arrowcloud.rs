@@ -327,31 +327,31 @@ fn arrowcloud_mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
 }
 
 #[inline(always)]
-fn arrowcloud_turn_label(turn: profile::TurnOption) -> &'static str {
+fn arrowcloud_turn_label(turn: profile_data::TurnOption) -> &'static str {
     match turn {
-        profile::TurnOption::None => "None",
-        profile::TurnOption::Mirror => "Mirror",
-        profile::TurnOption::Left => "Left",
-        profile::TurnOption::Right => "Right",
-        profile::TurnOption::LRMirror => "LR-Mirror",
-        profile::TurnOption::UDMirror => "UD-Mirror",
-        profile::TurnOption::Shuffle
-        | profile::TurnOption::Blender
-        | profile::TurnOption::Random => "Shuffle",
+        profile_data::TurnOption::None => "None",
+        profile_data::TurnOption::Mirror => "Mirror",
+        profile_data::TurnOption::Left => "Left",
+        profile_data::TurnOption::Right => "Right",
+        profile_data::TurnOption::LRMirror => "LR-Mirror",
+        profile_data::TurnOption::UDMirror => "UD-Mirror",
+        profile_data::TurnOption::Shuffle
+        | profile_data::TurnOption::Blender
+        | profile_data::TurnOption::Random => "Shuffle",
     }
 }
 
 #[inline(always)]
-fn arrowcloud_scroll_label(scroll: profile::ScrollOption) -> Option<String> {
-    if scroll.contains(profile::ScrollOption::Reverse) {
+fn arrowcloud_scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
+    if scroll.contains(profile_data::ScrollOption::Reverse) {
         Some("Reverse".to_string())
-    } else if scroll.contains(profile::ScrollOption::Split) {
+    } else if scroll.contains(profile_data::ScrollOption::Split) {
         Some("Split".to_string())
-    } else if scroll.contains(profile::ScrollOption::Alternate) {
+    } else if scroll.contains(profile_data::ScrollOption::Alternate) {
         Some("Alternate".to_string())
-    } else if scroll.contains(profile::ScrollOption::Cross) {
+    } else if scroll.contains(profile_data::ScrollOption::Cross) {
         Some("Cross".to_string())
-    } else if scroll.contains(profile::ScrollOption::Centered) {
+    } else if scroll.contains(profile_data::ScrollOption::Centered) {
         Some("Centered".to_string())
     } else {
         None

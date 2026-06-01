@@ -4,6 +4,7 @@ use super::LUA_PLAYERS;
 use super::overlay::{
     SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
 };
+use deadsync_profile::NoteSkin;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SongLuaDifficulty {
@@ -78,7 +79,7 @@ impl Default for SongLuaPlayerContext {
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
             display_bpms: [60.0, 60.0],
-            noteskin_name: crate::game::profile::NoteSkin::default().to_string(),
+            noteskin_name: NoteSkin::default().to_string(),
             screen_x: 320.0,
             screen_y: 240.0,
         }

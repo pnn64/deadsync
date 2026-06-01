@@ -22,54 +22,52 @@ pub(super) const TILT_INTENSITY_MAX: f32 = 10.00;
 
 pub(super) const TILT_INTENSITY_STEP: f32 = 0.05;
 
-pub(super) const LONG_ERROR_BAR_INTENSITY_MIN: f32 =
-    crate::game::profile::LONG_ERROR_BAR_INTENSITY_MIN;
+pub(super) const LONG_ERROR_BAR_INTENSITY_MIN: f32 = deadsync_profile::LONG_ERROR_BAR_INTENSITY_MIN;
 
-pub(super) const LONG_ERROR_BAR_INTENSITY_MAX: f32 =
-    crate::game::profile::LONG_ERROR_BAR_INTENSITY_MAX;
+pub(super) const LONG_ERROR_BAR_INTENSITY_MAX: f32 = deadsync_profile::LONG_ERROR_BAR_INTENSITY_MAX;
 
 pub(super) const LONG_ERROR_BAR_INTENSITY_STEP: f32 =
-    crate::game::profile::LONG_ERROR_BAR_INTENSITY_STEP;
+    deadsync_profile::LONG_ERROR_BAR_INTENSITY_STEP;
 
 pub(super) const AVERAGE_ERROR_BAR_INTENSITY_MIN: f32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTENSITY_MIN;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTENSITY_MIN;
 
 pub(super) const AVERAGE_ERROR_BAR_INTENSITY_MAX: f32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTENSITY_MAX;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTENSITY_MAX;
 
 pub(super) const AVERAGE_ERROR_BAR_INTENSITY_STEP: f32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTENSITY_STEP;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTENSITY_STEP;
 
 pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_MIN: u32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MIN;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MIN;
 
 pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_MAX: u32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MAX;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTERVAL_MS_MAX;
 
 pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_STEP: u32 =
-    crate::game::profile::AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
+    deadsync_profile::AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
 
 pub(super) const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 =
-    crate::game::profile::LONG_ERROR_BAR_THRESHOLD_MS_MIN;
+    deadsync_profile::LONG_ERROR_BAR_THRESHOLD_MS_MIN;
 
 pub(super) const LONG_ERROR_BAR_THRESHOLD_MS_MAX: u32 =
-    crate::game::profile::LONG_ERROR_BAR_THRESHOLD_MS_MAX;
+    deadsync_profile::LONG_ERROR_BAR_THRESHOLD_MS_MAX;
 
 pub(super) const LONG_ERROR_BAR_MIN_SAMPLES_MIN: u32 =
-    crate::game::profile::LONG_ERROR_BAR_MIN_SAMPLES_MIN;
+    deadsync_profile::LONG_ERROR_BAR_MIN_SAMPLES_MIN;
 
 pub(super) const LONG_ERROR_BAR_MIN_SAMPLES_MAX: u32 =
-    crate::game::profile::LONG_ERROR_BAR_MIN_SAMPLES_MAX;
+    deadsync_profile::LONG_ERROR_BAR_MIN_SAMPLES_MAX;
 
 pub(super) const LONG_ERROR_BAR_BUFFER_CAP_MIN: u32 =
-    crate::game::profile::LONG_ERROR_BAR_BUFFER_CAP_MIN;
+    deadsync_profile::LONG_ERROR_BAR_BUFFER_CAP_MIN;
 
 pub(super) const LONG_ERROR_BAR_BUFFER_CAP_MAX: u32 =
-    crate::game::profile::LONG_ERROR_BAR_BUFFER_CAP_MAX;
+    deadsync_profile::LONG_ERROR_BAR_BUFFER_CAP_MAX;
 
-pub(super) const TILT_THRESHOLD_MIN_MS: u32 = crate::game::profile::TILT_THRESHOLD_MIN_MS;
+pub(super) const TILT_THRESHOLD_MIN_MS: u32 = deadsync_profile::TILT_THRESHOLD_MIN_MS;
 
-pub(super) const TILT_THRESHOLD_MAX_MS: u32 = crate::game::profile::TILT_THRESHOLD_MAX_MS;
+pub(super) const TILT_THRESHOLD_MAX_MS: u32 = deadsync_profile::TILT_THRESHOLD_MAX_MS;
 
 pub(super) const HUD_OFFSET_MIN: i32 = deadsync_profile::HUD_OFFSET_MIN;
 
@@ -109,13 +107,11 @@ pub(super) const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 
 pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
-use crate::game::profile::{
-    ComboColors, ComboFont, ComboMode, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    TargetScoreSetting, TurnOption,
-};
 use deadsync_profile::{
-    AttackMode, DataVisualizations, ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter,
-    MeasureLines, MiniIndicatorSize, Perspective, ScatterplotMaxWindow, TimingWindowsOption,
+    AttackMode, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim, HideLightType,
+    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorScoreType, MiniIndicatorSize, Perspective, ScatterplotMaxWindow,
+    TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).

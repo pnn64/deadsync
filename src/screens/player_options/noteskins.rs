@@ -25,7 +25,7 @@ pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
     if noteskin_names.is_empty() {
-        choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+        choices.push(profile_data::NoteSkin::DEFAULT_NAME.to_string());
     } else {
         choices.extend(noteskin_names.iter().cloned());
     }
@@ -37,7 +37,7 @@ pub(super) fn build_tap_explosion_noteskin_choices(noteskin_names: &[String]) ->
     choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
     choices.push(tr("PlayerOptions", "NoTapExplosionLabel").to_string());
     if noteskin_names.is_empty() {
-        choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+        choices.push(profile_data::NoteSkin::DEFAULT_NAME.to_string());
     } else {
         choices.extend(noteskin_names.iter().cloned());
     }
@@ -57,10 +57,7 @@ pub(super) fn build_noteskin_cache(
     cache
 }
 
-pub(super) fn push_noteskin_name_once(
-    names: &mut Vec<String>,
-    skin: &crate::game::profile::NoteSkin,
-) {
+pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_data::NoteSkin) {
     if skin.is_none_choice() {
         return;
     }
@@ -72,21 +69,21 @@ pub(super) fn push_noteskin_name_once(
 
 pub(super) fn cached_noteskin(
     cache: &HashMap<String, Arc<Noteskin>>,
-    skin: &crate::game::profile::NoteSkin,
+    skin: &profile_data::NoteSkin,
 ) -> Option<Arc<Noteskin>> {
     cache.get(skin.as_str()).cloned()
 }
 
 pub(super) fn fallback_noteskin(cache: &HashMap<String, Arc<Noteskin>>) -> Option<Arc<Noteskin>> {
     cache
-        .get(crate::game::profile::NoteSkin::DEFAULT_NAME)
+        .get(profile_data::NoteSkin::DEFAULT_NAME)
         .cloned()
         .or_else(|| cache.values().next().cloned())
 }
 
 pub(super) fn cached_or_load_noteskin(
     cache: &mut HashMap<String, Arc<Noteskin>>,
-    skin: &crate::game::profile::NoteSkin,
+    skin: &profile_data::NoteSkin,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
     if let Some(ns) = cached_noteskin(cache, skin) {
@@ -104,14 +101,12 @@ pub(super) fn cached_or_load_noteskin(
 
     if !skin
         .as_str()
-        .eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME)
-        && let Some(loaded) = load_noteskin_cached(
-            crate::game::profile::NoteSkin::DEFAULT_NAME,
-            cols_per_player,
-        )
+        .eq_ignore_ascii_case(profile_data::NoteSkin::DEFAULT_NAME)
+        && let Some(loaded) =
+            load_noteskin_cached(profile_data::NoteSkin::DEFAULT_NAME, cols_per_player)
     {
         cache.insert(
-            crate::game::profile::NoteSkin::DEFAULT_NAME.to_string(),
+            profile_data::NoteSkin::DEFAULT_NAME.to_string(),
             loaded.clone(),
         );
         return Some(loaded);
@@ -122,7 +117,7 @@ pub(super) fn cached_or_load_noteskin(
 
 pub(super) fn cached_or_load_noteskin_exact(
     cache: &mut HashMap<String, Arc<Noteskin>>,
-    skin: &crate::game::profile::NoteSkin,
+    skin: &profile_data::NoteSkin,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
     if let Some(ns) = cached_noteskin(cache, skin) {
@@ -136,8 +131,8 @@ pub(super) fn cached_or_load_noteskin_exact(
 
 pub(super) fn resolved_noteskin_override_preview(
     cache: &mut HashMap<String, Arc<Noteskin>>,
-    noteskin: &crate::game::profile::NoteSkin,
-    override_noteskin: Option<&crate::game::profile::NoteSkin>,
+    noteskin: &profile_data::NoteSkin,
+    override_noteskin: Option<&profile_data::NoteSkin>,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
     if let Some(override_noteskin) = override_noteskin
@@ -151,11 +146,11 @@ pub(super) fn resolved_noteskin_override_preview(
 
 pub(super) fn resolved_tap_explosion_preview(
     cache: &mut HashMap<String, Arc<Noteskin>>,
-    noteskin: &crate::game::profile::NoteSkin,
-    tap_explosion_noteskin: Option<&crate::game::profile::NoteSkin>,
+    noteskin: &profile_data::NoteSkin,
+    tap_explosion_noteskin: Option<&profile_data::NoteSkin>,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
-    if tap_explosion_noteskin.is_some_and(crate::game::profile::NoteSkin::is_none_choice) {
+    if tap_explosion_noteskin.is_some_and(profile_data::NoteSkin::is_none_choice) {
         return None;
     }
 

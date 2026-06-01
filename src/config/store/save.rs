@@ -53,8 +53,16 @@ fn push_saved_options(
     push_bool(content, "CacheSongs", cfg.cachesongs);
     push_bool(content, "CDTitleCache", cfg.cdtitle_cache);
     push_bool(content, "Center1Player", cfg.center_1player_notefield);
-    push_line(content, "CenterImageTranslateX", cfg.center_image_translate_x);
-    push_line(content, "CenterImageTranslateY", cfg.center_image_translate_y);
+    push_line(
+        content,
+        "CenterImageTranslateX",
+        cfg.center_image_translate_x,
+    );
+    push_line(
+        content,
+        "CenterImageTranslateY",
+        cfg.center_image_translate_y,
+    );
     push_line(content, "CenterImageAddWidth", cfg.center_image_add_width);
     push_line(content, "CenterImageAddHeight", cfg.center_image_add_height);
     push_bool(

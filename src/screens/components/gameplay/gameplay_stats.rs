@@ -504,19 +504,19 @@ fn cached_live_timing_pair(recent_ms: f32, all_ms: f32) -> Arc<str> {
 }
 
 #[inline(always)]
-fn live_timing_stat_mask(index: usize) -> profile::LiveTimingStatsMask {
+fn live_timing_stat_mask(index: usize) -> profile_data::LiveTimingStatsMask {
     match index {
-        0 => profile::LiveTimingStatsMask::MEAN,
-        1 => profile::LiveTimingStatsMask::MEAN_ABS,
-        _ => profile::LiveTimingStatsMask::MAX,
+        0 => profile_data::LiveTimingStatsMask::MEAN,
+        1 => profile_data::LiveTimingStatsMask::MEAN_ABS,
+        _ => profile_data::LiveTimingStatsMask::MAX,
     }
 }
 
 #[inline(always)]
-fn live_timing_enabled_count(mask: profile::LiveTimingStatsMask) -> usize {
-    usize::from(mask.contains(profile::LiveTimingStatsMask::MEAN))
-        + usize::from(mask.contains(profile::LiveTimingStatsMask::MEAN_ABS))
-        + usize::from(mask.contains(profile::LiveTimingStatsMask::MAX))
+fn live_timing_enabled_count(mask: profile_data::LiveTimingStatsMask) -> usize {
+    usize::from(mask.contains(profile_data::LiveTimingStatsMask::MEAN))
+        + usize::from(mask.contains(profile_data::LiveTimingStatsMask::MEAN_ABS))
+        + usize::from(mask.contains(profile_data::LiveTimingStatsMask::MAX))
 }
 
 #[inline(always)]

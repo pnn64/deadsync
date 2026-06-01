@@ -1,10 +1,10 @@
 use super::super::row::{index_binding, simple_bitmask_binding};
 use super::*;
 use crate::game::profile as gp;
-use crate::game::profile::{
-    AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask, VisualEffectsMask,
+use deadsync_profile::{
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, HideLightType, HoldsMask, InsertMask,
+    RemoveMask, VisualEffectsMask,
 };
-use deadsync_profile::{AttackMode, HideLightType};
 
 const ATTACKS: ChoiceBinding<usize> = index_binding!(
     ATTACK_MODE_VARIANTS,

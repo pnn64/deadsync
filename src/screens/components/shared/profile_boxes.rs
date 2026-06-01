@@ -93,10 +93,10 @@ struct Choice {
     speed_mod: String,
     avatar_key: Option<String>,
     total_songs: String,
-    scroll_option: profile::ScrollOption,
-    mini_indicator: profile::MiniIndicator,
-    noteskin: profile::NoteSkin,
-    judgment: profile::JudgmentGraphic,
+    scroll_option: profile_data::ScrollOption,
+    mini_indicator: profile_data::MiniIndicator,
+    noteskin: profile_data::NoteSkin,
+    judgment: profile_data::JudgmentGraphic,
 }
 
 pub struct State {
@@ -136,14 +136,17 @@ impl NoteskinCache {
         };
         let mut cache = HashMap::with_capacity(1);
         if let Ok(default_skin) =
-            noteskin::load_itg_skin_cached(&style, profile::NoteSkin::DEFAULT_NAME)
+            noteskin::load_itg_skin_cached(&style, profile_data::NoteSkin::DEFAULT_NAME)
         {
-            cache.insert(profile::NoteSkin::DEFAULT_NAME.to_string(), default_skin);
+            cache.insert(
+                profile_data::NoteSkin::DEFAULT_NAME.to_string(),
+                default_skin,
+            );
         }
         Self { cache, style }
     }
 
-    fn get(&mut self, kind: &profile::NoteSkin) -> Option<Arc<Noteskin>> {
+    fn get(&mut self, kind: &profile_data::NoteSkin) -> Option<Arc<Noteskin>> {
         let requested = kind.as_str();
         if let Some(cached) = self.cache.get(requested) {
             return Some(cached.clone());
@@ -154,15 +157,15 @@ impl NoteskinCache {
             return Some(loaded);
         }
 
-        if let Some(default_cached) = self.cache.get(profile::NoteSkin::DEFAULT_NAME) {
+        if let Some(default_cached) = self.cache.get(profile_data::NoteSkin::DEFAULT_NAME) {
             return Some(default_cached.clone());
         }
 
         if let Ok(default_loaded) =
-            noteskin::load_itg_skin_cached(&self.style, profile::NoteSkin::DEFAULT_NAME)
+            noteskin::load_itg_skin_cached(&self.style, profile_data::NoteSkin::DEFAULT_NAME)
         {
             self.cache.insert(
-                profile::NoteSkin::DEFAULT_NAME.to_string(),
+                profile_data::NoteSkin::DEFAULT_NAME.to_string(),
                 default_loaded.clone(),
             );
             return Some(default_loaded);
@@ -219,9 +222,9 @@ fn parse_ini_bool(raw: &str) -> Option<bool> {
 #[inline(always)]
 fn format_recent_mods(
     speed_mod: &str,
-    scroll: profile::ScrollOption,
-    mini_indicator: profile::MiniIndicator,
-    noteskin: &profile::NoteSkin,
+    scroll: profile_data::ScrollOption,
+    mini_indicator: profile_data::MiniIndicator,
+    noteskin: &profile_data::NoteSkin,
 ) -> String {
     let mut out = String::new();
     let mut first = true;
@@ -238,23 +241,23 @@ fn format_recent_mods(
     };
 
     push(speed_mod.trim());
-    if scroll.contains(profile::ScrollOption::Reverse) {
+    if scroll.contains(profile_data::ScrollOption::Reverse) {
         let s = tr("SelectProfile", "Reverse");
         push(&s);
     }
-    if scroll.contains(profile::ScrollOption::Split) {
+    if scroll.contains(profile_data::ScrollOption::Split) {
         let s = tr("SelectProfile", "Split");
         push(&s);
     }
-    if scroll.contains(profile::ScrollOption::Alternate) {
+    if scroll.contains(profile_data::ScrollOption::Alternate) {
         let s = tr("SelectProfile", "Alternate");
         push(&s);
     }
-    if scroll.contains(profile::ScrollOption::Cross) {
+    if scroll.contains(profile_data::ScrollOption::Cross) {
         let s = tr("SelectProfile", "Cross");
         push(&s);
     }
-    if scroll.contains(profile::ScrollOption::Centered) {
+    if scroll.contains(profile_data::ScrollOption::Centered) {
         let s = tr("SelectProfile", "Centered");
         push(&s);
     }
@@ -262,15 +265,17 @@ fn format_recent_mods(
     push(&overhead);
     push(noteskin.as_str());
     let mini_indicator_label = match mini_indicator {
-        profile::MiniIndicator::None => None,
-        profile::MiniIndicator::SubtractiveScoring => {
+        profile_data::MiniIndicator::None => None,
+        profile_data::MiniIndicator::SubtractiveScoring => {
             Some(tr("SelectProfile", "SubtractiveScoring"))
         }
-        profile::MiniIndicator::PredictiveScoring => Some(tr("SelectProfile", "PredictiveScoring")),
-        profile::MiniIndicator::PaceScoring => Some(tr("SelectProfile", "PaceScoring")),
-        profile::MiniIndicator::RivalScoring => Some(tr("SelectProfile", "RivalScoring")),
-        profile::MiniIndicator::Pacemaker => Some(tr("SelectProfile", "Pacemaker")),
-        profile::MiniIndicator::StreamProg => Some(tr("SelectProfile", "StreamProgress")),
+        profile_data::MiniIndicator::PredictiveScoring => {
+            Some(tr("SelectProfile", "PredictiveScoring"))
+        }
+        profile_data::MiniIndicator::PaceScoring => Some(tr("SelectProfile", "PaceScoring")),
+        profile_data::MiniIndicator::RivalScoring => Some(tr("SelectProfile", "RivalScoring")),
+        profile_data::MiniIndicator::Pacemaker => Some(tr("SelectProfile", "Pacemaker")),
+        profile_data::MiniIndicator::StreamProg => Some(tr("SelectProfile", "StreamProgress")),
     };
     if let Some(label) = mini_indicator_label {
         push(&label);
@@ -293,17 +298,17 @@ fn build_choices() -> Vec<Choice> {
         avatar_key: None,
         total_songs: String::new(),
         scroll_option: default_scroll_option,
-        mini_indicator: profile::MiniIndicator::None,
-        noteskin: profile::NoteSkin::default(),
-        judgment: profile::JudgmentGraphic::default(),
+        mini_indicator: profile_data::MiniIndicator::None,
+        noteskin: profile_data::NoteSkin::default(),
+        judgment: profile_data::JudgmentGraphic::default(),
     });
     for p in profile::scan_local_profiles() {
         let total_songs = format_total_songs_played(scores::total_songs_played_for_profile(&p.id));
         let mut speed_mod = default_speed_mod.clone();
         let mut scroll_option = default_scroll_option;
-        let mut mini_indicator = profile::MiniIndicator::None;
-        let mut noteskin = profile::NoteSkin::default();
-        let mut judgment = profile::JudgmentGraphic::default();
+        let mut mini_indicator = profile_data::MiniIndicator::None;
+        let mut noteskin = profile_data::NoteSkin::default();
+        let mut judgment = profile_data::JudgmentGraphic::default();
         let ini_path = dirs::app_dirs()
             .profiles_root()
             .join(&p.id)
@@ -322,19 +327,19 @@ fn build_choices() -> Vec<Choice> {
             }
 
             scroll_option = get_player_option("Scroll")
-                .and_then(|s| profile::ScrollOption::from_str(&s).ok())
+                .and_then(|s| profile_data::ScrollOption::from_str(&s).ok())
                 .unwrap_or_else(|| {
                     let reverse_enabled = get_player_option("ReverseScroll")
                         .and_then(|v| v.parse::<u8>().ok())
                         .is_some_and(|v| v != 0);
                     if reverse_enabled {
-                        profile::ScrollOption::Reverse
+                        profile_data::ScrollOption::Reverse
                     } else {
                         default_scroll_option
                     }
                 });
             mini_indicator = get_player_option("MiniIndicator")
-                .and_then(|v| profile::MiniIndicator::from_str(&v).ok())
+                .and_then(|v| profile_data::MiniIndicator::from_str(&v).ok())
                 .unwrap_or_else(|| {
                     let subtractive = get_player_option("SubtractiveScoring")
                         .and_then(|v| parse_ini_bool(&v))
@@ -343,25 +348,25 @@ fn build_choices() -> Vec<Choice> {
                         .and_then(|v| parse_ini_bool(&v))
                         .unwrap_or(false);
                     if subtractive {
-                        profile::MiniIndicator::SubtractiveScoring
+                        profile_data::MiniIndicator::SubtractiveScoring
                     } else if pacemaker {
-                        profile::MiniIndicator::Pacemaker
+                        profile_data::MiniIndicator::Pacemaker
                     } else {
-                        profile::MiniIndicator::None
+                        profile_data::MiniIndicator::None
                     }
                 });
         }
         if let Ok(value) = ini
             .get(player_options_section, "NoteSkin")
             .unwrap_or_default()
-            .parse::<profile::NoteSkin>()
+            .parse::<profile_data::NoteSkin>()
         {
             noteskin = value;
         }
         if let Ok(value) = ini
             .get(player_options_section, "JudgmentGraphic")
             .unwrap_or_default()
-            .parse::<profile::JudgmentGraphic>()
+            .parse::<profile_data::JudgmentGraphic>()
         {
             judgment = value;
         }

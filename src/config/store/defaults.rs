@@ -45,7 +45,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "CenterImageTranslateY",
         default.center_image_translate_y,
     );
-    push_line(content, "CenterImageAddWidth", default.center_image_add_width);
+    push_line(
+        content,
+        "CenterImageAddWidth",
+        default.center_image_add_width,
+    );
     push_line(
         content,
         "CenterImageAddHeight",

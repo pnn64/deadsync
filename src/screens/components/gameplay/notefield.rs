@@ -809,17 +809,17 @@ fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
 }
 
 #[inline(always)]
-fn turn_option_name(turn: profile::TurnOption) -> Option<&'static str> {
+fn turn_option_name(turn: profile_data::TurnOption) -> Option<&'static str> {
     match turn {
-        profile::TurnOption::None => None,
-        profile::TurnOption::Mirror => Some("Mirror"),
-        profile::TurnOption::Left => Some("Left"),
-        profile::TurnOption::Right => Some("Right"),
-        profile::TurnOption::LRMirror => Some("LR-Mirror"),
-        profile::TurnOption::UDMirror => Some("UD-Mirror"),
-        profile::TurnOption::Shuffle => Some("Shuffle"),
-        profile::TurnOption::Blender => Some("Blender"),
-        profile::TurnOption::Random => Some("Random"),
+        profile_data::TurnOption::None => None,
+        profile_data::TurnOption::Mirror => Some("Mirror"),
+        profile_data::TurnOption::Left => Some("Left"),
+        profile_data::TurnOption::Right => Some("Right"),
+        profile_data::TurnOption::LRMirror => Some("LR-Mirror"),
+        profile_data::TurnOption::UDMirror => Some("UD-Mirror"),
+        profile_data::TurnOption::Shuffle => Some("Shuffle"),
+        profile_data::TurnOption::Blender => Some("Blender"),
+        profile_data::TurnOption::Random => Some("Random"),
     }
 }
 
@@ -856,31 +856,31 @@ fn disabled_timing_windows_name(bits: u8) -> Option<String> {
 }
 
 #[inline(always)]
-const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
+const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
     match turn {
-        profile::TurnOption::None => 0,
-        profile::TurnOption::Mirror => 1 << 0,
-        profile::TurnOption::Left => 1 << 1,
-        profile::TurnOption::Right => 1 << 2,
-        profile::TurnOption::LRMirror => 1 << 3,
-        profile::TurnOption::UDMirror => 1 << 4,
-        profile::TurnOption::Shuffle => 1 << 5,
-        profile::TurnOption::Blender => 1 << 6,
-        profile::TurnOption::Random => 1 << 7,
+        profile_data::TurnOption::None => 0,
+        profile_data::TurnOption::Mirror => 1 << 0,
+        profile_data::TurnOption::Left => 1 << 1,
+        profile_data::TurnOption::Right => 1 << 2,
+        profile_data::TurnOption::LRMirror => 1 << 3,
+        profile_data::TurnOption::UDMirror => 1 << 4,
+        profile_data::TurnOption::Shuffle => 1 << 5,
+        profile_data::TurnOption::Blender => 1 << 6,
+        profile_data::TurnOption::Random => 1 << 7,
     }
 }
 
 #[inline(always)]
 fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
     for turn in [
-        profile::TurnOption::Mirror,
-        profile::TurnOption::Left,
-        profile::TurnOption::Right,
-        profile::TurnOption::LRMirror,
-        profile::TurnOption::UDMirror,
-        profile::TurnOption::Shuffle,
-        profile::TurnOption::Blender,
-        profile::TurnOption::Random,
+        profile_data::TurnOption::Mirror,
+        profile_data::TurnOption::Left,
+        profile_data::TurnOption::Right,
+        profile_data::TurnOption::LRMirror,
+        profile_data::TurnOption::UDMirror,
+        profile_data::TurnOption::Shuffle,
+        profile_data::TurnOption::Blender,
+        profile_data::TurnOption::Random,
     ] {
         if (bits & turn_option_bits(turn)) != 0
             && let Some(name) = turn_option_name(turn)
@@ -2701,7 +2701,7 @@ fn zmod_layout_ys(
     let mut error_bar_mask = profile.error_bar_active_mask;
     if error_bar_mask.is_empty() {
         error_bar_mask =
-            profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+            profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
     }
     let has_error_bar = !error_bar_mask.is_empty();
     if has_error_bar {
@@ -2928,31 +2928,31 @@ fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32, trailing_space: bool)
 }
 
 #[inline(always)]
-fn zmod_small_combo_font(combo_font: profile::ComboFont) -> &'static str {
+fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
     match combo_font {
-        profile::ComboFont::Wendy | profile::ComboFont::WendyCursed => "wendy",
-        profile::ComboFont::ArialRounded => "combo_arial_rounded",
-        profile::ComboFont::Asap => "combo_asap",
-        profile::ComboFont::BebasNeue => "combo_bebas_neue",
-        profile::ComboFont::SourceCode => "combo_source_code",
-        profile::ComboFont::Work => "combo_work",
-        profile::ComboFont::Mega => "combo_mega",
-        profile::ComboFont::None => "wendy",
+        profile_data::ComboFont::Wendy | profile_data::ComboFont::WendyCursed => "wendy",
+        profile_data::ComboFont::ArialRounded => "combo_arial_rounded",
+        profile_data::ComboFont::Asap => "combo_asap",
+        profile_data::ComboFont::BebasNeue => "combo_bebas_neue",
+        profile_data::ComboFont::SourceCode => "combo_source_code",
+        profile_data::ComboFont::Work => "combo_work",
+        profile_data::ComboFont::Mega => "combo_mega",
+        profile_data::ComboFont::None => "wendy",
     }
 }
 
 #[inline(always)]
-fn zmod_combo_font_name(combo_font: profile::ComboFont) -> Option<&'static str> {
+fn zmod_combo_font_name(combo_font: profile_data::ComboFont) -> Option<&'static str> {
     match combo_font {
-        profile::ComboFont::Wendy => Some("wendy_combo"),
-        profile::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-        profile::ComboFont::Asap => Some("combo_asap"),
-        profile::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-        profile::ComboFont::SourceCode => Some("combo_source_code"),
-        profile::ComboFont::Work => Some("combo_work"),
-        profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-        profile::ComboFont::Mega => Some("combo_mega"),
-        profile::ComboFont::None => None,
+        profile_data::ComboFont::Wendy => Some("wendy_combo"),
+        profile_data::ComboFont::ArialRounded => Some("combo_arial_rounded"),
+        profile_data::ComboFont::Asap => Some("combo_asap"),
+        profile_data::ComboFont::BebasNeue => Some("combo_bebas_neue"),
+        profile_data::ComboFont::SourceCode => Some("combo_source_code"),
+        profile_data::ComboFont::Work => Some("combo_work"),
+        profile_data::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+        profile_data::ComboFont::Mega => Some("combo_mega"),
+        profile_data::ComboFont::None => None,
     }
 }
 
@@ -3071,7 +3071,7 @@ pub fn prewarm_text_layout(
             }
             prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
-        if zmod_indicator_mode(profile) != profile::MiniIndicator::None {
+        if zmod_indicator_mode(profile) != profile_data::MiniIndicator::None {
             for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
                 prewarm_percent(cache, mc_font_name, value);
                 prewarm_signed_percent(cache, mc_font_name, value, true);
@@ -3107,7 +3107,7 @@ fn zmod_combo_quint_active(state: &State, player_idx: usize, profile: &profile::
     if !profile.show_fa_plus_window || player_idx >= state.num_players {
         return false;
     }
-    let counts = if profile.combo_mode == profile::ComboMode::FullCombo {
+    let counts = if profile.combo_mode == profile_data::ComboMode::FullCombo {
         crate::game::gameplay::display_window_counts(state, player_idx, None)
     } else {
         state.players[player_idx].current_combo_window_counts
@@ -3220,7 +3220,7 @@ fn zmod_mini_indicator_progress(
     state: &State,
     p: &PlayerRuntime,
     player_idx: usize,
-    score_type: profile::MiniIndicatorScoreType,
+    score_type: profile_data::MiniIndicatorScoreType,
 ) -> MiniIndicatorProgress {
     let w1 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)];
     let w2 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)];
@@ -3255,15 +3255,15 @@ fn zmod_mini_indicator_progress(
 
     // Compute predictive percents for the active score type.
     let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
-        profile::MiniIndicatorScoreType::Itg => {
+        profile_data::MiniIndicatorScoreType::Itg => {
             let (kept, lost, pace) =
                 predictive_itg_percents(current_possible_dp, possible_dp, actual_dp);
             (kept, lost, pace, 0)
         }
-        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
+        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
             let score = crate::game::gameplay::display_scored_ex_score_data(state, player_idx);
             let white_count = score.counts.w1;
-            if score_type == profile::MiniIndicatorScoreType::Ex {
+            if score_type == profile_data::MiniIndicatorScoreType::Ex {
                 let (kept, lost, pace) = judgment::predictive_ex_score_percents(&score);
                 (kept, lost, pace, white_count)
             } else {
@@ -3296,7 +3296,7 @@ fn zmod_mini_indicator_progress(
 #[inline(always)]
 fn zmod_subtractive_counter_state(
     progress: &MiniIndicatorProgress,
-    score_type: profile::MiniIndicatorScoreType,
+    score_type: profile_data::MiniIndicatorScoreType,
 ) -> (u32, bool) {
     let forced_percent = progress.w3 > 0
         || progress.w4 > 0
@@ -3305,25 +3305,29 @@ fn zmod_subtractive_counter_state(
         || progress.let_go > 0
         || progress.mines_hit > 0;
     match score_type {
-        profile::MiniIndicatorScoreType::Itg => (progress.w2, forced_percent || progress.w2 > 10),
-        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => (
-            progress.white_count,
-            forced_percent || progress.w2 > 0 || progress.white_count > 10,
-        ),
+        profile_data::MiniIndicatorScoreType::Itg => {
+            (progress.w2, forced_percent || progress.w2 > 10)
+        }
+        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
+            (
+                progress.white_count,
+                forced_percent || progress.w2 > 0 || progress.white_count > 10,
+            )
+        }
     }
 }
 
 #[inline(always)]
-fn zmod_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
-    if profile.mini_indicator != profile::MiniIndicator::None {
+fn zmod_indicator_mode(profile: &profile::Profile) -> profile_data::MiniIndicator {
+    if profile.mini_indicator != profile_data::MiniIndicator::None {
         return profile.mini_indicator;
     }
     if profile.subtractive_scoring {
-        profile::MiniIndicator::SubtractiveScoring
+        profile_data::MiniIndicator::SubtractiveScoring
     } else if profile.pacemaker {
-        profile::MiniIndicator::Pacemaker
+        profile_data::MiniIndicator::Pacemaker
     } else {
-        profile::MiniIndicator::None
+        profile_data::MiniIndicator::None
     }
 }
 
@@ -3362,10 +3366,13 @@ fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn zmod_indicator_score_color(score_percent: f64, style: profile::MiniIndicatorColor) -> [f32; 4] {
+fn zmod_indicator_score_color(
+    score_percent: f64,
+    style: profile_data::MiniIndicatorColor,
+) -> [f32; 4] {
     match style {
-        profile::MiniIndicatorColor::Default => zmod_indicator_default_color(score_percent),
-        profile::MiniIndicatorColor::Detailed => zmod_indicator_detailed_color(score_percent),
+        profile_data::MiniIndicatorColor::Default => zmod_indicator_default_color(score_percent),
+        profile_data::MiniIndicatorColor::Detailed => zmod_indicator_detailed_color(score_percent),
     }
 }
 
@@ -3438,7 +3445,7 @@ fn zmod_mini_indicator_text(
     player_idx: usize,
 ) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
-    if mode == profile::MiniIndicator::None {
+    if mode == profile_data::MiniIndicator::None {
         return None;
     }
 
@@ -3449,7 +3456,7 @@ fn zmod_mini_indicator_text(
     }
 
     match mode {
-        profile::MiniIndicator::SubtractiveScoring => {
+        profile_data::MiniIndicator::SubtractiveScoring => {
             let (count, entered_percent_mode) =
                 zmod_subtractive_counter_state(&progress, profile.mini_indicator_score_type);
             if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
@@ -3463,21 +3470,21 @@ fn zmod_mini_indicator_text(
                 zmod_indicator_score_color(score, profile.mini_indicator_color),
             ))
         }
-        profile::MiniIndicator::PredictiveScoring => {
+        profile_data::MiniIndicator::PredictiveScoring => {
             let score = progress.kept_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(score),
                 zmod_indicator_score_color(score, profile.mini_indicator_color),
             ))
         }
-        profile::MiniIndicator::PaceScoring => {
+        profile_data::MiniIndicator::PaceScoring => {
             let pace = progress.pace_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(pace),
                 zmod_indicator_score_color(pace, profile.mini_indicator_color),
             ))
         }
-        profile::MiniIndicator::RivalScoring => {
+        profile_data::MiniIndicator::RivalScoring => {
             let possible = f64::from(progress.possible_dp.max(1));
             let current_possible = f64::from(progress.current_possible_dp.max(0));
             let actual = f64::from(progress.actual_dp.max(0));
@@ -3490,7 +3497,7 @@ fn zmod_mini_indicator_text(
             let text = cached_signed_percent2_f64(diff, pace < rival_pace);
             Some((text, zmod_rival_color(pace, rival_pace)))
         }
-        profile::MiniIndicator::Pacemaker => {
+        profile_data::MiniIndicator::Pacemaker => {
             let possible = f64::from(progress.possible_dp.max(1));
             let current_possible = f64::from(progress.current_possible_dp.max(0));
             let actual = f64::from(progress.actual_dp.max(0));
@@ -3509,7 +3516,7 @@ fn zmod_mini_indicator_text(
             };
             Some((text, zmod_pacemaker_color(pace, rival_pace)))
         }
-        profile::MiniIndicator::StreamProg => {
+        profile_data::MiniIndicator::StreamProg => {
             let completion = zmod_stream_prog_completion(state, player_idx)?;
             let rgba = if completion >= 0.9 {
                 [
@@ -3538,7 +3545,7 @@ fn zmod_mini_indicator_text(
                 rgba,
             ))
         }
-        profile::MiniIndicator::None => None,
+        profile_data::MiniIndicator::None => None,
     }
 }
 
@@ -3683,7 +3690,7 @@ fn hold_explosion_active(
 fn hold_explosion_enabled(profile: &profile::Profile) -> bool {
     profile
         .tap_explosion_active_mask
-        .contains(profile::TapExplosionMask::HOLDING)
+        .contains(profile_data::TapExplosionMask::HOLDING)
 }
 
 #[inline(always)]
@@ -3998,7 +4005,8 @@ pub fn build_bundles(
     let error_bar_mask = {
         let mut mask = profile.error_bar_active_mask;
         if mask.is_empty() {
-            mask = profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+            mask =
+                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
         }
         mask
     };
@@ -4028,7 +4036,7 @@ pub fn build_bundles(
         } else {
             2
         }
-        + if error_bar_mask.contains(profile::ErrorBarMask::TEXT) {
+        + if error_bar_mask.contains(profile_data::ErrorBarMask::TEXT) {
             1
         } else {
             0
@@ -7885,9 +7893,9 @@ pub fn build_bundles(
         } else if p.combo >= SHOW_COMBO_AT {
             let quint_active = zmod_combo_quint_active(state, player_idx, profile);
             let final_color = match profile.combo_colors {
-                profile::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
-                profile::ComboColors::Rainbow => {
-                    if profile.combo_mode == profile::ComboMode::FullCombo {
+                profile_data::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
+                profile_data::ComboColors::Rainbow => {
+                    if profile.combo_mode == profile_data::ComboMode::FullCombo {
                         if matches!(
                             p.full_combo_grade,
                             Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
@@ -7900,8 +7908,8 @@ pub fn build_bundles(
                         zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
                     }
                 }
-                profile::ComboColors::RainbowScroll => {
-                    if profile.combo_mode == profile::ComboMode::FullCombo {
+                profile_data::ComboColors::RainbowScroll => {
+                    if profile.combo_mode == profile_data::ComboMode::FullCombo {
                         if matches!(
                             p.full_combo_grade,
                             Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
@@ -7914,8 +7922,8 @@ pub fn build_bundles(
                         zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
                     }
                 }
-                profile::ComboColors::Glow => {
-                    let combo_grade = if profile.combo_mode == profile::ComboMode::FullCombo {
+                profile_data::ComboColors::Glow => {
+                    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
                         p.full_combo_grade
                     } else {
                         p.current_combo_grade
@@ -7930,8 +7938,8 @@ pub fn build_bundles(
                         [1.0, 1.0, 1.0, 1.0]
                     }
                 }
-                profile::ComboColors::Solid => {
-                    let combo_grade = if profile.combo_mode == profile::ComboMode::FullCombo {
+                profile_data::ComboColors::Solid => {
+                    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
                         p.full_combo_grade
                     } else {
                         p.current_combo_grade
@@ -7962,11 +7970,11 @@ pub fn build_bundles(
         .then(|| share_hud_range(&mut hud_actors, combo_capture_start))
         .flatten();
 
-    let show_error_bar_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
-    let show_error_bar_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
-    let show_error_bar_text = error_bar_mask.contains(profile::ErrorBarMask::TEXT);
-    let show_error_bar_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
-    let show_error_bar_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
+    let show_error_bar_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
+    let show_error_bar_monochrome = error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME);
+    let show_error_bar_text = error_bar_mask.contains(profile_data::ErrorBarMask::TEXT);
+    let show_error_bar_highlight = error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT);
+    let show_error_bar_average = error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE);
     let show_error_bar = !error_bar_mask.is_empty();
     let error_bar_y = hud_layout.error_bar_y;
     let error_bar_max_h = hud_layout.error_bar_max_h;
@@ -8036,22 +8044,22 @@ pub fn build_bundles(
 
     // Error Bar (Simply Love parity)
     if !blind_active && show_error_bar {
-        let mut styles = [profile::ErrorBarStyle::None; 4];
+        let mut styles = [profile_data::ErrorBarStyle::None; 4];
         let mut style_count = 0usize;
         if show_error_bar_colorful {
-            styles[style_count] = profile::ErrorBarStyle::Colorful;
+            styles[style_count] = profile_data::ErrorBarStyle::Colorful;
             style_count += 1;
         }
         if show_error_bar_monochrome {
-            styles[style_count] = profile::ErrorBarStyle::Monochrome;
+            styles[style_count] = profile_data::ErrorBarStyle::Monochrome;
             style_count += 1;
         }
         if show_error_bar_highlight {
-            styles[style_count] = profile::ErrorBarStyle::Highlight;
+            styles[style_count] = profile_data::ErrorBarStyle::Highlight;
             style_count += 1;
         }
         if show_error_bar_average {
-            styles[style_count] = profile::ErrorBarStyle::Average;
+            styles[style_count] = profile_data::ErrorBarStyle::Average;
             style_count += 1;
         }
         let blue_fantastic_window_s =
@@ -8059,7 +8067,7 @@ pub fn build_bundles(
 
         for style in styles.into_iter().take(style_count) {
             match style {
-                crate::game::profile::ErrorBarStyle::Monochrome => {
+                profile_data::ErrorBarStyle::Monochrome => {
                     let bar_h = error_bar_max_h;
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
                     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
@@ -8184,7 +8192,7 @@ pub fn build_bundles(
                         }
                     }
                 }
-                crate::game::profile::ErrorBarStyle::Colorful => {
+                profile_data::ErrorBarStyle::Colorful => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
                     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -8277,7 +8285,7 @@ pub fn build_bundles(
                         }
                     }
                 }
-                crate::game::profile::ErrorBarStyle::Highlight => {
+                profile_data::ErrorBarStyle::Highlight => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
                     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -8382,7 +8390,7 @@ pub fn build_bundles(
                         }
                     }
                 }
-                crate::game::profile::ErrorBarStyle::Average => {
+                profile_data::ErrorBarStyle::Average => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
                     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -8405,7 +8413,7 @@ pub fn build_bundles(
                         let tick_h =
                             ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
                         let multi_tick = profile.error_bar_multi_tick;
-                        let intensity = crate::game::profile::clamp_average_error_bar_intensity(
+                        let intensity = profile_data::clamp_average_error_bar_intensity(
                             profile.average_error_bar_intensity,
                         );
                         for tick_opt in &p.error_bar_avg_ticks {
@@ -8435,8 +8443,8 @@ pub fn build_bundles(
                         }
                     }
                 }
-                crate::game::profile::ErrorBarStyle::Text => {}
-                crate::game::profile::ErrorBarStyle::None => {}
+                profile_data::ErrorBarStyle::Text => {}
+                profile_data::ErrorBarStyle::None => {}
             }
         }
 
@@ -8464,9 +8472,8 @@ pub fn build_bundles(
                 profile.error_bar_multi_tick,
             );
             if alpha > 0.0 && wscale.is_finite() && wscale > 0.0 {
-                let intensity = crate::game::profile::clamp_long_error_bar_intensity(
-                    profile.long_error_bar_intensity,
-                );
+                let intensity =
+                    profile_data::clamp_long_error_bar_intensity(profile.long_error_bar_intensity);
                 let scaled_offset = if max_offset_s.is_finite() && max_offset_s > 0.0 {
                     (long_tick.offset_s * intensity).clamp(-max_offset_s, max_offset_s)
                 } else {
@@ -9261,16 +9268,16 @@ mod tests {
         let mut disabled = profile::Profile::default();
         disabled
             .tap_explosion_active_mask
-            .remove(profile::TapExplosionMask::HOLDING);
+            .remove(profile_data::TapExplosionMask::HOLDING);
 
         assert!(!hold_explosion_enabled(&disabled));
 
         disabled
             .tap_explosion_active_mask
-            .insert(profile::TapExplosionMask::HOLDING);
+            .insert(profile_data::TapExplosionMask::HOLDING);
         disabled
             .tap_explosion_active_mask
-            .remove(profile::TapExplosionMask::HELD);
+            .remove(profile_data::TapExplosionMask::HELD);
 
         assert!(hold_explosion_enabled(&disabled));
     }
@@ -9587,7 +9594,7 @@ mod tests {
             ..MiniIndicatorProgress::default()
         };
         assert_eq!(
-            zmod_subtractive_counter_state(&itg, profile::MiniIndicatorScoreType::Itg),
+            zmod_subtractive_counter_state(&itg, profile_data::MiniIndicatorScoreType::Itg),
             (4, false)
         );
 
@@ -9597,7 +9604,7 @@ mod tests {
             ..MiniIndicatorProgress::default()
         };
         assert_eq!(
-            zmod_subtractive_counter_state(&ex, profile::MiniIndicatorScoreType::Ex),
+            zmod_subtractive_counter_state(&ex, profile_data::MiniIndicatorScoreType::Ex),
             (7, false)
         );
 
@@ -9607,7 +9614,7 @@ mod tests {
             ..MiniIndicatorProgress::default()
         };
         assert_eq!(
-            zmod_subtractive_counter_state(&hard_ex, profile::MiniIndicatorScoreType::HardEx),
+            zmod_subtractive_counter_state(&hard_ex, profile_data::MiniIndicatorScoreType::HardEx),
             (7, true)
         );
     }
@@ -9626,7 +9633,7 @@ mod tests {
 
     #[test]
     fn detailed_mini_indicator_color_uses_expanded_thresholds() {
-        let detailed = profile::MiniIndicatorColor::Detailed;
+        let detailed = profile_data::MiniIndicatorColor::Detailed;
         assert_eq!(
             zmod_indicator_score_color(99.0, detailed),
             color::rgba_hex("#FF00FF")
@@ -10079,11 +10086,11 @@ mod tests {
     #[test]
     fn display_mods_use_simply_love_turn_names() {
         assert_eq!(
-            turn_option_name(profile::TurnOption::LRMirror),
+            turn_option_name(profile_data::TurnOption::LRMirror),
             Some("LR-Mirror")
         );
         assert_eq!(
-            turn_option_name(profile::TurnOption::UDMirror),
+            turn_option_name(profile_data::TurnOption::UDMirror),
             Some("UD-Mirror")
         );
     }
@@ -10093,8 +10100,8 @@ mod tests {
         let mut parts = Vec::new();
         append_turn_parts(
             &mut parts,
-            turn_option_bits(profile::TurnOption::Mirror)
-                | turn_option_bits(profile::TurnOption::Random),
+            turn_option_bits(profile_data::TurnOption::Mirror)
+                | turn_option_bits(profile_data::TurnOption::Random),
         );
         assert_eq!(parts, vec!["Mirror".to_string(), "Random".to_string()]);
     }
@@ -10241,7 +10248,7 @@ mod tests {
     #[test]
     fn hud_layout_offsets_apply_independently() {
         let profile = profile::Profile {
-            error_bar_active_mask: profile::ERROR_BAR_BIT_MONOCHROME,
+            error_bar_active_mask: profile_data::ErrorBarMask::MONOCHROME,
             ..profile::Profile::default()
         };
         let base = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 0.0);

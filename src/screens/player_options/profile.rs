@@ -246,12 +246,12 @@ pub(super) fn parse_tilt_threshold_ms(choice: &str) -> Option<u32> {
         .trim()
         .parse::<u32>()
         .ok()
-        .map(crate::game::profile::clamp_tilt_threshold_ms)
+        .map(deadsync_profile::clamp_tilt_threshold_ms)
 }
 
 pub(super) fn custom_fantastic_window_choices() -> Vec<String> {
-    let lo = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MIN_MS;
-    let hi = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MAX_MS;
+    let lo = deadsync_profile::CUSTOM_FANTASTIC_WINDOW_MIN_MS;
+    let hi = deadsync_profile::CUSTOM_FANTASTIC_WINDOW_MAX_MS;
     let mut out = Vec::with_capacity((hi - lo + 1) as usize);
     for ms in lo..=hi {
         out.push(format!("{ms}ms"));

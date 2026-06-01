@@ -1497,11 +1497,10 @@ fn selection_range(state: &State) -> Option<(f32, f32)> {
 }
 
 fn edit_reverse_scroll(state: &State) -> bool {
-    state
-        .gameplay
-        .player_profiles
-        .first()
-        .is_some_and(|p| p.scroll_option.contains(profile::ScrollOption::Reverse))
+    state.gameplay.player_profiles.first().is_some_and(|p| {
+        p.scroll_option
+            .contains(profile_data::ScrollOption::Reverse)
+    })
 }
 
 fn max_play_beat(state: &State) -> f32 {

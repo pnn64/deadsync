@@ -14,15 +14,17 @@ use super::super::state::{
 use super::*;
 use crate::game::profile as gp;
 use deadsync_profile::{
-    DataVisualizations, ErrorBarTrim, LifeMeterType, MeasureCounter, MeasureLines,
-    MiniIndicatorSize, PlayerSide, ScatterplotMaxWindow, TimingWindowsOption,
+    ComboColors, ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, LifeMeterType,
+    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
+    MiniIndicatorSize, PlayerSide, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption,
+    TurnOption,
 };
 
 // =============================== Bindings ===============================
 
 const TURN: ChoiceBinding<usize> = index_binding!(
     TURN_OPTION_VARIANTS,
-    gp::TurnOption::None,
+    TurnOption::None,
     turn_option,
     gp::update_turn_option_for_side,
     false,
@@ -82,7 +84,7 @@ const SCATTERPLOT_MAX_WINDOW: ChoiceBinding<usize> = index_binding!(
 );
 const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
     TARGET_SCORE_VARIANTS,
-    gp::TargetScoreSetting::S,
+    TargetScoreSetting::S,
     target_score,
     gp::update_target_score_for_side,
     false,
@@ -97,7 +99,7 @@ const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
 );
 const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SCORE_TYPE_VARIANTS,
-    gp::MiniIndicatorScoreType::Itg,
+    MiniIndicatorScoreType::Itg,
     mini_indicator_score_type,
     gp::update_mini_indicator_score_type_for_side,
     false,
@@ -127,7 +129,7 @@ const MINI_INDICATOR_SIZE: ChoiceBinding<usize> = index_binding!(
 );
 const MINI_INDICATOR_COLOR: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_COLOR_VARIANTS,
-    gp::MiniIndicatorColor::Default,
+    MiniIndicatorColor::Default,
     mini_indicator_color,
     gp::update_mini_indicator_color_for_side,
     false,
@@ -142,7 +144,7 @@ const MINI_INDICATOR_COLOR: ChoiceBinding<usize> = index_binding!(
 );
 const COMBO_COLORS: ChoiceBinding<usize> = index_binding!(
     COMBO_COLORS_VARIANTS,
-    gp::ComboColors::Glow,
+    ComboColors::Glow,
     combo_colors,
     gp::update_combo_colors_for_side,
     false,
@@ -157,7 +159,7 @@ const COMBO_COLORS: ChoiceBinding<usize> = index_binding!(
 );
 const COMBO_COLOR_MODE: ChoiceBinding<usize> = index_binding!(
     COMBO_MODE_VARIANTS,
-    gp::ComboMode::FullCombo,
+    ComboMode::FullCombo,
     combo_mode,
     gp::update_combo_mode_for_side,
     false,
@@ -378,7 +380,7 @@ const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
             // ``scroll_choice_order_matches_scroll_option_bits`` guards the
             // invariant. We translate per-flag rather than copying ``.0`` so
             // any future divergence is caught here.
-            use crate::game::profile::ScrollOption;
+            use deadsync_profile::ScrollOption;
             let mut bits = ScrollMask::empty();
             if p.scroll_option.contains(ScrollOption::Reverse) {
                 bits.insert(ScrollMask::from_bits_retain(1u8 << 0));
@@ -410,7 +412,7 @@ const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
     },
     writeback: BitmaskWriteback {
         project: |_m, p, b| {
-            use crate::game::profile::ScrollOption;
+            use deadsync_profile::ScrollOption;
             let mask = ScrollMask::from_bits_truncate(b as u8);
             let mut setting = ScrollOption::Normal;
             if mask.contains(ScrollMask::REVERSE) {
@@ -578,7 +580,7 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
             // legacy profile or unset) fall back to the canonical mapping
             // from the visual style + text-mode pair.
             let mask = if p.error_bar_active_mask.is_empty() {
-                crate::game::profile::error_bar_mask_from_style(p.error_bar, p.error_bar_text)
+                deadsync_profile::error_bar_mask_from_style(p.error_bar, p.error_bar_text)
             } else {
                 p.error_bar_active_mask
             };
@@ -591,16 +593,16 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
                 0,
                 "ErrorBarMask init bits exceed u8 width"
             );
-            m.error_bar = crate::game::profile::ErrorBarMask::from_bits_retain(b as u8);
+            m.error_bar = ErrorBarMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     },
     writeback: BitmaskWriteback {
         project: |_m, p, b| {
-            let mask = crate::game::profile::ErrorBarMask::from_bits_truncate(b as u8);
+            let mask = ErrorBarMask::from_bits_truncate(b as u8);
             p.error_bar_active_mask = mask;
-            p.error_bar = crate::game::profile::error_bar_style_from_mask(mask);
-            p.error_bar_text = crate::game::profile::error_bar_text_from_mask(mask);
+            p.error_bar = deadsync_profile::error_bar_style_from_mask(mask);
+            p.error_bar_text = deadsync_profile::error_bar_text_from_mask(mask);
         },
         persist_for_side: |s, p| {
             gp::update_error_bar_mask_for_side(s, p.error_bar_active_mask);
@@ -786,9 +788,9 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
         let mini_indicator = MINI_INDICATOR_VARIANTS
             .get(new_index)
             .copied()
-            .unwrap_or(gp::MiniIndicator::None);
-        let subtractive_scoring = mini_indicator == gp::MiniIndicator::SubtractiveScoring;
-        let pacemaker = mini_indicator == gp::MiniIndicator::Pacemaker;
+            .unwrap_or(MiniIndicator::None);
+        let subtractive_scoring = mini_indicator == MiniIndicator::SubtractiveScoring;
+        let pacemaker = mini_indicator == MiniIndicator::Pacemaker;
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
@@ -856,7 +858,7 @@ const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
         let Ok(raw) = parsed else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_average_error_bar_intensity(raw);
+        let value = deadsync_profile::clamp_average_error_bar_intensity(raw);
         state.player_profiles[player_idx].average_error_bar_intensity = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -885,7 +887,7 @@ const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
         let Ok(raw) = parsed else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_average_error_bar_interval_ms(raw);
+        let value = deadsync_profile::clamp_average_error_bar_interval_ms(raw);
         state.player_profiles[player_idx].average_error_bar_interval_ms = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -914,7 +916,7 @@ const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
         let Ok(raw) = parsed else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_long_error_bar_intensity(raw);
+        let value = deadsync_profile::clamp_long_error_bar_intensity(raw);
         state.player_profiles[player_idx].long_error_bar_intensity = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -943,7 +945,7 @@ const LONG_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
         let Ok(raw) = parsed else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_long_error_bar_threshold_ms(raw);
+        let value = deadsync_profile::clamp_long_error_bar_threshold_ms(raw);
         state.player_profiles[player_idx].long_error_bar_threshold_ms = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -971,7 +973,7 @@ const LONG_ERROR_BAR_MIN_SAMPLES: CustomBinding = CustomBinding {
         let Ok(raw) = choice.trim().parse::<u32>() else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_long_error_bar_min_samples(raw);
+        let value = deadsync_profile::clamp_long_error_bar_min_samples(raw);
         state.player_profiles[player_idx].long_error_bar_min_samples = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -999,7 +1001,7 @@ const LONG_ERROR_BAR_BUFFER_CAP: CustomBinding = CustomBinding {
         let Ok(raw) = choice.trim().parse::<u32>() else {
             return Outcome::persisted();
         };
-        let value = gp::clamp_long_error_bar_buffer_cap(raw);
+        let value = deadsync_profile::clamp_long_error_bar_buffer_cap(raw);
         state.player_profiles[player_idx].long_error_bar_buffer_cap = value;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -1041,8 +1043,9 @@ const JUDGMENT_TILT_MIN_THRESHOLD: CustomBinding = CustomBinding {
         };
         let (min_ms, max_ms) = {
             let profile = &mut state.player_profiles[player_idx];
-            let min_ms = gp::clamp_tilt_threshold_ms(min_ms);
-            let max_ms = gp::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms).max(min_ms);
+            let min_ms = deadsync_profile::clamp_tilt_threshold_ms(min_ms);
+            let max_ms = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms)
+                .max(min_ms);
             profile.tilt_min_threshold_ms = min_ms;
             profile.tilt_max_threshold_ms = max_ms;
             (min_ms, max_ms)
@@ -1063,8 +1066,9 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
         };
         let (min_ms, max_ms) = {
             let profile = &mut state.player_profiles[player_idx];
-            let max_ms = gp::clamp_tilt_threshold_ms(max_ms);
-            let min_ms = gp::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms).min(max_ms);
+            let max_ms = deadsync_profile::clamp_tilt_threshold_ms(max_ms);
+            let min_ms = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms)
+                .min(max_ms);
             profile.tilt_min_threshold_ms = min_ms;
             profile.tilt_max_threshold_ms = max_ms;
             (min_ms, max_ms)
@@ -1112,7 +1116,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
         let Ok(raw) = choice.trim_end_matches("ms").parse::<u8>() else {
             return Outcome::persisted();
         };
-        let ms = gp::clamp_custom_fantastic_window_ms(raw);
+        let ms = deadsync_profile::clamp_custom_fantastic_window_ms(raw);
         state.player_profiles[player_idx].custom_fantastic_window_ms = ms;
         let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
@@ -1843,7 +1847,7 @@ mod bitmask_binding_init_tests {
     /// drifts, this test must fail before reaching production.
     #[test]
     fn scroll_choice_order_matches_scroll_option_bits() {
-        use crate::game::profile::ScrollOption;
+        use deadsync_profile::ScrollOption;
         let cases = [
             (0u8, ScrollOption::Reverse),
             (1, ScrollOption::Split),

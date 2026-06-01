@@ -1,4 +1,5 @@
 use crate::game::profile;
+use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{
     JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
@@ -45,7 +46,7 @@ fn default_fa_plus_window_s(state: &State) -> f32 {
 #[inline(always)]
 fn profile_custom_window_ms(profile: &profile::Profile) -> f32 {
     let ms = profile.custom_fantastic_window_ms;
-    f32::from(crate::game::profile::clamp_custom_fantastic_window_ms(ms))
+    f32::from(profile_data::clamp_custom_fantastic_window_ms(ms))
 }
 
 #[inline(always)]

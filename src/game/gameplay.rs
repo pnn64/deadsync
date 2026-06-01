@@ -428,13 +428,13 @@ pub struct ScrollEffects {
 
 impl ScrollEffects {
     #[inline(always)]
-    fn from_option(scroll: profile::ScrollOption) -> Self {
+    fn from_option(scroll: profile_data::ScrollOption) -> Self {
         Self {
-            reverse: f32::from(scroll.contains(profile::ScrollOption::Reverse)),
-            split: f32::from(scroll.contains(profile::ScrollOption::Split)),
-            alternate: f32::from(scroll.contains(profile::ScrollOption::Alternate)),
-            cross: f32::from(scroll.contains(profile::ScrollOption::Cross)),
-            centered: f32::from(scroll.contains(profile::ScrollOption::Centered)),
+            reverse: f32::from(scroll.contains(profile_data::ScrollOption::Reverse)),
+            split: f32::from(scroll.contains(profile_data::ScrollOption::Split)),
+            alternate: f32::from(scroll.contains(profile_data::ScrollOption::Alternate)),
+            cross: f32::from(scroll.contains(profile_data::ScrollOption::Cross)),
+            centered: f32::from(scroll.contains(profile_data::ScrollOption::Centered)),
         }
     }
 
@@ -1295,11 +1295,11 @@ fn turn_seed_for_song(song: &SongData) -> u64 {
     hasher.finish()
 }
 
-fn turn_take_from(turn: profile::TurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
+fn turn_take_from(turn: profile_data::TurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
     if cols == 0 {
         return None;
     }
-    use profile::TurnOption;
+    use profile_data::TurnOption;
     match (turn, cols) {
         (TurnOption::None, _) => None,
         (TurnOption::Mirror, _) => Some((0..cols).rev().collect()),
@@ -1333,7 +1333,7 @@ fn apply_turn_permutation(
     note_range: (usize, usize),
     col_offset: usize,
     cols: usize,
-    turn: profile::TurnOption,
+    turn: profile_data::TurnOption,
     seed: u64,
 ) {
     let Some(take_from) = turn_take_from(turn, cols, seed) else {
@@ -1670,14 +1670,14 @@ fn apply_turn_options(
         let note_range = note_ranges[player];
         let col_offset = player * cols_per_player;
         match turn {
-            profile::TurnOption::None => {}
-            profile::TurnOption::Blender => {
+            profile_data::TurnOption::None => {}
+            profile_data::TurnOption::Blender => {
                 apply_turn_permutation(
                     notes,
                     note_range,
                     col_offset,
                     cols_per_player,
-                    profile::TurnOption::Shuffle,
+                    profile_data::TurnOption::Shuffle,
                     base_seed,
                 );
                 apply_super_shuffle_taps(
@@ -1688,7 +1688,7 @@ fn apply_turn_options(
                     base_seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
                 );
             }
-            profile::TurnOption::Random => {
+            profile_data::TurnOption::Random => {
                 apply_hyper_shuffle(
                     notes,
                     note_range,
@@ -2973,10 +2973,10 @@ fn build_column_cues_for_player(
 
 #[inline(always)]
 fn compute_column_scroll_dirs(
-    scroll_option: profile::ScrollOption,
+    scroll_option: profile_data::ScrollOption,
     num_cols: usize,
 ) -> [f32; MAX_COLS] {
-    use profile::ScrollOption;
+    use profile_data::ScrollOption;
     let mut dirs = [1.0_f32; MAX_COLS];
     let n = num_cols.min(MAX_COLS);
 
@@ -3403,7 +3403,7 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
         error_bar_long_avg_samples: VecDeque::with_capacity(
-            crate::game::profile::LONG_ERROR_BAR_BUFFER_CAP_DEFAULT as usize,
+            profile_data::LONG_ERROR_BAR_BUFFER_CAP_DEFAULT as usize,
         ),
         error_bar_long_avg_total: 0.0,
         error_bar_long_avg_tick: None,
@@ -5815,7 +5815,7 @@ pub fn init(
         let draw_scale = player_draw_scale(&player_profiles[player]);
         if player_profiles[player]
             .scroll_option
-            .contains(profile::ScrollOption::Centered)
+            .contains(profile_data::ScrollOption::Centered)
         {
             screen_height() * 0.6 * draw_scale
         } else {
@@ -6050,7 +6050,7 @@ pub fn init(
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
-        if mini_indicator_mode(&player_profiles[p]) == profile::MiniIndicator::None {
+        if mini_indicator_mode(&player_profiles[p]) == profile_data::MiniIndicator::None {
             continue;
         }
         let constant_bpm = !timing_players[p].has_bpm_changes();
@@ -6067,8 +6067,8 @@ pub fn init(
             .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0));
 
         let target = match player_profiles[p].target_score {
-            profile::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
-            profile::TargetScoreSetting::PersonalBest => personal_best,
+            profile_data::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
+            profile_data::TargetScoreSetting::PersonalBest => personal_best,
             setting => target_score_setting_percent(setting),
         }
         .unwrap_or(89.0);
@@ -7017,7 +7017,7 @@ fn error_bar_average_offset_s(
     let now_ms = ((music_time_s * 100.0).round() * 10.0).max(0.0);
     samples.push_back((now_ms, offset_s));
 
-    let window_ms = profile::clamp_average_error_bar_interval_ms(window_ms) as f32;
+    let window_ms = profile_data::clamp_average_error_bar_interval_ms(window_ms) as f32;
     while let Some((t, _)) = samples.front() {
         if now_ms - *t <= window_ms {
             break;
@@ -7063,13 +7063,14 @@ fn error_bar_register_tap(
     let prof = &state.player_profiles[player];
     let mut error_bar_mask = prof.error_bar_active_mask;
     if error_bar_mask.is_empty() {
-        error_bar_mask = profile::error_bar_mask_from_style(prof.error_bar, prof.error_bar_text);
+        error_bar_mask =
+            profile_data::error_bar_mask_from_style(prof.error_bar, prof.error_bar_text);
     }
-    let show_text = error_bar_mask.contains(profile::ErrorBarMask::TEXT);
-    let show_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
-    let show_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
-    let show_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
-    let show_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
+    let show_text = error_bar_mask.contains(profile_data::ErrorBarMask::TEXT);
+    let show_monochrome = error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME);
+    let show_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
+    let show_highlight = error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT);
+    let show_average = error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE);
     let show_text_10ms = prof.text_error_bar_10ms;
     let show_fa_plus_window = prof.show_fa_plus_window;
     let blue_fantastic_window_s = player_blue_window_ms(state, player) / 1000.0;
@@ -7079,14 +7080,14 @@ fn error_bar_register_tap(
     let short_avg_enabled = prof.short_average_error_bar_enabled;
     let long_avg_enabled = prof.long_error_bar_enabled;
     let long_avg_threshold_s =
-        profile::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
+        profile_data::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
             / 1000.0;
     let long_avg_min_samples =
-        profile::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
+        profile_data::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
     let long_avg_buffer_cap =
-        profile::clamp_long_error_bar_buffer_cap(prof.long_error_bar_buffer_cap) as usize;
+        profile_data::clamp_long_error_bar_buffer_cap(prof.long_error_bar_buffer_cap) as usize;
     let average_interval_ms =
-        profile::clamp_average_error_bar_interval_ms(prof.average_error_bar_interval_ms);
+        profile_data::clamp_average_error_bar_interval_ms(prof.average_error_bar_interval_ms);
     let Some(window) = judgment.window else {
         return;
     };
@@ -9411,13 +9412,13 @@ return Def.ActorFrame{}
                 p1.display_name = "P1 runtime".to_string();
                 p1.scroll_speed = ScrollSpeedSetting::XMod(1.5);
                 p1.perspective = profile_data::Perspective::Overhead;
-                p1.judgment_graphic = profile::JudgmentGraphic::new("Love");
+                p1.judgment_graphic = profile_data::JudgmentGraphic::new("Love");
 
                 let mut p2 = profile::Profile::default();
                 p2.display_name = "P2 runtime".to_string();
                 p2.scroll_speed = ScrollSpeedSetting::CMod(777.0);
                 p2.perspective = profile_data::Perspective::Space;
-                p2.judgment_graphic = profile::JudgmentGraphic::new("Bebas");
+                p2.judgment_graphic = profile_data::JudgmentGraphic::new("Bebas");
 
                 let state = regression_state([p1, p2.clone()]);
 
@@ -10393,7 +10394,7 @@ return Def.ActorFrame{}
                 let mut p1 = profile::Profile::default();
                 p1.error_ms_display = true;
                 p1.error_bar_text = true;
-                p1.error_bar_active_mask = profile::ERROR_BAR_BIT_TEXT;
+                p1.error_bar_active_mask = profile_data::ErrorBarMask::TEXT;
 
                 let mut state = regression_state([p1, profile::Profile::default()]);
                 let row_index = 48usize;
@@ -10484,7 +10485,7 @@ return Def.ActorFrame{}
             fa_plus_10ms_blue_window: true,
             custom_fantastic_window: false,
             error_bar_text: true,
-            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
             ..profile::Profile::default()
         };
 
@@ -10533,7 +10534,7 @@ return Def.ActorFrame{}
             show_fa_plus_window: false,
             error_bar_text: true,
             text_error_bar_10ms: true,
-            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
             ..profile::Profile::default()
         };
 
@@ -10585,7 +10586,7 @@ return Def.ActorFrame{}
             show_fa_plus_window: false,
             error_bar_text: true,
             text_error_bar_10ms: false,
-            error_bar_active_mask: profile::ERROR_BAR_BIT_TEXT,
+            error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
             ..profile::Profile::default()
         };
 
@@ -10634,7 +10635,7 @@ return Def.ActorFrame{}
     #[test]
     fn average_error_bar_can_show_long_term_only() {
         let p1 = profile::Profile {
-            error_bar_active_mask: profile::ERROR_BAR_BIT_AVERAGE,
+            error_bar_active_mask: profile_data::ErrorBarMask::AVERAGE,
             short_average_error_bar_enabled: false,
             long_error_bar_enabled: true,
             long_error_bar_threshold_ms: 1,
@@ -10863,7 +10864,7 @@ return Def.ActorFrame{}
         let mut profile = profile::Profile::default();
         profile
             .tap_explosion_active_mask
-            .remove(profile::TapExplosionMask::GREAT);
+            .remove(profile_data::TapExplosionMask::GREAT);
         let mut disabled = regression_state([profile, profile::Profile::default()]);
         trigger_tap_explosion(&mut disabled, column, JudgeGrade::Great);
         assert!(disabled.tap_explosions[column].is_none());
@@ -10885,7 +10886,7 @@ return Def.ActorFrame{}
         let mut profile = profile::Profile::default();
         profile
             .tap_explosion_active_mask
-            .remove(profile::TapExplosionMask::HELD);
+            .remove(profile_data::TapExplosionMask::HELD);
         let mut disabled = regression_state([profile, profile::Profile::default()]);
         trigger_hold_explosion(&mut disabled, column);
         assert!(disabled.tap_explosions[column].is_none());
@@ -10894,7 +10895,7 @@ return Def.ActorFrame{}
     #[test]
     fn white_fantastic_row_uses_bright_tap_explosion() {
         let mut profile = profile::Profile::default();
-        profile.noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
+        profile.noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
         profile.show_fa_plus_window = true;
         let mut state = regression_state([profile, profile::Profile::default()]);
         let row_index = 48usize;
@@ -10928,7 +10929,7 @@ return Def.ActorFrame{}
     #[test]
     fn blue_fantastic_row_uses_dim_tap_explosion() {
         let mut profile = profile::Profile::default();
-        profile.noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
+        profile.noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
         profile.show_fa_plus_window = true;
         let mut state = regression_state([profile, profile::Profile::default()]);
         let row_index = 48usize;
@@ -11752,7 +11753,7 @@ return Def.ActorFrame{}
     fn score_valid_rejects_nohands_when_chart_has_hands() {
         let mut profile = profile::Profile::default();
         profile.remove_active_mask =
-            profile::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
+            profile_data::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
         let chart = test_chart(
             ArrowStats {
                 hands: 4,
@@ -11771,7 +11772,7 @@ return Def.ActorFrame{}
     #[test]
     fn score_valid_keeps_turn_options_rankable() {
         let mut profile = profile::Profile::default();
-        profile.turn_option = profile::TurnOption::Mirror;
+        profile.turn_option = profile_data::TurnOption::Mirror;
         let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
 
         assert!(
@@ -13203,7 +13204,7 @@ return Def.ActorFrame{}
         assert_eq!(windows[0].chart.insert_mask, INSERT_MASK_BIT_MINES);
         assert_eq!(
             windows[0].chart.turn_bits,
-            turn_option_bits(profile::TurnOption::Mirror)
+            turn_option_bits(profile_data::TurnOption::Mirror)
         );
     }
 

@@ -12,6 +12,7 @@ use super::actor_host::{
 };
 use super::song_tables::create_steps_table;
 use super::*;
+use deadsync_profile::NoteSkin;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -3361,7 +3362,7 @@ fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
                 .first()
                 .map(|player| player.noteskin_name.clone())
         })
-        .unwrap_or_else(|| crate::game::profile::NoteSkin::default().to_string())
+        .unwrap_or_else(|| NoteSkin::default().to_string())
 }
 
 fn song_lua_noteskin_path(skin: &str, button: &str, element: &str) -> String {

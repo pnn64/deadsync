@@ -1,6 +1,6 @@
 use crate::game::profile;
 use deadsync_chart::{ChartData, GameplayChartData};
-use deadsync_profile::{AttackMode, MeasureCounter};
+use deadsync_profile::{AttackMode, MeasureCounter, MiniIndicator, TargetScoreSetting};
 use deadsync_rules::judgment;
 use deadsync_rules::stream::{StreamSegment, zmod_stream_totals_full_measures};
 use deadsync_rules::timing::WindowCounts;
@@ -19,22 +19,22 @@ fn chart_has_attacks(chart: &ChartData) -> bool {
 }
 
 #[inline(always)]
-pub(crate) fn mini_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
-    if profile.mini_indicator != profile::MiniIndicator::None {
+pub(crate) fn mini_indicator_mode(profile: &profile::Profile) -> MiniIndicator {
+    if profile.mini_indicator != MiniIndicator::None {
         profile.mini_indicator
     } else if profile.subtractive_scoring {
-        profile::MiniIndicator::SubtractiveScoring
+        MiniIndicator::SubtractiveScoring
     } else if profile.pacemaker {
-        profile::MiniIndicator::Pacemaker
+        MiniIndicator::Pacemaker
     } else {
-        profile::MiniIndicator::None
+        MiniIndicator::None
     }
 }
 
 #[inline(always)]
 pub(crate) fn needs_stream_data(profile: &profile::Profile) -> bool {
     profile.measure_counter != MeasureCounter::None
-        || mini_indicator_mode(profile) != profile::MiniIndicator::None
+        || mini_indicator_mode(profile) != MiniIndicator::None
 }
 
 #[inline(always)]
@@ -159,8 +159,7 @@ pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals
 }
 
 #[inline(always)]
-pub(crate) fn target_score_setting_percent(setting: profile::TargetScoreSetting) -> Option<f64> {
-    use profile::TargetScoreSetting;
+pub(crate) fn target_score_setting_percent(setting: TargetScoreSetting) -> Option<f64> {
     match setting {
         TargetScoreSetting::CMinus => Some(50.0),
         TargetScoreSetting::C => Some(55.0),

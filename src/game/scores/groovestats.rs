@@ -15,7 +15,7 @@ use deadsync_online::groovestats::{
     GrooveStatsSubmitPlayerPayload, GrooveStatsSubmitRequestError,
 };
 use deadsync_profile as profile_data;
-use deadsync_profile::TimingWindowsOption;
+use deadsync_profile::{RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
@@ -752,18 +752,14 @@ fn groovestats_player_options_json(profile: &Profile) -> String {
     options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
     options.insert(
         "NoMines".to_string(),
-        JsonValue::from(
-            profile
-                .remove_active_mask
-                .contains(profile::RemoveMask::NO_MINES),
-        ),
+        JsonValue::from(profile.remove_active_mask.contains(RemoveMask::NO_MINES)),
     );
     options.insert(
         "Reverse".to_string(),
         JsonValue::from(
             profile
                 .scroll_option
-                .contains(profile::ScrollOption::Reverse),
+                .contains(profile_data::ScrollOption::Reverse),
         ),
     );
     options.insert(
@@ -1620,7 +1616,7 @@ mod tests {
     fn groovestats_validity_allows_cmod_and_no_mines() {
         let mut profile = Profile::default();
         profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
-        profile.remove_active_mask = crate::game::profile::RemoveMask::from_bits_truncate(1u8 << 1);
+        profile.remove_active_mask = RemoveMask::from_bits_truncate(1u8 << 1);
 
         assert_eq!(
             groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.5),
@@ -1809,8 +1805,10 @@ mod tests {
             show_fa_plus_window: true,
             ..Profile::default()
         };
-        profile.remove_active_mask |= profile::RemoveMask::NO_MINES;
-        profile.scroll_option = profile.scroll_option.union(profile::ScrollOption::Reverse);
+        profile.remove_active_mask |= RemoveMask::NO_MINES;
+        profile.scroll_option = profile
+            .scroll_option
+            .union(profile_data::ScrollOption::Reverse);
 
         let value: serde_json::Value =
             serde_json::from_str(&groovestats_player_options_json(&profile)).unwrap();

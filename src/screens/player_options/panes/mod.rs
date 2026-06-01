@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_profile::NoteSkin;
 
 mod advanced;
 mod display;
@@ -99,7 +100,7 @@ pub(super) fn build_rows(
 }
 
 fn find_noteskin_choice_index(
-    profile_value: Option<&crate::game::profile::NoteSkin>,
+    profile_value: Option<&NoteSkin>,
     choices: &[String],
     match_label: &str,
     none_label: Option<&str>,
@@ -159,9 +160,9 @@ pub(super) fn apply_profile_defaults(
             .iter()
             .position(|c| c.eq_ignore_ascii_case(profile.noteskin.as_str()))
             .or_else(|| {
-                row.choices.iter().position(|c| {
-                    c.eq_ignore_ascii_case(crate::game::profile::NoteSkin::DEFAULT_NAME)
-                })
+                row.choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(NoteSkin::DEFAULT_NAME))
             })
             .unwrap_or(0);
     }
@@ -237,7 +238,7 @@ pub(super) fn apply_profile_defaults(
     }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarIntensity) {
         let stepped =
-            crate::game::profile::clamp_long_error_bar_intensity(profile.long_error_bar_intensity);
+            deadsync_profile::clamp_long_error_bar_intensity(profile.long_error_bar_intensity);
         let needle = fmt_long_error_bar_intensity(stepped);
         row.selected_choice_index[player_idx] = row
             .choices
@@ -247,7 +248,7 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::AverageErrorBarIntensity) {
-        let stepped = crate::game::profile::clamp_average_error_bar_intensity(
+        let stepped = deadsync_profile::clamp_average_error_bar_intensity(
             profile.average_error_bar_intensity,
         );
         let needle = fmt_average_error_bar_intensity(stepped);
@@ -259,7 +260,7 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::AverageErrorBarInterval) {
-        let ms = crate::game::profile::clamp_average_error_bar_interval_ms(
+        let ms = deadsync_profile::clamp_average_error_bar_interval_ms(
             profile.average_error_bar_interval_ms,
         );
         let needle = fmt_average_error_bar_interval_ms(ms);
@@ -271,7 +272,7 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarThreshold) {
-        let ms = crate::game::profile::clamp_long_error_bar_threshold_ms(
+        let ms = deadsync_profile::clamp_long_error_bar_threshold_ms(
             profile.long_error_bar_threshold_ms,
         );
         let needle = fmt_long_error_bar_threshold_ms(ms);
@@ -283,9 +284,8 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarMinSamples) {
-        let n = crate::game::profile::clamp_long_error_bar_min_samples(
-            profile.long_error_bar_min_samples,
-        );
+        let n =
+            deadsync_profile::clamp_long_error_bar_min_samples(profile.long_error_bar_min_samples);
         let needle = fmt_long_error_bar_min_samples(n);
         row.selected_choice_index[player_idx] = row
             .choices
@@ -295,9 +295,8 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarBufferCap) {
-        let n = crate::game::profile::clamp_long_error_bar_buffer_cap(
-            profile.long_error_bar_buffer_cap,
-        );
+        let n =
+            deadsync_profile::clamp_long_error_bar_buffer_cap(profile.long_error_bar_buffer_cap);
         let needle = fmt_long_error_bar_buffer_cap(n);
         row.selected_choice_index[player_idx] = row
             .choices
@@ -307,8 +306,7 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMinThreshold) {
-        let threshold =
-            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
+        let threshold = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
         let needle = fmt_tilt_threshold_ms(threshold);
         row.selected_choice_index[player_idx] = row
             .choices
@@ -319,10 +317,9 @@ pub(super) fn apply_profile_defaults(
     }
     if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMaxThreshold) {
         let min_threshold =
-            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
-        let threshold =
-            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms)
-                .max(min_threshold);
+            deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
+        let threshold = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms)
+            .max(min_threshold);
         let needle = fmt_tilt_threshold_ms(threshold);
         row.selected_choice_index[player_idx] = row
             .choices
@@ -343,9 +340,8 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindowMs) {
-        let ms = crate::game::profile::clamp_custom_fantastic_window_ms(
-            profile.custom_fantastic_window_ms,
-        );
+        let ms =
+            deadsync_profile::clamp_custom_fantastic_window_ms(profile.custom_fantastic_window_ms);
         let target = format!("{ms}ms");
         if let Some(idx) = row.choices.iter().position(|c| c == &target) {
             row.selected_choice_index[player_idx] = idx;

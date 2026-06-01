@@ -206,7 +206,7 @@ pub fn init(
     );
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
-    let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
+    let mut initial_noteskin_names = vec![profile_data::NoteSkin::DEFAULT_NAME.to_string()];
     for profile in &player_profiles {
         push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
         if let Some(skin) = profile.mine_noteskin.as_ref() {

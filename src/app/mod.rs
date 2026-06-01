@@ -2556,19 +2556,19 @@ fn fallback_eval_mods_text(
         parts.push(format!("{}% Spacing", profile.spacing_percent));
     }
     let scroll = profile.scroll_option;
-    if scroll.contains(profile::ScrollOption::Reverse) {
+    if scroll.contains(profile_data::ScrollOption::Reverse) {
         parts.push("Reverse".to_string());
     }
-    if scroll.contains(profile::ScrollOption::Split) {
+    if scroll.contains(profile_data::ScrollOption::Split) {
         parts.push("Split".to_string());
     }
-    if scroll.contains(profile::ScrollOption::Alternate) {
+    if scroll.contains(profile_data::ScrollOption::Alternate) {
         parts.push("Alternate".to_string());
     }
-    if scroll.contains(profile::ScrollOption::Cross) {
+    if scroll.contains(profile_data::ScrollOption::Cross) {
         parts.push("Cross".to_string());
     }
-    if scroll.contains(profile::ScrollOption::Centered) {
+    if scroll.contains(profile_data::ScrollOption::Centered) {
         parts.push("Centered".to_string());
     }
     parts.push(profile.perspective.to_string());

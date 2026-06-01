@@ -1,21 +1,23 @@
 use super::{
-    AccelEffectsMask, AppearanceEffectsMask, ComboColors, ComboFont, ComboMode, ErrorBarMask,
-    HeldMissGraphic, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
-    LiveTimingStatsMask, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX,
-    NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, PlayStyle, PlayerSide, RemoveMask, ScrollOption,
-    ScrollSpeedSetting, TapExplosionMask, TargetScoreSetting, TurnOption, VISUAL_DELAY_MS_MAX,
-    VISUAL_DELAY_MS_MIN, VisualEffectsMask, clamp_custom_fantastic_window_ms,
-    clamp_tilt_threshold_ms, error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles,
-    sanitize_player_initials, save_profile_ini_for_side, save_profile_stats_for_side,
-    session_side_is_guest, side_ix,
+    PlayStyle, PlayerSide, ScrollSpeedSetting, lock_profiles, sanitize_player_initials,
+    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use deadsync_profile::{
-    AttackMode, BackgroundFilter, DataVisualizations, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
-    HideLightType, LifeMeterType, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter, MeasureLines,
-    MiniIndicatorSize, Perspective, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScatterplotMaxWindow,
-    TimingWindowsOption,
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
+    ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
+    HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
+    LifeMeterType, LiveTimingStatsMask, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter,
+    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
+    NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX,
+    NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, RemoveMask, SPACING_PERCENT_MAX,
+    SPACING_PERCENT_MIN, ScatterplotMaxWindow, ScrollOption, TapExplosionMask, TargetScoreSetting,
+    TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN, VisualEffectsMask,
+    clamp_average_error_bar_intensity, clamp_average_error_bar_interval_ms,
+    clamp_custom_fantastic_window_ms, clamp_long_error_bar_buffer_cap,
+    clamp_long_error_bar_intensity, clamp_long_error_bar_min_samples,
+    clamp_long_error_bar_threshold_ms, clamp_tilt_threshold_ms, error_bar_style_from_mask,
+    error_bar_text_from_mask,
 };
 use std::path::Path;
 
@@ -1090,7 +1092,7 @@ pub fn update_text_error_bar_10ms_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_average_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {
-    let normalized = super::clamp_average_error_bar_intensity(intensity);
+    let normalized = clamp_average_error_bar_intensity(intensity);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -1115,7 +1117,7 @@ pub fn update_short_average_error_bar_enabled_for_side(side: PlayerSide, enabled
 }
 
 pub fn update_average_error_bar_interval_ms_for_side(side: PlayerSide, ms: u32) {
-    let normalized = super::clamp_average_error_bar_interval_ms(ms);
+    let normalized = clamp_average_error_bar_interval_ms(ms);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -1140,7 +1142,7 @@ pub fn update_long_error_bar_enabled_for_side(side: PlayerSide, enabled: bool) {
 }
 
 pub fn update_long_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {
-    let normalized = super::clamp_long_error_bar_intensity(intensity);
+    let normalized = clamp_long_error_bar_intensity(intensity);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -1153,7 +1155,7 @@ pub fn update_long_error_bar_intensity_for_side(side: PlayerSide, intensity: f32
 }
 
 pub fn update_long_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
-    let normalized = super::clamp_long_error_bar_threshold_ms(ms);
+    let normalized = clamp_long_error_bar_threshold_ms(ms);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -1166,7 +1168,7 @@ pub fn update_long_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
 }
 
 pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
-    let normalized = super::clamp_long_error_bar_min_samples(n);
+    let normalized = clamp_long_error_bar_min_samples(n);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -1179,7 +1181,7 @@ pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
 }
 
 pub fn update_long_error_bar_buffer_cap_for_side(side: PlayerSide, n: u32) {
-    let normalized = super::clamp_long_error_bar_buffer_cap(n);
+    let normalized = clamp_long_error_bar_buffer_cap(n);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];

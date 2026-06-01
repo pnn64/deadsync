@@ -3,7 +3,10 @@ use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
 use deadsync_profile::{
-    BackgroundFilter, MINI_PERCENT_MAX, MINI_PERCENT_MIN, Perspective, PlayerSide,
+    BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
+    MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
+    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayerSide,
+    TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
 };
 
 // =============================== Bindings ===============================
@@ -25,7 +28,7 @@ const PERSPECTIVE: ChoiceBinding<usize> = index_binding!(
 );
 const COMBO_FONT: ChoiceBinding<usize> = index_binding!(
     COMBO_FONT_VARIANTS,
-    gp::ComboFont::Wendy,
+    ComboFont::Wendy,
     combo_font,
     gp::update_combo_font_for_side,
     true,
@@ -200,11 +203,11 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
             wrap,
             |state, player_idx, choice, should_persist, side| {
                 let name = if choice.is_empty() {
-                    gp::NoteSkin::DEFAULT_NAME.to_string()
+                    NoteSkin::DEFAULT_NAME.to_string()
                 } else {
                     choice.to_string()
                 };
-                let setting = gp::NoteSkin::new(&name);
+                let setting = NoteSkin::new(&name);
                 state.player_profiles[player_idx].noteskin = setting.clone();
                 if should_persist {
                     gp::update_noteskin_for_side(side, setting);
@@ -231,7 +234,7 @@ const MINE_SKIN: CustomBinding = CustomBinding {
                 let setting = if choice == match_label.as_ref() {
                     None
                 } else {
-                    Some(gp::NoteSkin::new(choice))
+                    Some(NoteSkin::new(choice))
                 };
                 state.player_profiles[player_idx]
                     .mine_noteskin
@@ -261,7 +264,7 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
                 let setting = if choice == match_label.as_ref() {
                     None
                 } else {
-                    Some(gp::NoteSkin::new(choice))
+                    Some(NoteSkin::new(choice))
                 };
                 state.player_profiles[player_idx]
                     .receptor_noteskin
@@ -292,9 +295,9 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                 let setting = if choice == match_label.as_ref() {
                     None
                 } else if choice == no_tap_label.as_ref() {
-                    Some(gp::NoteSkin::none_choice())
+                    Some(NoteSkin::none_choice())
                 } else {
-                    Some(gp::NoteSkin::new(choice))
+                    Some(NoteSkin::new(choice))
                 };
                 state.player_profiles[player_idx]
                     .tap_explosion_noteskin
@@ -318,14 +321,14 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
 };
 
 const TAP_EXPLOSION_OPTION_BITS: &[u32] = &[
-    gp::TapExplosionMask::FANTASTIC.bits() as u32,
-    gp::TapExplosionMask::EXCELLENT.bits() as u32,
-    gp::TapExplosionMask::GREAT.bits() as u32,
-    gp::TapExplosionMask::DECENT.bits() as u32,
-    gp::TapExplosionMask::WAY_OFF.bits() as u32,
-    gp::TapExplosionMask::MISS.bits() as u32,
-    gp::TapExplosionMask::HELD.bits() as u32,
-    gp::TapExplosionMask::HOLDING.bits() as u32,
+    TapExplosionMask::FANTASTIC.bits() as u32,
+    TapExplosionMask::EXCELLENT.bits() as u32,
+    TapExplosionMask::GREAT.bits() as u32,
+    TapExplosionMask::DECENT.bits() as u32,
+    TapExplosionMask::WAY_OFF.bits() as u32,
+    TapExplosionMask::MISS.bits() as u32,
+    TapExplosionMask::HELD.bits() as u32,
+    TapExplosionMask::HOLDING.bits() as u32,
 ];
 
 const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
@@ -338,13 +341,13 @@ const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
                 0,
                 "TapExplosionMask init bits exceed storage width",
             );
-            m.tap_explosion = gp::TapExplosionMask::from_bits_retain(b as u8);
+            m.tap_explosion = TapExplosionMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     },
     writeback: BitmaskWriteback {
         project: |_m, p, b| {
-            p.tap_explosion_active_mask = gp::TapExplosionMask::from_bits_truncate(b as u8);
+            p.tap_explosion_active_mask = TapExplosionMask::from_bits_truncate(b as u8);
         },
         persist_for_side: |s, p| {
             gp::update_tap_explosion_mask_for_side(s, p.tap_explosion_active_mask);
@@ -473,7 +476,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
         };
         let setting = assets::judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::JudgmentGraphic::new(choice.key.as_ref()))
+            .map(|choice| JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].judgment_graphic = setting;
         let (should_persist, side) = choice::persist_ctx(player_idx);
@@ -495,7 +498,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
         };
         let setting = assets::hold_judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::HoldJudgmentGraphic::new(choice.key.as_ref()))
+            .map(|choice| HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
         let (should_persist, side) = choice::persist_ctx(player_idx);
@@ -519,7 +522,7 @@ const HELD_GRAPHIC: CustomBinding = CustomBinding {
         };
         let setting = assets::held_miss_texture_choices()
             .get(new_index)
-            .map(|choice| gp::HeldMissGraphic::new(choice.key.as_ref()))
+            .map(|choice| HeldMissGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].held_miss_graphic = setting;
         let (should_persist, side) = choice::persist_ctx(player_idx);
@@ -606,7 +609,7 @@ fn push_noteskin_row(b: &mut RowBuilder, noteskin_names: &[String]) {
         lookup_key("PlayerOptionsHelp", "NoteSkinHelp"),
         NOTE_SKIN,
         if noteskin_names.is_empty() {
-            vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
+            vec![NoteSkin::DEFAULT_NAME.to_string()]
         } else {
             noteskin_names.to_vec()
         },
@@ -788,7 +791,7 @@ fn push_notefield_offset_rows(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "NoteFieldOffsetX"),
         lookup_key("PlayerOptionsHelp", "NoteFieldOffsetXHelp"),
         NOTEFIELD_OFFSET_X,
-        (gp::NOTE_FIELD_OFFSET_X_MIN..=gp::NOTE_FIELD_OFFSET_X_MAX)
+        (NOTE_FIELD_OFFSET_X_MIN..=NOTE_FIELD_OFFSET_X_MAX)
             .map(|v| v.to_string())
             .collect(),
     ));
@@ -797,7 +800,7 @@ fn push_notefield_offset_rows(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "NoteFieldOffsetY"),
         lookup_key("PlayerOptionsHelp", "NoteFieldOffsetYHelp"),
         NOTEFIELD_OFFSET_Y,
-        (gp::NOTE_FIELD_OFFSET_Y_MIN..=gp::NOTE_FIELD_OFFSET_Y_MAX)
+        (NOTE_FIELD_OFFSET_Y_MIN..=NOTE_FIELD_OFFSET_Y_MAX)
             .map(|v| v.to_string())
             .collect(),
     ));
@@ -958,11 +961,11 @@ pub(super) fn build_main_rows(
             lookup_key("PlayerOptions", "VisualDelay"),
             lookup_key("PlayerOptionsHelp", "VisualDelayHelp"),
             VISUAL_DELAY,
-            (gp::VISUAL_DELAY_MS_MIN..=gp::VISUAL_DELAY_MS_MAX)
+            (VISUAL_DELAY_MS_MIN..=VISUAL_DELAY_MS_MAX)
                 .map(|v| format!("{v}ms"))
                 .collect(),
         )
-        .with_initial_choice_index((-gp::VISUAL_DELAY_MS_MIN) as usize),
+        .with_initial_choice_index((-VISUAL_DELAY_MS_MIN) as usize),
     );
     b.push(
         Row::numeric(
@@ -970,11 +973,11 @@ pub(super) fn build_main_rows(
             lookup_key("PlayerOptions", "GlobalOffsetShift"),
             lookup_key("PlayerOptionsHelp", "GlobalOffsetShiftHelp"),
             GLOBAL_OFFSET_SHIFT,
-            (gp::VISUAL_DELAY_MS_MIN..=gp::VISUAL_DELAY_MS_MAX)
+            (VISUAL_DELAY_MS_MIN..=VISUAL_DELAY_MS_MAX)
                 .map(|v| format!("{v}ms"))
                 .collect(),
         )
-        .with_initial_choice_index((-gp::VISUAL_DELAY_MS_MIN) as usize),
+        .with_initial_choice_index((-VISUAL_DELAY_MS_MIN) as usize),
     );
     b.push(Row::custom(
         RowId::MusicRate,

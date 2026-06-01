@@ -1,4 +1,5 @@
 use super::super::*;
+use deadsync_profile::NoteSkin;
 
 pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -43,7 +44,7 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::DefaultNoteSkin,
         label: lookup_key("OptionsSystem", "DefaultNoteSkin"),
-        choices: &[literal_choice(profile::NoteSkin::DEFAULT_NAME)],
+        choices: &[literal_choice(NoteSkin::DEFAULT_NAME)],
         inline: false,
     },
 ];
@@ -110,7 +111,7 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
 pub(in crate::screens::options) fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
     if names.is_empty() {
-        names.push(profile::NoteSkin::DEFAULT_NAME.to_string());
+        names.push(NoteSkin::DEFAULT_NAME.to_string());
     }
     names
 }

@@ -200,7 +200,7 @@ pub(super) struct ParsedAttackMods {
     pub(super) insert_mask: u8,
     pub(super) remove_mask: u8,
     pub(super) holds_mask: u8,
-    pub(super) turn_option: profile::TurnOption,
+    pub(super) turn_option: profile_data::TurnOption,
     pub(super) clear_all: bool,
     pub(super) accel: AccelOverrides,
     pub(super) visual: VisualOverrides,
@@ -222,7 +222,7 @@ impl Default for ParsedAttackMods {
             insert_mask: 0,
             remove_mask: 0,
             holds_mask: 0,
-            turn_option: profile::TurnOption::None,
+            turn_option: profile_data::TurnOption::None,
             clear_all: false,
             accel: AccelOverrides::default(),
             visual: VisualOverrides::default(),
@@ -246,7 +246,7 @@ impl ParsedAttackMods {
         self.insert_mask != 0
             || self.remove_mask != 0
             || self.holds_mask != 0
-            || self.turn_option != profile::TurnOption::None
+            || self.turn_option != profile_data::TurnOption::None
     }
 
     #[inline(always)]
@@ -264,17 +264,17 @@ impl ParsedAttackMods {
 }
 
 #[inline(always)]
-pub(super) const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
+pub(super) const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
     match turn {
-        profile::TurnOption::None => 0,
-        profile::TurnOption::Mirror => 1 << 0,
-        profile::TurnOption::Left => 1 << 1,
-        profile::TurnOption::Right => 1 << 2,
-        profile::TurnOption::LRMirror => 1 << 3,
-        profile::TurnOption::UDMirror => 1 << 4,
-        profile::TurnOption::Shuffle => 1 << 5,
-        profile::TurnOption::Blender => 1 << 6,
-        profile::TurnOption::Random => 1 << 7,
+        profile_data::TurnOption::None => 0,
+        profile_data::TurnOption::Mirror => 1 << 0,
+        profile_data::TurnOption::Left => 1 << 1,
+        profile_data::TurnOption::Right => 1 << 2,
+        profile_data::TurnOption::LRMirror => 1 << 3,
+        profile_data::TurnOption::UDMirror => 1 << 4,
+        profile_data::TurnOption::Shuffle => 1 << 5,
+        profile_data::TurnOption::Blender => 1 << 6,
+        profile_data::TurnOption::Random => 1 << 7,
     }
 }
 
@@ -518,14 +518,14 @@ fn apply_runtime_mod(
         "twister" => out.holds_mask |= HOLDS_MASK_BIT_TWISTER,
         "norolls" => out.holds_mask |= HOLDS_MASK_BIT_NO_ROLLS,
         "holdrolls" | "holdstorolls" => out.holds_mask |= HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
-        "mirror" => out.turn_option = profile::TurnOption::Mirror,
-        "left" => out.turn_option = profile::TurnOption::Left,
-        "right" => out.turn_option = profile::TurnOption::Right,
-        "lrmirror" => out.turn_option = profile::TurnOption::LRMirror,
-        "udmirror" => out.turn_option = profile::TurnOption::UDMirror,
-        "shuffle" => out.turn_option = profile::TurnOption::Shuffle,
-        "supershuffle" | "blender" => out.turn_option = profile::TurnOption::Blender,
-        "hypershuffle" => out.turn_option = profile::TurnOption::Random,
+        "mirror" => out.turn_option = profile_data::TurnOption::Mirror,
+        "left" => out.turn_option = profile_data::TurnOption::Left,
+        "right" => out.turn_option = profile_data::TurnOption::Right,
+        "lrmirror" => out.turn_option = profile_data::TurnOption::LRMirror,
+        "udmirror" => out.turn_option = profile_data::TurnOption::UDMirror,
+        "shuffle" => out.turn_option = profile_data::TurnOption::Shuffle,
+        "supershuffle" | "blender" => out.turn_option = profile_data::TurnOption::Blender,
+        "hypershuffle" => out.turn_option = profile_data::TurnOption::Random,
         "reverse" => set_approached_mod(
             &mut out.scroll.reverse,
             &mut out.scroll_approach_speed.reverse,
@@ -2785,7 +2785,7 @@ fn build_song_lua_compile_context(
         noteskin_name: if player < num_players {
             player_profiles[player].noteskin.to_string()
         } else {
-            crate::game::profile::NoteSkin::default().to_string()
+            profile_data::NoteSkin::default().to_string()
         },
         screen_x: if player < num_players {
             song_lua_compile_player_screen_x(
@@ -3789,23 +3789,23 @@ fn apply_attack_turn_mod(
     notes: &mut [Note],
     col_offset: usize,
     cols: usize,
-    turn_option: profile::TurnOption,
+    turn_option: profile_data::TurnOption,
     seed: u64,
     player: usize,
 ) {
-    if notes.is_empty() || turn_option == profile::TurnOption::None {
+    if notes.is_empty() || turn_option == profile_data::TurnOption::None {
         return;
     }
     let note_range = (0usize, notes.len());
     match turn_option {
-        profile::TurnOption::None => {}
-        profile::TurnOption::Blender => {
+        profile_data::TurnOption::None => {}
+        profile_data::TurnOption::Blender => {
             apply_turn_permutation(
                 notes,
                 note_range,
                 col_offset,
                 cols,
-                profile::TurnOption::Shuffle,
+                profile_data::TurnOption::Shuffle,
                 seed,
             );
             apply_super_shuffle_taps(
@@ -3816,7 +3816,7 @@ fn apply_attack_turn_mod(
                 seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
             );
         }
-        profile::TurnOption::Random => {
+        profile_data::TurnOption::Random => {
             apply_hyper_shuffle(
                 notes,
                 note_range,
@@ -3963,7 +3963,7 @@ pub(super) fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Pr
 #[inline(always)]
 pub(super) fn player_changes_chart(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
     super::has_uncommon_masks(profile)
-        || profile.turn_option != profile::TurnOption::None
+        || profile.turn_option != profile_data::TurnOption::None
         || has_chart_attacks(chart, profile)
 }
 

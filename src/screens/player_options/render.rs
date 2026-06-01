@@ -1,5 +1,6 @@
 use super::*;
 use crate::assets::{FontRole, current_machine_font_key};
+use deadsync_profile::TapExplosionMask;
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
@@ -440,16 +441,16 @@ pub(super) fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
-fn tap_explosion_choice_mask(mask: crate::game::profile::TapExplosionMask) -> u16 {
+fn tap_explosion_choice_mask(mask: TapExplosionMask) -> u16 {
     [
-        crate::game::profile::TapExplosionMask::FANTASTIC,
-        crate::game::profile::TapExplosionMask::EXCELLENT,
-        crate::game::profile::TapExplosionMask::GREAT,
-        crate::game::profile::TapExplosionMask::DECENT,
-        crate::game::profile::TapExplosionMask::WAY_OFF,
-        crate::game::profile::TapExplosionMask::MISS,
-        crate::game::profile::TapExplosionMask::HELD,
-        crate::game::profile::TapExplosionMask::HOLDING,
+        TapExplosionMask::FANTASTIC,
+        TapExplosionMask::EXCELLENT,
+        TapExplosionMask::GREAT,
+        TapExplosionMask::DECENT,
+        TapExplosionMask::WAY_OFF,
+        TapExplosionMask::MISS,
+        TapExplosionMask::HELD,
+        TapExplosionMask::HOLDING,
     ]
     .into_iter()
     .enumerate()

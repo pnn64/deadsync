@@ -20,7 +20,9 @@ pub(super) mod tests {
     use crate::game::profile::{self, Profile};
     use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
-    use deadsync_profile::{BackgroundFilter, Perspective, PlayStyle, PlayerSide};
+    use deadsync_profile::{
+        BackgroundFilter, ComboFont, Perspective, PlayStyle, PlayerSide, ScrollOption,
+    };
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use std::time::Duration;
 
@@ -874,7 +876,7 @@ pub(super) mod tests {
         // the moment the user toggles any choice on those rows.
         ensure_i18n();
         let mut profile = Profile::default();
-        profile.scroll_option = profile::ScrollOption::Reverse.union(profile::ScrollOption::Cross);
+        profile.scroll_option = ScrollOption::Reverse.union(ScrollOption::Cross);
 
         let mut main_rows = test_row_map(vec![test_row(
             RowId::Exit,
@@ -885,7 +887,7 @@ pub(super) mod tests {
         let scroll_binding = BitmaskBinding::Generic {
             init: BitmaskInit {
                 from_profile: |p| {
-                    use crate::game::profile::ScrollOption;
+                    use deadsync_profile::ScrollOption;
                     let mut bits = ScrollMask::empty();
                     if p.scroll_option.contains(ScrollOption::Reverse) {
                         bits.insert(ScrollMask::from_bits_retain(1 << 0));
@@ -2428,7 +2430,7 @@ pub(super) mod tests {
         // CycleInit / NumericInit contract.
         let p = &mut state.player_profiles[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = profile::ComboFont::Wendy;
+        p.combo_font = ComboFont::Wendy;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
@@ -2477,7 +2479,7 @@ pub(super) mod tests {
 
         let p = &mut state.player_profiles[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = profile::ComboFont::Wendy;
+        p.combo_font = ComboFont::Wendy;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.spacing_percent = 95;
         p.judgment_offset_x = -25;
@@ -2771,7 +2773,7 @@ pub(super) mod tests {
         );
     }
 
-    use crate::game::profile::{
+    use deadsync_profile::{
         AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
         VisualEffectsMask,
     };

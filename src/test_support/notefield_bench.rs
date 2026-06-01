@@ -78,15 +78,15 @@ pub fn fixture() -> NotefieldBenchFixture {
     let gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS] =
         [gameplay_chart.clone(), gameplay_chart];
     let mut player_profiles = [profile::Profile::default(), profile::Profile::default()];
-    player_profiles[0].noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
+    player_profiles[0].noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
     player_profiles[0].scroll_speed = ScrollSpeedSetting::CMod(620.0);
-    player_profiles[0].judgment_graphic = profile::JudgmentGraphic::new("Wendy");
-    player_profiles[0].hold_judgment_graphic = profile::HoldJudgmentGraphic::new("Love");
+    player_profiles[0].judgment_graphic = profile_data::JudgmentGraphic::new("Wendy");
+    player_profiles[0].hold_judgment_graphic = profile_data::HoldJudgmentGraphic::new("Love");
     player_profiles[0].hide_combo = false;
     player_profiles[0].column_cues = true;
-    player_profiles[0].error_bar = profile::ErrorBarStyle::Colorful;
+    player_profiles[0].error_bar = profile_data::ErrorBarStyle::Colorful;
     player_profiles[0].error_bar_active_mask =
-        profile::error_bar_mask_from_style(profile::ErrorBarStyle::Colorful, true);
+        profile_data::error_bar_mask_from_style(profile_data::ErrorBarStyle::Colorful, true);
     player_profiles[0].error_bar_text = true;
     player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 

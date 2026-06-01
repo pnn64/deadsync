@@ -1,9 +1,9 @@
 use super::*;
-pub use crate::game::profile::{
+use bitflags::bitflags;
+pub use deadsync_profile::{
     AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
     LiveTimingStatsMask, RemoveMask, TapExplosionMask, VisualEffectsMask,
 };
-use bitflags::bitflags;
 
 bitflags! {
     /// Active modifiers for the Scroll row.

@@ -294,7 +294,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::LogFile => config::update_log_to_file(new_index == 1),
             SubRowId::DefaultNoteSkin => {
                 if let Some(skin_name) = selected_choice.as_deref() {
-                    profile::update_machine_default_noteskin(profile::NoteSkin::new(skin_name));
+                    profile::update_machine_default_noteskin(profile_data::NoteSkin::new(
+                        skin_name,
+                    ));
                 }
             }
             _ => {}
