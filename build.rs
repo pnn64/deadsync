@@ -196,6 +196,25 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
 }
 
 fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
+    // Derive the profile output directory (where the final binary lives, e.g.
+    // `target/local`) from OUT_DIR rather than the PROFILE env var.
+    //
+    // Cargo only ever sets PROFILE to "debug" or "release" — it does NOT reflect
+    // custom profiles. A profile like `[profile.local] inherits = "release"`
+    // builds into `target/local/` but reports PROFILE=release, so the old logic
+    // copied assets to `target/release/` and left the running `target/local`
+    // binary with stale assets (e.g. missing language keys).
+    //
+    // OUT_DIR is always `<target>/<profile>/build/<crate>-<hash>/out`, so its
+    // third ancestor is the real profile output directory for any profile.
+    if let Ok(out_dir) = std::env::var("OUT_DIR") {
+        if let Some(profile_dir) = PathBuf::from(out_dir).ancestors().nth(3) {
+            return Ok(profile_dir.to_path_buf());
+        }
+    }
+
+    // Fallback: best-effort reconstruction from PROFILE (only correct for the
+    // built-in debug/release profiles).
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
     let profile = std::env::var("PROFILE")?;
     let base = std::env::var("CARGO_TARGET_DIR")
