@@ -331,11 +331,14 @@ fn serial_prefix(serial: &str) -> String {
     }
 }
 
-/// `enabled_sensors` is a flat bitmask: sensor `s` of panel `p` lives at
-/// linear bit `p * 4 + s` (`enabledSensors[0] & 1` is panel 0 sensor 0).
+/// `enabled_sensors` packs one panel per nibble: panel `p` uses byte `p / 2`,
+/// the high nibble (`0xF0`) for even panels and the low nibble (`0x0F`) for odd
+/// panels, matching the official SMX config tool (`Widgets.cs`). The four
+/// sensors of a panel are the four bits of that nibble (sensor `s` → bit `s`).
 fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
-    let bit = panel * PANEL_SENSOR_COUNT + sensor;
-    (bit / 8, 1u8 << (bit % 8))
+    let byte = panel / 2;
+    let base = if panel % 2 == 0 { 4 } else { 0 };
+    (byte, 1u8 << (base + sensor))
 }
 
 fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {

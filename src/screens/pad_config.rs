@@ -43,8 +43,8 @@ const PAD_GAP: f32 = 70.0;
 const ADV_BAR_W: f32 = 20.0;
 const ADV_BAR_GAP: f32 = 6.0;
 const ADV_GROUP_GAP: f32 = 44.0;
-const ADV_BAR_HEIGHT: f32 = 108.0;
-const ADV_TOP_Y: f32 = 108.0;
+const ADV_BAR_HEIGHT: f32 = 138.0;
+const ADV_TOP_Y: f32 = 132.0;
 
 const PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
 const PANEL_BORDER_H: f32 = 3.0;
@@ -374,15 +374,27 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
         for (btn_idx, button) in pad.buttons.iter().enumerate() {
             let x = left + btn_idx as f32 * (BAR_WIDTH + BAR_GAP);
             let selected = state.selected == pad_idx * PAD_BUTTON_COUNT + btn_idx;
-            let threshold = pending_simple_threshold(state, pad.device_id, btn_idx)
-                .unwrap_or(button.aggregate_threshold);
+            // A pending whole-button edit shows a single value; otherwise show the
+            // live per-sensor range ("200-230") so Advanced edits are visible here.
+            let (threshold_label, threshold_norm) =
+                if let Some(v) = pending_simple_threshold(state, pad.device_id, btn_idx) {
+                    (v.to_string(), normalize(v, button.max_raw_threshold))
+                } else {
+                    let (mn, mx) = sensor_threshold_range(button);
+                    let label = if mn == mx {
+                        mx.to_string()
+                    } else {
+                        format!("{mn}-{mx}")
+                    };
+                    (label, normalize(mx, button.max_raw_threshold))
+                };
             push_bar(
                 actors,
                 button.label,
                 button.aggregate_value,
                 normalize(button.aggregate_value, button.max_raw_threshold),
-                threshold,
-                normalize(threshold, button.max_raw_threshold),
+                threshold_label,
+                threshold_norm,
                 button.active,
                 x,
                 track_y,
@@ -452,6 +464,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 actors,
                 x,
                 top_y,
+                s,
                 sensor.value_norm,
                 sensor.active && enabled,
                 threshold,
@@ -466,8 +479,9 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         group_left += gw + ADV_GROUP_GAP;
     }
 
-    // Extra Advanced section (pad-level), below the sensor grid.
-    let mut ey = top_y + ADV_BAR_HEIGHT + 44.0;
+    // Extra Advanced section (pad-level), anchored just above the footer so it
+    // doesn't leave a big gap under the sensor grid.
+    let mut ey = screen_height() - 150.0;
     if pad.auto_recalibration.is_some() || pad.debounce_micros.is_some() {
         actors.push(act!(text:
             font("miso"):
@@ -501,6 +515,7 @@ fn push_sensor_bar(
     actors: &mut Vec<Actor>,
     x: f32,
     y: f32,
+    sensor_index: usize,
     value_norm: f32,
     active: bool,
     raw_threshold: u16,
@@ -553,12 +568,18 @@ fn push_sensor_bar(
         xy(x, y - 2.0): zoom(0.5): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
-    // Enable indicator below the bar (only where the backend supports it).
+    // Sensor identifier (1-based) directly below the bar.
+    actors.push(act!(text:
+        font("miso"): settext((sensor_index + 1).to_string()): align(0.5, 0.0):
+        xy(x, y + ADV_BAR_HEIGHT + 4.0): zoom(0.5): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
+    // Enable indicator under the identifier (only where the backend supports it).
     if supports_toggle {
         let (label, c) = if enabled { ("ON", ON_TEXT) } else { ("off", OFF_TEXT) };
         actors.push(act!(text:
             font("miso"): settext(label.to_string()): align(0.5, 0.0):
-            xy(x, y + ADV_BAR_HEIGHT + 5.0): zoom(0.5): horizalign(center):
+            xy(x, y + ADV_BAR_HEIGHT + 17.0): zoom(0.46): horizalign(center):
             diffuse(c[0], c[1], c[2], c[3]): z(z + 3.0)
         ));
     }
@@ -910,6 +931,21 @@ fn total_bars(state: &State) -> usize {
     state.pads.len() * PAD_BUTTON_COUNT
 }
 
+/// Min/max live threshold across a button's sensors (for the Simple-view
+/// range display). Empty buttons report `(0, 0)`.
+fn sensor_threshold_range(button: &crate::engine::input::fsr::ButtonView) -> (u16, u16) {
+    let mut mn = u16::MAX;
+    let mut mx = 0u16;
+    for s in &button.sensors {
+        mn = mn.min(s.raw_threshold);
+        mx = mx.max(s.raw_threshold);
+    }
+    if button.sensors.is_empty() {
+        return (0, 0);
+    }
+    (mn, mx)
+}
+
 fn group_width(sensors: usize) -> f32 {
     if sensors == 0 {
         return ADV_BAR_W;
@@ -1111,7 +1147,7 @@ fn push_bar(
     label: &str,
     raw_value: u16,
     value_norm: f32,
-    raw_threshold: u16,
+    threshold_label: String,
     threshold_norm: f32,
     active: bool,
     x: f32,
@@ -1170,7 +1206,7 @@ fn push_bar(
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
+        font("miso"): settext(threshold_label): align(0.5, 1.0):
         xy(x, threshold_y - 3.0): zoom(0.68): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
