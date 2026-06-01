@@ -182,6 +182,10 @@ pub fn open_lights_submenu(state: &mut State) {
     open_submenu_now(state, SubmenuKind::Lights);
 }
 
+pub fn open_graphics_submenu(state: &mut State) {
+    open_submenu_now(state, SubmenuKind::Graphics);
+}
+
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     state.view = OptionsView::Submenu(kind);
     state.pending_submenu_kind = None;

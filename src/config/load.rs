@@ -64,6 +64,12 @@ fn publish_config(cfg: Config) {
         let mut current = lock_config();
         *current = cfg;
         sync_audio_mix_levels_from_config(&current);
+        crate::engine::space::set_overscan(
+            current.center_image_translate_x,
+            current.center_image_translate_y,
+            current.center_image_add_width,
+            current.center_image_add_height,
+        );
         logging::set_file_logging_enabled(current.log_to_file);
     }
     info!(

@@ -129,6 +129,13 @@ pub struct Config {
     pub cdtitle_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
+    /// Overscan adjustment (CenterImage). Values are in
+    /// physical window pixels and scale/translate the entire rendered image so
+    /// content cut off by display overscan can be pulled back into view.
+    pub center_image_translate_x: i32,
+    pub center_image_translate_y: i32,
+    pub center_image_add_width: i32,
+    pub center_image_add_height: i32,
     pub video_renderer: BackendType,
     /// Native high-DPI/Retina rendering. Currently affects macOS OpenGL only.
     pub high_dpi: bool,
@@ -351,6 +358,10 @@ impl Default for Config {
             cdtitle_cache: true,
             display_width: 1600,
             display_height: 900,
+            center_image_translate_x: 0,
+            center_image_translate_y: 0,
+            center_image_add_width: 0,
+            center_image_add_height: 0,
             video_renderer: BackendType::OpenGL,
             high_dpi: false,
             hide_mouse_cursor: true,

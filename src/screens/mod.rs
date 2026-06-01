@@ -14,6 +14,7 @@ pub mod manage_local_profiles;
 pub mod mappings;
 pub mod menu;
 pub mod options;
+pub mod overscan_adjustment;
 pub(crate) mod pack_sync;
 pub mod player_options;
 pub mod practice;
@@ -142,6 +143,7 @@ pub enum Screen {
     EvaluationSummary,
     PlayerOptions,
     TestLights,
+    OverscanAdjustment,
 }
 
 impl Screen {
@@ -173,6 +175,7 @@ impl Screen {
             Self::EvaluationSummary => "ScreenEvaluationSummary",
             Self::PlayerOptions => "ScreenPlayerOptions",
             Self::TestLights => "ScreenTestLights",
+            Self::OverscanAdjustment => "ScreenOverscanConfig",
         }
     }
 }

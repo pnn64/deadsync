@@ -34,8 +34,8 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
     initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style, test_lights,
+    overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
+    select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
 use winit::{
     application::ApplicationHandler,
@@ -659,6 +659,7 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         CurrentScreen::Init => LightMode::Attract,
         CurrentScreen::Gameplay | CurrentScreen::Practice => LightMode::Gameplay,
         CurrentScreen::TestLights => LightMode::TestAutoCycle,
+        CurrentScreen::OverscanAdjustment => LightMode::MenuStartAndDirections,
         CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
             LightMode::Cleared
         }
@@ -755,6 +756,7 @@ const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
             | CurrentScreen::Mappings
             | CurrentScreen::Input
             | CurrentScreen::TestLights
+            | CurrentScreen::OverscanAdjustment
     )
 }
 
@@ -1569,6 +1571,7 @@ pub struct ScreensState {
     mappings_state: mappings::State,
     input_state: input_screen::State,
     test_lights_state: test_lights::State,
+    overscan_adjustment_state: overscan_adjustment::State,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -3509,6 +3512,9 @@ impl ScreensState {
         let mut test_lights_state = test_lights::init();
         test_lights_state.active_color_index = color_index;
 
+        let mut overscan_adjustment_state = overscan_adjustment::init();
+        overscan_adjustment_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -3535,6 +3541,7 @@ impl ScreensState {
             mappings_state,
             input_state,
             test_lights_state,
+            overscan_adjustment_state,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -3595,6 +3602,10 @@ impl ScreensState {
             ),
             CurrentScreen::TestLights => (
                 test_lights::update(&mut self.test_lights_state, delta_time),
+                false,
+            ),
+            CurrentScreen::OverscanAdjustment => (
+                overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -5978,6 +5989,10 @@ impl App {
                 &mut self.state.screens.test_lights_state,
                 &ev,
             ),
+            CurrentScreen::OverscanAdjustment => crate::screens::overscan_adjustment::handle_input(
+                &mut self.state.screens.overscan_adjustment_state,
+                &ev,
+            ),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
@@ -6322,6 +6337,10 @@ impl App {
                 &self.state.screens.test_lights_state,
                 self.lights.state_snapshot(),
                 self.lights.mode(),
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::OverscanAdjustment => overscan_adjustment::get_actors(
+                &self.state.screens.overscan_adjustment_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::PlayerOptions => {
@@ -7290,6 +7309,16 @@ impl App {
                 }
                 return true;
             }
+        } else if self.state.screens.current_screen == CurrentScreen::OverscanAdjustment {
+            // The overscan screen owns the W/A/S/D/I/J/K/L adjustment keys so they
+            // do not also fire as virtual P1 pad directions. Other keys (arrows,
+            // Enter, Escape) fall through to the virtual keymap for menu/pad nav.
+            if crate::screens::overscan_adjustment::handle_raw_key_event(
+                &mut self.state.screens.overscan_adjustment_state,
+                &raw_key,
+            ) {
+                return true;
+            }
         } else if self.state.screens.current_screen == CurrentScreen::Input {
             let action = crate::screens::input::handle_raw_key_event(
                 &mut self.state.screens.input_state,
@@ -7773,6 +7802,14 @@ impl App {
             self.state.screens.test_lights_state.active_color_index = color_index;
             test_lights::on_enter(&mut self.state.screens.test_lights_state);
             self.lights.set_test_auto_cycle();
+        } else if target == CurrentScreen::OverscanAdjustment {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.overscan_adjustment_state = overscan_adjustment::init();
+            self.state
+                .screens
+                .overscan_adjustment_state
+                .active_color_index = color_index;
+            overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
