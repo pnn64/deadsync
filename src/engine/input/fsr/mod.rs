@@ -42,6 +42,9 @@ pub struct SensorView {
     pub raw_threshold: u16,
     pub threshold_norm: f32,
     pub active: bool,
+    /// Whether the firmware currently uses this sensor (Advanced mode toggle).
+    /// Backends without per-sensor enable always report `true`.
+    pub enabled: bool,
 }
 
 /// One playable button (L/D/U/R) and the sensors that drive it.
@@ -68,6 +71,14 @@ pub struct PadView {
     /// Player side the pad maps to (P2 vs P1), used to filter by play style.
     pub is_player2: bool,
     pub buttons: [ButtonView; PAD_BUTTON_COUNT],
+    /// Whether this backend supports enabling/disabling individual sensors.
+    pub supports_sensor_toggle: bool,
+    /// Current auto-recalibration state, if the backend exposes it (SMX).
+    /// `None` means the control is unsupported and is hidden in the UI.
+    pub auto_recalibration: Option<bool>,
+    /// Current per-panel debounce in microseconds, if the backend exposes it.
+    /// `None` means the control is unsupported and is hidden in the UI.
+    pub debounce_micros: Option<u16>,
 }
 
 #[cfg(any(
@@ -125,6 +136,36 @@ impl Monitor {
         }
     }
 
+    /// Enable or disable a single sensor within a button (Advanced mode).
+    pub fn set_sensor_enabled(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        sensor: usize,
+        enabled: bool,
+    ) -> bool {
+        match device.backend {
+            BackendKind::Fsrio => self.fsrio.set_sensor_enabled(device, button, sensor, enabled),
+            BackendKind::Smx => self.smx.set_sensor_enabled(device, button, sensor, enabled),
+        }
+    }
+
+    /// Turn auto-recalibration on/off for a whole pad (Extra Advanced).
+    pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
+        match device.backend {
+            BackendKind::Fsrio => self.fsrio.set_auto_recalibration(device, enabled),
+            BackendKind::Smx => self.smx.set_auto_recalibration(device, enabled),
+        }
+    }
+
+    /// Set the per-panel debounce (microseconds) for a whole pad (Extra Advanced).
+    pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
+        match device.backend {
+            BackendKind::Fsrio => self.fsrio.set_debounce_micros(device, micros),
+            BackendKind::Smx => self.smx.set_debounce_micros(device, micros),
+        }
+    }
+
     /// Enter/leave live read mode (e.g. SMX sensor test mode). Call with `true`
     /// while the config screen is open and `false` when leaving it.
     pub fn set_active(&mut self, active: bool) {
@@ -164,6 +205,24 @@ mod unsupported {
             _sensor: Option<usize>,
             _value: u16,
         ) -> bool {
+            false
+        }
+
+        pub fn set_sensor_enabled(
+            &mut self,
+            _device: PadDeviceId,
+            _button: usize,
+            _sensor: usize,
+            _enabled: bool,
+        ) -> bool {
+            false
+        }
+
+        pub fn set_auto_recalibration(&mut self, _device: PadDeviceId, _enabled: bool) -> bool {
+            false
+        }
+
+        pub fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
             false
         }
 

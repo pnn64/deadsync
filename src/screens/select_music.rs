@@ -8170,17 +8170,21 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
-    let close_side = match ev.action {
-        VirtualAction::p1_start | VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
-        VirtualAction::p2_start | VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
-        _ => None,
-    };
-    if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
-        hide_pad_config_overlay(state);
-        audio::play_sfx("assets/sounds/start.ogg");
-        return ScreenAction::None;
+    // Start drills into Advanced and Back steps back out of it, all handled
+    // inside pad_config. Only a Back at the top (simple) level closes the
+    // overlay, and only from a joined side.
+    let result = pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine);
+    if ev.pressed && result == pad_config::EditResult::ExitToParent {
+        let close_side = match ev.action {
+            VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
+            VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
+            _ => None,
+        };
+        if close_side.is_some_and(profile::is_session_side_joined) {
+            hide_pad_config_overlay(state);
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
     }
-    pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine);
     ScreenAction::None
 }
 

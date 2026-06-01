@@ -3915,10 +3915,33 @@ impl App {
             } else {
                 &mut self.state.screens.select_music_state.pad_config_overlay
             };
-            if let Some(cmd) = pad_config::take_command(target) {
-                let _ =
-                    self.fsr_monitor
-                        .set_threshold(cmd.device, cmd.button, cmd.sensor, cmd.threshold);
+            for cmd in pad_config::take_commands(target) {
+                match cmd {
+                    pad_config::PadCommand::Threshold {
+                        device,
+                        button,
+                        sensor,
+                        value,
+                    } => {
+                        let _ = self.fsr_monitor.set_threshold(device, button, sensor, value);
+                    }
+                    pad_config::PadCommand::SensorEnabled {
+                        device,
+                        button,
+                        sensor,
+                        enabled,
+                    } => {
+                        let _ = self
+                            .fsr_monitor
+                            .set_sensor_enabled(device, button, sensor, enabled);
+                    }
+                    pad_config::PadCommand::AutoRecalibration { device, enabled } => {
+                        let _ = self.fsr_monitor.set_auto_recalibration(device, enabled);
+                    }
+                    pad_config::PadCommand::Debounce { device, micros } => {
+                        let _ = self.fsr_monitor.set_debounce_micros(device, micros);
+                    }
+                }
             }
             pad_config::set_pads(target, pads);
         } else if self.fsr_pads_active {

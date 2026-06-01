@@ -88,6 +88,7 @@ mod imp {
                             raw_threshold,
                             threshold_norm: normalize_sensor_value(raw_threshold),
                             active: raw_value >= raw_threshold && raw_threshold > 0,
+                            enabled: true,
                         }
                     })
                     .collect();
@@ -115,6 +116,9 @@ mod imp {
                     .unwrap_or_else(|| "FSR Pad".to_owned()),
                 is_player2: false,
                 buttons,
+                supports_sensor_toggle: false,
+                auto_recalibration: None,
+                debounce_micros: None,
             }]
         }
 
@@ -154,6 +158,27 @@ mod imp {
                 return true;
             }
             self.drop_device();
+            false
+        }
+
+        /// FSRIO has no per-sensor enable bit; Advanced exposes thresholds only.
+        pub fn set_sensor_enabled(
+            &mut self,
+            _device: PadDeviceId,
+            _button: usize,
+            _sensor: usize,
+            _enabled: bool,
+        ) -> bool {
+            false
+        }
+
+        /// FSRIO does not expose auto-recalibration.
+        pub fn set_auto_recalibration(&mut self, _device: PadDeviceId, _enabled: bool) -> bool {
+            false
+        }
+
+        /// FSRIO does not expose a panel debounce setting.
+        pub fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
             false
         }
 

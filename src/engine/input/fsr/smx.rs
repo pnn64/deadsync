@@ -14,6 +14,11 @@ const PANEL_SENSOR_COUNT: usize = 4;
 const MIN_FSR_THRESHOLD: u16 = 5;
 const MAX_FSR_THRESHOLD: u16 = 250;
 
+/// Debounce edit bounds (microseconds). Firmware default is 4000us (4.0ms);
+/// we never let the user drop below 0.5ms.
+const MIN_DEBOUNCE_US: u16 = 500;
+const MAX_DEBOUNCE_US: u16 = 25000;
+
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
@@ -88,6 +93,7 @@ impl Monitor {
                             raw_threshold,
                             threshold_norm: normalize(raw_threshold, MAX_FSR_THRESHOLD),
                             active: raw_value >= raw_threshold && raw_threshold > 0,
+                            enabled: sensor_enabled(&config, panel, s),
                         }
                     })
                     .collect();
@@ -105,6 +111,9 @@ impl Monitor {
                 }
             });
 
+            // Read packed u16 fields by copy (no references into a packed struct).
+            let max_tare = config.auto_calibration_max_tare;
+            let debounce_us = config.panel_debounce_us;
             pads.push(PadView {
                 device_id: PadDeviceId {
                     backend: BackendKind::Smx,
@@ -113,6 +122,9 @@ impl Monitor {
                 device_name,
                 is_player2: info.is_player2,
                 buttons,
+                supports_sensor_toggle: true,
+                auto_recalibration: Some(max_tare != 0),
+                debounce_micros: Some(debounce_us),
             });
         }
         pads
@@ -161,6 +173,87 @@ impl Monitor {
                 }
             }
         }
+        smx::set_config(pad, config);
+        true
+    }
+
+    /// Enable/disable one sensor of a panel via the `enabled_sensors` bitmask.
+    pub fn set_sensor_enabled(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        sensor: usize,
+        enabled: bool,
+    ) -> bool {
+        if device.backend != BackendKind::Smx
+            || button >= PAD_BUTTON_COUNT
+            || sensor >= PANEL_SENSOR_COUNT
+        {
+            return false;
+        }
+        let pad = device.index;
+        let info = smx::get_info(pad);
+        if !info.connected || info.firmware_version < 5 {
+            return false;
+        }
+        let Some(mut config) = smx::get_config(pad) else {
+            return false;
+        };
+        if !is_fsr(&config) {
+            return false;
+        }
+        let (panel, _) = VIEW_PANELS[button];
+        let (byte, mask) = enabled_bit(panel, sensor);
+        if enabled {
+            config.enabled_sensors[byte] |= mask;
+        } else {
+            config.enabled_sensors[byte] &= !mask;
+        }
+        smx::set_config(pad, config);
+        true
+    }
+
+    /// Turn auto-recalibration on (max tare `0xFFFF`) or off (max tare `0`),
+    /// matching how other StepManiaX SDK forks toggle it.
+    pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
+        if device.backend != BackendKind::Smx {
+            return false;
+        }
+        let pad = device.index;
+        let info = smx::get_info(pad);
+        if !info.connected || info.firmware_version < 5 {
+            return false;
+        }
+        let Some(mut config) = smx::get_config(pad) else {
+            return false;
+        };
+        if !is_fsr(&config) {
+            return false;
+        }
+        config.auto_calibration_max_tare = if enabled { 0xFFFF } else { 0 };
+        smx::set_config(pad, config);
+        true
+    }
+
+    /// Set the per-panel debounce time in microseconds.
+    pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
+        if device.backend != BackendKind::Smx
+            || !(MIN_DEBOUNCE_US..=MAX_DEBOUNCE_US).contains(&micros)
+        {
+            return false;
+        }
+        let pad = device.index;
+        let info = smx::get_info(pad);
+        if !info.connected || info.firmware_version < 5 {
+            return false;
+        }
+        let Some(mut config) = smx::get_config(pad) else {
+            return false;
+        };
+        if !is_fsr(&config) {
+            return false;
+        }
+        config.panel_debounce_us = micros;
         smx::set_config(pad, config);
         true
     }
@@ -236,6 +329,18 @@ fn serial_prefix(serial: &str) -> String {
     } else {
         serial.chars().take(4).collect()
     }
+}
+
+/// `enabled_sensors` is a flat bitmask: sensor `s` of panel `p` lives at
+/// linear bit `p * 4 + s` (`enabledSensors[0] & 1` is panel 0 sensor 0).
+fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
+    let bit = panel * PANEL_SENSOR_COUNT + sensor;
+    (bit / 8, 1u8 << (bit % 8))
+}
+
+fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
+    let (byte, mask) = enabled_bit(panel, sensor);
+    config.enabled_sensors[byte] & mask != 0
 }
 
 fn is_fsr(config: &SmxConfig) -> bool {
