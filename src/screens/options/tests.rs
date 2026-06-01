@@ -178,6 +178,17 @@ fn graphics_hide_cursor_item_matches_row() {
 }
 
 #[test]
+fn graphics_overscan_item_matches_row() {
+    let row_idx = row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::OverscanAdjustment)
+        .expect("overscan row should exist");
+
+    assert_eq!(
+        GRAPHICS_OPTIONS_ITEMS[row_idx].id,
+        ItemId::GfxOverscanAdjustment
+    );
+}
+
+#[test]
 fn p2_can_navigate_and_change_system_options() {
     let asset_manager = AssetManager::new();
     let mut state = init();

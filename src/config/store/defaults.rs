@@ -35,6 +35,22 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_bool(content, "CacheSongs", default.cachesongs);
     push_bool(content, "CDTitleCache", default.cdtitle_cache);
     push_bool(content, "Center1Player", default.center_1player_notefield);
+    push_line(
+        content,
+        "CenterImageTranslateX",
+        default.center_image_translate_x,
+    );
+    push_line(
+        content,
+        "CenterImageTranslateY",
+        default.center_image_translate_y,
+    );
+    push_line(content, "CenterImageAddWidth", default.center_image_add_width);
+    push_line(
+        content,
+        "CenterImageAddHeight",
+        default.center_image_add_height,
+    );
     push_bool(
         content,
         "CourseAutosubmitScoresIndividually",

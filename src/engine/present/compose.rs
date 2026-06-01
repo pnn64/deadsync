@@ -132,6 +132,16 @@ pub fn build_screen_cached_with_scratch(
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;
 
+    // Overscan adjustment (CenterImage): post-multiply a centering matrix onto
+    // every camera in clip space. This single global point
+    // covers the base camera, any custom pushed cameras, and screenshots, and is
+    // applied live without rebuilding projections.
+    if let Some(centering) = crate::engine::space::current_centering_matrix() {
+        for cam in &mut cameras {
+            *cam = centering * *cam;
+        }
+    }
+
     // Texture handles are resolved during composition and cached per frame so
     // draw prep/backends only see compact render objects.
     RenderList {

@@ -139,6 +139,12 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[literal_choice("0 ms")],
         inline: false,
     },
+    SubRow {
+        id: SubRowId::OverscanAdjustment,
+        label: lookup_key("OptionsGraphics", "OverscanAdjustment"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
@@ -268,6 +274,14 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "VisualDelayHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GfxOverscanAdjustment,
+        name: lookup_key("OptionsGraphics", "OverscanAdjustment"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "OverscanAdjustmentHelp",
         ))],
     },
     Item {

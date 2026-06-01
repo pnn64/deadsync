@@ -116,6 +116,22 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .or_else(|| conf.get("Options", "CenteredP1Notefield"))
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.center_1player_notefield);
+    cfg.center_image_translate_x = conf
+        .get("Options", "CenterImageTranslateX")
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(default.center_image_translate_x);
+    cfg.center_image_translate_y = conf
+        .get("Options", "CenterImageTranslateY")
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(default.center_image_translate_y);
+    cfg.center_image_add_width = conf
+        .get("Options", "CenterImageAddWidth")
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(default.center_image_add_width);
+    cfg.center_image_add_height = conf
+        .get("Options", "CenterImageAddHeight")
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(default.center_image_add_height);
     cfg.autosubmit_course_scores_individually = conf
         .get("Options", "CourseAutosubmitScoresIndividually")
         .and_then(|v| v.parse::<u8>().ok())

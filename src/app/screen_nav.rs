@@ -1,7 +1,8 @@
 use super::{
     App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION, credits,
     evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
-    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
+    manage_local_profiles, mappings, menu, options, overscan_adjustment, player_options,
+    profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
     test_lights,
 };
@@ -146,6 +147,7 @@ impl App {
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
                 | CurrentScreen::TestLights
+                | CurrentScreen::OverscanAdjustment
         )
     }
 
@@ -257,6 +259,14 @@ impl App {
             self.state.screens.test_lights_state.active_color_index = color_index;
             test_lights::on_enter(&mut self.state.screens.test_lights_state);
             self.lights.set_test_auto_cycle();
+        } else if target_screen == CurrentScreen::OverscanAdjustment {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.overscan_adjustment_state = overscan_adjustment::init();
+            self.state
+                .screens
+                .overscan_adjustment_state
+                .active_color_index = color_index;
+            overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
         }
 
         if prev == CurrentScreen::SelectColor {
@@ -406,6 +416,8 @@ impl App {
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::TestLights)
             || (from == CurrentScreen::TestLights && to == CurrentScreen::Options)
+            || (from == CurrentScreen::Options && to == CurrentScreen::OverscanAdjustment)
+            || (from == CurrentScreen::OverscanAdjustment && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
             || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
     }
@@ -542,6 +554,7 @@ impl App {
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::TestLights => test_lights::out_transition(),
+            CurrentScreen::OverscanAdjustment => overscan_adjustment::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
@@ -584,6 +597,7 @@ impl App {
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::TestLights => test_lights::in_transition(),
+            CurrentScreen::OverscanAdjustment => overscan_adjustment::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),
