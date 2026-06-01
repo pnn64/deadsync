@@ -3755,7 +3755,7 @@ impl ScreensState {
 impl AppState {
     fn new(
         cfg: config::Config,
-        profile_data: profile::Profile,
+        profile_data: profile_data::Profile,
         overlay_mode: u8,
         color_index: i32,
     ) -> Self {
@@ -4568,7 +4568,7 @@ impl App {
         overlay_mode: u8,
         color_index: i32,
         config: config::Config,
-        profile_data: profile::Profile,
+        profile_data: profile_data::Profile,
     ) -> Self {
         let software_renderer_threads = config.software_renderer_threads;
         let gfx_debug_enabled = config.gfx_debug;

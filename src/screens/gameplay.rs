@@ -295,7 +295,7 @@ pub fn init(
     active_color_index: i32,
     music_rate: f32,
     scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
-    player_profiles: [profile::Profile; MAX_PLAYERS],
+    player_profiles: [profile_data::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
     replay_status_text: Option<Arc<str>>,
@@ -7359,7 +7359,7 @@ pub fn push_actors(
 
     let mut build_player_bundle =
         |player_idx: usize,
-         profile: &profile::Profile,
+         profile: &profile_data::Profile,
          placement: notefield::FieldPlacement,
          requests: SongLuaPlayerProxyRequests| {
             let field_scratch = &mut notefield_actor_scratch[player_idx];

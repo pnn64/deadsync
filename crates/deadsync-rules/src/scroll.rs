@@ -8,6 +8,8 @@ pub enum ScrollSpeedSetting {
     MMod(f32),
 }
 
+pub const GUEST_SCROLL_SPEED: ScrollSpeedSetting = ScrollSpeedSetting::MMod(250.0);
+
 impl Default for ScrollSpeedSetting {
     fn default() -> Self {
         Self::CMod(600.0)
@@ -168,7 +170,7 @@ impl ScrollSpeedSetting {
 
 #[cfg(test)]
 mod tests {
-    use super::ScrollSpeedSetting;
+    use super::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
     use std::str::FromStr;
 
     #[test]
@@ -192,6 +194,12 @@ mod tests {
         assert_eq!(ScrollSpeedSetting::CMod(650.0).to_string(), "C650");
         assert_eq!(ScrollSpeedSetting::XMod(1.25).to_string(), "X1.25");
         assert_eq!(ScrollSpeedSetting::MMod(777.5).to_string(), "M777.5");
+    }
+
+    #[test]
+    fn guest_scroll_speed_uses_legacy_mmod() {
+        assert_eq!(GUEST_SCROLL_SPEED, ScrollSpeedSetting::MMod(250.0));
+        assert_eq!(GUEST_SCROLL_SPEED.to_string(), "M250");
     }
 
     #[test]

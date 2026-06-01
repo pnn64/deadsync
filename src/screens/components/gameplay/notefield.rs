@@ -29,7 +29,7 @@ use crate::game::parsing::noteskin::{
 use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, State},
-    profile, scores,
+    scores,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use deadsync_core::input::MAX_COLS;
@@ -119,7 +119,7 @@ const MAX_NOTES_AFTER: usize = 64;
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 
 #[inline(always)]
-fn judgment_tilt_rotation_deg(profile: &profile::Profile, judgment: &Judgment) -> f32 {
+fn judgment_tilt_rotation_deg(profile: &profile_data::Profile, judgment: &Judgment) -> f32 {
     if !profile.judgment_tilt || judgment.grade == JudgeGrade::Miss {
         return 0.0;
     }
@@ -2222,7 +2222,7 @@ fn smoothstep01(t: f32) -> f32 {
 
 #[inline(always)]
 fn effective_mini_value(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     visual: VisualEffects,
     mini_percent: f32,
 ) -> f32 {
@@ -2483,7 +2483,7 @@ fn error_bar_color_for_window(window: TimingWindow, show_fa_plus_window: bool) -
 }
 
 #[inline(always)]
-fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool {
+fn split_15_10ms_active(profile: &profile_data::Profile, judgment: &Judgment) -> bool {
     profile.show_fa_plus_window
         && profile.split_15_10ms
         && !profile.custom_fantastic_window
@@ -2493,7 +2493,7 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
 }
 
 #[inline(always)]
-fn tap_judgment_is_blue_fantastic(profile: &profile::Profile, judgment: &Judgment) -> bool {
+fn tap_judgment_is_blue_fantastic(profile: &profile_data::Profile, judgment: &Judgment) -> bool {
     if judgment.grade != JudgeGrade::Fantastic {
         return false;
     }
@@ -2510,7 +2510,9 @@ fn tap_judgment_is_blue_fantastic(profile: &profile::Profile, judgment: &Judgmen
 }
 
 #[inline(always)]
-fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&'static assets::TextureChoice> {
+fn resolved_judgment_texture(
+    profile: &profile_data::Profile,
+) -> Option<&'static assets::TextureChoice> {
     assets::resolve_texture_choice_entry(
         profile.judgment_graphic.texture_key(),
         assets::judgment_texture_choices(),
@@ -2519,7 +2521,7 @@ fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&'static asse
 
 #[inline(always)]
 fn resolved_hold_judgment_texture(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
 ) -> Option<&'static assets::TextureChoice> {
     assets::resolve_texture_choice_entry(
         profile.hold_judgment_graphic.texture_key(),
@@ -2529,7 +2531,7 @@ fn resolved_hold_judgment_texture(
 
 #[inline(always)]
 fn resolved_held_miss_texture(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
 ) -> Option<&'static assets::TextureChoice> {
     assets::resolve_texture_choice_entry(
         profile.held_miss_graphic.texture_key(),
@@ -2548,7 +2550,7 @@ fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
 
 #[inline(always)]
 fn tap_judgment_rows(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     judgment: &Judgment,
     frame_rows: usize,
 ) -> (usize, Option<usize>) {
@@ -2689,7 +2691,7 @@ fn hud_y(
 
 #[inline(always)]
 fn zmod_layout_ys(
-    profile: &crate::game::profile::Profile,
+    profile: &profile_data::Profile,
     judgment_y: f32,
     combo_y_base: f32,
     reverse: bool,
@@ -2756,7 +2758,7 @@ fn zmod_layout_ys(
 
 #[inline(always)]
 fn hud_layout_ys(
-    profile: &crate::game::profile::Profile,
+    profile: &profile_data::Profile,
     judgment_y_base: f32,
     combo_y_base: f32,
     reverse: bool,
@@ -3103,7 +3105,11 @@ pub fn prewarm_text_layout(
 }
 
 #[inline(always)]
-fn zmod_combo_quint_active(state: &State, player_idx: usize, profile: &profile::Profile) -> bool {
+fn zmod_combo_quint_active(
+    state: &State,
+    player_idx: usize,
+    profile: &profile_data::Profile,
+) -> bool {
     if !profile.show_fa_plus_window || player_idx >= state.num_players {
         return false;
     }
@@ -3318,7 +3324,7 @@ fn zmod_subtractive_counter_state(
 }
 
 #[inline(always)]
-fn zmod_indicator_mode(profile: &profile::Profile) -> profile_data::MiniIndicator {
+fn zmod_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
     if profile.mini_indicator != profile_data::MiniIndicator::None {
         return profile.mini_indicator;
     }
@@ -3441,7 +3447,7 @@ fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> 
 fn zmod_mini_indicator_text(
     state: &State,
     p: &PlayerRuntime,
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     player_idx: usize,
 ) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
@@ -3687,7 +3693,7 @@ fn hold_explosion_active(
 }
 
 #[inline(always)]
-fn hold_explosion_enabled(profile: &profile::Profile) -> bool {
+fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     profile
         .tap_explosion_active_mask
         .contains(profile_data::TapExplosionMask::HOLDING)
@@ -3957,7 +3963,7 @@ const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
 
 pub fn build_bundles(
     state: &State,
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
@@ -8991,7 +8997,6 @@ mod tests {
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
-    use crate::game::profile;
     use deadsync_core::note::NoteType;
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
@@ -9262,10 +9267,10 @@ mod tests {
 
     #[test]
     fn hold_explosion_option_uses_holding_mask() {
-        let enabled = profile::Profile::default();
+        let enabled = profile_data::Profile::default();
         assert!(hold_explosion_enabled(&enabled));
 
-        let mut disabled = profile::Profile::default();
+        let mut disabled = profile_data::Profile::default();
         disabled
             .tap_explosion_active_mask
             .remove(profile_data::TapExplosionMask::HOLDING);
@@ -10247,9 +10252,9 @@ mod tests {
 
     #[test]
     fn hud_layout_offsets_apply_independently() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             error_bar_active_mask: profile_data::ErrorBarMask::MONOCHROME,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let base = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 0.0);
         let moved_judgment = hud_layout_ys(&profile, 100.0, 160.0, false, 25.0, 0.0, 0.0);
@@ -10328,11 +10333,11 @@ mod tests {
 
     #[test]
     fn judgment_tilt_thresholds_deadzone_and_cap() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             judgment_tilt: true,
             tilt_min_threshold_ms: 5,
             tilt_max_threshold_ms: 20,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         assert_eq!(
             judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 5.0)),
@@ -10354,11 +10359,11 @@ mod tests {
 
     #[test]
     fn judgment_tilt_keeps_early_late_direction() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             judgment_tilt: true,
             tilt_min_threshold_ms: 0,
             tilt_max_threshold_ms: 50,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         assert!(
             judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, -10.0))
@@ -10382,10 +10387,10 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_overlay_white_for_split_15_10_hits() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
             split_15_10ms: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
@@ -10393,9 +10398,9 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_keep_plain_blue_when_split_is_off() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
@@ -10403,10 +10408,10 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_use_10ms_blue_window() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
             fa_plus_10ms_blue_window: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let blue = fantastic_judgment(TimingWindow::W0, timing::FA_PLUS_W010_MS);
         let white = fantastic_judgment(TimingWindow::W0, 12.0);
@@ -10432,11 +10437,11 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_split_keeps_blue_base_above_10ms() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
             fa_plus_10ms_blue_window: true,
             split_15_10ms: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
 
@@ -10445,9 +10450,9 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_ignore_split_without_fa_plus_window() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             split_15_10ms: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
@@ -10455,12 +10460,12 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_defer_to_custom_window_over_fixed_split() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
             split_15_10ms: true,
             custom_fantastic_window: true,
             custom_fantastic_window_ms: 12,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W1, 14.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (1, None));
@@ -10468,10 +10473,10 @@ mod tests {
 
     #[test]
     fn tap_judgment_rows_keep_six_row_assets_unsplit() {
-        let profile = profile::Profile {
+        let profile = profile_data::Profile {
             show_fa_plus_window: true,
             split_15_10ms: true,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
         let fantastic = fantastic_judgment(TimingWindow::W0, 12.0);
         let excellent = Judgment {

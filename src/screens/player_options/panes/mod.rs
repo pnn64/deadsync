@@ -131,7 +131,7 @@ fn find_noteskin_choice_index(
 /// pass is a pure function of `profile`, so multiple invocations are safe.
 pub(super) fn apply_profile_defaults(
     row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
+    profile: &deadsync_profile::Profile,
     player_idx: usize,
     masks: &mut PlayerOptionMasks,
 ) {
@@ -366,7 +366,7 @@ pub(super) fn apply_profile_defaults(
 
 fn init_opted_in_bitmask_rows(
     row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
+    profile: &deadsync_profile::Profile,
     masks: &mut PlayerOptionMasks,
     player_idx: usize,
 ) {
@@ -388,7 +388,7 @@ fn init_opted_in_bitmask_rows(
 
 fn init_opted_in_cycle_rows(
     row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
+    profile: &deadsync_profile::Profile,
     player_idx: usize,
 ) {
     let ids: Vec<RowId> = row_map.display_order().to_vec();
@@ -410,7 +410,7 @@ fn init_opted_in_cycle_rows(
 
 fn init_opted_in_numeric_rows(
     row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
+    profile: &deadsync_profile::Profile,
     player_idx: usize,
 ) {
     let ids: Vec<RowId> = row_map.display_order().to_vec();
@@ -440,7 +440,7 @@ fn init_opted_in_numeric_rows(
 /// `masks.<field>`. Multiple rules writing the same field are allowed but
 /// discouraged; prefer a single closure that builds the full value.
 struct DerivedMaskRule {
-    apply: fn(&crate::game::profile::Profile, &mut PlayerOptionMasks),
+    apply: fn(&deadsync_profile::Profile, &mut PlayerOptionMasks),
 }
 
 const DERIVED_MASKS: &[DerivedMaskRule] = &[DerivedMaskRule {
@@ -460,7 +460,7 @@ const DERIVED_MASKS: &[DerivedMaskRule] = &[DerivedMaskRule {
     },
 }];
 
-fn apply_derived_masks(profile: &crate::game::profile::Profile, masks: &mut PlayerOptionMasks) {
+fn apply_derived_masks(profile: &deadsync_profile::Profile, masks: &mut PlayerOptionMasks) {
     for rule in DERIVED_MASKS {
         (rule.apply)(profile, masks);
     }

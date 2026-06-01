@@ -7,7 +7,7 @@ use super::{
 };
 use crate::game::gameplay;
 use crate::game::online;
-use crate::game::profile::{self, Profile};
+use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     self as groovestats_api, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_SUBMIT_MAX_ENTRIES,
@@ -15,6 +15,7 @@ use deadsync_online::groovestats::{
     GrooveStatsSubmitPlayerPayload, GrooveStatsSubmitRequestError,
 };
 use deadsync_profile as profile_data;
+use deadsync_profile::Profile;
 use deadsync_profile::{RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{

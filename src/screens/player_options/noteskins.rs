@@ -159,7 +159,7 @@ pub(super) fn resolved_tap_explosion_preview(
 
 pub(super) fn sync_noteskin_previews_for_player(
     noteskin: &mut NoteskinState,
-    profile: &crate::game::profile::Profile,
+    profile: &profile_data::Profile,
     player_idx: usize,
 ) {
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());

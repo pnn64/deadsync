@@ -4,7 +4,7 @@ use super::{
     lua_chart_submit_allowed, submit_side_ix,
 };
 use crate::game::gameplay;
-use crate::game::profile::{self, Profile};
+use crate::game::profile;
 use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ArrowCloudJudgmentCounts, ArrowCloudLifePoint, ArrowCloudModifiers,
@@ -13,6 +13,7 @@ use deadsync_online::arrowcloud::{
 };
 use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_profile as profile_data;
+use deadsync_profile::Profile;
 use deadsync_rules::{
     judgment,
     note::{HoldResult, MineResult, Note},

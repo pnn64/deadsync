@@ -5,7 +5,10 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bincode = "2.0.1"
 bitflags = "2.11.1"
+chrono = "0.4.44"
+deadsync-rules = { path = "../deadsync-rules" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

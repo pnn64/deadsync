@@ -9983,7 +9983,7 @@ fn push_folder_stats_overlay(
     state: &State,
     asset_manager: &AssetManager,
     side: profile_data::PlayerSide,
-    side_profile: &profile::Profile,
+    side_profile: &profile_data::Profile,
     target_chart_type: &str,
     chart: Option<&ChartData>,
     preferred_difficulty_index: usize,

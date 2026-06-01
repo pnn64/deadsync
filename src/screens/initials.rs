@@ -156,7 +156,7 @@ fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) ->
 }
 
 fn sanitize_name(raw: &str) -> String {
-    profile::sanitize_player_initials(raw)
+    profile_data::sanitize_player_initials(raw)
 }
 
 #[inline(always)]

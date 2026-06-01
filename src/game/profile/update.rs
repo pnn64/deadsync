@@ -1,6 +1,6 @@
 use super::{
-    PlayStyle, PlayerSide, ScrollSpeedSetting, lock_profiles, sanitize_player_initials,
-    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
+    PlayStyle, PlayerSide, ScrollSpeedSetting, lock_profiles, save_profile_ini_for_side,
+    save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use deadsync_profile::{
@@ -17,7 +17,7 @@ use deadsync_profile::{
     clamp_custom_fantastic_window_ms, clamp_long_error_bar_buffer_cap,
     clamp_long_error_bar_intensity, clamp_long_error_bar_min_samples,
     clamp_long_error_bar_threshold_ms, clamp_tilt_threshold_ms, error_bar_style_from_mask,
-    error_bar_text_from_mask,
+    error_bar_text_from_mask, sanitize_player_initials,
 };
 use std::path::Path;
 

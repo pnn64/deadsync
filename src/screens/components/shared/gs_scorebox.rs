@@ -366,7 +366,7 @@ pub(crate) fn entries_with_local_self_state(
     if let Some(entry) = entries.iter_mut().find(|entry| entry.is_self) {
         if let Some((local_score_10000, local_is_fail)) = local_self
             && local_is_fail
-            && scores::same_score_10000(entry.score, local_score_10000)
+            && score_data::same_score_10000(entry.score, local_score_10000)
         {
             entry.is_fail = true;
             if entry.machine_tag.is_none() {
@@ -386,7 +386,7 @@ pub(crate) fn entries_with_local_self_state(
         }
         if let Some((local_score_10000, local_is_fail)) = local_self
             && local_is_fail
-            && scores::same_score_10000(entry.score, local_score_10000)
+            && score_data::same_score_10000(entry.score, local_score_10000)
         {
             entry.is_fail = true;
         }
@@ -1508,7 +1508,7 @@ mod tests {
     }
 
     fn scorebox_profile(show_ex_score: bool) -> score_data::GameplayScoreboxProfileSnapshot {
-        let mut player_profile = profile::Profile::default();
+        let mut player_profile = profile_data::Profile::default();
         player_profile.show_ex_score = show_ex_score;
         player_profile.display_scorebox = true;
         scores::scorebox_profile_snapshot(&player_profile, true, None)

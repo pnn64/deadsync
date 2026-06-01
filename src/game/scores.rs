@@ -2,11 +2,12 @@ use crate::config::SimpleIni;
 use crate::config::dirs;
 use crate::game::gameplay;
 use crate::game::online;
-use crate::game::profile::{self, Profile};
+use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{Local, TimeZone};
 use deadsync_chart::ArrowStats;
+use deadsync_profile::Profile;
 use log::{debug, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -19,7 +20,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bincode::{Decode, Encode};
 use deadsync_core::song_time::SongTimeNs;
-use deadsync_input::InputSource;
 use deadsync_online::OnlineRequestError;
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES, ArrowCloudLeaderboardEntry,
@@ -49,11 +49,19 @@ pub use arrowcloud::{
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudServerGrade, CachedPlayerLeaderboardData, CachedScore,
-    GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner, LeaderboardEntry,
-    LeaderboardPane, LocalScalarScore, MachineReplayEntry, PlayerLeaderboardData, ReplayEdge,
-    ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress, gameplay_run_failed,
-    gameplay_run_passed, lua_chart_submit_allowed, promote_quint_grade, score_to_grade,
+    CachedPlayerLeaderboardData, CachedScore, GameplayScoreboxProfileSnapshot, Grade,
+    GrooveStatsSubmitRecordBanner, GsScoreEntry, LOCAL_SCORE_VERSION, LeaderboardEntry,
+    LeaderboardPane, LocalReplayEdge, LocalScalarScore, LocalScoreEntry, LocalScoreHeader,
+    MachineReplayEntry, PlayerLeaderboardData, ReplayEdge, ScoreBulkImportSummary,
+    ScoreImportEndpoint, ScoreImportProgress, arrowcloud_score_from_retrieve_fields,
+    arrowcloud_score_from_submit_percent, cached_score, cached_score_10000,
+    cached_score_from_gs_entry, cached_score_from_local_header, compute_local_lamp,
+    decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
+    encode_gs_score_entry, encode_local_score_entry, failed_score_override, fix_gs_cached_score,
+    gameplay_run_failed, gameplay_run_passed, grade_from_code, grade_to_code,
+    gs_score_entry_from_cached, is_better_itg, is_better_scalar_score, lua_chart_submit_allowed,
+    merge_arrowcloud_score_slot, promote_quint_grade, replaces_stale_quint, same_score_10000,
+    score_to_grade, set_arrowcloud_score_for_leaderboard,
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
@@ -385,25 +393,14 @@ pub(super) fn cache_arrowcloud_scores_from_submit(
     is_fail: bool,
     submitted_at: chrono::DateTime<chrono::Utc>,
 ) {
-    let make_score = |percent: f64| -> Option<ArrowCloudScore> {
-        if !percent.is_finite() {
-            return None;
-        }
-        let clamped = percent.clamp(0.0, 100.0);
-        Some(ArrowCloudScore {
-            score_percent: clamped / 100.0,
-            server_grade: None, // The submit response is best-effort: we
-            // don't decode the server's chosen grade here.
-            played_at: Some(submitted_at),
-            play_id: None,
-            is_fail,
-        })
-    };
-
     let new_scores = ArrowCloudScores {
-        itg: make_score(itg_percent),
-        ex: make_score(ex_percent),
-        hard_ex: make_score(hard_ex_percent),
+        itg: arrowcloud_score_from_submit_percent(itg_percent, is_fail, submitted_at.clone()),
+        ex: arrowcloud_score_from_submit_percent(ex_percent, is_fail, submitted_at.clone()),
+        hard_ex: arrowcloud_score_from_submit_percent(
+            hard_ex_percent,
+            is_fail,
+            submitted_at.clone(),
+        ),
     };
 
     ensure_ac_score_cache_loaded_for_profile(profile_id);
@@ -419,32 +416,6 @@ pub(super) fn cache_arrowcloud_scores_from_submit(
         map.clone()
     };
     save_ac_score_index(&ac_score_index_path_for_profile(profile_id), &merged);
-}
-
-#[inline]
-fn merge_arrowcloud_score_slot(
-    existing: &mut Option<ArrowCloudScore>,
-    incoming: Option<ArrowCloudScore>,
-) {
-    let Some(new_score) = incoming else {
-        return;
-    };
-    match existing {
-        None => *existing = Some(new_score),
-        Some(prev) => {
-            // Failed scores never overwrite a non-failed score with the same
-            // or higher percent. Otherwise, keep whichever percent is higher.
-            let prev_failed = prev.is_fail;
-            let new_failed = new_score.is_fail;
-            if prev_failed && !new_failed {
-                *prev = new_score;
-            } else if !prev_failed && new_failed {
-                // Keep prev: the existing non-failed score wins.
-            } else if new_score.score_percent > prev.score_percent {
-                *prev = new_score;
-            }
-        }
-    }
 }
 
 // --- Local score cache (on-disk, one file per play) ---
@@ -784,109 +755,8 @@ fn shard2_for_hash(hash: &str) -> &str {
 }
 
 #[inline(always)]
-fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
-    match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
-        (true, false) => return true,
-        (false, true) => return false,
-        _ => {}
-    }
-    if !same_score_10000(cached_score_10000(new), cached_score_10000(old)) {
-        return new.score_percent > old.score_percent;
-    }
-
-    let new_grade = grade_priority(new.grade);
-    let old_grade = grade_priority(old.grade);
-    if new_grade != old_grade {
-        return new_grade < old_grade;
-    }
-
-    let new_lamp = lamp_priority(new.lamp_index);
-    let old_lamp = lamp_priority(old.lamp_index);
-    if new_lamp != old_lamp {
-        return new_lamp < old_lamp;
-    }
-
-    let new_count = lamp_judge_count_priority(new.lamp_judge_count);
-    let old_count = lamp_judge_count_priority(old.lamp_judge_count);
-    new_count < old_count
-}
-
-#[inline(always)]
-const fn grade_priority(grade: Grade) -> u8 {
-    match grade {
-        Grade::Quint => 0,
-        Grade::Tier01 => 1,
-        Grade::Tier02 => 2,
-        Grade::Tier03 => 3,
-        Grade::Tier04 => 4,
-        Grade::Tier05 => 5,
-        Grade::Tier06 => 6,
-        Grade::Tier07 => 7,
-        Grade::Tier08 => 8,
-        Grade::Tier09 => 9,
-        Grade::Tier10 => 10,
-        Grade::Tier11 => 11,
-        Grade::Tier12 => 12,
-        Grade::Tier13 => 13,
-        Grade::Tier14 => 14,
-        Grade::Tier15 => 15,
-        Grade::Tier16 => 16,
-        Grade::Tier17 => 17,
-        Grade::Failed => u8::MAX,
-    }
-}
-
-#[inline(always)]
-const fn lamp_priority(lamp_index: Option<u8>) -> u8 {
-    match lamp_index {
-        Some(idx @ 0..=4) => idx,
-        Some(_) | None => u8::MAX,
-    }
-}
-
-#[inline(always)]
-const fn lamp_judge_count_priority(count: Option<u8>) -> u8 {
-    match count {
-        Some(value) => value,
-        None => u8::MAX,
-    }
-}
-
-#[inline(always)]
-pub(crate) fn same_score_10000(a: f64, b: f64) -> bool {
-    a.is_finite() && b.is_finite() && (a.round() - b.round()).abs() <= 1.0
-}
-
-#[inline(always)]
-fn cached_score_10000(score: &CachedScore) -> f64 {
-    score.score_percent * 10000.0
-}
-
-#[inline(always)]
-fn authoritative_failed_score<'a>(a: &'a CachedScore, b: &'a CachedScore) -> Option<CachedScore> {
-    if a.grade == Grade::Failed
-        && b.grade != Grade::Failed
-        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
-    {
-        Some(*a)
-    } else if b.grade == Grade::Failed
-        && a.grade != Grade::Failed
-        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
-    {
-        Some(*b)
-    } else {
-        None
-    }
-}
-
-#[inline(always)]
 fn is_better_scalar(new: BestScalar, old: BestScalar) -> bool {
-    match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
-        (true, false) => return true,
-        (false, true) => return false,
-        _ => {}
-    }
-    new.percent > old.percent
+    is_better_scalar_score(new.grade, new.percent, old.grade, old.percent)
 }
 
 fn ensure_local_score_cache_loaded(profile_id: &str) {
@@ -929,7 +799,7 @@ fn profile_initials_for_id(profile_id: &str) -> Option<String> {
         return None;
     }
     let s = ini.get("userprofile", "PlayerInitials")?;
-    let s = profile::sanitize_player_initials(&s);
+    let s = profile_data::sanitize_player_initials(&s);
     (!s.is_empty()).then_some(s)
 }
 
@@ -1056,8 +926,7 @@ pub fn get_cached_score_for_side(
     // numeric percent matches a cached non-failed score (parity with prior
     // local+gs merge semantics).
     [local, gs, ac].into_iter().flatten().reduce(|a, b| {
-        authoritative_failed_score(&a, &b)
-            .unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+        failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
     })
 }
 
@@ -1122,115 +991,6 @@ pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore
 
 // --- On-disk GrooveStats score storage ---
 
-#[derive(Debug, Clone, Encode, Decode)]
-struct GsScoreEntryV1 {
-    score_percent: f64,
-    grade_code: u8,
-    lamp_index: Option<u8>,
-    username: String,
-    fetched_at_ms: i64,
-}
-
-#[derive(Debug, Clone, Encode, Decode)]
-struct GsScoreEntry {
-    score_percent: f64,
-    grade_code: u8,
-    lamp_index: Option<u8>,
-    lamp_judge_count: Option<u8>,
-    username: String,
-    fetched_at_ms: i64,
-}
-
-const fn grade_to_code(g: Grade) -> u8 {
-    match g {
-        Grade::Quint => 0,
-        Grade::Tier01 => 1,
-        Grade::Tier02 => 2,
-        Grade::Tier03 => 3,
-        Grade::Tier04 => 4,
-        Grade::Tier05 => 5,
-        Grade::Tier06 => 6,
-        Grade::Tier07 => 7,
-        Grade::Tier08 => 8,
-        Grade::Tier09 => 9,
-        Grade::Tier10 => 10,
-        Grade::Tier11 => 11,
-        Grade::Tier12 => 12,
-        Grade::Tier13 => 13,
-        Grade::Tier14 => 14,
-        Grade::Tier15 => 15,
-        Grade::Tier16 => 16,
-        Grade::Tier17 => 17,
-        Grade::Failed => 18,
-    }
-}
-
-const fn grade_from_code(code: u8) -> Grade {
-    match code {
-        0 => Grade::Quint,
-        1 => Grade::Tier01,
-        2 => Grade::Tier02,
-        3 => Grade::Tier03,
-        4 => Grade::Tier04,
-        5 => Grade::Tier05,
-        6 => Grade::Tier06,
-        7 => Grade::Tier07,
-        8 => Grade::Tier08,
-        9 => Grade::Tier09,
-        10 => Grade::Tier10,
-        11 => Grade::Tier11,
-        12 => Grade::Tier12,
-        13 => Grade::Tier13,
-        14 => Grade::Tier14,
-        15 => Grade::Tier15,
-        16 => Grade::Tier16,
-        17 => Grade::Tier17,
-        _ => Grade::Failed,
-    }
-}
-
-fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> GsScoreEntry {
-    let score = fix_gs_cached_score(score);
-    GsScoreEntry {
-        score_percent: score.score_percent,
-        grade_code: grade_to_code(score.grade),
-        lamp_index: score.lamp_index,
-        lamp_judge_count: score.lamp_judge_count,
-        username: username.to_string(),
-        fetched_at_ms,
-    }
-}
-
-fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
-    fix_gs_cached_score(cached_score(
-        grade_from_code(entry.grade_code),
-        entry.score_percent,
-        entry.lamp_index,
-        entry.lamp_judge_count,
-    ))
-}
-
-fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
-    if let Ok((entry, _)) =
-        bincode::decode_from_slice::<GsScoreEntry, _>(bytes, bincode::config::standard())
-    {
-        return Some(entry);
-    }
-    if let Ok((v1, _)) =
-        bincode::decode_from_slice::<GsScoreEntryV1, _>(bytes, bincode::config::standard())
-    {
-        return Some(GsScoreEntry {
-            score_percent: v1.score_percent,
-            grade_code: v1.grade_code,
-            lamp_index: v1.lamp_index,
-            lamp_judge_count: None,
-            username: v1.username,
-            fetched_at_ms: v1.fetched_at_ms,
-        });
-    }
-    None
-}
-
 fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScore>) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
@@ -1262,7 +1022,7 @@ fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScor
         let Some(entry) = decode_gs_score_entry(&bytes) else {
             continue;
         };
-        let cached = cached_from_entry(&entry);
+        let cached = cached_score_from_gs_entry(&entry);
 
         match best_by_chart.get_mut(chart_hash) {
             Some(existing) => {
@@ -1344,7 +1104,7 @@ fn append_gs_score_on_disk_for_profile(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
-    let new_entry = entry_from_cached(score, username, fetched_at_ms);
+    let new_entry = gs_score_entry_from_cached(score, username, fetched_at_ms);
 
     let epsilon = 1e-9_f64;
     for existing in &entries {
@@ -1368,230 +1128,23 @@ fn append_gs_score_on_disk_for_profile(
     let file_name = format!("{chart_hash}-{fetched_at_ms}.bin");
     let path = dir.join(file_name);
 
-    match bincode::encode_to_vec(&new_entry, bincode::config::standard()) {
-        Ok(buf) => {
+    match encode_gs_score_entry(&new_entry) {
+        Some(buf) => {
             if let Err(e) = fs::write(&path, buf) {
                 warn!("Failed to write GrooveStats score file {path:?}: {e}");
             } else {
                 debug!("Stored GrooveStats score on disk for chart {chart_hash} at {path:?}");
             }
         }
-        Err(e) => {
-            warn!("Failed to encode GrooveStats score for chart {chart_hash}: {e}");
+        None => {
+            warn!("Failed to encode GrooveStats score for chart {chart_hash}");
         }
     }
 }
 
 // --- On-disk local score storage (one file per play) ---
 
-const LOCAL_SCORE_VERSION_V1: u16 = 1;
-
-#[derive(Debug, Clone, Copy, Encode, Decode)]
-struct LocalReplayEdgeV1 {
-    event_music_time_ns: SongTimeNs,
-    lane: u8,
-    pressed: bool,
-    // 0 = Keyboard, 1 = Gamepad
-    source: u8,
-}
-
-#[derive(Debug, Clone, Encode, Decode)]
-struct LocalScoreEntryHeaderV1 {
-    version: u16,
-    played_at_ms: i64,
-    music_rate: f32,
-    score_percent: f64,
-    grade_code: u8,
-    lamp_index: Option<u8>,
-    lamp_judge_count: Option<u8>,
-    ex_score_percent: f64,
-    hard_ex_score_percent: f64,
-    // Fantastic, Excellent, Great, Decent, WayOff, Miss (row judgments)
-    judgment_counts: [u32; 6],
-    holds_held: u32,
-    holds_total: u32,
-    rolls_held: u32,
-    rolls_total: u32,
-    mines_avoided: u32,
-    mines_total: u32,
-    hands_achieved: u32,
-    fail_time: Option<f32>,
-    beat0_time_ns: SongTimeNs,
-}
-
-#[derive(Debug, Clone, Encode, Decode)]
-struct LocalScoreEntryV1 {
-    version: u16,
-    played_at_ms: i64,
-    music_rate: f32,
-    score_percent: f64,
-    grade_code: u8,
-    lamp_index: Option<u8>,
-    lamp_judge_count: Option<u8>,
-    ex_score_percent: f64,
-    hard_ex_score_percent: f64,
-    judgment_counts: [u32; 6],
-    holds_held: u32,
-    holds_total: u32,
-    rolls_held: u32,
-    rolls_total: u32,
-    mines_avoided: u32,
-    mines_total: u32,
-    hands_achieved: u32,
-    fail_time: Option<f32>,
-    beat0_time_ns: SongTimeNs,
-    replay: Vec<LocalReplayEdgeV1>,
-}
-
-#[inline(always)]
-fn local_lamp_judge_count(count: u32) -> Option<u8> {
-    if (1..=9).contains(&count) {
-        Some(count as u8)
-    } else {
-        None
-    }
-}
-
-fn compute_local_lamp(
-    counts: [u32; 6],
-    grade: Grade,
-    white_fantastics: Option<u32>,
-) -> (Option<u8>, Option<u8>) {
-    if grade == Grade::Failed {
-        return (None, None);
-    }
-    if grade == Grade::Quint {
-        return (Some(0), None);
-    }
-
-    let excellent = counts[1];
-    let great = counts[2];
-    let decent = counts[3];
-    let wayoff = counts[4];
-    let miss = counts[5];
-
-    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 && excellent == 0 {
-        return (Some(1), white_fantastics.and_then(local_lamp_judge_count));
-    }
-    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 {
-        return (Some(2), local_lamp_judge_count(excellent));
-    }
-    if miss == 0 && wayoff == 0 && decent == 0 {
-        return (Some(3), local_lamp_judge_count(great));
-    }
-    if miss == 0 && wayoff == 0 {
-        return (Some(4), local_lamp_judge_count(decent));
-    }
-    (None, None)
-}
-
-#[inline(always)]
-const fn local_score_grade(grade_code: u8, has_fail_time: bool) -> Grade {
-    if has_fail_time {
-        Grade::Failed
-    } else {
-        grade_from_code(grade_code)
-    }
-}
-
-#[inline(always)]
-fn cached_score(
-    grade: Grade,
-    score_percent: f64,
-    lamp_index: Option<u8>,
-    lamp_judge_count: Option<u8>,
-) -> CachedScore {
-    if grade == Grade::Failed {
-        CachedScore {
-            grade,
-            score_percent,
-            lamp_index: None,
-            lamp_judge_count: None,
-        }
-    } else {
-        CachedScore {
-            grade,
-            score_percent,
-            lamp_index,
-            lamp_judge_count,
-        }
-    }
-}
-
-#[inline(always)]
-const fn non_quint_grade(grade: Grade) -> Grade {
-    match grade {
-        Grade::Quint => Grade::Tier01,
-        _ => grade,
-    }
-}
-
-#[inline(always)]
-fn fix_quint_grade_ex(grade: Grade, ex_score_percent: f64) -> Grade {
-    if grade == Grade::Failed {
-        Grade::Failed
-    } else {
-        promote_quint_grade(non_quint_grade(grade), ex_score_percent)
-    }
-}
-
-#[inline(always)]
-fn fix_quint_grade_lamp(grade: Grade, score_percent: f64, lamp_index: Option<u8>) -> Grade {
-    if grade == Grade::Failed {
-        return Grade::Failed;
-    }
-    let grade = if grade == Grade::Quint {
-        score_to_grade(score_percent.clamp(0.0, 1.0) * 10000.0)
-    } else {
-        grade
-    };
-    if lamp_index == Some(0) {
-        Grade::Quint
-    } else {
-        grade
-    }
-}
-
-#[inline(always)]
-fn fix_gs_cached_score(score: CachedScore) -> CachedScore {
-    cached_score(
-        fix_quint_grade_lamp(score.grade, score.score_percent, score.lamp_index),
-        score.score_percent,
-        score.lamp_index,
-        score.lamp_judge_count,
-    )
-}
-
-#[inline(always)]
-fn cached_local_score_from_header(h: &LocalScoreEntryHeaderV1) -> CachedScore {
-    let grade = fix_quint_grade_ex(
-        local_score_grade(h.grade_code, h.fail_time.is_some()),
-        h.ex_score_percent,
-    );
-    let (lamp_index, lamp_judge_count) = if grade == Grade::Quint {
-        (Some(0), None)
-    } else if h.lamp_index == Some(0) {
-        compute_local_lamp(h.judgment_counts, grade, None)
-    } else {
-        (h.lamp_index, h.lamp_judge_count)
-    };
-    cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
-}
-
-fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreEntryHeaderV1> {
-    let Ok((h, _)) = bincode::decode_from_slice::<LocalScoreEntryHeaderV1, _>(
-        bytes,
-        bincode::config::standard(),
-    ) else {
-        return None;
-    };
-    if h.version != LOCAL_SCORE_VERSION_V1 {
-        return None;
-    }
-    Some(h)
-}
-
-fn read_local_score_header(path: &Path) -> Option<LocalScoreEntryHeaderV1> {
+fn read_local_score_header(path: &Path) -> Option<LocalScoreHeader> {
     // Local score files include replay data; for indexing we only need the prefix.
     // A 1KiB prefix comfortably covers the fixed header fields.
     let file = fs::File::open(path).ok()?;
@@ -1602,15 +1155,9 @@ fn read_local_score_header(path: &Path) -> Option<LocalScoreEntryHeaderV1> {
     decode_local_score_header(&buf)
 }
 
-fn read_local_score_entry(path: &Path) -> Option<LocalScoreEntryV1> {
+fn read_local_score_entry(path: &Path) -> Option<LocalScoreEntry> {
     let bytes = fs::read(path).ok()?;
-    let (entry, _) =
-        bincode::decode_from_slice::<LocalScoreEntryV1, _>(&bytes, bincode::config::standard())
-            .ok()?;
-    if entry.version != LOCAL_SCORE_VERSION_V1 {
-        return None;
-    }
-    Some(entry)
+    decode_local_score_entry(&bytes)
 }
 
 fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
@@ -1642,7 +1189,7 @@ fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
             continue;
         };
 
-        let cached = cached_local_score_from_header(&h);
+        let cached = cached_score_from_local_header(&h);
         let grade = cached.grade;
 
         match index.best_itg.get_mut(chart_hash) {
@@ -1718,9 +1265,9 @@ fn load_local_score_index(root: &Path) -> LocalScoreIndex {
 fn update_local_index_with_header(
     idx: &mut LocalScoreIndex,
     chart_hash: &str,
-    h: &LocalScoreEntryHeaderV1,
+    h: &LocalScoreHeader,
 ) {
-    let cached = cached_local_score_from_header(h);
+    let cached = cached_score_from_local_header(h);
     let grade = cached.grade;
     match idx.best_itg.get_mut(chart_hash) {
         Some(existing) => {
@@ -1768,7 +1315,7 @@ fn append_local_score_on_disk(
     profile_id: &str,
     profile_initials: &str,
     chart_hash: &str,
-    entry: &mut LocalScoreEntryV1,
+    entry: &mut LocalScoreEntry,
 ) {
     let shard = shard2_for_hash(chart_hash);
     let dir = local_scores_root_for_profile(profile_id).join(shard);
@@ -1787,7 +1334,7 @@ fn append_local_score_on_disk(
     entry.played_at_ms = played_at_ms;
 
     let tmp_path = dir.join(format!(".{chart_hash}-{played_at_ms}.tmp"));
-    let Ok(buf) = bincode::encode_to_vec(&*entry, bincode::config::standard()) else {
+    let Some(buf) = encode_local_score_entry(entry) else {
         warn!("Failed to encode local score for chart {chart_hash}");
         return;
     };
@@ -1802,27 +1349,7 @@ fn append_local_score_on_disk(
     }
 
     // Update in-memory cache if it's already loaded for this profile.
-    let header = LocalScoreEntryHeaderV1 {
-        version: entry.version,
-        played_at_ms: entry.played_at_ms,
-        music_rate: entry.music_rate,
-        score_percent: entry.score_percent,
-        grade_code: entry.grade_code,
-        lamp_index: entry.lamp_index,
-        lamp_judge_count: entry.lamp_judge_count,
-        ex_score_percent: entry.ex_score_percent,
-        hard_ex_score_percent: entry.hard_ex_score_percent,
-        judgment_counts: entry.judgment_counts,
-        holds_held: entry.holds_held,
-        holds_total: entry.holds_total,
-        rolls_held: entry.rolls_held,
-        rolls_total: entry.rolls_total,
-        mines_avoided: entry.mines_avoided,
-        mines_total: entry.mines_total,
-        hands_achieved: entry.hands_achieved,
-        fail_time: entry.fail_time,
-        beat0_time_ns: entry.beat0_time_ns,
-    };
+    let header = entry.header();
     let loaded_snapshot = {
         let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
         if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
@@ -1841,7 +1368,7 @@ fn append_local_score_on_disk(
         save_local_score_index_file(&index_path, &index);
     }
 
-    let cached = cached_local_score_from_header(&header);
+    let cached = cached_score_from_local_header(&header);
     update_machine_cache_if_loaded(chart_hash, cached, profile_initials);
 }
 
@@ -1849,7 +1376,7 @@ fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
     p.judgment_counts
 }
 
-fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdgeV1> {
+fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdge> {
     if player >= gs.num_players {
         return Vec::new();
     }
@@ -1871,16 +1398,12 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
         {
             continue;
         }
-        let source = match e.source {
-            InputSource::Keyboard => 0,
-            InputSource::Gamepad => 1,
-        };
-        out.push(LocalReplayEdgeV1 {
-            event_music_time_ns: e.event_music_time_ns,
-            lane: (lane - col_start) as u8,
-            pressed: e.pressed,
-            source,
-        });
+        out.push(LocalReplayEdge::new(
+            e.event_music_time_ns,
+            (lane - col_start) as u8,
+            e.pressed,
+            e.source,
+        ));
     }
     out
 }
@@ -1991,8 +1514,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, white_fantastics);
         let replay = replay_edges_for_player(gs, player_idx);
 
-        let mut entry = LocalScoreEntryV1 {
-            version: LOCAL_SCORE_VERSION_V1,
+        let mut entry = LocalScoreEntry {
+            version: LOCAL_SCORE_VERSION,
             played_at_ms: now_ms,
             music_rate: gs.music_rate,
             score_percent,
@@ -2094,8 +1617,8 @@ pub fn save_local_summary_score_for_side(
     ];
     let (lamp_index, lamp_judge_count) =
         compute_local_lamp(counts, summary.grade, Some(summary.window_counts.w1));
-    let mut entry = LocalScoreEntryV1 {
-        version: LOCAL_SCORE_VERSION_V1,
+    let mut entry = LocalScoreEntry {
+        version: LOCAL_SCORE_VERSION,
         played_at_ms: now_ms,
         music_rate: if music_rate.is_finite() && music_rate > 0.0 {
             music_rate
@@ -2140,7 +1663,7 @@ struct PlayerLeaderboardCacheKey {
 }
 
 pub fn scorebox_profile_snapshot(
-    player_profile: &profile::Profile,
+    player_profile: &profile_data::Profile,
     side_joined: bool,
     persistent_profile_id: Option<String>,
 ) -> GameplayScoreboxProfileSnapshot {
@@ -2366,20 +1889,6 @@ fn cached_score_from_gs(
     cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
 }
 
-#[inline(always)]
-fn replaces_stale_inferred_quint(
-    score: &CachedScore,
-    existing: &CachedScore,
-    proves_nonquint_ex: bool,
-) -> bool {
-    proves_nonquint_ex
-        && existing.grade == Grade::Quint
-        && existing.lamp_index == Some(0)
-        && score.grade == Grade::Tier01
-        && score.lamp_index == Some(1)
-        && same_score_10000(cached_score_10000(score), cached_score_10000(existing))
-}
-
 fn cache_gs_score_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -2389,7 +1898,7 @@ fn cache_gs_score_for_profile(
 ) {
     let score = fix_gs_cached_score(score);
     if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
-        && !replaces_stale_inferred_quint(&score, &existing, proves_nonquint_ex)
+        && !replaces_stale_quint(&score, &existing, proves_nonquint_ex)
         && !(score.grade == Grade::Failed
             && existing.grade != Grade::Failed
             && same_score_10000(cached_score_10000(&score), cached_score_10000(&existing)))
@@ -2653,23 +2162,13 @@ fn boxed_online_status_error(
 /// preserves AC-native fields (server grade enum, played-at timestamp, play
 /// id) rather than collapsing into the GS-shaped `CachedScore`.
 fn arrowcloud_score_from_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option<ArrowCloudScore> {
-    let percent_0_100 = entry.score?.clamp(0.0, 100.0);
-    let server_grade = entry
-        .grade
-        .as_deref()
-        .and_then(ArrowCloudServerGrade::from_server_str);
-    let played_at = entry
-        .date
-        .as_deref()
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&Utc));
-    Some(ArrowCloudScore {
-        score_percent: percent_0_100 / 100.0,
-        server_grade,
-        played_at,
-        play_id: entry.play_id,
-        is_fail: entry.is_fail,
-    })
+    arrowcloud_score_from_retrieve_fields(
+        entry.score,
+        entry.grade.as_deref(),
+        entry.date.as_deref(),
+        entry.play_id,
+        entry.is_fail,
+    )
 }
 
 fn arrowcloud_scores_from_entry_map(
@@ -2680,17 +2179,10 @@ fn arrowcloud_scores_from_entry_map(
         let Ok(lb_id) = lb_id_raw.parse::<u32>() else {
             continue;
         };
-        let Some(variant) = ArrowCloudLeaderboard::from_id(lb_id) else {
-            continue; // Ignore event/non-global leaderboards.
-        };
         let Some(score) = arrowcloud_score_from_entry(entry) else {
             continue; // Ignore malformed entries with no score field.
         };
-        match variant {
-            ArrowCloudLeaderboard::Itg => out.itg = Some(score),
-            ArrowCloudLeaderboard::Ex => out.ex = Some(score),
-            ArrowCloudLeaderboard::HardEx => out.hard_ex = Some(score),
-        }
+        set_arrowcloud_score_for_leaderboard(&mut out, lb_id, score);
     }
     out
 }
@@ -3348,7 +2840,7 @@ struct MachineReplayPlay {
     played_at_ms: i64,
     is_fail: bool,
     replay_beat0_time_ns: SongTimeNs,
-    replay: Vec<LocalReplayEdgeV1>,
+    replay: Vec<LocalReplayEdge>,
 }
 
 fn push_machine_leaderboard_from_dir(
@@ -3572,16 +3064,11 @@ pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<Ma
             if gameplay::song_time_ns_invalid(edge.event_music_time_ns) {
                 continue;
             }
-            let source = if edge.source == 1 {
-                InputSource::Gamepad
-            } else {
-                InputSource::Keyboard
-            };
             replay.push(ReplayEdge {
                 event_music_time_ns: edge.event_music_time_ns,
                 lane_index: edge.lane,
                 pressed: edge.pressed,
-                source,
+                source: edge.input_source(),
             });
         }
         out.push(MachineReplayEntry {
@@ -4635,7 +4122,8 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_score::{leaderboard_rank_for_score, lua_submit_allowed};
+    use chrono::Utc;
+    use deadsync_score::{ArrowCloudServerGrade, leaderboard_rank_for_score, lua_submit_allowed};
 
     #[test]
     fn lua_chart_submit_allowlist_matches_known_hashes() {
@@ -4780,8 +4268,8 @@ mod tests {
     }
 
     #[test]
-    fn cached_from_entry_downgrades_stale_quint_without_quint_lamp() {
-        let cached = cached_from_entry(&GsScoreEntry {
+    fn cached_score_from_gs_entry_downgrades_stale_quint_without_quint_lamp() {
+        let cached = cached_score_from_gs_entry(&GsScoreEntry {
             score_percent: 1.0,
             grade_code: grade_to_code(Grade::Quint),
             lamp_index: Some(1),
@@ -4796,8 +4284,8 @@ mod tests {
     }
 
     #[test]
-    fn cached_from_entry_promotes_quint_from_quint_lamp() {
-        let cached = cached_from_entry(&GsScoreEntry {
+    fn cached_score_from_gs_entry_promotes_quint_from_quint_lamp() {
+        let cached = cached_score_from_gs_entry(&GsScoreEntry {
             score_percent: 1.0,
             grade_code: grade_to_code(Grade::Tier01),
             lamp_index: Some(0),
@@ -4828,60 +4316,6 @@ mod tests {
             compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
             (Some(0), None)
         );
-    }
-
-    #[test]
-    fn is_better_itg_prefers_richer_tied_score() {
-        let quad = CachedScore {
-            grade: Grade::Tier01,
-            score_percent: 1.0,
-            lamp_index: Some(1),
-            lamp_judge_count: Some(3),
-        };
-        let quint = CachedScore {
-            grade: Grade::Quint,
-            score_percent: 1.0,
-            lamp_index: Some(0),
-            lamp_judge_count: None,
-        };
-        let bland_quad = CachedScore {
-            grade: Grade::Tier01,
-            score_percent: 1.0,
-            lamp_index: Some(1),
-            lamp_judge_count: None,
-        };
-
-        assert!(is_better_itg(&quint, &quad));
-        assert!(is_better_itg(&quad, &bland_quad));
-        assert!(!is_better_itg(&bland_quad, &quad));
-    }
-
-    #[test]
-    fn stale_inferred_quint_replacement_requires_nonperfect_ex() {
-        let stale_quint = CachedScore {
-            grade: Grade::Quint,
-            score_percent: 1.0,
-            lamp_index: Some(0),
-            lamp_judge_count: None,
-        };
-        let corrected_quad = CachedScore {
-            grade: Grade::Tier01,
-            score_percent: 1.0,
-            lamp_index: Some(1),
-            lamp_judge_count: None,
-        };
-
-        assert!(replaces_stale_inferred_quint(
-            &corrected_quad,
-            &stale_quint,
-            true
-        ));
-        assert!(!replaces_stale_inferred_quint(
-            &corrected_quad,
-            &stale_quint,
-            false
-        ));
-        assert!(!is_better_itg(&corrected_quad, &stale_quint));
     }
 
     #[test]
@@ -5157,9 +4591,9 @@ mod tests {
     }
 
     #[test]
-    fn cached_local_score_from_header_treats_fail_time_as_failed() {
-        let header = LocalScoreEntryHeaderV1 {
-            version: LOCAL_SCORE_VERSION_V1,
+    fn cached_score_from_local_header_treats_fail_time_as_failed() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
             played_at_ms: 0,
             music_rate: 1.0,
             score_percent: 0.9482,
@@ -5180,7 +4614,7 @@ mod tests {
             beat0_time_ns: 0,
         };
 
-        let cached = cached_local_score_from_header(&header);
+        let cached = cached_score_from_local_header(&header);
 
         assert_eq!(cached.grade, Grade::Failed);
         assert_eq!(cached.score_percent, 0.9482);
@@ -5189,9 +4623,9 @@ mod tests {
     }
 
     #[test]
-    fn cached_local_score_from_header_downgrades_stale_quint() {
-        let header = LocalScoreEntryHeaderV1 {
-            version: LOCAL_SCORE_VERSION_V1,
+    fn cached_score_from_local_header_downgrades_stale_quint() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
             played_at_ms: 0,
             music_rate: 1.0,
             score_percent: 1.0,
@@ -5212,7 +4646,7 @@ mod tests {
             beat0_time_ns: 0,
         };
 
-        let cached = cached_local_score_from_header(&header);
+        let cached = cached_score_from_local_header(&header);
 
         assert_eq!(cached.grade, Grade::Tier01);
         assert_eq!(cached.lamp_index, Some(1));
@@ -5220,9 +4654,9 @@ mod tests {
     }
 
     #[test]
-    fn cached_local_score_from_header_promotes_perfect_ex_to_quint() {
-        let header = LocalScoreEntryHeaderV1 {
-            version: LOCAL_SCORE_VERSION_V1,
+    fn cached_score_from_local_header_promotes_perfect_ex_to_quint() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
             played_at_ms: 0,
             music_rate: 1.0,
             score_percent: 1.0,
@@ -5243,7 +4677,7 @@ mod tests {
             beat0_time_ns: 0,
         };
 
-        let cached = cached_local_score_from_header(&header);
+        let cached = cached_score_from_local_header(&header);
 
         assert_eq!(cached.grade, Grade::Quint);
         assert_eq!(cached.lamp_index, Some(0));

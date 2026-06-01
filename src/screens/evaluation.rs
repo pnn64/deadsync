@@ -44,7 +44,6 @@ use std::time::Instant;
 
 use crate::engine::input::RawKeyboardEvent;
 use crate::game::profile;
-use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_online::groovestats as groovestats_api;
@@ -109,6 +108,25 @@ const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner11.png",
     "banner12.png",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScatterWindow {
+    FantasticPlus,
+    Fantastic,
+    Great,
+}
+
+impl ScatterWindow {
+    #[inline]
+    fn ms(self) -> f32 {
+        let tw = timing_stats::effective_windows_ms();
+        match self {
+            ScatterWindow::FantasticPlus => timing_stats::FA_PLUS_W0_MS,
+            ScatterWindow::Fantastic => tw[0],
+            ScatterWindow::Great => tw[2],
+        }
+    }
+}
 
 thread_local! {
     static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));

@@ -1,4 +1,3 @@
-use crate::game::profile;
 use deadsync_chart::{ChartData, GameplayChartData};
 use deadsync_profile::{AttackMode, MeasureCounter, MiniIndicator, TargetScoreSetting};
 use deadsync_rules::judgment;
@@ -19,7 +18,7 @@ fn chart_has_attacks(chart: &ChartData) -> bool {
 }
 
 #[inline(always)]
-pub(crate) fn mini_indicator_mode(profile: &profile::Profile) -> MiniIndicator {
+pub(crate) fn mini_indicator_mode(profile: &deadsync_profile::Profile) -> MiniIndicator {
     if profile.mini_indicator != MiniIndicator::None {
         profile.mini_indicator
     } else if profile.subtractive_scoring {
@@ -32,7 +31,7 @@ pub(crate) fn mini_indicator_mode(profile: &profile::Profile) -> MiniIndicator {
 }
 
 #[inline(always)]
-pub(crate) fn needs_stream_data(profile: &profile::Profile) -> bool {
+pub(crate) fn needs_stream_data(profile: &deadsync_profile::Profile) -> bool {
     profile.measure_counter != MeasureCounter::None
         || mini_indicator_mode(profile) != MiniIndicator::None
 }
@@ -65,7 +64,7 @@ pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSe
 
 pub fn score_invalid_reason_lines_for_chart(
     chart: &ChartData,
-    profile: &profile::Profile,
+    profile: &deadsync_profile::Profile,
     _scroll_speed: ScrollSpeedSetting,
     music_rate: f32,
 ) -> Vec<&'static str> {

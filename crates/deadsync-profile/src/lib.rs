@@ -1,8 +1,16 @@
+use bincode::{Decode, Encode};
 use bitflags::bitflags;
+use chrono::{Datelike, Local};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 pub const PLAYER_SLOTS: usize = 2;
+pub const DEFAULT_PROFILE_ID: &str = "00000000";
+pub const LOCAL_PROFILE_MAX_ID: u32 = 99_999_999;
+pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
+pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
 pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
 pub const DEFAULT_BIRTH_YEAR: i32 = 1995;
 pub const PLAYER_INITIALS_MAX_LEN: usize = 4;
@@ -46,6 +54,69 @@ pub const LONG_ERROR_BAR_BUFFER_CAP_DEFAULT: u32 = 64;
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
+pub const TAP_EXPLOSION_MASK_VERSION: u8 = 2;
+
+#[inline(always)]
+pub const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
+    if weight_pounds == 0 {
+        0
+    } else if weight_pounds < 20 {
+        20
+    } else if weight_pounds > 1000 {
+        1000
+    } else {
+        weight_pounds
+    }
+}
+
+#[inline(always)]
+pub const fn resolved_weight_pounds(weight_pounds: i32) -> i32 {
+    if weight_pounds == 0 {
+        DEFAULT_WEIGHT_POUNDS
+    } else {
+        weight_pounds
+    }
+}
+
+#[inline(always)]
+pub const fn age_years_for_birth_year(birth_year: i32, current_year: i32) -> i32 {
+    if birth_year == 0 {
+        current_year - DEFAULT_BIRTH_YEAR
+    } else {
+        current_year - birth_year
+    }
+}
+
+#[inline(always)]
+pub fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
+    match window {
+        "W0" | "W1" => Some(TapExplosionMask::FANTASTIC),
+        "W2" => Some(TapExplosionMask::EXCELLENT),
+        "W3" => Some(TapExplosionMask::GREAT),
+        "W4" => Some(TapExplosionMask::DECENT),
+        "W5" => Some(TapExplosionMask::WAY_OFF),
+        "Miss" => Some(TapExplosionMask::MISS),
+        "Held" => Some(TapExplosionMask::HELD),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+pub fn tap_explosion_mask_enabled(mask: TapExplosionMask, window: &str) -> bool {
+    let Some(flag) = tap_explosion_mask_for_window(window) else {
+        return false;
+    };
+    mask.contains(flag)
+}
+
+#[inline(always)]
+pub fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
+    let mut mask = TapExplosionMask::from_bits_truncate(bits);
+    if version < TAP_EXPLOSION_MASK_VERSION {
+        mask.insert(TapExplosionMask::MISS | TapExplosionMask::HOLDING);
+    }
+    mask
+}
 
 #[inline(always)]
 pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
@@ -143,10 +214,176 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
     }
 }
 
+pub fn sanitize_player_initials(raw: &str) -> String {
+    let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
+    for ch in raw.chars() {
+        if out.len() >= PLAYER_INITIALS_MAX_LEN {
+            break;
+        }
+        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
+            out.push(ch.to_ascii_uppercase());
+        }
+    }
+    out
+}
+
+pub fn initials_from_name(name: &str) -> String {
+    let mut out = sanitize_player_initials(name);
+    match out.len() {
+        0 => "??".to_string(),
+        1 => {
+            out.push('?');
+            out
+        }
+        _ => out,
+    }
+}
+
+pub fn parse_profile_bool(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+pub fn parse_groovestats_is_pad_player(value: Option<&str>, default: bool) -> bool {
+    value
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default, |v| v == 1)
+}
+
+pub fn parse_last_played_value(value: Option<&str>) -> Option<String> {
+    value.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[inline(always)]
+pub fn is_local_profile_id(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 64 && s != "." && s != ".." && !s.contains(['/', '\\', '\0'])
+}
+
+#[inline(always)]
+pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .cmp(b.chars().flat_map(char::to_lowercase))
+        .then_with(|| a.cmp(b))
+}
+
+pub fn next_local_profile_id(existing: Vec<u32>) -> Option<String> {
+    next_local_profile_number(existing, LOCAL_PROFILE_MAX_ID).map(|n| format!("{n:08}"))
+}
+
+pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> String {
+    let mut out = String::with_capacity(src.len() + display_name.len() + 32);
+    let mut in_userprofile = false;
+    let mut saw_userprofile = false;
+    let mut wrote_display = false;
+
+    for raw_line in src.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_userprofile && !wrote_display {
+                out.push_str("DisplayName=");
+                out.push_str(display_name);
+                out.push('\n');
+                wrote_display = true;
+            }
+            let section = trimmed[1..trimmed.len() - 1].trim();
+            in_userprofile = section.eq_ignore_ascii_case("userprofile");
+            if in_userprofile {
+                saw_userprofile = true;
+            }
+            out.push_str(raw_line);
+            out.push('\n');
+            continue;
+        }
+
+        if in_userprofile && let Some(eq) = trimmed.find('=') {
+            let key = trimmed[..eq].trim();
+            if key.eq_ignore_ascii_case("DisplayName") {
+                out.push_str("DisplayName=");
+                out.push_str(display_name);
+                out.push('\n');
+                wrote_display = true;
+                continue;
+            }
+        }
+
+        out.push_str(raw_line);
+        out.push('\n');
+    }
+
+    if !saw_userprofile {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("[userprofile]\n");
+        out.push_str("DisplayName=");
+        out.push_str(display_name);
+        out.push('\n');
+    } else if in_userprofile && !wrote_display {
+        out.push_str("DisplayName=");
+        out.push_str(display_name);
+        out.push('\n');
+    }
+
+    out
+}
+
+fn next_local_profile_number(mut nums: Vec<u32>, max: u32) -> Option<u32> {
+    nums.retain(|&n| n <= max);
+    nums.sort_unstable();
+    nums.dedup();
+
+    let mut first_free = 0_u32;
+    for &n in &nums {
+        if n == first_free {
+            first_free += 1;
+        } else if n > first_free {
+            break;
+        }
+    }
+
+    let mut next = nums.last().copied().unwrap_or(0);
+    if !nums.is_empty() {
+        next = next.saturating_add(1);
+    }
+    if next > max {
+        if first_free > max {
+            None
+        } else {
+            Some(first_free)
+        }
+    } else {
+        Some(next)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveProfile {
     Guest,
     Local { id: String },
+}
+
+#[inline(always)]
+pub fn active_profile_is_guest(profile: &ActiveProfile) -> bool {
+    matches!(profile, ActiveProfile::Guest)
+}
+
+#[inline(always)]
+pub fn active_profile_local_id(profile: &ActiveProfile) -> Option<&str> {
+    match profile {
+        ActiveProfile::Local { id } => Some(id),
+        ActiveProfile::Guest => None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -167,6 +404,14 @@ impl PlayStyle {
     }
 }
 
+#[inline(always)]
+pub const fn player_options_section(style: PlayStyle) -> &'static str {
+    match style {
+        PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
+        PlayStyle::Double => "PlayerOptionsDoubles",
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlayMode {
     #[default]
@@ -179,6 +424,34 @@ pub enum PlayerSide {
     #[default]
     P1,
     P2,
+}
+
+#[inline(always)]
+pub const fn player_side_index(side: PlayerSide) -> usize {
+    match side {
+        PlayerSide::P1 => 0,
+        PlayerSide::P2 => 1,
+    }
+}
+
+#[inline(always)]
+pub const fn player_side_joined_mask(side: PlayerSide) -> u8 {
+    match side {
+        PlayerSide::P1 => SESSION_JOINED_MASK_P1,
+        PlayerSide::P2 => SESSION_JOINED_MASK_P2,
+    }
+}
+
+#[inline(always)]
+pub const fn joined_player_mask(p1: bool, p2: bool) -> u8 {
+    let p1_mask = if p1 { SESSION_JOINED_MASK_P1 } else { 0 };
+    let p2_mask = if p2 { SESSION_JOINED_MASK_P2 } else { 0 };
+    p1_mask | p2_mask
+}
+
+#[inline(always)]
+pub const fn player_side_is_joined(joined_mask: u8, side: PlayerSide) -> bool {
+    joined_mask & player_side_joined_mask(side) != 0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1472,6 +1745,31 @@ impl core::fmt::Display for NoteSkin {
     }
 }
 
+#[inline(always)]
+pub fn resolve_noteskin_choice<'a>(
+    noteskin: Option<&'a NoteSkin>,
+    fallback: &'a NoteSkin,
+) -> &'a NoteSkin {
+    noteskin.unwrap_or(fallback)
+}
+
+#[inline(always)]
+pub fn tap_explosion_skin_hidden(noteskin: Option<&NoteSkin>) -> bool {
+    noteskin.is_some_and(NoteSkin::is_none_choice)
+}
+
+#[inline(always)]
+pub fn resolve_tap_explosion_skin<'a>(
+    noteskin: Option<&'a NoteSkin>,
+    fallback: &'a NoteSkin,
+) -> Option<&'a NoteSkin> {
+    if tap_explosion_skin_hidden(noteskin) {
+        None
+    } else {
+        Some(resolve_noteskin_choice(noteskin, fallback))
+    }
+}
+
 fn normalize_graphic_key(
     raw: &str,
     folder: &str,
@@ -1903,11 +2201,97 @@ pub struct LocalProfileSummary {
     pub avatar_path: Option<PathBuf>,
 }
 
+const PROFILE_STATS_VERSION_V1: u16 = 1;
+
+#[derive(Debug, Clone, Copy, Encode, Decode)]
+struct LegacyProfileStatsV1 {
+    version: u16,
+    current_combo: u32,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct ProfileStatsV1 {
+    version: u16,
+    current_combo: u32,
+    known_pack_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProfileStats {
+    pub current_combo: u32,
+    pub known_pack_names: HashSet<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileStatsDecodeError {
+    UnsupportedVersion(u16),
+    InvalidPayload,
+}
+
+pub fn decode_profile_stats(bytes: &[u8]) -> Result<ProfileStats, ProfileStatsDecodeError> {
+    if let Ok((stats, _)) =
+        bincode::decode_from_slice::<ProfileStatsV1, _>(bytes, bincode::config::standard())
+    {
+        if stats.version != PROFILE_STATS_VERSION_V1 {
+            return Err(ProfileStatsDecodeError::UnsupportedVersion(stats.version));
+        }
+        return Ok(ProfileStats {
+            current_combo: stats.current_combo,
+            known_pack_names: stats.known_pack_names.into_iter().collect(),
+        });
+    }
+    if let Ok((stats, _)) =
+        bincode::decode_from_slice::<LegacyProfileStatsV1, _>(bytes, bincode::config::standard())
+    {
+        if stats.version != PROFILE_STATS_VERSION_V1 {
+            return Err(ProfileStatsDecodeError::UnsupportedVersion(stats.version));
+        }
+        return Ok(ProfileStats {
+            current_combo: stats.current_combo,
+            known_pack_names: HashSet::new(),
+        });
+    }
+    Err(ProfileStatsDecodeError::InvalidPayload)
+}
+
+pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
+    let mut known_pack_names: Vec<String> = stats.known_pack_names.iter().cloned().collect();
+    known_pack_names.sort_unstable();
+    bincode::encode_to_vec(
+        ProfileStatsV1 {
+            version: PROFILE_STATS_VERSION_V1,
+            current_combo: stats.current_combo,
+            known_pack_names,
+        },
+        bincode::config::standard(),
+    )
+    .ok()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LastPlayed {
     pub song_music_path: Option<String>,
     pub chart_hash: Option<String>,
     pub difficulty_index: usize,
+}
+
+pub fn append_last_played_section(content: &mut String, section: &str, last_played: &LastPlayed) {
+    content.push_str(&format!("[{section}]\n"));
+    if let Some(path) = &last_played.song_music_path {
+        content.push_str(&format!("MusicPath={path}\n"));
+    } else {
+        content.push_str("MusicPath=\n");
+    }
+    if let Some(hash) = &last_played.chart_hash {
+        content.push_str(&format!("ChartHash={hash}\n"));
+    } else {
+        content.push_str("ChartHash=\n");
+    }
+    content.push_str(&format!(
+        "DifficultyIndex={}\n",
+        last_played.difficulty_index
+    ));
+    content.push('\n');
 }
 
 impl Default for LastPlayed {
@@ -1925,6 +2309,913 @@ impl Default for LastPlayed {
 pub struct LastPlayedCourse {
     pub course_path: Option<String>,
     pub difficulty_name: Option<String>,
+}
+
+pub fn append_last_played_course_section(
+    content: &mut String,
+    section: &str,
+    last_played: &LastPlayedCourse,
+) {
+    content.push_str(&format!("[{section}]\n"));
+    if let Some(path) = &last_played.course_path {
+        content.push_str(&format!("CoursePath={path}\n"));
+    } else {
+        content.push_str("CoursePath=\n");
+    }
+    if let Some(name) = &last_played.difficulty_name {
+        content.push_str(&format!("DifficultyName={name}\n"));
+    } else {
+        content.push_str("DifficultyName=\n");
+    }
+    content.push('\n');
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerOptionsData {
+    pub background_filter: BackgroundFilter,
+    pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
+    pub judgment_graphic: JudgmentGraphic,
+    pub combo_font: ComboFont,
+    pub combo_colors: ComboColors,
+    pub combo_mode: ComboMode,
+    pub carry_combo_between_songs: bool,
+    pub noteskin: NoteSkin,
+    pub mine_noteskin: Option<NoteSkin>,
+    pub receptor_noteskin: Option<NoteSkin>,
+    pub tap_explosion_noteskin: Option<NoteSkin>,
+    pub tap_explosion_active_mask: TapExplosionMask,
+    pub scroll_speed: ScrollSpeedSetting,
+    pub scroll_option: ScrollOption,
+    pub reverse_scroll: bool,
+    pub turn_option: TurnOption,
+    pub insert_active_mask: InsertMask,
+    pub remove_active_mask: RemoveMask,
+    pub holds_active_mask: HoldsMask,
+    pub accel_effects_active_mask: AccelEffectsMask,
+    pub visual_effects_active_mask: VisualEffectsMask,
+    pub appearance_effects_active_mask: AppearanceEffectsMask,
+    pub attack_mode: AttackMode,
+    pub hide_light_type: HideLightType,
+    pub rescore_early_hits: bool,
+    pub hide_early_dw_judgments: bool,
+    pub hide_early_dw_flash: bool,
+    pub timing_windows: TimingWindowsOption,
+    pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    pub fa_plus_10ms_blue_window: bool,
+    pub split_15_10ms: bool,
+    pub track_early_judgments: bool,
+    pub scale_scatterplot: bool,
+    pub scatterplot_max_window: ScatterplotMaxWindow,
+    pub custom_fantastic_window: bool,
+    pub custom_fantastic_window_ms: u8,
+    pub judgment_tilt: bool,
+    pub column_cues: bool,
+    pub judgment_back: bool,
+    pub error_ms_display: bool,
+    pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
+    pub rainbow_max: bool,
+    pub responsive_colors: bool,
+    pub show_life_percent: bool,
+    pub tilt_multiplier: f32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
+    pub error_bar_active_mask: ErrorBarMask,
+    pub error_bar: ErrorBarStyle,
+    pub error_bar_text: bool,
+    pub text_error_bar_10ms: bool,
+    pub error_bar_up: bool,
+    pub error_bar_multi_tick: bool,
+    pub error_bar_trim: ErrorBarTrim,
+    pub short_average_error_bar_enabled: bool,
+    pub average_error_bar_intensity: f32,
+    pub average_error_bar_interval_ms: u32,
+    pub long_error_bar_enabled: bool,
+    pub long_error_bar_intensity: f32,
+    pub long_error_bar_threshold_ms: u32,
+    pub long_error_bar_min_samples: u32,
+    pub long_error_bar_buffer_cap: u32,
+    pub data_visualizations: DataVisualizations,
+    pub target_score: TargetScoreSetting,
+    pub lifemeter_type: LifeMeterType,
+    pub measure_counter: MeasureCounter,
+    pub measure_counter_lookahead: u8,
+    pub measure_counter_left: bool,
+    pub measure_counter_up: bool,
+    pub measure_counter_vert: bool,
+    pub broken_run: bool,
+    pub run_timer: bool,
+    pub measure_lines: MeasureLines,
+    pub hide_targets: bool,
+    pub hide_song_bg: bool,
+    pub hide_combo: bool,
+    pub hide_lifebar: bool,
+    pub hide_score: bool,
+    pub hide_danger: bool,
+    pub hide_combo_explosions: bool,
+    pub column_flash_on_miss: bool,
+    pub subtractive_scoring: bool,
+    pub pacemaker: bool,
+    pub nps_graph_at_top: bool,
+    pub transparent_density_graph_bg: bool,
+    pub mini_indicator: MiniIndicator,
+    pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_size: MiniIndicatorSize,
+    pub mini_indicator_color: MiniIndicatorColor,
+    pub mini_percent: i32,
+    pub spacing_percent: i32,
+    pub perspective: Perspective,
+    pub note_field_offset_x: i32,
+    pub note_field_offset_y: i32,
+    pub judgment_offset_x: i32,
+    pub judgment_offset_y: i32,
+    pub combo_offset_x: i32,
+    pub combo_offset_y: i32,
+    pub error_bar_offset_x: i32,
+    pub error_bar_offset_y: i32,
+    pub visual_delay_ms: i32,
+    pub global_offset_shift_ms: i32,
+}
+
+fn default_player_options() -> PlayerOptionsData {
+    PlayerOptionsData {
+        background_filter: BackgroundFilter::default(),
+        hold_judgment_graphic: HoldJudgmentGraphic::default(),
+        held_miss_graphic: HeldMissGraphic::default(),
+        judgment_graphic: JudgmentGraphic::default(),
+        combo_font: ComboFont::default(),
+        combo_colors: ComboColors::default(),
+        combo_mode: ComboMode::default(),
+        carry_combo_between_songs: true,
+        noteskin: NoteSkin::default(),
+        mine_noteskin: None,
+        receptor_noteskin: None,
+        tap_explosion_noteskin: None,
+        tap_explosion_active_mask: TapExplosionMask::all(),
+        scroll_speed: ScrollSpeedSetting::default(),
+        scroll_option: ScrollOption::default(),
+        reverse_scroll: false,
+        turn_option: TurnOption::default(),
+        insert_active_mask: InsertMask::empty(),
+        remove_active_mask: RemoveMask::empty(),
+        holds_active_mask: HoldsMask::empty(),
+        accel_effects_active_mask: AccelEffectsMask::empty(),
+        visual_effects_active_mask: VisualEffectsMask::empty(),
+        appearance_effects_active_mask: AppearanceEffectsMask::empty(),
+        attack_mode: AttackMode::default(),
+        hide_light_type: HideLightType::default(),
+        rescore_early_hits: true,
+        hide_early_dw_judgments: false,
+        hide_early_dw_flash: false,
+        timing_windows: TimingWindowsOption::default(),
+        show_fa_plus_window: false,
+        show_ex_score: false,
+        show_hard_ex_score: false,
+        show_fa_plus_pane: false,
+        fa_plus_10ms_blue_window: false,
+        split_15_10ms: false,
+        track_early_judgments: false,
+        scale_scatterplot: false,
+        scatterplot_max_window: ScatterplotMaxWindow::Off,
+        custom_fantastic_window: false,
+        custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
+        judgment_tilt: false,
+        column_cues: false,
+        judgment_back: false,
+        error_ms_display: false,
+        display_scorebox: true,
+        live_timing_stats: false,
+        live_timing_stats_mask: LiveTimingStatsMask::empty(),
+        rainbow_max: false,
+        responsive_colors: false,
+        show_life_percent: false,
+        tilt_multiplier: 1.0,
+        tilt_min_threshold_ms: TILT_MIN_THRESHOLD_DEFAULT_MS,
+        tilt_max_threshold_ms: TILT_MAX_THRESHOLD_DEFAULT_MS,
+        error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
+        error_bar: ErrorBarStyle::default(),
+        error_bar_text: false,
+        text_error_bar_10ms: false,
+        error_bar_up: false,
+        error_bar_multi_tick: false,
+        error_bar_trim: ErrorBarTrim::default(),
+        short_average_error_bar_enabled: true,
+        average_error_bar_intensity: AVERAGE_ERROR_BAR_INTENSITY_DEFAULT,
+        average_error_bar_interval_ms: AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT,
+        long_error_bar_enabled: true,
+        long_error_bar_intensity: LONG_ERROR_BAR_INTENSITY_DEFAULT,
+        long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
+        long_error_bar_min_samples: LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT,
+        long_error_bar_buffer_cap: LONG_ERROR_BAR_BUFFER_CAP_DEFAULT,
+        data_visualizations: DataVisualizations::default(),
+        target_score: TargetScoreSetting::default(),
+        lifemeter_type: LifeMeterType::default(),
+        measure_counter: MeasureCounter::default(),
+        measure_counter_lookahead: 2,
+        measure_counter_left: true,
+        measure_counter_up: false,
+        measure_counter_vert: false,
+        broken_run: false,
+        run_timer: false,
+        measure_lines: MeasureLines::default(),
+        hide_targets: false,
+        hide_song_bg: false,
+        hide_combo: false,
+        hide_lifebar: false,
+        hide_score: false,
+        hide_danger: false,
+        hide_combo_explosions: false,
+        column_flash_on_miss: false,
+        subtractive_scoring: false,
+        pacemaker: false,
+        nps_graph_at_top: false,
+        transparent_density_graph_bg: false,
+        mini_indicator: MiniIndicator::None,
+        mini_indicator_score_type: MiniIndicatorScoreType::Itg,
+        mini_indicator_size: MiniIndicatorSize::Default,
+        mini_indicator_color: MiniIndicatorColor::Default,
+        mini_percent: 0,
+        spacing_percent: 0,
+        perspective: Perspective::default(),
+        note_field_offset_x: 0,
+        note_field_offset_y: 0,
+        judgment_offset_x: 0,
+        judgment_offset_y: 0,
+        combo_offset_x: 0,
+        combo_offset_y: 0,
+        error_bar_offset_x: 0,
+        error_bar_offset_y: 0,
+        visual_delay_ms: 0,
+        global_offset_shift_ms: 0,
+    }
+}
+
+impl Default for PlayerOptionsData {
+    fn default() -> Self {
+        default_player_options()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Profile {
+    pub display_name: String,
+    pub player_initials: String,
+    // Profile stats (Simply Love / StepMania semantics).
+    pub weight_pounds: i32,
+    pub birth_year: i32,
+    pub calories_burned_today: f32,
+    pub calories_burned_day: String,
+    pub ignore_step_count_calories: bool,
+    pub groovestats_api_key: String,
+    pub groovestats_is_pad_player: bool,
+    pub groovestats_username: String,
+    pub arrowcloud_api_key: String,
+    // Style-scoped player options are stored per chart family below.
+    // These top-level fields hold the snapshot currently applied for the
+    // active session play style so existing read paths can stay simple.
+    pub background_filter: BackgroundFilter,
+    pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
+    pub judgment_graphic: JudgmentGraphic,
+    pub combo_font: ComboFont,
+    pub combo_colors: ComboColors,
+    pub combo_mode: ComboMode,
+    pub carry_combo_between_songs: bool,
+    pub current_combo: u32,
+    pub known_pack_names: HashSet<String>,
+    pub favorites: HashSet<String>,
+    pub noteskin: NoteSkin,
+    pub mine_noteskin: Option<NoteSkin>,
+    pub receptor_noteskin: Option<NoteSkin>,
+    pub tap_explosion_noteskin: Option<NoteSkin>,
+    pub tap_explosion_active_mask: TapExplosionMask,
+    pub avatar_path: Option<PathBuf>,
+    pub avatar_texture_key: Option<String>,
+    pub scroll_speed: ScrollSpeedSetting,
+    pub scroll_option: ScrollOption,
+    pub reverse_scroll: bool,
+    pub turn_option: TurnOption,
+    // zmod uncommon modifiers (ScreenPlayerOptions3).
+    // Bit order mirrors row choice order in metrics.ini.
+    pub insert_active_mask: InsertMask,
+    pub remove_active_mask: RemoveMask,
+    pub holds_active_mask: HoldsMask,
+    pub accel_effects_active_mask: AccelEffectsMask,
+    pub visual_effects_active_mask: VisualEffectsMask,
+    pub appearance_effects_active_mask: AppearanceEffectsMask,
+    pub attack_mode: AttackMode,
+    pub hide_light_type: HideLightType,
+    // Allow early Decent/WayOff hits to be rescored to better judgments.
+    pub rescore_early_hits: bool,
+    // Visual behavior for early Decent/Way Off hits (Simply Love semantics).
+    pub hide_early_dw_judgments: bool,
+    pub hide_early_dw_flash: bool,
+    pub timing_windows: TimingWindowsOption,
+    // FA+ visual options (Simply Love semantics).
+    // These do not change core timing semantics; they only affect HUD/UX.
+    pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
+    pub fa_plus_10ms_blue_window: bool,
+    // zmod SplitWhites: keep the 15ms blue FA+ judgment base and overlay the
+    // white Fantastic art for 10ms-15ms hits. Visual only.
+    pub split_15_10ms: bool,
+    // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
+    pub track_early_judgments: bool,
+    // Constrain the evaluation scatter plot's vertical scale to a Great
+    // upper cap and a Fantastic lower floor (zmod's `ScaleGraph`-style
+    // toggle). Off uses the original behavior of an Excellent floor with
+    // no upper cap.
+    pub scale_scatterplot: bool,
+    // Hard cap for the evaluation scatter plot's vertical scale. When
+    // anything other than `Off`, this overrides `scale_scatterplot`'s
+    // tier-snapped behavior and clamps the worst-window ms to the
+    // selected judgment tier (Chris's SL `ScaleGraph`-per-tier semantics).
+    pub scatterplot_max_window: ScatterplotMaxWindow,
+    // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
+    pub custom_fantastic_window: bool,
+    pub custom_fantastic_window_ms: u8,
+    // Judgment tilt (Simply Love semantics).
+    pub judgment_tilt: bool,
+    pub column_cues: bool,
+    // zmod ExtraAesthetics: draw judgments/error timing HUD behind notes.
+    pub judgment_back: bool,
+    // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
+    pub error_ms_display: bool,
+    pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
+    // zmod LifeBarOptions (Arrow Cloud semantics).
+    pub rainbow_max: bool,
+    pub responsive_colors: bool,
+    pub show_life_percent: bool,
+    pub tilt_multiplier: f32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
+    // Error bar (zmod semantics): each bit toggles one submodule in the
+    // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
+    pub error_bar_active_mask: ErrorBarMask,
+    pub error_bar: ErrorBarStyle,
+    // Backward-compatible text flag written to profile.ini.
+    pub error_bar_text: bool,
+    // Optional Text error bar mode that surfaces >10ms hits independently
+    // of the active judgment windows.
+    pub text_error_bar_10ms: bool,
+    pub error_bar_up: bool,
+    pub error_bar_multi_tick: bool,
+    pub error_bar_trim: ErrorBarTrim,
+    pub short_average_error_bar_enabled: bool,
+    pub average_error_bar_intensity: f32,
+    pub average_error_bar_interval_ms: u32,
+    pub long_error_bar_enabled: bool,
+    pub long_error_bar_intensity: f32,
+    pub long_error_bar_threshold_ms: u32,
+    pub long_error_bar_min_samples: u32,
+    pub long_error_bar_buffer_cap: u32,
+    pub data_visualizations: DataVisualizations,
+    pub target_score: TargetScoreSetting,
+    pub lifemeter_type: LifeMeterType,
+    pub measure_counter: MeasureCounter,
+    pub measure_counter_lookahead: u8,
+    pub measure_counter_left: bool,
+    pub measure_counter_up: bool,
+    pub measure_counter_vert: bool,
+    pub broken_run: bool,
+    pub run_timer: bool,
+    pub measure_lines: MeasureLines,
+    // "Hide" options (Simply Love semantics).
+    pub hide_targets: bool,
+    pub hide_song_bg: bool,
+    pub hide_combo: bool,
+    pub hide_lifebar: bool,
+    pub hide_score: bool,
+    pub hide_danger: bool,
+    pub hide_combo_explosions: bool,
+    // Gameplay extras (Simply Love semantics).
+    pub column_flash_on_miss: bool,
+    pub subtractive_scoring: bool,
+    pub pacemaker: bool,
+    pub nps_graph_at_top: bool,
+    pub transparent_density_graph_bg: bool,
+    pub mini_indicator: MiniIndicator,
+    pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_size: MiniIndicatorSize,
+    pub mini_indicator_color: MiniIndicatorColor,
+    // Mini modifier as a percentage, mirroring Simply Love semantics.
+    // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
+    pub mini_percent: i32,
+    /// Horizontal spacing between note columns as a percentage (zmod parity).
+    /// 0 = noteskin default, +N% scales lateral column offsets by
+    /// `1 + N/100`. Range -100..=100 (capped on read to stay sane).
+    pub spacing_percent: i32,
+    pub perspective: Perspective,
+    // NoteField positional offsets (Simply Love semantics).
+    // X is non-negative and interpreted relative to player side:
+    // for P1, positive values move the field left.
+    pub note_field_offset_x: i32,
+    // Y is applied directly to the notefield and related HUD,
+    // positive values move everything down.
+    pub note_field_offset_y: i32,
+    // Independent HUD element offsets in logical pixels.
+    // Positive X = right, positive Y = down.
+    pub judgment_offset_x: i32,
+    pub judgment_offset_y: i32,
+    pub combo_offset_x: i32,
+    pub combo_offset_y: i32,
+    pub error_bar_offset_x: i32,
+    pub error_bar_offset_y: i32,
+    // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
+    // Negative values shift arrows upwards; positive values shift them down.
+    pub visual_delay_ms: i32,
+    // Per-player timing shift applied on top of machine global offset. Stored in milliseconds.
+    pub global_offset_shift_ms: i32,
+    pub player_options_singles: PlayerOptionsData,
+    pub player_options_doubles: PlayerOptionsData,
+    // Persisted "last played" selections so future sessions can reopen
+    // SelectMusic on the most recently played chart for each chart family.
+    // Singles is shared by Single and Versus. Double uses its own entry.
+    pub last_played_singles: LastPlayed,
+    pub last_played_doubles: LastPlayed,
+    pub last_played_course_singles: LastPlayedCourse,
+    pub last_played_course_doubles: LastPlayedCourse,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        let player_options = PlayerOptionsData::default();
+        Self {
+            display_name: "Player 1".to_string(),
+            player_initials: "P1".to_string(),
+            weight_pounds: 0,
+            birth_year: 0,
+            calories_burned_today: 0.0,
+            calories_burned_day: String::new(),
+            ignore_step_count_calories: false,
+            groovestats_api_key: String::new(),
+            groovestats_is_pad_player: false,
+            groovestats_username: String::new(),
+            arrowcloud_api_key: String::new(),
+            background_filter: player_options.background_filter,
+            hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
+            held_miss_graphic: player_options.held_miss_graphic.clone(),
+            judgment_graphic: player_options.judgment_graphic.clone(),
+            combo_font: player_options.combo_font,
+            combo_colors: player_options.combo_colors,
+            combo_mode: player_options.combo_mode,
+            carry_combo_between_songs: player_options.carry_combo_between_songs,
+            current_combo: 0,
+            known_pack_names: HashSet::new(),
+            favorites: HashSet::new(),
+            noteskin: player_options.noteskin.clone(),
+            mine_noteskin: player_options.mine_noteskin.clone(),
+            receptor_noteskin: player_options.receptor_noteskin.clone(),
+            tap_explosion_noteskin: player_options.tap_explosion_noteskin.clone(),
+            tap_explosion_active_mask: player_options.tap_explosion_active_mask,
+            avatar_path: None,
+            avatar_texture_key: None,
+            scroll_speed: player_options.scroll_speed,
+            scroll_option: player_options.scroll_option,
+            reverse_scroll: player_options.reverse_scroll,
+            turn_option: player_options.turn_option,
+            insert_active_mask: player_options.insert_active_mask,
+            remove_active_mask: player_options.remove_active_mask,
+            holds_active_mask: player_options.holds_active_mask,
+            accel_effects_active_mask: player_options.accel_effects_active_mask,
+            visual_effects_active_mask: player_options.visual_effects_active_mask,
+            appearance_effects_active_mask: player_options.appearance_effects_active_mask,
+            attack_mode: player_options.attack_mode,
+            hide_light_type: player_options.hide_light_type,
+            rescore_early_hits: player_options.rescore_early_hits,
+            hide_early_dw_judgments: player_options.hide_early_dw_judgments,
+            hide_early_dw_flash: player_options.hide_early_dw_flash,
+            timing_windows: player_options.timing_windows,
+            show_fa_plus_window: player_options.show_fa_plus_window,
+            show_ex_score: player_options.show_ex_score,
+            show_hard_ex_score: player_options.show_hard_ex_score,
+            show_fa_plus_pane: player_options.show_fa_plus_pane,
+            fa_plus_10ms_blue_window: player_options.fa_plus_10ms_blue_window,
+            split_15_10ms: player_options.split_15_10ms,
+            track_early_judgments: player_options.track_early_judgments,
+            scale_scatterplot: player_options.scale_scatterplot,
+            scatterplot_max_window: player_options.scatterplot_max_window,
+            custom_fantastic_window: player_options.custom_fantastic_window,
+            custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
+            judgment_tilt: player_options.judgment_tilt,
+            column_cues: player_options.column_cues,
+            judgment_back: player_options.judgment_back,
+            error_ms_display: player_options.error_ms_display,
+            display_scorebox: player_options.display_scorebox,
+            live_timing_stats: player_options.live_timing_stats,
+            live_timing_stats_mask: player_options.live_timing_stats_mask,
+            rainbow_max: player_options.rainbow_max,
+            responsive_colors: player_options.responsive_colors,
+            show_life_percent: player_options.show_life_percent,
+            tilt_multiplier: player_options.tilt_multiplier,
+            tilt_min_threshold_ms: player_options.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: player_options.tilt_max_threshold_ms,
+            error_bar: player_options.error_bar,
+            error_bar_active_mask: player_options.error_bar_active_mask,
+            error_bar_text: player_options.error_bar_text,
+            text_error_bar_10ms: player_options.text_error_bar_10ms,
+            error_bar_up: player_options.error_bar_up,
+            error_bar_multi_tick: player_options.error_bar_multi_tick,
+            error_bar_trim: player_options.error_bar_trim,
+            short_average_error_bar_enabled: player_options.short_average_error_bar_enabled,
+            average_error_bar_intensity: player_options.average_error_bar_intensity,
+            average_error_bar_interval_ms: player_options.average_error_bar_interval_ms,
+            long_error_bar_enabled: player_options.long_error_bar_enabled,
+            long_error_bar_intensity: player_options.long_error_bar_intensity,
+            long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
+            long_error_bar_min_samples: player_options.long_error_bar_min_samples,
+            long_error_bar_buffer_cap: player_options.long_error_bar_buffer_cap,
+            data_visualizations: player_options.data_visualizations,
+            target_score: player_options.target_score,
+            lifemeter_type: player_options.lifemeter_type,
+            measure_counter: player_options.measure_counter,
+            measure_counter_lookahead: player_options.measure_counter_lookahead,
+            measure_counter_left: player_options.measure_counter_left,
+            measure_counter_up: player_options.measure_counter_up,
+            measure_counter_vert: player_options.measure_counter_vert,
+            broken_run: player_options.broken_run,
+            run_timer: player_options.run_timer,
+            measure_lines: player_options.measure_lines,
+            hide_targets: player_options.hide_targets,
+            hide_song_bg: player_options.hide_song_bg,
+            hide_combo: player_options.hide_combo,
+            hide_lifebar: player_options.hide_lifebar,
+            hide_score: player_options.hide_score,
+            hide_danger: player_options.hide_danger,
+            hide_combo_explosions: player_options.hide_combo_explosions,
+            column_flash_on_miss: player_options.column_flash_on_miss,
+            subtractive_scoring: player_options.subtractive_scoring,
+            pacemaker: player_options.pacemaker,
+            nps_graph_at_top: player_options.nps_graph_at_top,
+            transparent_density_graph_bg: player_options.transparent_density_graph_bg,
+            mini_indicator: player_options.mini_indicator,
+            mini_indicator_score_type: player_options.mini_indicator_score_type,
+            mini_indicator_size: player_options.mini_indicator_size,
+            mini_indicator_color: player_options.mini_indicator_color,
+            mini_percent: player_options.mini_percent,
+            spacing_percent: player_options.spacing_percent,
+            perspective: player_options.perspective,
+            note_field_offset_x: player_options.note_field_offset_x,
+            note_field_offset_y: player_options.note_field_offset_y,
+            judgment_offset_x: player_options.judgment_offset_x,
+            judgment_offset_y: player_options.judgment_offset_y,
+            combo_offset_x: player_options.combo_offset_x,
+            combo_offset_y: player_options.combo_offset_y,
+            error_bar_offset_x: player_options.error_bar_offset_x,
+            error_bar_offset_y: player_options.error_bar_offset_y,
+            visual_delay_ms: player_options.visual_delay_ms,
+            global_offset_shift_ms: player_options.global_offset_shift_ms,
+            player_options_singles: player_options.clone(),
+            player_options_doubles: player_options,
+            last_played_singles: LastPlayed::default(),
+            last_played_doubles: LastPlayed::default(),
+            last_played_course_singles: LastPlayedCourse::default(),
+            last_played_course_doubles: LastPlayedCourse::default(),
+        }
+    }
+}
+
+impl Profile {
+    #[inline(always)]
+    pub const fn calculated_weight_pounds(&self) -> i32 {
+        resolved_weight_pounds(self.weight_pounds)
+    }
+
+    #[inline(always)]
+    pub const fn age_years_for(&self, current_year: i32) -> i32 {
+        age_years_for_birth_year(self.birth_year, current_year)
+    }
+
+    #[inline(always)]
+    pub fn age_years(&self) -> i32 {
+        self.age_years_for(Local::now().year())
+    }
+
+    #[inline(always)]
+    pub fn resolved_mine_noteskin(&self) -> &NoteSkin {
+        resolve_noteskin_choice(self.mine_noteskin.as_ref(), &self.noteskin)
+    }
+
+    #[inline(always)]
+    pub fn resolved_receptor_noteskin(&self) -> &NoteSkin {
+        resolve_noteskin_choice(self.receptor_noteskin.as_ref(), &self.noteskin)
+    }
+
+    #[inline(always)]
+    pub fn tap_explosion_noteskin_hidden(&self) -> bool {
+        tap_explosion_skin_hidden(self.tap_explosion_noteskin.as_ref())
+    }
+
+    #[inline(always)]
+    pub fn resolved_tap_explosion_noteskin(&self) -> Option<&NoteSkin> {
+        resolve_tap_explosion_skin(self.tap_explosion_noteskin.as_ref(), &self.noteskin)
+    }
+
+    #[inline(always)]
+    pub fn tap_explosion_window_enabled(&self, window: &str) -> bool {
+        tap_explosion_mask_enabled(self.tap_explosion_active_mask, window)
+    }
+
+    #[inline(always)]
+    pub fn current_player_options(&self) -> PlayerOptionsData {
+        PlayerOptionsData {
+            background_filter: self.background_filter,
+            hold_judgment_graphic: self.hold_judgment_graphic.clone(),
+            held_miss_graphic: self.held_miss_graphic.clone(),
+            judgment_graphic: self.judgment_graphic.clone(),
+            combo_font: self.combo_font,
+            combo_colors: self.combo_colors,
+            combo_mode: self.combo_mode,
+            carry_combo_between_songs: self.carry_combo_between_songs,
+            noteskin: self.noteskin.clone(),
+            mine_noteskin: self.mine_noteskin.clone(),
+            receptor_noteskin: self.receptor_noteskin.clone(),
+            tap_explosion_noteskin: self.tap_explosion_noteskin.clone(),
+            tap_explosion_active_mask: self.tap_explosion_active_mask,
+            scroll_speed: self.scroll_speed,
+            scroll_option: self.scroll_option,
+            reverse_scroll: self.reverse_scroll,
+            turn_option: self.turn_option,
+            insert_active_mask: self.insert_active_mask,
+            remove_active_mask: self.remove_active_mask,
+            holds_active_mask: self.holds_active_mask,
+            accel_effects_active_mask: self.accel_effects_active_mask,
+            visual_effects_active_mask: self.visual_effects_active_mask,
+            appearance_effects_active_mask: self.appearance_effects_active_mask,
+            attack_mode: self.attack_mode,
+            hide_light_type: self.hide_light_type,
+            rescore_early_hits: self.rescore_early_hits,
+            hide_early_dw_judgments: self.hide_early_dw_judgments,
+            hide_early_dw_flash: self.hide_early_dw_flash,
+            timing_windows: self.timing_windows,
+            show_fa_plus_window: self.show_fa_plus_window,
+            show_ex_score: self.show_ex_score,
+            show_hard_ex_score: self.show_hard_ex_score,
+            show_fa_plus_pane: self.show_fa_plus_pane,
+            fa_plus_10ms_blue_window: self.fa_plus_10ms_blue_window,
+            split_15_10ms: self.split_15_10ms,
+            track_early_judgments: self.track_early_judgments,
+            scale_scatterplot: self.scale_scatterplot,
+            scatterplot_max_window: self.scatterplot_max_window,
+            custom_fantastic_window: self.custom_fantastic_window,
+            custom_fantastic_window_ms: self.custom_fantastic_window_ms,
+            judgment_tilt: self.judgment_tilt,
+            column_cues: self.column_cues,
+            judgment_back: self.judgment_back,
+            error_ms_display: self.error_ms_display,
+            display_scorebox: self.display_scorebox,
+            live_timing_stats: self.live_timing_stats,
+            live_timing_stats_mask: self.live_timing_stats_mask,
+            rainbow_max: self.rainbow_max,
+            responsive_colors: self.responsive_colors,
+            show_life_percent: self.show_life_percent,
+            tilt_multiplier: self.tilt_multiplier,
+            tilt_min_threshold_ms: self.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: self.tilt_max_threshold_ms,
+            error_bar_active_mask: self.error_bar_active_mask,
+            error_bar: self.error_bar,
+            error_bar_text: self.error_bar_text,
+            text_error_bar_10ms: self.text_error_bar_10ms,
+            error_bar_up: self.error_bar_up,
+            error_bar_multi_tick: self.error_bar_multi_tick,
+            error_bar_trim: self.error_bar_trim,
+            short_average_error_bar_enabled: self.short_average_error_bar_enabled,
+            average_error_bar_intensity: self.average_error_bar_intensity,
+            average_error_bar_interval_ms: self.average_error_bar_interval_ms,
+            long_error_bar_enabled: self.long_error_bar_enabled,
+            long_error_bar_intensity: self.long_error_bar_intensity,
+            long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
+            long_error_bar_min_samples: self.long_error_bar_min_samples,
+            long_error_bar_buffer_cap: self.long_error_bar_buffer_cap,
+            data_visualizations: self.data_visualizations,
+            target_score: self.target_score,
+            lifemeter_type: self.lifemeter_type,
+            measure_counter: self.measure_counter,
+            measure_counter_lookahead: self.measure_counter_lookahead,
+            measure_counter_left: self.measure_counter_left,
+            measure_counter_up: self.measure_counter_up,
+            measure_counter_vert: self.measure_counter_vert,
+            broken_run: self.broken_run,
+            run_timer: self.run_timer,
+            measure_lines: self.measure_lines,
+            hide_targets: self.hide_targets,
+            hide_song_bg: self.hide_song_bg,
+            hide_combo: self.hide_combo,
+            hide_lifebar: self.hide_lifebar,
+            hide_score: self.hide_score,
+            hide_danger: self.hide_danger,
+            hide_combo_explosions: self.hide_combo_explosions,
+            column_flash_on_miss: self.column_flash_on_miss,
+            subtractive_scoring: self.subtractive_scoring,
+            pacemaker: self.pacemaker,
+            nps_graph_at_top: self.nps_graph_at_top,
+            transparent_density_graph_bg: self.transparent_density_graph_bg,
+            mini_indicator: self.mini_indicator,
+            mini_indicator_score_type: self.mini_indicator_score_type,
+            mini_indicator_size: self.mini_indicator_size,
+            mini_indicator_color: self.mini_indicator_color,
+            mini_percent: self.mini_percent,
+            spacing_percent: self.spacing_percent,
+            perspective: self.perspective,
+            note_field_offset_x: self.note_field_offset_x,
+            note_field_offset_y: self.note_field_offset_y,
+            judgment_offset_x: self.judgment_offset_x,
+            judgment_offset_y: self.judgment_offset_y,
+            combo_offset_x: self.combo_offset_x,
+            combo_offset_y: self.combo_offset_y,
+            error_bar_offset_x: self.error_bar_offset_x,
+            error_bar_offset_y: self.error_bar_offset_y,
+            visual_delay_ms: self.visual_delay_ms,
+            global_offset_shift_ms: self.global_offset_shift_ms,
+        }
+    }
+
+    fn apply_player_options(&mut self, options: &PlayerOptionsData) {
+        self.background_filter = options.background_filter;
+        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
+        self.held_miss_graphic = options.held_miss_graphic.clone();
+        self.judgment_graphic = options.judgment_graphic.clone();
+        self.combo_font = options.combo_font;
+        self.combo_colors = options.combo_colors;
+        self.combo_mode = options.combo_mode;
+        self.carry_combo_between_songs = options.carry_combo_between_songs;
+        self.noteskin = options.noteskin.clone();
+        self.mine_noteskin.clone_from(&options.mine_noteskin);
+        self.receptor_noteskin
+            .clone_from(&options.receptor_noteskin);
+        self.tap_explosion_noteskin
+            .clone_from(&options.tap_explosion_noteskin);
+        self.tap_explosion_active_mask = options.tap_explosion_active_mask;
+        self.scroll_speed = options.scroll_speed;
+        self.scroll_option = options.scroll_option;
+        self.reverse_scroll = options.reverse_scroll;
+        self.turn_option = options.turn_option;
+        self.insert_active_mask = options.insert_active_mask;
+        self.remove_active_mask = options.remove_active_mask;
+        self.holds_active_mask = options.holds_active_mask;
+        self.accel_effects_active_mask = options.accel_effects_active_mask;
+        self.visual_effects_active_mask = options.visual_effects_active_mask;
+        self.appearance_effects_active_mask = options.appearance_effects_active_mask;
+        self.attack_mode = options.attack_mode;
+        self.hide_light_type = options.hide_light_type;
+        self.rescore_early_hits = options.rescore_early_hits;
+        self.hide_early_dw_judgments = options.hide_early_dw_judgments;
+        self.hide_early_dw_flash = options.hide_early_dw_flash;
+        self.timing_windows = options.timing_windows;
+        self.show_fa_plus_window = options.show_fa_plus_window;
+        self.show_ex_score = options.show_ex_score;
+        self.show_hard_ex_score = options.show_hard_ex_score;
+        self.show_fa_plus_pane = options.show_fa_plus_pane;
+        self.fa_plus_10ms_blue_window = options.fa_plus_10ms_blue_window;
+        self.split_15_10ms = options.split_15_10ms;
+        self.track_early_judgments = options.track_early_judgments;
+        self.scale_scatterplot = options.scale_scatterplot;
+        self.scatterplot_max_window = options.scatterplot_max_window;
+        self.custom_fantastic_window = options.custom_fantastic_window;
+        self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
+        self.judgment_tilt = options.judgment_tilt;
+        self.column_cues = options.column_cues;
+        self.judgment_back = options.judgment_back;
+        self.error_ms_display = options.error_ms_display;
+        self.display_scorebox = options.display_scorebox;
+        self.live_timing_stats = options.live_timing_stats;
+        self.live_timing_stats_mask = options.live_timing_stats_mask;
+        self.rainbow_max = options.rainbow_max;
+        self.responsive_colors = options.responsive_colors;
+        self.show_life_percent = options.show_life_percent;
+        self.tilt_multiplier = options.tilt_multiplier;
+        self.tilt_min_threshold_ms = options.tilt_min_threshold_ms;
+        self.tilt_max_threshold_ms = options.tilt_max_threshold_ms;
+        self.error_bar_active_mask = options.error_bar_active_mask;
+        self.error_bar = options.error_bar;
+        self.error_bar_text = options.error_bar_text;
+        self.text_error_bar_10ms = options.text_error_bar_10ms;
+        self.error_bar_up = options.error_bar_up;
+        self.error_bar_multi_tick = options.error_bar_multi_tick;
+        self.error_bar_trim = options.error_bar_trim;
+        self.short_average_error_bar_enabled = options.short_average_error_bar_enabled;
+        self.average_error_bar_intensity = options.average_error_bar_intensity;
+        self.average_error_bar_interval_ms = options.average_error_bar_interval_ms;
+        self.long_error_bar_enabled = options.long_error_bar_enabled;
+        self.long_error_bar_intensity = options.long_error_bar_intensity;
+        self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
+        self.long_error_bar_min_samples = options.long_error_bar_min_samples;
+        self.long_error_bar_buffer_cap = options.long_error_bar_buffer_cap;
+        self.data_visualizations = options.data_visualizations;
+        self.target_score = options.target_score;
+        self.lifemeter_type = options.lifemeter_type;
+        self.measure_counter = options.measure_counter;
+        self.measure_counter_lookahead = options.measure_counter_lookahead;
+        self.measure_counter_left = options.measure_counter_left;
+        self.measure_counter_up = options.measure_counter_up;
+        self.measure_counter_vert = options.measure_counter_vert;
+        self.broken_run = options.broken_run;
+        self.run_timer = options.run_timer;
+        self.measure_lines = options.measure_lines;
+        self.hide_targets = options.hide_targets;
+        self.hide_song_bg = options.hide_song_bg;
+        self.hide_combo = options.hide_combo;
+        self.hide_lifebar = options.hide_lifebar;
+        self.hide_score = options.hide_score;
+        self.hide_danger = options.hide_danger;
+        self.hide_combo_explosions = options.hide_combo_explosions;
+        self.column_flash_on_miss = options.column_flash_on_miss;
+        self.subtractive_scoring = options.subtractive_scoring;
+        self.pacemaker = options.pacemaker;
+        self.nps_graph_at_top = options.nps_graph_at_top;
+        self.transparent_density_graph_bg = options.transparent_density_graph_bg;
+        self.mini_indicator = options.mini_indicator;
+        self.mini_indicator_score_type = options.mini_indicator_score_type;
+        self.mini_indicator_size = options.mini_indicator_size;
+        self.mini_indicator_color = options.mini_indicator_color;
+        self.mini_percent = options.mini_percent;
+        self.spacing_percent = options.spacing_percent;
+        self.perspective = options.perspective;
+        self.note_field_offset_x = options.note_field_offset_x;
+        self.note_field_offset_y = options.note_field_offset_y;
+        self.judgment_offset_x = options.judgment_offset_x;
+        self.judgment_offset_y = options.judgment_offset_y;
+        self.combo_offset_x = options.combo_offset_x;
+        self.combo_offset_y = options.combo_offset_y;
+        self.error_bar_offset_x = options.error_bar_offset_x;
+        self.error_bar_offset_y = options.error_bar_offset_y;
+        self.visual_delay_ms = options.visual_delay_ms;
+        self.global_offset_shift_ms = options.global_offset_shift_ms;
+    }
+
+    #[inline(always)]
+    pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
+            PlayStyle::Double => &self.player_options_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
+            PlayStyle::Double => &mut self.player_options_doubles,
+        }
+    }
+
+    pub fn store_current_player_options(&mut self, style: PlayStyle) {
+        let options = self.current_player_options();
+        *self.player_options_mut(style) = options;
+    }
+
+    pub fn store_current_player_options_for_all_styles(&mut self) {
+        let options = self.current_player_options();
+        self.player_options_singles = options.clone();
+        self.player_options_doubles = options;
+    }
+
+    pub fn apply_player_options_for_style(&mut self, style: PlayStyle) {
+        let options = self.player_options(style).clone();
+        self.apply_player_options(&options);
+    }
+
+    #[inline(always)]
+    pub const fn last_played(&self, style: PlayStyle) -> &LastPlayed {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.last_played_singles,
+            PlayStyle::Double => &self.last_played_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn last_played_mut(&mut self, style: PlayStyle) -> &mut LastPlayed {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.last_played_singles,
+            PlayStyle::Double => &mut self.last_played_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn last_played_course(&self, style: PlayStyle) -> &LastPlayedCourse {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.last_played_course_singles,
+            PlayStyle::Double => &self.last_played_course_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn last_played_course_mut(&mut self, style: PlayStyle) -> &mut LastPlayedCourse {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.last_played_course_singles,
+            PlayStyle::Double => &mut self.last_played_course_doubles,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1970,6 +3261,189 @@ mod tests {
         assert_eq!(PlayMode::default(), PlayMode::Regular);
         assert_eq!(PlayerSide::default(), PlayerSide::P1);
         assert_eq!(TimingTickMode::default(), TimingTickMode::Off);
+
+        let options = PlayerOptionsData::default();
+        assert_eq!(options.scroll_speed, ScrollSpeedSetting::default());
+        assert!(options.carry_combo_between_songs);
+        assert!(options.rescore_early_hits);
+        assert!(options.display_scorebox);
+        assert!(options.short_average_error_bar_enabled);
+        assert!(options.long_error_bar_enabled);
+        assert_eq!(options.measure_counter_lookahead, 2);
+        assert!(options.measure_counter_left);
+        assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
+    }
+
+    #[test]
+    fn player_side_indices_and_joined_masks_are_stable() {
+        assert_eq!(PLAYER_SLOTS, 2);
+        assert_eq!(DEFAULT_PROFILE_ID, "00000000");
+        assert_eq!(LOCAL_PROFILE_MAX_ID, 99_999_999);
+        assert_eq!(player_side_index(PlayerSide::P1), 0);
+        assert_eq!(player_side_index(PlayerSide::P2), 1);
+        assert_eq!(SESSION_JOINED_MASK_P1, 1 << 0);
+        assert_eq!(SESSION_JOINED_MASK_P2, 1 << 1);
+        assert_eq!(
+            player_side_joined_mask(PlayerSide::P1),
+            SESSION_JOINED_MASK_P1
+        );
+        assert_eq!(
+            player_side_joined_mask(PlayerSide::P2),
+            SESSION_JOINED_MASK_P2
+        );
+
+        let mask = joined_player_mask(true, false);
+        assert!(player_side_is_joined(mask, PlayerSide::P1));
+        assert!(!player_side_is_joined(mask, PlayerSide::P2));
+
+        let mask = joined_player_mask(false, true);
+        assert!(!player_side_is_joined(mask, PlayerSide::P1));
+        assert!(player_side_is_joined(mask, PlayerSide::P2));
+    }
+
+    #[test]
+    fn local_profile_ids_reject_pathlike_or_empty_values() {
+        assert!(is_local_profile_id("00000000"));
+        assert!(is_local_profile_id("Player One"));
+        assert!(is_local_profile_id(&"a".repeat(64)));
+
+        assert!(!is_local_profile_id(""));
+        assert!(!is_local_profile_id("."));
+        assert!(!is_local_profile_id(".."));
+        assert!(!is_local_profile_id("a/b"));
+        assert!(!is_local_profile_id("a\\b"));
+        assert!(!is_local_profile_id("a\0b"));
+        assert!(!is_local_profile_id(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn profile_id_sorting_is_case_insensitive_with_stable_tiebreak() {
+        let mut ids = ["beta", "Alpha", "alpha", "Beta", "00000000"];
+        ids.sort_by(|a, b| cmp_profile_ids_case_insensitive(a, b));
+        assert_eq!(ids, ["00000000", "Alpha", "alpha", "Beta", "beta"]);
+    }
+
+    #[test]
+    fn profile_stats_roundtrip_preserves_current_combo_and_known_packs() {
+        let stats = ProfileStats {
+            current_combo: 12,
+            known_pack_names: ["Beta", "Alpha"].into_iter().map(str::to_owned).collect(),
+        };
+
+        let bytes = encode_profile_stats(&stats).expect("profile stats should encode");
+        let decoded = decode_profile_stats(&bytes).expect("profile stats should decode");
+        assert_eq!(decoded, stats);
+
+        let (raw, _) =
+            bincode::decode_from_slice::<ProfileStatsV1, _>(&bytes, bincode::config::standard())
+                .expect("encoded stats should use v1 shape");
+        assert_eq!(
+            raw.known_pack_names,
+            vec!["Alpha".to_string(), "Beta".to_string()]
+        );
+    }
+
+    #[test]
+    fn profile_stats_decode_accepts_legacy_combo_payload() {
+        let bytes = bincode::encode_to_vec(
+            LegacyProfileStatsV1 {
+                version: PROFILE_STATS_VERSION_V1,
+                current_combo: 42,
+            },
+            bincode::config::standard(),
+        )
+        .expect("legacy stats should encode");
+
+        let stats = decode_profile_stats(&bytes).expect("legacy stats should decode");
+        assert_eq!(stats.current_combo, 42);
+        assert!(stats.known_pack_names.is_empty());
+    }
+
+    #[test]
+    fn profile_stats_decode_rejects_unsupported_version() {
+        let bytes = bincode::encode_to_vec(
+            ProfileStatsV1 {
+                version: PROFILE_STATS_VERSION_V1 + 1,
+                current_combo: 0,
+                known_pack_names: Vec::new(),
+            },
+            bincode::config::standard(),
+        )
+        .expect("stats should encode");
+
+        assert_eq!(
+            decode_profile_stats(&bytes),
+            Err(ProfileStatsDecodeError::UnsupportedVersion(
+                PROFILE_STATS_VERSION_V1 + 1
+            ))
+        );
+    }
+
+    #[test]
+    fn next_local_profile_id_prefers_append_then_wraps_to_gaps() {
+        assert_eq!(next_local_profile_id(Vec::new()), Some("00000000".into()));
+        assert_eq!(
+            next_local_profile_id(vec![0, 1, 1, 2]),
+            Some("00000003".into())
+        );
+        assert_eq!(next_local_profile_id(vec![0, 2]), Some("00000003".into()));
+        assert_eq!(
+            next_local_profile_id(vec![0, LOCAL_PROFILE_MAX_ID]),
+            Some("00000001".into())
+        );
+    }
+
+    #[test]
+    fn next_local_profile_number_reports_full_small_ranges() {
+        assert_eq!(next_local_profile_number(vec![0, 1, 2], 2), None);
+        assert_eq!(next_local_profile_number(vec![0, 2], 2), Some(1));
+        assert_eq!(next_local_profile_number(vec![0, 9], 2), Some(1));
+    }
+
+    #[test]
+    fn profile_display_name_rewrite_updates_existing_userprofile_key() {
+        let src = "[userprofile]\nDisplayName=Old\nPlayerInitials=OLD\n";
+        let out = rewrite_profile_display_name_content(src, "New Name");
+        assert_eq!(
+            out,
+            "[userprofile]\nDisplayName=New Name\nPlayerInitials=OLD\n"
+        );
+    }
+
+    #[test]
+    fn profile_display_name_rewrite_adds_missing_key_before_next_section() {
+        let src = "[userprofile]\nPlayerInitials=OLD\n\n[Stats]\nCalories=0\n";
+        let out = rewrite_profile_display_name_content(src, "New Name");
+        assert_eq!(
+            out,
+            "[userprofile]\nPlayerInitials=OLD\n\nDisplayName=New Name\n[Stats]\nCalories=0\n"
+        );
+    }
+
+    #[test]
+    fn profile_display_name_rewrite_appends_missing_section() {
+        let src = "[Stats]\nCalories=0\n";
+        let out = rewrite_profile_display_name_content(src, "New Name");
+        assert_eq!(
+            out,
+            "[Stats]\nCalories=0\n[userprofile]\nDisplayName=New Name\n"
+        );
+
+        let out = rewrite_profile_display_name_content("", "New Name");
+        assert_eq!(out, "[userprofile]\nDisplayName=New Name\n");
+    }
+
+    #[test]
+    fn active_profile_helpers_report_guest_or_local_id() {
+        let guest = ActiveProfile::Guest;
+        assert!(active_profile_is_guest(&guest));
+        assert_eq!(active_profile_local_id(&guest), None);
+
+        let local = ActiveProfile::Local {
+            id: "00000042".to_string(),
+        };
+        assert!(!active_profile_is_guest(&local));
+        assert_eq!(active_profile_local_id(&local), Some("00000042"));
     }
 
     #[test]
@@ -2108,6 +3582,141 @@ mod tests {
     }
 
     #[test]
+    fn clamp_weight_pounds_preserves_unset_and_bounds_user_values() {
+        assert_eq!(clamp_weight_pounds(0), 0);
+        assert_eq!(clamp_weight_pounds(-50), 20);
+        assert_eq!(clamp_weight_pounds(19), 20);
+        assert_eq!(clamp_weight_pounds(120), 120);
+        assert_eq!(clamp_weight_pounds(1001), 1000);
+    }
+
+    #[test]
+    fn profile_stat_defaults_match_itg_fallbacks() {
+        assert_eq!(resolved_weight_pounds(0), DEFAULT_WEIGHT_POUNDS);
+        assert_eq!(resolved_weight_pounds(165), 165);
+        assert_eq!(age_years_for_birth_year(0, 2026), 2026 - DEFAULT_BIRTH_YEAR);
+        assert_eq!(age_years_for_birth_year(2000, 2026), 26);
+    }
+
+    #[test]
+    fn tap_explosion_mask_maps_judgment_windows() {
+        assert_eq!(
+            tap_explosion_mask_for_window("W0"),
+            Some(TapExplosionMask::FANTASTIC)
+        );
+        assert_eq!(
+            tap_explosion_mask_for_window("W1"),
+            Some(TapExplosionMask::FANTASTIC)
+        );
+        assert_eq!(
+            tap_explosion_mask_for_window("W5"),
+            Some(TapExplosionMask::WAY_OFF)
+        );
+        assert_eq!(
+            tap_explosion_mask_for_window("Miss"),
+            Some(TapExplosionMask::MISS)
+        );
+        assert_eq!(
+            tap_explosion_mask_for_window("Held"),
+            Some(TapExplosionMask::HELD)
+        );
+        assert_eq!(tap_explosion_mask_for_window("Holding"), None);
+    }
+
+    #[test]
+    fn tap_explosion_mask_enabled_checks_window_flags() {
+        let mask = TapExplosionMask::MISS | TapExplosionMask::HELD;
+        assert!(tap_explosion_mask_enabled(mask, "Miss"));
+        assert!(tap_explosion_mask_enabled(mask, "Held"));
+        assert!(!tap_explosion_mask_enabled(mask, "W1"));
+        assert!(!tap_explosion_mask_enabled(mask, "Holding"));
+    }
+
+    #[test]
+    fn tap_explosion_mask_migrates_new_bits_from_old_profiles() {
+        let old_all = TapExplosionMask::FANTASTIC
+            | TapExplosionMask::EXCELLENT
+            | TapExplosionMask::GREAT
+            | TapExplosionMask::DECENT
+            | TapExplosionMask::WAY_OFF
+            | TapExplosionMask::HELD;
+
+        assert_eq!(
+            normalize_tap_explosion_mask(old_all.bits(), 1),
+            TapExplosionMask::all()
+        );
+        assert_eq!(
+            normalize_tap_explosion_mask(old_all.bits(), TAP_EXPLOSION_MASK_VERSION),
+            old_all
+        );
+    }
+
+    #[test]
+    fn sanitize_player_initials_limits_to_four_ascii_chars() {
+        assert_eq!(sanitize_player_initials("ab?c!de"), "AB?C");
+        assert_eq!(sanitize_player_initials("a b-c_d"), "ABCD");
+        assert_eq!(sanitize_player_initials(""), "");
+        assert_eq!(PLAYER_INITIALS_MAX_LEN, 4);
+    }
+
+    #[test]
+    fn initials_from_name_uses_two_char_fallbacks() {
+        assert_eq!(initials_from_name("john smith"), "JOHN");
+        assert_eq!(initials_from_name("a"), "A?");
+        assert_eq!(initials_from_name("!!!"), "!!!");
+        assert_eq!(initials_from_name(""), "??");
+    }
+
+    #[test]
+    fn parse_profile_bool_accepts_legacy_boolean_spellings() {
+        for value in ["1", "true", "yes", "on", " TRUE "] {
+            assert_eq!(parse_profile_bool(value), Some(true));
+        }
+        for value in ["0", "false", "no", "off", " FALSE "] {
+            assert_eq!(parse_profile_bool(value), Some(false));
+        }
+        assert_eq!(parse_profile_bool("maybe"), None);
+    }
+
+    #[test]
+    fn groovestats_pad_player_requires_explicit_one() {
+        assert!(parse_groovestats_is_pad_player(Some("1"), false));
+        assert!(!parse_groovestats_is_pad_player(Some("0"), true));
+        assert!(!parse_groovestats_is_pad_player(Some("2"), true));
+        assert!(parse_groovestats_is_pad_player(Some("true"), true));
+        assert!(!parse_groovestats_is_pad_player(Some("true"), false));
+        assert!(parse_groovestats_is_pad_player(None, true));
+        assert!(!parse_groovestats_is_pad_player(None, false));
+    }
+
+    #[test]
+    fn parse_last_played_value_trims_empty_optional_fields() {
+        assert_eq!(parse_last_played_value(None), None);
+        assert_eq!(parse_last_played_value(Some("")), None);
+        assert_eq!(parse_last_played_value(Some("   ")), None);
+        assert_eq!(
+            parse_last_played_value(Some(" Songs/Pack/Song.ogg ")),
+            Some("Songs/Pack/Song.ogg".to_string())
+        );
+    }
+
+    #[test]
+    fn player_options_section_matches_style_storage() {
+        assert_eq!(
+            player_options_section(PlayStyle::Single),
+            "PlayerOptionsSingles"
+        );
+        assert_eq!(
+            player_options_section(PlayStyle::Versus),
+            "PlayerOptionsSingles"
+        );
+        assert_eq!(
+            player_options_section(PlayStyle::Double),
+            "PlayerOptionsDoubles"
+        );
+    }
+
+    #[test]
     fn hud_player_snapshot_defaults_to_guestless_unjoined() {
         let snapshot = GameplayHudPlayerSnapshot::default();
         assert!(!snapshot.joined);
@@ -2126,6 +3735,59 @@ mod tests {
         let last_course = LastPlayedCourse::default();
         assert_eq!(last_course.course_path, None);
         assert_eq!(last_course.difficulty_name, None);
+    }
+
+    #[test]
+    fn last_played_sections_render_empty_and_present_fields() {
+        let mut content = String::new();
+        append_last_played_section(&mut content, "LastPlayedSingles", &LastPlayed::default());
+        assert_eq!(
+            content,
+            "[LastPlayedSingles]\nMusicPath=\nChartHash=\nDifficultyIndex=2\n\n"
+        );
+
+        content.clear();
+        append_last_played_section(
+            &mut content,
+            "LastPlayedDoubles",
+            &LastPlayed {
+                song_music_path: Some("Songs/Pack/Song.ogg".to_string()),
+                chart_hash: Some("abc123".to_string()),
+                difficulty_index: 4,
+            },
+        );
+        assert_eq!(
+            content,
+            "[LastPlayedDoubles]\nMusicPath=Songs/Pack/Song.ogg\nChartHash=abc123\nDifficultyIndex=4\n\n"
+        );
+    }
+
+    #[test]
+    fn last_played_course_sections_render_empty_and_present_fields() {
+        let mut content = String::new();
+        append_last_played_course_section(
+            &mut content,
+            "LastPlayedCourseSingles",
+            &LastPlayedCourse::default(),
+        );
+        assert_eq!(
+            content,
+            "[LastPlayedCourseSingles]\nCoursePath=\nDifficultyName=\n\n"
+        );
+
+        content.clear();
+        append_last_played_course_section(
+            &mut content,
+            "LastPlayedCourseDoubles",
+            &LastPlayedCourse {
+                course_path: Some("Courses/Test.crs".to_string()),
+                difficulty_name: Some("Hard".to_string()),
+            },
+        );
+        assert_eq!(
+            content,
+            "[LastPlayedCourseDoubles]\nCoursePath=Courses/Test.crs\nDifficultyName=Hard\n\n"
+        );
     }
 
     #[test]
@@ -2774,6 +4436,35 @@ mod tests {
         assert_eq!(NoteSkin::new(" Default ").as_str(), NoteSkin::DEFAULT_NAME);
         assert_eq!(NoteSkin::none_choice().as_str(), NoteSkin::NONE_NAME);
         assert!(NoteSkin::from_str("").is_err());
+    }
+
+    #[test]
+    fn noteskin_resolution_uses_override_or_fallback() {
+        let fallback = NoteSkin::new("metal");
+        let override_skin = NoteSkin::new("cyber");
+
+        assert_eq!(resolve_noteskin_choice(None, &fallback), &fallback);
+        assert_eq!(
+            resolve_noteskin_choice(Some(&override_skin), &fallback),
+            &override_skin
+        );
+    }
+
+    #[test]
+    fn tap_explosion_skin_resolution_hides_none_choice() {
+        let fallback = NoteSkin::new("metal");
+        let override_skin = NoteSkin::new("cyber");
+        let hidden = NoteSkin::none_choice();
+
+        assert!(!tap_explosion_skin_hidden(None));
+        assert!(!tap_explosion_skin_hidden(Some(&override_skin)));
+        assert!(tap_explosion_skin_hidden(Some(&hidden)));
+        assert_eq!(resolve_tap_explosion_skin(None, &fallback), Some(&fallback));
+        assert_eq!(
+            resolve_tap_explosion_skin(Some(&override_skin), &fallback),
+            Some(&override_skin)
+        );
+        assert_eq!(resolve_tap_explosion_skin(Some(&hidden), &fallback), None);
     }
 
     #[test]

@@ -1650,7 +1650,7 @@ fn itl_judgments_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlJu
 }
 
 #[inline(always)]
-fn itl_all_timing_windows_enabled(profile: &profile::Profile) -> bool {
+fn itl_all_timing_windows_enabled(profile: &profile_data::Profile) -> bool {
     profile
         .timing_windows
         .disabled_windows()
@@ -1922,7 +1922,7 @@ mod tests {
 
     #[test]
     fn itl_requires_all_timing_windows_enabled() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         assert!(itl_all_timing_windows_enabled(&profile));
 
         for setting in [

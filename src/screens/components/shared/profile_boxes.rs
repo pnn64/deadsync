@@ -19,7 +19,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
-use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -286,11 +286,12 @@ fn format_recent_mods(
 fn build_choices() -> Vec<Choice> {
     let mut out = Vec::new();
 
-    let default_profile = crate::game::profile::Profile::default();
+    let default_profile = profile_data::Profile::default();
     let default_speed_mod = format!("{}", default_profile.scroll_speed);
-    let guest_speed_mod = format!("{}", crate::game::profile::GUEST_SCROLL_SPEED);
+    let guest_speed_mod = format!("{GUEST_SCROLL_SPEED}");
     let default_scroll_option = default_profile.scroll_option;
-    let player_options_section = profile::player_options_section(profile::get_session_play_style());
+    let player_options_section =
+        profile_data::player_options_section(profile::get_session_play_style());
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
         display_name: tr("SelectProfile", "GuestLabel").to_string(),

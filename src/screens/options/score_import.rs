@@ -865,7 +865,7 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
         return;
     }
     clear_navigation_holds(state);
-    let mut profile_cfg = profile::Profile::default();
+    let mut profile_cfg = deadsync_profile::Profile::default();
     profile_cfg
         .display_name
         .clone_from(&selection.profile.display_name);

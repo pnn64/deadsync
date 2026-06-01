@@ -246,7 +246,7 @@ pub struct State {
     pub nav_input: [PlayerNavInput; PLAYER_SLOTS],
     pub start_input: [PlayerStartInput; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,
-    pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
+    pub player_profiles: [deadsync_profile::Profile; PLAYER_SLOTS],
     pub(super) noteskin: NoteskinState,
     pub(super) preview_time: f32,
     pub(super) preview_beat: f32,

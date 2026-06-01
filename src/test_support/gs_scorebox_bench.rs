@@ -1,5 +1,4 @@
 use crate::engine::present::actors::Actor;
-use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox;
 use deadsync_score::{
@@ -32,7 +31,7 @@ impl GsScoreboxBenchFixture {
 }
 
 pub fn fixture() -> GsScoreboxBenchFixture {
-    let mut profile = profile::Profile::default();
+    let mut profile = deadsync_profile::Profile::default();
     profile.display_scorebox = true;
     GsScoreboxBenchFixture {
         snapshot: CachedPlayerLeaderboardData {

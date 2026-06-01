@@ -2688,7 +2688,7 @@ fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod 
 fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     play_style: profile_data::PlayStyle,
     player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
@@ -2728,7 +2728,7 @@ fn build_song_lua_compile_context(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     num_players: usize,
-    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
@@ -2894,7 +2894,7 @@ pub(super) fn build_song_lua_runtime_windows(
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     num_players: usize,
-    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
@@ -3949,7 +3949,10 @@ fn apply_chart_attacks_for_player(
 }
 
 #[inline(always)]
-pub(super) fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+pub(super) fn has_chart_attacks(
+    chart: &GameplayChartData,
+    profile: &profile_data::Profile,
+) -> bool {
     match profile.attack_mode {
         profile_data::AttackMode::Off => false,
         profile_data::AttackMode::On => chart
@@ -3961,7 +3964,10 @@ pub(super) fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Pr
 }
 
 #[inline(always)]
-pub(super) fn player_changes_chart(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+pub(super) fn player_changes_chart(
+    chart: &GameplayChartData,
+    profile: &profile_data::Profile,
+) -> bool {
     super::has_uncommon_masks(profile)
         || profile.turn_option != profile_data::TurnOption::None
         || has_chart_attacks(chart, profile)
@@ -3973,7 +3979,7 @@ pub(super) fn apply_chart_attacks_transforms(
     gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     cols_per_player: usize,
     num_players: usize,
-    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     base_seed: u64,
     song_length_seconds: f32,
@@ -4022,7 +4028,7 @@ pub(super) fn apply_chart_attacks_transforms(
 }
 
 #[inline(always)]
-pub(super) fn base_appearance_effects(profile: &profile::Profile) -> AppearanceEffects {
+pub(super) fn base_appearance_effects(profile: &profile_data::Profile) -> AppearanceEffects {
     AppearanceEffects::from_mask(profile.appearance_effects_active_mask.bits())
 }
 
@@ -4461,7 +4467,7 @@ fn approach_mini_percent_to_target(
 }
 
 #[inline(always)]
-fn base_visual_effects(profile: &profile::Profile) -> VisualEffects {
+fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
     VisualEffects::from_mask(profile.visual_effects_active_mask.bits())
 }
 

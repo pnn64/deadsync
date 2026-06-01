@@ -1,4 +1,3 @@
-use crate::game::profile;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{
     JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
@@ -44,7 +43,7 @@ fn default_fa_plus_window_s(state: &State) -> f32 {
 }
 
 #[inline(always)]
-fn profile_custom_window_ms(profile: &profile::Profile) -> f32 {
+fn profile_custom_window_ms(profile: &profile_data::Profile) -> f32 {
     let ms = profile.custom_fantastic_window_ms;
     f32::from(profile_data::clamp_custom_fantastic_window_ms(ms))
 }
@@ -81,7 +80,7 @@ pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 #[inline(always)]
 pub(super) fn build_player_judgment_timing(
     mut timing_profile: TimingProfile,
-    player_profile: &profile::Profile,
+    player_profile: &profile_data::Profile,
     music_rate: f32,
 ) -> PlayerJudgmentTiming {
     let base_fa_plus_s = timing_profile

@@ -736,7 +736,7 @@ const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
 
 #[inline(always)]
 fn effective_mini_value_with_visual_mask(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
@@ -753,7 +753,7 @@ fn effective_mini_value_with_visual_mask(
 }
 
 #[inline(always)]
-fn effective_mini_value(profile: &profile::Profile) -> f32 {
+fn effective_mini_value(profile: &profile_data::Profile) -> f32 {
     let visual_mask = profile.visual_effects_active_mask.bits();
     effective_mini_value_with_visual_mask(profile, visual_mask, profile.mini_percent as f32)
 }
@@ -761,7 +761,7 @@ fn effective_mini_value(profile: &profile::Profile) -> f32 {
 #[inline(always)]
 fn player_draw_scale_for_tilt_with_visual_mask(
     tilt: f32,
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
@@ -771,7 +771,7 @@ fn player_draw_scale_for_tilt_with_visual_mask(
 
 #[inline(always)]
 fn player_draw_scale_with_visual_mask(
-    profile: &profile::Profile,
+    profile: &profile_data::Profile,
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
@@ -784,7 +784,7 @@ fn player_draw_scale_with_visual_mask(
 }
 
 #[inline(always)]
-fn player_draw_scale(profile: &profile::Profile) -> f32 {
+fn player_draw_scale(profile: &profile_data::Profile) -> f32 {
     let visual_mask = profile.visual_effects_active_mask.bits();
     player_draw_scale_with_visual_mask(profile, visual_mask, 0.0)
 }
@@ -1662,7 +1662,7 @@ fn apply_turn_options(
     note_ranges: [(usize, usize); MAX_PLAYERS],
     cols_per_player: usize,
     num_players: usize,
-    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     base_seed: u64,
 ) {
     for player in 0..num_players {
@@ -2650,7 +2650,7 @@ fn apply_uncommon_masks_with_masks(
 
 fn apply_uncommon_masks_for_player(
     notes: &mut Vec<Note>,
-    player_profile: &profile::Profile,
+    player_profile: &profile_data::Profile,
     timing_player: &TimingData,
     col_offset: usize,
     cols: usize,
@@ -2671,7 +2671,7 @@ fn apply_uncommon_masks_for_player(
 }
 
 #[inline(always)]
-fn has_uncommon_masks(profile: &profile::Profile) -> bool {
+fn has_uncommon_masks(profile: &profile_data::Profile) -> bool {
     !profile.insert_active_mask.is_empty()
         || !profile.remove_active_mask.is_empty()
         || !profile.holds_active_mask.is_empty()
@@ -2682,7 +2682,7 @@ fn apply_uncommon_chart_transforms(
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
     cols_per_player: usize,
     num_players: usize,
-    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
 ) {
     if num_players == 0
@@ -3720,7 +3720,7 @@ pub struct State {
     pub live_window_counts_10ms_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
     pub live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
 
-    pub player_profiles: [profile::Profile; MAX_PLAYERS],
+    pub player_profiles: [profile_data::Profile; MAX_PLAYERS],
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
@@ -5265,7 +5265,7 @@ pub fn init(
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
-    mut player_profiles: [profile::Profile; MAX_PLAYERS],
+    mut player_profiles: [profile_data::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
     replay_status_text: Option<Arc<str>>,
@@ -9046,7 +9046,7 @@ mod tests {
         }
     }
 
-    fn regression_state(player_profiles: [profile::Profile; MAX_PLAYERS]) -> super::State {
+    fn regression_state(player_profiles: [profile_data::Profile; MAX_PLAYERS]) -> super::State {
         let song = Arc::new(gameplay_regression_song());
         let chart = Arc::new(song.charts[0].clone());
         let charts = [chart.clone(), chart];
@@ -9197,8 +9197,10 @@ return Def.ActorFrame{}
                         .remove(0),
                 );
                 let chart = Arc::new(song.charts[chart_ix].clone());
-                let mut player_profiles =
-                    [profile::Profile::default(), profile::Profile::default()];
+                let mut player_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
                 player_profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
                 player_profiles[1].scroll_speed = ScrollSpeedSetting::CMod(516.0);
 
@@ -9288,7 +9290,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn regression_state_passes_hot_state_audit() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let state = regression_state(profiles);
         super::assert_valid_hot_state_for_tests(&state, 0.0, state.current_music_time_display);
     }
@@ -9408,13 +9413,13 @@ return Def.ActorFrame{}
             false,
             true,
             || {
-                let mut p1 = profile::Profile::default();
+                let mut p1 = profile_data::Profile::default();
                 p1.display_name = "P1 runtime".to_string();
                 p1.scroll_speed = ScrollSpeedSetting::XMod(1.5);
                 p1.perspective = profile_data::Perspective::Overhead;
                 p1.judgment_graphic = profile_data::JudgmentGraphic::new("Love");
 
-                let mut p2 = profile::Profile::default();
+                let mut p2 = profile_data::Profile::default();
                 p2.display_name = "P2 runtime".to_string();
                 p2.scroll_speed = ScrollSpeedSetting::CMod(777.0);
                 p2.perspective = profile_data::Perspective::Space;
@@ -9446,7 +9451,10 @@ return Def.ActorFrame{}
             false,
             true,
             || {
-                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
                 let mut state = regression_state(state_profiles);
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_start));
@@ -9467,7 +9475,10 @@ return Def.ActorFrame{}
             true,
             true,
             || {
-                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
 
                 let mut start_state = regression_state(state_profiles.clone());
                 assert_eq!(start_state.num_players, 2);
@@ -9492,7 +9503,10 @@ return Def.ActorFrame{}
             true,
             false,
             || {
-                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
                 let mut state = regression_state(state_profiles);
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
@@ -9533,7 +9547,10 @@ return Def.ActorFrame{}
                 let prev = crate::config::get().delayed_back;
                 crate::config::update_delayed_back(false);
 
-                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
                 let mut state = regression_state(state_profiles);
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
@@ -9571,7 +9588,10 @@ return Def.ActorFrame{}
                 let prev = crate::config::get().delayed_back;
                 crate::config::update_delayed_back(true);
 
-                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state_profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
                 let mut state = regression_state(state_profiles);
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
@@ -9594,7 +9614,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn begin_restart_exit_arms_cancel_transition_like_back_out() {
-        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let state_profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(state_profiles);
         assert!(state.exit_transition.is_none());
 
@@ -9612,7 +9635,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn begin_restart_exit_is_idempotent_when_already_exiting() {
-        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let state_profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(state_profiles);
 
         // Pretend a give-up exit is already in flight.
@@ -9629,7 +9655,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn positive_song_offset_delta_moves_notes_earlier_like_global_offset() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut song_state = regression_state(profiles.clone());
         let mut global_state = regression_state(profiles);
 
@@ -9658,7 +9687,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn global_offset_delta_preserves_player_shift() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let shift = 0.015_f32;
 
@@ -9780,7 +9812,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn lane_press_counts_hold_until_last_alias_release() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
 
         let mut transitions = Vec::new();
@@ -9817,7 +9852,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn physical_edges_still_judge_while_lane_is_logically_held() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
 
         let mut tap_edges = Vec::new();
@@ -9940,7 +9978,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn active_hold_let_go_visual_row_uses_frame_target() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let timing = Arc::new(test_timing(ROWS_PER_BEAT as usize * 4));
         state.timing = timing.clone();
@@ -9973,7 +10014,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn early_next_hold_start_settles_previous_same_column_hold() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let previous_end_ns = song_time_ns_from_seconds(1.0);
         let next_start_ns = song_time_ns_from_seconds(1.09375);
@@ -10033,7 +10077,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn roll_step_refreshes_before_event_time_decay() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let mut roll = test_roll(0, 0, ROWS_PER_BEAT as usize * 4);
         roll.result = Some(Judgment {
@@ -10083,7 +10130,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn live_input_resolves_invalid_edge_time_from_song_clock() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let event_time_ns = song_time_ns_from_seconds(12.345);
         let edge = test_input_edge_at(Lane::Left, true, super::INVALID_SONG_TIME_NS);
@@ -10105,7 +10155,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn empty_live_press_steps_receptor() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let event_time_ns = song_time_ns_from_seconds(12.345);
         state
@@ -10391,12 +10444,12 @@ return Def.ActorFrame{}
             true,
             false,
             || {
-                let mut p1 = profile::Profile::default();
+                let mut p1 = profile_data::Profile::default();
                 p1.error_ms_display = true;
                 p1.error_bar_text = true;
                 p1.error_bar_active_mask = profile_data::ErrorBarMask::TEXT;
 
-                let mut state = regression_state([p1, profile::Profile::default()]);
+                let mut state = regression_state([p1, profile_data::Profile::default()]);
                 let row_index = 48usize;
                 state.notes = vec![
                     test_note(0, row_index, NoteType::Tap),
@@ -10480,16 +10533,16 @@ return Def.ActorFrame{}
 
     #[test]
     fn error_bar_text_uses_10ms_blue_fantastic_threshold() {
-        let p1 = profile::Profile {
+        let p1 = profile_data::Profile {
             show_fa_plus_window: true,
             fa_plus_10ms_blue_window: true,
             custom_fantastic_window: false,
             error_bar_text: true,
             error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
 
-        let mut state = regression_state([p1, profile::Profile::default()]);
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
         state.total_elapsed_in_screen = 4.0;
 
         error_bar_register_tap(
@@ -10530,15 +10583,15 @@ return Def.ActorFrame{}
 
     #[test]
     fn text_error_bar_10ms_mode_surfaces_default_window_fantastics() {
-        let p1 = profile::Profile {
+        let p1 = profile_data::Profile {
             show_fa_plus_window: false,
             error_bar_text: true,
             text_error_bar_10ms: true,
             error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
 
-        let mut state = regression_state([p1, profile::Profile::default()]);
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
         state.total_elapsed_in_screen = 4.0;
 
         error_bar_register_tap(
@@ -10582,15 +10635,15 @@ return Def.ActorFrame{}
 
     #[test]
     fn text_error_bar_window_mode_preserves_default_threshold() {
-        let p1 = profile::Profile {
+        let p1 = profile_data::Profile {
             show_fa_plus_window: false,
             error_bar_text: true,
             text_error_bar_10ms: false,
             error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
 
-        let mut state = regression_state([p1, profile::Profile::default()]);
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
         state.total_elapsed_in_screen = 4.0;
 
         error_bar_register_tap(
@@ -10634,15 +10687,15 @@ return Def.ActorFrame{}
 
     #[test]
     fn average_error_bar_can_show_long_term_only() {
-        let p1 = profile::Profile {
+        let p1 = profile_data::Profile {
             error_bar_active_mask: profile_data::ErrorBarMask::AVERAGE,
             short_average_error_bar_enabled: false,
             long_error_bar_enabled: true,
             long_error_bar_threshold_ms: 1,
             long_error_bar_min_samples: 4,
-            ..profile::Profile::default()
+            ..profile_data::Profile::default()
         };
-        let mut state = regression_state([p1, profile::Profile::default()]);
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
         state.total_elapsed_in_screen = 4.0;
 
         for i in 0..4 {
@@ -10672,8 +10725,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn autosync_row_hits_use_music_time_offsets_at_rate() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let row_index = 48usize;
         let autosync_offset_ns = song_time_ns_from_seconds(0.015);
 
@@ -10705,8 +10760,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn hold_judgment_cleanup_uses_screen_time_boundary() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         state.total_elapsed_in_screen = 5.0;
         state.hold_judgments[0] = Some(HoldJudgmentRenderInfo {
             result: HoldResult::Held,
@@ -10725,8 +10782,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn held_miss_feedback_records_column_and_cleans_up() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         state.total_elapsed_in_screen = 5.0;
         state.notes = vec![test_note(2, 48, NoteType::Tap)];
         state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
@@ -10768,8 +10827,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn mine_judgment_feedback_records_result_column_and_time() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         state.total_elapsed_in_screen = 9.25;
 
         super::set_last_mine_judgment(&mut state, 0, 2, MineResult::Avoided);
@@ -10784,8 +10845,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn hidden_song_lua_tap_steps_receptor_without_core_flash() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let row_index = 48usize;
         let column = 1usize;
         trigger_receptor_step_pulse(&mut state, 0);
@@ -10828,8 +10891,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn visible_tap_hit_steps_receptor_with_core_flash() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let row_index = 48usize;
         let column = 1usize;
         let note_time = song_time_ns_from_seconds(1.0);
@@ -10856,16 +10921,18 @@ return Def.ActorFrame{}
     #[test]
     fn tap_explosion_mask_disables_selected_tap_window() {
         let column = 1usize;
-        let mut enabled =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut enabled = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         trigger_tap_explosion(&mut enabled, column, JudgeGrade::Great);
         assert!(enabled.tap_explosions[column].is_some());
 
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile
             .tap_explosion_active_mask
             .remove(profile_data::TapExplosionMask::GREAT);
-        let mut disabled = regression_state([profile, profile::Profile::default()]);
+        let mut disabled = regression_state([profile, profile_data::Profile::default()]);
         trigger_tap_explosion(&mut disabled, column, JudgeGrade::Great);
         assert!(disabled.tap_explosions[column].is_none());
     }
@@ -10878,26 +10945,28 @@ return Def.ActorFrame{}
     #[test]
     fn tap_explosion_mask_disables_held_success_flash() {
         let column = 1usize;
-        let mut enabled =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut enabled = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         trigger_hold_explosion(&mut enabled, column);
         assert!(enabled.tap_explosions[column].is_some());
 
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile
             .tap_explosion_active_mask
             .remove(profile_data::TapExplosionMask::HELD);
-        let mut disabled = regression_state([profile, profile::Profile::default()]);
+        let mut disabled = regression_state([profile, profile_data::Profile::default()]);
         trigger_hold_explosion(&mut disabled, column);
         assert!(disabled.tap_explosions[column].is_none());
     }
 
     #[test]
     fn white_fantastic_row_uses_bright_tap_explosion() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
         profile.show_fa_plus_window = true;
-        let mut state = regression_state([profile, profile::Profile::default()]);
+        let mut state = regression_state([profile, profile_data::Profile::default()]);
         let row_index = 48usize;
         let column = 1usize;
         let mut note = note_with_judgment(
@@ -10928,10 +10997,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn blue_fantastic_row_uses_dim_tap_explosion() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
         profile.show_fa_plus_window = true;
-        let mut state = regression_state([profile, profile::Profile::default()]);
+        let mut state = regression_state([profile, profile_data::Profile::default()]);
         let row_index = 48usize;
         let column = 1usize;
         let mut note =
@@ -10957,10 +11026,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn ten_ms_blue_window_uses_bright_tap_explosion_above_10ms() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.show_fa_plus_window = true;
         profile.fa_plus_10ms_blue_window = true;
-        let state = regression_state([profile, profile::Profile::default()]);
+        let state = regression_state([profile, profile_data::Profile::default()]);
         let judgment = Judgment {
             time_error_ms: 12.0,
             time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
@@ -10974,11 +11043,11 @@ return Def.ActorFrame{}
 
     #[test]
     fn split_15_10ms_keeps_dim_tap_explosion_above_10ms() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.show_fa_plus_window = true;
         profile.fa_plus_10ms_blue_window = true;
         profile.split_15_10ms = true;
-        let state = regression_state([profile, profile::Profile::default()]);
+        let state = regression_state([profile, profile_data::Profile::default()]);
         let judgment = Judgment {
             time_error_ms: 12.0,
             time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
@@ -10992,8 +11061,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn synthetic_receptor_step_survives_until_lift() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let column = 0usize;
 
         trigger_receptor_step_pulse(&mut state, column);
@@ -11423,7 +11494,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn course_display_carry_captures_current_life() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.players[0].life = 0.32;
 
         let carry = super::course_display_carry_from_state(&state);
@@ -11657,8 +11728,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn autoplay_rows_do_not_record_ex_counts() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let row_index = 48usize;
         state.notes = vec![test_note(0, row_index, NoteType::Tap)];
         state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
@@ -11751,7 +11824,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn score_valid_rejects_nohands_when_chart_has_hands() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.remove_active_mask =
             profile_data::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
         let chart = test_chart(
@@ -11771,7 +11844,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn score_valid_keeps_turn_options_rankable() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.turn_option = profile_data::TurnOption::Mirror;
         let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
 
@@ -11783,7 +11856,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn score_valid_keeps_cmod_rankable_on_timing_changes() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.scroll_speed = ScrollSpeedSetting::CMod(600.0);
         let chart = test_chart(
             ArrowStats::default(),
@@ -11802,7 +11875,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn score_valid_rejects_disabled_chart_attacks() {
-        let mut profile = profile::Profile::default();
+        let mut profile = profile_data::Profile::default();
         profile.attack_mode = profile_data::AttackMode::Off;
         let chart = test_chart(
             ArrowStats::default(),
@@ -11892,7 +11965,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn chart_attack_sudden_offset_approaches_instead_of_snapping() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
             Some(
                 "TIME=0.000:LEN=3.000:MODS=*1000 sudden,*1000 -125% suddenoffset\
@@ -11925,7 +11998,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn chart_attack_runtime_mods_stop_after_len() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
             Some("TIME=0.000:LEN=1.000:MODS=50% drunk"),
             profile_data::AttackMode::On,
@@ -11943,7 +12016,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn outro_attack_clear_phases_out_song_lua_visual_mods() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.active_attack_visual[0].confusion_offset = Some(-12.56);
         state.active_attack_visual[0].tipsy = Some(0.75);
         state.active_attack_visibility[0].dark = Some(1.0);
@@ -11972,7 +12045,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn outro_attack_clear_keeps_player_rotationz_eases_alive() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -12398,7 +12471,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn song_lua_active_reset_cuts_overlapping_ease_tail() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -12541,7 +12614,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn song_lua_constant_mods_persist_after_attack_window() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -12571,7 +12644,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn song_lua_constant_visual_scroll_and_mini_mods_approach() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -12613,7 +12686,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn song_lua_active_reset_overrides_ended_constant_mods() {
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -12705,7 +12778,7 @@ return Def.ActorFrame{}
         };
         let timing =
             TimingData::from_segments(0.036, 0.0, &timing_segments, &test_row_to_beat(72 * 48));
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.attack_mask_windows[0] =
             super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
@@ -12832,7 +12905,7 @@ return Def.ActorFrame{}
                 && (window.to - 20.0).abs() <= 0.000_1
         }));
 
-        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.attack_mask_windows[0] = constants;
         state.song_lua_ease_windows[0] = windows;
 
@@ -13225,7 +13298,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn player_draw_scale_helper_uses_supplied_tilt() {
-        let profile = crate::game::profile::Profile::default();
+        let profile = profile_data::Profile::default();
         let base = player_draw_scale_for_tilt_with_visual_mask(0.0, &profile, 0, 0.0);
         let tilted = player_draw_scale_for_tilt_with_visual_mask(-1.0, &profile, 0, 0.0);
         assert!((base - 1.0).abs() <= 1e-6);
@@ -13442,8 +13515,10 @@ return Def.ActorFrame{}
         ));
         let note_time_ns = timing.get_time_for_beat_ns(1.0);
 
-        let mut tap_state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut tap_state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         set_state_timing(&mut tap_state, Arc::clone(&timing));
         tap_state.note_time_cache_ns[0] = note_time_ns;
         let miss_distance_ns =
@@ -13464,8 +13539,10 @@ return Def.ActorFrame{}
             Some(JudgeGrade::Miss)
         );
 
-        let mut mine_state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut mine_state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         set_state_timing(&mut mine_state, Arc::clone(&timing));
         set_regression_mine(&mut mine_state, 0, 0, ROWS_PER_BEAT as usize, note_time_ns);
         let mine_distance_ns =
@@ -13495,7 +13572,10 @@ return Def.ActorFrame{}
             },
             &test_row_to_beat(ROWS_PER_BEAT as usize * 4),
         ));
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         set_state_timing(&mut state, Arc::clone(&timing));
 
@@ -13518,7 +13598,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn completed_song_finalizes_last_tap_miss_before_eval() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         assert_eq!(state.num_players, 1);
 
@@ -13602,7 +13685,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn crossed_held_mine_hits_even_when_frame_offset_exceeds_mine_window() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let mine_time_ns = song_time_ns_from_seconds(1.0);
         set_regression_mine(&mut state, 0, 0, 48, mine_time_ns);
@@ -13627,7 +13713,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn mine_hit_side_effects_wait_until_after_active_holds() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let hold_end_ns = song_time_ns_from_seconds(1.0);
         state.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize);
@@ -13667,7 +13756,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn scored_missed_hold_resolves_let_go_at_hold_end() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let note_time_ns = song_time_ns_from_seconds(1.0);
         let hold_end_ns = song_time_ns_from_seconds(2.0);
@@ -13714,7 +13806,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn unscored_missed_hold_emits_missed_feedback_at_hold_end() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         let note_time_ns = song_time_ns_from_seconds(1.0);
         let hold_end_ns = song_time_ns_from_seconds(2.0);
@@ -13750,7 +13845,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn crossed_held_mine_new_press_excludes_rows_before_press() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
         let mut state = regression_state(profiles);
         set_regression_mine(&mut state, 0, 0, 48, song_time_ns_from_seconds(1.0));
         let crossed_from_ns = crossed_mine_held_start_time(
@@ -14190,8 +14288,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn note_hit_eval_scales_windows_in_music_time_ns() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         state.music_rate = 1.5;
         state.player_judgment_timing = std::array::from_fn(|player| {
             build_player_judgment_timing(
@@ -14218,7 +14318,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn note_hit_eval_matches_tap_and_lift_zero_offsets() {
-        let state = regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let tap_time_ns = song_time_ns_from_seconds(1.0);
         let lift_time_ns = song_time_ns_from_seconds(2.0);
 
@@ -14235,8 +14338,10 @@ return Def.ActorFrame{}
 
     #[test]
     fn set_music_rate_rebuilds_judgment_and_end_times() {
-        let mut state =
-            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
         let baseline_great_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
         let baseline_notes_end = state.notes_end_time_ns;
         let baseline_music_end = state.music_end_time_ns;

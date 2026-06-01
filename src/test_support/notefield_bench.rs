@@ -23,7 +23,7 @@ const WINDOW_BEATS_AFTER: f32 = 24.0;
 
 pub struct NotefieldBenchFixture {
     state: gameplay::State,
-    profile: profile::Profile,
+    profile: profile_data::Profile,
 }
 
 impl NotefieldBenchFixture {
@@ -35,11 +35,11 @@ impl NotefieldBenchFixture {
         &mut self.state
     }
 
-    pub fn profile(&self) -> &profile::Profile {
+    pub fn profile(&self) -> &profile_data::Profile {
         &self.profile
     }
 
-    pub fn into_parts(self) -> (gameplay::State, profile::Profile) {
+    pub fn into_parts(self) -> (gameplay::State, profile_data::Profile) {
         (self.state, self.profile)
     }
 
@@ -77,7 +77,10 @@ pub fn fixture() -> NotefieldBenchFixture {
     let gameplay_chart = Arc::new(bench_gameplay_chart());
     let gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS] =
         [gameplay_chart.clone(), gameplay_chart];
-    let mut player_profiles = [profile::Profile::default(), profile::Profile::default()];
+    let mut player_profiles = [
+        profile_data::Profile::default(),
+        profile_data::Profile::default(),
+    ];
     player_profiles[0].noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
     player_profiles[0].scroll_speed = ScrollSpeedSetting::CMod(620.0);
     player_profiles[0].judgment_graphic = profile_data::JudgmentGraphic::new("Wendy");

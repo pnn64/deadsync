@@ -89,7 +89,7 @@ pub(super) fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> ScrollSpeedSetting {
 
 #[inline(always)]
 pub(super) fn sync_profile_scroll_speed(
-    profile: &mut crate::game::profile::Profile,
+    profile: &mut deadsync_profile::Profile,
     speed_mod: &SpeedMod,
 ) {
     profile.scroll_speed = scroll_speed_for_mod(speed_mod);
@@ -406,7 +406,7 @@ pub(super) fn speed_mod_helper_scaled_text(
     chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
-    profile: &crate::game::profile::Profile,
+    profile: &deadsync_profile::Profile,
 ) -> String {
     let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, chart, speed_mod, music_rate) else {
         return String::new();

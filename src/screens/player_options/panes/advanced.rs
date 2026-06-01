@@ -16,8 +16,8 @@ use crate::game::profile as gp;
 use deadsync_profile::{
     ComboColors, ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    MiniIndicatorSize, PlayerSide, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption,
-    TurnOption,
+    MiniIndicatorSize, PlayerSide, Profile, ScatterplotMaxWindow, TargetScoreSetting,
+    TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -644,7 +644,7 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
     },
     sync_visibility = false,
 );
-fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
+fn fa_plus_bits_from_profile(p: &Profile) -> u32 {
     let mut bits = FaPlusMask::empty();
     if p.show_fa_plus_window {
         bits.insert(FaPlusMask::WINDOW);
@@ -670,7 +670,7 @@ fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
 /// Project the full FA+ mask onto every fan-out profile field. Both FA+
 /// rows share the same projection — they only differ in which slice of
 /// `FaPlusMask` they own at toggle time.
-fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut gp::Profile, _b: u32, mask: FaPlusMask) {
+fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut Profile, _b: u32, mask: FaPlusMask) {
     p.show_fa_plus_window = mask.contains(FaPlusMask::WINDOW);
     p.show_ex_score = mask.contains(FaPlusMask::EX_SCORE);
     p.show_hard_ex_score = mask.contains(FaPlusMask::HARD_EX_SCORE);
@@ -679,7 +679,7 @@ fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut gp::Profile, _b: u32, mas
     p.split_15_10ms = mask.contains(FaPlusMask::SPLIT_15_10MS);
 }
 
-fn persist_fa_plus(s: PlayerSide, p: &gp::Profile) {
+fn persist_fa_plus(s: PlayerSide, p: &Profile) {
     gp::update_show_fa_plus_window_for_side(s, p.show_fa_plus_window);
     gp::update_show_ex_score_for_side(s, p.show_ex_score);
     gp::update_show_hard_ex_score_for_side(s, p.show_hard_ex_score);
@@ -1708,7 +1708,7 @@ mod bitmask_binding_init_tests {
     use super::super::super::state::{FaPlusMask, HideMask, PlayerOptionMasks};
     use super::*;
     use crate::assets::i18n::{LookupKey, lookup_key};
-    use crate::game::profile::Profile;
+    use deadsync_profile::Profile;
 
     fn ensure_i18n() {
         use std::sync::Once;

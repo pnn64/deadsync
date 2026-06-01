@@ -432,6 +432,80 @@ pub struct ArrowCloudScores {
     pub hard_ex: Option<ArrowCloudScore>,
 }
 
+pub fn arrowcloud_score_from_retrieve_fields(
+    score: Option<f64>,
+    grade: Option<&str>,
+    date: Option<&str>,
+    play_id: Option<i64>,
+    is_fail: bool,
+) -> Option<ArrowCloudScore> {
+    let percent_0_100 = score?.clamp(0.0, 100.0);
+    let server_grade = grade.and_then(ArrowCloudServerGrade::from_server_str);
+    let played_at = date
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+    Some(ArrowCloudScore {
+        score_percent: percent_0_100 / 100.0,
+        server_grade,
+        played_at,
+        play_id,
+        is_fail,
+    })
+}
+
+pub fn arrowcloud_score_from_submit_percent(
+    percent_0_100: f64,
+    is_fail: bool,
+    submitted_at: DateTime<Utc>,
+) -> Option<ArrowCloudScore> {
+    if !percent_0_100.is_finite() {
+        return None;
+    }
+    Some(ArrowCloudScore {
+        score_percent: percent_0_100.clamp(0.0, 100.0) / 100.0,
+        server_grade: None,
+        played_at: Some(submitted_at),
+        play_id: None,
+        is_fail,
+    })
+}
+
+pub fn set_arrowcloud_score_for_leaderboard(
+    scores: &mut ArrowCloudScores,
+    leaderboard_id: u32,
+    score: ArrowCloudScore,
+) -> bool {
+    match ArrowCloudLeaderboard::from_id(leaderboard_id) {
+        Some(ArrowCloudLeaderboard::Itg) => scores.itg = Some(score),
+        Some(ArrowCloudLeaderboard::Ex) => scores.ex = Some(score),
+        Some(ArrowCloudLeaderboard::HardEx) => scores.hard_ex = Some(score),
+        None => return false,
+    }
+    true
+}
+
+#[inline]
+pub fn merge_arrowcloud_score_slot(
+    existing: &mut Option<ArrowCloudScore>,
+    incoming: Option<ArrowCloudScore>,
+) {
+    let Some(new_score) = incoming else {
+        return;
+    };
+    match existing {
+        None => *existing = Some(new_score),
+        Some(prev) => {
+            if prev.is_fail && !new_score.is_fail {
+                *prev = new_score;
+            } else if !prev.is_fail && new_score.is_fail {
+                // Keep prev: the existing non-failed score wins.
+            } else if new_score.score_percent > prev.score_percent {
+                *prev = new_score;
+            }
+        }
+    }
+}
+
 /// Global ArrowCloud leaderboard variants. Numeric values match server IDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -554,6 +628,529 @@ pub fn score_to_grade(score: f64) -> Grade {
     } else {
         Grade::Tier17
     }
+}
+
+pub const fn grade_to_code(grade: Grade) -> u8 {
+    match grade {
+        Grade::Quint => 0,
+        Grade::Tier01 => 1,
+        Grade::Tier02 => 2,
+        Grade::Tier03 => 3,
+        Grade::Tier04 => 4,
+        Grade::Tier05 => 5,
+        Grade::Tier06 => 6,
+        Grade::Tier07 => 7,
+        Grade::Tier08 => 8,
+        Grade::Tier09 => 9,
+        Grade::Tier10 => 10,
+        Grade::Tier11 => 11,
+        Grade::Tier12 => 12,
+        Grade::Tier13 => 13,
+        Grade::Tier14 => 14,
+        Grade::Tier15 => 15,
+        Grade::Tier16 => 16,
+        Grade::Tier17 => 17,
+        Grade::Failed => 18,
+    }
+}
+
+pub const fn grade_from_code(code: u8) -> Grade {
+    match code {
+        0 => Grade::Quint,
+        1 => Grade::Tier01,
+        2 => Grade::Tier02,
+        3 => Grade::Tier03,
+        4 => Grade::Tier04,
+        5 => Grade::Tier05,
+        6 => Grade::Tier06,
+        7 => Grade::Tier07,
+        8 => Grade::Tier08,
+        9 => Grade::Tier09,
+        10 => Grade::Tier10,
+        11 => Grade::Tier11,
+        12 => Grade::Tier12,
+        13 => Grade::Tier13,
+        14 => Grade::Tier14,
+        15 => Grade::Tier15,
+        16 => Grade::Tier16,
+        17 => Grade::Tier17,
+        _ => Grade::Failed,
+    }
+}
+
+#[inline(always)]
+pub const fn cached_score(
+    grade: Grade,
+    score_percent: f64,
+    lamp_index: Option<u8>,
+    lamp_judge_count: Option<u8>,
+) -> CachedScore {
+    if matches!(grade, Grade::Failed) {
+        CachedScore {
+            grade,
+            score_percent,
+            lamp_index: None,
+            lamp_judge_count: None,
+        }
+    } else {
+        CachedScore {
+            grade,
+            score_percent,
+            lamp_index,
+            lamp_judge_count,
+        }
+    }
+}
+
+#[inline(always)]
+pub fn cached_score_10000(score: &CachedScore) -> f64 {
+    score.score_percent * 10000.0
+}
+
+#[inline(always)]
+pub fn same_score_10000(a: f64, b: f64) -> bool {
+    a.is_finite() && b.is_finite() && (a.round() - b.round()).abs() <= 1.0
+}
+
+#[inline(always)]
+const fn grade_priority(grade: Grade) -> u8 {
+    match grade {
+        Grade::Quint => 0,
+        Grade::Tier01 => 1,
+        Grade::Tier02 => 2,
+        Grade::Tier03 => 3,
+        Grade::Tier04 => 4,
+        Grade::Tier05 => 5,
+        Grade::Tier06 => 6,
+        Grade::Tier07 => 7,
+        Grade::Tier08 => 8,
+        Grade::Tier09 => 9,
+        Grade::Tier10 => 10,
+        Grade::Tier11 => 11,
+        Grade::Tier12 => 12,
+        Grade::Tier13 => 13,
+        Grade::Tier14 => 14,
+        Grade::Tier15 => 15,
+        Grade::Tier16 => 16,
+        Grade::Tier17 => 17,
+        Grade::Failed => u8::MAX,
+    }
+}
+
+#[inline(always)]
+const fn lamp_priority(lamp_index: Option<u8>) -> u8 {
+    match lamp_index {
+        Some(idx @ 0..=4) => idx,
+        Some(_) | None => u8::MAX,
+    }
+}
+
+#[inline(always)]
+const fn lamp_judge_count_priority(count: Option<u8>) -> u8 {
+    match count {
+        Some(value) => value,
+        None => u8::MAX,
+    }
+}
+
+#[inline(always)]
+pub fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
+    match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
+        (true, false) => return true,
+        (false, true) => return false,
+        _ => {}
+    }
+    if !same_score_10000(cached_score_10000(new), cached_score_10000(old)) {
+        return new.score_percent > old.score_percent;
+    }
+
+    let new_grade = grade_priority(new.grade);
+    let old_grade = grade_priority(old.grade);
+    if new_grade != old_grade {
+        return new_grade < old_grade;
+    }
+
+    let new_lamp = lamp_priority(new.lamp_index);
+    let old_lamp = lamp_priority(old.lamp_index);
+    if new_lamp != old_lamp {
+        return new_lamp < old_lamp;
+    }
+
+    let new_count = lamp_judge_count_priority(new.lamp_judge_count);
+    let old_count = lamp_judge_count_priority(old.lamp_judge_count);
+    new_count < old_count
+}
+
+#[inline(always)]
+pub fn is_better_scalar_score(
+    new_grade: Grade,
+    new_percent: f64,
+    old_grade: Grade,
+    old_percent: f64,
+) -> bool {
+    match (old_grade == Grade::Failed, new_grade == Grade::Failed) {
+        (true, false) => return true,
+        (false, true) => return false,
+        _ => {}
+    }
+    new_percent > old_percent
+}
+
+#[inline(always)]
+pub fn failed_score_override(a: &CachedScore, b: &CachedScore) -> Option<CachedScore> {
+    if a.grade == Grade::Failed
+        && b.grade != Grade::Failed
+        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
+    {
+        Some(*a)
+    } else if b.grade == Grade::Failed
+        && a.grade != Grade::Failed
+        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
+    {
+        Some(*b)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+pub fn replaces_stale_quint(
+    score: &CachedScore,
+    existing: &CachedScore,
+    proves_nonquint_ex: bool,
+) -> bool {
+    proves_nonquint_ex
+        && existing.grade == Grade::Quint
+        && existing.lamp_index == Some(0)
+        && score.grade == Grade::Tier01
+        && score.lamp_index == Some(1)
+        && same_score_10000(cached_score_10000(score), cached_score_10000(existing))
+}
+
+#[inline(always)]
+const fn non_quint_grade(grade: Grade) -> Grade {
+    match grade {
+        Grade::Quint => Grade::Tier01,
+        _ => grade,
+    }
+}
+
+#[inline(always)]
+fn fix_quint_grade_lamp(grade: Grade, score_percent: f64, lamp_index: Option<u8>) -> Grade {
+    if grade == Grade::Failed {
+        return Grade::Failed;
+    }
+    let grade = if grade == Grade::Quint {
+        score_to_grade(score_percent.clamp(0.0, 1.0) * 10000.0)
+    } else {
+        grade
+    };
+    if lamp_index == Some(0) {
+        Grade::Quint
+    } else {
+        grade
+    }
+}
+
+#[inline(always)]
+pub fn fix_gs_cached_score(score: CachedScore) -> CachedScore {
+    cached_score(
+        fix_quint_grade_lamp(score.grade, score.score_percent, score.lamp_index),
+        score.score_percent,
+        score.lamp_index,
+        score.lamp_judge_count,
+    )
+}
+
+#[inline(always)]
+pub fn fix_local_ex_grade(grade: Grade, ex_score_percent: f64) -> Grade {
+    if grade == Grade::Failed {
+        Grade::Failed
+    } else {
+        promote_quint_grade(non_quint_grade(grade), ex_score_percent)
+    }
+}
+
+pub const LOCAL_SCORE_VERSION: u16 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
+pub struct LocalReplayEdge {
+    pub event_music_time_ns: SongTimeNs,
+    pub lane: u8,
+    pub pressed: bool,
+    // 0 = Keyboard, 1 = Gamepad
+    pub source: u8,
+}
+
+impl LocalReplayEdge {
+    #[inline(always)]
+    pub const fn new(
+        event_music_time_ns: SongTimeNs,
+        lane: u8,
+        pressed: bool,
+        source: InputSource,
+    ) -> Self {
+        Self {
+            event_music_time_ns,
+            lane,
+            pressed,
+            source: Self::source_code(source),
+        }
+    }
+
+    #[inline(always)]
+    pub const fn input_source(self) -> InputSource {
+        match self.source {
+            1 => InputSource::Gamepad,
+            _ => InputSource::Keyboard,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn source_code(source: InputSource) -> u8 {
+        match source {
+            InputSource::Keyboard => 0,
+            InputSource::Gamepad => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
+pub struct LocalScoreHeader {
+    pub version: u16,
+    pub played_at_ms: i64,
+    pub music_rate: f32,
+    pub score_percent: f64,
+    pub grade_code: u8,
+    pub lamp_index: Option<u8>,
+    pub lamp_judge_count: Option<u8>,
+    pub ex_score_percent: f64,
+    pub hard_ex_score_percent: f64,
+    // Fantastic, Excellent, Great, Decent, WayOff, Miss (row judgments)
+    pub judgment_counts: [u32; 6],
+    pub holds_held: u32,
+    pub holds_total: u32,
+    pub rolls_held: u32,
+    pub rolls_total: u32,
+    pub mines_avoided: u32,
+    pub mines_total: u32,
+    pub hands_achieved: u32,
+    pub fail_time: Option<f32>,
+    pub beat0_time_ns: SongTimeNs,
+}
+
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+pub struct LocalScoreEntry {
+    pub version: u16,
+    pub played_at_ms: i64,
+    pub music_rate: f32,
+    pub score_percent: f64,
+    pub grade_code: u8,
+    pub lamp_index: Option<u8>,
+    pub lamp_judge_count: Option<u8>,
+    pub ex_score_percent: f64,
+    pub hard_ex_score_percent: f64,
+    pub judgment_counts: [u32; 6],
+    pub holds_held: u32,
+    pub holds_total: u32,
+    pub rolls_held: u32,
+    pub rolls_total: u32,
+    pub mines_avoided: u32,
+    pub mines_total: u32,
+    pub hands_achieved: u32,
+    pub fail_time: Option<f32>,
+    pub beat0_time_ns: SongTimeNs,
+    pub replay: Vec<LocalReplayEdge>,
+}
+
+impl LocalScoreEntry {
+    pub fn header(&self) -> LocalScoreHeader {
+        LocalScoreHeader {
+            version: self.version,
+            played_at_ms: self.played_at_ms,
+            music_rate: self.music_rate,
+            score_percent: self.score_percent,
+            grade_code: self.grade_code,
+            lamp_index: self.lamp_index,
+            lamp_judge_count: self.lamp_judge_count,
+            ex_score_percent: self.ex_score_percent,
+            hard_ex_score_percent: self.hard_ex_score_percent,
+            judgment_counts: self.judgment_counts,
+            holds_held: self.holds_held,
+            holds_total: self.holds_total,
+            rolls_held: self.rolls_held,
+            rolls_total: self.rolls_total,
+            mines_avoided: self.mines_avoided,
+            mines_total: self.mines_total,
+            hands_achieved: self.hands_achieved,
+            fail_time: self.fail_time,
+            beat0_time_ns: self.beat0_time_ns,
+        }
+    }
+}
+
+#[inline(always)]
+fn local_lamp_judge_count(count: u32) -> Option<u8> {
+    if (1..=9).contains(&count) {
+        Some(count as u8)
+    } else {
+        None
+    }
+}
+
+pub fn compute_local_lamp(
+    counts: [u32; 6],
+    grade: Grade,
+    white_fantastics: Option<u32>,
+) -> (Option<u8>, Option<u8>) {
+    if grade == Grade::Failed {
+        return (None, None);
+    }
+    if grade == Grade::Quint {
+        return (Some(0), None);
+    }
+
+    let excellent = counts[1];
+    let great = counts[2];
+    let decent = counts[3];
+    let wayoff = counts[4];
+    let miss = counts[5];
+
+    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 && excellent == 0 {
+        return (Some(1), white_fantastics.and_then(local_lamp_judge_count));
+    }
+    if miss == 0 && wayoff == 0 && decent == 0 && great == 0 {
+        return (Some(2), local_lamp_judge_count(excellent));
+    }
+    if miss == 0 && wayoff == 0 && decent == 0 {
+        return (Some(3), local_lamp_judge_count(great));
+    }
+    if miss == 0 && wayoff == 0 {
+        return (Some(4), local_lamp_judge_count(decent));
+    }
+    (None, None)
+}
+
+#[inline(always)]
+const fn local_score_grade(grade_code: u8, has_fail_time: bool) -> Grade {
+    if has_fail_time {
+        Grade::Failed
+    } else {
+        grade_from_code(grade_code)
+    }
+}
+
+#[inline(always)]
+pub fn cached_score_from_local_header(h: &LocalScoreHeader) -> CachedScore {
+    let grade = fix_local_ex_grade(
+        local_score_grade(h.grade_code, h.fail_time.is_some()),
+        h.ex_score_percent,
+    );
+    let (lamp_index, lamp_judge_count) = if grade == Grade::Quint {
+        (Some(0), None)
+    } else if h.lamp_index == Some(0) {
+        compute_local_lamp(h.judgment_counts, grade, None)
+    } else {
+        (h.lamp_index, h.lamp_judge_count)
+    };
+    cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
+}
+
+pub fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreHeader> {
+    let Ok((h, _)) =
+        bincode::decode_from_slice::<LocalScoreHeader, _>(bytes, bincode::config::standard())
+    else {
+        return None;
+    };
+    if h.version != LOCAL_SCORE_VERSION {
+        return None;
+    }
+    Some(h)
+}
+
+pub fn decode_local_score_entry(bytes: &[u8]) -> Option<LocalScoreEntry> {
+    let Ok((entry, _)) =
+        bincode::decode_from_slice::<LocalScoreEntry, _>(bytes, bincode::config::standard())
+    else {
+        return None;
+    };
+    if entry.version != LOCAL_SCORE_VERSION {
+        return None;
+    }
+    Some(entry)
+}
+
+pub fn encode_local_score_entry(entry: &LocalScoreEntry) -> Option<Vec<u8>> {
+    bincode::encode_to_vec(entry, bincode::config::standard()).ok()
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct GsScoreEntryV1 {
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    username: String,
+    fetched_at_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+pub struct GsScoreEntry {
+    pub score_percent: f64,
+    pub grade_code: u8,
+    pub lamp_index: Option<u8>,
+    pub lamp_judge_count: Option<u8>,
+    pub username: String,
+    pub fetched_at_ms: i64,
+}
+
+pub fn gs_score_entry_from_cached(
+    score: CachedScore,
+    username: &str,
+    fetched_at_ms: i64,
+) -> GsScoreEntry {
+    let score = fix_gs_cached_score(score);
+    GsScoreEntry {
+        score_percent: score.score_percent,
+        grade_code: grade_to_code(score.grade),
+        lamp_index: score.lamp_index,
+        lamp_judge_count: score.lamp_judge_count,
+        username: username.to_string(),
+        fetched_at_ms,
+    }
+}
+
+pub fn cached_score_from_gs_entry(entry: &GsScoreEntry) -> CachedScore {
+    fix_gs_cached_score(cached_score(
+        grade_from_code(entry.grade_code),
+        entry.score_percent,
+        entry.lamp_index,
+        entry.lamp_judge_count,
+    ))
+}
+
+pub fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
+    if let Ok((entry, _)) =
+        bincode::decode_from_slice::<GsScoreEntry, _>(bytes, bincode::config::standard())
+    {
+        return Some(entry);
+    }
+    if let Ok((v1, _)) =
+        bincode::decode_from_slice::<GsScoreEntryV1, _>(bytes, bincode::config::standard())
+    {
+        return Some(GsScoreEntry {
+            score_percent: v1.score_percent,
+            grade_code: v1.grade_code,
+            lamp_index: v1.lamp_index,
+            lamp_judge_count: None,
+            username: v1.username,
+            fetched_at_ms: v1.fetched_at_ms,
+        });
+    }
+    None
+}
+
+pub fn encode_gs_score_entry(entry: &GsScoreEntry) -> Option<Vec<u8>> {
+    bincode::encode_to_vec(entry, bincode::config::standard()).ok()
 }
 
 #[inline(always)]
@@ -730,6 +1327,323 @@ mod tests {
     }
 
     #[test]
+    fn grade_storage_codes_round_trip_stable_variants() {
+        for (grade, code) in [
+            (Grade::Quint, 0),
+            (Grade::Tier01, 1),
+            (Grade::Tier02, 2),
+            (Grade::Tier03, 3),
+            (Grade::Tier04, 4),
+            (Grade::Tier05, 5),
+            (Grade::Tier06, 6),
+            (Grade::Tier07, 7),
+            (Grade::Tier08, 8),
+            (Grade::Tier09, 9),
+            (Grade::Tier10, 10),
+            (Grade::Tier11, 11),
+            (Grade::Tier12, 12),
+            (Grade::Tier13, 13),
+            (Grade::Tier14, 14),
+            (Grade::Tier15, 15),
+            (Grade::Tier16, 16),
+            (Grade::Tier17, 17),
+            (Grade::Failed, 18),
+        ] {
+            assert_eq!(grade_to_code(grade), code);
+            assert_eq!(grade_from_code(code), grade);
+        }
+        assert_eq!(grade_from_code(255), Grade::Failed);
+    }
+
+    #[test]
+    fn cached_score_clears_lamp_fields_for_failed_runs() {
+        let score = cached_score(Grade::Failed, 0.91, Some(3), Some(2));
+        assert_eq!(score.grade, Grade::Failed);
+        assert_eq!(score.score_percent, 0.91);
+        assert_eq!(score.lamp_index, None);
+        assert_eq!(score.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn itg_score_order_prefers_richer_tied_score() {
+        let quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+        };
+        let quint = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        let bland_quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: None,
+        };
+
+        assert!(is_better_itg(&quint, &quad));
+        assert!(is_better_itg(&quad, &bland_quad));
+        assert!(!is_better_itg(&bland_quad, &quad));
+    }
+
+    #[test]
+    fn stale_quint_replacement_requires_nonperfect_ex() {
+        let stale_quint = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        let corrected_quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: None,
+        };
+
+        assert!(replaces_stale_quint(&corrected_quad, &stale_quint, true));
+        assert!(!replaces_stale_quint(&corrected_quad, &stale_quint, false));
+        assert!(!is_better_itg(&corrected_quad, &stale_quint));
+    }
+
+    #[test]
+    fn failed_score_override_preserves_known_failed_run() {
+        let failed = CachedScore {
+            grade: Grade::Failed,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        let passed = CachedScore {
+            grade: Grade::Tier17,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+
+        assert_eq!(failed_score_override(&failed, &passed), Some(failed));
+        assert_eq!(failed_score_override(&passed, &failed), Some(failed));
+    }
+
+    #[test]
+    fn gs_cached_score_recomputes_stale_quint_from_lamp() {
+        let stale = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+        };
+        assert_eq!(fix_gs_cached_score(stale).grade, Grade::Tier01);
+
+        let quint_lamp = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        assert_eq!(fix_gs_cached_score(quint_lamp).grade, Grade::Quint);
+    }
+
+    #[test]
+    fn gs_score_entry_roundtrip_preserves_lamp_judge_count() {
+        let score = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+        };
+
+        let entry = gs_score_entry_from_cached(score, "Player", 1234);
+        assert_eq!(entry.grade_code, grade_to_code(Grade::Tier01));
+        assert_eq!(entry.username, "Player");
+        assert_eq!(entry.fetched_at_ms, 1234);
+
+        let bytes = encode_gs_score_entry(&entry).expect("GS entry should encode");
+        let decoded = decode_gs_score_entry(&bytes).expect("GS entry should decode");
+        assert_eq!(decoded, entry);
+        assert_eq!(cached_score_from_gs_entry(&decoded), score);
+    }
+
+    #[test]
+    fn gs_score_entry_decode_accepts_legacy_payload_without_judge_count() {
+        let bytes = bincode::encode_to_vec(
+            GsScoreEntryV1 {
+                score_percent: 0.985,
+                grade_code: grade_to_code(Grade::Tier03),
+                lamp_index: Some(2),
+                username: "Legacy".to_string(),
+                fetched_at_ms: 4321,
+            },
+            bincode::config::standard(),
+        )
+        .expect("legacy GS entry should encode");
+
+        let entry = decode_gs_score_entry(&bytes).expect("legacy GS entry should decode");
+        assert_eq!(entry.score_percent, 0.985);
+        assert_eq!(entry.grade_code, grade_to_code(Grade::Tier03));
+        assert_eq!(entry.lamp_index, Some(2));
+        assert_eq!(entry.lamp_judge_count, None);
+        assert_eq!(entry.username, "Legacy");
+        assert_eq!(entry.fetched_at_ms, 4321);
+    }
+
+    #[test]
+    fn local_ex_grade_promotion_ignores_stale_quint_without_perfect_ex() {
+        assert_eq!(fix_local_ex_grade(Grade::Quint, 99.71), Grade::Tier01);
+        assert_eq!(fix_local_ex_grade(Grade::Tier01, 100.0), Grade::Quint);
+        assert_eq!(fix_local_ex_grade(Grade::Failed, 100.0), Grade::Failed);
+    }
+
+    #[test]
+    fn local_lamp_uses_white_fantastics_for_quad() {
+        assert_eq!(
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5)),
+            (Some(1), Some(5))
+        );
+        assert_eq!(
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
+            (Some(0), None)
+        );
+    }
+
+    #[test]
+    fn cached_score_from_local_header_treats_fail_time_as_failed() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 0.9482,
+            grade_code: grade_to_code(Grade::Tier06),
+            lamp_index: Some(4),
+            lamp_judge_count: Some(2),
+            ex_score_percent: 92.0,
+            hard_ex_score_percent: 88.0,
+            judgment_counts: [0; 6],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: Some(12.0),
+            beat0_time_ns: 0,
+        };
+
+        let cached = cached_score_from_local_header(&header);
+
+        assert_eq!(cached.grade, Grade::Failed);
+        assert_eq!(cached.score_percent, 0.9482);
+        assert_eq!(cached.lamp_index, None);
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_score_from_local_header_downgrades_stale_quint() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Quint),
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+            ex_score_percent: 99.71,
+            hard_ex_score_percent: 99.71,
+            judgment_counts: [320, 0, 0, 0, 0, 0],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: None,
+            beat0_time_ns: 0,
+        };
+
+        let cached = cached_score_from_local_header(&header);
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_score_from_local_header_promotes_perfect_ex_to_quint() {
+        let header = LocalScoreHeader {
+            version: LOCAL_SCORE_VERSION,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Tier01),
+            lamp_index: Some(1),
+            lamp_judge_count: Some(2),
+            ex_score_percent: 100.0,
+            hard_ex_score_percent: 100.0,
+            judgment_counts: [320, 0, 0, 0, 0, 0],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: None,
+            beat0_time_ns: 0,
+        };
+
+        let cached = cached_score_from_local_header(&header);
+
+        assert_eq!(cached.grade, Grade::Quint);
+        assert_eq!(cached.lamp_index, Some(0));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn local_score_entry_roundtrip_decodes_header_prefix() {
+        let entry = LocalScoreEntry {
+            version: LOCAL_SCORE_VERSION,
+            played_at_ms: 1234,
+            music_rate: 1.1,
+            score_percent: 0.9876,
+            grade_code: grade_to_code(Grade::Tier03),
+            lamp_index: Some(2),
+            lamp_judge_count: Some(4),
+            ex_score_percent: 98.25,
+            hard_ex_score_percent: 97.75,
+            judgment_counts: [100, 4, 3, 2, 1, 0],
+            holds_held: 5,
+            holds_total: 6,
+            rolls_held: 7,
+            rolls_total: 8,
+            mines_avoided: 9,
+            mines_total: 10,
+            hands_achieved: 11,
+            fail_time: None,
+            beat0_time_ns: -250_000_000,
+            replay: vec![LocalReplayEdge::new(
+                1_500_000_000,
+                2,
+                true,
+                InputSource::Gamepad,
+            )],
+        };
+
+        let bytes = encode_local_score_entry(&entry).expect("local score should encode");
+        let decoded = decode_local_score_entry(&bytes).expect("local score should decode");
+        let header = decode_local_score_header(&bytes).expect("local header should decode");
+
+        assert_eq!(decoded, entry);
+        assert_eq!(header, entry.header());
+        assert_eq!(decoded.replay[0].input_source(), InputSource::Gamepad);
+    }
+
+    #[test]
     fn leaderboard_rank_places_current_run_before_equal_scores() {
         let entries = [entry(9800.0), entry(9750.0), entry(9700.0)];
         assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
@@ -825,6 +1739,121 @@ mod tests {
         let bytes = bincode::encode_to_vec(original, cfg).unwrap();
         let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
         assert_eq!(decoded, original);
+    }
+
+    fn ac_score(percent_0_1: f64, is_fail: bool) -> ArrowCloudScore {
+        ArrowCloudScore {
+            score_percent: percent_0_1,
+            server_grade: None,
+            played_at: None,
+            play_id: None,
+            is_fail,
+        }
+    }
+
+    #[test]
+    fn arrowcloud_retrieve_fields_preserve_native_metadata() {
+        let score = arrowcloud_score_from_retrieve_fields(
+            Some(99.89),
+            Some("Tristar"),
+            Some("2026-05-03T19:10:17.504Z"),
+            Some(12345),
+            false,
+        )
+        .expect("score should decode");
+
+        assert!((score.score_percent - 0.9989).abs() < 1e-6);
+        assert_eq!(score.server_grade, Some(ArrowCloudServerGrade::Tristar));
+        assert_eq!(score.play_id, Some(12345));
+        assert_eq!(
+            score
+                .played_at
+                .expect("played_at parsed")
+                .timestamp_millis(),
+            1_777_835_417_504
+        );
+    }
+
+    #[test]
+    fn arrowcloud_retrieve_fields_drop_missing_score_and_bad_metadata() {
+        assert!(
+            arrowcloud_score_from_retrieve_fields(None, Some("Tristar"), None, None, false)
+                .is_none()
+        );
+
+        let score = arrowcloud_score_from_retrieve_fields(
+            Some(125.0),
+            Some("Mythic"),
+            Some("not-a-date"),
+            None,
+            true,
+        )
+        .expect("score should decode");
+
+        assert_eq!(score.score_percent, 1.0);
+        assert_eq!(score.server_grade, None);
+        assert_eq!(score.played_at, None);
+        assert!(score.is_fail);
+    }
+
+    #[test]
+    fn arrowcloud_submit_percent_clamps_and_rejects_nan() {
+        let submitted_at = Utc.timestamp_millis_opt(1_777_835_417_504).unwrap();
+        let score = arrowcloud_score_from_submit_percent(120.0, false, submitted_at)
+            .expect("finite submit percent should decode");
+
+        assert_eq!(score.score_percent, 1.0);
+        assert_eq!(score.server_grade, None);
+        assert_eq!(score.played_at, Some(submitted_at));
+        assert!(arrowcloud_score_from_submit_percent(f64::NAN, false, submitted_at).is_none());
+    }
+
+    #[test]
+    fn arrowcloud_leaderboard_slot_assignment_ignores_unknown_ids() {
+        let mut scores = ArrowCloudScores::default();
+
+        assert!(set_arrowcloud_score_for_leaderboard(
+            &mut scores,
+            ArrowCloudLeaderboard::HardEx.id(),
+            ac_score(0.9951, false)
+        ));
+        assert!(set_arrowcloud_score_for_leaderboard(
+            &mut scores,
+            ArrowCloudLeaderboard::Ex.id(),
+            ac_score(0.9810, false)
+        ));
+        assert!(set_arrowcloud_score_for_leaderboard(
+            &mut scores,
+            ArrowCloudLeaderboard::Itg.id(),
+            ac_score(0.9989, false)
+        ));
+        assert!(!set_arrowcloud_score_for_leaderboard(
+            &mut scores,
+            9,
+            ac_score(0.9500, false)
+        ));
+
+        assert_eq!(scores.itg.unwrap().score_percent, 0.9989);
+        assert_eq!(scores.ex.unwrap().score_percent, 0.9810);
+        assert_eq!(scores.hard_ex.unwrap().score_percent, 0.9951);
+    }
+
+    #[test]
+    fn arrowcloud_score_slot_merge_keeps_best_non_failed_score() {
+        let mut slot = Some(ac_score(0.85, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, true)));
+        assert!(!slot.as_ref().unwrap().is_fail);
+
+        let mut slot = Some(ac_score(0.85, true));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.50, false)));
+        assert_eq!(slot.as_ref().unwrap().score_percent, 0.50);
+        assert!(!slot.as_ref().unwrap().is_fail);
+
+        let mut slot = Some(ac_score(0.90, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.92, false)));
+        assert_eq!(slot.as_ref().unwrap().score_percent, 0.92);
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.91, false)));
+        assert_eq!(slot.as_ref().unwrap().score_percent, 0.92);
     }
 
     #[test]
