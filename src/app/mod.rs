@@ -1498,8 +1498,6 @@ pub struct ShellState {
 /// `` ` `` alone → `1.0 / TAB_SLOW_DIVISOR`× rate.
 /// Both held → `0.0` (halt).
 ///
-/// Always returns `1.0` on `CurrentScreen::Gameplay` (timing-sensitive,
-/// per issue #174) or when `enabled` is false.
 const TAB_FAST_MULTIPLIER: f32 = 4.0;
 const TAB_SLOW_DIVISOR: f32 = 4.0;
 /// Upper bound on the post-acceleration logic dt fed to screens.
@@ -1516,7 +1514,12 @@ fn apply_tab_acceleration(
     slow: bool,
     enabled: bool,
 ) -> f32 {
-    if !enabled || matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
+    if !enabled
+        || matches!(
+            screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Init
+        )
+    {
         return wall_dt;
     }
     let scaled = match (fast, slow) {
@@ -10399,6 +10402,18 @@ mod tests {
             assert!(
                 (out - dt).abs() < EPS,
                 "Gameplay must passthrough; fast={fast} slow={slow} got={out}"
+            );
+        }
+    }
+
+    #[test]
+    fn tab_accel_init_screen_never_scales() {
+        let dt = 0.016_f32;
+        for (fast, slow) in [(false, false), (true, false), (false, true), (true, true)] {
+            let out = apply_tab_acceleration(dt, CurrentScreen::Init, fast, slow, true);
+            assert!(
+                (out - dt).abs() < EPS,
+                "Init must passthrough so loading/splash ignore Tab; fast={fast} slow={slow} got={out}"
             );
         }
     }
