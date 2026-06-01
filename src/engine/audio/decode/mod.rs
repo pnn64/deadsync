@@ -4,8 +4,6 @@ pub(crate) mod ogg_vorbis;
 pub(crate) mod opus;
 pub(crate) mod wav;
 
-use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 
 pub(crate) struct OpenFile {
@@ -16,7 +14,7 @@ pub(crate) struct OpenFile {
 
 pub(crate) enum Reader {
     Flac(flac::Reader),
-    Mp3(mp3::Reader<BufReader<File>>),
+    Mp3(mp3::Reader),
     Ogg(ogg_vorbis::Reader),
     Opus(opus::Reader),
     Wav(wav::Reader),
