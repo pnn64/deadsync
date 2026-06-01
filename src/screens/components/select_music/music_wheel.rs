@@ -416,7 +416,10 @@ fn chart_for_preferred_or_nearest_standard<'a>(
 }
 
 #[inline(always)]
-const fn steps_slot_for_side(play_style: profile_data::PlayStyle, side: profile_data::PlayerSide) -> usize {
+const fn steps_slot_for_side(
+    play_style: profile_data::PlayStyle,
+    side: profile_data::PlayerSide,
+) -> usize {
     match (play_style, side) {
         (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
         _ => 0,
@@ -519,8 +522,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
-    let joined_sides = usize::from(profile::is_session_side_joined(profile_data::PlayerSide::P1))
-        + usize::from(profile::is_session_side_joined(profile_data::PlayerSide::P2));
+    let joined_sides = usize::from(profile::is_session_side_joined(
+        profile_data::PlayerSide::P1,
+    )) + usize::from(profile::is_session_side_joined(
+        profile_data::PlayerSide::P2,
+    ));
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
     let selected_chart_hash_for_side = |side: profile_data::PlayerSide| {
@@ -705,9 +711,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = has_lua
                         && if joined_sides == 0 {
-                            wheel_chart_for_side(profile_data::PlayerSide::P1).is_some_and(|chart| {
-                                score_data::lua_chart_submit_allowed(chart.short_hash.as_str())
-                            })
+                            wheel_chart_for_side(profile_data::PlayerSide::P1).is_some_and(
+                                |chart| {
+                                    score_data::lua_chart_submit_allowed(chart.short_hash.as_str())
+                                },
+                            )
                         } else {
                             [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
                                 .iter()
@@ -1049,8 +1057,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
                     // Favorite heart icon
                     {
-                        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-                        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+                        let p1_joined =
+                            profile::is_session_side_joined(profile_data::PlayerSide::P1);
+                        let p2_joined =
+                            profile::is_session_side_joined(profile_data::PlayerSide::P2);
                         let p1_fav = p1_joined
                             && info.charts.iter().any(|c| {
                                 profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash)
@@ -1103,8 +1113,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
                     // ITL unlocks lock icon (per-player)
                     {
-                        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-                        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+                        let p1_joined =
+                            profile::is_session_side_joined(profile_data::PlayerSide::P1);
+                        let p2_joined =
+                            profile::is_session_side_joined(profile_data::PlayerSide::P2);
                         let both_joined = p1_joined && p2_joined;
                         if (p1_joined || p2_joined)
                             && let Some((pack_dir, song_dir)) =
@@ -1210,17 +1222,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     }
 
     // Selection highlight overlay (Simply Love: Graphics/MusicWheel highlight.lua + [MusicWheel] HighlightOnCommand)
-    let selected_is_favorite =
-        if let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) {
-            let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-            let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
-            info.charts.iter().any(|c| {
-                (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
-                    || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
-            })
-        } else {
-            false
-        };
+    let selected_is_favorite = if let Some(MusicWheelEntry::Song(info)) =
+        p.entries.get(p.selected_index)
+    {
+        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+        info.charts.iter().any(|c| {
+            (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
+                || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
+        })
+    } else {
+        false
+    };
     let highlight_c1: [f32; 4] = if selected_is_favorite {
         [1.0, 0.75, 0.80, 0.20] // pink tint
     } else {
@@ -1352,15 +1365,24 @@ mod tests {
     #[test]
     fn single_p2_uses_primary_steps_slot() {
         assert_eq!(
-            steps_slot_for_side(profile_data::PlayStyle::Single, profile_data::PlayerSide::P2),
+            steps_slot_for_side(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2
+            ),
             0
         );
         assert_eq!(
-            steps_slot_for_side(profile_data::PlayStyle::Double, profile_data::PlayerSide::P2),
+            steps_slot_for_side(
+                profile_data::PlayStyle::Double,
+                profile_data::PlayerSide::P2
+            ),
             0
         );
         assert_eq!(
-            steps_slot_for_side(profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2),
+            steps_slot_for_side(
+                profile_data::PlayStyle::Versus,
+                profile_data::PlayerSide::P2
+            ),
             1
         );
     }

@@ -25,10 +25,8 @@ use deadsync_online::arrowcloud as ac_api;
 use deadsync_online::groovestats as gs_api;
 use deadsync_profile as profile_data;
 
-const ALL_SIDES: [profile_data::PlayerSide; 2] = [
-    profile_data::PlayerSide::P1,
-    profile_data::PlayerSide::P2,
-];
+const ALL_SIDES: [profile_data::PlayerSide; 2] =
+    [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
 
 /// Returns `true` when the ArrowCloud QR-login screen should be
 /// auto-shown after Select Profile, given the current pref and live

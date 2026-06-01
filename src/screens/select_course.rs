@@ -1986,7 +1986,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = profile::get_session_player_side();
     let play_style = profile::get_session_play_style();
-    let is_p2_single = play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
+    let is_p2_single =
+        play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
     let selected_rating = selected_meta

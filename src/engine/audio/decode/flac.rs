@@ -1,6 +1,21 @@
-use claxon::{FlacReader, FlacReaderOptions};
 use std::fs::File;
 use std::path::Path;
+use symphonia::core::codecs::audio::{
+    AudioCodecParameters, AudioDecoder, AudioDecoderOptions, well_known::CODEC_ID_FLAC,
+};
+use symphonia::core::errors::Error as SymphoniaError;
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, Track};
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::units::{Duration, Timestamp};
+
+// FLAC is lossless and decodes sample-accurately, so a seek that lands on an
+// earlier block and discards frames up to the target reproduces a linear decode
+// exactly. We still seek a little ahead of the target (one block of preroll) and
+// retry with a larger window so we always land before the target, mirroring the
+// Vorbis decoder for consistency.
+const SEEK_PREROLL_FRAMES: u64 = 1 << 14;
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -9,12 +24,24 @@ pub(crate) struct OpenFile {
 }
 
 pub(crate) struct Reader {
-    reader: FlacReader<File>,
+    format: Box<dyn FormatReader>,
+    decoder: Box<dyn AudioDecoder>,
+    track_id: u32,
     channels: usize,
-    bits_per_sample: u32,
-    block_buffer: Vec<i32>,
+    // Absolute timestamp of the stream's first sample (codec params start_ts);
+    // used as the floor for seek positions.
+    start_ts: Timestamp,
+    // Absolute timestamp of the first *emitted* audio frame. Frame 0 in our
+    // cursor space maps to this timestamp, so seek arithmetic is independent of
+    // any encoder pre-skip.
+    base_ts: Timestamp,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
+}
+
+enum SeekOutcome {
+    Landed,
+    Overshoot,
 }
 
 #[inline(always)]
@@ -24,29 +51,77 @@ pub(crate) fn path_is_flac(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("flac"))
 }
 
+fn probe_format(
+    path: &Path,
+) -> Result<Box<dyn FormatReader>, Box<dyn std::error::Error + Send + Sync>> {
+    let file = File::open(path)?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    hint.with_extension("flac");
+    symphonia::default::get_probe()
+        .probe(
+            &hint,
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
+        .map_err(|e| format!("Cannot probe FLAC '{}': {e}", path.display()).into())
+}
+
+fn flac_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
+    tracks.iter().find_map(|track| {
+        let params = track.codec_params.as_ref()?.audio()?;
+        (params.codec == CODEC_ID_FLAC).then_some((track, params))
+    })
+}
+
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let reader = FlacReader::open(path)?;
-    let info = reader.streaminfo();
-    let channels = info.channels.max(1) as usize;
-    let sample_rate_hz = info.sample_rate.max(1);
-    let bits_per_sample = info.bits_per_sample.max(1);
+    let format = probe_format(path)?;
+
+    let (track_id, channels, sample_rate_hz, start_ts, decoder) = {
+        let (track, cp) = flac_track(format.tracks())
+            .ok_or_else(|| format!("FLAC '{}' has no FLAC track", path.display()))?;
+        let channels = cp.channels.as_ref().map(|c| c.count()).unwrap_or(0);
+        if channels == 0 {
+            return Err(format!("FLAC '{}' has unknown channel layout", path.display()).into());
+        }
+        let sample_rate_hz = cp
+            .sample_rate
+            .ok_or_else(|| format!("FLAC '{}' has unknown sample rate", path.display()))?;
+        let decoder = symphonia::default::get_codecs()
+            .make_audio_decoder(cp, &AudioDecoderOptions::default())
+            .map_err(|e| format!("Cannot create FLAC decoder for '{}': {e}", path.display()))?;
+        (track.id, channels, sample_rate_hz, track.start_ts, decoder)
+    };
+
     let mut reader = Reader {
-        reader,
+        format,
+        decoder,
+        track_id,
         channels,
-        bits_per_sample,
-        block_buffer: Vec::new(),
+        start_ts,
+        base_ts: start_ts,
         pending: None,
         cursor_frames: 0,
     };
-    let mut first_packet = Vec::new();
-    if !reader.decode_next_packet_into(&mut first_packet)? {
-        return Err(format!(
-            "FLAC '{}' contained no decodable audio frames",
-            path.display()
-        )
-        .into());
+
+    // Prime the first audio packet so linear reads start at the true first
+    // sample, and record its timestamp as the frame origin for seeks.
+    let mut first = Vec::new();
+    match reader.next_audio_packet(&mut first)? {
+        Some(ts) => {
+            reader.base_ts = ts;
+            reader.pending = Some(first);
+        }
+        None => {
+            return Err(format!(
+                "FLAC '{}' contained no decodable audio frames",
+                path.display()
+            )
+            .into());
+        }
     }
-    reader.pending = Some(first_packet);
+
     Ok(OpenFile {
         reader,
         channels,
@@ -55,39 +130,43 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
 }
 
 pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
-    let reader = FlacReader::open_ext(
-        path,
-        FlacReaderOptions {
-            metadata_only: true,
-            read_vorbis_comment: false,
-        },
-    )
-    .map_err(|e| format!("Cannot open FLAC file: {e}"))?;
-    let info = reader.streaminfo();
-    if info.sample_rate == 0 {
+    let mut format = probe_format(path).map_err(|e| format!("Cannot open FLAC file: {e}"))?;
+
+    let (track_id, sample_rate, start_ts, n_frames) = {
+        let (track, cp) =
+            flac_track(format.tracks()).ok_or_else(|| "FLAC file has no FLAC track".to_string())?;
+        let sample_rate = cp
+            .sample_rate
+            .ok_or_else(|| "FLAC sample rate is invalid".to_string())?;
+        (track.id, sample_rate, track.start_ts, track.num_frames)
+    };
+    if sample_rate == 0 {
         return Err("FLAC sample rate is invalid (0)".to_string());
     }
-    if let Some(total_frames) = info.samples {
-        return Ok((total_frames as f64 / f64::from(info.sample_rate)) as f32);
+
+    if let Some(n_frames) = n_frames {
+        return Ok((n_frames as f64 / f64::from(sample_rate)) as f32);
     }
 
-    let mut reader = FlacReader::open(path).map_err(|e| format!("Cannot decode FLAC file: {e}"))?;
-    let channels = reader.streaminfo().channels.max(1) as usize;
-    let mut block_buffer = Vec::new();
-    let mut total_frames = 0u64;
+    // Fallback: demux (without decoding) and track the maximum end timestamp.
+    let mut last_end = start_ts;
     loop {
-        let block = reader
-            .blocks()
-            .read_next_or_eof(block_buffer)
-            .map_err(|e| format!("FLAC decode failed: {e}"))?;
-        let Some(block) = block else {
-            break;
-        };
-        validate_channels(channels, block.channels() as usize)?;
-        total_frames = total_frames.saturating_add(block.duration() as u64);
-        block_buffer = block.into_buffer();
+        match format.next_packet() {
+            Ok(Some(packet)) => {
+                if packet.track_id == track_id {
+                    last_end = last_end.max(packet.pts.saturating_add(packet.dur));
+                }
+            }
+            Ok(None) => break,
+            Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                break;
+            }
+            Err(SymphoniaError::ResetRequired) => break,
+            Err(e) => return Err(format!("FLAC decode failed: {e}")),
+        }
     }
-    Ok((total_frames as f64 / f64::from(reader.streaminfo().sample_rate)) as f32)
+    let total = last_end.duration_from(start_ts).map_or(0, Duration::get);
+    Ok((total as f64 / f64::from(sample_rate)) as f32)
 }
 
 impl Reader {
@@ -95,30 +174,48 @@ impl Reader {
         &mut self,
         out: &mut Vec<i16>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        if !self.take_packet_into(out)? {
-            return Ok(false);
+        if let Some(mut packet) = self.pending.take() {
+            std::mem::swap(out, &mut packet);
+            self.cursor_frames = self
+                .cursor_frames
+                .saturating_add((out.len() / self.channels) as u64);
+            return Ok(true);
         }
-        self.cursor_frames = self
-            .cursor_frames
-            .saturating_add(packet_frames(out, self.channels) as u64);
-        Ok(true)
+        match self.next_audio_packet(out)? {
+            Some(_ts) => {
+                self.cursor_frames = self
+                    .cursor_frames
+                    .saturating_add((out.len() / self.channels) as u64);
+                Ok(true)
+            }
+            None => {
+                out.clear();
+                Ok(false)
+            }
+        }
     }
 
     pub(crate) fn seek_frame(
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if target_frame <= self.cursor_frames {
-            return Ok(());
-        }
-        while self.cursor_frames < target_frame {
-            let Some(packet) = self.take_packet()? else {
-                return Ok(());
-            };
-            if self.finish_seek_packet(packet, target_frame) {
-                return Ok(());
+        let target_ts = self.base_ts.saturating_add(Duration::new(target_frame));
+
+        // Try progressively larger prerolls; a larger window guarantees we land
+        // before the target so the post-seek audio reproduces a linear decode.
+        for preroll in [SEEK_PREROLL_FRAMES, SEEK_PREROLL_FRAMES * 4] {
+            let seek_ts = target_ts
+                .saturating_sub(Duration::new(preroll))
+                .max(self.start_ts);
+            match self.seek_and_collect(seek_ts, target_ts, target_frame)? {
+                SeekOutcome::Landed => return Ok(()),
+                SeekOutcome::Overshoot => continue,
             }
         }
+
+        // Final fallback: decode from the very start of the stream. The target
+        // is always >= base_ts, so decoding from start_ts can never overshoot.
+        self.seek_and_collect(self.start_ts, target_ts, target_frame)?;
         Ok(())
     }
 
@@ -127,98 +224,89 @@ impl Reader {
         self.cursor_frames
     }
 
-    #[inline(always)]
-    fn take_packet_into(
+    fn seek_and_collect(
         &mut self,
-        out: &mut Vec<i16>,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(mut packet) = self.pending.take() {
-            std::mem::swap(out, &mut packet);
-            return Ok(true);
-        }
-        self.decode_next_packet_into(out)
-    }
+        seek_ts: Timestamp,
+        target_ts: Timestamp,
+        target_frame: u64,
+    ) -> Result<SeekOutcome, Box<dyn std::error::Error + Send + Sync>> {
+        self.format
+            .seek(
+                SeekMode::Accurate,
+                SeekTo::Timestamp {
+                    ts: seek_ts,
+                    track_id: self.track_id,
+                },
+            )
+            .map_err(|e| format!("FLAC seek error: {e}"))?;
+        self.decoder.reset();
+        self.pending = None;
 
-    #[inline(always)]
-    fn take_packet(
-        &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(packet) = self.pending.take() {
-            return Ok(Some(packet));
-        };
-        let mut packet = Vec::new();
-        if !self.decode_next_packet_into(&mut packet)? {
-            return Ok(None);
-        }
-        Ok(Some(packet))
-    }
-
-    fn finish_seek_packet(&mut self, packet: Vec<i16>, target_frame: u64) -> bool {
-        let packet_frames = packet_frames(&packet, self.channels);
-        let remaining = target_frame.saturating_sub(self.cursor_frames) as usize;
-        if remaining >= packet_frames {
-            self.cursor_frames = self.cursor_frames.saturating_add(packet_frames as u64);
-            return false;
-        }
-        let drop_samples = remaining * self.channels;
-        self.pending = Some(packet[drop_samples..].to_vec());
-        self.cursor_frames = target_frame;
-        true
-    }
-
-    fn decode_next_packet_into(
-        &mut self,
-        out: &mut Vec<i16>,
-    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        let block = self
-            .reader
-            .blocks()
-            .read_next_or_eof(std::mem::take(&mut self.block_buffer))?;
-        let Some(block) = block else {
-            out.clear();
-            return Ok(false);
-        };
-        if let Err(err) = validate_channels(self.channels, block.channels() as usize) {
-            return Err(err.into());
-        }
-        let frames = block.duration() as usize;
-        out.clear();
-        out.reserve(frames.saturating_mul(self.channels));
-        for frame in 0..frames as u32 {
-            for ch in 0..self.channels as u32 {
-                out.push(sample_to_i16(block.sample(ch, frame), self.bits_per_sample));
+        let mut scratch = Vec::new();
+        loop {
+            let ts = match self.next_audio_packet(&mut scratch)? {
+                Some(ts) => ts,
+                None => {
+                    // Target is at or past the end of the stream; clamp.
+                    self.cursor_frames = target_frame;
+                    self.pending = None;
+                    return Ok(SeekOutcome::Landed);
+                }
+            };
+            let frames = (scratch.len() / self.channels) as u64;
+            if ts.saturating_add(Duration::new(frames)) <= target_ts {
+                continue; // Entirely before the target.
             }
+            if ts > target_ts {
+                // Seek landed after the target; caller retries with more preroll.
+                return Ok(SeekOutcome::Overshoot);
+            }
+            let skip = target_ts.duration_from(ts).map_or(0, Duration::get) as usize;
+            let drop_samples = skip * self.channels;
+            self.pending = Some(scratch[drop_samples..].to_vec());
+            self.cursor_frames = target_frame;
+            return Ok(SeekOutcome::Landed);
         }
-        self.block_buffer = block.into_buffer();
-        Ok(true)
     }
-}
 
-#[inline(always)]
-fn packet_frames(packet: &[i16], channels: usize) -> usize {
-    packet.len() / channels
-}
-
-#[inline(always)]
-fn validate_channels(expected: usize, found: usize) -> Result<(), String> {
-    if found != expected {
-        return Err(format!(
-            "unsupported FLAC channel change ({} -> {})",
-            expected, found
-        ));
+    // Reads, decodes and interleaves the next non-empty audio packet for our
+    // track into `out`, returning its absolute timestamp. Returns `None` at end
+    // of stream. All field accesses are direct (no `&mut self` helper call while
+    // the decoded buffer borrows `self.decoder`) to satisfy the borrow checker.
+    fn next_audio_packet(
+        &mut self,
+        out: &mut Vec<i16>,
+    ) -> Result<Option<Timestamp>, Box<dyn std::error::Error + Send + Sync>> {
+        loop {
+            let packet = match self.format.next_packet() {
+                Ok(Some(packet)) => packet,
+                Ok(None) => return Ok(None),
+                Err(SymphoniaError::IoError(e))
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    return Ok(None);
+                }
+                Err(SymphoniaError::ResetRequired) => return Ok(None),
+                Err(e) => return Err(format!("FLAC read error: {e}").into()),
+            };
+            if packet.track_id != self.track_id {
+                continue;
+            }
+            let ts = packet.pts;
+            let audio = match self.decoder.decode(&packet) {
+                Ok(audio) => audio,
+                // Recoverable per symphonia's contract: skip and continue.
+                Err(SymphoniaError::DecodeError(_)) => continue,
+                Err(e) => return Err(format!("FLAC decode error: {e}").into()),
+            };
+            let frames = audio.frames() as u64;
+            if frames == 0 {
+                // Defensive: an empty decoded buffer produces no output frames.
+                continue;
+            }
+            out.clear();
+            audio.copy_to_vec_interleaved::<i16>(out);
+            return Ok(Some(ts));
+        }
     }
-    Ok(())
-}
-
-#[inline(always)]
-fn sample_to_i16(sample: i32, bits_per_sample: u32) -> i16 {
-    if bits_per_sample == 16 {
-        return sample.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-    }
-    if bits_per_sample > 16 {
-        let shifted = sample >> (bits_per_sample - 16).min(31);
-        return shifted.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-    }
-    let widened = (i64::from(sample)) << (16 - bits_per_sample);
-    widened.clamp(i16::MIN as i64, i16::MAX as i64) as i16
 }

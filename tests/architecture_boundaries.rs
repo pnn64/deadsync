@@ -86,9 +86,18 @@ const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["ScrollSpeedSetting"];
 
 const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "ActiveProfile",
+    "AttackMode",
+    "BackgroundFilter",
+    "DataVisualizations",
+    "ErrorBarTrim",
     "GameplayHudPlayerSnapshot",
     "GameplayHudSnapshot",
+    "HideLightType",
+    "LifeMeterType",
     "LocalProfileSummary",
+    "MeasureCounter",
+    "MeasureLines",
+    "MiniIndicatorSize",
     "DEFAULT_BIRTH_YEAR",
     "DEFAULT_WEIGHT_POUNDS",
     "HUD_OFFSET_MAX",
@@ -97,12 +106,15 @@ const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "MINI_PERCENT_MIN",
     "PLAYER_SLOTS",
     "PLAYER_INITIALS_MAX_LEN",
+    "Perspective",
     "PlayMode",
     "PlayStyle",
     "PlayerSide",
+    "ScatterplotMaxWindow",
     "SPACING_PERCENT_MAX",
     "SPACING_PERCENT_MIN",
     "TimingTickMode",
+    "TimingWindowsOption",
 ];
 
 const GAME_CHART_FACADE_SCAN_DIRS: &[&str] = &[

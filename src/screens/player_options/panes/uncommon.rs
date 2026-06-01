@@ -4,17 +4,18 @@ use crate::game::profile as gp;
 use crate::game::profile::{
     AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask, VisualEffectsMask,
 };
+use deadsync_profile::{AttackMode, HideLightType};
 
 const ATTACKS: ChoiceBinding<usize> = index_binding!(
     ATTACK_MODE_VARIANTS,
-    gp::AttackMode::On,
+    AttackMode::On,
     attack_mode,
     gp::update_attack_mode_for_side,
     false
 );
 const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     HIDE_LIGHT_TYPE_VARIANTS,
-    gp::HideLightType::NoHideLights,
+    HideLightType::NoHideLights,
     hide_light_type,
     gp::update_hide_light_type_for_side,
     false

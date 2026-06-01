@@ -88,7 +88,7 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].error_bar_active_mask =
         profile::error_bar_mask_from_style(profile::ErrorBarStyle::Colorful, true);
     player_profiles[0].error_bar_text = true;
-    player_profiles[0].measure_lines = profile::MeasureLines::Eighth;
+    player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 
     let mut state = gameplay::init(
         song,

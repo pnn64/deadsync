@@ -478,7 +478,7 @@ pub struct PerspectiveEffects {
 
 impl PerspectiveEffects {
     #[inline(always)]
-    fn from_perspective(perspective: profile::Perspective) -> Self {
+    fn from_perspective(perspective: profile_data::Perspective) -> Self {
         let (tilt, skew) = perspective.tilt_skew();
         Self { tilt, skew }
     }
@@ -4454,7 +4454,7 @@ pub fn scroll_receptor_y(
     centered_y: f32,
 ) -> f32 {
     let reverse_y = lerp(normal_y, reverse_y, reverse_percent.clamp(0.0, 1.0));
-    lerp(reverse_y, centered_y, centered_percent)
+    (centered_y - reverse_y).mul_add(centered_percent, reverse_y)
 }
 
 fn refresh_live_notefield_options(state: &mut State, current_bpm: f32) {
@@ -5985,7 +5985,7 @@ pub fn init(
         if player >= num_players {
             return Vec::new();
         }
-        let mut windows = if player_profiles[player].attack_mode == profile::AttackMode::Off {
+        let mut windows = if player_profiles[player].attack_mode == profile_data::AttackMode::Off {
             Vec::new()
         } else {
             build_attack_mask_windows_for_player(
@@ -6115,7 +6115,7 @@ pub fn init(
     let wants_step_stats = player_profiles
         .iter()
         .take(num_players)
-        .any(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics);
+        .any(|p| p.data_visualizations == profile_data::DataVisualizations::StepStatistics);
     let wide = is_wide();
     let density_graph_enabled = wide && wants_step_stats;
     let sw = screen_width();
@@ -7130,10 +7130,10 @@ fn error_bar_register_tap(
     }
 
     let max_window_ix = match error_bar_trim {
-        profile::ErrorBarTrim::Off => 4,
-        profile::ErrorBarTrim::Fantastic => 0,
-        profile::ErrorBarTrim::Excellent => 1,
-        profile::ErrorBarTrim::Great => 2,
+        profile_data::ErrorBarTrim::Off => 4,
+        profile_data::ErrorBarTrim::Fantastic => 0,
+        profile_data::ErrorBarTrim::Excellent => 1,
+        profile_data::ErrorBarTrim::Great => 2,
     };
     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
     let clamped_offset_s = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -9410,13 +9410,13 @@ return Def.ActorFrame{}
                 let mut p1 = profile::Profile::default();
                 p1.display_name = "P1 runtime".to_string();
                 p1.scroll_speed = ScrollSpeedSetting::XMod(1.5);
-                p1.perspective = profile::Perspective::Overhead;
+                p1.perspective = profile_data::Perspective::Overhead;
                 p1.judgment_graphic = profile::JudgmentGraphic::new("Love");
 
                 let mut p2 = profile::Profile::default();
                 p2.display_name = "P2 runtime".to_string();
                 p2.scroll_speed = ScrollSpeedSetting::CMod(777.0);
-                p2.perspective = profile::Perspective::Space;
+                p2.perspective = profile_data::Perspective::Space;
                 p2.judgment_graphic = profile::JudgmentGraphic::new("Bebas");
 
                 let state = regression_state([p1, p2.clone()]);
@@ -9426,7 +9426,7 @@ return Def.ActorFrame{}
                 assert_eq!(state.player_profiles[0].display_name, "P2 runtime");
                 assert_eq!(
                     state.player_profiles[0].perspective,
-                    profile::Perspective::Space
+                    profile_data::Perspective::Space
                 );
                 assert_eq!(
                     state.player_profiles[0].judgment_graphic,
@@ -11802,7 +11802,7 @@ return Def.ActorFrame{}
     #[test]
     fn score_valid_rejects_disabled_chart_attacks() {
         let mut profile = profile::Profile::default();
-        profile.attack_mode = profile::AttackMode::Off;
+        profile.attack_mode = profile_data::AttackMode::Off;
         let chart = test_chart(
             ArrowStats::default(),
             TimingSegments::default(),
@@ -11897,7 +11897,7 @@ return Def.ActorFrame{}
                 "TIME=0.000:LEN=3.000:MODS=*1000 sudden,*1000 -125% suddenoffset\
                  :TIME=0.083:LEN=3.000:MODS=*2.4 150% suddenoffset",
             ),
-            profile::AttackMode::On,
+            profile_data::AttackMode::On,
             0,
             0x1234,
             10.0,
@@ -11927,7 +11927,7 @@ return Def.ActorFrame{}
         let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
         state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
             Some("TIME=0.000:LEN=1.000:MODS=50% drunk"),
-            profile::AttackMode::On,
+            profile_data::AttackMode::On,
             0,
             0x1234,
             10.0,
@@ -13194,7 +13194,7 @@ return Def.ActorFrame{}
     fn attack_windows_keep_chart_only_effects_for_live_state() {
         let windows = build_attack_mask_windows_for_player(
             Some("TIME=1.0:LEN=2.0:MODS=mirror,mines"),
-            profile::AttackMode::On,
+            profile_data::AttackMode::On,
             0,
             123,
             10.0,

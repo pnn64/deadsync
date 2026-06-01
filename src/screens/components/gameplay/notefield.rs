@@ -824,7 +824,7 @@ fn turn_option_name(turn: profile::TurnOption) -> Option<&'static str> {
 }
 
 #[inline(always)]
-fn disabled_timing_window_bits(setting: profile::TimingWindowsOption) -> u8 {
+fn disabled_timing_window_bits(setting: profile_data::TimingWindowsOption) -> u8 {
     setting
         .disabled_windows()
         .into_iter()
@@ -891,11 +891,11 @@ fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
 }
 
 #[inline(always)]
-fn attack_mode_name(mode: profile::AttackMode) -> Option<&'static str> {
+fn attack_mode_name(mode: profile_data::AttackMode) -> Option<&'static str> {
     match mode {
-        profile::AttackMode::Off => Some("NoAttacks"),
-        profile::AttackMode::On => None,
-        profile::AttackMode::Random => Some("RandomAttacks"),
+        profile_data::AttackMode::Off => Some("NoAttacks"),
+        profile_data::AttackMode::On => None,
+        profile_data::AttackMode::Random => Some("RandomAttacks"),
     }
 }
 
@@ -2621,12 +2621,12 @@ fn error_bar_flash_alpha(now: f32, started_at: Option<f32>, dur: f32) -> f32 {
 }
 
 #[inline(always)]
-fn error_bar_trim_max_window_ix(trim: profile::ErrorBarTrim) -> usize {
+fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize {
     match trim {
-        profile::ErrorBarTrim::Off => 4,       // W5
-        profile::ErrorBarTrim::Fantastic => 0, // W1
-        profile::ErrorBarTrim::Excellent => 1, // W2
-        profile::ErrorBarTrim::Great => 2,     // W3
+        profile_data::ErrorBarTrim::Off => 4,       // W5
+        profile_data::ErrorBarTrim::Fantastic => 0, // W1
+        profile_data::ErrorBarTrim::Excellent => 1, // W2
+        profile_data::ErrorBarTrim::Great => 2,     // W3
     }
 }
 
@@ -2635,7 +2635,7 @@ fn error_bar_boundaries_s(
     windows_s: [f32; 5],
     w0_s: Option<f32>,
     show_fa_plus_window: bool,
-    trim: profile::ErrorBarTrim,
+    trim: profile_data::ErrorBarTrim,
 ) -> ([f32; 6], usize) {
     let mut out = [0.0_f32; 6];
     let mut len: usize = 0;
@@ -2715,7 +2715,7 @@ fn zmod_layout_ys(
     }
 
     let mut measure_counter_y = None;
-    let has_measure_counter = profile.measure_counter != crate::game::profile::MeasureCounter::None;
+    let has_measure_counter = profile.measure_counter != profile_data::MeasureCounter::None;
     if has_measure_counter {
         if profile.measure_counter_up {
             let mut y = top_y - 8.0;
@@ -3064,7 +3064,7 @@ pub fn prewarm_text_layout(
         }
         prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
         prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
-        if profile.measure_counter != crate::game::profile::MeasureCounter::None {
+        if profile.measure_counter != profile_data::MeasureCounter::None {
             let countdown_max = max_measure_len.clamp(16, MEASURE_PREWARM_CAP);
             for value in 0..=countdown_max {
                 prewarm_i32(cache, mc_font_name, value);
@@ -3370,10 +3370,10 @@ fn zmod_indicator_score_color(score_percent: f64, style: profile::MiniIndicatorC
 }
 
 #[inline(always)]
-fn zmod_mini_indicator_zoom(size: profile::MiniIndicatorSize) -> f32 {
+fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) -> f32 {
     match size {
-        profile::MiniIndicatorSize::Default => 0.35,
-        profile::MiniIndicatorSize::Large => 0.5,
+        profile_data::MiniIndicatorSize::Default => 0.35,
+        profile_data::MiniIndicatorSize::Large => 0.5,
     }
 }
 
@@ -4006,10 +4006,10 @@ pub fn build_bundles(
         72
     } else {
         match profile.measure_lines {
-            crate::game::profile::MeasureLines::Off => 0,
-            crate::game::profile::MeasureLines::Measure => 18,
-            crate::game::profile::MeasureLines::Quarter => 30,
-            crate::game::profile::MeasureLines::Eighth => 42,
+            profile_data::MeasureLines::Off => 0,
+            profile_data::MeasureLines::Measure => 18,
+            profile_data::MeasureLines::Quarter => 30,
+            profile_data::MeasureLines::Eighth => 42,
         }
     };
     let actor_cap = (num_cols * 10).max(28)
@@ -4048,22 +4048,28 @@ pub fn build_bundles(
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let judgment_extra_x = profile
         .judgment_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let judgment_extra_y = profile
         .judgment_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let combo_extra_x = profile
         .combo_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let combo_extra_y = profile
         .combo_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let error_bar_extra_x = profile
         .error_bar_offset_x
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let error_bar_extra_y = profile
         .error_bar_offset_y
-        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX) as f32;
+        .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
+        as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let centered_one_side = state.num_players == 1
@@ -4460,10 +4466,7 @@ pub fn build_bundles(
         // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha).
         // ScreenEdit/Practice always draws editor beat bars at 16th-note spacing.
         let show_measure_lines = view.edit_beat_bars
-            || !matches!(
-                profile.measure_lines,
-                crate::game::profile::MeasureLines::Off
-            );
+            || !matches!(profile.measure_lines, profile_data::MeasureLines::Off);
         if show_measure_lines {
             let edit_bar_speed =
                 edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
@@ -4484,10 +4487,10 @@ pub fn build_bundles(
                     )
                 } else {
                     match profile.measure_lines {
-                        crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0, 0.0, 0.5),
-                        crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0, 0.0, 0.5),
-                        crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0, 0.0, 0.5),
-                        crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125, 0.0, 0.5),
+                        profile_data::MeasureLines::Off => (0.0, 0.0, 0.0, 0.0, 0.5),
+                        profile_data::MeasureLines::Measure => (0.75, 0.0, 0.0, 0.0, 0.5),
+                        profile_data::MeasureLines::Quarter => (0.75, 0.5, 0.0, 0.0, 0.5),
+                        profile_data::MeasureLines::Eighth => (0.75, 0.5, 0.125, 0.0, 0.5),
                     }
                 };
 
@@ -8530,7 +8533,7 @@ pub fn build_bundles(
     }
 
     // Measure Counter / Measure Breakdown (Zmod parity)
-    if profile.measure_counter != crate::game::profile::MeasureCounter::None {
+    if profile.measure_counter != profile_data::MeasureCounter::None {
         let segs: &[StreamSegment] = &state.measure_counter_segments[player_idx];
         if !segs.is_empty() {
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
@@ -8983,6 +8986,7 @@ mod tests {
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
     use deadsync_core::note::NoteType;
+    use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -9611,11 +9615,11 @@ mod tests {
     #[test]
     fn mini_indicator_zoom_matches_size_setting() {
         assert!(
-            (zmod_mini_indicator_zoom(profile::MiniIndicatorSize::Default) - 0.35).abs()
+            (zmod_mini_indicator_zoom(profile_data::MiniIndicatorSize::Default) - 0.35).abs()
                 <= f32::EPSILON
         );
         assert!(
-            (zmod_mini_indicator_zoom(profile::MiniIndicatorSize::Large) - 0.5).abs()
+            (zmod_mini_indicator_zoom(profile_data::MiniIndicatorSize::Large) - 0.5).abs()
                 <= f32::EPSILON
         );
     }
@@ -10119,14 +10123,15 @@ mod tests {
 
     #[test]
     fn display_mods_use_itg_disabled_timing_window_names() {
-        let bits = disabled_timing_window_bits(profile::TimingWindowsOption::DecentsAndWayOffs);
+        let bits =
+            disabled_timing_window_bits(profile_data::TimingWindowsOption::DecentsAndWayOffs);
         assert_eq!(
             disabled_timing_windows_name(bits),
             Some("No W4/W5".to_string())
         );
 
         let bits =
-            disabled_timing_window_bits(profile::TimingWindowsOption::FantasticsAndExcellents);
+            disabled_timing_window_bits(profile_data::TimingWindowsOption::FantasticsAndExcellents);
         assert_eq!(
             disabled_timing_windows_name(bits),
             Some("No W1/W2".to_string())
@@ -10410,7 +10415,7 @@ mod tests {
             windows,
             Some(timing::FA_PLUS_W010_MS / 1000.0),
             true,
-            profile::ErrorBarTrim::Fantastic,
+            profile_data::ErrorBarTrim::Fantastic,
         );
 
         assert_eq!(len, 2);

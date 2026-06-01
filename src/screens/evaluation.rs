@@ -1857,7 +1857,11 @@ fn eval_pane_skip_duplicate(
 }
 
 #[inline(always)]
-fn warm_eval_leaderboards(has_online_panes: bool, chart_hash: &str, side: profile_data::PlayerSide) {
+fn warm_eval_leaderboards(
+    has_online_panes: bool,
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) {
     if has_online_panes {
         let _ = scores::get_or_fetch_player_leaderboards_for_side(chart_hash, side, GS_RECORD_ROWS);
     }
@@ -2088,10 +2092,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 // (matching Chris's Simply-Love-SM5-8ms `ScaleGraph`
                 // semantics, generalized per tier).
                 let cap_idx: Option<usize> = match prof.scatterplot_max_window {
-                    profile::ScatterplotMaxWindow::Off => None,
-                    profile::ScatterplotMaxWindow::Fantastic => Some(1),
-                    profile::ScatterplotMaxWindow::Excellent => Some(2),
-                    profile::ScatterplotMaxWindow::Great => Some(3),
+                    profile_data::ScatterplotMaxWindow::Off => None,
+                    profile_data::ScatterplotMaxWindow::Fantastic => Some(1),
+                    profile_data::ScatterplotMaxWindow::Excellent => Some(2),
+                    profile_data::ScatterplotMaxWindow::Great => Some(3),
                 };
                 if let Some(cap) = cap_idx {
                     idx = idx.min(cap);
@@ -2988,10 +2992,14 @@ fn set_lobby_disconnect_hold(
     started_at: Option<Instant>,
 ) {
     match side {
-        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1
+            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+        {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2
+            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+        {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -3424,14 +3432,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P1,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
             }
             VirtualAction::p2_start => {
                 if ev.pressed {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P2,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
@@ -3864,7 +3880,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
         let upper_single = [(0, player_side)];
-        let upper_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let upper_vs = [
+            (0, profile_data::PlayerSide::P1),
+            (1, profile_data::PlayerSide::P2),
+        ];
         let upper_players: &[(usize, profile_data::PlayerSide)] =
             if play_style == profile_data::PlayStyle::Versus {
                 &upper_vs
@@ -4286,7 +4305,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if !state.itl_overlay_visible {
         let progress_single = [(0, player_side)];
-        let progress_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let progress_vs = [
+            (0, profile_data::PlayerSide::P1),
+            (1, profile_data::PlayerSide::P2),
+        ];
         let progress_players: &[(usize, profile_data::PlayerSide)] =
             if play_style == profile_data::PlayStyle::Versus {
                 &progress_vs
@@ -5261,7 +5283,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if state.itl_overlay_visible {
         let progress_single = [(0, player_side)];
-        let progress_vs = [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)];
+        let progress_vs = [
+            (0, profile_data::PlayerSide::P1),
+            (1, profile_data::PlayerSide::P2),
+        ];
         let progress_players: &[(usize, profile_data::PlayerSide)] =
             if play_style == profile_data::PlayStyle::Versus {
                 &progress_vs

@@ -1,5 +1,6 @@
 use crate::game::profile;
 use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_profile::{AttackMode, MeasureCounter};
 use deadsync_rules::judgment;
 use deadsync_rules::stream::{StreamSegment, zmod_stream_totals_full_measures};
 use deadsync_rules::timing::WindowCounts;
@@ -32,7 +33,7 @@ pub(crate) fn mini_indicator_mode(profile: &profile::Profile) -> profile::MiniIn
 
 #[inline(always)]
 pub(crate) fn needs_stream_data(profile: &profile::Profile) -> bool {
-    profile.measure_counter != profile::MeasureCounter::None
+    profile.measure_counter != MeasureCounter::None
         || mini_indicator_mode(profile) != profile::MiniIndicator::None
 }
 
@@ -126,13 +127,13 @@ pub fn score_invalid_reason_lines_for_chart(
     }
 
     match profile.attack_mode {
-        profile::AttackMode::Off => {
+        AttackMode::Off => {
             if chart_has_attacks(chart) {
                 reasons.push("AttackMode=Off is enabled on a chart with attacks");
             }
         }
-        profile::AttackMode::On => {}
-        profile::AttackMode::Random => reasons.push("AttackMode=Random is enabled"),
+        AttackMode::On => {}
+        AttackMode::Random => reasons.push("AttackMode=Random is enabled"),
     }
 
     reasons

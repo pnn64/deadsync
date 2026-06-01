@@ -550,7 +550,10 @@ fn build_row(
         horizalign(center)
     ));
 
-    for (idx, side) in [(0, profile_data::PlayerSide::P1), (1, profile_data::PlayerSide::P2)] {
+    for (idx, side) in [
+        (0, profile_data::PlayerSide::P1),
+        (1, profile_data::PlayerSide::P2),
+    ] {
         let Some(p) = stage.players.get(idx).and_then(|p| p.as_ref()) else {
             continue;
         };

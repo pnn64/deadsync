@@ -467,10 +467,14 @@ fn set_all_local_lobby_players_ready(state: &mut State, ready: bool) {
 
 fn set_local_lobby_player_ready(state: &mut State, side: profile_data::PlayerSide) {
     match side {
-        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1
+            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+        {
             state.lobby_ready_p1 = true;
         }
-        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2
+            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+        {
             state.lobby_ready_p2 = true;
         }
         _ => {}
@@ -488,10 +492,14 @@ fn set_lobby_disconnect_hold(
     started_at: Option<Instant>,
 ) {
     match side {
-        profile_data::PlayerSide::P1 if local_lobby_side_is_active(profile_data::PlayerSide::P1) => {
+        profile_data::PlayerSide::P1
+            if local_lobby_side_is_active(profile_data::PlayerSide::P1) =>
+        {
             state.lobby_disconnect_hold_p1 = started_at;
         }
-        profile_data::PlayerSide::P2 if local_lobby_side_is_active(profile_data::PlayerSide::P2) => {
+        profile_data::PlayerSide::P2
+            if local_lobby_side_is_active(profile_data::PlayerSide::P2) =>
+        {
             state.lobby_disconnect_hold_p2 = started_at;
         }
         _ => {}
@@ -721,7 +729,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p1_start => {
                 if ev.pressed {
                     set_local_lobby_player_ready(state, profile_data::PlayerSide::P1);
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P1,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
                 }
@@ -729,7 +741,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_start => {
                 if ev.pressed {
                     set_local_lobby_player_ready(state, profile_data::PlayerSide::P2);
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, Some(ev.timestamp));
+                    set_lobby_disconnect_hold(
+                        state,
+                        profile_data::PlayerSide::P2,
+                        Some(ev.timestamp),
+                    );
                 } else {
                     set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
                 }
@@ -7024,8 +7040,8 @@ pub fn push_actors(
     actors.reserve(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
-    let is_p2_single =
-        play_style == profile_data::PlayStyle::Single && player_side == profile_data::PlayerSide::P2;
+    let is_p2_single = play_style == profile_data::PlayStyle::Single
+        && player_side == profile_data::PlayerSide::P2;
     let center_1player_notefield =
         cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single
@@ -8072,7 +8088,7 @@ pub fn push_actors(
                 let life_percent_text = cached_life_percent_text(life_percent);
 
                 match state.player_profiles[player_idx].lifemeter_type {
-                    profile::LifeMeterType::Standard => {
+                    profile_data::LifeMeterType::Standard => {
                         let w = 136.0;
                         let h = 18.0;
                         let meter_cy = 20.0;
@@ -8166,7 +8182,7 @@ pub fn push_actors(
                         ));
                         }
                     }
-                    profile::LifeMeterType::Surround => {
+                    profile_data::LifeMeterType::Surround => {
                         let sw = screen_width();
                         let sh = screen_height();
                         let w = sw * 0.5;
@@ -8237,7 +8253,7 @@ pub fn push_actors(
                             }
                         }
                     }
-                    profile::LifeMeterType::Vertical => {
+                    profile_data::LifeMeterType::Vertical => {
                         let bar_w = 16.0;
                         let bar_h = 250.0;
 
@@ -8436,14 +8452,14 @@ pub fn push_actors(
         let show_step_stats = match play_style {
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                 state.player_profiles.first().is_some_and(|p| {
-                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
                 })
             }
             profile_data::PlayStyle::Versus => {
                 state.player_profiles.first().is_some_and(|p| {
-                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
                 }) || state.player_profiles.get(1).is_some_and(|p| {
-                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
                 })
             }
         };

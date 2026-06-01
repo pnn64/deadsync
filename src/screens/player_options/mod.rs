@@ -367,11 +367,9 @@ fn session_persisted_player_idx() -> usize {
     let side = crate::game::profile::get_session_player_side();
     match play_style {
         profile_data::PlayStyle::Versus => P1,
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-            match side {
-                profile_data::PlayerSide::P1 => P1,
-                profile_data::PlayerSide::P2 => P2,
-            }
-        }
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => match side {
+            profile_data::PlayerSide::P1 => P1,
+            profile_data::PlayerSide::P2 => P2,
+        },
     }
 }
