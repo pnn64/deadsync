@@ -5,11 +5,8 @@ use crate::game::online;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
-use chrono::{Local, TimeZone};
-use deadsync_chart::ArrowStats;
 use deadsync_profile::Profile;
 use log::{debug, warn};
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs;
@@ -18,8 +15,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use bincode::{Decode, Encode};
-use deadsync_core::song_time::SongTimeNs;
 use deadsync_online::OnlineRequestError;
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES, ArrowCloudLeaderboardEntry,
@@ -49,19 +44,28 @@ pub use arrowcloud::{
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    CachedPlayerLeaderboardData, CachedScore, GameplayScoreboxProfileSnapshot, Grade,
-    GrooveStatsSubmitRecordBanner, GsScoreEntry, LOCAL_SCORE_VERSION, LeaderboardEntry,
-    LeaderboardPane, LocalReplayEdge, LocalScalarScore, LocalScoreEntry, LocalScoreHeader,
-    MachineReplayEntry, PlayerLeaderboardData, ReplayEdge, ScoreBulkImportSummary,
-    ScoreImportEndpoint, ScoreImportProgress, arrowcloud_score_from_retrieve_fields,
-    arrowcloud_score_from_submit_percent, cached_score, cached_score_10000,
+    ArrowCloudUserContext, CachedPlayerLeaderboardData, CachedScore,
+    GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner, GsExEvidence,
+    GsLampChartStats, GsScoreEntry, LOCAL_SCORE_VERSION, LeaderboardEntry, LeaderboardPane,
+    LocalReplayEdge, LocalScalarScore, LocalScoreEntry, LocalScoreHeader, LocalScoreIndex,
+    MachineLeaderboardPlay, MachineReplayEntry, MachineReplayPlay, PlayerLeaderboardData,
+    ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress,
+    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
+    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
+    arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
+    arrowcloud_score_from_submit_percent, arrowcloud_target_user_ids, arrowcloud_user_id,
+    cached_gs_score_from_lamp, cached_missing_gs_score, cached_score_10000,
     cached_score_from_gs_entry, cached_score_from_local_header, compute_local_lamp,
     decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
-    encode_gs_score_entry, encode_local_score_entry, failed_score_override, fix_gs_cached_score,
-    gameplay_run_failed, gameplay_run_passed, grade_from_code, grade_to_code,
-    gs_score_entry_from_cached, is_better_itg, is_better_scalar_score, lua_chart_submit_allowed,
-    merge_arrowcloud_score_slot, promote_quint_grade, replaces_stale_quint, same_score_10000,
-    score_to_grade, set_arrowcloud_score_for_leaderboard,
+    decode_local_score_index, encode_gs_score_entry, encode_local_score_entry,
+    encode_local_score_index, failed_score_override, fix_gs_cached_score, gameplay_run_failed,
+    gameplay_run_passed, grade_from_code, grade_to_code, groovestats_submit_record_banner,
+    gs_lamp_index_from_chart_stats, gs_score_entry_from_cached, is_better_itg,
+    leaderboard_nonzero_rank, leaderboard_score_10000, leaderboard_username_matches,
+    lua_chart_submit_allowed, machine_leaderboard_entries, machine_replay_entries,
+    merge_arrowcloud_score_slot, parse_score_file_name, promote_quint_grade, replaces_stale_quint,
+    same_score_10000, score_file_shard, score_import_entry_matches_profile, score_to_grade,
+    set_arrowcloud_score_for_leaderboard, update_local_score_index,
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
@@ -99,7 +103,7 @@ fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
 }
 
 fn gs_scores_dir_for_profile_and_hash(profile_id: &str, chart_hash: &str) -> PathBuf {
-    gs_scores_dir_for_profile(profile_id).join(shard2_for_hash(chart_hash))
+    gs_scores_dir_for_profile(profile_id).join(score_file_shard(chart_hash))
 }
 
 fn gs_score_index_path_for_profile(profile_id: &str) -> PathBuf {
@@ -420,28 +424,6 @@ pub(super) fn cache_arrowcloud_scores_from_submit(
 
 // --- Local score cache (on-disk, one file per play) ---
 
-#[derive(Clone, Copy, Debug, Encode, Decode)]
-struct BestScalar {
-    grade: Grade,
-    percent: f64,
-}
-
-#[derive(Debug, Default, Clone, Encode, Decode)]
-struct LocalScoreIndex {
-    best_itg: HashMap<String, CachedScore>,
-    best_ex: HashMap<String, BestScalar>,
-    best_hard_ex: HashMap<String, BestScalar>,
-}
-
-// Rebuild old indexes so stale grade-only quints are rehydrated from EX-backed play files.
-const LOCAL_SCORE_INDEX_VERSION: u16 = 2;
-
-#[derive(Debug, Clone, Encode, Decode)]
-struct LocalScoreIndexFile {
-    version: u16,
-    index: LocalScoreIndex,
-}
-
 #[derive(Default)]
 struct LocalScoreCacheState {
     loaded_profiles: HashMap<String, LocalScoreIndex>,
@@ -479,13 +461,7 @@ fn local_score_index_path_for_profile(profile_id: &str) -> PathBuf {
 
 fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
     let bytes = fs::read(path).ok()?;
-    let (file, _) =
-        bincode::decode_from_slice::<LocalScoreIndexFile, _>(&bytes, bincode::config::standard())
-            .ok()?;
-    if file.version != LOCAL_SCORE_INDEX_VERSION {
-        return None;
-    }
-    Some(file.index)
+    decode_local_score_index(&bytes)
 }
 
 fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
@@ -496,11 +472,7 @@ fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
         warn!("Failed to create local score index dir {parent:?}: {e}");
         return;
     }
-    let file = LocalScoreIndexFile {
-        version: LOCAL_SCORE_INDEX_VERSION,
-        index: index.clone(),
-    };
-    let Ok(buf) = bincode::encode_to_vec(file, bincode::config::standard()) else {
+    let Some(buf) = encode_local_score_index(index) else {
         warn!("Failed to encode local score index at {path:?}");
         return;
     };
@@ -564,20 +536,6 @@ pub fn total_songs_played_for_side(side: profile_data::PlayerSide) -> u32 {
     total_songs_played_for_profile(&profile_id)
 }
 
-#[inline(always)]
-fn parse_local_score_filename(name: &str) -> Option<(&str, i64)> {
-    if !name.ends_with(".bin") {
-        return None;
-    }
-    let base = &name[..name.len().saturating_sub(4)];
-    let idx_dash = base.rfind('-')?;
-    if idx_dash == 0 {
-        return None;
-    }
-    let played_at_ms = base[(idx_dash + 1)..].parse::<i64>().ok()?;
-    Some((&base[..idx_dash], played_at_ms))
-}
-
 fn collect_recent_plays_in_dir(dir: &Path, latest_by_chart: &mut HashMap<String, i64>) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
@@ -590,7 +548,7 @@ fn collect_recent_plays_in_dir(dir: &Path, latest_by_chart: &mut HashMap<String,
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Some((chart_hash, played_at_ms)) = parse_local_score_filename(name) else {
+        let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
         match latest_by_chart.get_mut(chart_hash) {
@@ -662,7 +620,7 @@ fn collect_play_counts_in_dir(dir: &Path, counts_by_chart: &mut HashMap<String, 
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Some((chart_hash, _played_at_ms)) = parse_local_score_filename(name) else {
+        let Some((chart_hash, _played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
         counts_by_chart
@@ -747,16 +705,6 @@ pub fn played_chart_counts_for_profile(profile_id: &str) -> Vec<(String, u32)> {
     let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
     ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     ranked
-}
-
-#[inline(always)]
-fn shard2_for_hash(hash: &str) -> &str {
-    if hash.len() >= 2 { &hash[..2] } else { "00" }
-}
-
-#[inline(always)]
-fn is_better_scalar(new: BestScalar, old: BestScalar) -> bool {
-    is_better_scalar_score(new.grade, new.percent, old.grade, old.percent)
 }
 
 fn ensure_local_score_cache_loaded(profile_id: &str) {
@@ -1173,65 +1121,15 @@ fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if !name.ends_with(".bin") {
-            continue;
-        }
-        let base = &name[..name.len().saturating_sub(4)];
-        let Some(idx_dash) = base.rfind('-') else {
+        let Some((chart_hash, _played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
-        if idx_dash == 0 {
-            continue;
-        }
-        let chart_hash = &base[..idx_dash];
 
         let Some(h) = read_local_score_header(&path) else {
             continue;
         };
 
-        let cached = cached_score_from_local_header(&h);
-        let grade = cached.grade;
-
-        match index.best_itg.get_mut(chart_hash) {
-            Some(existing) => {
-                if is_better_itg(&cached, existing) {
-                    *existing = cached;
-                }
-            }
-            None => {
-                index.best_itg.insert(chart_hash.to_string(), cached);
-            }
-        }
-
-        let ex = BestScalar {
-            grade,
-            percent: h.ex_score_percent,
-        };
-        match index.best_ex.get_mut(chart_hash) {
-            Some(existing) => {
-                if is_better_scalar(ex, *existing) {
-                    *existing = ex;
-                }
-            }
-            None => {
-                index.best_ex.insert(chart_hash.to_string(), ex);
-            }
-        }
-
-        let hard_ex = BestScalar {
-            grade,
-            percent: h.hard_ex_score_percent,
-        };
-        match index.best_hard_ex.get_mut(chart_hash) {
-            Some(existing) => {
-                if is_better_scalar(hard_ex, *existing) {
-                    *existing = hard_ex;
-                }
-            }
-            None => {
-                index.best_hard_ex.insert(chart_hash.to_string(), hard_ex);
-            }
-        }
+        update_local_score_index(index, chart_hash, &h);
     }
 }
 
@@ -1262,62 +1160,13 @@ fn load_local_score_index(root: &Path) -> LocalScoreIndex {
     index
 }
 
-fn update_local_index_with_header(
-    idx: &mut LocalScoreIndex,
-    chart_hash: &str,
-    h: &LocalScoreHeader,
-) {
-    let cached = cached_score_from_local_header(h);
-    let grade = cached.grade;
-    match idx.best_itg.get_mut(chart_hash) {
-        Some(existing) => {
-            if is_better_itg(&cached, existing) {
-                *existing = cached;
-            }
-        }
-        None => {
-            idx.best_itg.insert(chart_hash.to_string(), cached);
-        }
-    }
-
-    let ex = BestScalar {
-        grade,
-        percent: h.ex_score_percent,
-    };
-    match idx.best_ex.get_mut(chart_hash) {
-        Some(existing) => {
-            if is_better_scalar(ex, *existing) {
-                *existing = ex;
-            }
-        }
-        None => {
-            idx.best_ex.insert(chart_hash.to_string(), ex);
-        }
-    }
-
-    let hard_ex = BestScalar {
-        grade,
-        percent: h.hard_ex_score_percent,
-    };
-    match idx.best_hard_ex.get_mut(chart_hash) {
-        Some(existing) => {
-            if is_better_scalar(hard_ex, *existing) {
-                *existing = hard_ex;
-            }
-        }
-        None => {
-            idx.best_hard_ex.insert(chart_hash.to_string(), hard_ex);
-        }
-    }
-}
-
 fn append_local_score_on_disk(
     profile_id: &str,
     profile_initials: &str,
     chart_hash: &str,
     entry: &mut LocalScoreEntry,
 ) {
-    let shard = shard2_for_hash(chart_hash);
+    let shard = score_file_shard(chart_hash);
     let dir = local_scores_root_for_profile(profile_id).join(shard);
     if let Err(e) = fs::create_dir_all(&dir) {
         warn!("Failed to create local scores dir {dir:?}: {e}");
@@ -1353,7 +1202,7 @@ fn append_local_score_on_disk(
     let loaded_snapshot = {
         let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
         if let Some(idx) = state.loaded_profiles.get_mut(profile_id) {
-            update_local_index_with_header(idx, chart_hash, &header);
+            update_local_score_index(idx, chart_hash, &header);
             Some(idx.clone())
         } else {
             None
@@ -1364,7 +1213,7 @@ fn append_local_score_on_disk(
     } else {
         let index_path = local_score_index_path_for_profile(profile_id);
         let mut index = load_local_score_index_file(&index_path).unwrap_or_default();
-        update_local_index_with_header(&mut index, chart_hash, &header);
+        update_local_score_index(&mut index, chart_hash, &header);
         save_local_score_index_file(&index_path, &index);
     }
 
@@ -1720,12 +1569,6 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
-#[derive(Debug, Default)]
-struct ArrowCloudUserContext {
-    self_user_id: Option<String>,
-    rival_user_ids: HashSet<String>,
-}
-
 fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
     let mut out = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -1791,21 +1634,15 @@ fn leaderboard_self_entry<'a>(
     username: &str,
 ) -> Option<&'a LeaderboardApiEntry> {
     entries.iter().find(|entry| entry.is_self).or_else(|| {
-        (!username.trim().is_empty()).then(|| {
-            entries
-                .iter()
-                .find(|entry| entry.name.eq_ignore_ascii_case(username))
-        })?
+        entries
+            .iter()
+            .find(|entry| leaderboard_username_matches(entry.name.as_str(), username))
     })
 }
 
 #[inline(always)]
 fn entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
-    if entry.is_fail || !entry.score.is_finite() {
-        None
-    } else {
-        Some(entry.score.clamp(0.0, 10000.0))
-    }
+    leaderboard_score_10000(entry.score, entry.is_fail)
 }
 
 #[inline(always)]
@@ -1826,13 +1663,7 @@ fn gs_ex_evidence_from_leaderboard(
 
 #[inline(always)]
 fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    let rank = leaderboard_self_entry(entries, username)?.rank;
-    (rank != 0).then_some(rank)
-}
-
-#[inline(always)]
-fn submit_result_improved(result: &str) -> bool {
-    result.eq_ignore_ascii_case("score-added") || result.eq_ignore_ascii_case("improved")
+    leaderboard_nonzero_rank(leaderboard_self_entry(entries, username)?.rank)
 }
 
 #[inline(always)]
@@ -1840,33 +1671,13 @@ fn submit_record_banner(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
-    if !submit_result_improved(response.result.as_str()) {
-        return None;
-    }
-    let use_ex = player.show_ex_score && !response.ex_leaderboard.is_empty();
-    let leaderboard = if use_ex {
-        response.ex_leaderboard.as_slice()
-    } else {
-        response.gs_leaderboard.as_slice()
-    };
-    if leaderboard_self_rank(leaderboard, player.username.as_str()) == Some(1) {
-        return Some(if use_ex {
-            GrooveStatsSubmitRecordBanner::WorldRecordEx
-        } else {
-            GrooveStatsSubmitRecordBanner::WorldRecord
-        });
-    }
-    Some(GrooveStatsSubmitRecordBanner::PersonalBest)
-}
-
-#[inline(always)]
-fn cached_failed_gs_score(score_10000: f64) -> CachedScore {
-    cached_score(Grade::Failed, score_10000 / 10000.0, None, None)
-}
-
-#[inline(always)]
-fn cached_missing_gs_score() -> CachedScore {
-    cached_failed_gs_score(0.0)
+    groovestats_submit_record_banner(
+        response.result.as_str(),
+        player.show_ex_score,
+        leaderboard_self_rank(response.gs_leaderboard.as_slice(), player.username.as_str()),
+        leaderboard_self_rank(response.ex_leaderboard.as_slice(), player.username.as_str()),
+        !response.ex_leaderboard.is_empty(),
+    )
 }
 
 #[inline(always)]
@@ -1877,16 +1688,8 @@ fn cached_score_from_gs(
     is_fail: bool,
     ex_evidence: GsExEvidence,
 ) -> CachedScore {
-    if is_fail {
-        return cached_failed_gs_score(score_10000);
-    }
     let lamp_index = compute_lamp_index(score_10000, comments, chart_hash, ex_evidence);
-    let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
-    let mut grade = score_to_grade(score_10000);
-    if lamp_index == Some(0) {
-        grade = promote_quint_grade(grade, 100.0);
-    }
-    cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
+    cached_gs_score_from_lamp(score_10000, is_fail, lamp_index, comments)
 }
 
 fn cache_gs_score_for_profile(
@@ -1948,33 +1751,8 @@ fn cache_gs_score_from_leaderboard(
     );
 }
 
-#[inline(always)]
-fn arrowcloud_lb_kind(lb_type: &str) -> Option<ArrowCloudPaneKind> {
-    if lb_type.is_empty() {
-        return None;
-    }
-    let mut compact = String::with_capacity(lb_type.len());
-    for ch in lb_type.chars() {
-        if ch.is_ascii_alphanumeric() {
-            compact.push(ch.to_ascii_lowercase());
-        }
-    }
-    match compact.as_str() {
-        "itg" => Some(ArrowCloudPaneKind::Itg),
-        "ex" => Some(ArrowCloudPaneKind::Ex),
-        "hardex" | "hex" => Some(ArrowCloudPaneKind::HardEx),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_entry_user_id(entry: &ArrowCloudLeaderboardEntry) -> Option<&str> {
-    let user_id = entry.user_id.trim();
-    (!user_id.is_empty()).then_some(user_id)
-}
-
 fn arrowcloud_user_context_from_api(user: ArrowCloudUserApiUser) -> ArrowCloudUserContext {
-    let self_user_id = (!user.id.trim().is_empty()).then_some(user.id);
+    let self_user_id = arrowcloud_user_id(user.id.as_str()).map(str::to_string);
     let rival_user_ids = user
         .rival_user_ids
         .into_iter()
@@ -1987,67 +1765,27 @@ fn arrowcloud_user_context_from_api(user: ArrowCloudUserApiUser) -> ArrowCloudUs
     }
 }
 
-#[inline(always)]
-fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<String> {
-    let Some(context) = context else {
-        return HashSet::new();
-    };
-    let mut out = HashSet::with_capacity(
-        usize::from(context.self_user_id.is_some()) + context.rival_user_ids.len(),
-    );
-    if let Some(self_user_id) = context.self_user_id.as_ref() {
-        out.insert(self_user_id.clone());
-    }
-    out.extend(context.rival_user_ids.iter().cloned());
-    out
-}
-
-#[inline(always)]
-fn arrowcloud_entry_flags(
-    entry: &ArrowCloudLeaderboardEntry,
-    context: Option<&ArrowCloudUserContext>,
-) -> (bool, bool) {
-    let user_id = arrowcloud_entry_user_id(entry);
-    let is_self = entry.is_self
-        || context
-            .and_then(|context| context.self_user_id.as_deref())
-            .is_some_and(|self_user_id| user_id == Some(self_user_id));
-    let is_rival = entry.is_rival
-        || context.is_some_and(|context| {
-            user_id.is_some_and(|user_id| context.rival_user_ids.contains(user_id))
-        });
-    (is_self, is_rival)
-}
-
 fn arrowcloud_entry_from_api(
     entry: ArrowCloudLeaderboardEntry,
     is_self: bool,
     is_rival: bool,
 ) -> LeaderboardEntry {
-    let score = if entry.score.is_finite() {
-        (entry.score * 100.0).clamp(0.0, 10000.0)
-    } else {
-        0.0
-    };
-    LeaderboardEntry {
-        rank: entry.rank,
-        name: entry.alias,
-        machine_tag: None,
-        score,
-        date: entry.date,
-        is_rival,
+    arrowcloud_leaderboard_entry(
+        entry.rank,
+        entry.alias,
+        entry.score,
+        entry.date,
         is_self,
-        is_fail: false,
-    }
+        is_rival,
+    )
 }
 
 fn arrowcloud_hard_ex_pane_from_response(
     decoded: ArrowCloudLeaderboardsApiResponse,
 ) -> Option<ArrowCloudLeaderboardPane> {
-    decoded
-        .leaderboards
-        .into_iter()
-        .find(|pane| arrowcloud_lb_kind(pane.r#type.as_str()) == Some(ArrowCloudPaneKind::HardEx))
+    decoded.leaderboards.into_iter().find(|pane| {
+        arrowcloud_pane_kind_from_type(pane.r#type.as_str()) == Some(ArrowCloudPaneKind::HardEx)
+    })
 }
 
 fn arrowcloud_update_remaining_targets(
@@ -2059,10 +1797,11 @@ fn arrowcloud_update_remaining_targets(
         return;
     }
     for entry in scores {
-        let Some(user_id) = arrowcloud_entry_user_id(entry) else {
+        let Some(user_id) = arrowcloud_user_id(entry.user_id.as_str()) else {
             continue;
         };
-        let (is_self, is_rival) = arrowcloud_entry_flags(entry, context);
+        let (is_self, is_rival) =
+            arrowcloud_entry_flags(Some(user_id), entry.is_self, entry.is_rival, context);
         if is_self || is_rival {
             remaining.remove(user_id);
             if remaining.is_empty() {
@@ -2081,8 +1820,9 @@ fn arrowcloud_hard_ex_pane_from_pages(
     let mut appended_user_ids = HashSet::new();
 
     for entry in first_page.scores {
-        let user_id = arrowcloud_entry_user_id(&entry).map(str::to_owned);
-        let (is_self, is_rival) = arrowcloud_entry_flags(&entry, context);
+        let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+        let (is_self, is_rival) =
+            arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
         if (is_self || is_rival)
             && let Some(user_id) = user_id
         {
@@ -2093,8 +1833,9 @@ fn arrowcloud_hard_ex_pane_from_pages(
 
     for page in extra_pages {
         for entry in page.scores {
-            let user_id = arrowcloud_entry_user_id(&entry).map(str::to_owned);
-            let (is_self, is_rival) = arrowcloud_entry_flags(&entry, context);
+            let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+            let (is_self, is_rival) =
+                arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
             if !(is_self || is_rival) {
                 continue;
             }
@@ -2108,26 +1849,7 @@ fn arrowcloud_hard_ex_pane_from_pages(
     }
     let personalized = entries.iter().any(|entry| entry.is_self || entry.is_rival);
 
-    LeaderboardPane {
-        name: "ArrowCloud".to_string(),
-        entries,
-        is_ex: false,
-        disabled: false,
-        personalized,
-        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
-    }
-}
-
-#[inline(always)]
-fn empty_arrowcloud_hard_ex_pane() -> LeaderboardPane {
-    LeaderboardPane {
-        name: "ArrowCloud".to_string(),
-        entries: Vec::new(),
-        is_ex: false,
-        disabled: false,
-        personalized: false,
-        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
-    }
+    arrowcloud_hard_ex_leaderboard_pane(entries, personalized)
 }
 
 fn fetch_arrowcloud_leaderboards(
@@ -2245,13 +1967,13 @@ fn fetch_arrowcloud_panes(
     };
 
     let Some(legacy_api_url) = arrowcloud_api::legacy_leaderboards_url(chart_hash) else {
-        return Ok(vec![empty_arrowcloud_hard_ex_pane()]);
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
     let Some(decoded) = fetch_arrowcloud_leaderboards(legacy_api_url.as_str(), Some(1))? else {
-        return Ok(vec![empty_arrowcloud_hard_ex_pane()]);
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
     let Some(first_page) = arrowcloud_hard_ex_pane_from_response(decoded) else {
-        return Ok(vec![empty_arrowcloud_hard_ex_pane()]);
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
 
     let mut extra_pages = Vec::new();
@@ -2824,25 +2546,6 @@ pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile_d
         cache.invalidated_after.insert(key, invalidated_at);
     }
 }
-#[derive(Debug)]
-struct MachineLeaderboardPlay {
-    name: String,
-    machine_tag: Option<String>,
-    score_percent: f64,
-    played_at_ms: i64,
-    is_fail: bool,
-}
-
-#[derive(Debug)]
-struct MachineReplayPlay {
-    initials: String,
-    score_percent: f64,
-    played_at_ms: i64,
-    is_fail: bool,
-    replay_beat0_time_ns: SongTimeNs,
-    replay: Vec<LocalReplayEdge>,
-}
-
 fn push_machine_leaderboard_from_dir(
     dir: &Path,
     chart_hash: &str,
@@ -2862,7 +2565,7 @@ fn push_machine_leaderboard_from_dir(
         let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Some((file_hash, played_at_ms)) = parse_local_score_filename(file_name) else {
+        let Some((file_hash, played_at_ms)) = parse_score_file_name(file_name) else {
             continue;
         };
         if file_hash != chart_hash {
@@ -2899,7 +2602,7 @@ fn push_machine_replays_from_dir(
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Some((file_hash, played_at_ms)) = parse_local_score_filename(name) else {
+        let Some((file_hash, played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
         if file_hash != chart_hash {
@@ -2919,43 +2622,6 @@ fn push_machine_replays_from_dir(
     }
 }
 
-fn local_score_date_string(played_at_ms: i64) -> String {
-    let Some(dt) = Local.timestamp_millis_opt(played_at_ms).single() else {
-        return String::new();
-    };
-    dt.format("%Y-%m-%d %H:%M:%S").to_string()
-}
-
-fn machine_leaderboard_entries(
-    mut plays: Vec<MachineLeaderboardPlay>,
-    max_entries: usize,
-) -> Vec<LeaderboardEntry> {
-    plays.sort_by(|a, b| {
-        b.score_percent
-            .partial_cmp(&a.score_percent)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
-            .then_with(|| a.name.cmp(&b.name))
-            .then_with(|| a.machine_tag.cmp(&b.machine_tag))
-    });
-
-    let take_len = max_entries.min(plays.len());
-    let mut out = Vec::with_capacity(take_len);
-    for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        out.push(LeaderboardEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.name,
-            machine_tag: play.machine_tag,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_rival: false,
-            is_self: false,
-            is_fail: play.is_fail,
-        });
-    }
-    out
-}
-
 pub fn get_machine_leaderboard_local(
     chart_hash: &str,
     max_entries: usize,
@@ -2970,7 +2636,7 @@ pub fn get_machine_leaderboard_local(
             profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
         let root = local_scores_root_for_profile(&profile_meta.id);
         push_machine_leaderboard_from_dir(&root, chart_hash, &initials, None, &mut plays);
-        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        let shard_dir = root.join(score_file_shard(chart_hash));
         push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, None, &mut plays);
     }
 
@@ -2997,7 +2663,7 @@ pub fn get_machine_leaderboard_local_with_names(
             Some(initials.as_str()),
             &mut plays,
         );
-        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        let shard_dir = root.join(score_file_shard(chart_hash));
         push_machine_leaderboard_from_dir(
             &shard_dir,
             chart_hash,
@@ -3024,7 +2690,7 @@ pub fn get_personal_leaderboard_local_for_side(
 
     let initials = profile_initials_for_id(&profile_id).unwrap_or_else(|| "----".to_string());
     let root = local_scores_root_for_profile(&profile_id);
-    let shard_dir = root.join(shard2_for_hash(chart_hash));
+    let shard_dir = root.join(score_file_shard(chart_hash));
 
     let mut plays: Vec<MachineLeaderboardPlay> = Vec::new();
     push_machine_leaderboard_from_dir(&root, chart_hash, &initials, None, &mut plays);
@@ -3044,182 +2710,24 @@ pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<Ma
             profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
         let root = local_scores_root_for_profile(&profile_meta.id);
         push_machine_replays_from_dir(&root, chart_hash, &initials, &mut plays);
-        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        let shard_dir = root.join(score_file_shard(chart_hash));
         push_machine_replays_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
     }
 
-    plays.sort_by(|a, b| {
-        b.score_percent
-            .partial_cmp(&a.score_percent)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
-            .then_with(|| a.initials.cmp(&b.initials))
-    });
-
-    let take_len = max_entries.min(plays.len());
-    let mut out = Vec::with_capacity(take_len);
-    for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        let mut replay = Vec::with_capacity(play.replay.len());
-        for edge in play.replay {
-            if gameplay::song_time_ns_invalid(edge.event_music_time_ns) {
-                continue;
-            }
-            replay.push(ReplayEdge {
-                event_music_time_ns: edge.event_music_time_ns,
-                lane_index: edge.lane,
-                pressed: edge.pressed,
-                source: edge.input_source(),
-            });
-        }
-        out.push(MachineReplayEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.initials,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_fail: play.is_fail,
-            replay_beat0_time_ns: play.replay_beat0_time_ns,
-            replay,
-        });
-    }
-    out
+    machine_replay_entries(plays, max_entries)
 }
 
-// --- ITG PercentScore weights (mirror Simply Love SL_Init.lua, ITG mode) ---
-const DP_W1: i32 = 5;
-const DP_W2: i32 = 4;
-const DP_W3: i32 = 2;
-const DP_W4: i32 = 0;
-const DP_W5: i32 = -6;
-const DP_MISS: i32 = -12;
-const DP_HELD: i32 = 5;
-
-#[derive(Debug, Default, Clone, Copy)]
-struct ParsedCommentCounts {
-    w: u32,
-    e: u32,
-    g: u32,
-    d: u32,
-    wo: u32,
-    m: u32,
-}
-
-fn parse_comment_counts(comment: &str) -> ParsedCommentCounts {
-    let mut counts = ParsedCommentCounts::default();
-    for part in comment.split(',') {
-        let s = part.trim();
-        if s.is_empty() {
-            continue;
-        }
-
-        let mut value: u32 = 0;
-        let mut idx = 0usize;
-        for (i, ch) in s.char_indices() {
-            if let Some(d) = ch.to_digit(10) {
-                value = value.saturating_mul(10).saturating_add(d);
-                idx = i + ch.len_utf8();
-            } else {
-                break;
-            }
-        }
-        if value == 0 {
-            continue;
-        }
-
-        let suffix = s[idx..].trim().to_ascii_lowercase();
-        match suffix.as_str() {
-            "w" => counts.w = value,
-            "e" => counts.e = value,
-            "g" => counts.g = value,
-            "d" => counts.d = value,
-            "wo" => counts.wo = value,
-            "m" => counts.m = value,
-            _ => {}
-        }
-    }
-    counts
-}
-
-fn parse_comment_ex_percent(comment: &str) -> Option<f64> {
-    let bytes = comment.as_bytes();
-    let mut idx = 0usize;
-    while idx < bytes.len() {
-        if !bytes[idx].is_ascii_digit() {
-            idx += 1;
-            continue;
-        }
-
-        let start = idx;
-        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
-            idx += 1;
-        }
-        if idx < bytes.len() && bytes[idx] == b'.' {
-            idx += 1;
-            while idx < bytes.len() && bytes[idx].is_ascii_digit() {
-                idx += 1;
-            }
-        }
-
-        let value_end = idx;
-        if idx < bytes.len() && bytes[idx] == b'%' {
-            idx += 1;
-        }
-        while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
-            idx += 1;
-        }
-
-        if idx + 2 <= bytes.len()
-            && bytes[idx].eq_ignore_ascii_case(&b'e')
-            && bytes[idx + 1].eq_ignore_ascii_case(&b'x')
-            && bytes
-                .get(idx + 2)
-                .is_none_or(|next| !next.is_ascii_alphabetic())
-        {
-            return comment[start..value_end].parse::<f64>().ok();
-        }
-    }
-    None
-}
-
-#[inline(always)]
-fn ex_scoreboard_is_quint(score_10000: f64) -> bool {
-    score_10000.is_finite() && score_10000.round().clamp(0.0, 10000.0) >= 10000.0
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct GsExEvidence {
-    leaderboard_score_10000: Option<f64>,
-    comment_percent: Option<f64>,
-}
-
-impl GsExEvidence {
-    fn from_sources(leaderboard_score_10000: Option<f64>, comment: Option<&str>) -> Self {
-        Self {
-            leaderboard_score_10000,
-            comment_percent: comment.and_then(parse_comment_ex_percent),
-        }
-    }
-
-    #[inline(always)]
-    fn is_quint(self) -> Option<bool> {
-        if let Some(score) = self.leaderboard_score_10000 {
-            return Some(ex_scoreboard_is_quint(score));
-        }
-        self.comment_percent.map(|ex| ex >= 100.0)
-    }
-
-    #[inline(always)]
-    fn proves_nonquint(self) -> bool {
-        self.is_quint() == Some(false)
-    }
-}
-
-fn find_chart_stats_for_hash(chart_hash: &str) -> Option<ArrowStats> {
+fn find_chart_stats_for_hash(chart_hash: &str) -> Option<GsLampChartStats> {
     let cache = get_song_cache();
     for pack in cache.iter() {
         for song in &pack.songs {
             for chart in &song.charts {
                 if chart.short_hash == chart_hash {
-                    return Some(chart.stats.clone());
+                    return Some(GsLampChartStats {
+                        total_steps: chart.stats.total_steps,
+                        holds: chart.stats.holds,
+                        rolls: chart.stats.rolls,
+                    });
                 }
             }
         }
@@ -3234,241 +2742,12 @@ fn compute_lamp_index(
     ex_evidence: GsExEvidence,
 ) -> Option<u8> {
     let score_percent = score / 10000.0;
-
-    // Perfect 100% ITG can still be a quad. Trust the GS/BS EX scoreboard
-    // first; only fall back to the EX comment when that board is unavailable.
-    if (score_percent - 1.0).abs() <= 1e-9 {
-        if let Some(is_quint) = ex_evidence.is_quint() {
-            if is_quint {
-                debug!(
-                    "GrooveStats lamp: hash={} score={:.4}% -> Quint lamp (EX=100, index=0)",
-                    chart_hash,
-                    score_percent * 100.0
-                );
-                return Some(0);
-            }
-            debug!(
-                "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (EX < 100, index=1)",
-                chart_hash,
-                score_percent * 100.0
-            );
-            return Some(1);
-        }
-        if let Some(comment) = comment {
-            let counts = parse_comment_counts(comment);
-            let explicit_nonquint_counts = counts.w != 0
-                || counts.e != 0
-                || counts.g != 0
-                || counts.d != 0
-                || counts.wo != 0
-                || counts.m != 0;
-            if explicit_nonquint_counts {
-                debug!(
-                    "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quad lamp (W1 FC, index=1)",
-                    chart_hash,
-                    score_percent * 100.0,
-                    comment
-                );
-                return Some(1);
-            }
-        }
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (no EX=100 evidence)",
-            chart_hash,
-            score_percent * 100.0
-        );
-        return Some(1);
-    }
-
-    let comment = if let Some(c) = comment {
-        c
-    } else {
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% -> no lamp (no GrooveStats comment available)",
-            chart_hash,
-            score_percent * 100.0
-        );
-        return None;
-    };
-    let counts = parse_comment_counts(comment);
-
-    // Any explicit Miss or Way Off disqualifies lamps immediately.
-    if counts.m > 0 || counts.wo > 0 {
-        return None;
-    }
-
-    let stats = if let Some(s) = find_chart_stats_for_hash(chart_hash) {
-        s
-    } else {
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (chart stats not found for hash)",
-            chart_hash,
-            score_percent * 100.0,
-            comment
-        );
-        return None;
-    };
-    let taps_rows = stats.total_steps as i32;
-    let holds = stats.holds as i32;
-    let rolls = stats.rolls as i32;
-
-    if taps_rows <= 0 {
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> no lamp (taps_rows <= 0, taps_rows={})",
-            chart_hash,
-            score_percent * 100.0,
-            comment,
-            taps_rows
-        );
-        return None;
-    }
-
-    // Reconstruct W1 count as "everything not explicitly listed".
-    let non_w1_from_suffixes = counts.e + counts.g + counts.d + counts.wo + counts.m + counts.w;
-    let inferred_w1 = if (non_w1_from_suffixes as i32) > taps_rows {
-        0
-    } else {
-        (taps_rows as u32).saturating_sub(counts.e + counts.g + counts.d + counts.wo + counts.m)
-    };
-    let w1_total = counts.w.max(inferred_w1);
-
-    // Dance Points from tap judgments (rows) only, per ITG PercentScoreWeight.
-    let dp_taps: i32 = (w1_total as i32) * DP_W1
-        + (counts.e as i32) * DP_W2
-        + (counts.g as i32) * DP_W3
-        + (counts.d as i32) * DP_W4
-        + (counts.wo as i32) * DP_W5
-        + (counts.m as i32) * DP_MISS;
-
-    // Holds + rolls assumed fully held for the "no hidden errors" hypothesis.
-    let dp_hold_roll: i32 = (holds + rolls) * DP_HELD;
-
-    // Maximum possible DP if every tap was W1 and all holds/rolls fully held.
-    let dp_possible_max: i32 = (taps_rows * DP_W1 + dp_hold_roll).max(1);
-    let dp_expect_no_hidden_errors: i32 = dp_taps + dp_hold_roll;
-
-    let dp_expect_frac = f64::from(dp_expect_no_hidden_errors) / f64::from(dp_possible_max);
-    let dp_diff = (score_percent - dp_expect_frac).abs();
-    let dp_consistent = dp_diff <= 0.0005;
-
-    if !dp_consistent {
-        // There must have been extra DP loss (e.g., dropped holds or hit mines).
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP mismatch: score%={:.5} vs no-hidden-errors%={:.5} (Δ={:.6}); \
-taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> no lamp",
-            chart_hash,
-            score_percent * 100.0,
-            comment,
-            score_percent * 100.0,
-            dp_expect_frac * 100.0,
-            dp_diff * 100.0,
-            taps_rows,
-            holds,
-            rolls,
-            counts.w,
-            counts.e,
-            counts.g,
-            counts.d,
-            counts.wo,
-            counts.m
-        );
-        return None;
-    }
-
-    // At this point, we know there were no hidden hold/mine mistakes.
-    // Classify the lamp tier, mirroring Simply Love's StageAward semantics.
-    if counts.g == 0 && counts.d == 0 && counts.wo == 0 && counts.m == 0 {
-        // Only W1/W2 present (and W1 reconstructed) => W2 full combo (FEC).
-        if counts.e > 0 || w1_total > 0 {
-            debug!(
-                "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
-taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=FEC (index=2)",
-                chart_hash,
-                score_percent * 100.0,
-                comment,
-                taps_rows,
-                holds,
-                rolls,
-                w1_total,
-                counts.e,
-                counts.g,
-                counts.d,
-                counts.wo,
-                counts.m
-            );
-            return Some(2);
-        }
-    }
-
-    if counts.d == 0 && counts.wo == 0 && counts.m == 0 {
-        // At least one Great, but no Decents/WayOff/Miss => W3 full combo.
-        if counts.g > 0 {
-            debug!(
-                "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
-taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=W3 FC (index=3)",
-                chart_hash,
-                score_percent * 100.0,
-                comment,
-                taps_rows,
-                holds,
-                rolls,
-                w1_total,
-                counts.e,
-                counts.g,
-                counts.d,
-                counts.wo,
-                counts.m
-            );
-            return Some(3);
-        }
-    }
-
-    // No WayOff/Miss and DP-consistent => at worst a W4 full combo.
-    if counts.wo == 0 && counts.m == 0 {
-        debug!(
-            "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> DP ok (no hidden errors). \
-taps_rows={} holds={} rolls={} counts[w={}, e={}, g={}, d={}, wo={}, m={}] -> lamp=W4 FC (index=4)",
-            chart_hash,
-            score_percent * 100.0,
-            comment,
-            taps_rows,
-            holds,
-            rolls,
-            w1_total,
-            counts.e,
-            counts.g,
-            counts.d,
-            counts.wo,
-            counts.m
-        );
-        return Some(4);
-    }
-
-    None
+    let needs_stats = (score_percent - 1.0).abs() > 1e-9 && comment.is_some();
+    let stats = needs_stats
+        .then(|| find_chart_stats_for_hash(chart_hash))
+        .flatten();
+    gs_lamp_index_from_chart_stats(score, comment, ex_evidence, stats)
 }
-
-fn compute_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Option<u8> {
-    let lamp_index = lamp_index?;
-    let comment = comment?;
-    let counts = parse_comment_counts(comment);
-
-    // zmod-style single-digit overlay:
-    // - lamp 1 shows #white fantastics
-    // - lamp 2 shows #W2
-    // - lamp 3 shows #W3
-    let count = match lamp_index {
-        1 => counts.w,
-        2 => counts.e,
-        3 => counts.g,
-        _ => return None,
-    };
-    if (1..=9).contains(&count) {
-        Some(count as u8)
-    } else {
-        None
-    }
-}
-
 // --- Public Fetch Function ---
 
 const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
@@ -3492,20 +2771,6 @@ fn score_import_api_key_for_endpoint(endpoint: ScoreImportEndpoint, profile: &Pr
     }
 }
 
-fn score_entry_matches_profile(
-    entry: &LeaderboardApiEntry,
-    endpoint: ScoreImportEndpoint,
-    username: &str,
-) -> bool {
-    if entry.is_self {
-        return true;
-    }
-    if endpoint.requires_username() {
-        return entry.name.eq_ignore_ascii_case(username);
-    }
-    false
-}
-
 fn score_import_result_from_response(
     decoded: LeaderboardsApiResponse,
     endpoint: ScoreImportEndpoint,
@@ -3523,15 +2788,20 @@ fn score_import_result_from_response(
         return result;
     };
 
-    if let Some(entry) = player
-        .gs_leaderboard
-        .iter()
-        .find(|entry| score_entry_matches_profile(entry, endpoint, username))
-    {
+    if let Some(entry) = player.gs_leaderboard.iter().find(|entry| {
+        score_import_entry_matches_profile(entry.name.as_str(), entry.is_self, endpoint, username)
+    }) {
         let ex_score = player
             .ex_leaderboard
             .iter()
-            .find(|entry| score_entry_matches_profile(entry, endpoint, username))
+            .find(|entry| {
+                score_import_entry_matches_profile(
+                    entry.name.as_str(),
+                    entry.is_self,
+                    endpoint,
+                    username,
+                )
+            })
             .and_then(entry_score_10000);
         let ex_evidence = GsExEvidence::from_sources(ex_score, entry.comments.as_deref());
         result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
@@ -4122,7 +3392,7 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    use chrono::{TimeZone, Utc};
     use deadsync_score::{ArrowCloudServerGrade, leaderboard_rank_for_score, lua_submit_allowed};
 
     #[test]
@@ -4147,31 +3417,6 @@ mod tests {
         assert!(lua_submit_allowed(true, "f95bc209c6f2cbfe"));
         assert!(lua_submit_allowed(true, "b50d0c3916e75b84"));
         assert!(lua_submit_allowed(true, "f41a24722a37758f"));
-    }
-
-    #[test]
-    fn groovestats_comment_counts_ignore_ds_prefix() {
-        let counts = parse_comment_counts("[DS], 15e, 2g, 2m");
-        assert_eq!(counts.e, 15);
-        assert_eq!(counts.g, 2);
-        assert_eq!(counts.m, 2);
-    }
-
-    #[test]
-    fn groovestats_comment_ex_percent_accepts_ds_formats() {
-        assert_eq!(parse_comment_ex_percent("[DS], FA+, 99.78EX"), Some(99.78));
-        assert_eq!(
-            parse_comment_ex_percent("[DS], FA+, 99.78% EX, C650"),
-            Some(99.78)
-        );
-        assert_eq!(parse_comment_ex_percent("[DS], 3 excellents"), None);
-    }
-
-    #[test]
-    fn groovestats_lamp_judge_count_ignores_ds_prefix() {
-        assert_eq!(compute_lamp_judge_count(Some(1), Some("[DS], 4w")), Some(4));
-        assert_eq!(compute_lamp_judge_count(Some(2), Some("[DS], 5e")), Some(5));
-        assert_eq!(compute_lamp_judge_count(Some(3), Some("[DS], 2g")), Some(2));
     }
 
     #[test]
@@ -4987,7 +4232,7 @@ mod tests {
 
     #[test]
     fn empty_arrowcloud_hard_ex_pane_stays_visible_as_hard_ex() {
-        let pane = empty_arrowcloud_hard_ex_pane();
+        let pane = arrowcloud_empty_hard_ex_leaderboard_pane();
 
         assert!(pane.entries.is_empty());
         assert!(!pane.personalized);
