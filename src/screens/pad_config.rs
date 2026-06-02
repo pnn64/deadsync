@@ -99,7 +99,20 @@ pub enum EditResult {
     Handled,
     /// Back was pressed at the top (Simple) level — the caller should exit.
     ExitToParent,
+    /// The user confirmed saving the selected pad as a profile. The caller
+    /// should `take_save` the draft and perform the capture + store.
+    SaveRequested,
 }
+
+/// In-progress "save this pad as a profile" entry (in-session overlay only).
+#[derive(Clone, Debug, Default)]
+pub struct SaveDraft {
+    pub name: String,
+    pub set_default: bool,
+}
+
+/// Max length of a saved pad-config profile name.
+const MAX_PROFILE_NAME_LEN: usize = 24;
 
 /// Which pads to show, based on play context when opened.
 #[derive(Clone, Copy, Default)]
@@ -123,6 +136,8 @@ pub struct State {
     adv_sel: usize,
     /// Queued edits drained by the app loop each frame.
     pending: Vec<PadCommand>,
+    /// When set, the "save this pad as a profile" name-entry box is open.
+    saving: Option<SaveDraft>,
     /// Screen to return to on Back. Set when navigating in; defaults to Options.
     return_screen: Option<Screen>,
     filter: PadFilter,
@@ -210,7 +225,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         EditResult::ExitToParent => {
             ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options))
         }
-        EditResult::Handled => ScreenAction::None,
+        // Saving is only reachable from the in-session overlay; the standalone
+        // Options screen never enters save mode, so this is inert here.
+        EditResult::Handled | EditResult::SaveRequested => ScreenAction::None,
     }
 }
 
@@ -225,6 +242,24 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     if ev.source == InputSource::Gamepad && !is_menu_control(ev.action) {
         return EditResult::Handled;
     }
+
+    // Name-entry box for saving the selected pad as a profile (text comes via
+    // the raw-key path; here we handle the menu controls).
+    if state.saving.is_some() {
+        if is_back(ev.action) {
+            state.saving = None;
+        } else if is_start(ev.action) {
+            if state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty()) {
+                return EditResult::SaveRequested;
+            }
+        } else if matches!(ui_action(ev.action), Some(UiAction::Raise | UiAction::Lower)) {
+            if let Some(d) = state.saving.as_mut() {
+                d.set_default = !d.set_default;
+            }
+        }
+        return EditResult::Handled;
+    }
+
     let total = total_bars(state);
     if total == 0 {
         // Allow Back to leave even with nothing connected.
@@ -261,6 +296,56 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         None => {}
     }
     EditResult::Handled
+}
+
+/// Open the "save this pad as a profile" name-entry box (in-session overlay).
+/// No-op in Advanced view, with no pads, or if already saving.
+pub fn begin_save(state: &mut State) {
+    if state.advanced.is_some() || state.pads.is_empty() || state.saving.is_some() {
+        return;
+    }
+    state.saving = Some(SaveDraft::default());
+}
+
+pub fn is_saving(state: &State) -> bool {
+    state.saving.is_some()
+}
+
+/// Whether the save box currently has a non-blank name (ready to confirm).
+pub fn save_name_nonempty(state: &State) -> bool {
+    state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty())
+}
+
+/// Take the confirmed save draft, clearing save mode.
+pub fn take_save(state: &mut State) -> Option<SaveDraft> {
+    state.saving.take()
+}
+
+/// Feed a raw key into the name-entry box. `backspace` removes the last char;
+/// otherwise printable characters from `text` are appended. Returns whether
+/// save mode is active (i.e. the event was consumed by the name box).
+pub fn save_key_input(state: &mut State, backspace: bool, text: Option<&str>) -> bool {
+    let Some(draft) = state.saving.as_mut() else {
+        return false;
+    };
+    if backspace {
+        draft.name.pop();
+    } else if let Some(text) = text {
+        for c in text.chars() {
+            if (c.is_alphanumeric() || matches!(c, ' ' | '-' | '_'))
+                && draft.name.chars().count() < MAX_PROFILE_NAME_LEN
+            {
+                draft.name.push(c);
+            }
+        }
+    }
+    true
+}
+
+/// The pad device the cursor is currently on (for the overlay's save action).
+pub fn selected_device(state: &State) -> Option<PadDeviceId> {
+    let pad_idx = state.selected / PAD_BUTTON_COUNT;
+    state.pads.get(pad_idx).map(|p| p.device_id)
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {
@@ -343,7 +428,59 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
     } else {
         build_simple(&mut actors, state, &theme, as_overlay, zb);
     }
+    if let Some(draft) = &state.saving {
+        push_save_box(&mut actors, state, draft, zb);
+    }
     actors
+}
+
+/// Modal name-entry box drawn over the Simple view while saving a pad profile.
+fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: f32) {
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+    // High z so it sits above everything (overlay base z is ~1450).
+    let z = 60.0 + zb;
+    // Dim + panel.
+    push_quad(actors, cx, cy - 90.0, 520.0, 180.0, [0.0, 0.0, 0.0, 0.92], z);
+    let pad_name = selected_device(state)
+        .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
+        .map_or("", |p| p.device_name.as_str());
+    actors.push(act!(text:
+        font("miso"): settext(format!("Save {pad_name} as profile")): align(0.5, 0.5):
+        xy(cx, cy - 64.0): zoom(0.85): horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95): z(z + 1.0)
+    ));
+    // Name with a blinking-ish caret (static underscore is fine).
+    let shown = if draft.name.is_empty() {
+        "_".to_owned()
+    } else {
+        format!("{}_", draft.name)
+    };
+    actors.push(act!(text:
+        font("miso"): settext(shown): align(0.5, 0.5):
+        xy(cx, cy - 30.0): zoom(1.0): horizalign(center):
+        diffuse(SELECTED_TEXT[0], SELECTED_TEXT[1], SELECTED_TEXT[2], SELECTED_TEXT[3]): z(z + 1.0)
+    ));
+    let (def_label, def_color) = if draft.set_default {
+        ("Set as default: ON", ON_TEXT)
+    } else {
+        ("Set as default: off", OFF_TEXT)
+    };
+    actors.push(act!(text:
+        font("miso"): settext(def_label.to_owned()): align(0.5, 0.5):
+        xy(cx, cy): zoom(0.7): horizalign(center):
+        diffuse(def_color[0], def_color[1], def_color[2], def_color[3]): z(z + 1.0)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext("Up/Down - toggle default".to_owned()): align(0.5, 0.5):
+        xy(cx, cy + 28.0): zoom(0.62): horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext("Press &START; to save, &BACK; to cancel".to_owned()): align(0.5, 0.5):
+        xy(cx, cy + 50.0): zoom(0.62): horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
+    ));
 }
 
 // ─── Simple view ─────────────────────────────────────────────────────────────
@@ -1089,12 +1226,17 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
                 format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
                 bottom - 70.0,
             );
-            if advanced_available {
-                line(
-                    actors,
-                    "Press &START; for Advanced (per-sensor)".to_owned(),
-                    bottom - 46.0,
-                );
+            // In-session overlay: combine Advanced + Save on one line (Save uses
+            // the session's player/profile context). Standalone screen: just
+            // Advanced (no profile to save to).
+            let action_line = match (as_overlay, advanced_available) {
+                (true, true) => Some("&START; Advanced    &SELECT; Save profile".to_owned()),
+                (true, false) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
+                (false, true) => Some("Press &START; for Advanced (per-sensor)".to_owned()),
+                (false, false) => None,
+            };
+            if let Some(action_line) = action_line {
+                line(actors, action_line, bottom - 46.0);
             }
             let back = if as_overlay {
                 "Press &BACK; to return to Song Select"

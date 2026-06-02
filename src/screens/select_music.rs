@@ -8173,19 +8173,67 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
     // Start drills into Advanced and Back steps back out of it, all handled
     // inside pad_config. Only a Back at the top (simple) level closes the
     // overlay, and only from a joined side.
-    let result = pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine);
-    if ev.pressed && result == pad_config::EditResult::ExitToParent {
-        let close_side = match ev.action {
-            VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
-            VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
-            _ => None,
-        };
-        if close_side.is_some_and(profile::is_session_side_joined) {
-            hide_pad_config_overlay(state);
-            audio::play_sfx("assets/sounds/start.ogg");
+    match pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine) {
+        pad_config::EditResult::ExitToParent => {
+            let close_side = match ev.action {
+                VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
+                VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
+                _ => None,
+            };
+            if close_side.is_some_and(profile::is_session_side_joined) {
+                hide_pad_config_overlay(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
+        }
+        pad_config::EditResult::SaveRequested => perform_pad_profile_save(state),
+        pad_config::EditResult::Handled => {
+            // Select opens the save name box (Simple view only; begin_save guards).
+            if ev.pressed
+                && matches!(ev.action, VirtualAction::p1_select | VirtualAction::p2_select)
+            {
+                pad_config::begin_save(&mut state.pad_config_overlay);
+            }
         }
     }
     ScreenAction::None
+}
+
+/// Save the cursor pad's current tuning to the active player's profile.
+/// SMX pads only; no-op for a Guest (nothing to save to).
+fn perform_pad_profile_save(state: &mut State) {
+    let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
+        return;
+    };
+    if draft.name.trim().is_empty() {
+        return;
+    }
+    let Some(device) = pad_config::selected_device(&state.pad_config_overlay) else {
+        return;
+    };
+    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+        return;
+    }
+    let slot = device.index;
+    let info = crate::engine::smx::get_info(slot);
+    let side = if info.is_player2 {
+        profile_data::PlayerSide::P2
+    } else {
+        profile_data::PlayerSide::P1
+    };
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return; // Guest: no profile to save to.
+    };
+    let Some(data) = crate::engine::smx::capture_config(slot) else {
+        return;
+    };
+    crate::game::pad_profiles::upsert(
+        &profile_id,
+        &draft.name,
+        Some(info.serial),
+        draft.set_default,
+        data.to_hex(),
+    );
+    audio::play_sfx("assets/sounds/start.ogg");
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -8958,7 +9006,28 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
     if state.pad_config_overlay_visible {
-        // Editing is driven by mapped (virtual) actions; swallow raw keys.
+        // While the save name box is open, raw keys type the name (and keyboard
+        // Enter/Esc confirm/cancel). Otherwise editing is virtual-action driven.
+        if pad_config::is_saving(&state.pad_config_overlay) {
+            if let Some(k) = key.filter(|k| k.pressed) {
+                match k.code {
+                    KeyCode::Escape => {
+                        let _ = pad_config::take_save(&mut state.pad_config_overlay);
+                    }
+                    KeyCode::Enter | KeyCode::NumpadEnter => {
+                        if pad_config::save_name_nonempty(&state.pad_config_overlay) {
+                            perform_pad_profile_save(state);
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        pad_config::save_key_input(&mut state.pad_config_overlay, true, None);
+                    }
+                    _ => {
+                        pad_config::save_key_input(&mut state.pad_config_overlay, false, text);
+                    }
+                }
+            }
+        }
         return ScreenAction::None;
     }
     if state.test_input_overlay_visible {
