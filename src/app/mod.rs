@@ -3923,12 +3923,23 @@ impl App {
                 self.fsr_pads_active = true;
             }
             let pads = self.fsr_monitor.poll_pads();
-            let target = if on_screen {
-                &mut self.state.screens.pad_config_state
-            } else {
-                &mut self.state.screens.select_music_state.pad_config_overlay
+            // Drain queued edits in a short-lived borrow so we can touch
+            // `smx_applied` (a sibling of `target`) below without a borrow clash.
+            let commands = {
+                let target = if on_screen {
+                    &mut self.state.screens.pad_config_state
+                } else {
+                    &mut self.state.screens.select_music_state.pad_config_overlay
+                };
+                pad_config::take_commands(target)
             };
-            for cmd in pad_config::take_commands(target) {
+            for cmd in commands {
+                let device = match &cmd {
+                    pad_config::PadCommand::Threshold { device, .. }
+                    | pad_config::PadCommand::SensorEnabled { device, .. }
+                    | pad_config::PadCommand::AutoRecalibration { device, .. }
+                    | pad_config::PadCommand::Debounce { device, .. } => *device,
+                };
                 match cmd {
                     pad_config::PadCommand::Threshold {
                         device,
@@ -3955,7 +3966,18 @@ impl App {
                         let _ = self.fsr_monitor.set_debounce_micros(device, micros);
                     }
                 }
+                // A manual edit diverges from any saved config, so the pad no
+                // longer matches a stored profile — drop the active marker.
+                if device.backend == input::fsr::BackendKind::Smx {
+                    let p2 = crate::engine::smx::get_info(device.index).is_player2;
+                    self.state.screens.select_music_state.smx_applied[usize::from(p2)] = None;
+                }
             }
+            let target = if on_screen {
+                &mut self.state.screens.pad_config_state
+            } else {
+                &mut self.state.screens.select_music_state.pad_config_overlay
+            };
             pad_config::set_pads(target, pads);
 
             // Saving / profile management is only offered in-session, for a cursor
