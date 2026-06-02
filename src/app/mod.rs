@@ -3961,29 +3961,45 @@ impl App {
             // Saving / profile management is only offered in-session, for a cursor
             // pad that is an SMX pad mapped to a joined local profile (the Options
             // screen never has a profile). Resolve it once and reuse for both the
-            // save gate and the management list.
-            let cursor_profile = if on_overlay {
-                pad_config::selected_device(target).and_then(|dev| {
-                    if dev.backend != input::fsr::BackendKind::Smx {
-                        return None;
-                    }
-                    let info = crate::engine::smx::get_info(dev.index);
-                    let side = if info.is_player2 {
-                        profile_data::PlayerSide::P2
-                    } else {
-                        profile_data::PlayerSide::P1
-                    };
-                    profile::active_local_profile_id_for_side(side)
-                })
+            // save gate and the management list. Capture the cursor device (Copy)
+            // so the later `smx_applied` read doesn't alias the `target` borrow.
+            let cursor_dev = if on_overlay {
+                pad_config::selected_device(target)
+                    .filter(|dev| dev.backend == input::fsr::BackendKind::Smx)
             } else {
                 None
             };
+            let cursor_side = cursor_dev.map(|dev| {
+                if crate::engine::smx::get_info(dev.index).is_player2 {
+                    profile_data::PlayerSide::P2
+                } else {
+                    profile_data::PlayerSide::P1
+                }
+            });
+            let cursor_profile =
+                cursor_side.and_then(profile::active_local_profile_id_for_side);
             pad_config::set_save_available(target, cursor_profile.is_some());
+            // Mark the config currently applied to the cursor pad's side. (Reading
+            // `smx_applied` here, after `target`'s last use, avoids a borrow clash.)
+            let active_name = cursor_dev.and_then(|dev| {
+                let p2 = crate::engine::smx::get_info(dev.index).is_player2;
+                self.state.screens.select_music_state.smx_applied[usize::from(p2)]
+                    .as_ref()
+                    .filter(|a| !a.preset)
+                    .map(|a| a.name.clone())
+            });
+            // Re-borrow target (released for the immutable read above).
+            let target = if on_screen {
+                &mut self.state.screens.pad_config_state
+            } else {
+                &mut self.state.screens.select_music_state.pad_config_overlay
+            };
             let profiles = cursor_profile
                 .map(|pid| {
                     crate::game::pad_profiles::load(&pid)
                         .into_iter()
                         .map(|c| pad_config::ProfileListEntry {
+                            is_active: active_name.as_deref() == Some(c.name.as_str()),
                             name: c.name,
                             is_default: c.is_default,
                         })
@@ -4028,21 +4044,38 @@ impl App {
             if self.smx_resolve_key[pad].as_ref() == Some(&key) {
                 continue; // nothing relevant changed — no file I/O, no rewrite
             }
-            let applied = match &profile_id {
+            use crate::screens::select_music::AppliedPadConfig;
+            let preset_label = AppliedPadConfig {
+                preset: true,
+                name: cfg.smx_default_pad_config.as_str().to_owned(),
+            };
+            let (applied, label) = match &profile_id {
                 Some(id) => {
                     let configs = pad_profiles::load(id);
-                    match pad_profiles::resolve(&configs, &info.serial)
-                        .and_then(|c| crate::engine::smx::PadConfigData::from_hex(&c.data_hex))
-                    {
-                        Some(data) => crate::engine::smx::apply_config_data(pad, &data),
+                    match pad_profiles::resolve(&configs, &info.serial).and_then(|c| {
+                        crate::engine::smx::PadConfigData::from_hex(&c.data_hex)
+                            .map(|d| (c.name.clone(), d))
+                    }) {
+                        Some((name, data)) => (
+                            crate::engine::smx::apply_config_data(pad, &data),
+                            AppliedPadConfig { preset: false, name },
+                        ),
                         // No matching/default config (or corrupt) → machine preset.
-                        None => crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+                        None => (
+                            crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+                            preset_label,
+                        ),
                     }
                 }
-                None => crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+                None => (
+                    crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+                    preset_label,
+                ),
             };
             if applied {
                 self.smx_resolve_key[pad] = Some(key);
+                let idx = usize::from(info.is_player2);
+                self.state.screens.select_music_state.smx_applied[idx] = Some(label);
             }
         }
     }

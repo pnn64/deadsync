@@ -1065,6 +1065,14 @@ struct PlaylistSongLookup {
     by_group: HashMap<String, Vec<Arc<SongData>>>,
 }
 
+/// What deadsync last applied to an SMX pad, so the UI can flag the active one.
+/// `preset` = a built-in preset (name is its label); otherwise a saved config.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AppliedPadConfig {
+    pub preset: bool,
+    pub name: String,
+}
+
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -1101,6 +1109,10 @@ pub struct State {
     test_input_overlay: test_input::State,
     pub pad_config_overlay_visible: bool,
     pub pad_config_overlay: pad_config::State,
+    /// What deadsync last applied to each SMX pad (index 0 = P1, 1 = P2), so the
+    /// menus can show which preset/config is currently active. Set by the
+    /// managed-config resolver and by manual recall / Apply.
+    pub smx_applied: [Option<AppliedPadConfig>; 2],
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
@@ -3537,6 +3549,7 @@ pub fn init() -> State {
         test_input_overlay: test_input::State::default(),
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
+        smx_applied: [None, None],
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3727,6 +3740,7 @@ pub fn init_placeholder() -> State {
         test_input_overlay: test_input::State::default(),
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
+        smx_applied: [None, None],
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -4277,11 +4291,11 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
 /// Quick-recall "Pad Profile" menu items: for each connected SMX pad with a
 /// joined local profile, the built-in presets + that profile's saved configs.
 /// Selecting one applies it to that physical pad. `None` hides the category.
-fn build_pad_profile_menu_items() -> Option<Vec<select_music_menu::Item>> {
+fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::Item>> {
     if !config::get().use_fsrs {
         return None;
     }
-    let mut pads: Vec<(bool, String, String)> = Vec::new(); // (p2, profile_id, serial)
+    let mut pads: Vec<(bool, String)> = Vec::new(); // (p2, profile_id)
     for slot in 0..2 {
         let info = crate::engine::smx::get_info(slot);
         if !info.connected {
@@ -4293,7 +4307,7 @@ fn build_pad_profile_menu_items() -> Option<Vec<select_music_menu::Item>> {
             profile_data::PlayerSide::P1
         };
         if let Some(pid) = profile::active_local_profile_id_for_side(side) {
-            pads.push((info.is_player2, pid, info.serial));
+            pads.push((info.is_player2, pid));
         }
     }
     if pads.is_empty() {
@@ -4301,17 +4315,22 @@ fn build_pad_profile_menu_items() -> Option<Vec<select_music_menu::Item>> {
     }
     let show_side = pads.len() > 1;
     let mut items = Vec::new();
-    for (p2, pid, serial) in &pads {
+    for (p2, pid) in &pads {
         let prefix = if show_side {
             if *p2 { "P2 " } else { "P1 " }
         } else {
             ""
         };
         let configs = crate::game::pad_profiles::load(pid);
-        let resolved = crate::game::pad_profiles::resolve(&configs, serial).map(|c| c.name.clone());
+        let applied = state.smx_applied[usize::from(*p2)].as_ref();
         for preset in ["Low", "Medium", "High"] {
+            let mark = if applied.is_some_and(|a| a.preset && a.name == preset) {
+                " (active)"
+            } else {
+                ""
+            };
             items.push(select_music_menu::pad_profile_item(
-                format!("{prefix}{preset}"),
+                format!("{prefix}{preset}{mark}"),
                 "",
                 *p2,
                 true,
@@ -4319,8 +4338,8 @@ fn build_pad_profile_menu_items() -> Option<Vec<select_music_menu::Item>> {
             ));
         }
         for c in &configs {
-            let mark = if resolved.as_deref() == Some(c.name.as_str()) {
-                " *"
+            let mark = if applied.is_some_and(|a| !a.preset && a.name == c.name) {
+                " (active)"
             } else if c.is_default {
                 " (default)"
             } else {
@@ -4452,7 +4471,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         sorts,
         profile: profile_items,
         advanced,
-        pad_profile: build_pad_profile_menu_items(),
+        pad_profile: build_pad_profile_menu_items(state),
         styles,
         playlists,
     }
@@ -8271,14 +8290,14 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
 /// SMX pads only; no-op for a Guest (nothing to save to).
 /// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
 /// (quick recall from the Advanced menu). Returns whether it was applied.
-fn apply_pad_profile_recall(p2: bool, preset: bool, name: &str) -> bool {
+fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
     let Some(slot) = (0..2).find(|&s| {
         let i = crate::engine::smx::get_info(s);
         i.connected && i.is_player2 == p2
     }) else {
         return false;
     };
-    if preset {
+    let applied = if preset {
         match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
             Ok(p) => crate::engine::smx::apply_preset(slot, p),
             Err(()) => false,
@@ -8300,7 +8319,14 @@ fn apply_pad_profile_recall(p2: bool, preset: bool, name: &str) -> bool {
             Some(data) => crate::engine::smx::apply_config_data(slot, &data),
             None => false,
         }
+    };
+    if applied {
+        state.smx_applied[usize::from(p2)] = Some(AppliedPadConfig {
+            preset,
+            name: name.to_owned(),
+        });
     }
+    applied
 }
 
 fn perform_pad_profile_save(state: &mut State) {
@@ -8332,6 +8358,14 @@ fn perform_pad_profile_save(state: &mut State) {
         crate::game::pad_profiles::rename(&profile_id, &old, &name);
         if draft.set_default {
             crate::game::pad_profiles::set_default(&profile_id, &name);
+        }
+        // Keep the active-config label following the rename.
+        let entry = &mut state.smx_applied[usize::from(info.is_player2)];
+        if entry.as_ref().is_some_and(|a| !a.preset && a.name == old) {
+            *entry = Some(AppliedPadConfig {
+                preset: false,
+                name: name.clone(),
+            });
         }
         audio::play_sfx("assets/sounds/start.ogg");
         return;
@@ -8380,6 +8414,11 @@ fn perform_pad_profile_apply(state: &mut State) {
     if let Some(data) = crate::engine::smx::PadConfigData::from_hex(&c.data_hex)
         && crate::engine::smx::apply_config_data(slot, &data)
     {
+        let p2 = crate::engine::smx::get_info(slot).is_player2;
+        state.smx_applied[usize::from(p2)] = Some(AppliedPadConfig {
+            preset: false,
+            name: name.clone(),
+        });
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8392,8 +8431,14 @@ fn perform_pad_profile_set_default(state: &mut State) {
 }
 
 fn perform_pad_profile_delete(state: &mut State) {
-    if let Some((profile_id, name, _)) = pad_overlay_profile_target(state) {
+    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         crate::game::pad_profiles::delete(&profile_id, &name);
+        // The deleted config is no longer "active"; forget it for that side.
+        let p2 = crate::engine::smx::get_info(slot).is_player2;
+        let entry = &mut state.smx_applied[usize::from(p2)];
+        if entry.as_ref().is_some_and(|a| !a.preset && a.name == name) {
+            *entry = None;
+        }
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8611,7 +8656,7 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::ApplyPadProfile { p2, preset, name } => {
             hide_select_music_menu(state);
-            if apply_pad_profile_recall(p2, preset, &name) {
+            if apply_pad_profile_recall(state, p2, preset, &name) {
                 audio::play_sfx("assets/sounds/start.ogg");
             }
             ScreenAction::None

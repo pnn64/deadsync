@@ -123,6 +123,8 @@ pub struct SaveDraft {
 pub struct ProfileListEntry {
     pub name: String,
     pub is_default: bool,
+    /// Whether this config is the one currently applied to the pad.
+    pub is_active: bool,
 }
 
 /// Max length of a saved pad-config profile name.
@@ -619,18 +621,28 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
         let y = top + row as f32 * row_h;
         let selected = state.profiles_sel == row;
         if selected {
-            push_quad(actors, cx, y, 540.0, row_h - 6.0, with_alpha(theme.frame, 0.30), 9.0 + zb);
+            // push_quad is top-anchored; center it on the row's text baseline (y).
+            let qh = row_h - 6.0;
+            push_quad(actors, cx, y - qh * 0.5, 540.0, qh, with_alpha(theme.frame, 0.30), 9.0 + zb);
         }
         let (label, color) = if row == 0 {
             ("+ Save current pad as new\u{2026}".to_owned(), ON_TEXT)
         } else {
             let e = &state.profiles[row - 1];
-            let label = if e.is_default {
-                format!("{}   (default)", e.name)
+            let mut label = e.name.clone();
+            if e.is_active {
+                label.push_str("   (active)");
+            } else if e.is_default {
+                label.push_str("   (default)");
+            }
+            // The active config is tinted even when the cursor is elsewhere.
+            let color = if selected {
+                SELECTED_TEXT
+            } else if e.is_active {
+                ON_TEXT
             } else {
-                e.name.clone()
+                [1.0, 1.0, 1.0, 0.9]
             };
-            let color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.9] };
             (label, color)
         };
         actors.push(act!(text:
