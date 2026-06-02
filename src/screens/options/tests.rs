@@ -653,3 +653,71 @@ fn folder_path_for_row_resolves_each_folder_row() {
     assert!(folder_path_for_row(SubRowId::Game).is_none());
     assert!(!is_folder_row(SubRowId::Game));
 }
+
+/// Run pending submenu fades to completion (cap iterations so a stuck transition
+/// fails the test rather than hanging).
+fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
+    for _ in 0..16 {
+        if matches!(state.submenu_transition, SubmenuTransition::None) {
+            return;
+        }
+        update(state, SUBMENU_FADE_DURATION + 0.001, asset_manager);
+    }
+    panic!("submenu transition did not settle");
+}
+
+#[test]
+fn input_backend_back_returns_to_input_not_root() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    // In the Input submenu, whose parent is the main list (no parent kind).
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.submenu_parent_kind = None;
+
+    // Open the inner Input Options (InputBackend) page.
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::InputOptions);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend));
+    assert_eq!(state.submenu_parent_kind, Some(SubmenuKind::Input));
+
+    // Back from the inner page must land on the parent Input submenu, not root.
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
+}
+
+#[test]
+fn input_backend_back_returns_to_input_after_visiting_smx_config() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.submenu_parent_kind = None;
+
+    // Input -> InputBackend.
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::InputOptions);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+
+    // The SMX Config row only shows when FSRs are enabled.
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::UseFsrs,
+        yes_no_choice_index(true),
+    );
+
+    // InputBackend -> SmxConfig, then back to InputBackend.
+    select_visible_row(&mut state, SubmenuKind::InputBackend, SubRowId::SmxConfig);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::SmxConfig));
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend));
+
+    // The parent link back to Input must survive the round trip.
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
+}

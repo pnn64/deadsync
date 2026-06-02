@@ -938,13 +938,31 @@ pub(super) fn handle_dedicated_three_key_options_input(
     }
 }
 
+/// The submenu a given submenu sits under (`None` = it opens straight off the
+/// main options list). The single source of truth for back navigation: when we
+/// return to a parent submenu we must also restore *its* parent link, otherwise
+/// a third-level page (e.g. SMX Config) would strand its parent (Input Options)
+/// with no way back to the Input launcher.
+pub(super) fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
+    match kind {
+        SubmenuKind::InputBackend => Some(SubmenuKind::Input),
+        SubmenuKind::SmxConfig => Some(SubmenuKind::InputBackend),
+        SubmenuKind::GrooveStats
+        | SubmenuKind::ArrowCloud
+        | SubmenuKind::ScoreImport => Some(SubmenuKind::OnlineScoring),
+        SubmenuKind::NullOrDieOptions | SubmenuKind::SyncPacks => Some(SubmenuKind::NullOrDie),
+        _ => None,
+    }
+}
+
 pub(super) fn cancel_current_view(state: &mut State) -> ScreenAction {
     match state.view {
         OptionsView::Main => ScreenAction::Navigate(Screen::Menu),
         OptionsView::Submenu(_) => {
             if let Some(parent_kind) = state.submenu_parent_kind {
                 state.pending_submenu_kind = Some(parent_kind);
-                state.pending_submenu_parent_kind = None;
+                // Restore the parent's own parent so a further Back keeps climbing.
+                state.pending_submenu_parent_kind = submenu_parent_kind_of(parent_kind);
                 state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
             } else {
                 state.submenu_transition = SubmenuTransition::FadeOutToMain;
@@ -1165,7 +1183,8 @@ pub(super) fn activate_current_selection(
                 audio::play_sfx("assets/sounds/start.ogg");
                 if let Some(parent_kind) = state.submenu_parent_kind {
                     state.pending_submenu_kind = Some(parent_kind);
-                    state.pending_submenu_parent_kind = None;
+                    // Restore the parent's own parent so a further Back keeps climbing.
+                    state.pending_submenu_parent_kind = submenu_parent_kind_of(parent_kind);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                 } else {
                     state.submenu_transition = SubmenuTransition::FadeOutToMain;
