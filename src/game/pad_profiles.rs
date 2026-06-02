@@ -106,7 +106,7 @@ fn parse(content: &str) -> Vec<PadConfigProfile> {
     let mut default = false;
     let mut data_hex = String::new();
 
-    let mut flush = |name: &mut String, serial: &mut String, default: &mut bool, data: &mut String, out: &mut Vec<PadConfigProfile>| {
+    let flush = |name: &mut String, serial: &mut String, default: &mut bool, data: &mut String, out: &mut Vec<PadConfigProfile>| {
         if !name.trim().is_empty() && !data.trim().is_empty() {
             out.push(PadConfigProfile {
                 name: std::mem::take(name).trim().to_string(),
