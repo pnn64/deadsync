@@ -1,9 +1,8 @@
 use super::{
-    GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, cache_gs_score_for_profile, cached_score_from_gs, gameplay_run_failed,
-    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
-    lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
+    cache_gs_score_for_profile, cached_score_from_gs, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
+    submit_side_ix,
 };
 use crate::game::gameplay;
 use crate::game::online;
@@ -19,9 +18,10 @@ use deadsync_profile::Profile;
 use deadsync_profile::{RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{
-    GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
-    ItlEventProgress, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs,
-    submit_retry_delay_secs,
+    GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
+    GS_INVALID_REMOVE_MASK, GrooveStatsEvalState, GrooveStatsSubmitRecordBanner,
+    GrooveStatsSubmitUiStatus, ItlEventProgress, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS,
+    duration_to_ceil_secs, groovestats_reason_lines, submit_retry_delay_secs,
 };
 use log::{debug, warn};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -89,24 +89,8 @@ struct GrooveStatsSubmitRetryEntry {
 /// `MAX_ATTEMPTS` failures, auto-retry is exhausted and the user gets bare
 /// `F5 Retry`). For *manual-only* statuses the cooldown caps at
 /// `delay(MAX)` and stays there for subsequent failures.
-/// Maximum number of attempts before the backoff schedule saturates.
 /// Alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
 const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
-
-/// Exponential backoff schedule shared with every other submission backend.
-/// See [`submit_retry_delay_secs`] for the schedule.
-#[inline(always)]
-const fn groovestats_retry_delay_secs(attempt: u8) -> u64 {
-    submit_retry_delay_secs(attempt)
-}
-
-/// Returns true when the given failure status should be retried automatically
-/// by the tick driver (with exponential backoff). Other retryable statuses
-/// still get a cooldown gate, but the user must press `F5` to actually fire.
-#[inline]
-const fn groovestats_status_is_auto_retryable(status: GrooveStatsSubmitUiStatus) -> bool {
-    matches!(status, GrooveStatsSubmitUiStatus::TimedOut)
-}
 
 static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<Mutex<[Vec<GrooveStatsSubmitRetryEntry>; 2]>> =
     std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
@@ -289,16 +273,6 @@ fn groovestats_next_submit_ui_token() -> u64 {
 }
 
 #[inline(always)]
-const fn groovestats_can_retry_submit(status: GrooveStatsSubmitUiStatus) -> bool {
-    matches!(
-        status,
-        GrooveStatsSubmitUiStatus::TimedOut
-            | GrooveStatsSubmitUiStatus::NetworkError
-            | GrooveStatsSubmitUiStatus::ServerError { .. }
-    )
-}
-
-#[inline(always)]
 fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
     let hash = entry.chart_hash.trim();
     if hash.is_empty() {
@@ -358,38 +332,6 @@ pub fn get_groovestats_submit_record_banner_for_side(
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.record_banner)
-}
-
-fn groovestats_reason_lines(
-    checks: &[bool; GROOVESTATS_REASON_COUNT],
-    bad: &[String],
-) -> Vec<String> {
-    let mut out = Vec::with_capacity(6);
-    for (idx, passed) in checks.iter().enumerate() {
-        if *passed {
-            continue;
-        }
-        match idx {
-            0 => out.push("GrooveStats only supports dance and pump charts.".to_string()),
-            1 => out.push("GrooveStats does not support dance-solo charts.".to_string()),
-            2 => out.push("GrooveStats QR is unavailable in course mode.".to_string()),
-            3 => out.push("GrooveStats requires ITG mode.".to_string()),
-            4 => out.push("Timing windows must be at ITG or harder.".to_string()),
-            5 => out.push("Life difficulty must be at ITG or harder.".to_string()),
-            6 => {
-                out.push("Metrics or preferences are incorrect.".to_string());
-                out.extend(bad.iter().cloned());
-            }
-            7 => out.push("Music rate must be between 1.0x and 3.0x.".to_string()),
-            8 => out.push("Note-removal modifiers are enabled.".to_string()),
-            9 => out.push("Note-insertion modifiers are enabled.".to_string()),
-            10 => out.push("Fail type must be Immediate or ImmediateContinue.".to_string()),
-            11 => out.push("Autoplay or replay is not allowed.".to_string()),
-            12 => out.push("MinTNSToScoreNotes cannot be W1 or W2.".to_string()),
-            _ => {}
-        }
-    }
-    out
 }
 
 fn groovestats_eval_state(
@@ -813,25 +755,6 @@ fn groovestats_payload_for_player(
     })
 }
 
-#[inline(always)]
-fn groovestats_status_from_http(status_code: u16) -> GrooveStatsSubmitUiStatus {
-    match status_code {
-        408 | 504 => GrooveStatsSubmitUiStatus::TimedOut,
-        500..=599 => GrooveStatsSubmitUiStatus::ServerError {
-            http_status: status_code,
-        },
-        401 | 403 => GrooveStatsSubmitUiStatus::Rejected {
-            reason: RejectReason::Unauthorized,
-        },
-        404 => GrooveStatsSubmitUiStatus::Rejected {
-            reason: RejectReason::NotFound,
-        },
-        _ => GrooveStatsSubmitUiStatus::Rejected {
-            reason: RejectReason::InvalidScore,
-        },
-    }
-}
-
 fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
@@ -857,39 +780,8 @@ fn groovestats_submit_error_from_online(
     service_name: &str,
     error: GrooveStatsSubmitRequestError,
 ) -> GrooveStatsSubmitError {
-    match error {
-        GrooveStatsSubmitRequestError::Transport { message, timed_out } => GrooveStatsSubmitError {
-            status: if timed_out {
-                GrooveStatsSubmitUiStatus::TimedOut
-            } else {
-                GrooveStatsSubmitUiStatus::NetworkError
-            },
-            message,
-        },
-        GrooveStatsSubmitRequestError::Http {
-            status,
-            body_snippet,
-        } => GrooveStatsSubmitError {
-            status: groovestats_status_from_http(status),
-            message: if body_snippet.is_empty() {
-                format!("{service_name} submit returned HTTP {status}")
-            } else {
-                format!("{service_name} submit returned HTTP {status}: {body_snippet}")
-            },
-        },
-        GrooveStatsSubmitRequestError::Decode { message } => GrooveStatsSubmitError {
-            status: GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            },
-            message: format!("failed to parse {service_name} submit response: {message}"),
-        },
-        GrooveStatsSubmitRequestError::Api { message } => GrooveStatsSubmitError {
-            status: GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            },
-            message: format!("{service_name} submit error: {message}"),
-        },
-    }
+    let (status, message) = groovestats_api::submit_error_status_and_message(service_name, &error);
+    GrooveStatsSubmitError { status, message }
 }
 
 fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
@@ -973,7 +865,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     groovestats_record_submit_success(player.side, player.chart_hash.as_str());
                 }
                 if let Some(profile_id) = player.profile_id.as_deref() {
-                    let ex_evidence = gs_ex_evidence_from_leaderboard(
+                    let ex_evidence = groovestats_api::gs_ex_evidence_from_leaderboard(
                         player_response.ex_leaderboard.as_slice(),
                         player.username.as_str(),
                         Some(player.comment.as_str()),
@@ -1267,7 +1159,7 @@ fn retry_groovestats_submit_inner(
     let Some(status) = get_groovestats_submit_ui_status_for_side(hash, side) else {
         return false;
     };
-    if !groovestats_can_retry_submit(status) {
+    if !status.can_retry() {
         return false;
     }
     let entry = {
@@ -1312,7 +1204,7 @@ fn retry_groovestats_submit_inner(
 /// `retry_attempt` counter, so mixed failure kinds (e.g., timeout → 5xx →
 /// timeout) keep ratcheting along the same exponential curve instead of
 /// each kind walking its own track. Auto-firing is gated on the current
-/// status being [`groovestats_status_is_auto_retryable`] AND
+/// status being [`GrooveStatsSubmitUiStatus::is_auto_retryable`] AND
 /// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
 /// as a manual F5 cooldown gate.
 fn groovestats_record_submit_failure(
@@ -1327,7 +1219,7 @@ fn groovestats_record_submit_failure(
     else {
         return;
     };
-    if !groovestats_can_retry_submit(status) {
+    if !status.can_retry() {
         // Terminal (e.g., Rejected) — clear any prior gate.
         entry.next_retry_at = None;
         return;
@@ -1336,7 +1228,7 @@ fn groovestats_record_submit_failure(
         .retry_attempt
         .saturating_add(1)
         .min(GROOVESTATS_RETRY_MAX_ATTEMPTS);
-    let delay = groovestats_retry_delay_secs(entry.retry_attempt);
+    let delay = submit_retry_delay_secs(entry.retry_attempt);
     entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
 }
 
@@ -1393,13 +1285,13 @@ pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::Play
     }
     matches!(
         get_groovestats_submit_ui_status_for_side(hash, side),
-        Some(s) if groovestats_status_is_auto_retryable(s)
+        Some(s) if s.is_auto_retryable()
     )
 }
 
 /// Fires any auto-retries whose scheduled time has elapsed. Only fires for
 /// entries whose current UI status is auto-retryable (see
-/// [`groovestats_status_is_auto_retryable`]) AND whose auto-retry budget
+/// [`GrooveStatsSubmitUiStatus::is_auto_retryable`]) AND whose auto-retry budget
 /// hasn't been exhausted; other retryable statuses (and exhausted entries)
 /// use `next_retry_at` purely as a manual cooldown gate and are NOT
 /// auto-fired by the tick. Should be called once per frame from the
@@ -1428,9 +1320,7 @@ pub fn tick_groovestats_auto_retries() -> bool {
         let Some(status) = get_groovestats_submit_ui_status_for_side(&hash, side) else {
             continue;
         };
-        if groovestats_status_is_auto_retryable(status)
-            && retry_groovestats_submit_inner(&hash, side, false)
-        {
+        if status.is_auto_retryable() && retry_groovestats_submit_inner(&hash, side, false) {
             fired = true;
         }
     }
@@ -1441,7 +1331,6 @@ pub fn tick_groovestats_auto_retries() -> bool {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use deadsync_online::groovestats::{GrooveStatsSubmitApiPlayer, LeaderboardApiEntry};
     use serde_json::json;
 
     fn sample_chart(chart_type: &str) -> ChartData {
@@ -1821,103 +1710,6 @@ mod tests {
         assert_eq!(value["ShowFaPlusWindow"], json!(true));
     }
 
-    fn sample_submit_job(show_ex_score: bool) -> GrooveStatsSubmitPlayerJob {
-        GrooveStatsSubmitPlayerJob {
-            side: profile_data::PlayerSide::P1,
-            slot: 1,
-            chart_hash: "deadbeef".to_string(),
-            username: "PerfectTaste".to_string(),
-            profile_name: "PerfectTaste".to_string(),
-            profile_id: None,
-            token: 1,
-            itl_score_hundredths: None,
-            show_ex_score,
-            score_10000: 9_999,
-            comment: String::new(),
-        }
-    }
-
-    fn sample_submit_entry(rank: u32, is_self: bool) -> LeaderboardApiEntry {
-        LeaderboardApiEntry {
-            rank,
-            name: "PerfectTaste".to_string(),
-            machine_tag: None,
-            score: 9999.0,
-            date: String::new(),
-            is_rival: false,
-            is_self,
-            is_fail: false,
-            comments: None,
-        }
-    }
-
-    fn sample_submit_response(
-        result: &str,
-        gs_leaderboard: Vec<LeaderboardApiEntry>,
-        ex_leaderboard: Vec<LeaderboardApiEntry>,
-    ) -> GrooveStatsSubmitApiPlayer {
-        GrooveStatsSubmitApiPlayer {
-            chart_hash: "deadbeef".to_string(),
-            result: result.to_string(),
-            gs_leaderboard,
-            ex_leaderboard,
-            rpg: None,
-            itl: None,
-        }
-    }
-
-    #[test]
-    fn submit_record_banner_returns_world_record_for_top_gs_rank() {
-        let banner = submit_record_banner(
-            &sample_submit_job(false),
-            &sample_submit_response("improved", vec![sample_submit_entry(1, true)], Vec::new()),
-        );
-
-        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecord));
-    }
-
-    #[test]
-    fn submit_record_banner_prefers_ex_leaderboard_for_ex_mode() {
-        let banner = submit_record_banner(
-            &sample_submit_job(true),
-            &sample_submit_response(
-                "score-added",
-                vec![sample_submit_entry(2, true)],
-                vec![sample_submit_entry(1, true)],
-            ),
-        );
-
-        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecordEx));
-    }
-
-    #[test]
-    fn submit_record_banner_falls_back_to_personal_best() {
-        let banner = submit_record_banner(
-            &sample_submit_job(true),
-            &sample_submit_response(
-                "improved",
-                vec![sample_submit_entry(3, true)],
-                vec![sample_submit_entry(4, true)],
-            ),
-        );
-
-        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::PersonalBest));
-    }
-
-    #[test]
-    fn submit_record_banner_ignores_non_improving_results() {
-        let banner = submit_record_banner(
-            &sample_submit_job(false),
-            &sample_submit_response(
-                "score-already-submitted",
-                vec![sample_submit_entry(1, true)],
-                Vec::new(),
-            ),
-        );
-
-        assert_eq!(banner, None);
-    }
-
     #[test]
     fn groovestats_run_passed_rejects_failed_runs() {
         assert!(gameplay_run_passed(true, false, 1.0, false));
@@ -1932,156 +1724,5 @@ mod tests {
         assert!(!gameplay_run_failed(false, false));
         assert!(gameplay_run_failed(true, false));
         assert!(gameplay_run_failed(false, true));
-    }
-
-    #[test]
-    fn groovestats_retry_allows_retryable_statuses() {
-        assert!(!groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::Submitting
-        ));
-        assert!(!groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::Submitted
-        ));
-        assert!(groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::TimedOut
-        ));
-        assert!(groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::NetworkError
-        ));
-        assert!(groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::ServerError { http_status: 500 }
-        ));
-        assert!(!groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            }
-        ));
-        assert!(!groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::Unauthorized,
-            }
-        ));
-    }
-
-    #[test]
-    fn groovestats_retry_delay_schedule_is_exponential() {
-        assert_eq!(groovestats_retry_delay_secs(1), 2);
-        assert_eq!(groovestats_retry_delay_secs(2), 4);
-        assert_eq!(groovestats_retry_delay_secs(3), 8);
-        assert_eq!(groovestats_retry_delay_secs(4), 16);
-        assert_eq!(
-            groovestats_retry_delay_secs(GROOVESTATS_RETRY_MAX_ATTEMPTS),
-            32
-        );
-    }
-
-    #[test]
-    fn groovestats_status_from_http_classifies_codes() {
-        assert_eq!(
-            groovestats_status_from_http(408),
-            GrooveStatsSubmitUiStatus::TimedOut
-        );
-        assert_eq!(
-            groovestats_status_from_http(504),
-            GrooveStatsSubmitUiStatus::TimedOut
-        );
-        assert_eq!(
-            groovestats_status_from_http(500),
-            GrooveStatsSubmitUiStatus::ServerError { http_status: 500 }
-        );
-        assert_eq!(
-            groovestats_status_from_http(503),
-            GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }
-        );
-        assert_eq!(
-            groovestats_status_from_http(401),
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::Unauthorized,
-            }
-        );
-        assert_eq!(
-            groovestats_status_from_http(403),
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::Unauthorized,
-            }
-        );
-        assert_eq!(
-            groovestats_status_from_http(404),
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::NotFound,
-            }
-        );
-        assert_eq!(
-            groovestats_status_from_http(400),
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            }
-        );
-        assert_eq!(
-            groovestats_status_from_http(418),
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            }
-        );
-    }
-
-    #[test]
-    fn groovestats_submit_error_maps_online_transport_errors() {
-        let timed_out = groovestats_submit_error_from_online(
-            "GrooveStats",
-            GrooveStatsSubmitRequestError::Transport {
-                message: "network error: timed out".to_string(),
-                timed_out: true,
-            },
-        );
-        assert_eq!(timed_out.status, GrooveStatsSubmitUiStatus::TimedOut);
-        assert_eq!(timed_out.message, "network error: timed out");
-
-        let network = groovestats_submit_error_from_online(
-            "GrooveStats",
-            GrooveStatsSubmitRequestError::Transport {
-                message: "network error: refused".to_string(),
-                timed_out: false,
-            },
-        );
-        assert_eq!(network.status, GrooveStatsSubmitUiStatus::NetworkError);
-    }
-
-    #[test]
-    fn groovestats_submit_error_maps_online_protocol_errors() {
-        let http = groovestats_submit_error_from_online(
-            "GrooveStats",
-            GrooveStatsSubmitRequestError::Http {
-                status: 403,
-                body_snippet: "bad key".to_string(),
-            },
-        );
-        assert_eq!(
-            http.status,
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::Unauthorized,
-            }
-        );
-        assert_eq!(
-            http.message,
-            "GrooveStats submit returned HTTP 403: bad key"
-        );
-
-        let api = groovestats_submit_error_from_online(
-            "GrooveStats",
-            GrooveStatsSubmitRequestError::Api {
-                message: "score-already-submitted".to_string(),
-            },
-        );
-        assert_eq!(
-            api.status,
-            GrooveStatsSubmitUiStatus::Rejected {
-                reason: RejectReason::InvalidScore,
-            }
-        );
-        assert_eq!(
-            api.message,
-            "GrooveStats submit error: score-already-submitted"
-        );
     }
 }

@@ -2,7 +2,7 @@ use super::{
     GrooveStatsSubmitPlayerJob, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
-    groovestats_judgment_counts, leaderboard_entries_from_api,
+    groovestats_judgment_counts,
 };
 use crate::config::dirs;
 use crate::game::gameplay;
@@ -14,6 +14,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, LeaderboardApiEntry,
+    leaderboard_entries_from_api,
 };
 use deadsync_profile as profile_data;
 use log::{debug, warn};

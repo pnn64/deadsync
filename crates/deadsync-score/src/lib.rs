@@ -363,6 +363,24 @@ impl LeaderboardPane {
     }
 }
 
+pub fn leaderboard_pane(
+    name: &str,
+    entries: Vec<LeaderboardEntry>,
+    is_ex: bool,
+) -> Option<LeaderboardPane> {
+    if entries.is_empty() {
+        return None;
+    }
+    Some(LeaderboardPane {
+        name: name.to_string(),
+        entries,
+        is_ex,
+        disabled: false,
+        personalized: true,
+        arrowcloud_kind: None,
+    })
+}
+
 pub fn arrowcloud_hard_ex_leaderboard_pane(
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
@@ -389,11 +407,49 @@ pub struct PlayerLeaderboardData {
     pub itl_self_rank: Option<u32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PlayerLeaderboardCacheKey {
+    pub chart_hash: String,
+    pub api_key: String,
+    pub arrowcloud_api_key: String,
+    pub include_arrowcloud: bool,
+    pub show_ex_score: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct CachedPlayerLeaderboardData {
     pub loading: bool,
     pub data: Option<PlayerLeaderboardData>,
     pub error: Option<String>,
+}
+
+impl CachedPlayerLeaderboardData {
+    #[inline(always)]
+    pub const fn loading() -> Self {
+        Self {
+            loading: true,
+            data: None,
+            error: None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn ready(data: PlayerLeaderboardData) -> Self {
+        Self {
+            loading: false,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn error(error: String) -> Self {
+        Self {
+            loading: false,
+            data: None,
+            error: Some(error),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -471,6 +527,61 @@ impl GameplayScoreboxProfileSnapshot {
     pub const fn should_auto_populate(&self) -> bool {
         self.should_auto_populate
     }
+}
+
+pub fn scorebox_snapshot(
+    display_scorebox: bool,
+    show_ex_score: bool,
+    side_joined: bool,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+    api_key: &str,
+    arrowcloud_api_key: &str,
+    gs_username: &str,
+    persistent_profile_id: Option<String>,
+) -> GameplayScoreboxProfileSnapshot {
+    let api_key = api_key.trim().to_string();
+    let arrowcloud_api_key = arrowcloud_api_key.trim().to_string();
+    let gs_username = gs_username.trim().to_string();
+    let include_arrowcloud = enable_arrowcloud && !arrowcloud_api_key.is_empty();
+    let auto_profile_id = if auto_populate_gs_scores {
+        persistent_profile_id.clone()
+    } else {
+        None
+    };
+    let should_auto_populate =
+        auto_populate_gs_scores && auto_profile_id.is_some() && !gs_username.is_empty();
+    GameplayScoreboxProfileSnapshot::new(
+        display_scorebox,
+        enable_groovestats && side_joined && !api_key.is_empty(),
+        show_ex_score,
+        api_key,
+        arrowcloud_api_key,
+        include_arrowcloud,
+        gs_username,
+        persistent_profile_id,
+        auto_profile_id,
+        should_auto_populate,
+    )
+}
+
+pub fn player_leaderboard_cache_key(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<PlayerLeaderboardCacheKey> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+        return None;
+    }
+
+    Some(PlayerLeaderboardCacheKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: profile_snapshot.api_key.clone(),
+        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key.clone(),
+        include_arrowcloud: profile_snapshot.include_arrowcloud,
+        show_ex_score: profile_snapshot.show_ex_score,
+    })
 }
 
 /// Maximum number of attempts before the backoff schedule saturates. For
@@ -1098,6 +1209,18 @@ pub fn cached_gs_score_from_lamp(
         grade = promote_quint_grade(grade, 100.0);
     }
     cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
+}
+
+#[inline(always)]
+pub fn cached_gs_score_from_chart_stats(
+    score_10000: f64,
+    is_fail: bool,
+    comment: Option<&str>,
+    ex_evidence: GsExEvidence,
+    stats: Option<GsLampChartStats>,
+) -> CachedScore {
+    let lamp_index = gs_lamp_index_from_chart_stats(score_10000, comment, ex_evidence, stats);
+    cached_gs_score_from_lamp(score_10000, is_fail, lamp_index, comment)
 }
 
 #[inline(always)]
@@ -1860,6 +1983,45 @@ pub struct GrooveStatsEvalState {
     pub manual_qr_url: Option<String>,
 }
 
+// Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
+pub const GS_INVALID_REMOVE_MASK: u8 =
+    (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
+pub const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
+pub const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
+pub const GROOVESTATS_REASON_COUNT: usize = 13;
+
+pub fn groovestats_reason_lines(
+    checks: &[bool; GROOVESTATS_REASON_COUNT],
+    bad: &[String],
+) -> Vec<String> {
+    let mut out = Vec::with_capacity(6);
+    for (idx, passed) in checks.iter().enumerate() {
+        if *passed {
+            continue;
+        }
+        match idx {
+            0 => out.push("GrooveStats only supports dance and pump charts.".to_string()),
+            1 => out.push("GrooveStats does not support dance-solo charts.".to_string()),
+            2 => out.push("GrooveStats QR is unavailable in course mode.".to_string()),
+            3 => out.push("GrooveStats requires ITG mode.".to_string()),
+            4 => out.push("Timing windows must be at ITG or harder.".to_string()),
+            5 => out.push("Life difficulty must be at ITG or harder.".to_string()),
+            6 => {
+                out.push("Metrics or preferences are incorrect.".to_string());
+                out.extend(bad.iter().cloned());
+            }
+            7 => out.push("Music rate must be between 1.0x and 3.0x.".to_string()),
+            8 => out.push("Note-removal modifiers are enabled.".to_string()),
+            9 => out.push("Note-insertion modifiers are enabled.".to_string()),
+            10 => out.push("Fail type must be Immediate or ImmediateContinue.".to_string()),
+            11 => out.push("Autoplay or replay is not allowed.".to_string()),
+            12 => out.push("MinTNSToScoreNotes cannot be W1 or W2.".to_string()),
+            _ => {}
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GrooveStatsSubmitUiStatus {
     Submitting,
@@ -1870,6 +2032,40 @@ pub enum GrooveStatsSubmitUiStatus {
     Rejected { reason: RejectReason },
 }
 
+impl GrooveStatsSubmitUiStatus {
+    #[inline(always)]
+    pub const fn can_retry(self) -> bool {
+        matches!(
+            self,
+            Self::TimedOut | Self::NetworkError | Self::ServerError { .. }
+        )
+    }
+
+    #[inline(always)]
+    pub const fn is_auto_retryable(self) -> bool {
+        matches!(self, Self::TimedOut)
+    }
+
+    #[inline(always)]
+    pub const fn from_http_status(status_code: u16) -> Self {
+        match status_code {
+            408 | 504 => Self::TimedOut,
+            500..=599 => Self::ServerError {
+                http_status: status_code,
+            },
+            401 | 403 => Self::Rejected {
+                reason: RejectReason::Unauthorized,
+            },
+            404 => Self::Rejected {
+                reason: RejectReason::NotFound,
+            },
+            _ => Self::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowCloudSubmitUiStatus {
     Submitting,
@@ -1878,6 +2074,40 @@ pub enum ArrowCloudSubmitUiStatus {
     NetworkError,
     ServerError { http_status: u16 },
     Rejected { reason: RejectReason },
+}
+
+impl ArrowCloudSubmitUiStatus {
+    #[inline(always)]
+    pub const fn can_retry(self) -> bool {
+        matches!(
+            self,
+            Self::TimedOut | Self::NetworkError | Self::ServerError { .. }
+        )
+    }
+
+    #[inline(always)]
+    pub const fn is_auto_retryable(self) -> bool {
+        matches!(self, Self::TimedOut)
+    }
+
+    #[inline(always)]
+    pub const fn from_http_status(status_code: u16) -> Self {
+        match status_code {
+            408 | 504 => Self::TimedOut,
+            500..=599 => Self::ServerError {
+                http_status: status_code,
+            },
+            401 | 403 => Self::Rejected {
+                reason: RejectReason::Unauthorized,
+            },
+            404 => Self::Rejected {
+                reason: RejectReason::NotFound,
+            },
+            _ => Self::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -2368,6 +2598,17 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_rank_uses_scores_not_identity() {
+        let mut top = entry(9999.0);
+        top.name = "AAA".to_string();
+        let mut target = entry(9750.0);
+        target.name = "BBB".to_string();
+        let entries = [top, target];
+
+        assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
+    }
+
+    #[test]
     fn leaderboard_identity_helpers_match_self_and_username() {
         assert!(leaderboard_username_matches("PerfectTaste", "perfecttaste"));
         assert!(!leaderboard_username_matches("PerfectTaste", " "));
@@ -2512,6 +2753,24 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_pane_skips_empty_entries() {
+        assert!(leaderboard_pane("GrooveStats", Vec::new(), false).is_none());
+    }
+
+    #[test]
+    fn leaderboard_pane_builds_default_online_metadata() {
+        let pane = leaderboard_pane("GrooveStats", vec![entry(9876.0)], true).unwrap();
+
+        assert_eq!(pane.name, "GrooveStats");
+        assert_eq!(pane.entries.len(), 1);
+        assert_eq!(pane.entries[0].score, 9876.0);
+        assert!(pane.is_ex);
+        assert!(!pane.disabled);
+        assert!(pane.personalized);
+        assert_eq!(pane.arrowcloud_kind, None);
+    }
+
+    #[test]
     fn arrowcloud_pane_kind_accepts_server_variants() {
         assert_eq!(
             arrowcloud_pane_kind_from_type("HardEX"),
@@ -2613,6 +2872,130 @@ mod tests {
         assert_eq!(submit_retry_delay_secs(5), 32);
         assert_eq!(duration_to_ceil_secs(Duration::from_secs(16)), 16);
         assert_eq!(duration_to_ceil_secs(Duration::from_millis(15_001)), 16);
+    }
+
+    #[test]
+    fn groovestats_submit_status_policy_classifies_retry_and_http() {
+        assert!(!GrooveStatsSubmitUiStatus::Submitting.can_retry());
+        assert!(!GrooveStatsSubmitUiStatus::Submitted.can_retry());
+        assert!(GrooveStatsSubmitUiStatus::TimedOut.can_retry());
+        assert!(GrooveStatsSubmitUiStatus::NetworkError.can_retry());
+        assert!(GrooveStatsSubmitUiStatus::ServerError { http_status: 500 }.can_retry());
+        assert!(
+            !GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+            .can_retry()
+        );
+        assert!(GrooveStatsSubmitUiStatus::TimedOut.is_auto_retryable());
+        assert!(!GrooveStatsSubmitUiStatus::NetworkError.is_auto_retryable());
+
+        assert_eq!(
+            GrooveStatsSubmitUiStatus::from_http_status(408),
+            GrooveStatsSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            GrooveStatsSubmitUiStatus::from_http_status(503),
+            GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }
+        );
+        assert_eq!(
+            GrooveStatsSubmitUiStatus::from_http_status(401),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            GrooveStatsSubmitUiStatus::from_http_status(404),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::NotFound,
+            }
+        );
+        assert_eq!(
+            GrooveStatsSubmitUiStatus::from_http_status(400),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+    }
+
+    #[test]
+    fn groovestats_eval_masks_match_old_submit_bits() {
+        assert_eq!(
+            GS_INVALID_REMOVE_MASK,
+            (1u8 << 0)
+                | (1u8 << 2)
+                | (1u8 << 3)
+                | (1u8 << 4)
+                | (1u8 << 5)
+                | (1u8 << 6)
+                | (1u8 << 7)
+        );
+        assert_eq!(GS_INVALID_INSERT_MASK, u8::MAX);
+        assert_eq!(GS_INVALID_HOLDS_MASK, 1u8 << 3);
+    }
+
+    #[test]
+    fn groovestats_reason_lines_keep_legacy_order_and_details() {
+        let mut checks = [true; GROOVESTATS_REASON_COUNT];
+        checks[1] = false;
+        checks[6] = false;
+        checks[7] = false;
+        let reasons =
+            groovestats_reason_lines(&checks, &[String::from("- Custom Fantastic window (18ms)")]);
+
+        assert_eq!(
+            reasons,
+            vec![
+                "GrooveStats does not support dance-solo charts.",
+                "Metrics or preferences are incorrect.",
+                "- Custom Fantastic window (18ms)",
+                "Music rate must be between 1.0x and 3.0x.",
+            ]
+        );
+    }
+
+    #[test]
+    fn arrowcloud_submit_status_policy_matches_shared_retry_rules() {
+        assert!(!ArrowCloudSubmitUiStatus::Submitting.can_retry());
+        assert!(!ArrowCloudSubmitUiStatus::Submitted.can_retry());
+        assert!(ArrowCloudSubmitUiStatus::TimedOut.can_retry());
+        assert!(ArrowCloudSubmitUiStatus::NetworkError.can_retry());
+        assert!(ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }.can_retry());
+        assert!(
+            !ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+            .can_retry()
+        );
+        assert!(ArrowCloudSubmitUiStatus::TimedOut.is_auto_retryable());
+        assert!(!ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }.is_auto_retryable());
+
+        assert_eq!(
+            ArrowCloudSubmitUiStatus::from_http_status(504),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            ArrowCloudSubmitUiStatus::from_http_status(500),
+            ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }
+        );
+        assert_eq!(
+            ArrowCloudSubmitUiStatus::from_http_status(403),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            ArrowCloudSubmitUiStatus::from_http_status(404),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::NotFound,
+            }
+        );
+        assert_eq!(
+            ArrowCloudSubmitUiStatus::from_http_status(418),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
     }
 
     #[test]
@@ -2988,6 +3371,36 @@ mod tests {
     }
 
     #[test]
+    fn cached_gs_score_from_chart_stats_reconstructs_lamp_before_caching() {
+        let stats = Some(GsLampChartStats {
+            total_steps: 100,
+            holds: 0,
+            rolls: 0,
+        });
+        let score = cached_gs_score_from_chart_stats(
+            9_920.0,
+            false,
+            Some("[DS], 4e"),
+            GsExEvidence::default(),
+            stats,
+        );
+        assert_eq!(score.grade, Grade::Tier02);
+        assert_eq!(score.lamp_index, Some(2));
+        assert_eq!(score.lamp_judge_count, Some(4));
+
+        let failed = cached_gs_score_from_chart_stats(
+            9_920.0,
+            true,
+            Some("[DS], 4e"),
+            GsExEvidence::default(),
+            stats,
+        );
+        assert_eq!(failed.grade, Grade::Failed);
+        assert_eq!(failed.lamp_index, None);
+        assert_eq!(failed.lamp_judge_count, None);
+    }
+
+    #[test]
     fn cached_gs_failed_scores_clear_lamp_fields() {
         let failed = cached_gs_score_from_lamp(9_123.0, true, Some(1), Some("[DS], 4w"));
         assert_eq!(failed.grade, Grade::Failed);
@@ -3074,5 +3487,127 @@ mod tests {
         assert!(snapshot.persistent_profile_id().is_none());
         assert!(snapshot.auto_profile_id().is_none());
         assert!(!snapshot.should_auto_populate());
+    }
+
+    #[test]
+    fn scorebox_snapshot_trims_and_gates_services() {
+        let snapshot = scorebox_snapshot(
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            "  gs-key  ",
+            "  ac-key  ",
+            "  player  ",
+            Some("profile-1".to_string()),
+        );
+
+        assert!(snapshot.display_scorebox);
+        assert!(snapshot.gs_active);
+        assert!(snapshot.show_ex_score);
+        assert_eq!(snapshot.api_key(), "gs-key");
+        assert_eq!(snapshot.arrowcloud_api_key(), "ac-key");
+        assert!(snapshot.include_arrowcloud());
+        assert_eq!(snapshot.gs_username(), "player");
+        assert_eq!(snapshot.persistent_profile_id(), Some("profile-1"));
+        assert_eq!(snapshot.auto_profile_id(), Some("profile-1"));
+        assert!(snapshot.should_auto_populate());
+    }
+
+    #[test]
+    fn scorebox_snapshot_requires_join_and_keys() {
+        let not_joined = scorebox_snapshot(
+            true,
+            false,
+            false,
+            true,
+            true,
+            true,
+            "gs-key",
+            "ac-key",
+            "player",
+            Some("profile-1".to_string()),
+        );
+        assert!(!not_joined.gs_active);
+        assert!(not_joined.include_arrowcloud());
+
+        let missing_keys = scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            true,
+            true,
+            "  ",
+            "  ",
+            "  ",
+            Some("profile-1".to_string()),
+        );
+        assert!(!missing_keys.gs_active);
+        assert!(!missing_keys.include_arrowcloud());
+        assert_eq!(missing_keys.auto_profile_id(), Some("profile-1"));
+        assert!(!missing_keys.should_auto_populate());
+    }
+
+    #[test]
+    fn player_leaderboard_cache_key_uses_active_profile_snapshot() {
+        let snapshot = scorebox_snapshot(
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            "  gs-key  ",
+            "  ac-key  ",
+            "player",
+            None,
+        );
+        let key =
+            player_leaderboard_cache_key("  deadbeef  ", &snapshot).expect("active key expected");
+
+        assert_eq!(key.chart_hash, "deadbeef");
+        assert_eq!(key.api_key, "gs-key");
+        assert_eq!(key.arrowcloud_api_key, "ac-key");
+        assert!(key.include_arrowcloud);
+        assert!(key.show_ex_score);
+    }
+
+    #[test]
+    fn player_leaderboard_cache_key_requires_chart_and_gs() {
+        let inactive = scorebox_snapshot(
+            true, false, true, true, true, false, " ", "ac-key", "player", None,
+        );
+        assert!(player_leaderboard_cache_key("deadbeef", &inactive).is_none());
+
+        let active = scorebox_snapshot(
+            true, false, true, true, true, false, "gs-key", "ac-key", "player", None,
+        );
+        assert!(player_leaderboard_cache_key(" ", &active).is_none());
+    }
+
+    #[test]
+    fn cached_leaderboard_snapshots_set_state_exclusively() {
+        let data = PlayerLeaderboardData {
+            panes: Vec::new(),
+            itl_self_score: Some(9_876),
+            itl_self_rank: Some(2),
+        };
+        let loading = CachedPlayerLeaderboardData::loading();
+        assert!(loading.loading);
+        assert!(loading.data.is_none());
+        assert!(loading.error.is_none());
+
+        let ready = CachedPlayerLeaderboardData::ready(data);
+        assert!(!ready.loading);
+        assert!(ready.data.is_some());
+        assert!(ready.error.is_none());
+
+        let error = CachedPlayerLeaderboardData::error("offline".to_string());
+        assert!(!error.loading);
+        assert!(error.data.is_none());
+        assert_eq!(error.error.as_deref(), Some("offline"));
     }
 }

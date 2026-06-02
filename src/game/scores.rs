@@ -16,13 +16,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_online::OnlineRequestError;
-use deadsync_online::arrowcloud::{
-    self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES, ArrowCloudLeaderboardEntry,
-    ArrowCloudLeaderboardPane, ArrowCloudLeaderboardsApiResponse, ArrowCloudRetrieveScoreEntry,
-    ArrowCloudUserApiUser,
-};
+use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
 use deadsync_online::groovestats::{
-    self as groovestats_api, GrooveStatsSubmitApiPlayer, LeaderboardApiEntry, LeaderboardApiPlayer,
+    self as groovestats_api, GrooveStatsSubmitApiPlayer, LeaderboardApiEntry,
     LeaderboardsApiResponse,
 };
 use deadsync_profile as profile_data;
@@ -43,29 +39,24 @@ pub use arrowcloud::{
     submit_arrowcloud_payloads_from_gameplay, tick_arrowcloud_auto_retries,
 };
 use deadsync_score::{
-    ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudUserContext, CachedPlayerLeaderboardData, CachedScore,
+    ArrowCloudLeaderboard, ArrowCloudScores, CachedPlayerLeaderboardData, CachedScore,
     GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner, GsExEvidence,
     GsLampChartStats, GsScoreEntry, LOCAL_SCORE_VERSION, LeaderboardEntry, LeaderboardPane,
     LocalReplayEdge, LocalScalarScore, LocalScoreEntry, LocalScoreHeader, LocalScoreIndex,
-    MachineLeaderboardPlay, MachineReplayEntry, MachineReplayPlay, PlayerLeaderboardData,
-    ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress,
-    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
-    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
-    arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
-    arrowcloud_score_from_submit_percent, arrowcloud_target_user_ids, arrowcloud_user_id,
-    cached_gs_score_from_lamp, cached_missing_gs_score, cached_score_10000,
-    cached_score_from_gs_entry, cached_score_from_local_header, compute_local_lamp,
-    decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
+    MachineLeaderboardPlay, MachineReplayEntry, MachineReplayPlay, PlayerLeaderboardCacheKey,
+    PlayerLeaderboardData, ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress,
+    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_score_from_submit_percent,
+    arrowcloud_target_user_ids, cached_gs_score_from_chart_stats, cached_missing_gs_score,
+    cached_score_10000, cached_score_from_gs_entry, cached_score_from_local_header,
+    compute_local_lamp, decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
     decode_local_score_index, encode_gs_score_entry, encode_local_score_entry,
     encode_local_score_index, failed_score_override, fix_gs_cached_score, gameplay_run_failed,
-    gameplay_run_passed, grade_from_code, grade_to_code, groovestats_submit_record_banner,
-    gs_lamp_index_from_chart_stats, gs_score_entry_from_cached, is_better_itg,
-    leaderboard_nonzero_rank, leaderboard_score_10000, leaderboard_username_matches,
+    gameplay_run_passed, grade_from_code, grade_to_code, gs_score_entry_from_cached, is_better_itg,
     lua_chart_submit_allowed, machine_leaderboard_entries, machine_replay_entries,
-    merge_arrowcloud_score_slot, parse_score_file_name, promote_quint_grade, replaces_stale_quint,
-    same_score_10000, score_file_shard, score_import_entry_matches_profile, score_to_grade,
-    set_arrowcloud_score_for_leaderboard, update_local_score_index,
+    merge_arrowcloud_score_slot, parse_score_file_name, player_leaderboard_cache_key,
+    promote_quint_grade, replaces_stale_quint, same_score_10000, score_file_shard,
+    score_import_entry_matches_profile, score_to_grade, scorebox_snapshot,
+    update_local_score_index,
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
@@ -1395,13 +1386,6 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     }
 }
 
-// Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
-const GS_INVALID_REMOVE_MASK: u8 =
-    (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
-const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
-const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
-const GROOVESTATS_REASON_COUNT: usize = 13;
-
 #[inline(always)]
 pub(super) const fn submit_side_ix(side: profile_data::PlayerSide) -> usize {
     match side {
@@ -1502,43 +1486,23 @@ pub fn save_local_summary_score_for_side(
 
 // --- API Response Structs ---
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct PlayerLeaderboardCacheKey {
-    chart_hash: String,
-    api_key: String,
-    arrowcloud_api_key: String,
-    include_arrowcloud: bool,
-    show_ex_score: bool,
-}
-
 pub fn scorebox_profile_snapshot(
     player_profile: &profile_data::Profile,
     side_joined: bool,
     persistent_profile_id: Option<String>,
 ) -> GameplayScoreboxProfileSnapshot {
     let cfg = crate::config::get();
-    let api_key = player_profile.groovestats_api_key.trim().to_string();
-    let arrowcloud_api_key = player_profile.arrowcloud_api_key.trim().to_string();
-    let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
-    let gs_username = player_profile.groovestats_username.trim().to_string();
-    let auto_profile_id = if cfg.auto_populate_gs_scores {
-        persistent_profile_id.clone()
-    } else {
-        None
-    };
-    let should_auto_populate =
-        cfg.auto_populate_gs_scores && auto_profile_id.is_some() && !gs_username.is_empty();
-    GameplayScoreboxProfileSnapshot::new(
+    scorebox_snapshot(
         player_profile.display_scorebox,
-        cfg.enable_groovestats && side_joined && !api_key.is_empty(),
         player_profile.show_ex_score,
-        api_key,
-        arrowcloud_api_key,
-        include_arrowcloud,
-        gs_username,
+        side_joined,
+        cfg.enable_groovestats,
+        cfg.enable_arrowcloud,
+        cfg.auto_populate_gs_scores,
+        player_profile.groovestats_api_key.as_str(),
+        player_profile.arrowcloud_api_key.as_str(),
+        player_profile.groovestats_username.as_str(),
         persistent_profile_id,
-        auto_profile_id,
-        should_auto_populate,
     )
 }
 
@@ -1569,49 +1533,6 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
-fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
-    let mut out = Vec::with_capacity(entries.len());
-    for entry in entries {
-        out.push(LeaderboardEntry {
-            rank: entry.rank,
-            name: entry.name,
-            machine_tag: entry.machine_tag,
-            score: entry.score,
-            date: entry.date,
-            is_rival: entry.is_rival,
-            is_self: entry.is_self,
-            is_fail: entry.is_fail,
-        });
-    }
-    out
-}
-
-fn push_leaderboard_pane(
-    out: &mut Vec<LeaderboardPane>,
-    name: &str,
-    entries: Vec<LeaderboardApiEntry>,
-    is_ex: bool,
-) {
-    if entries.is_empty() {
-        return;
-    }
-    out.push(LeaderboardPane {
-        name: name.to_string(),
-        entries: leaderboard_entries_from_api(entries),
-        is_ex,
-        disabled: false,
-        personalized: true,
-        arrowcloud_kind: None,
-    });
-}
-
-struct FetchedPlayerLeaderboards {
-    data: PlayerLeaderboardData,
-    gs_entries: Vec<LeaderboardApiEntry>,
-    ex_entries: Vec<LeaderboardApiEntry>,
-    itl_self_found: bool,
-}
-
 #[inline(always)]
 fn should_keep_newer_player_leaderboard_entry(
     entry: Option<&PlayerLeaderboardCacheEntry>,
@@ -1629,54 +1550,14 @@ fn player_leaderboard_request_was_invalidated(
 }
 
 #[inline(always)]
-fn leaderboard_self_entry<'a>(
-    entries: &'a [LeaderboardApiEntry],
-    username: &str,
-) -> Option<&'a LeaderboardApiEntry> {
-    entries.iter().find(|entry| entry.is_self).or_else(|| {
-        entries
-            .iter()
-            .find(|entry| leaderboard_username_matches(entry.name.as_str(), username))
-    })
-}
-
-#[inline(always)]
-fn entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
-    leaderboard_score_10000(entry.score, entry.is_fail)
-}
-
-#[inline(always)]
-fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    Some(entry_score_10000(leaderboard_self_entry(entries, username)?)?.round() as u32)
-}
-
-fn gs_ex_evidence_from_leaderboard(
-    ex_entries: &[LeaderboardApiEntry],
-    username: &str,
-    comment: Option<&str>,
-) -> GsExEvidence {
-    GsExEvidence::from_sources(
-        leaderboard_self_entry(ex_entries, username).and_then(entry_score_10000),
-        comment,
-    )
-}
-
-#[inline(always)]
-fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    leaderboard_nonzero_rank(leaderboard_self_entry(entries, username)?.rank)
-}
-
-#[inline(always)]
 fn submit_record_banner(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
-    groovestats_submit_record_banner(
-        response.result.as_str(),
+    groovestats_api::submit_record_banner_from_api(
+        response,
+        player.username.as_str(),
         player.show_ex_score,
-        leaderboard_self_rank(response.gs_leaderboard.as_slice(), player.username.as_str()),
-        leaderboard_self_rank(response.ex_leaderboard.as_slice(), player.username.as_str()),
-        !response.ex_leaderboard.is_empty(),
     )
 }
 
@@ -1688,8 +1569,12 @@ fn cached_score_from_gs(
     is_fail: bool,
     ex_evidence: GsExEvidence,
 ) -> CachedScore {
-    let lamp_index = compute_lamp_index(score_10000, comments, chart_hash, ex_evidence);
-    cached_gs_score_from_lamp(score_10000, is_fail, lamp_index, comments)
+    let score_percent = score_10000 / 10000.0;
+    let needs_stats = (score_percent - 1.0).abs() > 1e-9 && comments.is_some();
+    let stats = needs_stats
+        .then(|| find_chart_stats_for_hash(chart_hash))
+        .flatten();
+    cached_gs_score_from_chart_stats(score_10000, is_fail, comments, ex_evidence, stats)
 }
 
 fn cache_gs_score_for_profile(
@@ -1722,7 +1607,7 @@ fn cache_gs_score_from_leaderboard(
     gs_entries: &[LeaderboardApiEntry],
     ex_entries: &[LeaderboardApiEntry],
 ) {
-    let Some(entry) = leaderboard_self_entry(gs_entries, username) else {
+    let Some(entry) = groovestats_api::leaderboard_self_entry(gs_entries, username) else {
         // Select Music and gameplay scoreboxes fetch shallow leaderboard pages.
         // If the page does not include the player's row, do not clobber an
         // existing cached GS score and make the wheel fall back to local data.
@@ -1733,8 +1618,11 @@ fn cache_gs_score_from_leaderboard(
             score.grade == Grade::Failed && same_score_10000(cached_score_10000(score), entry.score)
         })
         .is_some();
-    let ex_evidence =
-        gs_ex_evidence_from_leaderboard(ex_entries, username, entry.comments.as_deref());
+    let ex_evidence = groovestats_api::gs_ex_evidence_from_leaderboard(
+        ex_entries,
+        username,
+        entry.comments.as_deref(),
+    );
     let score = cached_score_from_gs(
         entry.score,
         entry.comments.as_deref(),
@@ -1751,121 +1639,6 @@ fn cache_gs_score_from_leaderboard(
     );
 }
 
-fn arrowcloud_user_context_from_api(user: ArrowCloudUserApiUser) -> ArrowCloudUserContext {
-    let self_user_id = arrowcloud_user_id(user.id.as_str()).map(str::to_string);
-    let rival_user_ids = user
-        .rival_user_ids
-        .into_iter()
-        .map(|user_id| user_id.trim().to_string())
-        .filter(|user_id| !user_id.is_empty())
-        .collect();
-    ArrowCloudUserContext {
-        self_user_id,
-        rival_user_ids,
-    }
-}
-
-fn arrowcloud_entry_from_api(
-    entry: ArrowCloudLeaderboardEntry,
-    is_self: bool,
-    is_rival: bool,
-) -> LeaderboardEntry {
-    arrowcloud_leaderboard_entry(
-        entry.rank,
-        entry.alias,
-        entry.score,
-        entry.date,
-        is_self,
-        is_rival,
-    )
-}
-
-fn arrowcloud_hard_ex_pane_from_response(
-    decoded: ArrowCloudLeaderboardsApiResponse,
-) -> Option<ArrowCloudLeaderboardPane> {
-    decoded.leaderboards.into_iter().find(|pane| {
-        arrowcloud_pane_kind_from_type(pane.r#type.as_str()) == Some(ArrowCloudPaneKind::HardEx)
-    })
-}
-
-fn arrowcloud_update_remaining_targets(
-    scores: &[ArrowCloudLeaderboardEntry],
-    context: Option<&ArrowCloudUserContext>,
-    remaining: &mut HashSet<String>,
-) {
-    if remaining.is_empty() {
-        return;
-    }
-    for entry in scores {
-        let Some(user_id) = arrowcloud_user_id(entry.user_id.as_str()) else {
-            continue;
-        };
-        let (is_self, is_rival) =
-            arrowcloud_entry_flags(Some(user_id), entry.is_self, entry.is_rival, context);
-        if is_self || is_rival {
-            remaining.remove(user_id);
-            if remaining.is_empty() {
-                break;
-            }
-        }
-    }
-}
-
-fn arrowcloud_hard_ex_pane_from_pages(
-    first_page: ArrowCloudLeaderboardPane,
-    extra_pages: Vec<ArrowCloudLeaderboardPane>,
-    context: Option<&ArrowCloudUserContext>,
-) -> LeaderboardPane {
-    let mut entries = Vec::with_capacity(first_page.scores.len());
-    let mut appended_user_ids = HashSet::new();
-
-    for entry in first_page.scores {
-        let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
-        let (is_self, is_rival) =
-            arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
-        if (is_self || is_rival)
-            && let Some(user_id) = user_id
-        {
-            appended_user_ids.insert(user_id);
-        }
-        entries.push(arrowcloud_entry_from_api(entry, is_self, is_rival));
-    }
-
-    for page in extra_pages {
-        for entry in page.scores {
-            let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
-            let (is_self, is_rival) =
-                arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
-            if !(is_self || is_rival) {
-                continue;
-            }
-            if let Some(user_id) = user_id
-                && !appended_user_ids.insert(user_id)
-            {
-                continue;
-            }
-            entries.push(arrowcloud_entry_from_api(entry, is_self, is_rival));
-        }
-    }
-    let personalized = entries.iter().any(|entry| entry.is_self || entry.is_rival);
-
-    arrowcloud_hard_ex_leaderboard_pane(entries, personalized)
-}
-
-fn fetch_arrowcloud_leaderboards(
-    api_url: &str,
-    page: Option<u32>,
-) -> Result<Option<ArrowCloudLeaderboardsApiResponse>, OnlineRequestError> {
-    arrowcloud_api::fetch_leaderboards(api_url, page)
-}
-
-fn fetch_arrowcloud_user_context(
-    api_key: &str,
-) -> Result<Option<ArrowCloudUserContext>, OnlineRequestError> {
-    arrowcloud_api::fetch_user(api_key)
-        .map(|response| response.map(|response| arrowcloud_user_context_from_api(response.user)))
-}
-
 fn boxed_online_status_error(
     prefix: &str,
     error: OnlineRequestError,
@@ -1877,37 +1650,6 @@ fn boxed_online_status_error(
 }
 
 // --- ArrowCloud bulk score retrieval (POST /v1/retrieve-scores) ---
-
-/// Convert a single bulk-API entry into our internal `ArrowCloudScore`.
-///
-/// Returns `None` if the entry has no usable `score` field; otherwise
-/// preserves AC-native fields (server grade enum, played-at timestamp, play
-/// id) rather than collapsing into the GS-shaped `CachedScore`.
-fn arrowcloud_score_from_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option<ArrowCloudScore> {
-    arrowcloud_score_from_retrieve_fields(
-        entry.score,
-        entry.grade.as_deref(),
-        entry.date.as_deref(),
-        entry.play_id,
-        entry.is_fail,
-    )
-}
-
-fn arrowcloud_scores_from_entry_map(
-    leaderboards: &HashMap<String, ArrowCloudRetrieveScoreEntry>,
-) -> ArrowCloudScores {
-    let mut out = ArrowCloudScores::default();
-    for (lb_id_raw, entry) in leaderboards {
-        let Ok(lb_id) = lb_id_raw.parse::<u32>() else {
-            continue;
-        };
-        let Some(score) = arrowcloud_score_from_entry(entry) else {
-            continue; // Ignore malformed entries with no score field.
-        };
-        set_arrowcloud_score_for_leaderboard(&mut out, lb_id, score);
-    }
-    out
-}
 
 /// POST `chart_hashes` to `/v1/retrieve-scores` and return parsed results.
 ///
@@ -1933,15 +1675,12 @@ fn fetch_arrowcloud_bulk_scores(
         .into());
     }
 
-    let decoded = arrowcloud_api::retrieve_scores(api_key, user_id, chart_hashes, leaderboards)?;
-    let mut out = HashMap::with_capacity(decoded.scores.len());
-    for (chart_hash, leaderboards) in decoded.scores {
-        let entries = arrowcloud_scores_from_entry_map(&leaderboards);
-        if entries.itg.is_some() || entries.ex.is_some() || entries.hard_ex.is_some() {
-            out.insert(chart_hash, entries);
-        }
-    }
-    Ok(out)
+    Ok(arrowcloud_api::retrieve_score_cache_entries(
+        api_key,
+        user_id,
+        chart_hashes,
+        leaderboards,
+    )?)
 }
 
 fn fetch_arrowcloud_panes(
@@ -1955,7 +1694,7 @@ fn fetch_arrowcloud_panes(
         return Ok(Vec::new());
     }
 
-    let user_context = match fetch_arrowcloud_user_context(api_key) {
+    let user_context = match arrowcloud_api::fetch_user_context(api_key) {
         Ok(context) => context,
         Err(error) => {
             debug!(
@@ -1969,16 +1708,17 @@ fn fetch_arrowcloud_panes(
     let Some(legacy_api_url) = arrowcloud_api::legacy_leaderboards_url(chart_hash) else {
         return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
-    let Some(decoded) = fetch_arrowcloud_leaderboards(legacy_api_url.as_str(), Some(1))? else {
+    let Some(decoded) = arrowcloud_api::fetch_leaderboards(legacy_api_url.as_str(), Some(1))?
+    else {
         return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
-    let Some(first_page) = arrowcloud_hard_ex_pane_from_response(decoded) else {
+    let Some(first_page) = arrowcloud_api::hard_ex_pane_from_response(decoded) else {
         return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
     };
 
     let mut extra_pages = Vec::new();
     let mut remaining = arrowcloud_target_user_ids(user_context.as_ref());
-    arrowcloud_update_remaining_targets(
+    arrowcloud_api::update_remaining_targets(
         first_page.scores.as_slice(),
         user_context.as_ref(),
         &mut remaining,
@@ -1990,13 +1730,13 @@ fn fetch_arrowcloud_panes(
     let mut page = first_page.page.max(1).saturating_add(1);
 
     while !remaining.is_empty() && page <= total_pages {
-        match fetch_arrowcloud_leaderboards(legacy_api_url.as_str(), Some(page)) {
+        match arrowcloud_api::fetch_leaderboards(legacy_api_url.as_str(), Some(page)) {
             Ok(Some(decoded)) => {
-                let Some(hard_ex_page) = arrowcloud_hard_ex_pane_from_response(decoded) else {
+                let Some(hard_ex_page) = arrowcloud_api::hard_ex_pane_from_response(decoded) else {
                     page += 1;
                     continue;
                 };
-                arrowcloud_update_remaining_targets(
+                arrowcloud_api::update_remaining_targets(
                     hard_ex_page.scores.as_slice(),
                     user_context.as_ref(),
                     &mut remaining,
@@ -2015,7 +1755,7 @@ fn fetch_arrowcloud_panes(
         page += 1;
     }
 
-    Ok(vec![arrowcloud_hard_ex_pane_from_pages(
+    Ok(vec![arrowcloud_api::hard_ex_pane_from_pages(
         first_page,
         extra_pages,
         user_context.as_ref(),
@@ -2029,7 +1769,7 @@ fn fetch_player_leaderboards_internal(
     arrowcloud_api_key: Option<&str>,
     show_ex_score: bool,
     max_entries: usize,
-) -> Result<FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
+) -> Result<groovestats_api::FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
     if chart_hash.trim().is_empty() {
         return Err("Missing chart hash for leaderboard request.".into());
     }
@@ -2045,62 +1785,15 @@ fn fetch_player_leaderboards_internal(
         Some(max_entries),
     )
     .map_err(|error| boxed_online_status_error("Leaderboard API", error))?;
-    let mut panes = Vec::with_capacity(5);
-    let mut gs_entries = Vec::new();
-    let mut ex_entries = Vec::new();
-    let mut itl_self_score = None;
-    let mut itl_self_rank = None;
-    let mut itl_self_found = false;
-    if let Some(player) = decoded.player1 {
-        let LeaderboardApiPlayer {
-            is_ranked: _is_ranked,
-            gs_leaderboard,
-            ex_leaderboard,
-            rpg,
-            itl,
-        } = player;
-
-        gs_entries.clone_from(&gs_leaderboard);
-        ex_entries.clone_from(&ex_leaderboard);
-        if show_ex_score {
-            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
-            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
-        } else {
-            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
-            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
-        }
-
-        if let Some(rpg) = rpg
-            && !rpg.rpg_leaderboard.is_empty()
-        {
-            let name = if rpg.name.trim().is_empty() {
-                "RPG"
-            } else {
-                rpg.name.as_str()
-            };
-            push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
-        }
-        if let Some(itl) = itl
-            && !itl.itl_leaderboard.is_empty()
-        {
-            itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
-            itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
-            itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
-            let name = if itl.name.trim().is_empty() {
-                "ITL"
-            } else {
-                itl.name.as_str()
-            };
-            push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
-        }
-    }
+    let mut fetched =
+        groovestats_api::fetched_player_leaderboards_from_api(decoded, username, show_ex_score);
 
     if let Some(arrowcloud_api_key) = arrowcloud_api_key {
         match fetch_arrowcloud_panes(chart_hash, arrowcloud_api_key, max_entries) {
             Ok(arrowcloud_panes) => {
-                let insert_ix = 2.min(panes.len());
+                let insert_ix = 2.min(fetched.data.panes.len());
                 for pane in arrowcloud_panes.into_iter().rev() {
-                    panes.insert(insert_ix, pane);
+                    fetched.data.panes.insert(insert_ix, pane);
                 }
             }
             Err(error) => warn!(
@@ -2110,40 +1803,23 @@ fn fetch_player_leaderboards_internal(
         }
     }
 
-    Ok(FetchedPlayerLeaderboards {
-        data: PlayerLeaderboardData {
-            panes,
-            itl_self_score,
-            itl_self_rank,
-        },
-        gs_entries,
-        ex_entries,
-        itl_self_found,
-    })
+    Ok(fetched)
 }
 
 #[inline(always)]
 const fn loading_player_leaderboard_snapshot() -> CachedPlayerLeaderboardData {
-    CachedPlayerLeaderboardData {
-        loading: true,
-        data: None,
-        error: None,
-    }
+    CachedPlayerLeaderboardData::loading()
 }
 
 #[inline(always)]
 fn cache_snapshot_from_entry(entry: &PlayerLeaderboardCacheEntry) -> CachedPlayerLeaderboardData {
     match &entry.value {
-        PlayerLeaderboardCacheValue::Ready(data) => CachedPlayerLeaderboardData {
-            loading: false,
-            data: Some(data.clone()),
-            error: None,
-        },
-        PlayerLeaderboardCacheValue::Error(error) => CachedPlayerLeaderboardData {
-            loading: false,
-            data: None,
-            error: Some(error.clone()),
-        },
+        PlayerLeaderboardCacheValue::Ready(data) => {
+            CachedPlayerLeaderboardData::ready(data.clone())
+        }
+        PlayerLeaderboardCacheValue::Error(error) => {
+            CachedPlayerLeaderboardData::error(error.clone())
+        }
     }
 }
 
@@ -2240,7 +1916,7 @@ fn spawn_player_leaderboard_fetch(
                             cache.by_key.get(&key),
                             request_started_at,
                         ) {
-                            let FetchedPlayerLeaderboards {
+                            let groovestats_api::FetchedPlayerLeaderboards {
                                 data,
                                 gs_entries,
                                 ex_entries,
@@ -2365,31 +2041,12 @@ fn player_leaderboard_profile_snapshot_for_side(
     )
 }
 
-#[inline(always)]
-fn player_leaderboard_cache_key_for_profile(
-    chart_hash: &str,
-    profile_snapshot: &GameplayScoreboxProfileSnapshot,
-) -> Option<PlayerLeaderboardCacheKey> {
-    let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile_snapshot.gs_active {
-        return None;
-    }
-
-    Some(PlayerLeaderboardCacheKey {
-        chart_hash: chart_hash.to_string(),
-        api_key: profile_snapshot.api_key().to_string(),
-        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key().to_string(),
-        include_arrowcloud: profile_snapshot.include_arrowcloud(),
-        show_ex_score: profile_snapshot.show_ex_score,
-    })
-}
-
 fn get_cached_player_leaderboard_itl_self_rank_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
-    let key = player_leaderboard_cache_key_for_profile(chart_hash, &profile_snapshot)?;
+    let key = player_leaderboard_cache_key(chart_hash, &profile_snapshot)?;
     let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
     let entry = cache.by_key.get(&key)?;
     let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
@@ -2408,7 +2065,7 @@ fn get_or_fetch_player_leaderboards_for_profile_inner(
     if chart_hash.is_empty() || max_entries == 0 {
         return None;
     }
-    let key = player_leaderboard_cache_key_for_profile(chart_hash, profile_snapshot)?;
+    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
     let gs_username = profile_snapshot.gs_username().to_string();
     let persistent_profile_id = profile_snapshot.persistent_profile_id().map(str::to_string);
     let auto_profile_id = profile_snapshot.auto_profile_id().map(str::to_string);
@@ -2735,19 +2392,6 @@ fn find_chart_stats_for_hash(chart_hash: &str) -> Option<GsLampChartStats> {
     None
 }
 
-fn compute_lamp_index(
-    score: f64,
-    comment: Option<&str>,
-    chart_hash: &str,
-    ex_evidence: GsExEvidence,
-) -> Option<u8> {
-    let score_percent = score / 10000.0;
-    let needs_stats = (score_percent - 1.0).abs() > 1e-9 && comment.is_some();
-    let stats = needs_stats
-        .then(|| find_chart_stats_for_hash(chart_hash))
-        .flatten();
-    gs_lamp_index_from_chart_stats(score, comment, ex_evidence, stats)
-}
 // --- Public Fetch Function ---
 
 const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
@@ -2802,7 +2446,7 @@ fn score_import_result_from_response(
                     username,
                 )
             })
-            .and_then(entry_score_10000);
+            .and_then(groovestats_api::leaderboard_entry_score_10000);
         let ex_evidence = GsExEvidence::from_sources(ex_score, entry.comments.as_deref());
         result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
         result.score = Some(cached_score_from_gs(
@@ -2817,9 +2461,12 @@ fn score_import_result_from_response(
     if let Some(itl) = player.itl
         && !itl.itl_leaderboard.is_empty()
     {
-        result.itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
-        result.itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
-        result.itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+        result.itl_self_found =
+            groovestats_api::leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
+        result.itl_self_score =
+            groovestats_api::leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+        result.itl_self_rank =
+            groovestats_api::leaderboard_self_rank(&itl.itl_leaderboard, username);
     }
 
     result
@@ -2980,7 +2627,7 @@ where
     // Resolve our user id once up front. The bulk endpoint accepts a missing
     // userId (it'll resolve from the bearer token), but sending it explicitly
     // is preferred and matches the documented contract.
-    let user_id = match fetch_arrowcloud_user_context(&api_key) {
+    let user_id = match arrowcloud_api::fetch_user_context(&api_key) {
         Ok(Some(ctx)) => ctx.self_user_id,
         Ok(None) => None,
         Err(e) => {
@@ -3392,32 +3039,7 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Utc};
-    use deadsync_score::{ArrowCloudServerGrade, leaderboard_rank_for_score, lua_submit_allowed};
-
-    #[test]
-    fn lua_chart_submit_allowlist_matches_known_hashes() {
-        assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
-        assert!(lua_chart_submit_allowed("c9e45c5e534f058d"));
-        assert!(lua_chart_submit_allowed("596b42ed8317d9b8"));
-        assert!(lua_chart_submit_allowed("3926ec3e5f1aaede"));
-        assert!(lua_chart_submit_allowed("a147dd828cd08fc7"));
-        assert!(lua_chart_submit_allowed("f95bc209c6f2cbfe"));
-        assert!(lua_chart_submit_allowed("b50d0c3916e75b84"));
-        assert!(lua_chart_submit_allowed("f41a24722a37758f"));
-        assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
-        assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
-        assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
-        assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
-        assert!(lua_submit_allowed(true, "d5bd4dd7224f68ff"));
-        assert!(lua_submit_allowed(true, "c9e45c5e534f058d"));
-        assert!(lua_submit_allowed(true, "596b42ed8317d9b8"));
-        assert!(lua_submit_allowed(true, "3926ec3e5f1aaede"));
-        assert!(lua_submit_allowed(true, "a147dd828cd08fc7"));
-        assert!(lua_submit_allowed(true, "f95bc209c6f2cbfe"));
-        assert!(lua_submit_allowed(true, "b50d0c3916e75b84"));
-        assert!(lua_submit_allowed(true, "f41a24722a37758f"));
-    }
+    use deadsync_online::groovestats::LeaderboardApiPlayer;
 
     #[test]
     fn cached_score_from_gs_uses_quint_comment_as_fallback() {
@@ -3513,45 +3135,6 @@ mod tests {
     }
 
     #[test]
-    fn cached_score_from_gs_entry_downgrades_stale_quint_without_quint_lamp() {
-        let cached = cached_score_from_gs_entry(&GsScoreEntry {
-            score_percent: 1.0,
-            grade_code: grade_to_code(Grade::Quint),
-            lamp_index: Some(1),
-            lamp_judge_count: Some(3),
-            username: "Player".to_string(),
-            fetched_at_ms: 0,
-        });
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, Some(3));
-    }
-
-    #[test]
-    fn cached_score_from_gs_entry_promotes_quint_from_quint_lamp() {
-        let cached = cached_score_from_gs_entry(&GsScoreEntry {
-            score_percent: 1.0,
-            grade_code: grade_to_code(Grade::Tier01),
-            lamp_index: Some(0),
-            lamp_judge_count: None,
-            username: "Player".to_string(),
-            fetched_at_ms: 0,
-        });
-
-        assert_eq!(cached.grade, Grade::Quint);
-        assert_eq!(cached.lamp_index, Some(0));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn promote_quint_grade_ignores_display_mode() {
-        assert_eq!(promote_quint_grade(Grade::Tier01, 100.0), Grade::Quint);
-        assert_eq!(promote_quint_grade(Grade::Tier01, 99.99), Grade::Tier01);
-        assert_eq!(promote_quint_grade(Grade::Failed, 100.0), Grade::Failed);
-    }
-
-    #[test]
     fn local_lamp_uses_single_digit_white_fantastics() {
         assert_eq!(
             compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5)),
@@ -3561,78 +3144,6 @@ mod tests {
             compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
             (Some(0), None)
         );
-    }
-
-    #[test]
-    fn leaderboard_self_score_prefers_self_flag_for_itl() {
-        let entries = vec![
-            LeaderboardApiEntry {
-                rank: 10,
-                name: "Other".to_string(),
-                machine_tag: None,
-                score: 9321.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-                comments: None,
-            },
-            LeaderboardApiEntry {
-                rank: 25,
-                name: "Player".to_string(),
-                machine_tag: None,
-                score: 9789.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: true,
-                is_fail: false,
-                comments: None,
-            },
-        ];
-
-        assert_eq!(
-            leaderboard_self_score_10000(&entries, "ignored"),
-            Some(9789)
-        );
-        assert_eq!(leaderboard_self_rank(&entries, "ignored"), Some(25));
-    }
-
-    #[test]
-    fn leaderboard_self_score_falls_back_to_username_match() {
-        let entries = vec![LeaderboardApiEntry {
-            rank: 25,
-            name: "PerfectTaste".to_string(),
-            machine_tag: None,
-            score: 9712.0,
-            date: String::new(),
-            is_rival: false,
-            is_self: false,
-            is_fail: false,
-            comments: None,
-        }];
-
-        assert_eq!(
-            leaderboard_self_score_10000(&entries, "perfecttaste"),
-            Some(9712)
-        );
-        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), Some(25));
-    }
-
-    #[test]
-    fn leaderboard_self_rank_ignores_zero_rank() {
-        let entries = vec![LeaderboardApiEntry {
-            rank: 0,
-            name: "PerfectTaste".to_string(),
-            machine_tag: None,
-            score: 9712.0,
-            date: String::new(),
-            is_rival: false,
-            is_self: true,
-            is_fail: false,
-            comments: None,
-        }];
-
-        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), None);
     }
 
     #[test]
@@ -3832,100 +3343,6 @@ mod tests {
         assert_eq!(cached.grade, Grade::Failed);
         assert_eq!(cached.score_percent, 0.9482);
         assert_eq!(cached.lamp_index, None);
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_local_header_treats_fail_time_as_failed() {
-        let header = LocalScoreHeader {
-            version: LOCAL_SCORE_VERSION,
-            played_at_ms: 0,
-            music_rate: 1.0,
-            score_percent: 0.9482,
-            grade_code: grade_to_code(Grade::Tier06),
-            lamp_index: Some(4),
-            lamp_judge_count: Some(2),
-            ex_score_percent: 92.0,
-            hard_ex_score_percent: 88.0,
-            judgment_counts: [0; 6],
-            holds_held: 0,
-            holds_total: 0,
-            rolls_held: 0,
-            rolls_total: 0,
-            mines_avoided: 0,
-            mines_total: 0,
-            hands_achieved: 0,
-            fail_time: Some(12.0),
-            beat0_time_ns: 0,
-        };
-
-        let cached = cached_score_from_local_header(&header);
-
-        assert_eq!(cached.grade, Grade::Failed);
-        assert_eq!(cached.score_percent, 0.9482);
-        assert_eq!(cached.lamp_index, None);
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_local_header_downgrades_stale_quint() {
-        let header = LocalScoreHeader {
-            version: LOCAL_SCORE_VERSION,
-            played_at_ms: 0,
-            music_rate: 1.0,
-            score_percent: 1.0,
-            grade_code: grade_to_code(Grade::Quint),
-            lamp_index: Some(0),
-            lamp_judge_count: None,
-            ex_score_percent: 99.71,
-            hard_ex_score_percent: 99.71,
-            judgment_counts: [320, 0, 0, 0, 0, 0],
-            holds_held: 0,
-            holds_total: 0,
-            rolls_held: 0,
-            rolls_total: 0,
-            mines_avoided: 0,
-            mines_total: 0,
-            hands_achieved: 0,
-            fail_time: None,
-            beat0_time_ns: 0,
-        };
-
-        let cached = cached_score_from_local_header(&header);
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_local_header_promotes_perfect_ex_to_quint() {
-        let header = LocalScoreHeader {
-            version: LOCAL_SCORE_VERSION,
-            played_at_ms: 0,
-            music_rate: 1.0,
-            score_percent: 1.0,
-            grade_code: grade_to_code(Grade::Tier01),
-            lamp_index: Some(1),
-            lamp_judge_count: Some(2),
-            ex_score_percent: 100.0,
-            hard_ex_score_percent: 100.0,
-            judgment_counts: [320, 0, 0, 0, 0, 0],
-            holds_held: 0,
-            holds_total: 0,
-            rolls_held: 0,
-            rolls_total: 0,
-            mines_avoided: 0,
-            mines_total: 0,
-            hands_achieved: 0,
-            fail_time: None,
-            beat0_time_ns: 0,
-        };
-
-        let cached = cached_score_from_local_header(&header);
-
-        assert_eq!(cached.grade, Grade::Quint);
-        assert_eq!(cached.lamp_index, Some(0));
         assert_eq!(cached.lamp_judge_count, None);
     }
 
@@ -4133,114 +3550,6 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_hard_ex_pane_from_response_filters_to_hardex() {
-        let pane = arrowcloud_hard_ex_pane_from_response(ArrowCloudLeaderboardsApiResponse {
-            leaderboards: vec![
-                ArrowCloudLeaderboardPane {
-                    r#type: "EX".to_string(),
-                    scores: Vec::new(),
-                    page: 1,
-                    has_next: false,
-                    total_pages: 1,
-                },
-                ArrowCloudLeaderboardPane {
-                    r#type: "HardEX".to_string(),
-                    scores: vec![ArrowCloudLeaderboardEntry {
-                        rank: 7,
-                        score: 98.31,
-                        alias: "YOU".to_string(),
-                        date: "2026-04-18T12:34:56.000Z".to_string(),
-                        user_id: "self".to_string(),
-                        is_rival: false,
-                        is_self: false,
-                    }],
-                    page: 1,
-                    has_next: true,
-                    total_pages: 4,
-                },
-            ],
-        })
-        .expect("expected HardEX pane");
-
-        assert_eq!(pane.r#type, "HardEX");
-        assert_eq!(pane.page, 1);
-        assert!(pane.has_next);
-        assert_eq!(pane.total_pages, 4);
-        assert_eq!(pane.scores.len(), 1);
-        assert_eq!(pane.scores[0].user_id, "self");
-    }
-
-    #[test]
-    fn arrowcloud_hard_ex_pane_from_pages_marks_self_and_rival_from_user_ids() {
-        let context = ArrowCloudUserContext {
-            self_user_id: Some("self".to_string()),
-            rival_user_ids: HashSet::from([String::from("rival")]),
-        };
-        let pane = arrowcloud_hard_ex_pane_from_pages(
-            ArrowCloudLeaderboardPane {
-                r#type: "HardEX".to_string(),
-                scores: vec![ArrowCloudLeaderboardEntry {
-                    rank: 1,
-                    score: 99.12,
-                    alias: "AAA".to_string(),
-                    date: String::new(),
-                    user_id: "top".to_string(),
-                    is_rival: false,
-                    is_self: false,
-                }],
-                page: 1,
-                has_next: true,
-                total_pages: 4,
-            },
-            vec![ArrowCloudLeaderboardPane {
-                r#type: "HardEX".to_string(),
-                scores: vec![
-                    ArrowCloudLeaderboardEntry {
-                        rank: 81,
-                        score: 88.99,
-                        alias: "YOU".to_string(),
-                        date: String::new(),
-                        user_id: "self".to_string(),
-                        is_rival: false,
-                        is_self: false,
-                    },
-                    ArrowCloudLeaderboardEntry {
-                        rank: 91,
-                        score: 87.65,
-                        alias: "RIVAL".to_string(),
-                        date: String::new(),
-                        user_id: "rival".to_string(),
-                        is_rival: false,
-                        is_self: false,
-                    },
-                ],
-                page: 4,
-                has_next: false,
-                total_pages: 4,
-            }],
-            Some(&context),
-        );
-
-        assert_eq!(pane.arrowcloud_kind, Some(ArrowCloudPaneKind::HardEx));
-        assert!(pane.personalized);
-        assert_eq!(pane.entries.len(), 3);
-        assert_eq!(pane.entries[1].rank, 81);
-        assert!(pane.entries[1].is_self);
-        assert_eq!(pane.entries[2].rank, 91);
-        assert!(pane.entries[2].is_rival);
-    }
-
-    #[test]
-    fn empty_arrowcloud_hard_ex_pane_stays_visible_as_hard_ex() {
-        let pane = arrowcloud_empty_hard_ex_leaderboard_pane();
-
-        assert!(pane.entries.is_empty());
-        assert!(!pane.personalized);
-        assert!(pane.is_arrowcloud());
-        assert!(pane.is_hard_ex());
-    }
-
-    #[test]
     fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
         let newer_entry = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
@@ -4272,359 +3581,5 @@ mod tests {
             Some(&older_entry),
             Instant::now(),
         ));
-    }
-
-    #[test]
-    fn leaderboard_rank_for_score_does_not_require_name_match() {
-        let entries = vec![
-            LeaderboardEntry {
-                rank: 1,
-                name: "AAA".to_string(),
-                machine_tag: None,
-                score: 9999.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-            },
-            LeaderboardEntry {
-                rank: 2,
-                name: "BBB".to_string(),
-                machine_tag: None,
-                score: 9750.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-            },
-        ];
-        assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
-    }
-
-    #[test]
-    fn leaderboard_rank_for_score_places_current_run_ahead_of_equal_scores() {
-        let entries = vec![
-            LeaderboardEntry {
-                rank: 1,
-                name: "AAA".to_string(),
-                machine_tag: None,
-                score: 9999.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-            },
-            LeaderboardEntry {
-                rank: 2,
-                name: "BBB".to_string(),
-                machine_tag: None,
-                score: 9750.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-            },
-            LeaderboardEntry {
-                rank: 3,
-                name: "CCC".to_string(),
-                machine_tag: None,
-                score: 9750.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-            },
-        ];
-        assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
-    }
-
-    #[test]
-    fn leaderboard_rank_for_score_rejects_non_finite_scores() {
-        assert_eq!(leaderboard_rank_for_score(&[], f64::NAN), None);
-    }
-
-    // --- ArrowCloud bulk score import tests ---
-
-    fn ac_entry(score: f64, is_fail: bool) -> ArrowCloudRetrieveScoreEntry {
-        ArrowCloudRetrieveScoreEntry {
-            score: Some(score),
-            grade: None,
-            date: None,
-            play_id: None,
-            is_fail,
-        }
-    }
-
-    fn ac_entry_full(
-        score: f64,
-        grade: Option<&str>,
-        date: Option<&str>,
-        play_id: Option<i64>,
-        is_fail: bool,
-    ) -> ArrowCloudRetrieveScoreEntry {
-        ArrowCloudRetrieveScoreEntry {
-            score: Some(score),
-            grade: grade.map(str::to_string),
-            date: date.map(str::to_string),
-            play_id,
-            is_fail,
-        }
-    }
-
-    #[test]
-    fn arrowcloud_leaderboard_id_round_trips() {
-        for v in ArrowCloudLeaderboard::ALL_GLOBAL {
-            assert_eq!(ArrowCloudLeaderboard::from_id(v.id()), Some(v));
-        }
-        assert_eq!(ArrowCloudLeaderboard::from_id(0), None);
-        assert_eq!(ArrowCloudLeaderboard::from_id(9), None);
-    }
-
-    #[test]
-    fn arrowcloud_leaderboard_serializes_as_integer() {
-        let json = serde_json::to_string(&ArrowCloudLeaderboard::Itg).unwrap();
-        assert_eq!(json, "3");
-        let json = serde_json::to_string(&ArrowCloudLeaderboard::ALL_GLOBAL).unwrap();
-        assert_eq!(json, "[4,2,3]");
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_map_assigns_global_leaderboards() {
-        let mut map = HashMap::new();
-        map.insert("4".to_string(), ac_entry(99.51, false));
-        map.insert("2".to_string(), ac_entry(98.10, false));
-        map.insert("3".to_string(), ac_entry(99.89, false));
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert!(scores.itg.is_some());
-        assert!(scores.ex.is_some());
-        assert!(scores.hard_ex.is_some());
-        assert!((scores.itg.unwrap().score_percent - 0.9989).abs() < 1e-6);
-        assert!((scores.ex.unwrap().score_percent - 0.9810).abs() < 1e-6);
-        assert!((scores.hard_ex.unwrap().score_percent - 0.9951).abs() < 1e-6);
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_map_ignores_unknown_leaderboard_ids() {
-        let mut map = HashMap::new();
-        map.insert("3".to_string(), ac_entry(99.0, false));
-        // Event-specific leaderboard (e.g. BlueShift) – should be dropped.
-        map.insert("9".to_string(), ac_entry(95.0, false));
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert!(scores.itg.is_some());
-        assert!(scores.ex.is_none());
-        assert!(scores.hard_ex.is_none());
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_map_ignores_unparseable_keys() {
-        let mut map = HashMap::new();
-        map.insert("itg".to_string(), ac_entry(99.0, false));
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert!(scores.itg.is_none());
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_map_drops_entries_without_score_field() {
-        let mut map = HashMap::new();
-        map.insert(
-            "3".to_string(),
-            ArrowCloudRetrieveScoreEntry {
-                score: None,
-                grade: None,
-                date: None,
-                play_id: None,
-                is_fail: false,
-            },
-        );
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert!(scores.itg.is_none(), "missing score must not cache as 0%");
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_preserves_grade_and_date() {
-        let mut map = HashMap::new();
-        map.insert(
-            "3".to_string(),
-            ac_entry_full(
-                99.89,
-                Some("Tristar"),
-                Some("2026-05-03T19:10:17.504Z"),
-                Some(12345),
-                false,
-            ),
-        );
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        let itg = scores.itg.unwrap();
-        assert_eq!(itg.server_grade, Some(ArrowCloudServerGrade::Tristar));
-        assert_eq!(itg.play_id, Some(12345));
-        let played_at = itg.played_at.expect("played_at parsed");
-        assert_eq!(played_at.timestamp_millis(), 1_777_835_417_504);
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_drops_unknown_grade() {
-        let mut map = HashMap::new();
-        map.insert(
-            "3".to_string(),
-            ac_entry_full(98.0, Some("Mythic"), None, None, false),
-        );
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert_eq!(scores.itg.unwrap().server_grade, None);
-    }
-
-    #[test]
-    fn arrowcloud_scores_from_entry_drops_unparseable_date() {
-        let mut map = HashMap::new();
-        map.insert(
-            "3".to_string(),
-            ac_entry_full(98.0, None, Some("not-a-date"), None, false),
-        );
-        let scores = arrowcloud_scores_from_entry_map(&map);
-        assert_eq!(scores.itg.unwrap().played_at, None);
-    }
-
-    #[test]
-    fn arrowcloud_server_grade_round_trips_through_str() {
-        for grade in [
-            ArrowCloudServerGrade::Sex,
-            ArrowCloudServerGrade::Quint,
-            ArrowCloudServerGrade::Quad,
-            ArrowCloudServerGrade::Tristar,
-            ArrowCloudServerGrade::SPlus,
-            ArrowCloudServerGrade::SMinus,
-            ArrowCloudServerGrade::Failed,
-        ] {
-            assert_eq!(
-                ArrowCloudServerGrade::from_server_str(grade.as_str()),
-                Some(grade)
-            );
-        }
-    }
-
-    #[test]
-    fn arrowcloud_score_bincode_round_trip_preserves_date() {
-        let original = ArrowCloudScore {
-            score_percent: 0.9989,
-            server_grade: Some(ArrowCloudServerGrade::Tristar),
-            played_at: Some(Utc.timestamp_millis_opt(1_777_835_417_504).unwrap()),
-            play_id: Some(12345),
-            is_fail: false,
-        };
-        let cfg = bincode::config::standard();
-        let bytes = bincode::encode_to_vec(original, cfg).unwrap();
-        let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
-        assert_eq!(decoded, original);
-    }
-
-    fn ac_score(percent_0_1: f64, is_fail: bool) -> ArrowCloudScore {
-        ArrowCloudScore {
-            score_percent: percent_0_1,
-            server_grade: None,
-            played_at: None,
-            play_id: None,
-            is_fail,
-        }
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_inserts_when_empty() {
-        let mut slot: Option<ArrowCloudScore> = None;
-        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, false)));
-        assert!(slot.is_some());
-        assert!((slot.unwrap().score_percent - 0.95).abs() < 1e-9);
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_keeps_higher_percent() {
-        let mut slot = Some(ac_score(0.99, false));
-        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.97, false)));
-        assert!((slot.unwrap().score_percent - 0.99).abs() < 1e-9);
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_overwrites_lower_percent() {
-        let mut slot = Some(ac_score(0.90, false));
-        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.92, false)));
-        assert!((slot.unwrap().score_percent - 0.92).abs() < 1e-9);
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_failed_does_not_overwrite_passed() {
-        let mut slot = Some(ac_score(0.85, false));
-        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, true)));
-        assert!(
-            !slot.unwrap().is_fail,
-            "failed score must not overwrite passed"
-        );
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_passed_overwrites_failed() {
-        let mut slot = Some(ac_score(0.85, true));
-        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.50, false)));
-        assert!(
-            !slot.unwrap().is_fail,
-            "non-failed score must replace failed"
-        );
-    }
-
-    #[test]
-    fn merge_arrowcloud_score_slot_ignores_none() {
-        let mut slot = Some(ac_score(0.85, false));
-        merge_arrowcloud_score_slot(&mut slot, None);
-        assert!((slot.unwrap().score_percent - 0.85).abs() < 1e-9);
-    }
-
-    #[test]
-    fn arrowcloud_retrieve_response_decodes_full_shape() {
-        // Mirrors the documented bulk response shape.
-        let raw = r#"{
-            "scores": {
-                "006fb5c4890e98a2": {
-                    "2": { "score": "99.12", "grade": "Tristar", "date": "2026-05-03T19:10:17.504Z" },
-                    "3": { "score": "99.89", "grade": "Tristar", "date": "2026-05-03T19:10:17.504Z" }
-                },
-                "0092bb246527b2ec": {
-                    "2": { "score": "97.44", "grade": "Twostar", "date": "2026-05-02T11:03:42.000Z" }
-                }
-            }
-        }"#;
-        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
-            serde_json::from_str(raw).unwrap();
-        assert_eq!(decoded.scores.len(), 2);
-        assert!(decoded.scores["006fb5c4890e98a2"].contains_key("2"));
-        assert!(decoded.scores["006fb5c4890e98a2"].contains_key("3"));
-        assert_eq!(decoded.scores["0092bb246527b2ec"]["2"].score, Some(97.44));
-    }
-
-    #[test]
-    fn arrowcloud_retrieve_response_ignores_unknown_top_level_fields() {
-        let raw = r#"{ "scores": {}, "extra": 42, "meta": { "x": 1 } }"#;
-        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
-            serde_json::from_str(raw).unwrap();
-        assert!(decoded.scores.is_empty());
-    }
-
-    #[test]
-    fn arrowcloud_retrieve_response_treats_missing_score_field_as_none() {
-        let raw = r#"{
-            "scores": {
-                "abc": { "3": { "grade": "n/a" } }
-            }
-        }"#;
-        let decoded: arrowcloud_api::ArrowCloudRetrieveScoresResponse =
-            serde_json::from_str(raw).unwrap();
-        assert_eq!(decoded.scores["abc"]["3"].score, None);
-    }
-
-    #[test]
-    fn arrowcloud_global_leaderboard_set_is_hardex_ex_itg() {
-        // Order matters for the request body payload; the server is
-        // order-insensitive but we send HardEX first to mirror display priority.
-        let ids: Vec<u32> = ArrowCloudLeaderboard::ALL_GLOBAL
-            .iter()
-            .map(|v| v.id())
-            .collect();
-        assert_eq!(ids, vec![4, 2, 3]);
     }
 }

@@ -5,6 +5,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
+use deadsync_score::{
+    GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, LeaderboardEntry,
+    LeaderboardPane, PlayerLeaderboardData, RejectReason, groovestats_submit_record_banner,
+    leaderboard_nonzero_rank, leaderboard_pane, leaderboard_score_10000,
+    leaderboard_username_matches,
+};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
@@ -310,6 +316,155 @@ pub struct LeaderboardApiEntry {
     pub comments: Option<String>,
 }
 
+pub fn leaderboard_entries_from_api(entries: Vec<LeaderboardApiEntry>) -> Vec<LeaderboardEntry> {
+    let mut out = Vec::with_capacity(entries.len());
+    for entry in entries {
+        out.push(LeaderboardEntry {
+            rank: entry.rank,
+            name: entry.name,
+            machine_tag: entry.machine_tag,
+            score: entry.score,
+            date: entry.date,
+            is_rival: entry.is_rival,
+            is_self: entry.is_self,
+            is_fail: entry.is_fail,
+        });
+    }
+    out
+}
+
+pub fn leaderboard_pane_from_api(
+    name: &str,
+    entries: Vec<LeaderboardApiEntry>,
+    is_ex: bool,
+) -> Option<LeaderboardPane> {
+    leaderboard_pane(name, leaderboard_entries_from_api(entries), is_ex)
+}
+
+pub fn leaderboard_self_entry<'a>(
+    entries: &'a [LeaderboardApiEntry],
+    username: &str,
+) -> Option<&'a LeaderboardApiEntry> {
+    entries.iter().find(|entry| entry.is_self).or_else(|| {
+        entries
+            .iter()
+            .find(|entry| leaderboard_username_matches(entry.name.as_str(), username))
+    })
+}
+
+#[inline(always)]
+pub fn leaderboard_entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
+    leaderboard_score_10000(entry.score, entry.is_fail)
+}
+
+pub fn leaderboard_self_score_10000(
+    entries: &[LeaderboardApiEntry],
+    username: &str,
+) -> Option<u32> {
+    Some(leaderboard_entry_score_10000(leaderboard_self_entry(entries, username)?)?.round() as u32)
+}
+
+pub fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    leaderboard_nonzero_rank(leaderboard_self_entry(entries, username)?.rank)
+}
+
+pub fn gs_ex_evidence_from_leaderboard(
+    ex_entries: &[LeaderboardApiEntry],
+    username: &str,
+    comment: Option<&str>,
+) -> GsExEvidence {
+    GsExEvidence::from_sources(
+        leaderboard_self_entry(ex_entries, username).and_then(leaderboard_entry_score_10000),
+        comment,
+    )
+}
+
+#[derive(Debug)]
+pub struct FetchedPlayerLeaderboards {
+    pub data: PlayerLeaderboardData,
+    pub gs_entries: Vec<LeaderboardApiEntry>,
+    pub ex_entries: Vec<LeaderboardApiEntry>,
+    pub itl_self_found: bool,
+}
+
+fn push_leaderboard_pane(
+    out: &mut Vec<LeaderboardPane>,
+    name: &str,
+    entries: Vec<LeaderboardApiEntry>,
+    is_ex: bool,
+) {
+    if let Some(pane) = leaderboard_pane_from_api(name, entries, is_ex) {
+        out.push(pane);
+    }
+}
+
+pub fn fetched_player_leaderboards_from_api(
+    decoded: LeaderboardsApiResponse,
+    username: &str,
+    show_ex_score: bool,
+) -> FetchedPlayerLeaderboards {
+    let mut panes = Vec::with_capacity(5);
+    let mut gs_entries = Vec::new();
+    let mut ex_entries = Vec::new();
+    let mut itl_self_score = None;
+    let mut itl_self_rank = None;
+    let mut itl_self_found = false;
+    if let Some(player) = decoded.player1 {
+        let LeaderboardApiPlayer {
+            is_ranked: _is_ranked,
+            gs_leaderboard,
+            ex_leaderboard,
+            rpg,
+            itl,
+        } = player;
+
+        gs_entries.clone_from(&gs_leaderboard);
+        ex_entries.clone_from(&ex_leaderboard);
+        if show_ex_score {
+            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+        } else {
+            push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
+            push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
+        }
+
+        if let Some(rpg) = rpg
+            && !rpg.rpg_leaderboard.is_empty()
+        {
+            let name = if rpg.name.trim().is_empty() {
+                "RPG"
+            } else {
+                rpg.name.as_str()
+            };
+            push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
+        }
+        if let Some(itl) = itl
+            && !itl.itl_leaderboard.is_empty()
+        {
+            itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
+            itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+            itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+            let name = if itl.name.trim().is_empty() {
+                "ITL"
+            } else {
+                itl.name.as_str()
+            };
+            push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard, true);
+        }
+    }
+
+    FetchedPlayerLeaderboards {
+        data: PlayerLeaderboardData {
+            panes,
+            itl_self_score,
+            itl_self_rank,
+        },
+        gs_entries,
+        ex_entries,
+        itl_self_found,
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrooveStatsJudgmentCounts {
@@ -612,6 +767,62 @@ pub enum GrooveStatsSubmitRequestError {
     Api { message: String },
 }
 
+pub fn submit_error_status_and_message(
+    service_name: &str,
+    error: &GrooveStatsSubmitRequestError,
+) -> (GrooveStatsSubmitUiStatus, String) {
+    match error {
+        GrooveStatsSubmitRequestError::Transport { message, timed_out } => (
+            if *timed_out {
+                GrooveStatsSubmitUiStatus::TimedOut
+            } else {
+                GrooveStatsSubmitUiStatus::NetworkError
+            },
+            message.clone(),
+        ),
+        GrooveStatsSubmitRequestError::Http {
+            status,
+            body_snippet,
+        } => {
+            let message = if body_snippet.is_empty() {
+                format!("{service_name} submit returned HTTP {status}")
+            } else {
+                format!("{service_name} submit returned HTTP {status}: {body_snippet}")
+            };
+            (
+                GrooveStatsSubmitUiStatus::from_http_status(*status),
+                message,
+            )
+        }
+        GrooveStatsSubmitRequestError::Decode { message } => (
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
+            format!("failed to parse {service_name} submit response: {message}"),
+        ),
+        GrooveStatsSubmitRequestError::Api { message } => (
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
+            format!("{service_name} submit error: {message}"),
+        ),
+    }
+}
+
+pub fn submit_record_banner_from_api(
+    response: &GrooveStatsSubmitApiPlayer,
+    username: &str,
+    show_ex_score: bool,
+) -> Option<GrooveStatsSubmitRecordBanner> {
+    groovestats_submit_record_banner(
+        response.result.as_str(),
+        show_ex_score,
+        leaderboard_self_rank(response.gs_leaderboard.as_slice(), username),
+        leaderboard_self_rank(response.ex_leaderboard.as_slice(), username),
+        !response.ex_leaderboard.is_empty(),
+    )
+}
+
 pub fn submit_score_request(
     service: Service,
     headers: &[(String, String)],
@@ -860,6 +1071,21 @@ pub fn compact_f32_text(value: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_score::{GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, RejectReason};
+
+    fn leaderboard_entry(rank: u32, name: &str, score: f64, is_self: bool) -> LeaderboardApiEntry {
+        LeaderboardApiEntry {
+            rank,
+            name: name.to_string(),
+            machine_tag: None,
+            score,
+            date: String::new(),
+            is_rival: false,
+            is_self,
+            is_fail: false,
+            comments: None,
+        }
+    }
 
     #[test]
     fn service_from_boogiestats_flag_selects_backend() {
@@ -1133,6 +1359,142 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_self_score_prefers_self_flag() {
+        let entries = vec![
+            LeaderboardApiEntry {
+                rank: 10,
+                name: "Other".to_string(),
+                machine_tag: None,
+                score: 9321.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+                comments: None,
+            },
+            LeaderboardApiEntry {
+                rank: 25,
+                name: "Player".to_string(),
+                machine_tag: None,
+                score: 9789.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            },
+        ];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "ignored"),
+            Some(9789)
+        );
+        assert_eq!(leaderboard_self_rank(&entries, "ignored"), Some(25));
+    }
+
+    #[test]
+    fn leaderboard_self_score_falls_back_to_username_match() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 25,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9712.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "perfecttaste"),
+            Some(9712)
+        );
+        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), Some(25));
+    }
+
+    #[test]
+    fn leaderboard_self_rank_ignores_zero_rank() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 0,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9712.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: true,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), None);
+    }
+
+    #[test]
+    fn leaderboard_pane_from_api_maps_entries() {
+        let pane = leaderboard_pane_from_api(
+            "GrooveStats",
+            vec![LeaderboardApiEntry {
+                rank: 2,
+                name: "Player".to_string(),
+                machine_tag: Some("CAB".to_string()),
+                score: 9876.0,
+                date: "2026-05-03".to_string(),
+                is_rival: true,
+                is_self: false,
+                is_fail: false,
+                comments: Some("not displayed".to_string()),
+            }],
+            false,
+        )
+        .expect("pane");
+
+        assert_eq!(pane.name, "GrooveStats");
+        assert_eq!(pane.entries.len(), 1);
+        assert_eq!(pane.entries[0].machine_tag.as_deref(), Some("CAB"));
+        assert!(pane.entries[0].is_rival);
+    }
+
+    #[test]
+    fn fetched_player_leaderboards_from_api_builds_panes_and_self_data() {
+        let fetched = fetched_player_leaderboards_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+                    ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
+                    rpg: Some(LeaderboardEventData {
+                        name: " ".to_string(),
+                        rpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
+                        itl_leaderboard: Vec::new(),
+                    }),
+                    itl: Some(LeaderboardEventData {
+                        name: String::new(),
+                        rpg_leaderboard: Vec::new(),
+                        itl_leaderboard: vec![leaderboard_entry(42, "PerfectTaste", 8765.0, true)],
+                    }),
+                }),
+            },
+            "perfecttaste",
+            true,
+        );
+
+        assert_eq!(fetched.gs_entries.len(), 1);
+        assert_eq!(fetched.ex_entries.len(), 1);
+        assert!(fetched.itl_self_found);
+        assert_eq!(fetched.data.itl_self_score, Some(8765));
+        assert_eq!(fetched.data.itl_self_rank, Some(42));
+        assert_eq!(fetched.data.panes.len(), 4);
+        assert_eq!(fetched.data.panes[0].name, "GrooveStats");
+        assert!(fetched.data.panes[0].is_ex);
+        assert_eq!(fetched.data.panes[1].name, "GrooveStats");
+        assert!(!fetched.data.panes[1].is_ex);
+        assert_eq!(fetched.data.panes[2].name, "RPG");
+        assert_eq!(fetched.data.panes[3].name, "ITL");
+        assert!(fetched.data.panes[3].is_ex);
+    }
+
+    #[test]
     fn submit_payload_serializes_old_api_shape() {
         let payload = GrooveStatsSubmitPlayerPayload {
             rate: 150,
@@ -1210,6 +1572,122 @@ mod tests {
         assert!(value.get("wayOff").is_none());
         assert_eq!(counts.decent_count(), 0);
         assert_eq!(counts.way_off_count(), 0);
+    }
+
+    #[test]
+    fn submit_error_maps_transport_errors_to_status() {
+        let (status, message) = submit_error_status_and_message(
+            "GrooveStats",
+            &GrooveStatsSubmitRequestError::Transport {
+                message: "network error: timed out".to_string(),
+                timed_out: true,
+            },
+        );
+        assert_eq!(status, GrooveStatsSubmitUiStatus::TimedOut);
+        assert_eq!(message, "network error: timed out");
+
+        let (status, _) = submit_error_status_and_message(
+            "GrooveStats",
+            &GrooveStatsSubmitRequestError::Transport {
+                message: "network error: refused".to_string(),
+                timed_out: false,
+            },
+        );
+        assert_eq!(status, GrooveStatsSubmitUiStatus::NetworkError);
+    }
+
+    #[test]
+    fn submit_error_maps_protocol_errors_to_status() {
+        let (status, message) = submit_error_status_and_message(
+            "GrooveStats",
+            &GrooveStatsSubmitRequestError::Http {
+                status: 403,
+                body_snippet: "bad key".to_string(),
+            },
+        );
+        assert_eq!(
+            status,
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(message, "GrooveStats submit returned HTTP 403: bad key");
+
+        let (status, message) = submit_error_status_and_message(
+            "GrooveStats",
+            &GrooveStatsSubmitRequestError::Api {
+                message: "score-already-submitted".to_string(),
+            },
+        );
+        assert_eq!(
+            status,
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+        assert_eq!(message, "GrooveStats submit error: score-already-submitted");
+    }
+
+    fn submit_player(
+        result: &str,
+        gs_leaderboard: Vec<LeaderboardApiEntry>,
+        ex_leaderboard: Vec<LeaderboardApiEntry>,
+    ) -> GrooveStatsSubmitApiPlayer {
+        GrooveStatsSubmitApiPlayer {
+            chart_hash: "deadbeef".to_string(),
+            result: result.to_string(),
+            gs_leaderboard,
+            ex_leaderboard,
+            rpg: None,
+            itl: None,
+        }
+    }
+
+    #[test]
+    fn submit_record_banner_from_api_maps_response_rank() {
+        let banner = submit_record_banner_from_api(
+            &submit_player(
+                "improved",
+                vec![leaderboard_entry(1, "PerfectTaste", 9999.0, true)],
+                Vec::new(),
+            ),
+            "PerfectTaste",
+            false,
+        );
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecord));
+
+        let banner = submit_record_banner_from_api(
+            &submit_player(
+                "score-added",
+                vec![leaderboard_entry(2, "PerfectTaste", 9999.0, true)],
+                vec![leaderboard_entry(1, "PerfectTaste", 9999.0, true)],
+            ),
+            "PerfectTaste",
+            true,
+        );
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecordEx));
+
+        let banner = submit_record_banner_from_api(
+            &submit_player(
+                "improved",
+                vec![leaderboard_entry(3, "PerfectTaste", 9999.0, true)],
+                vec![leaderboard_entry(4, "PerfectTaste", 9999.0, true)],
+            ),
+            "PerfectTaste",
+            true,
+        );
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::PersonalBest));
+
+        let banner = submit_record_banner_from_api(
+            &submit_player(
+                "score-already-submitted",
+                vec![leaderboard_entry(1, "PerfectTaste", 9999.0, true)],
+                Vec::new(),
+            ),
+            "PerfectTaste",
+            false,
+        );
+        assert_eq!(banner, None);
     }
 
     #[test]

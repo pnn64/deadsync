@@ -1,10 +1,17 @@
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
-use deadsync_score::ArrowCloudLeaderboard;
+use deadsync_score::{
+    ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
+    ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry, LeaderboardPane,
+    RejectReason, arrowcloud_entry_flags, arrowcloud_hard_ex_leaderboard_pane,
+    arrowcloud_leaderboard_entry, arrowcloud_pane_kind_from_type,
+    arrowcloud_score_from_retrieve_fields, arrowcloud_user_id,
+    set_arrowcloud_score_for_leaderboard,
+};
 use serde::Deserializer;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -133,6 +140,44 @@ pub enum ArrowCloudSubmitRequestError {
     InvalidRequest { message: String },
     Transport { message: String, timed_out: bool },
     Http { status: u16, body_snippet: String },
+}
+
+pub fn submit_error_status_and_message(
+    error: &ArrowCloudSubmitRequestError,
+) -> (ArrowCloudSubmitUiStatus, String) {
+    match error {
+        ArrowCloudSubmitRequestError::InvalidRequest { message } => {
+            let reason = if message.contains("API key") {
+                RejectReason::Unauthorized
+            } else {
+                RejectReason::InvalidScore
+            };
+            (
+                ArrowCloudSubmitUiStatus::Rejected { reason },
+                message.clone(),
+            )
+        }
+        ArrowCloudSubmitRequestError::Transport { message, timed_out } => (
+            if *timed_out {
+                ArrowCloudSubmitUiStatus::TimedOut
+            } else {
+                ArrowCloudSubmitUiStatus::NetworkError
+            },
+            message.clone(),
+        ),
+        ArrowCloudSubmitRequestError::Http {
+            status,
+            body_snippet,
+        } => {
+            let status_kind = ArrowCloudSubmitUiStatus::from_http_status(*status);
+            let message = if body_snippet.is_empty() {
+                format!("HTTP {status}")
+            } else {
+                format!("HTTP {status}: {body_snippet}")
+            };
+            (status_kind, message)
+        }
+    }
 }
 
 pub fn submit_score_request(
@@ -321,6 +366,60 @@ pub fn retrieve_scores(
     network::read_json_body(response).map_err(OnlineRequestError::from)
 }
 
+/// Convert one bulk-score entry into the shared ArrowCloud score cache type.
+///
+/// Returns `None` when the response has no usable score field; otherwise it
+/// preserves ArrowCloud-native metadata such as server grade, timestamp, and
+/// play id.
+pub fn score_from_retrieve_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option<ArrowCloudScore> {
+    arrowcloud_score_from_retrieve_fields(
+        entry.score,
+        entry.grade.as_deref(),
+        entry.date.as_deref(),
+        entry.play_id,
+        entry.is_fail,
+    )
+}
+
+pub fn scores_from_retrieve_entry_map(
+    leaderboards: &HashMap<String, ArrowCloudRetrieveScoreEntry>,
+) -> ArrowCloudScores {
+    let mut out = ArrowCloudScores::default();
+    for (leaderboard_id, entry) in leaderboards {
+        let Ok(leaderboard_id) = leaderboard_id.parse::<u32>() else {
+            continue;
+        };
+        let Some(score) = score_from_retrieve_entry(entry) else {
+            continue;
+        };
+        set_arrowcloud_score_for_leaderboard(&mut out, leaderboard_id, score);
+    }
+    out
+}
+
+pub fn score_cache_entries_from_retrieve_response(
+    response: ArrowCloudRetrieveScoresResponse,
+) -> HashMap<String, ArrowCloudScores> {
+    let mut out = HashMap::with_capacity(response.scores.len());
+    for (chart_hash, leaderboards) in response.scores {
+        let scores = scores_from_retrieve_entry_map(&leaderboards);
+        if scores.itg.is_some() || scores.ex.is_some() || scores.hard_ex.is_some() {
+            out.insert(chart_hash, scores);
+        }
+    }
+    out
+}
+
+pub fn retrieve_score_cache_entries(
+    api_key: &str,
+    user_id: Option<&str>,
+    chart_hashes: &[String],
+    leaderboards: &[ArrowCloudLeaderboard],
+) -> Result<HashMap<String, ArrowCloudScores>, OnlineRequestError> {
+    retrieve_scores(api_key, user_id, chart_hashes, leaderboards)
+        .map(score_cache_entries_from_retrieve_response)
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ArrowCloudLeaderboardsApiResponse {
@@ -375,6 +474,114 @@ pub struct ArrowCloudUserApiUser {
     pub id: String,
     #[serde(default)]
     pub rival_user_ids: Vec<String>,
+}
+
+pub fn user_context_from_api(user: ArrowCloudUserApiUser) -> ArrowCloudUserContext {
+    let self_user_id = arrowcloud_user_id(user.id.as_str()).map(str::to_string);
+    let rival_user_ids = user
+        .rival_user_ids
+        .into_iter()
+        .map(|user_id| user_id.trim().to_string())
+        .filter(|user_id| !user_id.is_empty())
+        .collect();
+    ArrowCloudUserContext {
+        self_user_id,
+        rival_user_ids,
+    }
+}
+
+pub fn fetch_user_context(
+    api_key: &str,
+) -> Result<Option<ArrowCloudUserContext>, OnlineRequestError> {
+    fetch_user(api_key)
+        .map(|response| response.map(|response| user_context_from_api(response.user)))
+}
+
+pub fn leaderboard_entry_from_api(
+    entry: ArrowCloudLeaderboardEntry,
+    is_self: bool,
+    is_rival: bool,
+) -> LeaderboardEntry {
+    arrowcloud_leaderboard_entry(
+        entry.rank,
+        entry.alias,
+        entry.score,
+        entry.date,
+        is_self,
+        is_rival,
+    )
+}
+
+pub fn hard_ex_pane_from_response(
+    decoded: ArrowCloudLeaderboardsApiResponse,
+) -> Option<ArrowCloudLeaderboardPane> {
+    decoded.leaderboards.into_iter().find(|pane| {
+        arrowcloud_pane_kind_from_type(pane.r#type.as_str()) == Some(ArrowCloudPaneKind::HardEx)
+    })
+}
+
+pub fn update_remaining_targets(
+    scores: &[ArrowCloudLeaderboardEntry],
+    context: Option<&ArrowCloudUserContext>,
+    remaining: &mut HashSet<String>,
+) {
+    if remaining.is_empty() {
+        return;
+    }
+    for entry in scores {
+        let Some(user_id) = arrowcloud_user_id(entry.user_id.as_str()) else {
+            continue;
+        };
+        let (is_self, is_rival) =
+            arrowcloud_entry_flags(Some(user_id), entry.is_self, entry.is_rival, context);
+        if is_self || is_rival {
+            remaining.remove(user_id);
+            if remaining.is_empty() {
+                break;
+            }
+        }
+    }
+}
+
+pub fn hard_ex_pane_from_pages(
+    first_page: ArrowCloudLeaderboardPane,
+    extra_pages: Vec<ArrowCloudLeaderboardPane>,
+    context: Option<&ArrowCloudUserContext>,
+) -> LeaderboardPane {
+    let mut entries = Vec::with_capacity(first_page.scores.len());
+    let mut appended_user_ids = HashSet::new();
+
+    for entry in first_page.scores {
+        let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+        let (is_self, is_rival) =
+            arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
+        if (is_self || is_rival)
+            && let Some(user_id) = user_id
+        {
+            appended_user_ids.insert(user_id);
+        }
+        entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
+    }
+
+    for page in extra_pages {
+        for entry in page.scores {
+            let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+            let (is_self, is_rival) =
+                arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
+            if !(is_self || is_rival) {
+                continue;
+            }
+            if let Some(user_id) = user_id
+                && !appended_user_ids.insert(user_id)
+            {
+                continue;
+            }
+            entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
+        }
+    }
+    let personalized = entries.iter().any(|entry| entry.is_self || entry.is_rival);
+
+    arrowcloud_hard_ex_leaderboard_pane(entries, personalized)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -777,6 +984,11 @@ fn sleep_device_login_with_cancel(seconds: f32, cancel: &Arc<AtomicBool>) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_score::{
+        ArrowCloudPaneKind, ArrowCloudServerGrade, ArrowCloudSubmitUiStatus, ArrowCloudUserContext,
+        RejectReason,
+    };
+    use std::collections::HashSet;
     use std::sync::Mutex;
 
     #[test]
@@ -857,6 +1069,104 @@ mod tests {
     }
 
     #[test]
+    fn hard_ex_pane_from_response_filters_to_hardex() {
+        let pane = hard_ex_pane_from_response(ArrowCloudLeaderboardsApiResponse {
+            leaderboards: vec![
+                ArrowCloudLeaderboardPane {
+                    r#type: "EX".to_string(),
+                    scores: Vec::new(),
+                    page: 1,
+                    has_next: false,
+                    total_pages: 1,
+                },
+                ArrowCloudLeaderboardPane {
+                    r#type: "HardEX".to_string(),
+                    scores: vec![ArrowCloudLeaderboardEntry {
+                        rank: 7,
+                        score: 98.31,
+                        alias: "YOU".to_string(),
+                        date: "2026-04-18T12:34:56.000Z".to_string(),
+                        user_id: "self".to_string(),
+                        is_rival: false,
+                        is_self: false,
+                    }],
+                    page: 1,
+                    has_next: true,
+                    total_pages: 4,
+                },
+            ],
+        })
+        .expect("expected HardEX pane");
+
+        assert_eq!(pane.r#type, "HardEX");
+        assert_eq!(pane.page, 1);
+        assert!(pane.has_next);
+        assert_eq!(pane.total_pages, 4);
+        assert_eq!(pane.scores.len(), 1);
+        assert_eq!(pane.scores[0].user_id, "self");
+    }
+
+    #[test]
+    fn hard_ex_pane_from_pages_marks_self_and_rival_from_user_ids() {
+        let context = ArrowCloudUserContext {
+            self_user_id: Some("self".to_string()),
+            rival_user_ids: HashSet::from([String::from("rival")]),
+        };
+        let pane = hard_ex_pane_from_pages(
+            ArrowCloudLeaderboardPane {
+                r#type: "HardEX".to_string(),
+                scores: vec![ArrowCloudLeaderboardEntry {
+                    rank: 1,
+                    score: 99.12,
+                    alias: "AAA".to_string(),
+                    date: String::new(),
+                    user_id: "top".to_string(),
+                    is_rival: false,
+                    is_self: false,
+                }],
+                page: 1,
+                has_next: true,
+                total_pages: 4,
+            },
+            vec![ArrowCloudLeaderboardPane {
+                r#type: "HardEX".to_string(),
+                scores: vec![
+                    ArrowCloudLeaderboardEntry {
+                        rank: 81,
+                        score: 88.99,
+                        alias: "YOU".to_string(),
+                        date: String::new(),
+                        user_id: "self".to_string(),
+                        is_rival: false,
+                        is_self: false,
+                    },
+                    ArrowCloudLeaderboardEntry {
+                        rank: 91,
+                        score: 87.65,
+                        alias: "RIVAL".to_string(),
+                        date: String::new(),
+                        user_id: "rival".to_string(),
+                        is_rival: false,
+                        is_self: false,
+                    },
+                ],
+                page: 4,
+                has_next: false,
+                total_pages: 4,
+            }],
+            Some(&context),
+        );
+
+        assert_eq!(pane.arrowcloud_kind, Some(ArrowCloudPaneKind::HardEx));
+        assert!(pane.personalized);
+        assert_eq!(pane.entries.len(), 3);
+        assert_eq!(pane.entries[1].rank, 81);
+        assert!(pane.entries[1].is_self);
+        assert_eq!(pane.entries[2].rank, 91);
+        assert!(pane.entries[2].is_rival);
+    }
+
+    #[test]
     fn retrieve_response_decodes_full_shape() {
         let raw = r#"{
             "scores": {
@@ -895,6 +1205,144 @@ mod tests {
         let decoded: ArrowCloudRetrieveScoresResponse =
             serde_json::from_str(raw).expect("deserialize");
         assert_eq!(decoded.scores["abc"]["3"].score, None);
+    }
+
+    fn retrieve_entry(score: f64, is_fail: bool) -> ArrowCloudRetrieveScoreEntry {
+        ArrowCloudRetrieveScoreEntry {
+            score: Some(score),
+            grade: None,
+            date: None,
+            play_id: None,
+            is_fail,
+        }
+    }
+
+    fn retrieve_entry_full(
+        score: f64,
+        grade: Option<&str>,
+        date: Option<&str>,
+        play_id: Option<i64>,
+        is_fail: bool,
+    ) -> ArrowCloudRetrieveScoreEntry {
+        ArrowCloudRetrieveScoreEntry {
+            score: Some(score),
+            grade: grade.map(str::to_string),
+            date: date.map(str::to_string),
+            play_id,
+            is_fail,
+        }
+    }
+
+    #[test]
+    fn scores_from_retrieve_entry_map_assigns_global_leaderboards() {
+        let mut map = HashMap::new();
+        map.insert("4".to_string(), retrieve_entry(99.51, false));
+        map.insert("2".to_string(), retrieve_entry(98.10, false));
+        map.insert("3".to_string(), retrieve_entry(99.89, false));
+        let scores = scores_from_retrieve_entry_map(&map);
+        assert!(scores.itg.is_some());
+        assert!(scores.ex.is_some());
+        assert!(scores.hard_ex.is_some());
+        assert!((scores.itg.unwrap().score_percent - 0.9989).abs() < 1e-6);
+        assert!((scores.ex.unwrap().score_percent - 0.9810).abs() < 1e-6);
+        assert!((scores.hard_ex.unwrap().score_percent - 0.9951).abs() < 1e-6);
+    }
+
+    #[test]
+    fn scores_from_retrieve_entry_map_ignores_invalid_leaderboards() {
+        let mut map = HashMap::new();
+        map.insert("3".to_string(), retrieve_entry(99.0, false));
+        map.insert("9".to_string(), retrieve_entry(95.0, false));
+        map.insert("itg".to_string(), retrieve_entry(97.0, false));
+        let scores = scores_from_retrieve_entry_map(&map);
+        assert!(scores.itg.is_some());
+        assert!(scores.ex.is_none());
+        assert!(scores.hard_ex.is_none());
+    }
+
+    #[test]
+    fn scores_from_retrieve_entry_map_drops_entries_without_score() {
+        let mut map = HashMap::new();
+        map.insert(
+            "3".to_string(),
+            ArrowCloudRetrieveScoreEntry {
+                score: None,
+                grade: None,
+                date: None,
+                play_id: None,
+                is_fail: false,
+            },
+        );
+        let scores = scores_from_retrieve_entry_map(&map);
+        assert!(scores.itg.is_none(), "missing score must not cache as 0%");
+    }
+
+    #[test]
+    fn score_from_retrieve_entry_preserves_native_metadata() {
+        let score = score_from_retrieve_entry(&retrieve_entry_full(
+            99.89,
+            Some("Tristar"),
+            Some("2026-05-03T19:10:17.504Z"),
+            Some(12345),
+            false,
+        ))
+        .expect("score");
+
+        assert_eq!(score.server_grade, Some(ArrowCloudServerGrade::Tristar));
+        assert_eq!(score.play_id, Some(12345));
+        let played_at = score.played_at.expect("played_at parsed");
+        assert_eq!(played_at.timestamp_millis(), 1_777_835_417_504);
+    }
+
+    #[test]
+    fn score_from_retrieve_entry_drops_bad_metadata() {
+        let unknown_grade = score_from_retrieve_entry(&retrieve_entry_full(
+            98.0,
+            Some("Mythic"),
+            None,
+            None,
+            false,
+        ))
+        .expect("score");
+        assert_eq!(unknown_grade.server_grade, None);
+
+        let bad_date = score_from_retrieve_entry(&retrieve_entry_full(
+            98.0,
+            None,
+            Some("not-a-date"),
+            None,
+            false,
+        ))
+        .expect("score");
+        assert_eq!(bad_date.played_at, None);
+    }
+
+    #[test]
+    fn score_cache_entries_from_retrieve_response_drops_empty_charts() {
+        let response = ArrowCloudRetrieveScoresResponse {
+            scores: HashMap::from([
+                (
+                    "has-score".to_string(),
+                    HashMap::from([("3".to_string(), retrieve_entry(99.0, false))]),
+                ),
+                (
+                    "empty".to_string(),
+                    HashMap::from([(
+                        "3".to_string(),
+                        ArrowCloudRetrieveScoreEntry {
+                            score: None,
+                            grade: None,
+                            date: None,
+                            play_id: None,
+                            is_fail: false,
+                        },
+                    )]),
+                ),
+            ]),
+        };
+        let entries = score_cache_entries_from_retrieve_response(response);
+        assert!(entries.contains_key("has-score"));
+        assert!(!entries.contains_key("empty"));
     }
 
     #[test]
@@ -967,6 +1415,62 @@ mod tests {
         assert_eq!(value["modifiers"]["speed"]["type"], serde_json::json!("C"));
         assert_eq!(value["bodyVersion"], serde_json::json!("1.4"));
         assert_eq!(value["_arrowCloudBodyVersion"], serde_json::json!("1.4"));
+    }
+
+    #[test]
+    fn submit_error_maps_transport_errors_to_status() {
+        let (status, message) =
+            submit_error_status_and_message(&ArrowCloudSubmitRequestError::Transport {
+                message: "network error: timed out".to_string(),
+                timed_out: true,
+            });
+        assert_eq!(status, ArrowCloudSubmitUiStatus::TimedOut);
+        assert_eq!(message, "network error: timed out");
+
+        let (status, _) =
+            submit_error_status_and_message(&ArrowCloudSubmitRequestError::Transport {
+                message: "network error: refused".to_string(),
+                timed_out: false,
+            });
+        assert_eq!(status, ArrowCloudSubmitUiStatus::NetworkError);
+    }
+
+    #[test]
+    fn submit_error_maps_protocol_errors_to_status() {
+        let (status, _) =
+            submit_error_status_and_message(&ArrowCloudSubmitRequestError::InvalidRequest {
+                message: "missing ArrowCloud API key".to_string(),
+            });
+        assert_eq!(
+            status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+
+        let (status, _) =
+            submit_error_status_and_message(&ArrowCloudSubmitRequestError::InvalidRequest {
+                message: "missing chart hash".to_string(),
+            });
+        assert_eq!(
+            status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+
+        let (status, message) =
+            submit_error_status_and_message(&ArrowCloudSubmitRequestError::Http {
+                status: 403,
+                body_snippet: "bad key".to_string(),
+            });
+        assert_eq!(
+            status,
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(message, "HTTP 403: bad key");
     }
 
     #[test]
