@@ -99,16 +99,30 @@ pub enum EditResult {
     Handled,
     /// Back was pressed at the top (Simple) level — the caller should exit.
     ExitToParent,
-    /// The user confirmed saving the selected pad as a profile. The caller
-    /// should `take_save` the draft and perform the capture + store.
+    /// The user confirmed the save name box. The caller should `take_save` the
+    /// draft and either store a new capture or (when `rename_of` is set) rename.
     SaveRequested,
+    /// Apply the saved config under the profiles-list cursor to the pad.
+    ApplyProfile,
+    /// Make the saved config under the profiles-list cursor the default.
+    SetDefaultProfile,
 }
 
-/// In-progress "save this pad as a profile" entry (in-session overlay only).
+/// In-progress name-entry box (in-session overlay only). Used both for saving a
+/// new capture and for renaming an existing config (`rename_of` set).
 #[derive(Clone, Debug, Default)]
 pub struct SaveDraft {
     pub name: String,
     pub set_default: bool,
+    /// When set, confirming renames this existing config instead of capturing.
+    pub rename_of: Option<String>,
+}
+
+/// One row in the Configure Pads "Profiles" management list (pushed by the app).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileListEntry {
+    pub name: String,
+    pub is_default: bool,
 }
 
 /// Max length of a saved pad-config profile name.
@@ -141,6 +155,14 @@ pub struct State {
     /// Whether the cursor pad can be saved to a profile (set by the app: true
     /// only in-session when the cursor pad maps to a local profile).
     save_available: bool,
+    /// When true, the "Profiles" management list is open over the current view.
+    profiles_mode: bool,
+    /// The cursor pad's saved configs (pushed by the app, like `set_pads`).
+    profiles: Vec<ProfileListEntry>,
+    /// Profiles-list cursor: 0 = "save current as new", 1.. = saved configs.
+    profiles_sel: usize,
+    /// Delete needs a second press to confirm; this arms the first one.
+    delete_armed: bool,
     /// Screen to return to on Back. Set when navigating in; defaults to Options.
     return_screen: Option<Screen>,
     filter: PadFilter,
@@ -228,9 +250,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         EditResult::ExitToParent => {
             ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options))
         }
-        // Saving is only reachable from the in-session overlay; the standalone
-        // Options screen never enters save mode, so this is inert here.
-        EditResult::Handled | EditResult::SaveRequested => ScreenAction::None,
+        // Saving and profile management are only reachable from the in-session
+        // overlay; the standalone Options screen never enters them, so the
+        // non-exit results are all inert here.
+        EditResult::Handled
+        | EditResult::SaveRequested
+        | EditResult::ApplyProfile
+        | EditResult::SetDefaultProfile => ScreenAction::None,
     }
 }
 
@@ -261,6 +287,11 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
             }
         }
         return EditResult::Handled;
+    }
+
+    // Profiles management list (opened with Select from Simple/Advanced).
+    if state.profiles_mode {
+        return apply_profiles_edit(state, ev);
     }
 
     let total = total_bars(state);
@@ -314,6 +345,125 @@ pub fn begin_save(state: &mut State) {
         return;
     }
     state.saving = Some(SaveDraft::default());
+}
+
+/// Replace the cursor pad's saved-config list (pushed by the app each frame).
+pub fn set_profiles(state: &mut State, profiles: Vec<ProfileListEntry>) {
+    state.profiles = profiles;
+    let count = state.profiles.len() + 1; // +1 for the "save new" row
+    if state.profiles_sel >= count {
+        state.profiles_sel = count - 1;
+    }
+}
+
+/// Open the "Profiles" management list over the current view. Same gating as
+/// `begin_save` (in-session SMX pad with a local profile).
+pub fn begin_profiles(state: &mut State) {
+    if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
+        return;
+    }
+    state.profiles_mode = true;
+    state.profiles_sel = 0;
+    state.delete_armed = false;
+}
+
+/// Clear any transient modal state (profiles list / save box). Called when the
+/// overlay is (re)opened so it always lands on the Simple view.
+pub fn reset_modes(state: &mut State) {
+    state.profiles_mode = false;
+    state.saving = None;
+    state.delete_armed = false;
+    state.profiles_sel = 0;
+}
+
+pub fn is_profiles_mode(state: &State) -> bool {
+    state.profiles_mode
+}
+
+/// The saved-config entry under the profiles-list cursor (`None` on the "save
+/// new" row at index 0).
+fn profile_at_cursor(state: &State) -> Option<&ProfileListEntry> {
+    if state.profiles_sel == 0 {
+        return None;
+    }
+    state.profiles.get(state.profiles_sel - 1)
+}
+
+/// Name of the saved config under the profiles-list cursor, for the app to act
+/// on (apply / set default / delete). `None` on the "save new" row.
+pub fn selected_profile_name(state: &State) -> Option<String> {
+    profile_at_cursor(state).map(|e| e.name.clone())
+}
+
+/// Open the rename box for the config under the profiles-list cursor, pre-filled
+/// with its current name. No-op on the "save new" row.
+pub fn begin_rename(state: &mut State) {
+    if state.saving.is_some() {
+        return;
+    }
+    let Some(entry) = profile_at_cursor(state) else {
+        return;
+    };
+    state.saving = Some(SaveDraft {
+        name: entry.name.clone(),
+        set_default: entry.is_default,
+        rename_of: Some(entry.name.clone()),
+    });
+}
+
+/// Handle a Delete press in the profiles list: the first arms a confirm, the
+/// second (returns `true`) tells the caller to actually delete the cursor config.
+pub fn delete_key(state: &mut State) -> bool {
+    if !state.profiles_mode || profile_at_cursor(state).is_none() {
+        return false;
+    }
+    if state.delete_armed {
+        state.delete_armed = false;
+        true
+    } else {
+        state.delete_armed = true;
+        false
+    }
+}
+
+/// Edit handling while the Profiles management list is open. Navigation + apply
+/// (Start) + set-default (Select); rename / delete arrive via raw keys. Back
+/// disarms a pending delete, else closes the list.
+fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
+    let count = state.profiles.len() + 1; // row 0 = "save current as new"
+    if is_back(ev.action) {
+        if state.delete_armed {
+            state.delete_armed = false;
+        } else {
+            state.profiles_mode = false;
+        }
+        return EditResult::Handled;
+    }
+    match ui_action(ev.action) {
+        Some(UiAction::Raise | UiAction::PrevBar) => {
+            state.profiles_sel = (state.profiles_sel + count - 1) % count;
+            state.delete_armed = false;
+        }
+        Some(UiAction::Lower | UiAction::NextBar) => {
+            state.profiles_sel = (state.profiles_sel + 1) % count;
+            state.delete_armed = false;
+        }
+        None => {}
+    }
+    if state.profiles_sel == 0 {
+        // "Save current as new" — Start or Select opens the name box.
+        if is_start(ev.action) || is_select(ev.action) {
+            state.saving = Some(SaveDraft::default());
+        }
+        return EditResult::Handled;
+    }
+    if is_start(ev.action) {
+        return EditResult::ApplyProfile;
+    }
+    if is_select(ev.action) {
+        return EditResult::SetDefaultProfile;
+    }
+    EditResult::Handled
 }
 
 pub fn is_saving(state: &State) -> bool {
@@ -436,7 +586,9 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
         return actors;
     }
 
-    if let Some(pad_idx) = advanced_pad {
+    if state.profiles_mode {
+        build_profiles(&mut actors, state, &theme, zb);
+    } else if let Some(pad_idx) = advanced_pad {
         build_advanced(&mut actors, state, pad_idx, &theme, zb);
     } else {
         build_simple(&mut actors, state, &theme, as_overlay, zb);
@@ -445,6 +597,68 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
         push_save_box(&mut actors, state, draft, zb);
     }
     actors
+}
+
+/// The "Profiles" management list: the cursor pad's saved configs with Apply /
+/// Set default / Rename / Delete actions.
+fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32) {
+    let cx = screen_center_x();
+    let pad_name = selected_device(state)
+        .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
+        .map_or("", |p| p.device_name.as_str());
+    actors.push(act!(text:
+        font("miso"): settext(format!("PROFILES  -  {pad_name}")): align(0.5, 0.0):
+        xy(cx, 84.0): zoom(0.95): horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95): z(20.0 + zb)
+    ));
+
+    let row_h = 34.0;
+    let rows = state.profiles.len() + 1;
+    let top = screen_center_y() - rows as f32 * row_h * 0.5 - 8.0;
+    for row in 0..rows {
+        let y = top + row as f32 * row_h;
+        let selected = state.profiles_sel == row;
+        if selected {
+            push_quad(actors, cx, y, 540.0, row_h - 6.0, with_alpha(theme.frame, 0.30), 9.0 + zb);
+        }
+        let (label, color) = if row == 0 {
+            ("+ Save current pad as new\u{2026}".to_owned(), ON_TEXT)
+        } else {
+            let e = &state.profiles[row - 1];
+            let label = if e.is_default {
+                format!("{}   (default)", e.name)
+            } else {
+                e.name.clone()
+            };
+            let color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.9] };
+            (label, color)
+        };
+        actors.push(act!(text:
+            font("miso"): settext(label): align(0.5, 0.5):
+            xy(cx, y): zoom(0.85): horizalign(center):
+            diffuse(color[0], color[1], color[2], color[3]): z(12.0 + zb)
+        ));
+    }
+
+    // Footer hints (vary with the cursor row + delete-arm state).
+    let bottom = screen_height();
+    let line = |actors: &mut Vec<Actor>, text: String, y: f32, color: [f32; 4]| {
+        actors.push(act!(text:
+            font("miso"): settext(text): align(0.5, 0.5):
+            xy(cx, y): zoom(0.7): horizalign(center):
+            diffuse(color[0], color[1], color[2], color[3]): z(20.0 + zb)
+        ));
+    };
+    line(actors, "Up/Down - Select".to_owned(), bottom - 94.0, [1.0, 1.0, 1.0, 0.85]);
+    if state.profiles_sel == 0 {
+        line(actors, "Press &START; to name and save the current tuning".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
+    } else if state.delete_armed {
+        line(actors, "Press DELETE again to confirm, &BACK; to cancel".to_owned(), bottom - 70.0, CAUTION_TEXT);
+    } else {
+        line(actors, "&START; Apply    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
+        line(actors, "R - Rename    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
+    }
+    line(actors, "Press &BACK; to return".to_owned(), bottom - 22.0, [1.0, 1.0, 1.0, 0.85]);
 }
 
 /// Modal name-entry box drawn over the Simple view while saving a pad profile.
@@ -458,8 +672,13 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
     let pad_name = selected_device(state)
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
         .map_or("", |p| p.device_name.as_str());
+    let title = if draft.rename_of.is_some() {
+        "Rename profile".to_owned()
+    } else {
+        format!("Save {pad_name} as profile")
+    };
     actors.push(act!(text:
-        font("miso"): settext(format!("Save {pad_name} as profile")): align(0.5, 0.5):
+        font("miso"): settext(title): align(0.5, 0.5):
         xy(cx, cy - 64.0): zoom(0.85): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.95): z(z + 1.0)
     ));
@@ -1259,8 +1478,8 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             // Combine Advanced + Save on one line; Save only when the cursor pad
             // has a profile to save to (in-session, local profile).
             let action_line = match (advanced_available, save_available) {
-                (true, true) => Some("&START; Advanced    &SELECT; Save profile".to_owned()),
-                (false, true) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
+                (true, true) => Some("&START; Advanced    &SELECT; Profiles".to_owned()),
+                (false, true) => Some("Press &SELECT; for pad profiles".to_owned()),
                 (true, false) => Some("Press &START; for Advanced (per-sensor)".to_owned()),
                 (false, false) => None,
             };
@@ -1280,9 +1499,9 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         } => {
             line(actors, "Left/Right - Select   Up/Down - Adjust (Shift = fine)".to_owned(), bottom - 70.0);
             let action_line = match (supports_toggle, save_available) {
-                (true, true) => Some("&START; toggle sensor    &SELECT; save profile".to_owned()),
+                (true, true) => Some("&START; toggle sensor    &SELECT; Profiles".to_owned()),
                 (true, false) => Some("Press &START; to toggle the selected sensor on/off".to_owned()),
-                (false, true) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
+                (false, true) => Some("Press &SELECT; for pad profiles".to_owned()),
                 (false, false) => None,
             };
             if let Some(action_line) = action_line {

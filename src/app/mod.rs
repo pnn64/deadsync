@@ -3958,21 +3958,39 @@ impl App {
             }
             pad_config::set_pads(target, pads);
 
-            // Saving is only offered in-session, for a cursor pad that is an SMX
-            // pad mapped to a joined local profile (the Options screen never saves).
-            let save_available = on_overlay
-                && pad_config::selected_device(target).is_some_and(|dev| {
-                    dev.backend == input::fsr::BackendKind::Smx && {
-                        let info = crate::engine::smx::get_info(dev.index);
-                        let side = if info.is_player2 {
-                            profile_data::PlayerSide::P2
-                        } else {
-                            profile_data::PlayerSide::P1
-                        };
-                        profile::active_local_profile_id_for_side(side).is_some()
+            // Saving / profile management is only offered in-session, for a cursor
+            // pad that is an SMX pad mapped to a joined local profile (the Options
+            // screen never has a profile). Resolve it once and reuse for both the
+            // save gate and the management list.
+            let cursor_profile = if on_overlay {
+                pad_config::selected_device(target).and_then(|dev| {
+                    if dev.backend != input::fsr::BackendKind::Smx {
+                        return None;
                     }
-                });
-            pad_config::set_save_available(target, save_available);
+                    let info = crate::engine::smx::get_info(dev.index);
+                    let side = if info.is_player2 {
+                        profile_data::PlayerSide::P2
+                    } else {
+                        profile_data::PlayerSide::P1
+                    };
+                    profile::active_local_profile_id_for_side(side)
+                })
+            } else {
+                None
+            };
+            pad_config::set_save_available(target, cursor_profile.is_some());
+            let profiles = cursor_profile
+                .map(|pid| {
+                    crate::game::pad_profiles::load(&pid)
+                        .into_iter()
+                        .map(|c| pad_config::ProfileListEntry {
+                            name: c.name,
+                            is_default: c.is_default,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            pad_config::set_profiles(target, profiles);
         } else if self.fsr_pads_active {
             self.fsr_monitor.set_active(false);
             self.fsr_pads_active = false;

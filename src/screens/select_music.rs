@@ -4513,6 +4513,7 @@ fn show_pad_config_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
     state.pad_config_overlay_visible = true;
     state.pad_config_overlay.active_color_index = state.active_color_index;
+    pad_config::reset_modes(&mut state.pad_config_overlay);
 
     // Show only the pads for the active player sides (mirrors Test Input).
     let (mut p1, mut p2) = match profile::get_session_play_style() {
@@ -8251,13 +8252,15 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
             }
         }
         pad_config::EditResult::SaveRequested => perform_pad_profile_save(state),
+        pad_config::EditResult::ApplyProfile => perform_pad_profile_apply(state),
+        pad_config::EditResult::SetDefaultProfile => perform_pad_profile_set_default(state),
         pad_config::EditResult::Handled => {
-            // Select opens the save name box. begin_save self-gates on
-            // `save_available` (set by the app: in-session + local profile).
+            // Select opens the Profiles management list. begin_profiles self-gates
+            // on `save_available` (set by the app: in-session + local profile).
             if ev.pressed
                 && matches!(ev.action, VirtualAction::p1_select | VirtualAction::p2_select)
             {
-                pad_config::begin_save(&mut state.pad_config_overlay);
+                pad_config::begin_profiles(&mut state.pad_config_overlay);
             }
         }
     }
@@ -8304,7 +8307,8 @@ fn perform_pad_profile_save(state: &mut State) {
     let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
         return;
     };
-    if draft.name.trim().is_empty() {
+    let name = draft.name.trim().to_owned();
+    if name.is_empty() {
         return;
     }
     let Some(device) = pad_config::selected_device(&state.pad_config_overlay) else {
@@ -8323,17 +8327,75 @@ fn perform_pad_profile_save(state: &mut State) {
     let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
         return; // Guest: no profile to save to.
     };
+    // Rename: just relabel the existing config (and honor the default toggle).
+    if let Some(old) = draft.rename_of {
+        crate::game::pad_profiles::rename(&profile_id, &old, &name);
+        if draft.set_default {
+            crate::game::pad_profiles::set_default(&profile_id, &name);
+        }
+        audio::play_sfx("assets/sounds/start.ogg");
+        return;
+    }
+    // Save new: capture the pad's live tuning under the given name.
     let Some(data) = crate::engine::smx::capture_config(slot) else {
         return;
     };
     crate::game::pad_profiles::upsert(
         &profile_id,
-        &draft.name,
+        &name,
         Some(info.serial),
         draft.set_default,
         data.to_hex(),
     );
     audio::play_sfx("assets/sounds/start.ogg");
+}
+
+/// Resolve the profiles-list cursor to `(profile_id, config_name, smx_slot)` for
+/// the management actions. `None` unless the cursor pad is an in-session SMX pad
+/// with a local profile and the cursor is on a saved config (not "save new").
+fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> {
+    let device = pad_config::selected_device(&state.pad_config_overlay)?;
+    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+        return None;
+    }
+    let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
+    let info = crate::engine::smx::get_info(device.index);
+    let side = if info.is_player2 {
+        profile_data::PlayerSide::P2
+    } else {
+        profile_data::PlayerSide::P1
+    };
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    Some((profile_id, name, device.index))
+}
+
+fn perform_pad_profile_apply(state: &mut State) {
+    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+        return;
+    };
+    let configs = crate::game::pad_profiles::load(&profile_id);
+    let Some(c) = configs.iter().find(|c| c.name == name) else {
+        return;
+    };
+    if let Some(data) = crate::engine::smx::PadConfigData::from_hex(&c.data_hex)
+        && crate::engine::smx::apply_config_data(slot, &data)
+    {
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
+}
+
+fn perform_pad_profile_set_default(state: &mut State) {
+    if let Some((profile_id, name, _)) = pad_overlay_profile_target(state) {
+        crate::game::pad_profiles::set_default(&profile_id, &name);
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
+}
+
+fn perform_pad_profile_delete(state: &mut State) {
+    if let Some((profile_id, name, _)) = pad_overlay_profile_target(state) {
+        crate::game::pad_profiles::delete(&profile_id, &name);
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -9141,6 +9203,29 @@ pub fn handle_raw_key_event(
             // Consume so this key isn't ALSO mapped to a virtual action and
             // re-processed (which would leak Enter/Back through to the pad UI).
             return ScreenAction::ConsumeInput;
+        }
+        // Profiles management list: navigation / apply / set-default come through
+        // virtual actions (handled in apply_edit); rename and delete are
+        // keyboard-only (no spare gamepad buttons) and handled here.
+        if pad_config::is_profiles_mode(&state.pad_config_overlay) {
+            if let Some(k) = key
+                && k.pressed
+            {
+                match k.code {
+                    KeyCode::KeyR => {
+                        pad_config::begin_rename(&mut state.pad_config_overlay);
+                        return ScreenAction::ConsumeInput;
+                    }
+                    KeyCode::Delete => {
+                        if pad_config::delete_key(&mut state.pad_config_overlay) {
+                            perform_pad_profile_delete(state);
+                        }
+                        return ScreenAction::ConsumeInput;
+                    }
+                    _ => {}
+                }
+            }
+            return ScreenAction::None;
         }
         return ScreenAction::None;
     }
