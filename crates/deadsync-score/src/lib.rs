@@ -1499,6 +1499,17 @@ pub fn replaces_stale_quint(
 }
 
 #[inline(always)]
+pub fn should_replace_cached_gs_score(
+    score: &CachedScore,
+    existing: &CachedScore,
+    proves_nonquint_ex: bool,
+) -> bool {
+    replaces_stale_quint(score, existing, proves_nonquint_ex)
+        || failed_score_override(score, existing) == Some(*score)
+        || is_better_itg(score, existing)
+}
+
+#[inline(always)]
 const fn non_quint_grade(grade: Grade) -> Grade {
     match grade {
         Grade::Quint => Grade::Tier01,
@@ -1939,6 +1950,105 @@ impl ScoreImportEndpoint {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportedPlayerScore {
+    pub score_10000: f64,
+    pub comments: Option<String>,
+    pub is_fail: bool,
+    pub ex_evidence: GsExEvidence,
+}
+
+impl ImportedPlayerScore {
+    #[inline(always)]
+    pub fn needs_chart_stats(&self) -> bool {
+        let score_percent = self.score_10000 / 10000.0;
+        (score_percent - 1.0).abs() > 1e-9 && self.comments.is_some()
+    }
+}
+
+pub fn merge_local_fail(
+    mut imported: ImportedPlayerScore,
+    local_score: Option<CachedScore>,
+) -> ImportedPlayerScore {
+    if local_score.is_some_and(|score| {
+        score.grade == Grade::Failed
+            && same_score_10000(cached_score_10000(&score), imported.score_10000)
+    }) {
+        imported.is_fail = true;
+    }
+    imported
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PlayerScoreImportResult {
+    pub score: Option<ImportedPlayerScore>,
+    pub score_proves_nonquint_ex: bool,
+    pub itl_self_score: Option<u32>,
+    pub itl_self_rank: Option<u32>,
+    pub itl_self_found: bool,
+}
+
+impl PlayerScoreImportResult {
+    #[inline(always)]
+    pub const fn empty() -> Self {
+        Self {
+            score: None,
+            score_proves_nonquint_ex: false,
+            itl_self_score: None,
+            itl_self_rank: None,
+            itl_self_found: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CachedScoreImportResult {
+    pub score: Option<CachedScore>,
+    pub score_proves_nonquint_ex: bool,
+    pub itl_self_score: Option<u32>,
+    pub itl_self_rank: Option<u32>,
+    pub itl_self_found: bool,
+}
+
+pub fn cached_score_from_imported_player_score(
+    score: ImportedPlayerScore,
+    stats: Option<GsLampChartStats>,
+) -> CachedScore {
+    let ImportedPlayerScore {
+        score_10000,
+        comments,
+        is_fail,
+        ex_evidence,
+    } = score;
+    let stats = if (score_10000 / 10000.0 - 1.0).abs() > 1e-9 && comments.is_some() {
+        stats
+    } else {
+        None
+    };
+    cached_gs_score_from_chart_stats(
+        score_10000,
+        is_fail,
+        comments.as_deref(),
+        ex_evidence,
+        stats,
+    )
+}
+
+pub fn cached_score_import_result_from_imported(
+    imported: PlayerScoreImportResult,
+    stats: Option<GsLampChartStats>,
+) -> CachedScoreImportResult {
+    CachedScoreImportResult {
+        score: imported
+            .score
+            .map(|score| cached_score_from_imported_player_score(score, stats)),
+        score_proves_nonquint_ex: imported.score_proves_nonquint_ex,
+        itl_self_score: imported.itl_self_score,
+        itl_self_rank: imported.itl_self_rank,
+        itl_self_found: imported.itl_self_found,
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ScoreBulkImportSummary {
     pub requested_charts: usize,
@@ -2313,6 +2423,64 @@ mod tests {
 
         assert_eq!(failed_score_override(&failed, &passed), Some(failed));
         assert_eq!(failed_score_override(&passed, &failed), Some(failed));
+    }
+
+    #[test]
+    fn cached_gs_replacement_policy_allows_score_corrections() {
+        let stale_quint = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        let corrected_quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: None,
+        };
+        assert!(should_replace_cached_gs_score(
+            &corrected_quad,
+            &stale_quint,
+            true
+        ));
+        assert!(!should_replace_cached_gs_score(
+            &corrected_quad,
+            &stale_quint,
+            false
+        ));
+
+        let passed = CachedScore {
+            grade: Grade::Tier17,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        let failed = CachedScore {
+            grade: Grade::Failed,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        assert!(should_replace_cached_gs_score(&failed, &passed, false));
+
+        let better_existing = CachedScore {
+            grade: Grade::Tier10,
+            score_percent: 0.91,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        let worse = CachedScore {
+            grade: Grade::Tier12,
+            score_percent: 0.75,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        assert!(!should_replace_cached_gs_score(
+            &worse,
+            &better_existing,
+            false
+        ));
     }
 
     #[test]
@@ -3396,8 +3564,64 @@ mod tests {
             stats,
         );
         assert_eq!(failed.grade, Grade::Failed);
+        assert_eq!(failed.score_percent, 0.992);
         assert_eq!(failed.lamp_index, None);
         assert_eq!(failed.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn imported_gs_scores_use_ex_evidence_and_comments() {
+        let score = cached_score_from_imported_player_score(
+            ImportedPlayerScore {
+                score_10000: 10_000.0,
+                comments: Some("[DS], FA+, 100.00EX".to_string()),
+                is_fail: false,
+                ex_evidence: GsExEvidence::from_sources(None, Some("[DS], FA+, 100.00EX")),
+            },
+            None,
+        );
+        assert_eq!(score.grade, Grade::Quint);
+        assert_eq!(score.lamp_index, Some(0));
+
+        let score = cached_score_from_imported_player_score(
+            ImportedPlayerScore {
+                score_10000: 10_000.0,
+                comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
+                is_fail: false,
+                ex_evidence: GsExEvidence::from_sources(
+                    Some(9_978.0),
+                    Some("[DS], FA+, 100.00EX, C875"),
+                ),
+            },
+            None,
+        );
+        assert_eq!(score.grade, Grade::Tier01);
+        assert_eq!(score.lamp_index, Some(1));
+
+        let score = cached_score_from_imported_player_score(
+            ImportedPlayerScore {
+                score_10000: 10_000.0,
+                comments: Some("[DS], FA+, 99.71EX, 3w".to_string()),
+                is_fail: false,
+                ex_evidence: GsExEvidence::from_sources(None, Some("[DS], FA+, 99.71EX, 3w")),
+            },
+            None,
+        );
+        assert_eq!(score.grade, Grade::Tier01);
+        assert_eq!(score.lamp_index, Some(1));
+        assert_eq!(score.lamp_judge_count, Some(3));
+
+        let score = cached_score_from_imported_player_score(
+            ImportedPlayerScore {
+                score_10000: 10_000.0,
+                comments: Some("[DS], FA+".to_string()),
+                is_fail: false,
+                ex_evidence: GsExEvidence::default(),
+            },
+            None,
+        );
+        assert_eq!(score.grade, Grade::Tier01);
+        assert_eq!(score.lamp_index, Some(1));
     }
 
     #[test]
@@ -3407,6 +3631,35 @@ mod tests {
         assert_eq!(failed.lamp_index, None);
         assert_eq!(failed.lamp_judge_count, None);
         assert_eq!(cached_missing_gs_score(), cached_failed_gs_score(0.0));
+    }
+
+    #[test]
+    fn merge_local_fail_marks_matching_imported_score() {
+        let imported = ImportedPlayerScore {
+            score_10000: 1_358.0,
+            comments: None,
+            is_fail: false,
+            ex_evidence: GsExEvidence::default(),
+        };
+        let matching_fail = CachedScore {
+            grade: Grade::Failed,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        assert!(merge_local_fail(imported.clone(), Some(matching_fail)).is_fail);
+
+        let passed = CachedScore {
+            grade: Grade::Tier17,
+            ..matching_fail
+        };
+        assert!(!merge_local_fail(imported.clone(), Some(passed)).is_fail);
+
+        let different_fail = CachedScore {
+            score_percent: 0.2,
+            ..matching_fail
+        };
+        assert!(!merge_local_fail(imported, Some(different_fail)).is_fail);
     }
 
     #[test]
@@ -3454,6 +3707,101 @@ mod tests {
         assert!(ScoreImportEndpoint::GrooveStats.requires_username());
         assert!(ScoreImportEndpoint::BoogieStats.requires_username());
         assert!(!ScoreImportEndpoint::ArrowCloud.requires_username());
+    }
+
+    #[test]
+    fn imported_player_score_tracks_chart_stats_need() {
+        let mut score = ImportedPlayerScore {
+            score_10000: 9876.0,
+            comments: Some("[DS], 2e".to_string()),
+            is_fail: false,
+            ex_evidence: GsExEvidence::default(),
+        };
+        assert!(score.needs_chart_stats());
+
+        score.score_10000 = 10_000.0;
+        assert!(!score.needs_chart_stats());
+
+        score.score_10000 = 9876.0;
+        score.comments = None;
+        assert!(!score.needs_chart_stats());
+    }
+
+    #[test]
+    fn cached_score_import_result_includes_itl_self_data() {
+        let result = cached_score_import_result_from_imported(
+            PlayerScoreImportResult {
+                score: Some(ImportedPlayerScore {
+                    score_10000: 9876.0,
+                    comments: Some("[DS], 2e".to_string()),
+                    is_fail: false,
+                    ex_evidence: GsExEvidence::from_sources(None, Some("[DS], 2e")),
+                }),
+                score_proves_nonquint_ex: false,
+                itl_self_score: Some(9912),
+                itl_self_rank: Some(42),
+                itl_self_found: true,
+            },
+            None,
+        );
+
+        assert!(result.score.is_some());
+        assert!(result.itl_self_found);
+        assert_eq!(result.itl_self_score, Some(9912));
+        assert_eq!(result.itl_self_rank, Some(42));
+    }
+
+    #[test]
+    fn cached_score_import_result_uses_ex_leaderboard_for_quint() {
+        let result = cached_score_import_result_from_imported(
+            PlayerScoreImportResult {
+                score: Some(ImportedPlayerScore {
+                    score_10000: 10_000.0,
+                    comments: Some("[DS], FA+, 99.78EX".to_string()),
+                    is_fail: false,
+                    ex_evidence: GsExEvidence::from_sources(
+                        Some(10_000.0),
+                        Some("[DS], FA+, 99.78EX"),
+                    ),
+                }),
+                score_proves_nonquint_ex: false,
+                itl_self_score: None,
+                itl_self_rank: None,
+                itl_self_found: false,
+            },
+            None,
+        );
+
+        let score = result.score.expect("score cached");
+        assert_eq!(score.grade, Grade::Quint);
+        assert_eq!(score.lamp_index, Some(0));
+    }
+
+    #[test]
+    fn cached_score_import_result_rejects_lower_ex_quint_comment() {
+        let result = cached_score_import_result_from_imported(
+            PlayerScoreImportResult {
+                score: Some(ImportedPlayerScore {
+                    score_10000: 10_000.0,
+                    comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
+                    is_fail: false,
+                    ex_evidence: GsExEvidence::from_sources(
+                        Some(9_978.0),
+                        Some("[DS], FA+, 100.00EX, C875"),
+                    ),
+                }),
+                score_proves_nonquint_ex: true,
+                itl_self_score: None,
+                itl_self_rank: None,
+                itl_self_found: false,
+            },
+            None,
+        );
+
+        let score = result.score.expect("score cached");
+        assert_eq!(score.grade, Grade::Tier01);
+        assert_eq!(score.lamp_index, Some(1));
+        assert!(result.score_proves_nonquint_ex);
     }
 
     #[test]

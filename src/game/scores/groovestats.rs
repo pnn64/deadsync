@@ -1,6 +1,6 @@
 use super::{
-    cache_gs_score_for_profile, cached_score_from_gs, gameplay_run_failed, gameplay_run_passed,
-    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    cache_gs_score_for_profile, chart_stats_for_imported_score, gameplay_run_failed,
+    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
     invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
     submit_side_ix,
 };
@@ -9,19 +9,19 @@ use crate::game::online;
 use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
-    self as groovestats_api, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_SUBMIT_MAX_ENTRIES,
-    GrooveStatsJudgmentCounts, GrooveStatsRescoreCounts, GrooveStatsSubmitApiResponse,
-    GrooveStatsSubmitPlayerPayload, GrooveStatsSubmitRequestError,
+    self as groovestats_api, GROOVESTATS_SUBMIT_MAX_ENTRIES, GrooveStatsJudgmentCounts,
+    GrooveStatsRescoreCounts, GrooveStatsSubmitApiResponse, GrooveStatsSubmitPlayerPayload,
+    GrooveStatsSubmitRequestError,
 };
 use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
-use deadsync_profile::{RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{
     GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
     GS_INVALID_REMOVE_MASK, GrooveStatsEvalState, GrooveStatsSubmitRecordBanner,
     GrooveStatsSubmitUiStatus, ItlEventProgress, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS,
-    duration_to_ceil_secs, groovestats_reason_lines, submit_retry_delay_secs,
+    cached_score_from_imported_player_score, duration_to_ceil_secs, groovestats_reason_lines,
+    submit_retry_delay_secs,
 };
 use log::{debug, warn};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -485,11 +485,6 @@ fn groovestats_submit_invalid_reason(
 }
 
 #[inline(always)]
-const fn groovestats_submit_bad_window_count(disabled: bool, count: u32) -> Option<u32> {
-    if disabled { None } else { Some(count) }
-}
-
-#[inline(always)]
 pub(super) fn groovestats_judgment_counts(
     gs: &gameplay::State,
     player_idx: usize,
@@ -499,45 +494,16 @@ pub(super) fn groovestats_judgment_counts(
     let disabled_windows = gs.player_profiles[player_idx]
         .timing_windows
         .disabled_windows();
-    GrooveStatsJudgmentCounts {
-        fantastic_plus: windows.w0,
-        fantastic: windows.w1,
-        excellent: windows.w2,
-        great: windows.w3,
-        decent: groovestats_submit_bad_window_count(disabled_windows[3], windows.w4),
-        way_off: groovestats_submit_bad_window_count(disabled_windows[4], windows.w5),
-        miss: windows.miss,
-        total_steps: gs.total_steps[player_idx],
-        holds_held: player.holds_held,
-        total_holds: gs.holds_total[player_idx],
-        mines_hit: player.mines_hit,
-        total_mines: gs.mines_total[player_idx],
-        rolls_held: player.rolls_held,
-        total_rolls: gs.rolls_total[player_idx],
-    }
-}
-
-#[inline(always)]
-fn groovestats_rescore_add_target(counts: &mut GrooveStatsRescoreCounts, j: &judgment::Judgment) {
-    if matches!(j.window, Some(judgment::TimingWindow::W0)) {
-        counts.fantastic_plus = counts.fantastic_plus.saturating_add(1);
-        return;
-    }
-    match j.grade {
-        judgment::JudgeGrade::Fantastic => counts.fantastic = counts.fantastic.saturating_add(1),
-        judgment::JudgeGrade::Excellent => counts.excellent = counts.excellent.saturating_add(1),
-        judgment::JudgeGrade::Great => counts.great = counts.great.saturating_add(1),
-        judgment::JudgeGrade::Decent => counts.decent = counts.decent.saturating_add(1),
-        judgment::JudgeGrade::WayOff => counts.way_off = counts.way_off.saturating_add(1),
-        judgment::JudgeGrade::Miss => {}
-    }
-}
-
-#[inline(always)]
-fn groovestats_final_result_counts_as_rescore_target(j: &judgment::Judgment) -> bool {
-    !matches!(
-        j.grade,
-        judgment::JudgeGrade::Decent | judgment::JudgeGrade::WayOff | judgment::JudgeGrade::Miss
+    groovestats_api::judgment_counts_from_stats(
+        windows,
+        disabled_windows,
+        gs.total_steps[player_idx],
+        player.holds_held,
+        gs.holds_total[player_idx],
+        player.mines_hit,
+        gs.mines_total[player_idx],
+        player.rolls_held,
+        gs.rolls_total[player_idx],
     )
 }
 
@@ -562,10 +528,10 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
         let Some(early_result) = note.early_result.as_ref() else {
             continue;
         };
-        if groovestats_final_result_counts_as_rescore_target(final_result) {
-            groovestats_rescore_add_target(&mut counts, final_result);
+        if groovestats_api::final_result_counts_as_rescore_target(final_result) {
+            groovestats_api::add_rescore_target(&mut counts, final_result);
         }
-        groovestats_rescore_add_target(&mut counts, early_result);
+        groovestats_api::add_rescore_target(&mut counts, early_result);
     }
     counts
 }
@@ -573,11 +539,9 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
 fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String {
     let profile = &gs.player_profiles[player_idx];
     let counts = groovestats_judgment_counts(gs, player_idx);
-    let mut parts: Vec<String> = Vec::with_capacity(11);
-
-    if profile.show_fa_plus_window {
+    let fa_plus_ex_score = if profile.show_fa_plus_window {
         let (start, end) = gs.note_ranges[player_idx];
-        let ex = judgment::calculate_ex_score_from_notes(
+        Some(judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
             &gs.note_time_cache_ns[start..end],
             &gs.hold_end_time_cache_ns[start..end],
@@ -589,136 +553,17 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
                 .fail_time
                 .map(gameplay::song_time_ns_from_seconds),
             false,
-        );
-        parts.push("FA+".to_string());
-        parts.push(format!("{ex:.2}EX"));
-    }
-
-    let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
-        gs.music_rate
+        ))
     } else {
-        1.0
+        None
     };
-    if (rate - 1.0).abs() > 0.0001 {
-        parts.push(format!("{}x Rate", groovestats_api::compact_f32_text(rate)));
-    }
-
-    for (count, suffix) in [
-        (counts.fantastic, "w"),
-        (counts.excellent, "e"),
-        (counts.great, "g"),
-        (counts.decent_count(), "d"),
-        (counts.way_off_count(), "wo"),
-        (counts.miss, "m"),
-    ] {
-        if count != 0 {
-            parts.push(format!("{count}{suffix}"));
-        }
-    }
-
-    if let Some(timing_windows) = groovestats_timing_windows_comment(profile.timing_windows) {
-        parts.push(timing_windows.to_string());
-    }
-
-    if let ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
-        parts.push(format!("C{}", groovestats_api::compact_f32_text(value)));
-    }
-
-    if parts.is_empty() {
-        GROOVESTATS_COMMENT_PREFIX.to_string()
-    } else {
-        format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
-    }
-}
-
-#[inline(always)]
-fn groovestats_timing_windows_comment(setting: TimingWindowsOption) -> Option<&'static str> {
-    match setting {
-        TimingWindowsOption::None => None,
-        TimingWindowsOption::WayOffs => Some("No WO"),
-        TimingWindowsOption::DecentsAndWayOffs => Some("No Dec/WO"),
-        TimingWindowsOption::FantasticsAndExcellents => Some("No Fan/Exc"),
-    }
-}
-
-fn groovestats_player_options_json(profile: &Profile) -> String {
-    let (speed_mod_type, speed_mod) = match profile.scroll_speed {
-        ScrollSpeedSetting::XMod(value) => (1, value),
-        ScrollSpeedSetting::CMod(value) => (2, value),
-        ScrollSpeedSetting::MMod(value) => (3, value),
-    };
-    let mut options = JsonMap::with_capacity(18);
-    options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
-    options.insert(
-        "SpeedMod".to_string(),
-        JsonValue::from(f64::from(speed_mod)),
-    );
-    options.insert(
-        "BackgroundFilter".to_string(),
-        JsonValue::from(profile.background_filter.percent()),
-    );
-    options.insert(
-        "HideTargets".to_string(),
-        JsonValue::from(profile.hide_targets),
-    );
-    options.insert(
-        "HideSongBG".to_string(),
-        JsonValue::from(profile.hide_song_bg),
-    );
-    options.insert("HideCombo".to_string(), JsonValue::from(profile.hide_combo));
-    options.insert(
-        "HideLifebar".to_string(),
-        JsonValue::from(profile.hide_lifebar),
-    );
-    options.insert("HideScore".to_string(), JsonValue::from(profile.hide_score));
-    options.insert(
-        "HideDanger".to_string(),
-        JsonValue::from(profile.hide_danger),
-    );
-    options.insert(
-        "HideComboExplosions".to_string(),
-        JsonValue::from(profile.hide_combo_explosions),
-    );
-    options.insert(
-        "ColumnFlashOnMiss".to_string(),
-        JsonValue::from(profile.column_flash_on_miss),
-    );
-    options.insert(
-        "SubtractiveScoring".to_string(),
-        JsonValue::from(profile.subtractive_scoring),
-    );
-    options.insert("Mini".to_string(), JsonValue::from(profile.mini_percent));
-    options.insert(
-        "VisualDelay".to_string(),
-        JsonValue::from(profile.visual_delay_ms),
-    );
-    options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
-    options.insert(
-        "NoMines".to_string(),
-        JsonValue::from(profile.remove_active_mask.contains(RemoveMask::NO_MINES)),
-    );
-    options.insert(
-        "Reverse".to_string(),
-        JsonValue::from(
-            profile
-                .scroll_option
-                .contains(profile_data::ScrollOption::Reverse),
-        ),
-    );
-    options.insert(
-        "ShowFaPlusWindow".to_string(),
-        JsonValue::from(profile.show_fa_plus_window),
-    );
-    options.insert(
-        "ShowExScore".to_string(),
-        JsonValue::from(profile.show_ex_score),
-    );
-    options.insert(
-        "ShowFaPlusPane".to_string(),
-        JsonValue::from(profile.show_fa_plus_pane),
-    );
-    serde_json::to_string(&JsonValue::Object(options))
-        .expect("serialize GrooveStats playerOptions JSON")
+    groovestats_api::submit_comment(
+        &counts,
+        fa_plus_ex_score,
+        gs.music_rate,
+        profile.timing_windows,
+        profile.scroll_speed,
+    )
 }
 
 fn groovestats_payload_for_player(
@@ -751,7 +596,7 @@ fn groovestats_payload_for_player(
             ScrollSpeedSetting::CMod(_)
         ),
         comment: groovestats_comment_string(gs, player_idx),
-        player_options: groovestats_player_options_json(&gs.player_profiles[player_idx]),
+        player_options: groovestats_api::player_options_json(&gs.player_profiles[player_idx]),
     })
 }
 
@@ -865,24 +710,22 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     groovestats_record_submit_success(player.side, player.chart_hash.as_str());
                 }
                 if let Some(profile_id) = player.profile_id.as_deref() {
-                    let ex_evidence = groovestats_api::gs_ex_evidence_from_leaderboard(
-                        player_response.ex_leaderboard.as_slice(),
+                    let imported = groovestats_api::imported_player_score_from_submit_response(
+                        player_response,
                         player.username.as_str(),
-                        Some(player.comment.as_str()),
-                    );
-                    let score = cached_score_from_gs(
                         f64::from(player.score_10000),
-                        Some(player.comment.as_str()),
-                        player.chart_hash.as_str(),
-                        false,
-                        ex_evidence,
+                        player.comment.as_str(),
                     );
+                    let proves_nonquint_ex = imported.ex_evidence.proves_nonquint();
+                    let stats =
+                        chart_stats_for_imported_score(&imported, player.chart_hash.as_str());
+                    let score = cached_score_from_imported_player_score(imported, stats);
                     cache_gs_score_for_profile(
                         profile_id,
                         player.chart_hash.as_str(),
                         score,
                         player.username.as_str(),
-                        ex_evidence.proves_nonquint(),
+                        proves_nonquint_ex,
                     );
                 }
                 debug!(
@@ -1331,6 +1174,7 @@ pub fn tick_groovestats_auto_retries() -> bool {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_profile::{RemoveMask, TimingWindowsOption};
     use serde_json::json;
 
     fn sample_chart(chart_type: &str) -> ChartData {
@@ -1498,8 +1342,12 @@ mod tests {
             miss_because_held: false,
         };
 
-        assert!(!groovestats_final_result_counts_as_rescore_target(&way_off));
-        assert!(groovestats_final_result_counts_as_rescore_target(&great));
+        assert!(!groovestats_api::final_result_counts_as_rescore_target(
+            &way_off
+        ));
+        assert!(groovestats_api::final_result_counts_as_rescore_target(
+            &great
+        ));
     }
 
     #[test]
@@ -1670,19 +1518,19 @@ mod tests {
     #[test]
     fn groovestats_comment_marks_disabled_timing_windows() {
         assert_eq!(
-            groovestats_timing_windows_comment(TimingWindowsOption::None),
+            groovestats_api::timing_windows_comment(TimingWindowsOption::None),
             None
         );
         assert_eq!(
-            groovestats_timing_windows_comment(TimingWindowsOption::WayOffs),
+            groovestats_api::timing_windows_comment(TimingWindowsOption::WayOffs),
             Some("No WO")
         );
         assert_eq!(
-            groovestats_timing_windows_comment(TimingWindowsOption::DecentsAndWayOffs),
+            groovestats_api::timing_windows_comment(TimingWindowsOption::DecentsAndWayOffs),
             Some("No Dec/WO")
         );
         assert_eq!(
-            groovestats_timing_windows_comment(TimingWindowsOption::FantasticsAndExcellents),
+            groovestats_api::timing_windows_comment(TimingWindowsOption::FantasticsAndExcellents),
             Some("No Fan/Exc")
         );
     }
@@ -1701,7 +1549,7 @@ mod tests {
             .union(profile_data::ScrollOption::Reverse);
 
         let value: serde_json::Value =
-            serde_json::from_str(&groovestats_player_options_json(&profile)).unwrap();
+            serde_json::from_str(&groovestats_api::player_options_json(&profile)).unwrap();
         assert_eq!(value["SpeedModType"], json!(2));
         assert_eq!(value["SpeedMod"], json!(650.0));
         assert_eq!(value["Cover"], json!(true));

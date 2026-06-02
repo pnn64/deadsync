@@ -7,18 +7,15 @@ use crate::game::gameplay;
 use crate::game::profile;
 use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
 use deadsync_online::arrowcloud::{
-    self as arrowcloud_api, ArrowCloudJudgmentCounts, ArrowCloudLifePoint, ArrowCloudModifiers,
-    ArrowCloudNpsInfo, ArrowCloudNpsPoint, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSpeed,
-    ArrowCloudSubmitRequestError, ArrowCloudTimingDatum, ArrowCloudTimingOffset,
+    self as arrowcloud_api, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSubmitRequestError,
+    ArrowCloudTimingDatum,
 };
 use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_profile as profile_data;
-use deadsync_profile::Profile;
 use deadsync_rules::{
     judgment,
     note::{HoldResult, MineResult, Note},
-    scroll::ScrollSpeedSetting,
-    timing::{self, ScatterPoint},
+    timing,
 };
 use deadsync_score::{
     ArrowCloudSubmitUiStatus, SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs,
@@ -32,21 +29,6 @@ use std::time::{Duration, Instant};
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
-const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
-const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
-const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
-    "Drunk",
-    "Dizzy",
-    "Confusion",
-    "Big",
-    "Flip",
-    "Invert",
-    "Tornado",
-    "Tipsy",
-    "Bumpy",
-    "Beat",
-];
-const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
 
 #[derive(Debug, Clone)]
 struct ArrowCloudSubmitUiEntry {
@@ -243,152 +225,11 @@ struct ArrowCloudSubmitError {
 }
 
 #[inline(always)]
-fn arrowcloud_format_length(seconds: f32) -> String {
-    if !seconds.is_finite() || seconds <= 0.0 {
-        return "0:00".to_string();
-    }
-    let total = seconds.floor() as i64;
-    if total >= 3600 {
-        format!(
-            "{}:{:02}:{:02}",
-            total / 3600,
-            (total % 3600) / 60,
-            total % 60
-        )
-    } else {
-        format!("{}:{:02}", total / 60, total % 60)
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_mask_labels_u8(mask: u8, names: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    for (i, name) in names.iter().enumerate() {
-        if (mask & (1u8 << i)) != 0 {
-            out.push((*name).to_string());
-        }
-    }
-    out
-}
-
-#[inline(always)]
-fn arrowcloud_mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    for (i, name) in names.iter().enumerate() {
-        if (mask & (1u16 << i)) != 0 {
-            out.push((*name).to_string());
-        }
-    }
-    out
-}
-
-#[inline(always)]
-fn arrowcloud_turn_label(turn: profile_data::TurnOption) -> &'static str {
-    match turn {
-        profile_data::TurnOption::None => "None",
-        profile_data::TurnOption::Mirror => "Mirror",
-        profile_data::TurnOption::Left => "Left",
-        profile_data::TurnOption::Right => "Right",
-        profile_data::TurnOption::LRMirror => "LR-Mirror",
-        profile_data::TurnOption::UDMirror => "UD-Mirror",
-        profile_data::TurnOption::Shuffle
-        | profile_data::TurnOption::Blender
-        | profile_data::TurnOption::Random => "Shuffle",
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
-    if scroll.contains(profile_data::ScrollOption::Reverse) {
-        Some("Reverse".to_string())
-    } else if scroll.contains(profile_data::ScrollOption::Split) {
-        Some("Split".to_string())
-    } else if scroll.contains(profile_data::ScrollOption::Alternate) {
-        Some("Alternate".to_string())
-    } else if scroll.contains(profile_data::ScrollOption::Cross) {
-        Some("Cross".to_string())
-    } else if scroll.contains(profile_data::ScrollOption::Centered) {
-        Some("Centered".to_string())
-    } else {
-        None
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
-    match speed {
-        ScrollSpeedSetting::CMod(v) => ArrowCloudSpeed {
-            value: v as f64,
-            speed_type: "C",
-        },
-        ScrollSpeedSetting::MMod(v) => ArrowCloudSpeed {
-            value: v as f64,
-            speed_type: "M",
-        },
-        ScrollSpeedSetting::XMod(v) => ArrowCloudSpeed {
-            value: ((v as f64) * 100.0).round() / 100.0,
-            speed_type: "X",
-        },
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_modifiers(profile: &Profile) -> ArrowCloudModifiers {
-    ArrowCloudModifiers {
-        visual_delay: profile.visual_delay_ms,
-        acceleration: arrowcloud_mask_labels_u8(
-            profile.accel_effects_active_mask.bits(),
-            &ARROWCLOUD_ACCEL_NAMES,
-        ),
-        appearance: arrowcloud_mask_labels_u8(
-            profile.appearance_effects_active_mask.bits(),
-            &ARROWCLOUD_APPEARANCE_NAMES,
-        ),
-        effect: arrowcloud_mask_labels_u16(
-            profile.visual_effects_active_mask.bits(),
-            &ARROWCLOUD_EFFECT_NAMES,
-        ),
-        mini: profile.mini_percent.clamp(-100, 150),
-        turn: arrowcloud_turn_label(profile.turn_option).to_string(),
-        disabled_windows: "None".to_string(),
-        speed: arrowcloud_speed_payload(profile.scroll_speed),
-        perspective: profile.perspective.to_string(),
-        noteskin: profile.noteskin.as_str().to_string(),
-        scroll: arrowcloud_scroll_label(profile.scroll_option),
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_life_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
-    let Some(&(_, first_life)) = life_history.first() else {
-        return 0.0;
-    };
-    if life_history.len() == 1 {
-        return first_life.clamp(0.0, 1.0);
-    }
-
-    let later_ix = life_history.partition_point(|&(t, _)| t <= sample_time);
-    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
-    let (earlier_t, earlier_life) = life_history[earlier_ix];
-    if later_ix >= life_history.len() {
-        return earlier_life.clamp(0.0, 1.0);
-    }
-
-    let (later_t, later_life) = life_history[later_ix];
-    let dt = later_t - earlier_t;
-    if dt.abs() <= f32::EPSILON {
-        return earlier_life.clamp(0.0, 1.0);
-    }
-    let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
-    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
-}
-
-#[inline(always)]
-fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowCloudLifePoint> {
+fn arrowcloud_lifebar_points(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Vec<arrowcloud_api::ArrowCloudLifePoint> {
     let life_history = gs.players[player_idx].life_history.as_slice();
-    if life_history.is_empty() {
-        return Vec::new();
-    }
     let (start, end) = gs.note_ranges[player_idx];
     let note_times = &gs.note_time_cache_ns[start..end];
     let first_second = gs.density_graph_first_second.min(0.0);
@@ -399,46 +240,14 @@ fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<Arr
         .copied()
         .map(gameplay::song_time_ns_to_seconds)
         .unwrap_or(first_second);
-    let duration = (last_second - first_second).max(0.0);
-    let step = duration / ARROWCLOUD_LIFEBAR_POINTS as f32;
 
-    let mut out = Vec::with_capacity(ARROWCLOUD_LIFEBAR_POINTS);
-    for i in 0..ARROWCLOUD_LIFEBAR_POINTS {
-        let x = chart_start_second + (i as f32 * step);
-        out.push(ArrowCloudLifePoint {
-            x: x as f64,
-            y: arrowcloud_life_lerp_at(life_history, x) as f64,
-        });
-    }
-    out
-}
-
-#[inline(always)]
-fn arrowcloud_timing_data_from_scatter(
-    scatter: &[ScatterPoint],
-    fail_time_s: Option<f32>,
-) -> Vec<ArrowCloudTimingDatum> {
-    let mut out = Vec::with_capacity(scatter.len());
-    for point in scatter {
-        if !point.time_sec.is_finite() {
-            continue;
-        }
-        if let Some(fail_time) = fail_time_s
-            && point.time_sec > fail_time
-        {
-            continue;
-        }
-        let value = if let Some(offset_ms) = point.offset_ms {
-            if !offset_ms.is_finite() {
-                continue;
-            }
-            ArrowCloudTimingOffset::Seconds((offset_ms / 1000.0) as f64)
-        } else {
-            ArrowCloudTimingOffset::Miss("Miss")
-        };
-        out.push((point.time_sec as f64, value));
-    }
-    out
+    arrowcloud_api::lifebar_points(
+        life_history,
+        chart_start_second,
+        first_second,
+        last_second,
+        arrowcloud_api::ARROWCLOUD_LIFEBAR_POINTS,
+    )
 }
 
 #[inline(always)]
@@ -460,54 +269,24 @@ fn arrowcloud_timing_data(
         &stream_segments,
     );
     let fail_time_s = fail_time_ns.map(gameplay::song_time_ns_to_seconds);
-    arrowcloud_timing_data_from_scatter(&scatter, fail_time_s)
+    arrowcloud_api::timing_data_from_scatter(&scatter, fail_time_s)
 }
 
 #[inline(always)]
-fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNpsInfo {
+fn arrowcloud_nps_info(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> arrowcloud_api::ArrowCloudNpsInfo {
     let chart = gs.charts[player_idx].as_ref();
     let first_second = gs.density_graph_first_second.min(0.0);
     let last_second = gs.density_graph_last_second.max(first_second);
-    let peak_nps = if chart.max_nps.is_finite() && chart.max_nps > 0.0 {
-        chart.max_nps
-    } else {
-        0.0
-    };
-
-    let mut points = Vec::with_capacity(chart.measure_nps_vec.len());
-    let mut started = false;
-    for (measure, nps) in chart.measure_nps_vec.iter().copied().enumerate() {
-        if !nps.is_finite() {
-            continue;
-        }
-        if nps > 0.0 {
-            started = true;
-        }
-        if !started {
-            continue;
-        }
-        let Some(&t) = chart.measure_seconds_vec.get(measure) else {
-            continue;
-        };
-        let x = if last_second > first_second {
-            ((t - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let y = if peak_nps > 0.0 {
-            (nps / peak_nps).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        points.push(ArrowCloudNpsPoint {
-            x: x as f64,
-            y,
-            measure: measure as u32,
-            nps,
-        });
-    }
-
-    ArrowCloudNpsInfo { peak_nps, points }
+    arrowcloud_api::nps_info_from_measure_data(
+        chart.max_nps,
+        chart.measure_nps_vec.as_slice(),
+        chart.measure_seconds_vec.as_slice(),
+        first_second,
+        last_second,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -641,45 +420,6 @@ fn arrowcloud_submit_stats(
 }
 
 #[inline(always)]
-fn arrowcloud_judgment_counts(
-    stats: ArrowCloudSubmitStats,
-    gs: &gameplay::State,
-    player_idx: usize,
-) -> ArrowCloudJudgmentCounts {
-    let counts = stats.judgment_counts;
-    let windows = stats.window_counts;
-    let fantastic_total = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)];
-    let fantastic_plus = windows.w0;
-    let fantastic = fantastic_total.saturating_sub(fantastic_plus);
-    let excellent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)];
-    let great = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Great)];
-    let decent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Decent)];
-    let way_off = counts[judgment::judge_grade_ix(judgment::JudgeGrade::WayOff)];
-    let miss = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)];
-    let mut total_steps = 0u32;
-    for count in counts {
-        total_steps = total_steps.saturating_add(count);
-    }
-
-    ArrowCloudJudgmentCounts {
-        fantastic_plus,
-        fantastic,
-        excellent,
-        great,
-        decent,
-        way_off,
-        miss,
-        total_steps,
-        holds_held: stats.holds_held,
-        total_holds: gs.holds_total[player_idx],
-        mines_hit: stats.mines_hit,
-        total_mines: gs.mines_total[player_idx],
-        rolls_held: stats.rolls_held,
-        total_rolls: gs.rolls_total[player_idx],
-    }
-}
-
-#[inline(always)]
 fn arrowcloud_payload_for_player(
     gs: &gameplay::State,
     player_idx: usize,
@@ -705,7 +445,7 @@ fn arrowcloud_payload_for_player(
         song_name,
         artist: gs.song.artist.clone(),
         pack,
-        length: arrowcloud_format_length(gs.song.music_length_seconds),
+        length: arrowcloud_api::format_length(gs.song.music_length_seconds),
         hash: chart.short_hash.clone(),
         timing_data: arrowcloud_timing_data(gs, player_idx, fail_time_ns),
         difficulty: chart.meter,
@@ -715,10 +455,19 @@ fn arrowcloud_payload_for_player(
             mines: [submit_stats.mines_avoided, gs.mines_total[player_idx]],
             rolls: [submit_stats.rolls_held, gs.rolls_total[player_idx]],
         },
-        judgment_counts: arrowcloud_judgment_counts(submit_stats, gs, player_idx),
+        judgment_counts: arrowcloud_api::judgment_counts_from_stats(
+            submit_stats.judgment_counts,
+            submit_stats.window_counts,
+            submit_stats.holds_held,
+            gs.holds_total[player_idx],
+            submit_stats.mines_hit,
+            gs.mines_total[player_idx],
+            submit_stats.rolls_held,
+            gs.rolls_total[player_idx],
+        ),
         nps_info: arrowcloud_nps_info(gs, player_idx),
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
-        modifiers: arrowcloud_modifiers(profile),
+        modifiers: arrowcloud_api::modifiers_from_profile(profile),
         music_rate,
         used_autoplay: gs.autoplay_used,
         passed,
@@ -1128,6 +877,11 @@ pub fn tick_arrowcloud_auto_retries() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_online::arrowcloud::{
+        ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudSpeed,
+        ArrowCloudTimingOffset,
+    };
+    use deadsync_rules::timing::ScatterPoint;
     use serde_json::{Value, json};
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
@@ -1274,7 +1028,7 @@ mod tests {
             sample_scatter(12.75, None),
             sample_scatter(f32::NAN, Some(2.0)),
         ];
-        let timing_data = arrowcloud_timing_data_from_scatter(&scatter, None);
+        let timing_data = arrowcloud_api::timing_data_from_scatter(&scatter, None);
         assert_eq!(timing_data.len(), 2);
 
         let value = serde_json::to_value(&timing_data).expect("serialize timingData");
@@ -1294,7 +1048,7 @@ mod tests {
             sample_scatter(2.0, None),
             sample_scatter(3.0, Some(12.0)),
         ];
-        let timing_data = arrowcloud_timing_data_from_scatter(&scatter, Some(2.0));
+        let timing_data = arrowcloud_api::timing_data_from_scatter(&scatter, Some(2.0));
 
         let value = serde_json::to_value(&timing_data).expect("serialize timingData");
         assert_eq!(value.as_array().map(Vec::len), Some(2));

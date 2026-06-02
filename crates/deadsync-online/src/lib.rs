@@ -34,6 +34,16 @@ impl std::fmt::Display for OnlineRequestError {
 
 impl std::error::Error for OnlineRequestError {}
 
+pub fn boxed_request_error(
+    prefix: &str,
+    error: OnlineRequestError,
+) -> Box<dyn std::error::Error + Send + Sync> {
+    if let Some(status) = error.http_status() {
+        return format!("{prefix} returned status {status}").into();
+    }
+    Box::new(error)
+}
+
 impl From<deadsync_net::NetworkError> for OnlineRequestError {
     fn from(error: deadsync_net::NetworkError) -> Self {
         match error {
@@ -57,5 +67,14 @@ mod tests {
             OnlineRequestError::HttpStatus(503).to_string(),
             "http status 503"
         );
+    }
+
+    #[test]
+    fn boxed_request_error_formats_http_status_with_prefix() {
+        let error = boxed_request_error("API", OnlineRequestError::HttpStatus(429));
+        assert_eq!(error.to_string(), "API returned status 429");
+
+        let timeout = boxed_request_error("API", OnlineRequestError::Timeout);
+        assert_eq!(timeout.to_string(), "request timed out");
     }
 }

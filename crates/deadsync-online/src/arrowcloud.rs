@@ -1,12 +1,19 @@
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
+use deadsync_profile as profile_data;
+use deadsync_profile::Profile;
+use deadsync_rules::{
+    judgment,
+    scroll::ScrollSpeedSetting,
+    timing::{ScatterPoint, WindowCounts},
+};
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
     ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry, LeaderboardPane,
-    RejectReason, arrowcloud_entry_flags, arrowcloud_hard_ex_leaderboard_pane,
-    arrowcloud_leaderboard_entry, arrowcloud_pane_kind_from_type,
-    arrowcloud_score_from_retrieve_fields, arrowcloud_user_id,
-    set_arrowcloud_score_for_leaderboard,
+    RejectReason, arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
+    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
+    arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
+    arrowcloud_target_user_ids, arrowcloud_user_id, set_arrowcloud_score_for_leaderboard,
 };
 use serde::Deserializer;
 use serde::de::DeserializeOwned;
@@ -22,6 +29,21 @@ const DEVICE_LOGIN_POLL_INTERVAL_MIN_S: f32 = 1.0;
 const DEVICE_LOGIN_POLL_INTERVAL_MAX_S: f32 = 10.0;
 const DEVICE_LOGIN_POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
 pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
+pub const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
+const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
+const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
+    "Drunk",
+    "Dizzy",
+    "Confusion",
+    "Big",
+    "Flip",
+    "Invert",
+    "Tornado",
+    "Tipsy",
+    "Bumpy",
+    "Beat",
+];
+const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionError {
@@ -416,6 +438,21 @@ pub fn retrieve_score_cache_entries(
     chart_hashes: &[String],
     leaderboards: &[ArrowCloudLeaderboard],
 ) -> Result<HashMap<String, ArrowCloudScores>, OnlineRequestError> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err(OnlineRequestError::Request(
+            "ArrowCloud API key is missing.".to_string(),
+        ));
+    }
+    if chart_hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    if chart_hashes.len() > ARROWCLOUD_BULK_MAX_HASHES {
+        return Err(OnlineRequestError::Request(format!(
+            "ArrowCloud bulk request exceeds {ARROWCLOUD_BULK_MAX_HASHES} chart hashes."
+        )));
+    }
+
     retrieve_scores(api_key, user_id, chart_hashes, leaderboards)
         .map(score_cache_entries_from_retrieve_response)
 }
@@ -584,6 +621,66 @@ pub fn hard_ex_pane_from_pages(
     arrowcloud_hard_ex_leaderboard_pane(entries, personalized)
 }
 
+pub fn fetch_hard_ex_leaderboard_panes(
+    chart_hash: &str,
+    api_key: &str,
+) -> Result<Vec<LeaderboardPane>, OnlineRequestError> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let user_context = fetch_user_context(api_key).ok().flatten();
+    let Some(legacy_api_url) = legacy_leaderboards_url(chart_hash) else {
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
+    };
+    let Some(decoded) = fetch_leaderboards(legacy_api_url.as_str(), Some(1))? else {
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
+    };
+    let Some(first_page) = hard_ex_pane_from_response(decoded) else {
+        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
+    };
+
+    let mut extra_pages = Vec::new();
+    let mut remaining = arrowcloud_target_user_ids(user_context.as_ref());
+    update_remaining_targets(
+        first_page.scores.as_slice(),
+        user_context.as_ref(),
+        &mut remaining,
+    );
+    let total_pages = first_page
+        .total_pages
+        .max(first_page.page.max(1) + u32::from(first_page.has_next))
+        .max(1);
+    let mut page = first_page.page.max(1).saturating_add(1);
+
+    while !remaining.is_empty() && page <= total_pages {
+        match fetch_leaderboards(legacy_api_url.as_str(), Some(page)) {
+            Ok(Some(decoded)) => {
+                let Some(hard_ex_page) = hard_ex_pane_from_response(decoded) else {
+                    page += 1;
+                    continue;
+                };
+                update_remaining_targets(
+                    hard_ex_page.scores.as_slice(),
+                    user_context.as_ref(),
+                    &mut remaining,
+                );
+                extra_pages.push(hard_ex_page);
+            }
+            Ok(None) | Err(_) => break,
+        }
+        page += 1;
+    }
+
+    Ok(vec![hard_ex_pane_from_pages(
+        first_page,
+        extra_pages,
+        user_context.as_ref(),
+    )])
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ArrowCloudSpeed {
     pub value: f64,
@@ -607,6 +704,103 @@ pub struct ArrowCloudModifiers {
     pub noteskin: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scroll: Option<String>,
+}
+
+#[inline(always)]
+fn mask_labels_u8(mask: u8, names: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        if (mask & (1u8 << i)) != 0 {
+            out.push((*name).to_string());
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        if (mask & (1u16 << i)) != 0 {
+            out.push((*name).to_string());
+        }
+    }
+    out
+}
+
+#[inline(always)]
+pub const fn turn_label(turn: profile_data::TurnOption) -> &'static str {
+    match turn {
+        profile_data::TurnOption::None => "None",
+        profile_data::TurnOption::Mirror => "Mirror",
+        profile_data::TurnOption::Left => "Left",
+        profile_data::TurnOption::Right => "Right",
+        profile_data::TurnOption::LRMirror => "LR-Mirror",
+        profile_data::TurnOption::UDMirror => "UD-Mirror",
+        profile_data::TurnOption::Shuffle
+        | profile_data::TurnOption::Blender
+        | profile_data::TurnOption::Random => "Shuffle",
+    }
+}
+
+#[inline(always)]
+pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
+    if scroll.contains(profile_data::ScrollOption::Reverse) {
+        Some("Reverse".to_string())
+    } else if scroll.contains(profile_data::ScrollOption::Split) {
+        Some("Split".to_string())
+    } else if scroll.contains(profile_data::ScrollOption::Alternate) {
+        Some("Alternate".to_string())
+    } else if scroll.contains(profile_data::ScrollOption::Cross) {
+        Some("Cross".to_string())
+    } else if scroll.contains(profile_data::ScrollOption::Centered) {
+        Some("Centered".to_string())
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+pub fn speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
+    match speed {
+        ScrollSpeedSetting::CMod(value) => ArrowCloudSpeed {
+            value: value as f64,
+            speed_type: "C",
+        },
+        ScrollSpeedSetting::MMod(value) => ArrowCloudSpeed {
+            value: value as f64,
+            speed_type: "M",
+        },
+        ScrollSpeedSetting::XMod(value) => ArrowCloudSpeed {
+            value: ((value as f64) * 100.0).round() / 100.0,
+            speed_type: "X",
+        },
+    }
+}
+
+pub fn modifiers_from_profile(profile: &Profile) -> ArrowCloudModifiers {
+    ArrowCloudModifiers {
+        visual_delay: profile.visual_delay_ms,
+        acceleration: mask_labels_u8(
+            profile.accel_effects_active_mask.bits(),
+            &ARROWCLOUD_ACCEL_NAMES,
+        ),
+        appearance: mask_labels_u8(
+            profile.appearance_effects_active_mask.bits(),
+            &ARROWCLOUD_APPEARANCE_NAMES,
+        ),
+        effect: mask_labels_u16(
+            profile.visual_effects_active_mask.bits(),
+            &ARROWCLOUD_EFFECT_NAMES,
+        ),
+        mini: profile.mini_percent.clamp(-100, 150),
+        turn: turn_label(profile.turn_option).to_string(),
+        disabled_windows: "None".to_string(),
+        speed: speed_payload(profile.scroll_speed),
+        perspective: profile.perspective.to_string(),
+        noteskin: profile.noteskin.as_str().to_string(),
+        scroll: scroll_label(profile.scroll_option),
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -640,6 +834,104 @@ pub struct ArrowCloudNpsInfo {
     pub points: Vec<ArrowCloudNpsPoint>,
 }
 
+#[inline(always)]
+pub fn life_lerp_at(life_history: &[(f32, f32)], sample_time: f32) -> f32 {
+    let Some(&(_, first_life)) = life_history.first() else {
+        return 0.0;
+    };
+    if life_history.len() == 1 {
+        return first_life.clamp(0.0, 1.0);
+    }
+
+    let later_ix = life_history.partition_point(|&(time, _)| time <= sample_time);
+    let earlier_ix = later_ix.saturating_sub(1).min(life_history.len() - 1);
+    let (earlier_time, earlier_life) = life_history[earlier_ix];
+    if later_ix >= life_history.len() {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+
+    let (later_time, later_life) = life_history[later_ix];
+    let dt = later_time - earlier_time;
+    if dt.abs() <= f32::EPSILON {
+        return earlier_life.clamp(0.0, 1.0);
+    }
+    let alpha = ((sample_time - earlier_time) / dt).clamp(0.0, 1.0);
+    (earlier_life + (later_life - earlier_life) * alpha).clamp(0.0, 1.0)
+}
+
+pub fn lifebar_points(
+    life_history: &[(f32, f32)],
+    chart_start_second: f32,
+    first_second: f32,
+    last_second: f32,
+    point_count: usize,
+) -> Vec<ArrowCloudLifePoint> {
+    if life_history.is_empty() || point_count == 0 {
+        return Vec::new();
+    }
+    let last_second = last_second.max(first_second);
+    let duration = (last_second - first_second).max(0.0);
+    let step = duration / point_count as f32;
+    let mut out = Vec::with_capacity(point_count);
+    for i in 0..point_count {
+        let x = chart_start_second + (i as f32 * step);
+        out.push(ArrowCloudLifePoint {
+            x: x as f64,
+            y: life_lerp_at(life_history, x) as f64,
+        });
+    }
+    out
+}
+
+pub fn nps_info_from_measure_data(
+    max_nps: f64,
+    measure_nps: &[f64],
+    measure_seconds: &[f32],
+    first_second: f32,
+    last_second: f32,
+) -> ArrowCloudNpsInfo {
+    let peak_nps = if max_nps.is_finite() && max_nps > 0.0 {
+        max_nps
+    } else {
+        0.0
+    };
+
+    let mut points = Vec::with_capacity(measure_nps.len());
+    let mut started = false;
+    for (measure, nps) in measure_nps.iter().copied().enumerate() {
+        if !nps.is_finite() {
+            continue;
+        }
+        if nps > 0.0 {
+            started = true;
+        }
+        if !started {
+            continue;
+        }
+        let Some(&time) = measure_seconds.get(measure) else {
+            continue;
+        };
+        let x = if last_second > first_second {
+            ((time - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let y = if peak_nps > 0.0 {
+            (nps / peak_nps).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        points.push(ArrowCloudNpsPoint {
+            x: x as f64,
+            y,
+            measure: measure as u32,
+            nps,
+        });
+    }
+
+    ArrowCloudNpsInfo { peak_nps, points }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum ArrowCloudTimingOffset {
@@ -648,6 +940,51 @@ pub enum ArrowCloudTimingOffset {
 }
 
 pub type ArrowCloudTimingDatum = (f64, ArrowCloudTimingOffset);
+
+#[inline(always)]
+pub fn format_length(seconds: f32) -> String {
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return "0:00".to_string();
+    }
+    let total = seconds.floor() as i64;
+    if total >= 3600 {
+        format!(
+            "{}:{:02}:{:02}",
+            total / 3600,
+            (total % 3600) / 60,
+            total % 60
+        )
+    } else {
+        format!("{}:{:02}", total / 60, total % 60)
+    }
+}
+
+pub fn timing_data_from_scatter(
+    scatter: &[ScatterPoint],
+    fail_time_s: Option<f32>,
+) -> Vec<ArrowCloudTimingDatum> {
+    let mut out = Vec::with_capacity(scatter.len());
+    for point in scatter {
+        if !point.time_sec.is_finite() {
+            continue;
+        }
+        if let Some(fail_time) = fail_time_s
+            && point.time_sec > fail_time
+        {
+            continue;
+        }
+        let value = if let Some(offset_ms) = point.offset_ms {
+            if !offset_ms.is_finite() {
+                continue;
+            }
+            ArrowCloudTimingOffset::Seconds((offset_ms / 1000.0) as f64)
+        } else {
+            ArrowCloudTimingOffset::Miss("Miss")
+        };
+        out.push((point.time_sec as f64, value));
+    }
+    out
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -666,6 +1003,47 @@ pub struct ArrowCloudJudgmentCounts {
     pub total_mines: u32,
     pub rolls_held: u32,
     pub total_rolls: u32,
+}
+
+pub fn judgment_counts_from_stats(
+    counts: judgment::JudgeCounts,
+    windows: WindowCounts,
+    holds_held: u32,
+    total_holds: u32,
+    mines_hit: u32,
+    total_mines: u32,
+    rolls_held: u32,
+    total_rolls: u32,
+) -> ArrowCloudJudgmentCounts {
+    let fantastic_total = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)];
+    let fantastic_plus = windows.w0;
+    let fantastic = fantastic_total.saturating_sub(fantastic_plus);
+    let excellent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)];
+    let great = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Great)];
+    let decent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Decent)];
+    let way_off = counts[judgment::judge_grade_ix(judgment::JudgeGrade::WayOff)];
+    let miss = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)];
+    let mut total_steps = 0u32;
+    for count in counts {
+        total_steps = total_steps.saturating_add(count);
+    }
+
+    ArrowCloudJudgmentCounts {
+        fantastic_plus,
+        fantastic,
+        excellent,
+        great,
+        decent,
+        way_off,
+        miss,
+        total_steps,
+        holds_held,
+        total_holds,
+        mines_hit,
+        total_mines,
+        rolls_held,
+        total_rolls,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -984,6 +1362,11 @@ fn sleep_device_login_with_cancel(seconds: f32, cancel: &Arc<AtomicBool>) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_profile::{
+        AccelEffectsMask, AppearanceEffectsMask, Perspective, ScrollOption, TurnOption,
+        VisualEffectsMask,
+    };
+    use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
     use deadsync_score::{
         ArrowCloudPaneKind, ArrowCloudServerGrade, ArrowCloudSubmitUiStatus, ArrowCloudUserContext,
         RejectReason,
@@ -1018,6 +1401,146 @@ mod tests {
     }
 
     #[test]
+    fn modifiers_from_profile_maps_arrowcloud_labels() {
+        let mut profile = Profile::default();
+        profile.visual_delay_ms = -12;
+        profile.accel_effects_active_mask = AccelEffectsMask::BOOST | AccelEffectsMask::WAVE;
+        profile.appearance_effects_active_mask =
+            AppearanceEffectsMask::HIDDEN | AppearanceEffectsMask::RANDOM_VANISH;
+        profile.visual_effects_active_mask = VisualEffectsMask::DRUNK | VisualEffectsMask::BUMPY;
+        profile.mini_percent = 200;
+        profile.turn_option = TurnOption::Random;
+        profile.scroll_speed = ScrollSpeedSetting::XMod(2.345);
+        profile.perspective = Perspective::Space;
+        profile.scroll_option = ScrollOption::Alternate;
+
+        let modifiers = modifiers_from_profile(&profile);
+        assert_eq!(modifiers.visual_delay, -12);
+        assert_eq!(modifiers.acceleration, ["Boost", "Wave"]);
+        assert_eq!(modifiers.appearance, ["Hidden", "R.Vanish"]);
+        assert_eq!(modifiers.effect, ["Drunk", "Bumpy"]);
+        assert_eq!(modifiers.mini, 150);
+        assert_eq!(modifiers.turn, "Shuffle");
+        assert_eq!(modifiers.disabled_windows, "None");
+        assert_eq!(modifiers.speed.value, 2.35);
+        assert_eq!(modifiers.speed.speed_type, "X");
+        assert_eq!(modifiers.perspective, "Space");
+        assert_eq!(modifiers.noteskin, profile.noteskin.as_str());
+        assert_eq!(modifiers.scroll.as_deref(), Some("Alternate"));
+    }
+
+    #[test]
+    fn format_length_matches_arrowcloud_payload_shape() {
+        assert_eq!(format_length(f32::NAN), "0:00");
+        assert_eq!(format_length(-1.0), "0:00");
+        assert_eq!(format_length(83.9), "1:23");
+        assert_eq!(format_length(3_661.0), "1:01:01");
+    }
+
+    #[test]
+    fn timing_data_from_scatter_keeps_misses_and_fail_cutoff() {
+        let scatter = [
+            ScatterPoint {
+                time_sec: 1.0,
+                offset_ms: Some(8.0),
+                direction_code: 1,
+                is_stream: false,
+                is_left_foot: false,
+                miss_because_held: false,
+            },
+            ScatterPoint {
+                time_sec: 1.5,
+                offset_ms: None,
+                direction_code: 2,
+                is_stream: false,
+                is_left_foot: false,
+                miss_because_held: false,
+            },
+            ScatterPoint {
+                time_sec: 3.0,
+                offset_ms: Some(1.0),
+                direction_code: 3,
+                is_stream: false,
+                is_left_foot: false,
+                miss_because_held: false,
+            },
+        ];
+
+        let timing_data = timing_data_from_scatter(&scatter, Some(2.0));
+        let value = serde_json::to_value(&timing_data).expect("serialize timing data");
+        assert_eq!(value[0][0], 1.0);
+        let first_offset = value[0][1].as_f64().expect("numeric timing offset");
+        assert!((first_offset - 0.008).abs() < 1e-6);
+        assert_eq!(value[1][0], 1.5);
+        assert_eq!(value[1][1], "Miss");
+        assert_eq!(timing_data.len(), 2);
+    }
+
+    #[test]
+    fn lifebar_points_interpolate_life_history() {
+        let life_history = [(0.0, 0.0), (10.0, 1.0)];
+        let points = lifebar_points(&life_history, 0.0, 0.0, 10.0, 5);
+
+        assert_eq!(points.len(), 5);
+        assert!((points[0].x - 0.0).abs() < 1e-6);
+        assert!((points[0].y - 0.0).abs() < 1e-6);
+        assert!((points[1].x - 2.0).abs() < 1e-6);
+        assert!((points[1].y - 0.2).abs() < 1e-6);
+        assert!((points[4].x - 8.0).abs() < 1e-6);
+        assert!((points[4].y - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn nps_info_from_measure_data_skips_leading_zeroes() {
+        let info =
+            nps_info_from_measure_data(20.0, &[0.0, 10.0, 20.0], &[0.0, 5.0, 10.0], 0.0, 10.0);
+
+        assert_eq!(info.peak_nps, 20.0);
+        assert_eq!(info.points.len(), 2);
+        assert_eq!(info.points[0].measure, 1);
+        assert!((info.points[0].x - 0.5).abs() < 1e-6);
+        assert!((info.points[0].y - 0.5).abs() < 1e-6);
+        assert_eq!(info.points[0].nps, 10.0);
+        assert_eq!(info.points[1].measure, 2);
+        assert!((info.points[1].x - 1.0).abs() < 1e-6);
+        assert!((info.points[1].y - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn judgment_counts_from_stats_splits_fa_plus() {
+        let mut counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 7;
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)] = 3;
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)] = 2;
+
+        let out = judgment_counts_from_stats(
+            counts,
+            WindowCounts {
+                w0: 2,
+                ..WindowCounts::default()
+            },
+            4,
+            5,
+            1,
+            6,
+            2,
+            3,
+        );
+
+        assert_eq!(out.fantastic_plus, 2);
+        assert_eq!(out.fantastic, 5);
+        assert_eq!(out.excellent, 3);
+        assert_eq!(out.miss, 2);
+        assert_eq!(out.total_steps, 12);
+        assert_eq!(out.holds_held, 4);
+        assert_eq!(out.total_holds, 5);
+        assert_eq!(out.mines_hit, 1);
+        assert_eq!(out.total_mines, 6);
+        assert_eq!(out.rolls_held, 2);
+        assert_eq!(out.total_rolls, 3);
+    }
+
+    #[test]
     fn retrieve_request_serializes_leaderboard_ids() {
         let hashes = vec!["006fb5c4890e98a2".to_string()];
         let body = ArrowCloudRetrieveScoresRequest {
@@ -1029,6 +1552,32 @@ mod tests {
         assert!(raw.contains("\"chartHashes\":[\"006fb5c4890e98a2\"]"));
         assert!(raw.contains("\"leaderboardIds\":[4,2,3]"));
         assert!(raw.contains("\"userId\":\"user-1\""));
+    }
+
+    #[test]
+    fn retrieve_score_cache_entries_validates_request_before_network() {
+        let hashes = vec!["006fb5c4890e98a2".to_string()];
+        let missing_key = retrieve_score_cache_entries(
+            "   ",
+            None,
+            hashes.as_slice(),
+            &ArrowCloudLeaderboard::ALL_GLOBAL,
+        );
+        assert!(matches!(missing_key, Err(OnlineRequestError::Request(_))));
+
+        let empty_hashes =
+            retrieve_score_cache_entries("key", None, &[], &ArrowCloudLeaderboard::ALL_GLOBAL)
+                .expect("empty request");
+        assert!(empty_hashes.is_empty());
+
+        let too_many = vec!["deadbeef".to_string(); ARROWCLOUD_BULK_MAX_HASHES + 1];
+        let overflow = retrieve_score_cache_entries(
+            "key",
+            None,
+            too_many.as_slice(),
+            &ArrowCloudLeaderboard::ALL_GLOBAL,
+        );
+        assert!(matches!(overflow, Err(OnlineRequestError::Request(_))));
     }
 
     #[test]
@@ -1164,6 +1713,20 @@ mod tests {
         assert!(pane.entries[1].is_self);
         assert_eq!(pane.entries[2].rank, 91);
         assert!(pane.entries[2].is_rival);
+    }
+
+    #[test]
+    fn fetch_hard_ex_leaderboard_panes_skips_empty_inputs() {
+        assert!(
+            fetch_hard_ex_leaderboard_panes("", "key")
+                .expect("empty chart hash")
+                .is_empty()
+        );
+        assert!(
+            fetch_hard_ex_leaderboard_panes("deadbeef", "")
+                .expect("empty api key")
+                .is_empty()
+        );
     }
 
     #[test]

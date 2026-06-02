@@ -2,6 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_score::ScoreImportEndpoint;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -2886,6 +2887,28 @@ impl Default for Profile {
 }
 
 impl Profile {
+    pub fn score_import_api_key(&self, endpoint: ScoreImportEndpoint) -> &str {
+        match endpoint {
+            ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
+                self.groovestats_api_key.trim()
+            }
+            ScoreImportEndpoint::ArrowCloud => self.arrowcloud_api_key.trim(),
+        }
+    }
+
+    pub fn score_import_username(&self, endpoint: ScoreImportEndpoint) -> &str {
+        if endpoint.requires_username() {
+            self.groovestats_username.trim()
+        } else {
+            ""
+        }
+    }
+
+    pub fn has_score_import_credentials(&self, endpoint: ScoreImportEndpoint) -> bool {
+        !self.score_import_api_key(endpoint).is_empty()
+            && (!endpoint.requires_username() || !self.score_import_username(endpoint).is_empty())
+    }
+
     #[inline(always)]
     pub const fn calculated_weight_pounds(&self) -> i32 {
         resolved_weight_pounds(self.weight_pounds)
@@ -3272,6 +3295,41 @@ mod tests {
         assert_eq!(options.measure_counter_lookahead, 2);
         assert!(options.measure_counter_left);
         assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
+    }
+
+    #[test]
+    fn score_import_credentials_select_endpoint_fields() {
+        let mut profile = Profile::default();
+        profile.groovestats_api_key = " gs-key ".to_string();
+        profile.groovestats_username = " player ".to_string();
+        profile.arrowcloud_api_key = " ac-key ".to_string();
+
+        assert_eq!(
+            profile.score_import_api_key(ScoreImportEndpoint::GrooveStats),
+            "gs-key"
+        );
+        assert_eq!(
+            profile.score_import_api_key(ScoreImportEndpoint::BoogieStats),
+            "gs-key"
+        );
+        assert_eq!(
+            profile.score_import_api_key(ScoreImportEndpoint::ArrowCloud),
+            "ac-key"
+        );
+        assert_eq!(
+            profile.score_import_username(ScoreImportEndpoint::GrooveStats),
+            "player"
+        );
+        assert_eq!(
+            profile.score_import_username(ScoreImportEndpoint::ArrowCloud),
+            ""
+        );
+        assert!(profile.has_score_import_credentials(ScoreImportEndpoint::GrooveStats));
+        assert!(profile.has_score_import_credentials(ScoreImportEndpoint::ArrowCloud));
+
+        profile.groovestats_username.clear();
+        assert!(!profile.has_score_import_credentials(ScoreImportEndpoint::GrooveStats));
+        assert!(profile.has_score_import_credentials(ScoreImportEndpoint::ArrowCloud));
     }
 
     #[test]

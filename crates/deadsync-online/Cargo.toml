@@ -6,6 +6,8 @@ license = "GPL-3.0"
 
 [dependencies]
 deadsync-net = { path = "../deadsync-net" }
+deadsync-profile = { path = "../deadsync-profile" }
+deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 rand = "0.10.1"
 serde = { version = "1.0.228", features = ["derive"] }

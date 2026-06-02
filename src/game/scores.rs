@@ -15,12 +15,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use deadsync_online::OnlineRequestError;
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
-use deadsync_online::groovestats::{
-    self as groovestats_api, GrooveStatsSubmitApiPlayer, LeaderboardApiEntry,
-    LeaderboardsApiResponse,
-};
+use deadsync_online::boxed_request_error;
+use deadsync_online::groovestats::{self as groovestats_api, GrooveStatsSubmitApiPlayer};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment;
 
@@ -40,23 +37,22 @@ pub use arrowcloud::{
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudScores, CachedPlayerLeaderboardData, CachedScore,
-    GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner, GsExEvidence,
-    GsLampChartStats, GsScoreEntry, LOCAL_SCORE_VERSION, LeaderboardEntry, LeaderboardPane,
+    CachedScoreImportResult, GameplayScoreboxProfileSnapshot, Grade, GrooveStatsSubmitRecordBanner,
+    GsLampChartStats, GsScoreEntry, ImportedPlayerScore, LOCAL_SCORE_VERSION, LeaderboardEntry,
     LocalReplayEdge, LocalScalarScore, LocalScoreEntry, LocalScoreHeader, LocalScoreIndex,
     MachineLeaderboardPlay, MachineReplayEntry, MachineReplayPlay, PlayerLeaderboardCacheKey,
     PlayerLeaderboardData, ScoreBulkImportSummary, ScoreImportEndpoint, ScoreImportProgress,
-    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_score_from_submit_percent,
-    arrowcloud_target_user_ids, cached_gs_score_from_chart_stats, cached_missing_gs_score,
-    cached_score_10000, cached_score_from_gs_entry, cached_score_from_local_header,
-    compute_local_lamp, decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
-    decode_local_score_index, encode_gs_score_entry, encode_local_score_entry,
-    encode_local_score_index, failed_score_override, fix_gs_cached_score, gameplay_run_failed,
-    gameplay_run_passed, grade_from_code, grade_to_code, gs_score_entry_from_cached, is_better_itg,
+    arrowcloud_score_from_submit_percent, cached_missing_gs_score, cached_score_from_gs_entry,
+    cached_score_from_imported_player_score, cached_score_from_local_header,
+    cached_score_import_result_from_imported, compute_local_lamp, decode_gs_score_entry,
+    decode_local_score_entry, decode_local_score_header, decode_local_score_index,
+    encode_gs_score_entry, encode_local_score_entry, encode_local_score_index,
+    failed_score_override, fix_gs_cached_score, gameplay_run_failed, gameplay_run_passed,
+    grade_from_code, grade_to_code, gs_score_entry_from_cached, is_better_itg,
     lua_chart_submit_allowed, machine_leaderboard_entries, machine_replay_entries,
-    merge_arrowcloud_score_slot, parse_score_file_name, player_leaderboard_cache_key,
-    promote_quint_grade, replaces_stale_quint, same_score_10000, score_file_shard,
-    score_import_entry_matches_profile, score_to_grade, scorebox_snapshot,
-    update_local_score_index,
+    merge_arrowcloud_score_slot, merge_local_fail, parse_score_file_name,
+    player_leaderboard_cache_key, promote_quint_grade, score_file_shard, score_to_grade,
+    scorebox_snapshot, should_replace_cached_gs_score, update_local_score_index,
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
@@ -1561,20 +1557,14 @@ fn submit_record_banner(
     )
 }
 
-#[inline(always)]
-fn cached_score_from_gs(
-    score_10000: f64,
-    comments: Option<&str>,
+fn chart_stats_for_imported_score(
+    score: &ImportedPlayerScore,
     chart_hash: &str,
-    is_fail: bool,
-    ex_evidence: GsExEvidence,
-) -> CachedScore {
-    let score_percent = score_10000 / 10000.0;
-    let needs_stats = (score_percent - 1.0).abs() > 1e-9 && comments.is_some();
-    let stats = needs_stats
+) -> Option<GsLampChartStats> {
+    score
+        .needs_chart_stats()
         .then(|| find_chart_stats_for_hash(chart_hash))
-        .flatten();
-    cached_gs_score_from_chart_stats(score_10000, is_fail, comments, ex_evidence, stats)
+        .flatten()
 }
 
 fn cache_gs_score_for_profile(
@@ -1586,11 +1576,7 @@ fn cache_gs_score_for_profile(
 ) {
     let score = fix_gs_cached_score(score);
     if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
-        && !replaces_stale_quint(&score, &existing, proves_nonquint_ex)
-        && !(score.grade == Grade::Failed
-            && existing.grade != Grade::Failed
-            && same_score_10000(cached_score_10000(&score), cached_score_10000(&existing)))
-        && !is_better_itg(&score, &existing)
+        && !should_replace_cached_gs_score(&score, &existing, proves_nonquint_ex)
     {
         return;
     }
@@ -1604,162 +1590,22 @@ fn cache_gs_score_from_leaderboard(
     profile_id: &str,
     username: &str,
     chart_hash: &str,
-    gs_entries: &[LeaderboardApiEntry],
-    ex_entries: &[LeaderboardApiEntry],
+    imported: Option<ImportedPlayerScore>,
 ) {
-    let Some(entry) = groovestats_api::leaderboard_self_entry(gs_entries, username) else {
+    let Some(mut imported) = imported else {
         // Select Music and gameplay scoreboxes fetch shallow leaderboard pages.
         // If the page does not include the player's row, do not clobber an
         // existing cached GS score and make the wheel fall back to local data.
         return;
     };
-    let local_failed_match = get_cached_local_score_for_profile(profile_id, chart_hash)
-        .filter(|score| {
-            score.grade == Grade::Failed && same_score_10000(cached_score_10000(score), entry.score)
-        })
-        .is_some();
-    let ex_evidence = groovestats_api::gs_ex_evidence_from_leaderboard(
-        ex_entries,
-        username,
-        entry.comments.as_deref(),
+    imported = merge_local_fail(
+        imported,
+        get_cached_local_score_for_profile(profile_id, chart_hash),
     );
-    let score = cached_score_from_gs(
-        entry.score,
-        entry.comments.as_deref(),
-        chart_hash,
-        entry.is_fail || local_failed_match,
-        ex_evidence,
-    );
-    cache_gs_score_for_profile(
-        profile_id,
-        chart_hash,
-        score,
-        username,
-        ex_evidence.proves_nonquint(),
-    );
-}
-
-fn boxed_online_status_error(
-    prefix: &str,
-    error: OnlineRequestError,
-) -> Box<dyn Error + Send + Sync> {
-    if let Some(status) = error.http_status() {
-        return format!("{prefix} returned status {status}").into();
-    }
-    Box::new(error)
-}
-
-// --- ArrowCloud bulk score retrieval (POST /v1/retrieve-scores) ---
-
-/// POST `chart_hashes` to `/v1/retrieve-scores` and return parsed results.
-///
-/// `user_id` may be `None` to let the server resolve the bearer-token user.
-/// `chart_hashes` MUST contain ≤ `ARROWCLOUD_BULK_MAX_HASHES` entries.
-fn fetch_arrowcloud_bulk_scores(
-    api_key: &str,
-    user_id: Option<&str>,
-    chart_hashes: &[String],
-    leaderboards: &[ArrowCloudLeaderboard],
-) -> Result<HashMap<String, ArrowCloudScores>, Box<dyn Error + Send + Sync>> {
-    let api_key = api_key.trim();
-    if api_key.is_empty() {
-        return Err("ArrowCloud API key is missing.".into());
-    }
-    if chart_hashes.is_empty() {
-        return Ok(HashMap::new());
-    }
-    if chart_hashes.len() > ARROWCLOUD_BULK_MAX_HASHES {
-        return Err(format!(
-            "ArrowCloud bulk request exceeds {ARROWCLOUD_BULK_MAX_HASHES} chart hashes."
-        )
-        .into());
-    }
-
-    Ok(arrowcloud_api::retrieve_score_cache_entries(
-        api_key,
-        user_id,
-        chart_hashes,
-        leaderboards,
-    )?)
-}
-
-fn fetch_arrowcloud_panes(
-    chart_hash: &str,
-    api_key: &str,
-    _max_entries: usize,
-) -> Result<Vec<LeaderboardPane>, Box<dyn Error + Send + Sync>> {
-    let chart_hash = chart_hash.trim();
-    let api_key = api_key.trim();
-    if chart_hash.is_empty() || api_key.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let user_context = match arrowcloud_api::fetch_user_context(api_key) {
-        Ok(context) => context,
-        Err(error) => {
-            debug!(
-                "ArrowCloud user context request failed for chart {}; using public H.EX board only: {}",
-                chart_hash, error
-            );
-            None
-        }
-    };
-
-    let Some(legacy_api_url) = arrowcloud_api::legacy_leaderboards_url(chart_hash) else {
-        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
-    };
-    let Some(decoded) = arrowcloud_api::fetch_leaderboards(legacy_api_url.as_str(), Some(1))?
-    else {
-        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
-    };
-    let Some(first_page) = arrowcloud_api::hard_ex_pane_from_response(decoded) else {
-        return Ok(vec![arrowcloud_empty_hard_ex_leaderboard_pane()]);
-    };
-
-    let mut extra_pages = Vec::new();
-    let mut remaining = arrowcloud_target_user_ids(user_context.as_ref());
-    arrowcloud_api::update_remaining_targets(
-        first_page.scores.as_slice(),
-        user_context.as_ref(),
-        &mut remaining,
-    );
-    let total_pages = first_page
-        .total_pages
-        .max(first_page.page.max(1) + u32::from(first_page.has_next))
-        .max(1);
-    let mut page = first_page.page.max(1).saturating_add(1);
-
-    while !remaining.is_empty() && page <= total_pages {
-        match arrowcloud_api::fetch_leaderboards(legacy_api_url.as_str(), Some(page)) {
-            Ok(Some(decoded)) => {
-                let Some(hard_ex_page) = arrowcloud_api::hard_ex_pane_from_response(decoded) else {
-                    page += 1;
-                    continue;
-                };
-                arrowcloud_api::update_remaining_targets(
-                    hard_ex_page.scores.as_slice(),
-                    user_context.as_ref(),
-                    &mut remaining,
-                );
-                extra_pages.push(hard_ex_page);
-            }
-            Ok(None) => break,
-            Err(error) => {
-                warn!(
-                    "ArrowCloud H.EX personalized scan stopped on chart {} page {}: {}",
-                    chart_hash, page, error
-                );
-                break;
-            }
-        }
-        page += 1;
-    }
-
-    Ok(vec![arrowcloud_api::hard_ex_pane_from_pages(
-        first_page,
-        extra_pages,
-        user_context.as_ref(),
-    )])
+    let proves_nonquint_ex = imported.ex_evidence.proves_nonquint();
+    let stats = chart_stats_for_imported_score(&imported, chart_hash);
+    let score = cached_score_from_imported_player_score(imported, stats);
+    cache_gs_score_for_profile(profile_id, chart_hash, score, username, proves_nonquint_ex);
 }
 
 fn fetch_player_leaderboards_internal(
@@ -1777,33 +1623,24 @@ fn fetch_player_leaderboards_internal(
         return Err("Missing GrooveStats API key for leaderboard request.".into());
     }
 
-    let max_entries = max_entries.max(1);
-    let decoded = groovestats_api::fetch_player_leaderboards(
+    let combined = groovestats_api::fetch_combined_player_leaderboards(
         active_groovestats_service(),
         api_key,
+        username,
         chart_hash,
-        Some(max_entries),
+        arrowcloud_api_key,
+        show_ex_score,
+        max_entries,
     )
-    .map_err(|error| boxed_online_status_error("Leaderboard API", error))?;
-    let mut fetched =
-        groovestats_api::fetched_player_leaderboards_from_api(decoded, username, show_ex_score);
-
-    if let Some(arrowcloud_api_key) = arrowcloud_api_key {
-        match fetch_arrowcloud_panes(chart_hash, arrowcloud_api_key, max_entries) {
-            Ok(arrowcloud_panes) => {
-                let insert_ix = 2.min(fetched.data.panes.len());
-                for pane in arrowcloud_panes.into_iter().rev() {
-                    fetched.data.panes.insert(insert_ix, pane);
-                }
-            }
-            Err(error) => warn!(
-                "ArrowCloud leaderboard fetch failed for chart {}: {}",
-                chart_hash, error
-            ),
-        }
+    .map_err(|error| boxed_request_error("Leaderboard API", error))?;
+    if let Some(error) = combined.arrowcloud_error {
+        warn!(
+            "ArrowCloud leaderboard fetch failed for chart {}: {}",
+            chart_hash, error
+        );
     }
 
-    Ok(fetched)
+    Ok(combined.fetched)
 }
 
 #[inline(always)]
@@ -1918,8 +1755,7 @@ fn spawn_player_leaderboard_fetch(
                         ) {
                             let groovestats_api::FetchedPlayerLeaderboards {
                                 data,
-                                gs_entries,
-                                ex_entries,
+                                imported_score,
                                 itl_self_found,
                             } = fetched;
                             if itl_self_found {
@@ -1943,8 +1779,7 @@ fn spawn_player_leaderboard_fetch(
                                     profile_id,
                                     gs_username.as_str(),
                                     key.chart_hash.as_str(),
-                                    gs_entries.as_slice(),
-                                    ex_entries.as_slice(),
+                                    imported_score,
                                 );
                             }
                             cache.by_key.insert(
@@ -2398,91 +2233,17 @@ const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
 const SCORE_IMPORT_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
 const SCORE_IMPORT_PROGRESS_LOG_EVERY: usize = 100;
 
-struct ScoreImportFetchResult {
-    score: Option<CachedScore>,
-    score_proves_nonquint_ex: bool,
-    itl_self_score: Option<u32>,
-    itl_self_rank: Option<u32>,
-    itl_self_found: bool,
-}
-
-fn score_import_api_key_for_endpoint(endpoint: ScoreImportEndpoint, profile: &Profile) -> &str {
-    match endpoint {
-        ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
-            profile.groovestats_api_key.trim()
-        }
-        ScoreImportEndpoint::ArrowCloud => profile.arrowcloud_api_key.trim(),
-    }
-}
-
-fn score_import_result_from_response(
-    decoded: LeaderboardsApiResponse,
-    endpoint: ScoreImportEndpoint,
-    username: &str,
-    chart_hash: &str,
-) -> ScoreImportFetchResult {
-    let mut result = ScoreImportFetchResult {
-        score: None,
-        score_proves_nonquint_ex: false,
-        itl_self_score: None,
-        itl_self_rank: None,
-        itl_self_found: false,
-    };
-    let Some(player) = decoded.player1 else {
-        return result;
-    };
-
-    if let Some(entry) = player.gs_leaderboard.iter().find(|entry| {
-        score_import_entry_matches_profile(entry.name.as_str(), entry.is_self, endpoint, username)
-    }) {
-        let ex_score = player
-            .ex_leaderboard
-            .iter()
-            .find(|entry| {
-                score_import_entry_matches_profile(
-                    entry.name.as_str(),
-                    entry.is_self,
-                    endpoint,
-                    username,
-                )
-            })
-            .and_then(groovestats_api::leaderboard_entry_score_10000);
-        let ex_evidence = GsExEvidence::from_sources(ex_score, entry.comments.as_deref());
-        result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
-        result.score = Some(cached_score_from_gs(
-            entry.score,
-            entry.comments.as_deref(),
-            chart_hash,
-            entry.is_fail,
-            ex_evidence,
-        ));
-    }
-
-    if let Some(itl) = player.itl
-        && !itl.itl_leaderboard.is_empty()
-    {
-        result.itl_self_found =
-            groovestats_api::leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
-        result.itl_self_score =
-            groovestats_api::leaderboard_self_score_10000(&itl.itl_leaderboard, username);
-        result.itl_self_rank =
-            groovestats_api::leaderboard_self_rank(&itl.itl_leaderboard, username);
-    }
-
-    result
-}
-
 fn fetch_player_score_from_endpoint(
     endpoint: ScoreImportEndpoint,
     profile: &Profile,
     chart_hash: &str,
-) -> Result<ScoreImportFetchResult, Box<dyn Error + Send + Sync>> {
+) -> Result<CachedScoreImportResult, Box<dyn Error + Send + Sync>> {
     let chart_hash = chart_hash.trim();
     if chart_hash.is_empty() {
         return Err("Missing chart hash for score request.".into());
     }
 
-    let api_key = score_import_api_key_for_endpoint(endpoint, profile);
+    let api_key = profile.score_import_api_key(endpoint);
     if api_key.is_empty() {
         return Err(format!(
             "{} API key is missing in profile configuration.",
@@ -2490,7 +2251,7 @@ fn fetch_player_score_from_endpoint(
         )
         .into());
     }
-    let username = profile.groovestats_username.trim();
+    let username = profile.score_import_username(endpoint);
     if endpoint.requires_username() && username.is_empty() {
         return Err(format!(
             "{} username is missing in profile configuration.",
@@ -2499,27 +2260,14 @@ fn fetch_player_score_from_endpoint(
         .into());
     }
 
-    let decoded = match endpoint {
-        ScoreImportEndpoint::GrooveStats => groovestats_api::fetch_player_leaderboards(
-            groovestats_api::Service::GrooveStats,
-            api_key,
-            chart_hash,
-            None,
-        ),
-        ScoreImportEndpoint::BoogieStats => groovestats_api::fetch_player_leaderboards(
-            groovestats_api::Service::BoogieStats,
-            api_key,
-            chart_hash,
-            None,
-        ),
-        ScoreImportEndpoint::ArrowCloud => {
-            arrowcloud_api::fetch_player_leaderboards(api_key, chart_hash)
-        }
-    }
-    .map_err(|error| boxed_online_status_error("API", error))?;
-    Ok(score_import_result_from_response(
-        decoded, endpoint, username, chart_hash,
-    ))
+    let imported =
+        groovestats_api::fetch_player_score_import_result(endpoint, api_key, username, chart_hash)
+            .map_err(|error| boxed_request_error("API", error))?;
+    let stats = imported
+        .score
+        .as_ref()
+        .and_then(|score| chart_stats_for_imported_score(score, chart_hash));
+    Ok(cached_score_import_result_from_imported(imported, stats))
 }
 
 fn collect_chart_hashes_for_import(
@@ -2619,7 +2367,9 @@ where
     F: FnMut(ScoreImportProgress),
 {
     let mut on_progress = on_progress;
-    let api_key = profile.arrowcloud_api_key.trim().to_string();
+    let api_key = profile
+        .score_import_api_key(ScoreImportEndpoint::ArrowCloud)
+        .to_string();
     if api_key.is_empty() {
         return Err("ArrowCloud API key is not set in profile configuration.".into());
     }
@@ -2704,12 +2454,14 @@ where
 
             let chunk_vec = chunk.to_vec();
             let request_started = Instant::now();
-            let detail = match fetch_arrowcloud_bulk_scores(
+            let detail = match arrowcloud_api::retrieve_score_cache_entries(
                 &api_key,
                 user_id.as_deref(),
                 &chunk_vec,
                 &ArrowCloudLeaderboard::ALL_GLOBAL,
-            ) {
+            )
+            .map_err(|error| boxed_request_error("API", error))
+            {
                 Ok(scores_by_chart) => {
                     let request_elapsed = request_started.elapsed();
                     let hits = scores_by_chart.len();
@@ -2816,7 +2568,7 @@ where
     }
 
     let mut on_progress = on_progress;
-    let api_key = score_import_api_key_for_endpoint(endpoint, &profile);
+    let api_key = profile.score_import_api_key(endpoint);
     if api_key.is_empty() {
         return Err(format!(
             "{} API key is not set in profile configuration.",
@@ -2824,7 +2576,7 @@ where
         )
         .into());
     }
-    if endpoint.requires_username() && profile.groovestats_username.trim().is_empty() {
+    if endpoint.requires_username() && profile.score_import_username(endpoint).is_empty() {
         return Err(format!(
             "{} username is not set in profile configuration.",
             endpoint.display_name()
@@ -2832,7 +2584,7 @@ where
         .into());
     }
 
-    let username = profile.groovestats_username.trim().to_string();
+    let username = profile.score_import_username(endpoint).to_string();
     let pack_chart_groups =
         collect_chart_hashes_for_import(&pack_groups, &profile_id, only_missing_gs_scores);
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
@@ -3001,34 +2753,31 @@ pub fn fetch_and_store_grade(
     profile: Profile,
     chart_hash: String,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if profile.groovestats_api_key.trim().is_empty()
-        || profile.groovestats_username.trim().is_empty()
-    {
+    let endpoint = active_groovestats_service().score_import_endpoint();
+    if !profile.has_score_import_credentials(endpoint) {
         return Err("GrooveStats API key or username is not set in profile.ini.".into());
     }
 
     debug!(
         "Requesting scores for '{}' on chart '{}'...",
-        profile.groovestats_username, chart_hash
+        profile.score_import_username(endpoint),
+        chart_hash
     );
 
-    let endpoint = match active_groovestats_service() {
-        groovestats_api::Service::GrooveStats => ScoreImportEndpoint::GrooveStats,
-        groovestats_api::Service::BoogieStats => ScoreImportEndpoint::BoogieStats,
-    };
     let result = fetch_player_score_from_endpoint(endpoint, &profile, chart_hash.as_str())?;
     if let Some(cached_score) = result.score {
         cache_gs_score_for_profile(
             &profile_id,
             &chart_hash,
             cached_score,
-            profile.groovestats_username.trim(),
+            profile.score_import_username(endpoint),
             result.score_proves_nonquint_ex,
         );
     } else {
         warn!(
             "No score found for player '{}' on chart '{}'. Caching as Failed.",
-            profile.groovestats_username, chart_hash
+            profile.score_import_username(endpoint),
+            chart_hash
         );
         set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_missing_gs_score());
     }
@@ -3039,100 +2788,6 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_online::groovestats::LeaderboardApiPlayer;
-
-    #[test]
-    fn cached_score_from_gs_uses_quint_comment_as_fallback() {
-        let comment = "[DS], FA+, 100.00EX";
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some(comment),
-            "deadbeef",
-            false,
-            GsExEvidence::from_sources(None, Some(comment)),
-        );
-
-        assert_eq!(cached.grade, Grade::Quint);
-        assert_eq!(cached.lamp_index, Some(0));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_gs_trusts_ex_leaderboard_for_quint() {
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some("[DS], FA+, 99.78EX"),
-            "deadbeef",
-            false,
-            GsExEvidence::from_sources(Some(10_000.0), Some("[DS], FA+, 99.78EX")),
-        );
-
-        assert_eq!(cached.grade, Grade::Quint);
-        assert_eq!(cached.lamp_index, Some(0));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_gs_rejects_quint_comment_when_ex_leaderboard_is_lower() {
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some("[DS], FA+, 100.00EX, C875"),
-            "deadbeef",
-            false,
-            GsExEvidence::from_sources(Some(9_978.0), Some("[DS], FA+, 100.00EX, C875")),
-        );
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_gs_keeps_quad_white_count() {
-        let comment = "[DS], FA+, 99.71EX, 3w";
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some(comment),
-            "deadbeef",
-            false,
-            GsExEvidence::from_sources(None, Some(comment)),
-        );
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, Some(3));
-    }
-
-    #[test]
-    fn cached_score_from_gs_keeps_quad_from_nonperfect_ex_comment() {
-        let comment = "[DS], FA+, 99.78EX";
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some(comment),
-            "deadbeef",
-            false,
-            GsExEvidence::from_sources(None, Some(comment)),
-        );
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
-
-    #[test]
-    fn cached_score_from_gs_does_not_infer_quint_without_ex_evidence() {
-        let cached = cached_score_from_gs(
-            10_000.0,
-            Some("[DS], FA+"),
-            "deadbeef",
-            false,
-            GsExEvidence::default(),
-        );
-
-        assert_eq!(cached.grade, Grade::Tier01);
-        assert_eq!(cached.lamp_index, Some(1));
-        assert_eq!(cached.lamp_judge_count, None);
-    }
 
     #[test]
     fn local_lamp_uses_single_digit_white_fantastics() {
@@ -3144,138 +2799,6 @@ mod tests {
             compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
             (Some(0), None)
         );
-    }
-
-    #[test]
-    fn score_import_result_includes_itl_self_data() {
-        let result = score_import_result_from_response(
-            LeaderboardsApiResponse {
-                player1: Some(LeaderboardApiPlayer {
-                    is_ranked: true,
-                    gs_leaderboard: vec![LeaderboardApiEntry {
-                        rank: 8,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: None,
-                        score: 9876.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                        comments: Some("[DS], 2e".to_string()),
-                    }],
-                    ex_leaderboard: Vec::new(),
-                    rpg: None,
-                    itl: Some(groovestats_api::LeaderboardEventData {
-                        name: "ITL Online 2026".to_string(),
-                        rpg_leaderboard: Vec::new(),
-                        itl_leaderboard: vec![LeaderboardApiEntry {
-                            rank: 42,
-                            name: "PerfectTaste".to_string(),
-                            machine_tag: None,
-                            score: 9912.0,
-                            date: String::new(),
-                            is_rival: false,
-                            is_self: true,
-                            is_fail: false,
-                            comments: None,
-                        }],
-                    }),
-                }),
-            },
-            ScoreImportEndpoint::GrooveStats,
-            "perfecttaste",
-            "deadbeef",
-        );
-
-        assert!(result.score.is_some());
-        assert!(result.itl_self_found);
-        assert_eq!(result.itl_self_score, Some(9912));
-        assert_eq!(result.itl_self_rank, Some(42));
-    }
-
-    #[test]
-    fn score_import_result_uses_ex_leaderboard_for_quint() {
-        let result = score_import_result_from_response(
-            LeaderboardsApiResponse {
-                player1: Some(LeaderboardApiPlayer {
-                    is_ranked: true,
-                    gs_leaderboard: vec![LeaderboardApiEntry {
-                        rank: 8,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: None,
-                        score: 10_000.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                        comments: Some("[DS], FA+, 99.78EX".to_string()),
-                    }],
-                    ex_leaderboard: vec![LeaderboardApiEntry {
-                        rank: 8,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: None,
-                        score: 10_000.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                        comments: None,
-                    }],
-                    rpg: None,
-                    itl: None,
-                }),
-            },
-            ScoreImportEndpoint::GrooveStats,
-            "perfecttaste",
-            "deadbeef",
-        );
-
-        let score = result.score.expect("score cached");
-        assert_eq!(score.grade, Grade::Quint);
-        assert_eq!(score.lamp_index, Some(0));
-    }
-
-    #[test]
-    fn score_import_result_rejects_quint_comment_when_ex_leaderboard_is_lower() {
-        let result = score_import_result_from_response(
-            LeaderboardsApiResponse {
-                player1: Some(LeaderboardApiPlayer {
-                    is_ranked: true,
-                    gs_leaderboard: vec![LeaderboardApiEntry {
-                        rank: 8,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: None,
-                        score: 10_000.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                        comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
-                    }],
-                    ex_leaderboard: vec![LeaderboardApiEntry {
-                        rank: 8,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: None,
-                        score: 9_978.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                        comments: None,
-                    }],
-                    rpg: None,
-                    itl: None,
-                }),
-            },
-            ScoreImportEndpoint::GrooveStats,
-            "perfecttaste",
-            "deadbeef",
-        );
-
-        let score = result.score.expect("score cached");
-        assert_eq!(score.grade, Grade::Tier01);
-        assert_eq!(score.lamp_index, Some(1));
-        assert!(result.score_proves_nonquint_ex);
     }
 
     #[test]
@@ -3296,23 +2819,7 @@ mod tests {
             );
         }
 
-        cache_gs_score_from_leaderboard(
-            profile_id,
-            "PerfectTaste",
-            chart_hash,
-            &[LeaderboardApiEntry {
-                rank: 1,
-                name: "Other".to_string(),
-                machine_tag: None,
-                score: 9999.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: false,
-                is_fail: false,
-                comments: None,
-            }],
-            &[],
-        );
+        cache_gs_score_from_leaderboard(profile_id, "PerfectTaste", chart_hash, None);
 
         let cached = GS_SCORE_CACHE
             .lock()
@@ -3328,22 +2835,6 @@ mod tests {
             .unwrap()
             .loaded_profiles
             .remove(profile_id);
-    }
-
-    #[test]
-    fn cached_score_from_gs_preserves_failed_percent() {
-        let cached = cached_score_from_gs(
-            9482.0,
-            Some("[DS], 3e"),
-            "deadbeef",
-            true,
-            GsExEvidence::default(),
-        );
-
-        assert_eq!(cached.grade, Grade::Failed);
-        assert_eq!(cached.score_percent, 0.9482);
-        assert_eq!(cached.lamp_index, None);
-        assert_eq!(cached.lamp_judge_count, None);
     }
 
     #[test]
@@ -3422,18 +2913,12 @@ mod tests {
             profile_id,
             "PerfectTaste",
             chart_hash,
-            &[LeaderboardApiEntry {
-                rank: 498,
-                name: "PerfectTaste".to_string(),
-                machine_tag: None,
-                score: 1358.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: true,
-                is_fail: false,
+            Some(ImportedPlayerScore {
+                score_10000: 1358.0,
                 comments: None,
-            }],
-            &[],
+                is_fail: false,
+                ex_evidence: deadsync_score::GsExEvidence::default(),
+            }),
         );
 
         let cached = GS_SCORE_CACHE

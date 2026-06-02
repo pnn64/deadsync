@@ -5,12 +5,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
+use deadsync_profile as profile_data;
+use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
+use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
     GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, LeaderboardEntry,
-    LeaderboardPane, PlayerLeaderboardData, RejectReason, groovestats_submit_record_banner,
-    leaderboard_nonzero_rank, leaderboard_pane, leaderboard_score_10000,
-    leaderboard_username_matches,
+    LeaderboardPane, PlayerLeaderboardData, RejectReason, ScoreImportEndpoint,
+    groovestats_submit_record_banner, leaderboard_nonzero_rank, leaderboard_pane,
+    leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
 };
+use serde_json::{Map as JsonMap, Value as JsonValue};
+
+pub use deadsync_score::{ImportedPlayerScore, PlayerScoreImportResult};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
@@ -88,6 +94,14 @@ impl Service {
             Self::BoogieStats
         } else {
             Self::GrooveStats
+        }
+    }
+
+    #[inline(always)]
+    pub const fn score_import_endpoint(self) -> ScoreImportEndpoint {
+        match self {
+            Self::GrooveStats => ScoreImportEndpoint::GrooveStats,
+            Self::BoogieStats => ScoreImportEndpoint::BoogieStats,
         }
     }
 }
@@ -379,12 +393,33 @@ pub fn gs_ex_evidence_from_leaderboard(
     )
 }
 
+pub fn imported_player_score_from_leaderboard_entries(
+    gs_entries: &[LeaderboardApiEntry],
+    ex_entries: &[LeaderboardApiEntry],
+    username: &str,
+) -> Option<ImportedPlayerScore> {
+    let entry = leaderboard_self_entry(gs_entries, username)?;
+    let ex_evidence =
+        gs_ex_evidence_from_leaderboard(ex_entries, username, entry.comments.as_deref());
+    Some(ImportedPlayerScore {
+        score_10000: entry.score,
+        comments: entry.comments.clone(),
+        is_fail: entry.is_fail,
+        ex_evidence,
+    })
+}
+
 #[derive(Debug)]
 pub struct FetchedPlayerLeaderboards {
     pub data: PlayerLeaderboardData,
-    pub gs_entries: Vec<LeaderboardApiEntry>,
-    pub ex_entries: Vec<LeaderboardApiEntry>,
+    pub imported_score: Option<ImportedPlayerScore>,
     pub itl_self_found: bool,
+}
+
+#[derive(Debug)]
+pub struct CombinedPlayerLeaderboards {
+    pub fetched: FetchedPlayerLeaderboards,
+    pub arrowcloud_error: Option<OnlineRequestError>,
 }
 
 fn push_leaderboard_pane(
@@ -398,14 +433,20 @@ fn push_leaderboard_pane(
     }
 }
 
+fn insert_arrowcloud_panes(fetched: &mut FetchedPlayerLeaderboards, panes: Vec<LeaderboardPane>) {
+    let insert_ix = 2.min(fetched.data.panes.len());
+    for pane in panes.into_iter().rev() {
+        fetched.data.panes.insert(insert_ix, pane);
+    }
+}
+
 pub fn fetched_player_leaderboards_from_api(
     decoded: LeaderboardsApiResponse,
     username: &str,
     show_ex_score: bool,
 ) -> FetchedPlayerLeaderboards {
     let mut panes = Vec::with_capacity(5);
-    let mut gs_entries = Vec::new();
-    let mut ex_entries = Vec::new();
+    let mut imported_score = None;
     let mut itl_self_score = None;
     let mut itl_self_rank = None;
     let mut itl_self_found = false;
@@ -418,8 +459,11 @@ pub fn fetched_player_leaderboards_from_api(
             itl,
         } = player;
 
-        gs_entries.clone_from(&gs_leaderboard);
-        ex_entries.clone_from(&ex_leaderboard);
+        imported_score = imported_player_score_from_leaderboard_entries(
+            &gs_leaderboard,
+            &ex_leaderboard,
+            username,
+        );
         if show_ex_score {
             push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
             push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
@@ -459,10 +503,104 @@ pub fn fetched_player_leaderboards_from_api(
             itl_self_score,
             itl_self_rank,
         },
-        gs_entries,
-        ex_entries,
+        imported_score,
         itl_self_found,
     }
+}
+
+pub fn fetch_combined_player_leaderboards(
+    service: Service,
+    api_key: &str,
+    username: &str,
+    chart_hash: &str,
+    arrowcloud_api_key: Option<&str>,
+    show_ex_score: bool,
+    max_entries: usize,
+) -> Result<CombinedPlayerLeaderboards, OnlineRequestError> {
+    let max_entries = max_entries.max(1);
+    let decoded = fetch_player_leaderboards(service, api_key, chart_hash, Some(max_entries))?;
+    let mut fetched = fetched_player_leaderboards_from_api(decoded, username, show_ex_score);
+    let mut arrowcloud_error = None;
+
+    if let Some(arrowcloud_api_key) = arrowcloud_api_key {
+        match crate::arrowcloud::fetch_hard_ex_leaderboard_panes(chart_hash, arrowcloud_api_key) {
+            Ok(arrowcloud_panes) => insert_arrowcloud_panes(&mut fetched, arrowcloud_panes),
+            Err(error) => arrowcloud_error = Some(error),
+        }
+    }
+
+    Ok(CombinedPlayerLeaderboards {
+        fetched,
+        arrowcloud_error,
+    })
+}
+
+pub fn player_score_import_result_from_api(
+    decoded: LeaderboardsApiResponse,
+    endpoint: ScoreImportEndpoint,
+    username: &str,
+) -> PlayerScoreImportResult {
+    let Some(player) = decoded.player1 else {
+        return PlayerScoreImportResult::empty();
+    };
+
+    let mut result = PlayerScoreImportResult::empty();
+    if let Some(entry) = player.gs_leaderboard.iter().find(|entry| {
+        score_import_entry_matches_profile(entry.name.as_str(), entry.is_self, endpoint, username)
+    }) {
+        let ex_score = player
+            .ex_leaderboard
+            .iter()
+            .find(|entry| {
+                score_import_entry_matches_profile(
+                    entry.name.as_str(),
+                    entry.is_self,
+                    endpoint,
+                    username,
+                )
+            })
+            .and_then(leaderboard_entry_score_10000);
+        let ex_evidence = GsExEvidence::from_sources(ex_score, entry.comments.as_deref());
+        result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
+        result.score = Some(ImportedPlayerScore {
+            score_10000: entry.score,
+            comments: entry.comments.clone(),
+            is_fail: entry.is_fail,
+            ex_evidence,
+        });
+    }
+
+    if let Some(itl) = player.itl
+        && !itl.itl_leaderboard.is_empty()
+    {
+        result.itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
+        result.itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+        result.itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+    }
+
+    result
+}
+
+pub fn fetch_player_score_import_result(
+    endpoint: ScoreImportEndpoint,
+    api_key: &str,
+    username: &str,
+    chart_hash: &str,
+) -> Result<PlayerScoreImportResult, OnlineRequestError> {
+    let decoded = match endpoint {
+        ScoreImportEndpoint::GrooveStats => {
+            fetch_player_leaderboards(Service::GrooveStats, api_key, chart_hash, None)
+        }
+        ScoreImportEndpoint::BoogieStats => {
+            fetch_player_leaderboards(Service::BoogieStats, api_key, chart_hash, None)
+        }
+        ScoreImportEndpoint::ArrowCloud => {
+            crate::arrowcloud::fetch_player_leaderboards(api_key, chart_hash)
+        }
+    }?;
+    Ok(player_score_import_result_from_api(
+        decoded, endpoint, username,
+    ))
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -506,6 +644,40 @@ impl GrooveStatsJudgmentCounts {
     }
 }
 
+#[inline(always)]
+const fn submit_bad_window_count(disabled: bool, count: u32) -> Option<u32> {
+    if disabled { None } else { Some(count) }
+}
+
+pub fn judgment_counts_from_stats(
+    windows: WindowCounts,
+    disabled_windows: [bool; 5],
+    total_steps: u32,
+    holds_held: u32,
+    total_holds: u32,
+    mines_hit: u32,
+    total_mines: u32,
+    rolls_held: u32,
+    total_rolls: u32,
+) -> GrooveStatsJudgmentCounts {
+    GrooveStatsJudgmentCounts {
+        fantastic_plus: windows.w0,
+        fantastic: windows.w1,
+        excellent: windows.w2,
+        great: windows.w3,
+        decent: submit_bad_window_count(disabled_windows[3], windows.w4),
+        way_off: submit_bad_window_count(disabled_windows[4], windows.w5),
+        miss: windows.miss,
+        total_steps,
+        holds_held,
+        total_holds,
+        mines_hit,
+        total_mines,
+        rolls_held,
+        total_rolls,
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrooveStatsRescoreCounts {
@@ -515,6 +687,80 @@ pub struct GrooveStatsRescoreCounts {
     pub great: u32,
     pub decent: u32,
     pub way_off: u32,
+}
+
+pub fn add_rescore_target(counts: &mut GrooveStatsRescoreCounts, judgment: &judgment::Judgment) {
+    if matches!(judgment.window, Some(judgment::TimingWindow::W0)) {
+        counts.fantastic_plus = counts.fantastic_plus.saturating_add(1);
+        return;
+    }
+    match judgment.grade {
+        judgment::JudgeGrade::Fantastic => counts.fantastic = counts.fantastic.saturating_add(1),
+        judgment::JudgeGrade::Excellent => counts.excellent = counts.excellent.saturating_add(1),
+        judgment::JudgeGrade::Great => counts.great = counts.great.saturating_add(1),
+        judgment::JudgeGrade::Decent => counts.decent = counts.decent.saturating_add(1),
+        judgment::JudgeGrade::WayOff => counts.way_off = counts.way_off.saturating_add(1),
+        judgment::JudgeGrade::Miss => {}
+    }
+}
+
+#[inline(always)]
+pub const fn final_result_counts_as_rescore_target(judgment: &judgment::Judgment) -> bool {
+    !matches!(
+        judgment.grade,
+        judgment::JudgeGrade::Decent | judgment::JudgeGrade::WayOff | judgment::JudgeGrade::Miss
+    )
+}
+
+pub fn submit_comment(
+    counts: &GrooveStatsJudgmentCounts,
+    fa_plus_ex_score: Option<f64>,
+    music_rate: f32,
+    timing_windows: TimingWindowsOption,
+    scroll_speed: ScrollSpeedSetting,
+) -> String {
+    let mut parts = Vec::with_capacity(11);
+
+    if let Some(ex_score) = fa_plus_ex_score {
+        parts.push("FA+".to_string());
+        parts.push(format!("{ex_score:.2}EX"));
+    }
+
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    if (rate - 1.0).abs() > 0.0001 {
+        parts.push(format!("{}x Rate", compact_f32_text(rate)));
+    }
+
+    for (count, suffix) in [
+        (counts.fantastic, "w"),
+        (counts.excellent, "e"),
+        (counts.great, "g"),
+        (counts.decent_count(), "d"),
+        (counts.way_off_count(), "wo"),
+        (counts.miss, "m"),
+    ] {
+        if count != 0 {
+            parts.push(format!("{count}{suffix}"));
+        }
+    }
+
+    if let Some(timing_windows) = timing_windows_comment(timing_windows) {
+        parts.push(timing_windows.to_string());
+    }
+
+    if let ScrollSpeedSetting::CMod(value) = scroll_speed {
+        parts.push(format!("C{}", compact_f32_text(value)));
+    }
+
+    if parts.is_empty() {
+        GROOVESTATS_COMMENT_PREFIX.to_string()
+    } else {
+        format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
+    }
 }
 
 #[inline(always)]
@@ -823,6 +1069,24 @@ pub fn submit_record_banner_from_api(
     )
 }
 
+pub fn imported_player_score_from_submit_response(
+    response: &GrooveStatsSubmitApiPlayer,
+    username: &str,
+    score_10000: f64,
+    comment: &str,
+) -> ImportedPlayerScore {
+    ImportedPlayerScore {
+        score_10000,
+        comments: Some(comment.to_string()),
+        is_fail: false,
+        ex_evidence: gs_ex_evidence_from_leaderboard(
+            response.ex_leaderboard.as_slice(),
+            username,
+            Some(comment),
+        ),
+    }
+}
+
 pub fn submit_score_request(
     service: Service,
     headers: &[(String, String)],
@@ -1068,10 +1332,103 @@ pub fn compact_f32_text(value: f32) -> String {
     text
 }
 
+#[inline(always)]
+pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'static str> {
+    match setting {
+        TimingWindowsOption::None => None,
+        TimingWindowsOption::WayOffs => Some("No WO"),
+        TimingWindowsOption::DecentsAndWayOffs => Some("No Dec/WO"),
+        TimingWindowsOption::FantasticsAndExcellents => Some("No Fan/Exc"),
+    }
+}
+
+pub fn player_options_json(profile: &Profile) -> String {
+    let (speed_mod_type, speed_mod) = match profile.scroll_speed {
+        ScrollSpeedSetting::XMod(value) => (1, value),
+        ScrollSpeedSetting::CMod(value) => (2, value),
+        ScrollSpeedSetting::MMod(value) => (3, value),
+    };
+    let mut options = JsonMap::with_capacity(18);
+    options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
+    options.insert(
+        "SpeedMod".to_string(),
+        JsonValue::from(f64::from(speed_mod)),
+    );
+    options.insert(
+        "BackgroundFilter".to_string(),
+        JsonValue::from(profile.background_filter.percent()),
+    );
+    options.insert(
+        "HideTargets".to_string(),
+        JsonValue::from(profile.hide_targets),
+    );
+    options.insert(
+        "HideSongBG".to_string(),
+        JsonValue::from(profile.hide_song_bg),
+    );
+    options.insert("HideCombo".to_string(), JsonValue::from(profile.hide_combo));
+    options.insert(
+        "HideLifebar".to_string(),
+        JsonValue::from(profile.hide_lifebar),
+    );
+    options.insert("HideScore".to_string(), JsonValue::from(profile.hide_score));
+    options.insert(
+        "HideDanger".to_string(),
+        JsonValue::from(profile.hide_danger),
+    );
+    options.insert(
+        "HideComboExplosions".to_string(),
+        JsonValue::from(profile.hide_combo_explosions),
+    );
+    options.insert(
+        "ColumnFlashOnMiss".to_string(),
+        JsonValue::from(profile.column_flash_on_miss),
+    );
+    options.insert(
+        "SubtractiveScoring".to_string(),
+        JsonValue::from(profile.subtractive_scoring),
+    );
+    options.insert("Mini".to_string(), JsonValue::from(profile.mini_percent));
+    options.insert(
+        "VisualDelay".to_string(),
+        JsonValue::from(profile.visual_delay_ms),
+    );
+    options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
+    options.insert(
+        "NoMines".to_string(),
+        JsonValue::from(profile.remove_active_mask.contains(RemoveMask::NO_MINES)),
+    );
+    options.insert(
+        "Reverse".to_string(),
+        JsonValue::from(
+            profile
+                .scroll_option
+                .contains(profile_data::ScrollOption::Reverse),
+        ),
+    );
+    options.insert(
+        "ShowFaPlusWindow".to_string(),
+        JsonValue::from(profile.show_fa_plus_window),
+    );
+    options.insert(
+        "ShowExScore".to_string(),
+        JsonValue::from(profile.show_ex_score),
+    );
+    options.insert(
+        "ShowFaPlusPane".to_string(),
+        JsonValue::from(profile.show_fa_plus_pane),
+    );
+    serde_json::to_string(&JsonValue::Object(options))
+        .expect("serialize GrooveStats playerOptions JSON")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_score::{GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, RejectReason};
+    use deadsync_rules::timing::WindowCounts;
+    use deadsync_score::{
+        GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, RejectReason, ScoreImportEndpoint,
+    };
 
     fn leaderboard_entry(rank: u32, name: &str, score: f64, is_self: bool) -> LeaderboardApiEntry {
         LeaderboardApiEntry {
@@ -1103,10 +1460,202 @@ mod tests {
     }
 
     #[test]
+    fn service_score_import_endpoints_match_backend() {
+        assert_eq!(
+            Service::GrooveStats.score_import_endpoint(),
+            ScoreImportEndpoint::GrooveStats
+        );
+        assert_eq!(
+            Service::BoogieStats.score_import_endpoint(),
+            ScoreImportEndpoint::BoogieStats
+        );
+    }
+
+    #[test]
     fn compact_f32_text_strips_trailing_decimal_zeroes() {
         assert_eq!(compact_f32_text(1.0), "1");
         assert_eq!(compact_f32_text(1.25), "1.25");
         assert_eq!(compact_f32_text(1.5), "1.5");
+    }
+
+    #[test]
+    fn timing_windows_comment_matches_submit_labels() {
+        assert_eq!(timing_windows_comment(TimingWindowsOption::None), None);
+        assert_eq!(
+            timing_windows_comment(TimingWindowsOption::WayOffs),
+            Some("No WO")
+        );
+        assert_eq!(
+            timing_windows_comment(TimingWindowsOption::DecentsAndWayOffs),
+            Some("No Dec/WO")
+        );
+        assert_eq!(
+            timing_windows_comment(TimingWindowsOption::FantasticsAndExcellents),
+            Some("No Fan/Exc")
+        );
+    }
+
+    #[test]
+    fn player_options_json_includes_submit_relevant_mods() {
+        let mut profile = Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
+        profile.background_filter = "55".parse().expect("background filter percent");
+        profile.hide_targets = true;
+        profile.hide_song_bg = true;
+        profile.hide_combo = true;
+        profile.hide_lifebar = true;
+        profile.hide_score = true;
+        profile.hide_danger = true;
+        profile.hide_combo_explosions = true;
+        profile.column_flash_on_miss = true;
+        profile.subtractive_scoring = true;
+        profile.mini_percent = 37;
+        profile.visual_delay_ms = -12;
+        profile.remove_active_mask |= RemoveMask::NO_MINES;
+        profile.scroll_option = profile
+            .scroll_option
+            .union(profile_data::ScrollOption::Reverse);
+        profile.show_fa_plus_window = true;
+        profile.show_ex_score = true;
+        profile.show_fa_plus_pane = true;
+
+        let value: serde_json::Value =
+            serde_json::from_str(&player_options_json(&profile)).expect("player options json");
+        assert_eq!(value["SpeedModType"], 2);
+        assert_eq!(value["SpeedMod"], 650.0);
+        assert_eq!(value["BackgroundFilter"], 55);
+        assert_eq!(value["HideTargets"], true);
+        assert_eq!(value["HideSongBG"], true);
+        assert_eq!(value["HideCombo"], true);
+        assert_eq!(value["HideLifebar"], true);
+        assert_eq!(value["HideScore"], true);
+        assert_eq!(value["HideDanger"], true);
+        assert_eq!(value["HideComboExplosions"], true);
+        assert_eq!(value["ColumnFlashOnMiss"], true);
+        assert_eq!(value["SubtractiveScoring"], true);
+        assert_eq!(value["Mini"], 37);
+        assert_eq!(value["VisualDelay"], -12);
+        assert_eq!(value["Cover"], true);
+        assert_eq!(value["NoMines"], true);
+        assert_eq!(value["Reverse"], true);
+        assert_eq!(value["ShowFaPlusWindow"], true);
+        assert_eq!(value["ShowExScore"], true);
+        assert_eq!(value["ShowFaPlusPane"], true);
+    }
+
+    #[test]
+    fn judgment_counts_from_stats_omits_disabled_bad_windows() {
+        let counts = judgment_counts_from_stats(
+            WindowCounts {
+                w0: 8,
+                w1: 17,
+                w2: 98,
+                w3: 270,
+                w4: 12,
+                w5: 4,
+                miss: 1,
+            },
+            [false, false, false, true, true],
+            394,
+            18,
+            18,
+            0,
+            0,
+            8,
+            8,
+        );
+
+        assert_eq!(counts.fantastic_plus, 8);
+        assert_eq!(counts.great, 270);
+        assert_eq!(counts.decent, None);
+        assert_eq!(counts.way_off, None);
+        assert_eq!(counts.decent_count(), 0);
+        assert_eq!(counts.way_off_count(), 0);
+        assert_eq!(counts.total_steps, 394);
+        assert_eq!(counts.holds_held, 18);
+        assert_eq!(counts.rolls_held, 8);
+    }
+
+    #[test]
+    fn rescore_target_helpers_count_fa_plus_and_final_windows() {
+        let way_off = judgment::Judgment {
+            time_error_ms: -18.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(-18.0, 1.0),
+            grade: judgment::JudgeGrade::WayOff,
+            window: Some(judgment::TimingWindow::W5),
+            miss_because_held: false,
+        };
+        let great = judgment::Judgment {
+            time_error_ms: -10.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(-10.0, 1.0),
+            grade: judgment::JudgeGrade::Great,
+            window: Some(judgment::TimingWindow::W3),
+            miss_because_held: false,
+        };
+        let fa_plus = judgment::Judgment {
+            time_error_ms: 1.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(1.0, 1.0),
+            grade: judgment::JudgeGrade::Fantastic,
+            window: Some(judgment::TimingWindow::W0),
+            miss_because_held: false,
+        };
+
+        assert!(!final_result_counts_as_rescore_target(&way_off));
+        assert!(final_result_counts_as_rescore_target(&great));
+
+        let mut counts = GrooveStatsRescoreCounts::default();
+        add_rescore_target(&mut counts, &way_off);
+        add_rescore_target(&mut counts, &great);
+        add_rescore_target(&mut counts, &fa_plus);
+
+        assert_eq!(counts.fantastic_plus, 1);
+        assert_eq!(counts.great, 1);
+        assert_eq!(counts.way_off, 1);
+    }
+
+    #[test]
+    fn submit_comment_formats_groovestats_parts() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 1,
+            fantastic: 2,
+            excellent: 3,
+            great: 0,
+            decent: Some(4),
+            way_off: Some(5),
+            miss: 6,
+            total_steps: 20,
+            holds_held: 1,
+            total_holds: 2,
+            mines_hit: 0,
+            total_mines: 1,
+            rolls_held: 0,
+            total_rolls: 0,
+        };
+
+        assert_eq!(
+            submit_comment(
+                &counts,
+                Some(99.5),
+                1.5,
+                TimingWindowsOption::DecentsAndWayOffs,
+                ScrollSpeedSetting::CMod(650.0),
+            ),
+            "[DS], FA+, 99.50EX, 1.5x Rate, 2w, 3e, 4d, 5wo, 6m, No Dec/WO, C650"
+        );
+    }
+
+    #[test]
+    fn submit_comment_uses_prefix_when_no_parts() {
+        assert_eq!(
+            submit_comment(
+                &GrooveStatsJudgmentCounts::default(),
+                None,
+                1.0,
+                TimingWindowsOption::None,
+                ScrollSpeedSetting::XMod(1.0),
+            ),
+            "[DS]"
+        );
     }
 
     #[test]
@@ -1431,6 +1980,66 @@ mod tests {
     }
 
     #[test]
+    fn imported_player_score_from_leaderboard_entries_uses_ex_evidence() {
+        let gs_entries = vec![LeaderboardApiEntry {
+            rank: 1,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 10_000.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: true,
+            is_fail: false,
+            comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
+        }];
+        let ex_entries = vec![LeaderboardApiEntry {
+            rank: 1,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9_978.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: true,
+            is_fail: false,
+            comments: None,
+        }];
+
+        let imported = imported_player_score_from_leaderboard_entries(
+            &gs_entries,
+            &ex_entries,
+            "perfecttaste",
+        )
+        .expect("self score should map");
+
+        assert_eq!(imported.score_10000, 10_000.0);
+        assert_eq!(
+            imported.comments.as_deref(),
+            Some("[DS], FA+, 100.00EX, C875")
+        );
+        assert!(!imported.is_fail);
+        assert!(imported.ex_evidence.proves_nonquint());
+    }
+
+    #[test]
+    fn imported_player_score_from_leaderboard_entries_requires_self_row() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 1,
+            name: "Other".to_string(),
+            machine_tag: None,
+            score: 10_000.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert!(
+            imported_player_score_from_leaderboard_entries(&entries, &[], "perfecttaste").is_none()
+        );
+    }
+
+    #[test]
     fn leaderboard_pane_from_api_maps_entries() {
         let pane = leaderboard_pane_from_api(
             "GrooveStats",
@@ -1479,8 +2088,9 @@ mod tests {
             true,
         );
 
-        assert_eq!(fetched.gs_entries.len(), 1);
-        assert_eq!(fetched.ex_entries.len(), 1);
+        let imported = fetched.imported_score.as_ref().expect("imported score");
+        assert_eq!(imported.score_10000, 9876.0);
+        assert_eq!(imported.ex_evidence.leaderboard_score_10000, Some(9912.0));
         assert!(fetched.itl_self_found);
         assert_eq!(fetched.data.itl_self_score, Some(8765));
         assert_eq!(fetched.data.itl_self_rank, Some(42));
@@ -1492,6 +2102,134 @@ mod tests {
         assert_eq!(fetched.data.panes[2].name, "RPG");
         assert_eq!(fetched.data.panes[3].name, "ITL");
         assert!(fetched.data.panes[3].is_ex);
+    }
+
+    #[test]
+    fn insert_arrowcloud_panes_places_them_after_core_gs_panes() {
+        let mut fetched = fetched_player_leaderboards_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+                    ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
+                    rpg: Some(LeaderboardEventData {
+                        name: "RPG".to_string(),
+                        rpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
+                        itl_leaderboard: Vec::new(),
+                    }),
+                    itl: None,
+                }),
+            },
+            "perfecttaste",
+            false,
+        );
+
+        insert_arrowcloud_panes(
+            &mut fetched,
+            vec![LeaderboardPane {
+                name: "ArrowCloud".to_string(),
+                entries: Vec::new(),
+                is_ex: false,
+                disabled: false,
+                personalized: false,
+                arrowcloud_kind: None,
+            }],
+        );
+
+        assert_eq!(fetched.data.panes.len(), 4);
+        assert_eq!(fetched.data.panes[0].name, "GrooveStats");
+        assert_eq!(fetched.data.panes[1].name, "GrooveStats");
+        assert_eq!(fetched.data.panes[2].name, "ArrowCloud");
+        assert_eq!(fetched.data.panes[3].name, "RPG");
+    }
+
+    #[test]
+    fn player_score_import_result_from_api_includes_itl_self_data() {
+        let result = player_score_import_result_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9876.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], 2e".to_string()),
+                    }],
+                    ex_leaderboard: Vec::new(),
+                    rpg: None,
+                    itl: Some(LeaderboardEventData {
+                        name: "ITL Online 2026".to_string(),
+                        rpg_leaderboard: Vec::new(),
+                        itl_leaderboard: vec![LeaderboardApiEntry {
+                            rank: 42,
+                            name: "PerfectTaste".to_string(),
+                            machine_tag: None,
+                            score: 9912.0,
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: true,
+                            is_fail: false,
+                            comments: None,
+                        }],
+                    }),
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+        );
+
+        let score = result.score.expect("score");
+        assert_eq!(score.score_10000, 9876.0);
+        assert_eq!(score.comments.as_deref(), Some("[DS], 2e"));
+        assert!(result.itl_self_found);
+        assert_eq!(result.itl_self_score, Some(9912));
+        assert_eq!(result.itl_self_rank, Some(42));
+    }
+
+    #[test]
+    fn player_score_import_result_from_api_uses_ex_leaderboard_evidence() {
+        let result = player_score_import_result_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 10_000.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
+                    }],
+                    ex_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9_978.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: None,
+                    }],
+                    rpg: None,
+                    itl: None,
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+        );
+
+        let score = result.score.expect("score");
+        assert_eq!(score.ex_evidence.leaderboard_score_10000, Some(9_978.0));
+        assert!(result.score_proves_nonquint_ex);
     }
 
     #[test]
@@ -1688,6 +2426,29 @@ mod tests {
             false,
         );
         assert_eq!(banner, None);
+    }
+
+    #[test]
+    fn imported_player_score_from_submit_response_uses_ex_evidence() {
+        let response = submit_player(
+            "improved",
+            Vec::new(),
+            vec![leaderboard_entry(1, "PerfectTaste", 9_978.0, true)],
+        );
+        let imported = imported_player_score_from_submit_response(
+            &response,
+            "perfecttaste",
+            10_000.0,
+            "[DS], FA+, 100.00EX, C875",
+        );
+
+        assert_eq!(imported.score_10000, 10_000.0);
+        assert_eq!(
+            imported.comments.as_deref(),
+            Some("[DS], FA+, 100.00EX, C875")
+        );
+        assert!(!imported.is_fail);
+        assert!(imported.ex_evidence.proves_nonquint());
     }
 
     #[test]
