@@ -334,6 +334,10 @@ pub fn apply_preset(pad: usize, preset: crate::config::SmxPadPreset) -> bool {
             s.fsr_high_threshold[i] = fsr_high;
         }
     }
+    // A built-in preset is a full baseline: also restore auto-recalibration on
+    // (max tare 0xFFFF) and the default 4ms panel debounce.
+    config.auto_calibration_max_tare = 0xFFFF;
+    config.panel_debounce_us = 4000;
     set_config(pad, config);
     true
 }

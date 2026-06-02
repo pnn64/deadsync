@@ -138,6 +138,9 @@ pub struct State {
     pending: Vec<PadCommand>,
     /// When set, the "save this pad as a profile" name-entry box is open.
     saving: Option<SaveDraft>,
+    /// Whether the cursor pad can be saved to a profile (set by the app: true
+    /// only in-session when the cursor pad maps to a local profile).
+    save_available: bool,
     /// Screen to return to on Back. Set when navigating in; defaults to Options.
     return_screen: Option<Screen>,
     filter: PadFilter,
@@ -248,7 +251,7 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     if state.saving.is_some() {
         if is_back(ev.action) {
             state.saving = None;
-        } else if is_start(ev.action) {
+        } else if is_start(ev.action) || is_select(ev.action) {
             if state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty()) {
                 return EditResult::SaveRequested;
             }
@@ -298,10 +301,16 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     EditResult::Handled
 }
 
-/// Open the "save this pad as a profile" name-entry box (in-session overlay).
-/// No-op in Advanced view, with no pads, or if already saving.
+/// Whether saving is available for the cursor pad (set by the app each frame).
+pub fn set_save_available(state: &mut State, available: bool) {
+    state.save_available = available;
+}
+
+/// Open the "save this pad as a profile" name-entry box. No-op if there are no
+/// pads, if already saving, or if the cursor pad can't be saved (no profile).
+/// Works in both the Simple and Advanced views.
 pub fn begin_save(state: &mut State) {
-    if state.advanced.is_some() || state.pads.is_empty() || state.saving.is_some() {
+    if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
     state.saving = Some(SaveDraft::default());
@@ -342,8 +351,12 @@ pub fn save_key_input(state: &mut State, backspace: bool, text: Option<&str>) ->
     true
 }
 
-/// The pad device the cursor is currently on (for the overlay's save action).
+/// The pad device the cursor is currently on — the Advanced pad if open,
+/// otherwise the Simple-view cursor's pad.
 pub fn selected_device(state: &State) -> Option<PadDeviceId> {
+    if let Some(dev) = state.advanced {
+        return Some(dev);
+    }
     let pad_idx = state.selected / PAD_BUTTON_COUNT;
     state.pads.get(pad_idx).map(|p| p.device_id)
 }
@@ -404,7 +417,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.8):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false }, zb);
+        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false, save_available: false }, zb);
         return actors;
     }
 
@@ -419,7 +432,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false }, zb);
+        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false, save_available: false }, zb);
         return actors;
     }
 
@@ -574,6 +587,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
         Footer::Simple {
             as_overlay,
             advanced_available,
+            save_available: state.save_available,
         },
         zb,
     );
@@ -679,7 +693,14 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         push_setting_row(actors, "Debounce", &format_ms(us), true, focused_here, ey, zb);
     }
 
-    push_footer(actors, Footer::Advanced { supports_toggle: pad.supports_sensor_toggle }, zb);
+    push_footer(
+        actors,
+        Footer::Advanced {
+            supports_toggle: pad.supports_sensor_toggle,
+            save_available: state.save_available,
+        },
+        zb,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1170,6 +1191,10 @@ const fn is_start(act: VirtualAction) -> bool {
     matches!(act, VirtualAction::p1_start | VirtualAction::p2_start)
 }
 
+const fn is_select(act: VirtualAction) -> bool {
+    matches!(act, VirtualAction::p1_select | VirtualAction::p2_select)
+}
+
 const fn is_dedicated_menu_action(act: VirtualAction) -> bool {
     matches!(
         act,
@@ -1187,7 +1212,7 @@ const fn is_dedicated_menu_action(act: VirtualAction) -> bool {
 /// Controls allowed from a gamepad source (so a pad's menu buttons work but
 /// stepping on its panels doesn't move the cursor).
 const fn is_menu_control(act: VirtualAction) -> bool {
-    is_dedicated_menu_action(act) || is_back(act) || is_start(act)
+    is_dedicated_menu_action(act) || is_back(act) || is_start(act) || is_select(act)
 }
 
 // ─── Footer ──────────────────────────────────────────────────────────────────
@@ -1196,8 +1221,12 @@ enum Footer {
     Simple {
         as_overlay: bool,
         advanced_available: bool,
+        save_available: bool,
     },
-    Advanced { supports_toggle: bool },
+    Advanced {
+        supports_toggle: bool,
+        save_available: bool,
+    },
 }
 
 fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
@@ -1219,6 +1248,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         Footer::Simple {
             as_overlay,
             advanced_available,
+            save_available,
         } => {
             line(actors, "Left/Right - Select Panel".to_owned(), bottom - 94.0);
             line(
@@ -1226,13 +1256,12 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
                 format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
                 bottom - 70.0,
             );
-            // In-session overlay: combine Advanced + Save on one line (Save uses
-            // the session's player/profile context). Standalone screen: just
-            // Advanced (no profile to save to).
-            let action_line = match (as_overlay, advanced_available) {
+            // Combine Advanced + Save on one line; Save only when the cursor pad
+            // has a profile to save to (in-session, local profile).
+            let action_line = match (advanced_available, save_available) {
                 (true, true) => Some("&START; Advanced    &SELECT; Save profile".to_owned()),
-                (true, false) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
-                (false, true) => Some("Press &START; for Advanced (per-sensor)".to_owned()),
+                (false, true) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
+                (true, false) => Some("Press &START; for Advanced (per-sensor)".to_owned()),
                 (false, false) => None,
             };
             if let Some(action_line) = action_line {
@@ -1245,14 +1274,19 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             };
             line(actors, back.to_owned(), bottom - 22.0);
         }
-        Footer::Advanced { supports_toggle } => {
+        Footer::Advanced {
+            supports_toggle,
+            save_available,
+        } => {
             line(actors, "Left/Right - Select   Up/Down - Adjust (Shift = fine)".to_owned(), bottom - 70.0);
-            if supports_toggle {
-                line(
-                    actors,
-                    "Press &START; to toggle the selected sensor on/off".to_owned(),
-                    bottom - 46.0,
-                );
+            let action_line = match (supports_toggle, save_available) {
+                (true, true) => Some("&START; toggle sensor    &SELECT; save profile".to_owned()),
+                (true, false) => Some("Press &START; to toggle the selected sensor on/off".to_owned()),
+                (false, true) => Some("Press &SELECT; to save this pad as a profile".to_owned()),
+                (false, false) => None,
+            };
+            if let Some(action_line) = action_line {
+                line(actors, action_line, bottom - 46.0);
             }
             line(
                 actors,
