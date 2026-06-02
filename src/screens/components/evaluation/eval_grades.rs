@@ -1,16 +1,34 @@
 use crate::act;
+use crate::assets;
+use crate::config::dirs;
+use crate::engine::gfx::SamplerDesc;
 use crate::engine::present::actors::Actor;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_score as score_data;
+use image::{Rgba, RgbaImage};
+use std::path::Path;
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
 const LETTER_ZOOM: f32 = 0.85;
+const STAR_TEX: &str = "grades/star.png";
+const AFFLUENT_TEX: &str = "grades/affluent.png";
+const GOLDSTAR_TEX: &str = "grades/goldstar (stretch).png";
+
+// Evaluation-only generated texture cache. The global asset registry owns uploads;
+// this path lazily builds at most 180 two-degree face-rotation buckets from bundled
+// grade art, outside gameplay, and does not evict during the process lifetime.
+const AFFLUENT_CLIP_KEY_PREFIX: &str = "__eval_grade_affluent_star_clip";
 
 const STAR_PULSE_PERIOD_S: f32 = 0.80;
 const STAR_PULSE_AMP: f32 = 0.06;
 const STAR_RAINBOW_DELAY_S: f32 = 2.0;
 const TAUNT_APPEAR_DELAY_S: f32 = 9.0;
 const AFFLUENT_FADE_S: f32 = 3.0;
+const AFFLUENT_ALPHA_MAX: f32 = 0.7;
+const AFFLUENT_OFFSET_Y: f32 = 10.0;
+const AFFLUENT_ZOOM: f32 = 1.2;
+const AFFLUENT_ROT_BUCKET_DEG: f32 = 2.0;
+const AFFLUENT_ROT_BUCKETS: u32 = (360.0 / AFFLUENT_ROT_BUCKET_DEG) as u32;
 const AFFLUENT_SPIN_DELAY_S: f32 = 14.0;
 const GOLDSTAR_ANIM_DELAY_S: f32 = 2.0;
 const GOLDSTAR_ZOOM_OUT_S: f32 = 3.0;
@@ -480,7 +498,7 @@ fn base_star_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Actor {
         [1.0, 1.0, 1.0, 1.0]
     };
 
-    act!(sprite("grades/star.png"):
+    act!(sprite(STAR_TEX):
         align(0.5, 0.5):
         xy(st.x, st.y):
         zoomx(st.sx):
@@ -492,53 +510,135 @@ fn base_star_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Actor {
 }
 
 #[inline(always)]
-fn mask_star_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
-    if !one_w2_taunt(p.taunt) || p.elapsed < TAUNT_APPEAR_DELAY_S {
-        return None;
-    }
-
-    Some(act!(sprite("grades/star.png"):
-        align(0.5, 0.5):
-        xy(st.x, st.y):
-        zoomx(st.sx):
-        zoomy(st.sy):
-        rotationz(st.rot):
-        z(p.z):
-        MaskSource()
-    ))
-}
-
-#[inline(always)]
 fn affluent_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Option<Actor> {
     if !p.easter_eggs || !one_w2_taunt(p.taunt) || p.elapsed < TAUNT_APPEAR_DELAY_S {
         return None;
     }
 
-    let alpha = ((p.elapsed - TAUNT_APPEAR_DELAY_S) / AFFLUENT_FADE_S).clamp(0.0, 1.0) * 0.7;
-    let rot = st.rot + affluent_rot_deg(p.elapsed, seed);
-    let (x, y) = child_xy(st, 0.0, 10.0);
-    if p.elapsed >= TAUNT_APPEAR_DELAY_S + AFFLUENT_FADE_S {
-        Some(act!(sprite("grades/affluent.png"):
+    let alpha =
+        ((p.elapsed - TAUNT_APPEAR_DELAY_S) / AFFLUENT_FADE_S).clamp(0.0, 1.0) * AFFLUENT_ALPHA_MAX;
+    let face_rot = affluent_rot_deg(p.elapsed, seed);
+    if p.elapsed < TAUNT_APPEAR_DELAY_S + AFFLUENT_FADE_S {
+        return Some(raw_affluent_actor(st, p.z, alpha, face_rot));
+    }
+
+    if let Some(key) = clipped_affluent_texture(face_rot) {
+        Some(act!(sprite(key):
             align(0.5, 0.5):
-            xy(x, y):
-            zoomx(st.sx * 1.2):
-            zoomy(st.sy * 1.2):
-            rotationz(rot):
-            z(p.z):
-            diffuse(1.0, 1.0, 1.0, alpha):
-            MaskDest()
-        ))
-    } else {
-        Some(act!(sprite("grades/affluent.png"):
-            align(0.5, 0.5):
-            xy(x, y):
-            zoomx(st.sx * 1.2):
-            zoomy(st.sy * 1.2):
-            rotationz(rot):
+            xy(st.x, st.y):
+            zoomx(st.sx):
+            zoomy(st.sy):
+            rotationz(st.rot):
             z(p.z):
             diffuse(1.0, 1.0, 1.0, alpha)
         ))
+    } else {
+        Some(raw_affluent_actor(st, p.z, alpha, face_rot))
     }
+}
+
+fn raw_affluent_actor(st: StarTransform, z: i16, alpha: f32, face_rot: f32) -> Actor {
+    let rot = st.rot + face_rot;
+    let (x, y) = child_xy(st, 0.0, AFFLUENT_OFFSET_Y);
+    act!(sprite(AFFLUENT_TEX):
+        align(0.5, 0.5):
+        xy(x, y):
+        zoomx(st.sx * AFFLUENT_ZOOM):
+        zoomy(st.sy * AFFLUENT_ZOOM):
+        rotationz(rot):
+        z(z):
+        diffuse(1.0, 1.0, 1.0, alpha)
+    )
+}
+
+fn clipped_affluent_texture(rot_deg: f32) -> Option<String> {
+    let bucket = affluent_rot_bucket(rot_deg);
+    let key = format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}");
+    if assets::texture_dims(&key).is_some() {
+        return Some(key);
+    }
+
+    let rot = bucket as f32 * AFFLUENT_ROT_BUCKET_DEG;
+    let image = build_clipped_affluent_texture(rot)?;
+    assets::register_generated_texture(&key, image, SamplerDesc::default());
+    Some(key)
+}
+
+#[inline(always)]
+fn affluent_rot_bucket(rot_deg: f32) -> u32 {
+    let bucket = (rot_deg.rem_euclid(360.0) / AFFLUENT_ROT_BUCKET_DEG).round() as u32;
+    bucket % AFFLUENT_ROT_BUCKETS
+}
+
+fn load_grade_rgba(key: &str) -> Option<RgbaImage> {
+    let path = Path::new("assets").join("graphics").join(key);
+    let path = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
+    assets::open_image_fallback(&path)
+        .map(|img| img.to_rgba8())
+        .ok()
+}
+
+fn build_clipped_affluent_texture(rot_deg: f32) -> Option<RgbaImage> {
+    let star = load_grade_rgba(STAR_TEX)?;
+    let face = load_grade_rgba(AFFLUENT_TEX)?;
+    let (w, h) = (star.width(), star.height());
+    let mut out = RgbaImage::new(w, h);
+    let face_cx = face.width() as f32 * 0.5;
+    let face_cy = face.height() as f32 * 0.5;
+    let out_cx = w as f32 * 0.5;
+    let out_cy = h as f32 * 0.5;
+    let rot = -rot_deg.to_radians();
+    let (sin, cos) = rot.sin_cos();
+
+    for y in 0..h {
+        for x in 0..w {
+            let mask_a = star.get_pixel(x, y)[3];
+            if mask_a == 0 {
+                continue;
+            }
+
+            let lx = x as f32 + 0.5 - out_cx;
+            let ly = y as f32 + 0.5 - out_cy - AFFLUENT_OFFSET_Y;
+            let rx = (lx * cos - ly * sin) / AFFLUENT_ZOOM + face_cx;
+            let ry = (lx * sin + ly * cos) / AFFLUENT_ZOOM + face_cy;
+            let Some(src) = sample_rgba_bilinear(&face, rx, ry) else {
+                continue;
+            };
+
+            let a = ((u16::from(src[3]) * u16::from(mask_a)) / 255) as u8;
+            out.put_pixel(x, y, Rgba([src[0], src[1], src[2], a]));
+        }
+    }
+    Some(out)
+}
+
+fn sample_rgba_bilinear(img: &RgbaImage, x: f32, y: f32) -> Option<[u8; 4]> {
+    if x < 0.0
+        || y < 0.0
+        || x > img.width().saturating_sub(1) as f32
+        || y > img.height().saturating_sub(1) as f32
+    {
+        return None;
+    }
+
+    let x0 = x.floor() as u32;
+    let y0 = y.floor() as u32;
+    let x1 = (x0 + 1).min(img.width() - 1);
+    let y1 = (y0 + 1).min(img.height() - 1);
+    let fx = x - x0 as f32;
+    let fy = y - y0 as f32;
+    let p00 = img.get_pixel(x0, y0);
+    let p10 = img.get_pixel(x1, y0);
+    let p01 = img.get_pixel(x0, y1);
+    let p11 = img.get_pixel(x1, y1);
+    let mut out = [0; 4];
+
+    for i in 0..4 {
+        let top = (p10[i] as f32 - p00[i] as f32).mul_add(fx, p00[i] as f32);
+        let bottom = (p11[i] as f32 - p01[i] as f32).mul_add(fx, p01[i] as f32);
+        out[i] = (bottom - top).mul_add(fy, top).round().clamp(0.0, 255.0) as u8;
+    }
+    Some(out)
 }
 
 #[inline(always)]
@@ -554,7 +654,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
 
     let one_w2 = p.taunt.great == 0 && p.taunt.excellent == 1;
     if one_w3_flag(p.taunt) {
-        return Some(act!(sprite("grades/goldstar (stretch).png"):
+        return Some(act!(sprite(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx):
@@ -571,7 +671,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
     let zoom = goldstar_zoom(p.elapsed);
     let wag = goldstar_wag_deg(p.elapsed);
     if p.elapsed >= GOLDSTAR_ANIM_DELAY_S + GOLDSTAR_ZOOM_OUT_S + GOLDSTAR_ZOOM_BACK_S {
-        Some(act!(sprite("grades/goldstar (stretch).png"):
+        Some(act!(sprite(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx * zoom):
@@ -582,7 +682,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
             texcoordvelocity(1.0, 0.0)
         ))
     } else if p.elapsed >= GOLDSTAR_ANIM_DELAY_S {
-        Some(act!(sprite("grades/goldstar (stretch).png"):
+        Some(act!(sprite(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx * zoom):
@@ -592,7 +692,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
             diffuse(1.0, 1.0, 1.0, 1.0)
         ))
     } else {
-        Some(act!(sprite("grades/goldstar (stretch).png"):
+        Some(act!(sprite(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx):
@@ -610,9 +710,6 @@ fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
     let seed = star_seed(s);
     let mut out = Vec::with_capacity(4);
     out.push(base_star_actor(st, p, seed));
-    if let Some(actor) = mask_star_actor(st, p) {
-        out.push(actor);
-    }
     if let Some(actor) = affluent_actor(st, p, seed) {
         out.push(actor);
     }
@@ -682,6 +779,18 @@ mod tests {
             .count()
     }
 
+    fn texture_prefix_count(actors: &[Actor], prefix: &str) -> usize {
+        actors
+            .iter()
+            .filter(|actor| match actor {
+                Actor::Sprite { source, .. } => source
+                    .texture_key()
+                    .is_some_and(|key| key.starts_with(prefix)),
+                _ => false,
+            })
+            .count()
+    }
+
     fn first_tint(actors: &[Actor], key: &str) -> Option<[f32; 4]> {
         actors.iter().find_map(|actor| match actor {
             Actor::Sprite { source, tint, .. } if source.texture_key() == Some(key) => Some(*tint),
@@ -700,9 +809,27 @@ mod tests {
             },
         );
 
-        assert_eq!(texture_count(&actors, "grades/star.png"), 2);
-        assert_eq!(texture_count(&actors, "grades/affluent.png"), 1);
-        assert_eq!(texture_count(&actors, "grades/goldstar (stretch).png"), 1);
+        assert_eq!(texture_count(&actors, STAR_TEX), 1);
+        assert_eq!(texture_count(&actors, AFFLUENT_TEX), 1);
+        assert_eq!(texture_prefix_count(&actors, AFFLUENT_CLIP_KEY_PREFIX), 0);
+        assert_eq!(texture_count(&actors, GOLDSTAR_TEX), 1);
+    }
+
+    #[test]
+    fn exact_one_w2_uses_clipped_affluent_after_fade() {
+        let actors = actors(
+            score_data::Grade::Tier04,
+            EvalGradeParams {
+                elapsed: 12.0,
+                taunt: grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(texture_count(&actors, STAR_TEX), 1);
+        assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
+        assert_eq!(texture_prefix_count(&actors, AFFLUENT_CLIP_KEY_PREFIX), 1);
+        assert_eq!(texture_count(&actors, GOLDSTAR_TEX), 1);
     }
 
     #[test]
@@ -716,10 +843,10 @@ mod tests {
             },
         );
 
-        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
-        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
+        assert_eq!(texture_count(&actors, STAR_TEX), 1);
+        assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
         assert_eq!(
-            first_tint(&actors, "grades/goldstar (stretch).png"),
+            first_tint(&actors, GOLDSTAR_TEX),
             Some([0.0, 0.0, 0.0, 1.0])
         );
     }
@@ -735,10 +862,10 @@ mod tests {
             },
         );
 
-        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
-        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
+        assert_eq!(texture_count(&actors, STAR_TEX), 1);
+        assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
         assert_eq!(
-            first_tint(&actors, "grades/goldstar (stretch).png"),
+            first_tint(&actors, GOLDSTAR_TEX),
             Some([0.0, 0.0, 0.0, 1.0])
         );
     }
@@ -754,8 +881,8 @@ mod tests {
             },
         );
 
-        assert_eq!(texture_count(&actors, "grades/star.png"), 1);
-        assert_eq!(texture_count(&actors, "grades/affluent.png"), 0);
-        assert_eq!(texture_count(&actors, "grades/goldstar (stretch).png"), 0);
+        assert_eq!(texture_count(&actors, STAR_TEX), 1);
+        assert_eq!(texture_count(&actors, AFFLUENT_TEX), 0);
+        assert_eq!(texture_count(&actors, GOLDSTAR_TEX), 0);
     }
 }
