@@ -9140,6 +9140,13 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
     update_select_hold_state(state, ev);
 
+    // The Configure Pads overlay is a focused modal: handle its input first, so
+    // the pre-overlay logic (e.g. the ignore-next-back/select swallow used when
+    // closing menus) can't eat the overlay's first Select/Back press.
+    if state.pad_config_overlay_visible {
+        return handle_pad_config_overlay_input(state, ev, fine);
+    }
+
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -9206,9 +9213,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         select_music_menu::ReplayOverlayState::Hidden
     ) {
         return handle_replay_overlay_input(state, ev);
-    }
-    if state.pad_config_overlay_visible {
-        return handle_pad_config_overlay_input(state, ev, fine);
     }
     if state.test_input_overlay_visible {
         return handle_test_input_overlay_input(state, ev);
