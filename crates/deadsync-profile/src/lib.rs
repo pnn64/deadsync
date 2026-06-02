@@ -49,9 +49,6 @@ pub const LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 4;
 pub const LONG_ERROR_BAR_MIN_SAMPLES_MIN: u32 = 4;
 pub const LONG_ERROR_BAR_MIN_SAMPLES_MAX: u32 = 64;
 pub const LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT: u32 = 16;
-pub const LONG_ERROR_BAR_BUFFER_CAP_MIN: u32 = 16;
-pub const LONG_ERROR_BAR_BUFFER_CAP_MAX: u32 = 128;
-pub const LONG_ERROR_BAR_BUFFER_CAP_DEFAULT: u32 = 64;
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
@@ -181,17 +178,6 @@ pub const fn clamp_long_error_bar_min_samples(n: u32) -> u32 {
         LONG_ERROR_BAR_MIN_SAMPLES_MIN
     } else if n > LONG_ERROR_BAR_MIN_SAMPLES_MAX {
         LONG_ERROR_BAR_MIN_SAMPLES_MAX
-    } else {
-        n
-    }
-}
-
-#[inline]
-pub const fn clamp_long_error_bar_buffer_cap(n: u32) -> u32 {
-    if n < LONG_ERROR_BAR_BUFFER_CAP_MIN {
-        LONG_ERROR_BAR_BUFFER_CAP_MIN
-    } else if n > LONG_ERROR_BAR_BUFFER_CAP_MAX {
-        LONG_ERROR_BAR_BUFFER_CAP_MAX
     } else {
         n
     }
@@ -2616,7 +2602,6 @@ pub struct PlayerOptionsData {
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
-    pub long_error_bar_buffer_cap: u32,
     pub step_statistics: StepStatisticsMask,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
@@ -2728,7 +2713,6 @@ fn default_player_options() -> PlayerOptionsData {
         long_error_bar_intensity: LONG_ERROR_BAR_INTENSITY_DEFAULT,
         long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         long_error_bar_min_samples: LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT,
-        long_error_bar_buffer_cap: LONG_ERROR_BAR_BUFFER_CAP_DEFAULT,
         step_statistics: StepStatisticsMask::default(),
         target_score: TargetScoreSetting::default(),
         lifemeter_type: LifeMeterType::default(),
@@ -3062,10 +3046,6 @@ where
         .and_then(|s| s.trim().parse::<u32>().ok())
         .map(clamp_long_error_bar_min_samples)
         .unwrap_or(options.long_error_bar_min_samples);
-    options.long_error_bar_buffer_cap = get("LongErrorBarBufferCap")
-        .and_then(|s| s.trim().parse::<u32>().ok())
-        .map(clamp_long_error_bar_buffer_cap)
-        .unwrap_or(options.long_error_bar_buffer_cap);
 }
 
 pub fn append_player_options_section(
@@ -3334,10 +3314,6 @@ pub fn append_player_options_section(
         "LongErrorBarMinSamples={}\n",
         clamp_long_error_bar_min_samples(options.long_error_bar_min_samples)
     ));
-    content.push_str(&format!(
-        "LongErrorBarBufferCap={}\n",
-        clamp_long_error_bar_buffer_cap(options.long_error_bar_buffer_cap)
-    ));
     content.push_str(&format!("StepStatistics={}\n", options.step_statistics));
     content.push_str(&format!("TargetScore={}\n", options.target_score));
     content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
@@ -3543,7 +3519,6 @@ pub struct Profile {
     pub long_error_bar_intensity: f32,
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
-    pub long_error_bar_buffer_cap: u32,
     pub step_statistics: StepStatisticsMask,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
@@ -3699,7 +3674,6 @@ impl Default for Profile {
             long_error_bar_intensity: player_options.long_error_bar_intensity,
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
             long_error_bar_min_samples: player_options.long_error_bar_min_samples,
-            long_error_bar_buffer_cap: player_options.long_error_bar_buffer_cap,
             step_statistics: player_options.step_statistics,
             target_score: player_options.target_score,
             lifemeter_type: player_options.lifemeter_type,
@@ -4069,13 +4043,6 @@ impl Profile {
         )
     }
 
-    pub fn set_long_error_bar_buffer_cap(&mut self, n: u32) -> bool {
-        set_u32_if_changed(
-            &mut self.long_error_bar_buffer_cap,
-            clamp_long_error_bar_buffer_cap(n),
-        )
-    }
-
     pub fn set_error_bar_options(&mut self, up: bool, multi_tick: bool) -> bool {
         if self.error_bar_up == up && self.error_bar_multi_tick == multi_tick {
             return false;
@@ -4223,7 +4190,6 @@ impl Profile {
             long_error_bar_intensity: self.long_error_bar_intensity,
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
             long_error_bar_min_samples: self.long_error_bar_min_samples,
-            long_error_bar_buffer_cap: self.long_error_bar_buffer_cap,
             step_statistics: self.step_statistics,
             target_score: self.target_score,
             lifemeter_type: self.lifemeter_type,
@@ -4337,7 +4303,6 @@ impl Profile {
         self.long_error_bar_intensity = options.long_error_bar_intensity;
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
-        self.long_error_bar_buffer_cap = options.long_error_bar_buffer_cap;
         self.step_statistics = options.step_statistics;
         self.target_score = options.target_score;
         self.lifemeter_type = options.lifemeter_type;
@@ -4826,11 +4791,6 @@ mod tests {
             LONG_ERROR_BAR_MIN_SAMPLES_MIN
         );
 
-        assert!(profile.set_long_error_bar_buffer_cap(LONG_ERROR_BAR_BUFFER_CAP_MAX + 1));
-        assert_eq!(
-            profile.long_error_bar_buffer_cap,
-            LONG_ERROR_BAR_BUFFER_CAP_MAX
-        );
     }
 
     #[test]
@@ -4846,7 +4806,6 @@ mod tests {
             ("LongErrorBarIntensity", "1.95x"),
             ("LongErrorBarThresholdMs", "9999ms"),
             ("LongErrorBarMinSamples", "0"),
-            ("LongErrorBarBufferCap", "9999"),
         ];
 
         load_error_bar_options(&mut options, |key| {
@@ -4875,10 +4834,6 @@ mod tests {
         assert_eq!(
             options.long_error_bar_min_samples,
             LONG_ERROR_BAR_MIN_SAMPLES_MIN
-        );
-        assert_eq!(
-            options.long_error_bar_buffer_cap,
-            LONG_ERROR_BAR_BUFFER_CAP_MAX
         );
     }
 
@@ -5399,14 +5354,6 @@ mod tests {
         assert_eq!(
             clamp_long_error_bar_min_samples(99),
             LONG_ERROR_BAR_MIN_SAMPLES_MAX
-        );
-        assert_eq!(
-            clamp_long_error_bar_buffer_cap(0),
-            LONG_ERROR_BAR_BUFFER_CAP_MIN
-        );
-        assert_eq!(
-            clamp_long_error_bar_buffer_cap(999),
-            LONG_ERROR_BAR_BUFFER_CAP_MAX
         );
     }
 

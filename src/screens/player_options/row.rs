@@ -71,7 +71,6 @@ pub enum RowId {
     LongErrorBarIntensity,
     LongErrorBarThreshold,
     LongErrorBarMinSamples,
-    LongErrorBarBufferCap,
     MeasureCounter,
     MeasureCounterLookahead,
     MeasureCounterOptions,

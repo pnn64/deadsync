@@ -294,17 +294,6 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = row_map.get_mut(RowId::LongErrorBarBufferCap) {
-        let n =
-            deadsync_profile::clamp_long_error_bar_buffer_cap(profile.long_error_bar_buffer_cap);
-        let needle = fmt_long_error_bar_buffer_cap(n);
-        row.selected_choice_index[player_idx] = row
-            .choices
-            .iter()
-            .position(|c| c == &needle)
-            .unwrap_or(0)
-            .min(row.choices.len().saturating_sub(1));
-    }
     if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMinThreshold) {
         let threshold = deadsync_profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
         let needle = fmt_tilt_threshold_ms(threshold);

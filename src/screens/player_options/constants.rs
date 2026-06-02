@@ -59,12 +59,6 @@ pub(super) const LONG_ERROR_BAR_MIN_SAMPLES_MIN: u32 =
 pub(super) const LONG_ERROR_BAR_MIN_SAMPLES_MAX: u32 =
     deadsync_profile::LONG_ERROR_BAR_MIN_SAMPLES_MAX;
 
-pub(super) const LONG_ERROR_BAR_BUFFER_CAP_MIN: u32 =
-    deadsync_profile::LONG_ERROR_BAR_BUFFER_CAP_MIN;
-
-pub(super) const LONG_ERROR_BAR_BUFFER_CAP_MAX: u32 =
-    deadsync_profile::LONG_ERROR_BAR_BUFFER_CAP_MAX;
-
 pub(super) const TILT_THRESHOLD_MIN_MS: u32 = deadsync_profile::TILT_THRESHOLD_MIN_MS;
 
 pub(super) const TILT_THRESHOLD_MAX_MS: u32 = deadsync_profile::TILT_THRESHOLD_MAX_MS;

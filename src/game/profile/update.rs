@@ -567,10 +567,6 @@ pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
     update_profile_ini(side, |profile| profile.set_long_error_bar_min_samples(n));
 }
 
-pub fn update_long_error_bar_buffer_cap_for_side(side: PlayerSide, n: u32) {
-    update_profile_ini(side, |profile| profile.set_long_error_bar_buffer_cap(n));
-}
-
 pub fn update_step_statistics_for_side(side: PlayerSide, mask: StepStatisticsMask) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.step_statistics, mask)

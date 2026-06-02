@@ -992,34 +992,6 @@ const LONG_ERROR_BAR_MIN_SAMPLES: CustomBinding = CustomBinding {
     },
 };
 
-const LONG_ERROR_BAR_BUFFER_CAP: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
-        else {
-            return Outcome::NONE;
-        };
-        let Some(choice) = state
-            .pane()
-            .row_map
-            .get(row_id)
-            .and_then(|r| r.choices.get(new_index))
-            .cloned()
-        else {
-            return Outcome::NONE;
-        };
-        let Ok(raw) = choice.trim().parse::<u32>() else {
-            return Outcome::persisted();
-        };
-        let value = deadsync_profile::clamp_long_error_bar_buffer_cap(raw);
-        state.player_profiles[player_idx].long_error_bar_buffer_cap = value;
-        let (should_persist, side) = choice::persist_ctx(player_idx);
-        if should_persist {
-            gp::update_long_error_bar_buffer_cap_for_side(side, value);
-        }
-        Outcome::persisted()
-    },
-};
-
 fn chosen_tilt_threshold_ms(
     state: &mut State,
     player_idx: usize,
@@ -1544,13 +1516,6 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "LongErrorBarMinSamplesHelp"),
         LONG_ERROR_BAR_MIN_SAMPLES,
         long_error_bar_min_samples_choices(),
-    ));
-    b.push(Row::custom(
-        RowId::LongErrorBarBufferCap,
-        lookup_key("PlayerOptions", "LongErrorBarBufferCap"),
-        lookup_key("PlayerOptionsHelp", "LongErrorBarBufferCapHelp"),
-        LONG_ERROR_BAR_BUFFER_CAP,
-        long_error_bar_buffer_cap_choices(),
     ));
     b.push(Row::cycle(
         RowId::MeasureCounter,

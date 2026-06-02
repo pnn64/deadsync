@@ -3409,9 +3409,7 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_next: 0,
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
-        error_bar_long_avg_samples: VecDeque::with_capacity(
-            profile_data::LONG_ERROR_BAR_BUFFER_CAP_DEFAULT as usize,
-        ),
+        error_bar_long_avg_samples: VecDeque::with_capacity(64),
         error_bar_long_avg_total: 0.0,
         error_bar_long_avg_tick: None,
         error_bar_long_avg_visible: false,
@@ -6976,16 +6974,24 @@ fn error_bar_long_term_offset_s(
     total: &mut f32,
     music_time_s: f32,
     offset_s: f32,
-    buffer_cap: usize,
+    average_window_ms: u32,
 ) -> (f32, usize) {
+    let now_ms = (music_time_s * 1000.0).max(0.0);
     if offset_s.abs() <= ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S {
-        let now_ms = (music_time_s * 1000.0).max(0.0);
         samples.push_back((now_ms, offset_s));
         *total += offset_s;
     }
 
+    let long_window_ms =
+        profile_data::clamp_average_error_bar_interval_ms(average_window_ms) as f32 * 16.0;
     let mut popped = 0usize;
-    while popped < ERROR_BAR_LONG_AVG_PRUNE_PER_TAP && samples.len() > buffer_cap {
+    while popped < ERROR_BAR_LONG_AVG_PRUNE_PER_TAP {
+        let Some((time_ms, _)) = samples.front() else {
+            break;
+        };
+        if now_ms - *time_ms <= long_window_ms {
+            break;
+        }
         if let Some((_, v)) = samples.pop_front() {
             *total -= v;
             popped += 1;
@@ -7096,8 +7102,6 @@ fn error_bar_register_tap(
             / 1000.0;
     let long_avg_min_samples =
         profile_data::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
-    let long_avg_buffer_cap =
-        profile_data::clamp_long_error_bar_buffer_cap(prof.long_error_bar_buffer_cap) as usize;
     let average_interval_ms =
         profile_data::clamp_average_error_bar_interval_ms(prof.average_error_bar_interval_ms);
     let Some(window) = judgment.window else {
@@ -7240,7 +7244,7 @@ fn error_bar_register_tap(
                 &mut p.error_bar_long_avg_total,
                 tap_music_time_s,
                 offset_s,
-                long_avg_buffer_cap,
+                average_interval_ms,
             );
             if long_len >= long_avg_min_samples && long_mean.abs() >= long_avg_threshold_s {
                 p.error_bar_long_avg_tick = Some(ErrorBarTick {
@@ -8747,8 +8751,9 @@ mod tests {
         effective_appearance_effects_for_player, effective_mini_percent_for_player,
         effective_player_global_offset_seconds, effective_scroll_effects_for_player,
         effective_visibility_effects_for_player, effective_visual_effects_for_player,
-        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_register_tap,
-        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
+        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, grade_to_window, handle_input, hit_mine,
         input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
@@ -8822,6 +8827,32 @@ mod tests {
         let mut narrow = VecDeque::from([(0.0, 0.010), (100.0, 0.020), (200.0, 0.030)]);
         let narrow_avg = error_bar_average_offset_s(&mut narrow, 0.5, 0.050, 200);
         assert!((narrow_avg - 0.0375).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn long_average_uses_short_interval_times_sixteen() {
+        let mut samples = VecDeque::from([(0.0, 0.010), (3000.0, 0.020), (3300.0, 0.030)]);
+        let mut total = 0.060;
+
+        let (mean, len) =
+            error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 400);
+
+        assert_eq!(len, 3);
+        assert_eq!(samples.front().map(|(t, _)| *t), Some(3000.0));
+        assert!((mean - 0.030).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn long_average_tracks_short_interval_changes() {
+        let mut samples = VecDeque::from([(0.0, 0.010), (3000.0, 0.020), (3300.0, 0.030)]);
+        let mut total = 0.060;
+
+        let (mean, len) =
+            error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 200);
+
+        assert_eq!(len, 2);
+        assert_eq!(samples.front().map(|(t, _)| *t), Some(3300.0));
+        assert!((mean - 0.035).abs() <= 1e-6);
     }
 
     struct SessionRestore {

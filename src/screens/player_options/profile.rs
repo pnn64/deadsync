@@ -212,21 +212,6 @@ pub(super) fn long_error_bar_min_samples_choices() -> Vec<String> {
 }
 
 #[inline(always)]
-pub(super) fn fmt_long_error_bar_buffer_cap(n: u32) -> String {
-    format!("{n}")
-}
-
-pub(super) fn long_error_bar_buffer_cap_choices() -> Vec<String> {
-    let mut out = Vec::with_capacity(
-        (LONG_ERROR_BAR_BUFFER_CAP_MAX - LONG_ERROR_BAR_BUFFER_CAP_MIN + 1) as usize,
-    );
-    for n in LONG_ERROR_BAR_BUFFER_CAP_MIN..=LONG_ERROR_BAR_BUFFER_CAP_MAX {
-        out.push(fmt_long_error_bar_buffer_cap(n));
-    }
-    out
-}
-
-#[inline(always)]
 pub(super) fn fmt_tilt_threshold_ms(ms: u32) -> String {
     format!("{ms}ms")
 }

@@ -56,7 +56,6 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::LongErrorBarIntensity
         || id == RowId::LongErrorBarThreshold
         || id == RowId::LongErrorBarMinSamples
-        || id == RowId::LongErrorBarBufferCap
     {
         return visibility.show_error_bar_children
             && visibility.show_average_error_bar_children
@@ -140,7 +139,6 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::LongErrorBarIntensity
         || id == RowId::LongErrorBarThreshold
         || id == RowId::LongErrorBarMinSamples
-        || id == RowId::LongErrorBarBufferCap
     {
         return Some(RowId::ErrorBar);
     }
