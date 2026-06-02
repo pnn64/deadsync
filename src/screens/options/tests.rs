@@ -94,8 +94,8 @@ fn max_fps_hold_delta_accelerates() {
 fn input_backend_items_match_rows() {
     let expected = [
         (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
-        (SubRowId::SmxInput, ItemId::InpSmxInput),
         (SubRowId::UseFsrs, ItemId::InpUseFsrs),
+        (SubRowId::SmxConfig, ItemId::InpSmxConfig),
         (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),
         (SubRowId::MenuNavigation, ItemId::InpMenuNavigation),
         (SubRowId::OptionsNavigation, ItemId::InpOptionsNavigation),
@@ -112,6 +112,26 @@ fn input_backend_items_match_rows() {
         assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS[idx].id, item_id);
     }
     assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
+fn smx_config_items_match_rows() {
+    let expected = [
+        (SubRowId::SmxInput, ItemId::InpSmxInput),
+        (SubRowId::SmxManagesPadConfig, ItemId::InpSmxManagesPadConfig),
+        (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),
+        (SubRowId::SmxDefaultPadConfig, ItemId::InpSmxDefaultPadConfig),
+    ];
+
+    assert_eq!(
+        SMX_CONFIG_OPTIONS_ROWS.len() + 1,
+        SMX_CONFIG_OPTIONS_ITEMS.len()
+    );
+    for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
+        assert_eq!(SMX_CONFIG_OPTIONS_ROWS[idx].id, row_id);
+        assert_eq!(SMX_CONFIG_OPTIONS_ITEMS[idx].id, item_id);
+    }
+    assert_eq!(SMX_CONFIG_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
 }
 
 #[test]

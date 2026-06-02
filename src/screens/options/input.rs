@@ -346,9 +346,6 @@ pub(super) fn apply_submenu_choice_delta(
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
         }
-        if row.id == SubRowId::SmxInput {
-            config::update_smx_input(yes_no_from_choice(new_index));
-        }
         if row.id == SubRowId::UseFsrs {
             config::update_use_fsrs(yes_no_from_choice(new_index));
         }
@@ -360,6 +357,20 @@ pub(super) fn apply_submenu_choice_delta(
         }
         if row.id == SubRowId::MenuButtons {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);
+        }
+    } else if matches!(kind, SubmenuKind::SmxConfig) {
+        let row = &rows[row_index];
+        if row.id == SubRowId::SmxInput {
+            config::update_smx_input(yes_no_from_choice(new_index));
+        }
+        if row.id == SubRowId::SmxManagesPadConfig {
+            config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
+        }
+        if row.id == SubRowId::SmxUsbPolling {
+            config::update_smx_usb_polling(usb_polling_value(new_index));
+        }
+        if row.id == SubRowId::SmxDefaultPadConfig {
+            config::update_smx_default_pad_config(crate::config::SmxPadPreset::from_index(new_index));
         }
     } else if matches!(kind, SubmenuKind::Lights) {
         let row = &rows[row_index];
@@ -1197,11 +1208,22 @@ pub(super) fn activate_current_selection(
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
                     return ScreenAction::None;
                 };
-                if let Some(row) = rows.get(row_idx)
-                    && row.id == SubRowId::DebugFsrDump
-                {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::WriteFsrDump;
+                if let Some(row) = rows.get(row_idx) {
+                    match row.id {
+                        SubRowId::DebugFsrDump => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            return ScreenAction::WriteFsrDump;
+                        }
+                        SubRowId::SmxConfig => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            state.pending_submenu_kind = Some(SubmenuKind::SmxConfig);
+                            state.pending_submenu_parent_kind = Some(SubmenuKind::InputBackend);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                            return ScreenAction::None;
+                        }
+                        _ => {}
+                    }
                 }
             } else if matches!(kind, SubmenuKind::Lights) {
                 let rows = submenu_rows(kind);

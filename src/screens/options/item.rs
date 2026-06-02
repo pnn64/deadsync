@@ -62,6 +62,11 @@ pub enum ItemId {
     InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,
+    // StepManiaX config sub-page
+    InpSmxConfig,
+    InpSmxManagesPadConfig,
+    InpSmxUsbPolling,
+    InpSmxDefaultPadConfig,
     InpMenuNavigation,
     InpOptionsNavigation,
     InpMenuButtons,

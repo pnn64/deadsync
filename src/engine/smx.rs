@@ -70,8 +70,21 @@ pub fn init() -> bool {
     };
 
     let _ = SHARED.set(shared);
+    set_usb_polling_us(crate::config::get().smx_usb_polling_us);
     log::info!("SMX: SDK initialized, polling for pads");
     true
+}
+
+/// Default SMX main-thread poll interval (ms). We only expose the USB rate to
+/// the user, keeping the SDK's main-thread cadence at its default.
+const DEFAULT_MAIN_THREAD_MS: i32 = 50;
+
+/// Apply the USB polling interval (microseconds) to the running SMX manager.
+pub fn set_usb_polling_us(micros: u16) {
+    if let Some(s) = SHARED.get() {
+        s.manager
+            .set_polling_rate(DEFAULT_MAIN_THREAD_MS, i32::from(micros));
+    }
 }
 
 /// Get a reference to the shared manager (None if not initialized).

@@ -53,6 +53,11 @@ pub enum SubRowId {
     SmxInput,
     UseFsrs,
     DebugFsrDump,
+    // StepManiaX config sub-page
+    SmxConfig,
+    SmxManagesPadConfig,
+    SmxUsbPolling,
+    SmxDefaultPadConfig,
     MenuNavigation,
     OptionsNavigation,
     MenuButtons,

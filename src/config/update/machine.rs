@@ -94,6 +94,47 @@ pub fn update_smx_input(enabled: bool) {
     save_without_keymaps();
 }
 
+/// Persist the "DeadSync manages pad config" toggle. The auto-apply behavior
+/// arrives with config profiles; for now this only records the preference.
+pub fn update_smx_manages_pad_config(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_manages_pad_config == enabled {
+            return;
+        }
+        cfg.smx_manages_pad_config = enabled;
+    }
+    save_without_keymaps();
+}
+
+/// Persist the built-in default pad preset (Low/Medium/High). Stored only for
+/// now; flashed to pads by the profiles phase.
+pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_default_pad_config == preset {
+            return;
+        }
+        cfg.smx_default_pad_config = preset;
+    }
+    save_without_keymaps();
+}
+
+/// Persist the SMX USB polling interval (microseconds) and apply it live to the
+/// running SMX manager.
+pub fn update_smx_usb_polling(micros: u16) {
+    let micros = micros.clamp(500, 1000);
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_usb_polling_us == micros {
+            return;
+        }
+        cfg.smx_usb_polling_us = micros;
+    }
+    crate::engine::smx::set_usb_polling_us(micros);
+    save_without_keymaps();
+}
+
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     let enabled = {
         let mut cfg = lock_config();

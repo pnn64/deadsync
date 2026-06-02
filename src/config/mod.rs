@@ -95,6 +95,55 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+/// Built-in StepManiaX threshold preset (sensitivity), mirroring the official
+/// SMX config tool's Low / Normal / High.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmxPadPreset {
+    Low,
+    Medium,
+    High,
+}
+
+impl SmxPadPreset {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+        }
+    }
+
+    /// 0/1/2 index used by the options choice list.
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Low => 0,
+            Self::Medium => 1,
+            Self::High => 2,
+        }
+    }
+
+    pub const fn from_index(i: usize) -> Self {
+        match i {
+            1 => Self::Medium,
+            2 => Self::High,
+            _ => Self::Low,
+        }
+    }
+}
+
+impl FromStr for SmxPadPreset {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
@@ -146,6 +195,13 @@ pub struct Config {
     pub windows_gamepad_backend: WindowsPadBackend,
     /// Enable StepManiaX pad input via rustmaniax-sdk (all platforms).
     pub smx_input: bool,
+    /// When true, DeadSync writes its pad thresholds to connected SMX pads.
+    /// (Auto-apply behavior lands with config profiles; persisted now.)
+    pub smx_manages_pad_config: bool,
+    /// USB polling interval for the SMX manager, in microseconds (500–1000).
+    pub smx_usb_polling_us: u16,
+    /// Built-in pad preset DeadSync would flash when it manages pad config.
+    pub smx_default_pad_config: SmxPadPreset,
     // When using the Software video renderer:
     // 0 = Auto (use all logical cores)
     // 1 = Single-threaded
@@ -370,6 +426,9 @@ impl Default for Config {
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             smx_input: false,
+            smx_manages_pad_config: false,
+            smx_usb_polling_us: 1000,
+            smx_default_pad_config: SmxPadPreset::Low,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
