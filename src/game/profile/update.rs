@@ -5,12 +5,12 @@ use super::{
 use chrono::Local;
 use deadsync_profile::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
-    ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType,
-    HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
-    LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, Perspective, Profile, RemoveMask,
-    ScatterplotMaxWindow, ScrollOption, TapExplosionMask, TargetScoreSetting, TimingWindowsOption,
-    TurnOption, VisualEffectsMask,
+    ComboMode, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType, HoldJudgmentGraphic,
+    HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType, LiveTimingStatsMask, MeasureCounter,
+    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
+    NoteSkin, Perspective, Profile, RemoveMask, ScatterplotMaxWindow, ScrollOption,
+    StepStatisticsMask, TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    VisualEffectsMask,
 };
 use std::path::Path;
 
@@ -475,12 +475,6 @@ pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
     });
 }
 
-pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.display_scorebox, enabled)
-    });
-}
-
 pub fn update_live_timing_stats_mask_for_side(side: PlayerSide, mask: LiveTimingStatsMask) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.live_timing_stats_mask, mask)
@@ -577,9 +571,15 @@ pub fn update_long_error_bar_buffer_cap_for_side(side: PlayerSide, n: u32) {
     update_profile_ini(side, |profile| profile.set_long_error_bar_buffer_cap(n));
 }
 
-pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisualizations) {
+pub fn update_step_statistics_for_side(side: PlayerSide, mask: StepStatisticsMask) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.data_visualizations, setting)
+        set_if_changed(&mut profile.step_statistics, mask)
+    });
+}
+
+pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.display_scorebox, enabled)
     });
 }
 

@@ -23,6 +23,7 @@ pub(super) mod tests {
     use deadsync_profile::Profile;
     use deadsync_profile::{
         BackgroundFilter, ComboFont, Perspective, PlayStyle, PlayerSide, ScrollOption,
+        StepStatisticsMask,
     };
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use std::time::Duration;
@@ -206,8 +207,8 @@ pub(super) mod tests {
             ),
             (
                 RowId::DataVisualizations,
-                RowId::TargetScore,
-                &["None", "Target Score Graph", "Step Statistics"][..],
+                RowId::DensityGraphBackground,
+                &["Density Graph", "Song Banner", "Judgment Counter"][..],
                 0,
             ),
         ] {
@@ -621,8 +622,8 @@ pub(super) mod tests {
         let mut row_map = test_row_map(vec![
             test_row(
                 RowId::DataVisualizations,
-                lookup_key("PlayerOptions", "DataVisualizations"),
-                &["None", "Target Score Graph", "Step Statistics"],
+                lookup_key("PlayerOptions", "StepStatistics"),
+                &["Density Graph", "Song Banner", "Judgment Counter"],
                 [0, 0],
             ),
             test_row(
@@ -655,16 +656,6 @@ pub(super) mod tests {
 
         assert!(!target_score_visible_for(&row_map));
 
-        row_map
-            .get_mut(RowId::DataVisualizations)
-            .unwrap()
-            .selected_choice_index[P1] = 1;
-        assert!(target_score_visible_for(&row_map));
-
-        row_map
-            .get_mut(RowId::DataVisualizations)
-            .unwrap()
-            .selected_choice_index[P1] = 0;
         row_map
             .get_mut(RowId::ActionOnMissedTarget)
             .unwrap()
@@ -1091,9 +1082,9 @@ pub(super) mod tests {
 
     /// Regression guard: `GameplayExtrasMore` is a derived mask with no
     /// constructed Row. Its bits are populated as a side effect of the
-    /// `GameplayExtras` profile processing (`column_cues` and
-    /// `display_scorebox` toggles contribute to BOTH masks). A row-driven
-    /// mask registry must explicitly handle this derivation.
+    /// `GameplayExtras` profile processing (`column_cues` contributes to
+    /// BOTH masks). A row-driven mask registry must explicitly handle this
+    /// derivation.
     #[test]
     fn init_gameplay_extras_more_derived_from_sibling_profile_fields() {
         ensure_i18n();
@@ -1142,7 +1133,7 @@ pub(super) mod tests {
                 "DensityTop",
                 "ColumnCues",
                 "LiveTiming",
-                "Scorebox",
+                "DisplayScorebox",
             ],
             gameplay_extras_binding,
         )]);
@@ -2595,7 +2586,8 @@ pub(super) mod tests {
         let p = &mut state.player_profiles[P1];
         p.turn_option = super::TURN_OPTION_VARIANTS[1];
         p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
-        p.data_visualizations = super::DATA_VISUALIZATIONS_VARIANTS[1];
+        p.step_statistics = StepStatisticsMask::SONG_BANNER | StepStatisticsMask::STEP_COUNTS;
+        p.display_scorebox = true;
         p.target_score = super::TARGET_SCORE_VARIANTS[1];
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
         p.mini_indicator_size = super::MINI_INDICATOR_SIZE_VARIANTS[1];
@@ -2648,11 +2640,26 @@ pub(super) mod tests {
             &super::LIFE_METER_TYPE_VARIANTS,
             profile.lifemeter_type,
         );
-        assert_variant_at_cursor(
-            &row_map,
-            RowId::DataVisualizations,
-            &super::DATA_VISUALIZATIONS_VARIANTS,
-            profile.data_visualizations,
+        assert_eq!(masks.step_statistics, profile.step_statistics);
+        assert_eq!(
+            row_map
+                .get(RowId::DataVisualizations)
+                .expect("Step Statistics row present")
+                .selected_choice_index[P1],
+            1,
+            "Step Statistics cursor should land on the first active bit",
+        );
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::DISPLAY_SCOREBOX),
+            "Gameplay Extras Display Scorebox bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras_more
+                .contains(GameplayExtrasMoreMask::DISPLAY_SCOREBOX),
+            "derived GameplayExtrasMore Display Scorebox bit set from sibling profile field",
         );
         assert_variant_at_cursor(
             &row_map,

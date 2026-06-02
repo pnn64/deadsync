@@ -880,8 +880,7 @@ impl Row {
         let BitmaskBinding::Generic { writeback, .. } = &binding;
         let required = writeback.bit_mapping.required_choices();
         // Allow `choices.len() <= required` so rows with conditional
-        // choices (e.g. `GameplayExtras` whose `DisplayScorebox` choice is
-        // gated behind a feature flag) can ship fewer choices than bits.
+        // choices can ship fewer choices than bits.
         // The `bit_for_choice` lookup already returns `None` for indices
         // past the row's choice list, so the extra bits are simply
         // unreachable from the UI — never silently toggled.

@@ -9,15 +9,15 @@ use super::super::row::{fanout_bitmask_binding, index_binding};
 use super::super::state::{
     EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
     HideMask, LifeBarOptionsMask, LiveTimingStatsMask, MeasureCounterOptionsMask,
-    PlayerOptionMasks, ResultsExtrasMask, ScrollMask,
+    PlayerOptionMasks, ResultsExtrasMask, STEP_STATISTICS_ROW_WIDTH, ScrollMask,
+    step_statistics_choice_bits, step_statistics_mask_from_choice_bits,
 };
 use super::*;
 use crate::game::profile as gp;
 use deadsync_profile::{
-    ComboColors, ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, LifeMeterType,
-    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    MiniIndicatorSize, PlayerSide, Profile, ScatterplotMaxWindow, TargetScoreSetting,
-    TimingWindowsOption, TurnOption,
+    ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim, LifeMeterType, MeasureCounter,
+    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
+    PlayerSide, Profile, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -48,21 +48,6 @@ const LIFE_METER_TYPE: ChoiceBinding<usize> = index_binding!(
             LIFE_METER_TYPE_VARIANTS
                 .iter()
                 .position(|&v| v == p.lifemeter_type)
-                .unwrap_or(0)
-        }
-    })
-);
-const DATA_VISUALIZATIONS: ChoiceBinding<usize> = index_binding!(
-    DATA_VISUALIZATIONS_VARIANTS,
-    DataVisualizations::None,
-    data_visualizations,
-    gp::update_data_visualizations_for_side,
-    true,
-    Some(CycleInit {
-        from_profile: |p| {
-            DATA_VISUALIZATIONS_VARIANTS
-                .iter()
-                .position(|&v| v == p.data_visualizations)
                 .unwrap_or(0)
         }
     })
@@ -481,6 +466,30 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
     },
     sync_visibility = false,
 );
+const STEP_STATISTICS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        from_profile: |p| step_statistics_choice_bits(p.step_statistics) as u32,
+        get_active: |m| step_statistics_choice_bits(m.step_statistics) as u32,
+        set_active: |m, b| {
+            m.step_statistics = step_statistics_mask_from_choice_bits(b);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, b| {
+            let mask = step_statistics_mask_from_choice_bits(b);
+            p.step_statistics = mask;
+            m.step_statistics = mask;
+        },
+        persist_for_side: |s, p| {
+            gp::update_step_statistics_for_side(s, p.step_statistics);
+        },
+        bit_mapping: BitMapping::Sequential {
+            width: STEP_STATISTICS_ROW_WIDTH,
+        },
+        sync_visibility: true,
+    },
+};
 const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
         from_profile: |p| {
@@ -1211,15 +1220,19 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "LifeBarOptionsShowLifePercentage").to_string(),
         ],
     ));
-    b.push(Row::cycle(
+    b.push(Row::bitmask(
         RowId::DataVisualizations,
-        lookup_key("PlayerOptions", "DataVisualizations"),
-        lookup_key("PlayerOptionsHelp", "DataVisualizationsHelp"),
-        CycleBinding::Index(DATA_VISUALIZATIONS),
+        lookup_key("PlayerOptions", "StepStatistics"),
+        lookup_key("PlayerOptionsHelp", "StepStatisticsHelp"),
+        STEP_STATISTICS,
         vec![
-            tr("PlayerOptions", "DataVisualizationsNone").to_string(),
-            tr("PlayerOptions", "DataVisualizationsTargetScoreGraph").to_string(),
-            tr("PlayerOptions", "DataVisualizationsStepStatistics").to_string(),
+            tr("PlayerOptions", "StepStatisticsDensity").to_string(),
+            tr("PlayerOptions", "StepStatisticsBanner").to_string(),
+            tr("PlayerOptions", "StepStatisticsJudgements").to_string(),
+            tr("PlayerOptions", "StepStatisticsDuration").to_string(),
+            tr("PlayerOptions", "StepStatisticsPackInfo").to_string(),
+            tr("PlayerOptions", "StepStatisticsStepCounts").to_string(),
+            tr("PlayerOptions", "StepStatisticsPeakNps").to_string(),
         ],
     ));
     b.push(Row::cycle(

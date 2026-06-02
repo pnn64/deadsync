@@ -108,10 +108,10 @@ pub(super) const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
 use deadsync_profile::{
-    AttackMode, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim, HideLightType,
-    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, Perspective, ScatterplotMaxWindow,
-    TargetScoreSetting, TimingWindowsOption, TurnOption,
+    AttackMode, ComboColors, ComboFont, ComboMode, ErrorBarTrim, HideLightType, LifeMeterType,
+    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
+    MiniIndicatorSize, Perspective, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption,
+    TurnOption,
 };
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).
@@ -167,12 +167,6 @@ pub(super) const COMBO_COLORS_VARIANTS: [ComboColors; 5] = [
 
 pub(super) const COMBO_MODE_VARIANTS: [ComboMode; 2] =
     [ComboMode::FullCombo, ComboMode::CurrentCombo];
-
-pub(super) const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
-    DataVisualizations::None,
-    DataVisualizations::TargetScoreGraph,
-    DataVisualizations::StepStatistics,
-];
 
 pub(super) const SCATTERPLOT_MAX_WINDOW_VARIANTS: [ScatterplotMaxWindow; 4] = [
     ScatterplotMaxWindow::Off,

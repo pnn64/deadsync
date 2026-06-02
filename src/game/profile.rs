@@ -14,13 +14,13 @@ mod update;
 
 use deadsync_profile::{
     AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, DEFAULT_PROFILE_ID,
-    DataVisualizations, GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask,
-    InsertMask, LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType,
-    LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
-    PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
-    ScrollOption, TargetScoreSetting, TimingTickMode, TimingWindowsOption, TurnOption,
-    VisualEffectsMask, active_profile_is_guest, active_profile_local_id, add_known_pack_names,
+    GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask, InsertMask,
+    LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType, LocalProfileSummary,
+    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
+    MiniIndicatorSize, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData, PlayerSide,
+    Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask, ScrollOption, StepStatisticsMask,
+    TargetScoreSetting, TimingTickMode, TimingWindowsOption, TurnOption, VisualEffectsMask,
+    active_profile_is_guest, active_profile_local_id, add_known_pack_names,
     append_last_played_course_section, append_last_played_section, append_player_options_section,
     clamp_weight_pounds, cmp_profile_ids_case_insensitive,
     decode_profile_stats as decode_profile_stats_bytes, encode_profile_stats, initials_from_name,
@@ -105,10 +105,17 @@ fn load_player_options(
     load_visual_player_options(&mut options, |key| profile_conf.get(section, key));
     load_timing_feedback_options(&mut options, |key| profile_conf.get(section, key));
     load_error_bar_options(&mut options, |key| profile_conf.get(section, key));
-    options.data_visualizations = profile_conf
+    if let Some(step_statistics) = profile_conf
+        .get(section, "StepStatistics")
+        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
+    {
+        options.step_statistics = step_statistics;
+    } else if let Some(step_statistics) = profile_conf
         .get(section, "DataVisualizations")
-        .and_then(|s| DataVisualizations::from_str(&s).ok())
-        .unwrap_or(options.data_visualizations);
+        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
+    {
+        options.step_statistics = step_statistics;
+    }
     options.target_score = profile_conf
         .get(section, "TargetScore")
         .and_then(|s| TargetScoreSetting::from_str(&s).ok())

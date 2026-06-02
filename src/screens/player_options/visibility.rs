@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_profile::{DataVisualizations, ErrorBarMask, MiniIndicator};
+use deadsync_profile::{ErrorBarMask, MiniIndicator, StepStatisticsMask};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowVisibility {
@@ -344,16 +344,18 @@ pub(super) fn custom_fantastic_window_ms_visible(
 pub(super) fn density_graph_background_visible(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
 ) -> bool {
-    let Some(row) = row_map.get(RowId::DataVisualizations) else {
+    if row_map.get(RowId::DataVisualizations).is_none() {
         return true;
     };
-    let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-        if choice_idx == 2 {
+        if option_masks[player_idx]
+            .step_statistics
+            .contains(StepStatisticsMask::DENSITY_GRAPH)
+        {
             return true;
         }
     }
@@ -368,18 +370,11 @@ fn selected_choice(row_map: &RowMap, id: RowId, player_idx: usize) -> Option<usi
 }
 
 pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
-    let has_trigger_row = row_map.get(RowId::DataVisualizations).is_some()
-        || row_map.get(RowId::MiniIndicator).is_some()
+    let has_trigger_row = row_map.get(RowId::MiniIndicator).is_some()
         || row_map.get(RowId::ActionOnMissedTarget).is_some();
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        if selected_choice(row_map, RowId::DataVisualizations, player_idx)
-            .and_then(|idx| DATA_VISUALIZATIONS_VARIANTS.get(idx))
-            .is_some_and(|&v| v == DataVisualizations::TargetScoreGraph)
-        {
-            return true;
-        }
         if selected_choice(row_map, RowId::MiniIndicator, player_idx)
             .and_then(|idx| MINI_INDICATOR_VARIANTS.get(idx))
             .is_some_and(|&v| v == MiniIndicator::Pacemaker)
@@ -561,7 +556,11 @@ pub(super) fn row_visibility(
         show_average_error_bar_children: average_error_bar_children_visible(active, option_masks),
         show_long_error_bar_children: long_error_bar_children_visible(row_map, active),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
-        show_density_graph_background: density_graph_background_visible(row_map, active),
+        show_density_graph_background: density_graph_background_visible(
+            row_map,
+            active,
+            option_masks,
+        ),
         show_target_score: target_score_visible(row_map, active),
         show_early_dw_options: early_dw_options_visible(row_map, active),
         show_fa_plus_window_options: fa_plus_window_options_visible(row_map, active, option_masks),

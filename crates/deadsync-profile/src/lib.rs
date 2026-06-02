@@ -1293,42 +1293,151 @@ impl core::fmt::Display for TimingWindowsOption {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum DataVisualizations {
-    #[default]
-    None,
-    TargetScoreGraph,
-    StepStatistics,
-}
-
-impl FromStr for DataVisualizations {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        match key.as_str() {
-            "" | "none" => Ok(Self::None),
-            "targetscoregraph" | "targetscore" | "target" => Ok(Self::TargetScoreGraph),
-            "stepstatistics" | "stepstats" => Ok(Self::StepStatistics),
-            other => Err(format!(
-                "'{other}' is not a valid DataVisualizations setting"
-            )),
-        }
+bitflags! {
+    /// Persisted bitmask of enabled Step Statistics gameplay widgets.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct StepStatisticsMask: u16 {
+        const DENSITY_GRAPH    = 1 << 0;
+        const SONG_BANNER      = 1 << 1;
+        const JUDGMENT_COUNTER = 1 << 2;
+        const SONG_DURATION    = 1 << 3;
+        const PACK_BANNER      = 1 << 4;
+        const SONG_INFO        = 1 << 5;
+        const STEP_COUNTS      = 1 << 6;
+        const PEAK_NPS         = 1 << 7;
     }
 }
 
-impl core::fmt::Display for DataVisualizations {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::TargetScoreGraph => write!(f, "Target Score Graph"),
-            Self::StepStatistics => write!(f, "Step Statistics"),
+impl StepStatisticsMask {
+    pub const ALL_WIDGET_BITS: u16 = Self::DENSITY_GRAPH.bits()
+        | Self::SONG_BANNER.bits()
+        | Self::JUDGMENT_COUNTER.bits()
+        | Self::SONG_DURATION.bits()
+        | Self::PACK_BANNER.bits()
+        | Self::SONG_INFO.bits()
+        | Self::STEP_COUNTS.bits()
+        | Self::PEAK_NPS.bits();
+
+    #[inline(always)]
+    pub const fn all_widgets() -> Self {
+        Self::from_bits_retain(Self::ALL_WIDGET_BITS)
+    }
+
+    #[inline(always)]
+    pub fn pack_info_enabled(self) -> bool {
+        self.intersects(Self::PACK_BANNER | Self::SONG_INFO)
+    }
+}
+
+fn normalize_option_key(s: &str) -> String {
+    let mut key = String::with_capacity(s.len());
+    for ch in s.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch.to_ascii_lowercase());
         }
+    }
+    key
+}
+
+fn step_statistics_bit_from_key(key: &str) -> Option<StepStatisticsMask> {
+    match key {
+        "densitygraph" | "density" => Some(StepStatisticsMask::DENSITY_GRAPH),
+        "songbanner" | "banner" => Some(StepStatisticsMask::SONG_BANNER),
+        "judgmentcounter" | "judgementcounter" | "judgmentcounts" | "judgementcounts"
+        | "judgmentscounter" | "judgementscounter" | "judgment" | "judgement" | "judgments"
+        | "judgements" => Some(StepStatisticsMask::JUDGMENT_COUNTER),
+        "songduration" | "songtime" | "duration" | "time" => {
+            Some(StepStatisticsMask::SONG_DURATION)
+        }
+        "packbanner" | "packinfo" | "songinfo" => Some(StepStatisticsMask::PACK_BANNER),
+        "stepcounts" | "steps" | "holdsminesrolls" | "jumpsminesholds" => {
+            Some(StepStatisticsMask::STEP_COUNTS)
+        }
+        "peaknps" => Some(StepStatisticsMask::PEAK_NPS),
+        _ => None,
+    }
+}
+
+impl FromStr for StepStatisticsMask {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let trimmed = s.trim();
+        let key = normalize_option_key(trimmed);
+        match key.as_str() {
+            "" | "none" => return Ok(Self::empty()),
+            // Legacy DataVisualizations values.
+            "targetscoregraph" | "targetscore" | "target" => return Ok(Self::empty()),
+            "stepstatistics" | "stepstats" => return Ok(Self::all_widgets()),
+            _ => {}
+        }
+
+        if let Ok(bits) = trimmed.parse::<u16>() {
+            return Ok(Self::from_bits_retain(bits & Self::ALL_WIDGET_BITS));
+        }
+
+        let mut mask = Self::empty();
+        for part in trimmed.split([',', '|', ';']) {
+            let key = normalize_option_key(part);
+            if key.is_empty() {
+                continue;
+            }
+            if matches!(key.as_str(), "gsbox" | "groovestatsbox" | "scorebox") {
+                continue;
+            }
+            let Some(bit) = step_statistics_bit_from_key(key.as_str()) else {
+                return Err(format!("'{part}' is not a valid StepStatistics setting"));
+            };
+            mask.insert(bit);
+        }
+        Ok(mask)
+    }
+}
+
+impl core::fmt::Display for StepStatisticsMask {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        const BEFORE_PACK: [(StepStatisticsMask, &str); 4] = [
+            (StepStatisticsMask::DENSITY_GRAPH, "Density Graph"),
+            (StepStatisticsMask::SONG_BANNER, "Song Banner"),
+            (StepStatisticsMask::JUDGMENT_COUNTER, "Judgements"),
+            (StepStatisticsMask::SONG_DURATION, "Song Duration"),
+        ];
+        const AFTER_PACK: [(StepStatisticsMask, &str); 2] = [
+            (StepStatisticsMask::STEP_COUNTS, "Step Counts"),
+            (StepStatisticsMask::PEAK_NPS, "Peak NPS"),
+        ];
+        if self.is_empty() {
+            return write!(f, "None");
+        }
+        let mut first = true;
+        for (bit, label) in BEFORE_PACK {
+            if !self.contains(bit) {
+                continue;
+            }
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(f, "{label}")?;
+            first = false;
+        }
+        if self.pack_info_enabled() {
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(f, "Pack Info")?;
+            first = false;
+        }
+        for (bit, label) in AFTER_PACK {
+            if !self.contains(bit) {
+                continue;
+            }
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(f, "{label}")?;
+            first = false;
+        }
+        Ok(())
     }
 }
 
@@ -2508,7 +2617,7 @@ pub struct PlayerOptionsData {
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
     pub long_error_bar_buffer_cap: u32,
-    pub data_visualizations: DataVisualizations,
+    pub step_statistics: StepStatisticsMask,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
@@ -2620,7 +2729,7 @@ fn default_player_options() -> PlayerOptionsData {
         long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         long_error_bar_min_samples: LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT,
         long_error_bar_buffer_cap: LONG_ERROR_BAR_BUFFER_CAP_DEFAULT,
-        data_visualizations: DataVisualizations::default(),
+        step_statistics: StepStatisticsMask::default(),
         target_score: TargetScoreSetting::default(),
         lifemeter_type: LifeMeterType::default(),
         measure_counter: MeasureCounter::default(),
@@ -3229,10 +3338,7 @@ pub fn append_player_options_section(
         "LongErrorBarBufferCap={}\n",
         clamp_long_error_bar_buffer_cap(options.long_error_bar_buffer_cap)
     ));
-    content.push_str(&format!(
-        "DataVisualizations={}\n",
-        options.data_visualizations
-    ));
+    content.push_str(&format!("StepStatistics={}\n", options.step_statistics));
     content.push_str(&format!("TargetScore={}\n", options.target_score));
     content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
     content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
@@ -3438,7 +3544,7 @@ pub struct Profile {
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
     pub long_error_bar_buffer_cap: u32,
-    pub data_visualizations: DataVisualizations,
+    pub step_statistics: StepStatisticsMask,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
@@ -3594,7 +3700,7 @@ impl Default for Profile {
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
             long_error_bar_min_samples: player_options.long_error_bar_min_samples,
             long_error_bar_buffer_cap: player_options.long_error_bar_buffer_cap,
-            data_visualizations: player_options.data_visualizations,
+            step_statistics: player_options.step_statistics,
             target_score: player_options.target_score,
             lifemeter_type: player_options.lifemeter_type,
             measure_counter: player_options.measure_counter,
@@ -4118,7 +4224,7 @@ impl Profile {
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
             long_error_bar_min_samples: self.long_error_bar_min_samples,
             long_error_bar_buffer_cap: self.long_error_bar_buffer_cap,
-            data_visualizations: self.data_visualizations,
+            step_statistics: self.step_statistics,
             target_score: self.target_score,
             lifemeter_type: self.lifemeter_type,
             measure_counter: self.measure_counter,
@@ -4232,7 +4338,7 @@ impl Profile {
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
         self.long_error_bar_buffer_cap = options.long_error_bar_buffer_cap;
-        self.data_visualizations = options.data_visualizations;
+        self.step_statistics = options.step_statistics;
         self.target_score = options.target_score;
         self.lifemeter_type = options.lifemeter_type;
         self.measure_counter = options.measure_counter;
@@ -4390,6 +4496,7 @@ mod tests {
         assert!(options.display_scorebox);
         assert!(options.short_average_error_bar_enabled);
         assert!(options.long_error_bar_enabled);
+        assert!(options.step_statistics.is_empty());
         assert_eq!(options.measure_counter_lookahead, 2);
         assert!(options.measure_counter_left);
         assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
@@ -6033,26 +6140,38 @@ mod tests {
     }
 
     #[test]
-    fn data_visualizations_round_trips_and_accepts_aliases() {
-        for setting in [
-            DataVisualizations::None,
-            DataVisualizations::TargetScoreGraph,
-            DataVisualizations::StepStatistics,
-        ] {
-            assert_eq!(
-                setting.to_string().parse::<DataVisualizations>(),
-                Ok(setting)
-            );
-        }
+    fn step_statistics_mask_round_trips_and_accepts_legacy_aliases() {
+        let mask = StepStatisticsMask::DENSITY_GRAPH
+            | StepStatisticsMask::SONG_BANNER
+            | StepStatisticsMask::JUDGMENT_COUNTER
+            | StepStatisticsMask::STEP_COUNTS;
+
+        assert_eq!(mask.to_string().parse::<StepStatisticsMask>(), Ok(mask));
         assert_eq!(
-            DataVisualizations::from_str("target"),
-            Ok(DataVisualizations::TargetScoreGraph)
+            StepStatisticsMask::from_str("target"),
+            Ok(StepStatisticsMask::empty())
         );
         assert_eq!(
-            DataVisualizations::from_str("stepstats"),
-            Ok(DataVisualizations::StepStatistics)
+            StepStatisticsMask::from_str("stepstats"),
+            Ok(StepStatisticsMask::all_widgets())
         );
-        assert!(DataVisualizations::from_str("lanes").is_err());
+        assert_eq!(
+            StepStatisticsMask::from_str("Judgements Counter, Peak NPS"),
+            Ok(StepStatisticsMask::JUDGMENT_COUNTER | StepStatisticsMask::PEAK_NPS)
+        );
+        assert_eq!(
+            StepStatisticsMask::from_str("Judgements, Pack Info"),
+            Ok(StepStatisticsMask::JUDGMENT_COUNTER | StepStatisticsMask::PACK_BANNER)
+        );
+        assert_eq!(
+            StepStatisticsMask::from_str("Song Info, Pack Banner"),
+            Ok(StepStatisticsMask::PACK_BANNER)
+        );
+        assert_eq!(
+            StepStatisticsMask::from_str("Step Counts, GS Box"),
+            Ok(StepStatisticsMask::STEP_COUNTS)
+        );
+        assert!(StepStatisticsMask::from_str("lanes").is_err());
     }
 
     #[test]

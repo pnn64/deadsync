@@ -40,10 +40,8 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
 
         state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
         state.players[1].judgment_counts = [20_204, 1_804, 404, 88, 23, 7];
-        state.player_profiles[0].data_visualizations =
-            profile_data::DataVisualizations::StepStatistics;
-        state.player_profiles[1].data_visualizations =
-            profile_data::DataVisualizations::StepStatistics;
+        state.player_profiles[0].step_statistics = profile_data::StepStatisticsMask::all_widgets();
+        state.player_profiles[1].step_statistics = profile_data::StepStatisticsMask::all_widgets();
         state.player_profiles[0].show_fa_plus_window = true;
         state.player_profiles[0].fa_plus_10ms_blue_window = true;
         state.player_profiles[1].show_fa_plus_window = false;

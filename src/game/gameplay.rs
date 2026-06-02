@@ -6124,12 +6124,12 @@ pub fn init(
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let graph_prep_started = Instant::now();
-    let wants_step_stats = player_profiles
-        .iter()
-        .take(num_players)
-        .any(|p| p.data_visualizations == profile_data::DataVisualizations::StepStatistics);
+    let wants_density_graph = player_profiles.iter().take(num_players).any(|p| {
+        p.step_statistics
+            .contains(profile_data::StepStatisticsMask::DENSITY_GRAPH)
+    });
     let wide = is_wide();
-    let density_graph_enabled = wide && wants_step_stats;
+    let density_graph_enabled = wide && wants_density_graph;
     let sw = screen_width();
     let sh = screen_height().max(1.0_f32);
     let density_graph_graph_h = if density_graph_enabled {

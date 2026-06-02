@@ -8450,17 +8450,19 @@ pub fn push_actors(
             right_avatar,
         }));
         let show_step_stats = match play_style {
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                state.player_profiles.first().is_some_and(|p| {
-                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
-                })
-            }
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => state
+                .player_profiles
+                .first()
+                .is_some_and(|p| !p.step_statistics.is_empty()),
             profile_data::PlayStyle::Versus => {
-                state.player_profiles.first().is_some_and(|p| {
-                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
-                }) || state.player_profiles.get(1).is_some_and(|p| {
-                    p.data_visualizations == profile_data::DataVisualizations::StepStatistics
-                })
+                state
+                    .player_profiles
+                    .first()
+                    .is_some_and(|p| !p.step_statistics.is_empty())
+                    || state
+                        .player_profiles
+                        .get(1)
+                        .is_some_and(|p| !p.step_statistics.is_empty())
             }
         };
         if show_step_stats {

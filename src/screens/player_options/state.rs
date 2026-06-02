@@ -2,8 +2,64 @@ use super::*;
 use bitflags::bitflags;
 pub use deadsync_profile::{
     AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-    LiveTimingStatsMask, RemoveMask, TapExplosionMask, VisualEffectsMask,
+    LiveTimingStatsMask, RemoveMask, StepStatisticsMask, TapExplosionMask, VisualEffectsMask,
 };
+
+pub const STEP_STATISTICS_ROW_WIDTH: u8 = 7;
+
+#[inline(always)]
+pub fn step_statistics_choice_bits(mask: StepStatisticsMask) -> u16 {
+    let mut bits = 0u16;
+    if mask.contains(StepStatisticsMask::DENSITY_GRAPH) {
+        bits |= 1 << 0;
+    }
+    if mask.contains(StepStatisticsMask::SONG_BANNER) {
+        bits |= 1 << 1;
+    }
+    if mask.contains(StepStatisticsMask::JUDGMENT_COUNTER) {
+        bits |= 1 << 2;
+    }
+    if mask.contains(StepStatisticsMask::SONG_DURATION) {
+        bits |= 1 << 3;
+    }
+    if mask.pack_info_enabled() {
+        bits |= 1 << 4;
+    }
+    if mask.contains(StepStatisticsMask::STEP_COUNTS) {
+        bits |= 1 << 5;
+    }
+    if mask.contains(StepStatisticsMask::PEAK_NPS) {
+        bits |= 1 << 6;
+    }
+    bits
+}
+
+#[inline(always)]
+pub fn step_statistics_mask_from_choice_bits(bits: u32) -> StepStatisticsMask {
+    let mut mask = StepStatisticsMask::empty();
+    if bits & (1 << 0) != 0 {
+        mask.insert(StepStatisticsMask::DENSITY_GRAPH);
+    }
+    if bits & (1 << 1) != 0 {
+        mask.insert(StepStatisticsMask::SONG_BANNER);
+    }
+    if bits & (1 << 2) != 0 {
+        mask.insert(StepStatisticsMask::JUDGMENT_COUNTER);
+    }
+    if bits & (1 << 3) != 0 {
+        mask.insert(StepStatisticsMask::SONG_DURATION);
+    }
+    if bits & (1 << 4) != 0 {
+        mask.insert(StepStatisticsMask::PACK_BANNER);
+    }
+    if bits & (1 << 5) != 0 {
+        mask.insert(StepStatisticsMask::STEP_COUNTS);
+    }
+    if bits & (1 << 6) != 0 {
+        mask.insert(StepStatisticsMask::PEAK_NPS);
+    }
+    mask
+}
 
 bitflags! {
     /// Active modifiers for the Scroll row.
@@ -130,6 +186,7 @@ pub struct PlayerOptionMasks {
     pub appearance_effects: AppearanceEffectsMask,
     pub fa_plus: FaPlusMask,
     pub early_dw: EarlyDwMask,
+    pub step_statistics: StepStatisticsMask,
     pub gameplay_extras: GameplayExtrasMask,
     pub live_timing_stats: LiveTimingStatsMask,
     pub gameplay_extras_more: GameplayExtrasMoreMask,

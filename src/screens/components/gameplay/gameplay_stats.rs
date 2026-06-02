@@ -150,6 +150,29 @@ fn step_stats_player_idx(state: &State, player_side: profile_data::PlayerSide) -
     }
 }
 
+#[inline(always)]
+fn step_stats_mask(
+    state: &State,
+    player_side: profile_data::PlayerSide,
+) -> profile_data::StepStatisticsMask {
+    let player_idx = step_stats_player_idx(state, player_side);
+    state
+        .player_profiles
+        .get(player_idx)
+        .map_or(profile_data::StepStatisticsMask::empty(), |p| {
+            p.step_statistics
+        })
+}
+
+#[inline(always)]
+fn any_step_stats_enabled(state: &State, bit: profile_data::StepStatisticsMask) -> bool {
+    state
+        .player_profiles
+        .iter()
+        .take(state.num_players)
+        .any(|p| p.step_statistics.contains(bit))
+}
+
 #[derive(Clone, Copy)]
 struct StepStatsTimeDisplay {
     total_seconds: f32,
@@ -829,14 +852,37 @@ pub fn push_step_stats(
     player_side: profile_data::PlayerSide,
 ) {
     let wide = is_wide();
+    let mask = step_stats_mask(state, player_side);
+    if mask.is_empty() {
+        return;
+    }
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     actors.reserve(if wide { 48 } else { 1 });
-    build_banner(actors, state, layout, wide, player_side);
-    build_pack_banner(actors, state, layout, wide, player_side);
-    build_steps_info(actors, state, layout, wide, player_side);
-    build_side_pane(actors, state, asset_manager, layout, wide, player_side);
-    build_holds_mines_rolls_pane(actors, state, asset_manager, layout, wide, player_side);
-    build_scorebox_pane(actors, state, layout, wide, player_side);
+    if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
+        build_banner(actors, state, layout, wide, player_side);
+    }
+    let show_pack_info = mask.pack_info_enabled();
+    if show_pack_info {
+        build_pack_banner(actors, state, layout, wide, player_side);
+    }
+    build_steps_info(actors, state, layout, wide, player_side, show_pack_info);
+    build_side_pane(
+        actors,
+        state,
+        asset_manager,
+        layout,
+        wide,
+        player_side,
+        mask,
+    );
+    if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) {
+        let player_idx = step_stats_player_idx(state, player_side);
+        if state.player_profiles[player_idx].display_scorebox {
+            build_scorebox_pane(actors, state, layout, wide, player_side);
+        } else {
+            build_holds_mines_rolls_pane(actors, state, asset_manager, layout, wide, player_side);
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -926,13 +972,17 @@ pub fn push_versus_step_stats(
     if state.num_players < 2 || state.players.len() < 2 {
         return;
     }
-    let show_for: [bool; 2] = [
-        state.player_profiles[0].data_visualizations
-            == profile_data::DataVisualizations::StepStatistics,
-        state.player_profiles[1].data_visualizations
-            == profile_data::DataVisualizations::StepStatistics,
+    let show_judgments_for: [bool; 2] = [
+        state.player_profiles[0]
+            .step_statistics
+            .contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER),
+        state.player_profiles[1]
+            .step_statistics
+            .contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER),
     ];
-    if !show_for[0] && !show_for[1] {
+    let show_song_banner =
+        any_step_stats_enabled(state, profile_data::StepStatisticsMask::SONG_BANNER);
+    if !show_judgments_for[0] && !show_judgments_for[1] && !show_song_banner {
         return;
     }
 
@@ -964,151 +1014,169 @@ pub fn push_versus_step_stats(
     let z_fg = 110i16;
 
     actors.reserve(128);
-    // Center black column behind the counters (SL: VersusStepStatistics.lua).
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(screen_center_x(), screen_center_y()):
-        zoomto(150.0, screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(z_bg)
-    ));
+    if show_judgments_for[0] || show_judgments_for[1] {
+        // Center black column behind the counters (SL: VersusStepStatistics.lua).
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoomto(150.0, screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(z_bg)
+        ));
+    }
 
-    asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
-            let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
-            if digit_w <= 0.0 {
-                return;
-            }
-
-            // Simply Love (VersusStepStatistics.lua) positions the two TapNoteJudgments actorframes at:
-            // P1: x=-64, P2: x=+66 (relative to center). TapNoteJudgments internally uses
-            // `PlayerNumber:Reverse()[player]` for halign, which is P1=0 (left), P2=1 (right),
-            // so both number blocks extend inward and sit inside the 150px black column.
-            let base_anchor_p1 = center_x - 64.0; // left edge for P1 block
-            let base_anchor_p2 = center_x + 66.0; // right edge for P2 block
-            let block_w = (digits as f32) * digit_w;
-            let bar_left = center_x - 75.0;
-            let bar_right = center_x + 75.0;
-            let margin = 4.0;
-            let anchor_p1 = base_anchor_p1.clamp(bar_left + margin, bar_right - margin - block_w);
-            let anchor_p2 = base_anchor_p2.clamp(bar_left + margin + block_w, bar_right - margin);
-
-            for (player_idx, show) in show_for.iter().copied().enumerate() {
-                if !show {
-                    continue;
+    if show_judgments_for[0] || show_judgments_for[1] {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
+                let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
+                if digit_w <= 0.0 {
+                    return;
                 }
-                let is_p1 = player_idx == 0;
-                let group_y = 100.0;
-                let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
-                let group_origin_y = screen_center_y() + group_y;
 
-                let player_profile = &state.player_profiles[player_idx];
-                let show_fa_plus_window = player_profile.show_fa_plus_window;
-                let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
-                let row_height = if show_fa_split { 29.0 } else { 35.0 };
-                let disabled_windows = player_profile.timing_windows.disabled_windows();
+                // Simply Love (VersusStepStatistics.lua) positions the two TapNoteJudgments actorframes at:
+                // P1: x=-64, P2: x=+66 (relative to center). TapNoteJudgments internally uses
+                // `PlayerNumber:Reverse()[player]` for halign, which is P1=0 (left), P2=1 (right),
+                // so both number blocks extend inward and sit inside the 150px black column.
+                let base_anchor_p1 = center_x - 64.0; // left edge for P1 block
+                let base_anchor_p2 = center_x + 66.0; // right edge for P2 block
+                let block_w = (digits as f32) * digit_w;
+                let bar_left = center_x - 75.0;
+                let bar_right = center_x + 75.0;
+                let margin = 4.0;
+                let anchor_p1 =
+                    base_anchor_p1.clamp(bar_left + margin, bar_right - margin - block_w);
+                let anchor_p2 =
+                    base_anchor_p2.clamp(bar_left + margin + block_w, bar_right - margin);
 
-                let (start, end) = state.note_ranges[player_idx];
-                if show_fa_split && end > start {
-                    let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
-                    let wc =
-                        gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
-                    let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                    let bright_colors = [
-                        color::JUDGMENT_RGBA[0],
-                        color::JUDGMENT_FA_PLUS_WHITE_RGBA,
-                        color::JUDGMENT_RGBA[1],
-                        color::JUDGMENT_RGBA[2],
-                        color::JUDGMENT_RGBA[3],
-                        color::JUDGMENT_RGBA[4],
-                        color::JUDGMENT_RGBA[5],
-                    ];
-                    let dim_colors = [
-                        color::JUDGMENT_DIM_RGBA[0],
-                        color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
-                        color::JUDGMENT_DIM_RGBA[1],
-                        color::JUDGMENT_DIM_RGBA[2],
-                        color::JUDGMENT_DIM_RGBA[3],
-                        color::JUDGMENT_DIM_RGBA[4],
-                        color::JUDGMENT_DIM_RGBA[5],
-                    ];
-                    for (row_i, count) in counts.iter().copied().enumerate() {
-                        let disabled = split_row_disabled(disabled_windows, row_i);
-                        let y =
-                            group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) =
-                            padded_runs_for_window(count, digits, disabled);
-                        let dim_color = if disabled {
-                            DISABLED_WINDOW_RGBA
-                        } else {
-                            dim_colors[row_i]
-                        };
-                        let bright_color = if disabled {
-                            DISABLED_WINDOW_RGBA
-                        } else {
-                            bright_colors[row_i]
-                        };
-                        push_versus_count_texts(
-                            actors,
-                            is_p1,
-                            anchor_x,
-                            y,
-                            digit_w,
-                            numbers_zoom_x,
-                            numbers_zoom_y,
-                            dim_text,
-                            bright_text,
-                            dim_color,
-                            bright_color,
-                            z_fg,
-                        );
+                for (player_idx, show) in show_judgments_for.iter().copied().enumerate() {
+                    if !show {
+                        continue;
                     }
-                } else {
-                    let counts = [
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Fantastic),
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Excellent),
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Great),
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Decent),
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::WayOff),
-                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
-                    ];
-                    for (row_i, count) in counts.iter().copied().enumerate() {
-                        let disabled = standard_row_disabled(disabled_windows, row_i);
-                        let y =
-                            group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) =
-                            padded_runs_for_window(count, digits, disabled);
-                        let dim_color = if disabled {
-                            DISABLED_WINDOW_RGBA
-                        } else {
-                            color::JUDGMENT_DIM_RGBA[row_i]
-                        };
-                        let bright_color = if disabled {
-                            DISABLED_WINDOW_RGBA
-                        } else {
-                            color::JUDGMENT_RGBA[row_i]
-                        };
-                        push_versus_count_texts(
-                            actors,
-                            is_p1,
-                            anchor_x,
-                            y,
-                            digit_w,
-                            numbers_zoom_x,
-                            numbers_zoom_y,
-                            dim_text,
-                            bright_text,
-                            dim_color,
-                            bright_color,
-                            z_fg,
+                    let is_p1 = player_idx == 0;
+                    let group_y = 100.0;
+                    let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
+                    let group_origin_y = screen_center_y() + group_y;
+
+                    let player_profile = &state.player_profiles[player_idx];
+                    let show_fa_plus_window = player_profile.show_fa_plus_window;
+                    let show_fa_split =
+                        show_fa_plus_window || player_profile.custom_fantastic_window;
+                    let row_height = if show_fa_split { 29.0 } else { 35.0 };
+                    let disabled_windows = player_profile.timing_windows.disabled_windows();
+
+                    let (start, end) = state.note_ranges[player_idx];
+                    if show_fa_split && end > start {
+                        let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
+                        let wc = gameplay::display_window_counts(
+                            state,
+                            player_idx,
+                            Some(blue_window_ms),
                         );
+                        let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
+                        let bright_colors = [
+                            color::JUDGMENT_RGBA[0],
+                            color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+                            color::JUDGMENT_RGBA[1],
+                            color::JUDGMENT_RGBA[2],
+                            color::JUDGMENT_RGBA[3],
+                            color::JUDGMENT_RGBA[4],
+                            color::JUDGMENT_RGBA[5],
+                        ];
+                        let dim_colors = [
+                            color::JUDGMENT_DIM_RGBA[0],
+                            color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
+                            color::JUDGMENT_DIM_RGBA[1],
+                            color::JUDGMENT_DIM_RGBA[2],
+                            color::JUDGMENT_DIM_RGBA[3],
+                            color::JUDGMENT_DIM_RGBA[4],
+                            color::JUDGMENT_DIM_RGBA[5],
+                        ];
+                        for (row_i, count) in counts.iter().copied().enumerate() {
+                            let disabled = split_row_disabled(disabled_windows, row_i);
+                            let y = group_origin_y
+                                + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let (dim_text, bright_text) =
+                                padded_runs_for_window(count, digits, disabled);
+                            let dim_color = if disabled {
+                                DISABLED_WINDOW_RGBA
+                            } else {
+                                dim_colors[row_i]
+                            };
+                            let bright_color = if disabled {
+                                DISABLED_WINDOW_RGBA
+                            } else {
+                                bright_colors[row_i]
+                            };
+                            push_versus_count_texts(
+                                actors,
+                                is_p1,
+                                anchor_x,
+                                y,
+                                digit_w,
+                                numbers_zoom_x,
+                                numbers_zoom_y,
+                                dim_text,
+                                bright_text,
+                                dim_color,
+                                bright_color,
+                                z_fg,
+                            );
+                        }
+                    } else {
+                        let counts = [
+                            gameplay::display_judgment_count(
+                                state,
+                                player_idx,
+                                JudgeGrade::Fantastic,
+                            ),
+                            gameplay::display_judgment_count(
+                                state,
+                                player_idx,
+                                JudgeGrade::Excellent,
+                            ),
+                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Great),
+                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Decent),
+                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::WayOff),
+                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
+                        ];
+                        for (row_i, count) in counts.iter().copied().enumerate() {
+                            let disabled = standard_row_disabled(disabled_windows, row_i);
+                            let y = group_origin_y
+                                + (y_base + row_i as f32 * row_height) * group_zoom_y;
+                            let (dim_text, bright_text) =
+                                padded_runs_for_window(count, digits, disabled);
+                            let dim_color = if disabled {
+                                DISABLED_WINDOW_RGBA
+                            } else {
+                                color::JUDGMENT_DIM_RGBA[row_i]
+                            };
+                            let bright_color = if disabled {
+                                DISABLED_WINDOW_RGBA
+                            } else {
+                                color::JUDGMENT_RGBA[row_i]
+                            };
+                            push_versus_count_texts(
+                                actors,
+                                is_p1,
+                                anchor_x,
+                                y,
+                                digit_w,
+                                numbers_zoom_x,
+                                numbers_zoom_y,
+                                dim_text,
+                                bright_text,
+                                dim_color,
+                                bright_color,
+                                z_fg,
+                            );
+                        }
                     }
                 }
-            }
+            });
         });
-    });
+    }
 
-    for (player_idx, show) in show_for.iter().copied().enumerate() {
+    for (player_idx, show) in show_judgments_for.iter().copied().enumerate() {
         if !show || !state.player_profiles[player_idx].nps_graph_at_top {
             continue;
         }
@@ -1136,7 +1204,7 @@ pub fn push_versus_step_stats(
         ));
     }
 
-    if let Some(key) = &state.song_banner_key {
+    if show_song_banner && let Some(key) = &state.song_banner_key {
         actors.push(act!(sprite(key):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y() + 70.0):
@@ -1163,6 +1231,19 @@ pub fn push_double_step_stats(
     if state.cols_per_player <= 4 {
         return;
     }
+    let mask = state
+        .player_profiles
+        .first()
+        .map_or(profile_data::StepStatisticsMask::empty(), |p| {
+            p.step_statistics
+        });
+    if mask.is_empty() {
+        return;
+    }
+    let display_scorebox = state
+        .player_profiles
+        .first()
+        .is_some_and(|p| p.display_scorebox);
 
     let Some(notefield_width) = notefield_width(state) else {
         return;
@@ -1207,7 +1288,9 @@ pub fn push_double_step_stats(
 
     // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
     let song_banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
-    if let Some(banner_key) = &state.song_banner_key {
+    if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER)
+        && let Some(banner_key) = &state.song_banner_key
+    {
         let banner_y = pane_cy + (-200.0 * banner_data_zoom);
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(song_banner_x, banner_y):
@@ -1218,7 +1301,9 @@ pub fn push_double_step_stats(
     }
 
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
-    if let Some(pack_key) = state.pack_banner_key.as_ref() {
+    if mask.pack_info_enabled()
+        && let Some(pack_key) = state.pack_banner_key.as_ref()
+    {
         let final_size = if note_field_is_centered { 0.2 } else { 0.25 };
         let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom;
         let pack_w = STEP_STATS_BANNER_W * final_size * banner_data_zoom;
@@ -1233,7 +1318,7 @@ pub fn push_double_step_stats(
     }
 
     // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)
-    {
+    if mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER) {
         let origin_x = pane_cx + ((-notefield_width + 75.0) * banner_data_zoom);
         let origin_y = pane_cy + (40.0 * banner_data_zoom);
         let base_zoom = 0.8 * banner_data_zoom;
@@ -1445,7 +1530,7 @@ pub fn push_double_step_stats(
     }
 
     // HoldsMinesRolls.lua (double): x(-GetNotefieldWidth() + 212), y(-10), zoom(0.8)
-    {
+    if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && !display_scorebox {
         let frame_cx = pane_cx + ((-notefield_width + 212.0) * banner_data_zoom);
         // Our holds/mines/rolls builder positions the frame origin at the *middle* row (Mines),
         // matching the non-double path where SL uses y=-140 and row2 is at y=28.
@@ -1465,7 +1550,7 @@ pub fn push_double_step_stats(
     }
 
     // Scorebox.lua (double): x(GetNotefieldWidth() - 140), y(-115)
-    {
+    if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && display_scorebox {
         let frame_cx = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
         let frame_cy = pane_cy + (-115.0 * banner_data_zoom);
         let frame_zoom = banner_data_zoom;
@@ -1483,7 +1568,7 @@ pub fn push_double_step_stats(
     }
 
     // Time.lua (double): x(-GetNotefieldWidth() + 150), y(75)
-    {
+    if mask.contains(profile_data::StepStatisticsMask::SONG_DURATION) {
         let base_x = pane_cx + ((-notefield_width + 150.0) * banner_data_zoom);
         let base_y = pane_cy + (75.0 * banner_data_zoom);
 
@@ -1564,10 +1649,12 @@ pub fn push_double_step_stats(
 
     // DensityGraph.lua (double): graph ActorFrame xy(260, 40), with width
     // calculated as 95% of the side pane in gameplay init.
-    push_density_graph_at(actors, state, 0, pane_cx + 260.0, pane_cy + 40.0);
+    if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
+        push_density_graph_at(actors, state, 0, pane_cx + 260.0, pane_cy + 40.0);
+    }
 
     // Peak NPS text (DensityGraph.lua drives this in SL).
-    {
+    if mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = cached_peak_nps_text(scaled_peak);
         // Simply Love computes this inside DensityGraph.lua with a funky halign() in double,
@@ -1691,6 +1778,7 @@ fn build_steps_info(
     layout: StepStatsPaneLayout,
     wide: bool,
     player_side: profile_data::PlayerSide,
+    show_song_info: bool,
 ) {
     if !wide {
         return;
@@ -1705,6 +1793,9 @@ fn build_steps_info(
         diffuse(0.0, 0.0, 0.0, 0.95):
         z(-80)
     ));
+    if !show_song_info {
+        return;
+    }
     let note_field_is_centered = layout.note_field_is_centered;
     let banner_data_zoom = layout.banner_data_zoom;
 
@@ -2161,6 +2252,7 @@ fn build_side_pane(
     layout: StepStatsPaneLayout,
     wide: bool,
     player_side: profile_data::PlayerSide,
+    mask: profile_data::StepStatisticsMask,
 ) {
     if !wide {
         return;
@@ -2210,8 +2302,12 @@ fn build_side_pane(
     });
     let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
+    let show_judgments = mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER);
+    let show_duration = mask.contains(profile_data::StepStatisticsMask::SONG_DURATION);
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
+    if show_judgments || show_duration {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
         let numbers_zoom = final_text_base_zoom * 0.5;
         let max_digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
         if max_digit_w <= 0.0 { return; }
@@ -2225,7 +2321,7 @@ fn build_side_pane(
             final_judgments_center_x + (x_sign * numbers_local_x_offset * final_text_base_zoom);
         let show_standard_judgments = !show_fa_split;
 
-        if show_standard_judgments {
+        if show_judgments && show_standard_judgments {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = judgment_info(*grade);
@@ -2307,7 +2403,7 @@ fn build_side_pane(
                     ));
                 }
             }
-        } else {
+        } else if show_judgments {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
             let wc = gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
@@ -2441,7 +2537,7 @@ fn build_side_pane(
         }
 
         // --- Time Display (Remaining / Total) ---
-        {
+        if show_duration {
             let local_y = -40.0 * layout.banner_data_zoom;
 
             let time_display = step_stats_time_display(state, player_idx);
@@ -2586,10 +2682,12 @@ fn build_side_pane(
                 71,
             );
         }
-    }));
+            });
+        });
+    }
 
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
-    if wide {
+    if wide && mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
         let graph_h = state.density_graph_graph_h;
         let graph_w = state.density_graph_graph_w;
         if graph_w > 0.0_f32 && graph_h > 0.0_f32 {
@@ -2600,7 +2698,7 @@ fn build_side_pane(
     }
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
-    if wide {
+    if wide && mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = cached_peak_nps_text(scaled_peak);
 
