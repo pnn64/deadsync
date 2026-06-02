@@ -76,6 +76,66 @@ pub fn upsert(
     save(profile_id, &list);
 }
 
+/// Mark one config as the profile's default (clearing it on the others). No-op
+/// if the name isn't found.
+pub fn set_default(profile_id: &str, name: &str) {
+    let mut list = load(profile_id);
+    if apply_set_default(&mut list, name) {
+        save(profile_id, &list);
+    }
+}
+
+/// Rename a config. No-op if `old` is missing, `new` is blank, or `new` already
+/// names a different config.
+pub fn rename(profile_id: &str, old: &str, new: &str) {
+    let mut list = load(profile_id);
+    if apply_rename(&mut list, old, new) {
+        save(profile_id, &list);
+    }
+}
+
+/// Delete a config by name. No-op if the name isn't found.
+pub fn delete(profile_id: &str, name: &str) {
+    let mut list = load(profile_id);
+    if apply_delete(&mut list, name) {
+        save(profile_id, &list);
+    }
+}
+
+// Pure list mutations (testable without touching the filesystem). Each returns
+// whether the list changed.
+fn apply_set_default(list: &mut [PadConfigProfile], name: &str) -> bool {
+    if !list.iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+        return false;
+    }
+    for p in list.iter_mut() {
+        p.is_default = p.name.eq_ignore_ascii_case(name);
+    }
+    true
+}
+
+fn apply_rename(list: &mut [PadConfigProfile], old: &str, new: &str) -> bool {
+    let new = new.trim();
+    if new.is_empty()
+        || !list.iter().any(|p| p.name.eq_ignore_ascii_case(old))
+        || list
+            .iter()
+            .any(|p| !p.name.eq_ignore_ascii_case(old) && p.name.eq_ignore_ascii_case(new))
+    {
+        return false;
+    }
+    if let Some(p) = list.iter_mut().find(|p| p.name.eq_ignore_ascii_case(old)) {
+        p.name = new.to_string();
+    }
+    true
+}
+
+fn apply_delete(list: &mut Vec<PadConfigProfile>, name: &str) -> bool {
+    let before = list.len();
+    list.retain(|p| !p.name.eq_ignore_ascii_case(name));
+    list.len() != before
+}
+
 /// Pick the config to apply for a pad: the serial-matching one first, else the
 /// profile's default.
 pub fn resolve<'a>(profiles: &'a [PadConfigProfile], serial: &str) -> Option<&'a PadConfigProfile> {
@@ -200,5 +260,42 @@ mod tests {
         assert_eq!(resolve(&profiles, "unknown").unwrap().name, "Default");
         let no_default = vec![sample("X", Some("s"), false, "22")];
         assert!(resolve(&no_default, "other").is_none());
+    }
+
+    #[test]
+    fn set_default_is_exclusive_and_case_insensitive() {
+        let mut list = vec![
+            sample("A", None, true, "00"),
+            sample("B", None, false, "11"),
+        ];
+        assert!(apply_set_default(&mut list, "b"));
+        assert!(!list[0].is_default);
+        assert!(list[1].is_default);
+        // Missing name → no change, no panic.
+        assert!(!apply_set_default(&mut list, "nope"));
+        assert!(list[1].is_default);
+    }
+
+    #[test]
+    fn rename_guards_blank_missing_and_duplicate() {
+        let mut list = vec![sample("A", None, false, "00"), sample("B", None, false, "11")];
+        assert!(!apply_rename(&mut list, "A", "  ")); // blank
+        assert!(!apply_rename(&mut list, "missing", "C")); // missing
+        assert!(!apply_rename(&mut list, "A", "b")); // duplicate (case-insensitive)
+        assert!(apply_rename(&mut list, "A", "Alpha"));
+        assert_eq!(list[0].name, "Alpha");
+        // Renaming to its own (case-different) name is allowed.
+        assert!(apply_rename(&mut list, "Alpha", "ALPHA"));
+        assert_eq!(list[0].name, "ALPHA");
+    }
+
+    #[test]
+    fn delete_removes_matching() {
+        let mut list = vec![sample("A", None, false, "00"), sample("B", None, false, "11")];
+        assert!(apply_delete(&mut list, "a"));
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "B");
+        assert!(!apply_delete(&mut list, "missing"));
+        assert_eq!(list.len(), 1);
     }
 }

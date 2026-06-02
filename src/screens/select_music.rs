@@ -4274,6 +4274,70 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
     }
 }
 
+/// Quick-recall "Pad Profile" menu items: for each connected SMX pad with a
+/// joined local profile, the built-in presets + that profile's saved configs.
+/// Selecting one applies it to that physical pad. `None` hides the category.
+fn build_pad_profile_menu_items() -> Option<Vec<select_music_menu::Item>> {
+    if !config::get().use_fsrs {
+        return None;
+    }
+    let mut pads: Vec<(bool, String, String)> = Vec::new(); // (p2, profile_id, serial)
+    for slot in 0..2 {
+        let info = crate::engine::smx::get_info(slot);
+        if !info.connected {
+            continue;
+        }
+        let side = if info.is_player2 {
+            profile_data::PlayerSide::P2
+        } else {
+            profile_data::PlayerSide::P1
+        };
+        if let Some(pid) = profile::active_local_profile_id_for_side(side) {
+            pads.push((info.is_player2, pid, info.serial));
+        }
+    }
+    if pads.is_empty() {
+        return None;
+    }
+    let show_side = pads.len() > 1;
+    let mut items = Vec::new();
+    for (p2, pid, serial) in &pads {
+        let prefix = if show_side {
+            if *p2 { "P2 " } else { "P1 " }
+        } else {
+            ""
+        };
+        let configs = crate::game::pad_profiles::load(pid);
+        let resolved = crate::game::pad_profiles::resolve(&configs, serial).map(|c| c.name.clone());
+        for preset in ["Low", "Medium", "High"] {
+            items.push(select_music_menu::pad_profile_item(
+                format!("{prefix}{preset}"),
+                "",
+                *p2,
+                true,
+                preset,
+            ));
+        }
+        for c in &configs {
+            let mark = if resolved.as_deref() == Some(c.name.as_str()) {
+                " *"
+            } else if c.is_default {
+                " (default)"
+            } else {
+                ""
+            };
+            items.push(select_music_menu::pad_profile_item(
+                format!("{prefix}{}{mark}", c.name),
+                "",
+                *p2,
+                false,
+                c.name.clone(),
+            ));
+        }
+    }
+    Some(items)
+}
+
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let replays_enabled = config::get().machine_enable_replays;
     let downloads_enabled = crate::game::online::downloads::sort_menu_available();
@@ -4388,6 +4452,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         sorts,
         profile: profile_items,
         advanced,
+        pad_profile: build_pad_profile_menu_items(),
         styles,
         playlists,
     }
@@ -8201,6 +8266,40 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
 
 /// Save the cursor pad's current tuning to the active player's profile.
 /// SMX pads only; no-op for a Guest (nothing to save to).
+/// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
+/// (quick recall from the Advanced menu). Returns whether it was applied.
+fn apply_pad_profile_recall(p2: bool, preset: bool, name: &str) -> bool {
+    let Some(slot) = (0..2).find(|&s| {
+        let i = crate::engine::smx::get_info(s);
+        i.connected && i.is_player2 == p2
+    }) else {
+        return false;
+    };
+    if preset {
+        match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
+            Ok(p) => crate::engine::smx::apply_preset(slot, p),
+            Err(()) => false,
+        }
+    } else {
+        let side = if p2 {
+            profile_data::PlayerSide::P2
+        } else {
+            profile_data::PlayerSide::P1
+        };
+        let Some(pid) = profile::active_local_profile_id_for_side(side) else {
+            return false;
+        };
+        let configs = crate::game::pad_profiles::load(&pid);
+        let Some(c) = configs.iter().find(|c| c.name == name) else {
+            return false;
+        };
+        match crate::engine::smx::PadConfigData::from_hex(&c.data_hex) {
+            Some(data) => crate::engine::smx::apply_config_data(slot, &data),
+            None => false,
+        }
+    }
+}
+
 fn perform_pad_profile_save(state: &mut State) {
     let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
         return;
@@ -8446,6 +8545,13 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         select_music_menu::Action::ConfigurePads => {
             hide_select_music_menu(state);
             show_pad_config_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ApplyPadProfile { p2, preset, name } => {
+            hide_select_music_menu(state);
+            if apply_pad_profile_recall(p2, preset, &name) {
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
             ScreenAction::None
         }
         select_music_menu::Action::SongSearch => {

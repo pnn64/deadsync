@@ -35,6 +35,7 @@ pub enum Category {
     Sorts,
     Profile,
     Advanced,
+    PadProfile,
     Styles,
     Playlists,
 }
@@ -119,6 +120,7 @@ pub struct CategoryItemLists {
     pub sorts: Vec<Item>,
     pub profile: Option<Vec<Item>>,
     pub advanced: Vec<Item>,
+    pub pad_profile: Option<Vec<Item>>,
     pub styles: Option<Vec<Item>>,
     pub playlists: Option<Vec<Item>>,
 }
@@ -132,17 +134,20 @@ pub fn build_entries(lists: &CategoryItemLists, categories: &CategoryState) -> V
         &lists.sorts,
         lists.profile.as_deref(),
         &lists.advanced,
+        lists.pad_profile.as_deref(),
         lists.styles.as_deref(),
         lists.playlists.as_deref(),
         categories,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_entries_from_slices(
     items_standalone: &[Item],
     items_sorts: &[Item],
     items_profile: Option<&[Item]>,
     items_advanced: &[Item],
+    items_pad_profile: Option<&[Item]>,
     items_styles: Option<&[Item]>,
     items_playlists: Option<&[Item]>,
     categories: &CategoryState,
@@ -180,6 +185,18 @@ fn build_entries_from_slices(
             entries.push(Entry::CategoryItem(item.clone()));
         }
         return entries;
+    }
+    if categories.is_expanded(Category::PadProfile) {
+        if let Some(pad_profile_items) = items_pad_profile {
+            let mut entries = vec![Entry::CategoryHeader {
+                category: Category::PadProfile,
+                label: "Pad Profile...",
+            }];
+            for item in pad_profile_items {
+                entries.push(Entry::CategoryItem(item.clone()));
+            }
+            return entries;
+        }
     }
     if categories.is_expanded(Category::Styles) {
         if let Some(style_items) = items_styles {
@@ -229,6 +246,13 @@ fn build_entries_from_slices(
         category: Category::Advanced,
         label: "Advanced Options",
     });
+
+    if items_pad_profile.is_some() {
+        entries.push(Entry::CategoryHeader {
+            category: Category::PadProfile,
+            label: "Pad Profile...",
+        });
+    }
 
     if items_styles.is_some() {
         entries.push(Entry::CategoryHeader {

@@ -37,6 +37,13 @@ pub enum Action {
     SortByTopGradesP1,
     SortByTopGradesP2,
     SortByPlaylist(String),
+    /// Apply a pad-config preset/profile to a physical pad (quick recall).
+    /// `preset` distinguishes a built-in preset name from a saved config name.
+    ApplyPadProfile {
+        p2: bool,
+        preset: bool,
+        name: String,
+    },
     ToggleFavorite,
     SortByFavorites,
     SwitchToSingle,
@@ -249,6 +256,25 @@ pub fn playlist_item(
         top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
         bottom_label: TextContent::Shared(Arc::<str>::from(bottom_label.into())),
         action: Action::SortByPlaylist(id.into()),
+    }
+}
+
+/// Build a "Pad Profile" recall item that applies a preset/saved config on select.
+pub fn pad_profile_item(
+    top_label: impl Into<String>,
+    bottom_label: impl Into<String>,
+    p2: bool,
+    preset: bool,
+    name: impl Into<String>,
+) -> Item {
+    Item {
+        top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
+        bottom_label: TextContent::Shared(Arc::<str>::from(bottom_label.into())),
+        action: Action::ApplyPadProfile {
+            p2,
+            preset,
+            name: name.into(),
+        },
     }
 }
 
