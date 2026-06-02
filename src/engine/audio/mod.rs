@@ -10,7 +10,7 @@ use crate::engine::host_time::{instant_nanos, now_nanos};
 use crate::engine::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -645,6 +645,7 @@ static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
+const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 
 #[inline(always)]
 fn music_nanos_from_seconds(seconds: f64) -> i64 {
@@ -1581,6 +1582,19 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let _ = ENGINE
         .command_sender
         .send(AudioCommand::PlayMusic(path, cut, looping, rate));
+}
+
+pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
+    let Ok(Some(snapped)) = decode::snap_start_forward_to_packet(path, start_sec) else {
+        return start_sec;
+    };
+    if snapped < start_sec || snapped - start_sec > MAX_PACKET_START_SNAP_SEC {
+        return start_sec;
+    }
+    if (snapped - start_sec).abs() > f64::EPSILON {
+        debug!("Snapped music cut start from {start_sec:.6}s to packet boundary {snapped:.6}s.");
+    }
+    snapped
 }
 
 /// Applies a ReplayGain result from the background analyzer, but only if it

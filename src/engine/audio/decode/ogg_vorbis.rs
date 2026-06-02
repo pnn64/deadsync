@@ -168,6 +168,75 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     Ok((total as f64 / f64::from(sample_rate)) as f32)
 }
 
+pub(crate) fn snap_start_forward_to_packet(
+    path: &Path,
+    start_sec: f64,
+) -> Result<Option<f64>, String> {
+    if !start_sec.is_finite() || start_sec <= 0.0 {
+        return Ok(None);
+    }
+
+    let mut format = probe_format(path).map_err(|e| format!("Cannot open OGG file: {e}"))?;
+    let (track_id, sample_rate) = {
+        let (track, cp) = vorbis_track(format.tracks())
+            .ok_or_else(|| "OGG file has no Vorbis track".to_string())?;
+        let sample_rate = cp
+            .sample_rate
+            .ok_or_else(|| "OGG sample rate is invalid".to_string())?;
+        (track.id, sample_rate)
+    };
+    if sample_rate == 0 {
+        return Err("OGG sample rate is invalid (0)".to_string());
+    }
+
+    let target_frame = (start_sec * f64::from(sample_rate)).ceil().max(0.0) as u64;
+    let Some(base_ts) = next_packet_start_ts(&mut format, track_id)? else {
+        return Ok(None);
+    };
+    let target_ts = base_ts.saturating_add(Duration::new(target_frame));
+    let seeked = format.seek(
+        SeekMode::Accurate,
+        SeekTo::Timestamp {
+            ts: target_ts,
+            track_id,
+        },
+    );
+    if seeked.is_err() {
+        format = probe_format(path).map_err(|e| format!("Cannot reopen OGG file: {e}"))?;
+        let _ = next_packet_start_ts(&mut format, track_id)?;
+    }
+
+    loop {
+        let Some(ts) = next_packet_start_ts(&mut format, track_id)? else {
+            return Ok(None);
+        };
+        let Some(frame) = ts.duration_from(base_ts).map(Duration::get) else {
+            continue;
+        };
+        if frame >= target_frame {
+            return Ok(Some(frame as f64 / f64::from(sample_rate)));
+        }
+    }
+}
+
+fn next_packet_start_ts(
+    format: &mut Box<dyn FormatReader>,
+    track_id: u32,
+) -> Result<Option<Timestamp>, String> {
+    loop {
+        match format.next_packet() {
+            Ok(Some(packet)) if packet.track_id == track_id => return Ok(Some(packet.pts)),
+            Ok(Some(_)) => continue,
+            Ok(None) => return Ok(None),
+            Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                return Ok(None);
+            }
+            Err(SymphoniaError::ResetRequired) => return Ok(None),
+            Err(e) => return Err(format!("OGG read failed: {e}")),
+        }
+    }
+}
+
 impl Reader {
     pub(crate) fn read_dec_packet_into(
         &mut self,
@@ -315,7 +384,7 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reader, open_file};
+    use super::{Reader, open_file, snap_start_forward_to_packet};
     use std::path::PathBuf;
 
     const SEEK_COMPARE_FRAMES: usize = 4096;
@@ -371,6 +440,26 @@ mod tests {
             let actual = read_frames(&mut seeked, SEEK_COMPARE_FRAMES);
 
             assert_eq!(actual, expected, "seek target frame {target}");
+        }
+    }
+
+    #[test]
+    fn packet_snap_never_moves_start_earlier() {
+        let path = fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        for target in [0.25, 1.0, 2.125, 3.5] {
+            let snapped = snap_start_forward_to_packet(&path, target)
+                .expect("snap packet start")
+                .expect("packet boundary");
+
+            assert!(snapped >= target, "target={target} snapped={snapped}");
+            assert!(
+                snapped - target <= 0.25,
+                "target={target} snapped={snapped}"
+            );
         }
     }
 }

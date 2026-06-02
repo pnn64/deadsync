@@ -132,3 +132,14 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     }
     Err(format!("unsupported audio format for '{}'", path.display()))
 }
+
+#[inline(always)]
+pub(crate) fn snap_start_forward_to_packet(
+    path: &Path,
+    start_sec: f64,
+) -> Result<Option<f64>, String> {
+    if ogg_vorbis::path_is_ogg_vorbis(path) {
+        return ogg_vorbis::snap_start_forward_to_packet(path, start_sec);
+    }
+    Ok(None)
+}

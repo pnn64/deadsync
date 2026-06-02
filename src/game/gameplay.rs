@@ -5143,19 +5143,24 @@ pub fn start_practice_music(
     judge_start_music_time: f32,
 ) {
     reset_practice_playback(state, judge_start_music_time);
-    state.audio_lead_in_seconds = (-playback_music_time).max(0.0);
-    set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
 
-    let Some(music_path) = state.charts[0].music_path.as_ref() else {
+    let Some(music_path) = state.charts[0].music_path.clone() else {
+        state.audio_lead_in_seconds = (-playback_music_time).max(0.0);
+        set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
         return;
     };
+    let playback_music_time =
+        audio::snap_music_start_sec(&music_path, f64::from(playback_music_time));
+    state.audio_lead_in_seconds = (-playback_music_time).max(0.0) as f32;
+    set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time as f32));
+
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
     audio::play_music(
-        music_path.clone(),
+        music_path,
         audio::Cut {
             start_sec: f64::from(playback_music_time),
             length_sec: f64::INFINITY,
