@@ -3805,6 +3805,9 @@ pub struct App {
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
     fsr_pads_active: bool,
+    /// Last built-in preset DeadSync flashed to each SMX pad slot while managing
+    /// pad config, so it only re-applies when the situation actually changes.
+    smx_applied_preset: [Option<config::SmxPadPreset>; 2],
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
@@ -3947,6 +3950,26 @@ impl App {
         } else if self.fsr_pads_active {
             self.fsr_monitor.set_active(false);
             self.fsr_pads_active = false;
+        }
+    }
+
+    /// When "DeadSync manages pad config" is on, flash the chosen built-in
+    /// preset to each connected StepManiaX pad once. The per-pad guard re-applies
+    /// only when the resolved preset changes, the pad reconnects, or managing is
+    /// toggled — so manual edits in Configure Pads aren't clobbered.
+    fn apply_smx_managed_preset(&mut self) {
+        let cfg = config::get();
+        for pad in 0..2 {
+            let connected = crate::engine::smx::get_info(pad).connected;
+            if !cfg.smx_input || !cfg.smx_manages_pad_config || !connected {
+                self.smx_applied_preset[pad] = None;
+                continue;
+            }
+            if self.smx_applied_preset[pad] != Some(cfg.smx_default_pad_config)
+                && crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config)
+            {
+                self.smx_applied_preset[pad] = Some(cfg.smx_default_pad_config);
+            }
         }
     }
 
@@ -4191,6 +4214,7 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.sync_pad_config_fsr();
+        self.apply_smx_managed_preset();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
         let mut upload_us: u32 = 0;
@@ -4623,6 +4647,7 @@ impl App {
             _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
             fsr_pads_active: false,
+            smx_applied_preset: [None, None],
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),

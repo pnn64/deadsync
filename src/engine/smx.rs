@@ -126,6 +126,87 @@ pub fn set_config(pad: usize, config: SmxConfig) {
     }
 }
 
+/// Threshold values for a built-in pad preset, matching the official SMX config
+/// tool (`ConfigPresets.cs`). Presets set both FSR and load-cell thresholds so
+/// one preset works regardless of pad type; the center panel uses its own pair.
+struct PresetThresholds {
+    load_cell_low: u8,
+    load_cell_high: u8,
+    load_cell_low_center: u8,
+    load_cell_high_center: u8,
+    fsr_low: u8,
+    fsr_high: u8,
+    fsr_low_center: u8,
+    fsr_high_center: u8,
+}
+
+fn preset_thresholds(preset: crate::config::SmxPadPreset) -> PresetThresholds {
+    use crate::config::SmxPadPreset;
+    match preset {
+        SmxPadPreset::Low => PresetThresholds {
+            load_cell_low: 70,
+            load_cell_high: 80,
+            load_cell_low_center: 100,
+            load_cell_high_center: 120,
+            fsr_low: 217,
+            fsr_high: 218,
+            fsr_low_center: 217,
+            fsr_high_center: 218,
+        },
+        SmxPadPreset::Medium => PresetThresholds {
+            load_cell_low: 33,
+            load_cell_high: 42,
+            load_cell_low_center: 35,
+            load_cell_high_center: 60,
+            fsr_low: 174,
+            fsr_high: 175,
+            fsr_low_center: 199,
+            fsr_high_center: 200,
+        },
+        SmxPadPreset::High => PresetThresholds {
+            load_cell_low: 20,
+            load_cell_high: 25,
+            load_cell_low_center: 20,
+            load_cell_high_center: 30,
+            fsr_low: 152,
+            fsr_high: 153,
+            fsr_low_center: 152,
+            fsr_high_center: 153,
+        },
+    }
+}
+
+/// Flash a built-in preset to a pad: every panel's FSR and load-cell thresholds
+/// (center panel 4 overridden), mirroring the official SMX tool. Returns false
+/// if the pad's config isn't available yet.
+pub fn apply_preset(pad: usize, preset: crate::config::SmxPadPreset) -> bool {
+    let Some(mut config) = get_config(pad) else {
+        return false;
+    };
+    let t = preset_thresholds(preset);
+    for panel in 0..9 {
+        let (lc_low, lc_high, fsr_low, fsr_high) = if panel == 4 {
+            (
+                t.load_cell_low_center,
+                t.load_cell_high_center,
+                t.fsr_low_center,
+                t.fsr_high_center,
+            )
+        } else {
+            (t.load_cell_low, t.load_cell_high, t.fsr_low, t.fsr_high)
+        };
+        let s = &mut config.panel_settings[panel];
+        s.load_cell_low_threshold = lc_low;
+        s.load_cell_high_threshold = lc_high;
+        for i in 0..4 {
+            s.fsr_low_threshold[i] = fsr_low;
+            s.fsr_high_threshold[i] = fsr_high;
+        }
+    }
+    set_config(pad, config);
+    true
+}
+
 /// Set sensor test mode for a pad.
 pub fn set_test_mode(pad: usize, mode: SensorTestMode) {
     if let Some(s) = SHARED.get() {
@@ -305,5 +386,47 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
         Some(format!("SMX {panel}"))
     } else {
         Some(format!("SMX[{prefix}] {panel}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::preset_thresholds;
+    use crate::config::SmxPadPreset;
+
+    #[test]
+    fn preset_thresholds_match_official_values() {
+        let low = preset_thresholds(SmxPadPreset::Low);
+        assert_eq!(
+            (low.load_cell_low, low.load_cell_high, low.fsr_low, low.fsr_high),
+            (70, 80, 217, 218)
+        );
+
+        let med = preset_thresholds(SmxPadPreset::Medium);
+        assert_eq!(
+            (med.load_cell_low, med.load_cell_high, med.fsr_low, med.fsr_high),
+            (33, 42, 174, 175)
+        );
+        // Center panel uses its own pair.
+        assert_eq!(
+            (
+                med.load_cell_low_center,
+                med.load_cell_high_center,
+                med.fsr_low_center,
+                med.fsr_high_center
+            ),
+            (35, 60, 199, 200)
+        );
+
+        let high = preset_thresholds(SmxPadPreset::High);
+        assert_eq!(
+            (
+                high.load_cell_low,
+                high.load_cell_high,
+                high.fsr_low,
+                high.fsr_high
+            ),
+            (20, 25, 152, 153)
+        );
     }
 }
