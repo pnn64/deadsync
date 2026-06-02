@@ -88,6 +88,42 @@ pub const fn age_years_for_birth_year(birth_year: i32, current_year: i32) -> i32
     }
 }
 
+#[inline]
+fn set_i32_if_changed(value: &mut i32, new_value: i32) -> bool {
+    if *value == new_value {
+        return false;
+    }
+    *value = new_value;
+    true
+}
+
+#[inline]
+fn set_f32_if_changed(value: &mut f32, new_value: f32) -> bool {
+    if (*value - new_value).abs() < 1e-6 {
+        return false;
+    }
+    *value = new_value;
+    true
+}
+
+#[inline]
+fn set_u32_if_changed(value: &mut u32, new_value: u32) -> bool {
+    if *value == new_value {
+        return false;
+    }
+    *value = new_value;
+    true
+}
+
+#[inline]
+fn set_u8_if_changed(value: &mut u8, new_value: u8) -> bool {
+    if *value == new_value {
+        return false;
+    }
+    *value = new_value;
+    true
+}
+
 #[inline(always)]
 pub fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
     match window {
@@ -2269,6 +2305,42 @@ pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
     .ok()
 }
 
+pub fn parse_favorites_content(text: &str) -> HashSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+pub fn render_favorites_content(favorites: &HashSet<String>) -> String {
+    let mut sorted: Vec<&str> = favorites.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    sorted.join("\n")
+}
+
+pub fn add_known_pack_names<'a>(
+    known_pack_names: &mut HashSet<String>,
+    pack_names: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    let mut changed = false;
+    for name in pack_names {
+        changed |= known_pack_names.insert(name.to_owned());
+    }
+    changed
+}
+
+pub fn unknown_pack_names(
+    known_pack_names: &HashSet<String>,
+    scanned_pack_names: &[String],
+) -> HashSet<String> {
+    scanned_pack_names
+        .iter()
+        .filter(|name| !known_pack_names.contains(name.as_str()))
+        .cloned()
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LastPlayed {
     pub song_music_path: Option<String>,
@@ -2293,6 +2365,27 @@ pub fn append_last_played_section(content: &mut String, section: &str, last_play
         last_played.difficulty_index
     ));
     content.push('\n');
+}
+
+pub fn load_last_played_section<F>(
+    has_any: bool,
+    mut get: F,
+    default: &LastPlayed,
+) -> Option<LastPlayed>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    if !has_any {
+        return None;
+    }
+
+    Some(LastPlayed {
+        song_music_path: parse_last_played_value(get("MusicPath").as_deref()),
+        chart_hash: parse_last_played_value(get("ChartHash").as_deref()),
+        difficulty_index: get("DifficultyIndex")
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(default.difficulty_index),
+    })
 }
 
 impl Default for LastPlayed {
@@ -2329,6 +2422,20 @@ pub fn append_last_played_course_section(
         content.push_str("DifficultyName=\n");
     }
     content.push('\n');
+}
+
+pub fn load_last_played_course_section<F>(has_any: bool, mut get: F) -> Option<LastPlayedCourse>
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    if !has_any {
+        return None;
+    }
+
+    Some(LastPlayedCourse {
+        course_path: parse_last_played_value(get("CoursePath").as_deref()),
+        difficulty_name: parse_last_played_value(get("DifficultyName").as_deref()),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2560,6 +2667,657 @@ impl Default for PlayerOptionsData {
     fn default() -> Self {
         default_player_options()
     }
+}
+
+#[inline(always)]
+fn load_u8_bool<F>(get: &mut F, key: &str, default: bool) -> bool
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    get(key)
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(default, |v| v != 0)
+}
+
+pub fn load_visual_player_options<F>(options: &mut PlayerOptionsData, mut get: F)
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    options.background_filter = get("BackgroundFilter")
+        .and_then(|s| BackgroundFilter::from_str(&s).ok())
+        .unwrap_or(options.background_filter);
+    options.hold_judgment_graphic = get("HoldJudgmentGraphic")
+        .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
+        .unwrap_or_else(|| options.hold_judgment_graphic.clone());
+    options.held_miss_graphic = get("HeldGraphic")
+        .or_else(|| get("HeldMissGraphic"))
+        .and_then(|s| HeldMissGraphic::from_str(&s).ok())
+        .unwrap_or_else(|| options.held_miss_graphic.clone());
+    options.judgment_graphic = get("JudgmentGraphic")
+        .and_then(|s| JudgmentGraphic::from_str(&s).ok())
+        .unwrap_or_else(|| options.judgment_graphic.clone());
+    options.combo_font = get("ComboFont")
+        .and_then(|s| ComboFont::from_str(&s).ok())
+        .unwrap_or(options.combo_font);
+    options.combo_colors = get("ComboColors")
+        .and_then(|s| ComboColors::from_str(&s).ok())
+        .unwrap_or(options.combo_colors);
+    options.combo_mode = get("ComboMode")
+        .and_then(|s| ComboMode::from_str(&s).ok())
+        .unwrap_or(options.combo_mode);
+    options.carry_combo_between_songs = get("CarryComboBetweenSongs")
+        .or_else(|| get("ComboContinuesBetweenSongs"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.carry_combo_between_songs, |v| v != 0);
+    options.noteskin = get("NoteSkin")
+        .and_then(|s| NoteSkin::from_str(&s).ok())
+        .unwrap_or_else(|| options.noteskin.clone());
+    options.mine_noteskin = get("MineSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.receptor_noteskin = get("ReceptorSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.tap_explosion_noteskin =
+        get("TapExplosionSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    let tap_explosion_mask_version = get("TapExplosionMaskVersion")
+        .and_then(|s| s.parse::<u8>().ok())
+        .unwrap_or(1);
+    options.tap_explosion_active_mask = get("TapExplosionMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|bits| normalize_tap_explosion_mask(bits, tap_explosion_mask_version))
+        .unwrap_or(options.tap_explosion_active_mask);
+    options.mini_percent = get("MiniPercent")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.mini_percent);
+    options.spacing_percent = get("Spacing")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.spacing_percent);
+    options.perspective = get("Perspective")
+        .and_then(|s| Perspective::from_str(&s).ok())
+        .unwrap_or(options.perspective);
+    options.note_field_offset_x = get("NoteFieldOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.note_field_offset_x);
+    options.note_field_offset_y = get("NoteFieldOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.note_field_offset_y);
+    options.judgment_offset_x = get("JudgmentOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.judgment_offset_x);
+    options.judgment_offset_y = get("JudgmentOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.judgment_offset_y);
+    options.combo_offset_x = get("ComboOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.combo_offset_x);
+    options.combo_offset_y = get("ComboOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.combo_offset_y);
+    options.error_bar_offset_x = get("ErrorBarOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.error_bar_offset_x);
+    options.error_bar_offset_y = get("ErrorBarOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.error_bar_offset_y);
+    options.visual_delay_ms = get("VisualDelayMs")
+        .or_else(|| get("VisualDelay"))
+        .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
+        .unwrap_or(options.visual_delay_ms);
+    options.global_offset_shift_ms = get("GlobalOffsetShiftMs")
+        .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
+        .unwrap_or(options.global_offset_shift_ms);
+}
+
+pub fn load_timing_feedback_options<F>(options: &mut PlayerOptionsData, mut get: F)
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    options.show_fa_plus_window =
+        load_u8_bool(&mut get, "ShowFaPlusWindow", options.show_fa_plus_window);
+    options.show_ex_score = load_u8_bool(&mut get, "ShowExScore", options.show_ex_score);
+    options.show_hard_ex_score =
+        load_u8_bool(&mut get, "ShowHardEXScore", options.show_hard_ex_score);
+    options.show_fa_plus_pane = load_u8_bool(&mut get, "ShowFaPlusPane", options.show_fa_plus_pane);
+    options.fa_plus_10ms_blue_window =
+        load_u8_bool(&mut get, "SmallerWhite", options.fa_plus_10ms_blue_window);
+    options.split_15_10ms = get("SplitWhites")
+        .or_else(|| get("Split1510ms"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.split_15_10ms, |v| v != 0);
+    options.track_early_judgments = load_u8_bool(
+        &mut get,
+        "TrackEarlyJudgments",
+        options.track_early_judgments,
+    );
+    options.scale_scatterplot = get("ScaleScatterplot")
+        .or_else(|| get("ScatterplotGreatMax"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.scale_scatterplot, |v| v != 0);
+    options.scatterplot_max_window = get("ScatterplotMaxWindow")
+        .and_then(|s| ScatterplotMaxWindow::from_str(&s).ok())
+        .unwrap_or(options.scatterplot_max_window);
+    options.custom_fantastic_window = load_u8_bool(
+        &mut get,
+        "CustomFantasticWindow",
+        options.custom_fantastic_window,
+    );
+    options.custom_fantastic_window_ms = get("CustomFantasticWindowMs")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(clamp_custom_fantastic_window_ms)
+        .unwrap_or(options.custom_fantastic_window_ms);
+    options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
+    options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
+    options.judgment_back = load_u8_bool(&mut get, "JudgmentBack", options.judgment_back);
+    options.error_ms_display = load_u8_bool(&mut get, "ErrorMSDisplay", options.error_ms_display);
+    options.display_scorebox = load_u8_bool(&mut get, "DisplayScorebox", options.display_scorebox);
+    let legacy_live_timing_stats =
+        load_u8_bool(&mut get, "LiveTimingStats", options.live_timing_stats);
+    if let Some(mask) = get("LiveTimingStatsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(LiveTimingStatsMask::from_bits_truncate)
+    {
+        options.live_timing_stats_mask = mask;
+        options.live_timing_stats = legacy_live_timing_stats;
+    } else {
+        options.live_timing_stats = legacy_live_timing_stats;
+        if legacy_live_timing_stats {
+            options.live_timing_stats_mask = LiveTimingStatsMask::all();
+        }
+    }
+    options.rainbow_max = load_u8_bool(&mut get, "RainbowMax", options.rainbow_max);
+    options.responsive_colors =
+        load_u8_bool(&mut get, "ResponsiveColors", options.responsive_colors);
+    options.show_life_percent =
+        load_u8_bool(&mut get, "ShowLifePercent", options.show_life_percent);
+    options.tilt_multiplier = get("TiltMultiplier")
+        .and_then(|s| s.parse::<f32>().ok())
+        .filter(|v| v.is_finite())
+        .unwrap_or(options.tilt_multiplier);
+    options.tilt_min_threshold_ms = get("TiltMinThresholdMs")
+        .or_else(|| get("TiltCutoffMs"))
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_min_threshold_ms);
+    options.tilt_max_threshold_ms = get("TiltMaxThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_max_threshold_ms);
+    if options.tilt_max_threshold_ms < options.tilt_min_threshold_ms {
+        options.tilt_max_threshold_ms = options.tilt_min_threshold_ms;
+    }
+}
+
+pub fn load_error_bar_options<F>(options: &mut PlayerOptionsData, mut get: F)
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    options.error_bar = get("ErrorBar")
+        .and_then(|s| ErrorBarStyle::from_str(&s).ok())
+        .unwrap_or(options.error_bar);
+    options.error_bar_text = get("ErrorBarText")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_text, |v| v != 0);
+    options.text_error_bar_10ms = get("TextErrorBar10ms")
+        .and_then(|s| parse_profile_bool(&s))
+        .unwrap_or(options.text_error_bar_10ms);
+    let mask_from_key = get("ErrorBarMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(ErrorBarMask::from_bits_truncate);
+    let colorful = get("Colorful")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let monochrome = get("Monochrome")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let text = get("Text")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let highlight = get("Highlight")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let average = get("Average")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let mask_from_flags = if colorful.is_some()
+        || monochrome.is_some()
+        || text.is_some()
+        || highlight.is_some()
+        || average.is_some()
+    {
+        let mut mask = ErrorBarMask::empty();
+        if colorful.unwrap_or(false) {
+            mask |= ErrorBarMask::COLORFUL;
+        }
+        if monochrome.unwrap_or(false) {
+            mask |= ErrorBarMask::MONOCHROME;
+        }
+        if text.unwrap_or(false) {
+            mask |= ErrorBarMask::TEXT;
+        }
+        if highlight.unwrap_or(false) {
+            mask |= ErrorBarMask::HIGHLIGHT;
+        }
+        if average.unwrap_or(false) {
+            mask |= ErrorBarMask::AVERAGE;
+        }
+        Some(mask)
+    } else {
+        None
+    };
+    options.error_bar_active_mask = mask_from_key
+        .or(mask_from_flags)
+        .unwrap_or_else(|| error_bar_mask_from_style(options.error_bar, options.error_bar_text));
+    options.error_bar = error_bar_style_from_mask(options.error_bar_active_mask);
+    options.error_bar_text = error_bar_text_from_mask(options.error_bar_active_mask);
+    options.error_bar_up = get("ErrorBarUp")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_up, |v| v != 0);
+    options.error_bar_multi_tick = get("ErrorBarMultiTick")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_multi_tick, |v| v != 0);
+    options.error_bar_trim = get("ErrorBarTrim")
+        .and_then(|s| ErrorBarTrim::from_str(&s).ok())
+        .unwrap_or(options.error_bar_trim);
+    options.short_average_error_bar_enabled = get("ShortAverageErrorBar")
+        .and_then(|s| parse_profile_bool(&s))
+        .or_else(|| {
+            get("LongAvgTickOnly")
+                .and_then(|s| parse_profile_bool(&s))
+                .map(|long_only| !long_only)
+        })
+        .unwrap_or(options.short_average_error_bar_enabled);
+    options.average_error_bar_intensity = get("AverageErrorBarIntensity")
+        .or_else(|| get("HighlightZoom"))
+        .and_then(|s| s.trim().trim_end_matches('x').trim().parse::<f32>().ok())
+        .map(clamp_average_error_bar_intensity)
+        .unwrap_or(options.average_error_bar_intensity);
+    options.average_error_bar_interval_ms = get("AverageErrorBarIntervalMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_average_error_bar_interval_ms)
+        .or_else(|| {
+            get("HighlightAverageMs")
+                .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+                .filter(|&ms| ms > 0)
+                .map(clamp_average_error_bar_interval_ms)
+        })
+        .unwrap_or(options.average_error_bar_interval_ms);
+    options.long_error_bar_enabled = get("LongErrorBar")
+        .and_then(|s| s.trim().parse::<i32>().ok())
+        .map_or(options.long_error_bar_enabled, |v| v != 0);
+    options.long_error_bar_intensity = get("LongErrorBarIntensity")
+        .and_then(|s| s.trim().trim_end_matches('x').trim().parse::<f32>().ok())
+        .map(clamp_long_error_bar_intensity)
+        .unwrap_or(options.long_error_bar_intensity);
+    options.long_error_bar_threshold_ms = get("LongErrorBarThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_threshold_ms)
+        .unwrap_or(options.long_error_bar_threshold_ms);
+    options.long_error_bar_min_samples = get("LongErrorBarMinSamples")
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_min_samples)
+        .unwrap_or(options.long_error_bar_min_samples);
+    options.long_error_bar_buffer_cap = get("LongErrorBarBufferCap")
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(clamp_long_error_bar_buffer_cap)
+        .unwrap_or(options.long_error_bar_buffer_cap);
+}
+
+pub fn append_player_options_section(
+    content: &mut String,
+    section: &str,
+    options: &PlayerOptionsData,
+) {
+    content.push_str(&format!("[{section}]\n"));
+    content.push_str(&format!("BackgroundFilter={}\n", options.background_filter));
+    content.push_str(&format!("ScrollSpeed={}\n", options.scroll_speed));
+    content.push_str(&format!("Scroll={}\n", options.scroll_option));
+    content.push_str(&format!("Turn={}\n", options.turn_option));
+    content.push_str(&format!(
+        "InsertMask={}\n",
+        options.insert_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "RemoveMask={}\n",
+        options.remove_active_mask.bits()
+    ));
+    content.push_str(&format!("HoldsMask={}\n", options.holds_active_mask.bits()));
+    content.push_str(&format!(
+        "AccelEffectsMask={}\n",
+        options.accel_effects_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "VisualEffectsMask={}\n",
+        options.visual_effects_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "AppearanceEffectsMask={}\n",
+        options.appearance_effects_active_mask.bits()
+    ));
+    content.push_str(&format!("AttackMode={}\n", options.attack_mode));
+    content.push_str(&format!("HideLightType={}\n", options.hide_light_type));
+    content.push_str(&format!(
+        "RescoreEarlyHits={}\n",
+        i32::from(options.rescore_early_hits)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffJudgments={}\n",
+        i32::from(options.hide_early_dw_judgments)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffFlash={}\n",
+        i32::from(options.hide_early_dw_flash)
+    ));
+    content.push_str(&format!("TimingWindows={}\n", options.timing_windows));
+    content.push_str(&format!(
+        "HideTargets={}\n",
+        i32::from(options.hide_targets)
+    ));
+    content.push_str(&format!("HideSongBG={}\n", i32::from(options.hide_song_bg)));
+    content.push_str(&format!("HideCombo={}\n", i32::from(options.hide_combo)));
+    content.push_str(&format!(
+        "HideLifebar={}\n",
+        i32::from(options.hide_lifebar)
+    ));
+    content.push_str(&format!("HideScore={}\n", i32::from(options.hide_score)));
+    content.push_str(&format!("HideDanger={}\n", i32::from(options.hide_danger)));
+    content.push_str(&format!(
+        "HideComboExplosions={}\n",
+        i32::from(options.hide_combo_explosions)
+    ));
+    content.push_str(&format!(
+        "ColumnFlashOnMiss={}\n",
+        i32::from(options.column_flash_on_miss)
+    ));
+    content.push_str(&format!(
+        "SubtractiveScoring={}\n",
+        i32::from(options.subtractive_scoring)
+    ));
+    content.push_str(&format!("Pacemaker={}\n", i32::from(options.pacemaker)));
+    content.push_str(&format!(
+        "NPSGraphAtTop={}\n",
+        i32::from(options.nps_graph_at_top)
+    ));
+    content.push_str(&format!(
+        "TransparentDensityGraphBackground={}\n",
+        i32::from(options.transparent_density_graph_bg)
+    ));
+    content.push_str(&format!("MiniIndicator={}\n", options.mini_indicator));
+    content.push_str(&format!(
+        "MiniIndicatorScoreType={}\n",
+        options.mini_indicator_score_type
+    ));
+    content.push_str(&format!(
+        "MiniIndicatorSize={}\n",
+        options.mini_indicator_size
+    ));
+    content.push_str(&format!(
+        "MiniIndicatorColor={}\n",
+        options.mini_indicator_color
+    ));
+    content.push_str(&format!(
+        "ReverseScroll={}\n",
+        i32::from(options.reverse_scroll)
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusWindow={}\n",
+        i32::from(options.show_fa_plus_window)
+    ));
+    content.push_str(&format!(
+        "ShowExScore={}\n",
+        i32::from(options.show_ex_score)
+    ));
+    content.push_str(&format!(
+        "ShowHardEXScore={}\n",
+        i32::from(options.show_hard_ex_score)
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusPane={}\n",
+        i32::from(options.show_fa_plus_pane)
+    ));
+    content.push_str(&format!(
+        "SmallerWhite={}\n",
+        i32::from(options.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "SplitWhites={}\n",
+        i32::from(options.split_15_10ms)
+    ));
+    content.push_str(&format!(
+        "TrackEarlyJudgments={}\n",
+        i32::from(options.track_early_judgments)
+    ));
+    content.push_str(&format!(
+        "ScaleScatterplot={}\n",
+        i32::from(options.scale_scatterplot)
+    ));
+    content.push_str(&format!(
+        "ScatterplotMaxWindow={}\n",
+        options.scatterplot_max_window
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindow={}\n",
+        i32::from(options.custom_fantastic_window)
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindowMs={}\n",
+        options.custom_fantastic_window_ms
+    ));
+    content.push_str(&format!(
+        "JudgmentTilt={}\n",
+        i32::from(options.judgment_tilt)
+    ));
+    content.push_str(&format!("ColumnCues={}\n", i32::from(options.column_cues)));
+    content.push_str(&format!(
+        "JudgmentBack={}\n",
+        i32::from(options.judgment_back)
+    ));
+    content.push_str(&format!(
+        "ErrorMSDisplay={}\n",
+        i32::from(options.error_ms_display)
+    ));
+    content.push_str(&format!(
+        "DisplayScorebox={}\n",
+        i32::from(options.display_scorebox)
+    ));
+    content.push_str(&format!(
+        "LiveTimingStats={}\n",
+        i32::from(options.live_timing_stats)
+    ));
+    content.push_str(&format!(
+        "LiveTimingStatsMask={}\n",
+        options.live_timing_stats_mask.bits()
+    ));
+    content.push_str(&format!("RainbowMax={}\n", i32::from(options.rainbow_max)));
+    content.push_str(&format!(
+        "ResponsiveColors={}\n",
+        i32::from(options.responsive_colors)
+    ));
+    content.push_str(&format!(
+        "ShowLifePercent={}\n",
+        i32::from(options.show_life_percent)
+    ));
+    content.push_str(&format!("TiltMultiplier={}\n", options.tilt_multiplier));
+    content.push_str(&format!(
+        "TiltMinThresholdMs={}\n",
+        options.tilt_min_threshold_ms
+    ));
+    content.push_str(&format!(
+        "TiltMaxThresholdMs={}\n",
+        options.tilt_max_threshold_ms
+    ));
+    content.push_str(&format!("ErrorBar={}\n", options.error_bar));
+    content.push_str(&format!(
+        "ErrorBarText={}\n",
+        i32::from(options.error_bar_text)
+    ));
+    content.push_str(&format!(
+        "TextErrorBar10ms={}\n",
+        i32::from(options.text_error_bar_10ms)
+    ));
+    content.push_str(&format!(
+        "ErrorBarMask={}\n",
+        options.error_bar_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "Colorful={}\n",
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::COLORFUL)
+        )
+    ));
+    content.push_str(&format!(
+        "Monochrome={}\n",
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::MONOCHROME)
+        )
+    ));
+    content.push_str(&format!(
+        "Text={}\n",
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::TEXT))
+    ));
+    content.push_str(&format!(
+        "Highlight={}\n",
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::HIGHLIGHT)
+        )
+    ));
+    content.push_str(&format!(
+        "Average={}\n",
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::AVERAGE)
+        )
+    ));
+    content.push_str(&format!("ErrorBarUp={}\n", i32::from(options.error_bar_up)));
+    content.push_str(&format!(
+        "ErrorBarMultiTick={}\n",
+        i32::from(options.error_bar_multi_tick)
+    ));
+    content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
+    content.push_str(&format!(
+        "ShortAverageErrorBar={}\n",
+        i32::from(options.short_average_error_bar_enabled)
+    ));
+    content.push_str(&format!(
+        "AverageErrorBarIntensity={:.2}\n",
+        clamp_average_error_bar_intensity(options.average_error_bar_intensity)
+    ));
+    content.push_str(&format!(
+        "AverageErrorBarIntervalMs={}\n",
+        clamp_average_error_bar_interval_ms(options.average_error_bar_interval_ms)
+    ));
+    content.push_str(&format!(
+        "LongErrorBar={}\n",
+        i32::from(options.long_error_bar_enabled)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarIntensity={:.2}\n",
+        clamp_long_error_bar_intensity(options.long_error_bar_intensity)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarThresholdMs={}\n",
+        clamp_long_error_bar_threshold_ms(options.long_error_bar_threshold_ms)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarMinSamples={}\n",
+        clamp_long_error_bar_min_samples(options.long_error_bar_min_samples)
+    ));
+    content.push_str(&format!(
+        "LongErrorBarBufferCap={}\n",
+        clamp_long_error_bar_buffer_cap(options.long_error_bar_buffer_cap)
+    ));
+    content.push_str(&format!(
+        "DataVisualizations={}\n",
+        options.data_visualizations
+    ));
+    content.push_str(&format!("TargetScore={}\n", options.target_score));
+    content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
+    content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
+    content.push_str(&format!(
+        "MeasureCounterLookahead={}\n",
+        options.measure_counter_lookahead
+    ));
+    content.push_str(&format!(
+        "MeasureCounterLeft={}\n",
+        i32::from(options.measure_counter_left)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterUp={}\n",
+        i32::from(options.measure_counter_up)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterVert={}\n",
+        i32::from(options.measure_counter_vert)
+    ));
+    content.push_str(&format!("BrokenRun={}\n", i32::from(options.broken_run)));
+    content.push_str(&format!("RunTimer={}\n", i32::from(options.run_timer)));
+    content.push_str(&format!("MeasureLines={}\n", options.measure_lines));
+    content.push_str(&format!(
+        "HoldJudgmentGraphic={}\n",
+        options.hold_judgment_graphic
+    ));
+    content.push_str(&format!("HeldGraphic={}\n", options.held_miss_graphic));
+    content.push_str(&format!("JudgmentGraphic={}\n", options.judgment_graphic));
+    content.push_str(&format!("ComboFont={}\n", options.combo_font));
+    content.push_str(&format!("ComboColors={}\n", options.combo_colors));
+    content.push_str(&format!("ComboMode={}\n", options.combo_mode));
+    content.push_str(&format!(
+        "CarryComboBetweenSongs={}\n",
+        i32::from(options.carry_combo_between_songs)
+    ));
+    content.push_str(&format!("NoteSkin={}\n", options.noteskin));
+    content.push_str(&format!(
+        "MineSkin={}\n",
+        options.mine_noteskin.as_ref().map_or("", NoteSkin::as_str)
+    ));
+    content.push_str(&format!(
+        "ReceptorSkin={}\n",
+        options
+            .receptor_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    ));
+    content.push_str(&format!(
+        "TapExplosionSkin={}\n",
+        options
+            .tap_explosion_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    ));
+    content.push_str(&format!(
+        "TapExplosionMask={}\n",
+        options.tap_explosion_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "TapExplosionMaskVersion={}\n",
+        TAP_EXPLOSION_MASK_VERSION
+    ));
+    content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
+    content.push_str(&format!("Spacing={}\n", options.spacing_percent));
+    content.push_str(&format!("Perspective={}\n", options.perspective));
+    content.push_str(&format!(
+        "NoteFieldOffsetX={}\n",
+        options.note_field_offset_x
+    ));
+    content.push_str(&format!(
+        "NoteFieldOffsetY={}\n",
+        options.note_field_offset_y
+    ));
+    content.push_str(&format!("JudgmentOffsetX={}\n", options.judgment_offset_x));
+    content.push_str(&format!("JudgmentOffsetY={}\n", options.judgment_offset_y));
+    content.push_str(&format!("ComboOffsetX={}\n", options.combo_offset_x));
+    content.push_str(&format!("ComboOffsetY={}\n", options.combo_offset_y));
+    content.push_str(&format!("ErrorBarOffsetX={}\n", options.error_bar_offset_x));
+    content.push_str(&format!("ErrorBarOffsetY={}\n", options.error_bar_offset_y));
+    content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
+    content.push_str(&format!(
+        "GlobalOffsetShiftMs={}\n",
+        options.global_offset_shift_ms
+    ));
+    content.push('\n');
 }
 
 #[derive(Debug, Clone)]
@@ -2907,6 +3665,346 @@ impl Profile {
     pub fn has_score_import_credentials(&self, endpoint: ScoreImportEndpoint) -> bool {
         !self.score_import_api_key(endpoint).is_empty()
             && (!endpoint.requires_username() || !self.score_import_username(endpoint).is_empty())
+    }
+
+    pub fn set_last_played(
+        &mut self,
+        style: PlayStyle,
+        song_music_path: Option<String>,
+        chart_hash: Option<String>,
+        difficulty_index: usize,
+    ) -> bool {
+        let last_played = self.last_played_mut(style);
+        if last_played.song_music_path == song_music_path
+            && last_played.chart_hash == chart_hash
+            && last_played.difficulty_index == difficulty_index
+        {
+            return false;
+        }
+        last_played.song_music_path = song_music_path;
+        last_played.chart_hash = chart_hash;
+        last_played.difficulty_index = difficulty_index;
+        true
+    }
+
+    pub fn set_last_played_course(
+        &mut self,
+        style: PlayStyle,
+        course_path: Option<String>,
+        difficulty_name: Option<String>,
+    ) -> bool {
+        let last_played = self.last_played_course_mut(style);
+        if last_played.course_path == course_path && last_played.difficulty_name == difficulty_name
+        {
+            return false;
+        }
+        last_played.course_path = course_path;
+        last_played.difficulty_name = difficulty_name;
+        true
+    }
+
+    pub fn add_stage_calories_for_day(&mut self, day: &str, calories_burned: f32) -> bool {
+        let mut changed = false;
+        if self.calories_burned_day.trim() != day {
+            self.calories_burned_day = day.to_string();
+            self.calories_burned_today = 0.0;
+            changed = true;
+        }
+
+        if !self.ignore_step_count_calories && calories_burned.is_finite() && calories_burned >= 0.0
+        {
+            let calories = (self.calories_burned_today + calories_burned).max(0.0);
+            changed |= set_f32_if_changed(&mut self.calories_burned_today, calories);
+        }
+        changed
+    }
+
+    pub fn set_player_initials(&mut self, initials: &str) -> bool {
+        let initials = sanitize_player_initials(initials);
+        if initials.is_empty() || self.player_initials == initials {
+            return false;
+        }
+        self.player_initials = initials;
+        true
+    }
+
+    pub fn set_scroll_option(&mut self, setting: ScrollOption) -> bool {
+        let reverse_enabled = setting.contains(ScrollOption::Reverse);
+        if self.scroll_option == setting && self.reverse_scroll == reverse_enabled {
+            return false;
+        }
+        self.scroll_option = setting;
+        self.reverse_scroll = reverse_enabled;
+        true
+    }
+
+    pub fn set_gameplay_extras(
+        &mut self,
+        column_flash_on_miss: bool,
+        subtractive_scoring: bool,
+        pacemaker: bool,
+        nps_graph_at_top: bool,
+    ) -> bool {
+        if self.column_flash_on_miss == column_flash_on_miss
+            && self.subtractive_scoring == subtractive_scoring
+            && self.pacemaker == pacemaker
+            && self.nps_graph_at_top == nps_graph_at_top
+        {
+            return false;
+        }
+        self.column_flash_on_miss = column_flash_on_miss;
+        self.subtractive_scoring = subtractive_scoring;
+        self.pacemaker = pacemaker;
+        self.nps_graph_at_top = nps_graph_at_top;
+        if subtractive_scoring {
+            self.mini_indicator = MiniIndicator::SubtractiveScoring;
+        } else if pacemaker {
+            self.mini_indicator = MiniIndicator::Pacemaker;
+        } else if matches!(
+            self.mini_indicator,
+            MiniIndicator::SubtractiveScoring | MiniIndicator::Pacemaker
+        ) {
+            self.mini_indicator = MiniIndicator::None;
+        }
+        true
+    }
+
+    pub fn set_early_dw_options(&mut self, hide_judgments: bool, hide_flash: bool) -> bool {
+        if self.hide_early_dw_judgments == hide_judgments && self.hide_early_dw_flash == hide_flash
+        {
+            return false;
+        }
+        self.hide_early_dw_judgments = hide_judgments;
+        self.hide_early_dw_flash = hide_flash;
+        true
+    }
+
+    pub fn set_hide_options(
+        &mut self,
+        hide_targets: bool,
+        hide_song_bg: bool,
+        hide_combo: bool,
+        hide_lifebar: bool,
+        hide_score: bool,
+        hide_danger: bool,
+        hide_combo_explosions: bool,
+    ) -> bool {
+        if self.hide_targets == hide_targets
+            && self.hide_song_bg == hide_song_bg
+            && self.hide_combo == hide_combo
+            && self.hide_lifebar == hide_lifebar
+            && self.hide_score == hide_score
+            && self.hide_danger == hide_danger
+            && self.hide_combo_explosions == hide_combo_explosions
+        {
+            return false;
+        }
+        self.hide_targets = hide_targets;
+        self.hide_song_bg = hide_song_bg;
+        self.hide_combo = hide_combo;
+        self.hide_lifebar = hide_lifebar;
+        self.hide_score = hide_score;
+        self.hide_danger = hide_danger;
+        self.hide_combo_explosions = hide_combo_explosions;
+        true
+    }
+
+    pub fn set_tilt_thresholds(&mut self, min_ms: u32, max_ms: u32) -> bool {
+        let min_ms = clamp_tilt_threshold_ms(min_ms);
+        let max_ms = clamp_tilt_threshold_ms(max_ms).max(min_ms);
+        if self.tilt_min_threshold_ms == min_ms && self.tilt_max_threshold_ms == max_ms {
+            return false;
+        }
+        self.tilt_min_threshold_ms = min_ms;
+        self.tilt_max_threshold_ms = max_ms;
+        true
+    }
+
+    pub fn set_error_bar_mask(&mut self, mask: ErrorBarMask) -> bool {
+        if self.error_bar_active_mask == mask {
+            return false;
+        }
+        self.error_bar_active_mask = mask;
+        self.error_bar = error_bar_style_from_mask(mask);
+        self.error_bar_text = error_bar_text_from_mask(mask);
+        true
+    }
+
+    pub fn set_note_field_offset_x(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.note_field_offset_x,
+            offset.clamp(NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_X_MAX),
+        )
+    }
+
+    pub fn set_note_field_offset_y(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.note_field_offset_y,
+            offset.clamp(NOTE_FIELD_OFFSET_Y_MIN, NOTE_FIELD_OFFSET_Y_MAX),
+        )
+    }
+
+    pub fn set_judgment_offset_x(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.judgment_offset_x,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_judgment_offset_y(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.judgment_offset_y,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_combo_offset_x(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.combo_offset_x,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_combo_offset_y(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.combo_offset_y,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_error_bar_offset_x(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.error_bar_offset_x,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_error_bar_offset_y(&mut self, offset: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.error_bar_offset_y,
+            offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        )
+    }
+
+    pub fn set_mini_percent(&mut self, percent: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.mini_percent,
+            percent.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX),
+        )
+    }
+
+    pub fn set_spacing_percent(&mut self, percent: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.spacing_percent,
+            percent.clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX),
+        )
+    }
+
+    pub fn set_visual_delay_ms(&mut self, ms: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.visual_delay_ms,
+            ms.clamp(VISUAL_DELAY_MS_MIN, VISUAL_DELAY_MS_MAX),
+        )
+    }
+
+    pub fn set_global_offset_shift_ms(&mut self, ms: i32) -> bool {
+        set_i32_if_changed(
+            &mut self.global_offset_shift_ms,
+            ms.clamp(VISUAL_DELAY_MS_MIN, VISUAL_DELAY_MS_MAX),
+        )
+    }
+
+    pub fn set_tilt_multiplier(&mut self, multiplier: f32) -> bool {
+        if !multiplier.is_finite() {
+            return false;
+        }
+        set_f32_if_changed(&mut self.tilt_multiplier, multiplier)
+    }
+
+    pub fn set_custom_fantastic_window_ms(&mut self, ms: u8) -> bool {
+        set_u8_if_changed(
+            &mut self.custom_fantastic_window_ms,
+            clamp_custom_fantastic_window_ms(ms),
+        )
+    }
+
+    pub fn set_average_error_bar_intensity(&mut self, intensity: f32) -> bool {
+        set_f32_if_changed(
+            &mut self.average_error_bar_intensity,
+            clamp_average_error_bar_intensity(intensity),
+        )
+    }
+
+    pub fn set_average_error_bar_interval_ms(&mut self, ms: u32) -> bool {
+        set_u32_if_changed(
+            &mut self.average_error_bar_interval_ms,
+            clamp_average_error_bar_interval_ms(ms),
+        )
+    }
+
+    pub fn set_long_error_bar_intensity(&mut self, intensity: f32) -> bool {
+        set_f32_if_changed(
+            &mut self.long_error_bar_intensity,
+            clamp_long_error_bar_intensity(intensity),
+        )
+    }
+
+    pub fn set_long_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
+        set_u32_if_changed(
+            &mut self.long_error_bar_threshold_ms,
+            clamp_long_error_bar_threshold_ms(ms),
+        )
+    }
+
+    pub fn set_long_error_bar_min_samples(&mut self, n: u32) -> bool {
+        set_u32_if_changed(
+            &mut self.long_error_bar_min_samples,
+            clamp_long_error_bar_min_samples(n),
+        )
+    }
+
+    pub fn set_long_error_bar_buffer_cap(&mut self, n: u32) -> bool {
+        set_u32_if_changed(
+            &mut self.long_error_bar_buffer_cap,
+            clamp_long_error_bar_buffer_cap(n),
+        )
+    }
+
+    pub fn set_error_bar_options(&mut self, up: bool, multi_tick: bool) -> bool {
+        if self.error_bar_up == up && self.error_bar_multi_tick == multi_tick {
+            return false;
+        }
+        self.error_bar_up = up;
+        self.error_bar_multi_tick = multi_tick;
+        true
+    }
+
+    pub fn set_measure_counter_lookahead(&mut self, lookahead: u8) -> bool {
+        set_u8_if_changed(&mut self.measure_counter_lookahead, lookahead.min(4))
+    }
+
+    pub fn set_measure_counter_options(
+        &mut self,
+        left: bool,
+        up: bool,
+        vert: bool,
+        broken_run: bool,
+        run_timer: bool,
+    ) -> bool {
+        if self.measure_counter_left == left
+            && self.measure_counter_up == up
+            && self.measure_counter_vert == vert
+            && self.broken_run == broken_run
+            && self.run_timer == run_timer
+        {
+            return false;
+        }
+        self.measure_counter_left = left;
+        self.measure_counter_up = up;
+        self.measure_counter_vert = vert;
+        self.broken_run = broken_run;
+        self.run_timer = run_timer;
+        true
     }
 
     #[inline(always)]
@@ -3333,6 +4431,524 @@ mod tests {
     }
 
     #[test]
+    fn profile_last_played_updates_style_entry() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_last_played(
+            PlayStyle::Single,
+            Some("Songs/Pack/Song.ogg".to_string()),
+            Some("hash-a".to_string()),
+            4,
+        ));
+        assert_eq!(
+            profile
+                .last_played(PlayStyle::Versus)
+                .song_music_path
+                .as_deref(),
+            Some("Songs/Pack/Song.ogg")
+        );
+        assert_eq!(
+            profile.last_played(PlayStyle::Single).chart_hash.as_deref(),
+            Some("hash-a")
+        );
+        assert_eq!(profile.last_played(PlayStyle::Single).difficulty_index, 4);
+        assert!(!profile.set_last_played(
+            PlayStyle::Versus,
+            Some("Songs/Pack/Song.ogg".to_string()),
+            Some("hash-a".to_string()),
+            4,
+        ));
+
+        assert!(profile.set_last_played(
+            PlayStyle::Double,
+            Some("Songs/Pack/Double.ogg".to_string()),
+            None,
+            1,
+        ));
+        assert_eq!(
+            profile
+                .last_played(PlayStyle::Double)
+                .song_music_path
+                .as_deref(),
+            Some("Songs/Pack/Double.ogg")
+        );
+        assert_eq!(
+            profile
+                .last_played(PlayStyle::Single)
+                .song_music_path
+                .as_deref(),
+            Some("Songs/Pack/Song.ogg")
+        );
+    }
+
+    #[test]
+    fn profile_last_played_course_updates_style_entry() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_last_played_course(
+            PlayStyle::Single,
+            Some("Courses/Course.crs".to_string()),
+            Some("Hard".to_string()),
+        ));
+        assert_eq!(
+            profile
+                .last_played_course(PlayStyle::Versus)
+                .course_path
+                .as_deref(),
+            Some("Courses/Course.crs")
+        );
+        assert_eq!(
+            profile
+                .last_played_course(PlayStyle::Single)
+                .difficulty_name
+                .as_deref(),
+            Some("Hard")
+        );
+        assert!(!profile.set_last_played_course(
+            PlayStyle::Versus,
+            Some("Courses/Course.crs".to_string()),
+            Some("Hard".to_string()),
+        ));
+
+        assert!(profile.set_last_played_course(
+            PlayStyle::Double,
+            Some("Courses/Double.crs".to_string()),
+            Some("Challenge".to_string()),
+        ));
+        assert!(profile.set_last_played_course(PlayStyle::Double, None, None));
+        assert_eq!(
+            profile.last_played_course(PlayStyle::Double).course_path,
+            None
+        );
+    }
+
+    #[test]
+    fn profile_stage_calories_reset_day_and_ignore_invalid() {
+        let mut profile = Profile {
+            calories_burned_day: "2026-06-01".to_string(),
+            calories_burned_today: 12.0,
+            ..Profile::default()
+        };
+
+        assert!(profile.add_stage_calories_for_day("2026-06-02", 3.5));
+        assert_eq!(profile.calories_burned_day, "2026-06-02");
+        assert!((profile.calories_burned_today - 3.5).abs() < 1e-6);
+
+        assert!(!profile.add_stage_calories_for_day("2026-06-02", f32::NAN));
+        assert!((profile.calories_burned_today - 3.5).abs() < 1e-6);
+
+        profile.ignore_step_count_calories = true;
+        assert!(!profile.add_stage_calories_for_day("2026-06-02", 10.0));
+        assert!((profile.calories_burned_today - 3.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn profile_player_initials_sanitize_and_skip_empty() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_player_initials("a b-c"));
+        assert_eq!(profile.player_initials, "ABC");
+        assert!(!profile.set_player_initials("abc"));
+        assert!(!profile.set_player_initials("    "));
+        assert_eq!(profile.player_initials, "ABC");
+    }
+
+    #[test]
+    fn profile_scroll_option_updates_reverse_flag() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_scroll_option(ScrollOption::Reverse));
+        assert_eq!(profile.scroll_option, ScrollOption::Reverse);
+        assert!(profile.reverse_scroll);
+        assert!(!profile.set_scroll_option(ScrollOption::Reverse));
+
+        assert!(profile.set_scroll_option(ScrollOption::Normal));
+        assert_eq!(profile.scroll_option, ScrollOption::Normal);
+        assert!(!profile.reverse_scroll);
+    }
+
+    #[test]
+    fn profile_gameplay_extras_sync_mini_indicator() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_gameplay_extras(false, true, false, false));
+        assert!(profile.subtractive_scoring);
+        assert_eq!(profile.mini_indicator, MiniIndicator::SubtractiveScoring);
+
+        assert!(profile.set_gameplay_extras(false, false, true, false));
+        assert!(!profile.subtractive_scoring);
+        assert!(profile.pacemaker);
+        assert_eq!(profile.mini_indicator, MiniIndicator::Pacemaker);
+
+        assert!(profile.set_gameplay_extras(false, false, false, false));
+        assert_eq!(profile.mini_indicator, MiniIndicator::None);
+        assert!(!profile.set_gameplay_extras(false, false, false, false));
+    }
+
+    #[test]
+    fn profile_grouped_visibility_options_update_together() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_early_dw_options(true, true));
+        assert!(profile.hide_early_dw_judgments);
+        assert!(profile.hide_early_dw_flash);
+        assert!(!profile.set_early_dw_options(true, true));
+
+        assert!(profile.set_hide_options(true, true, false, true, false, true, true));
+        assert!(profile.hide_targets);
+        assert!(profile.hide_song_bg);
+        assert!(!profile.hide_combo);
+        assert!(profile.hide_lifebar);
+        assert!(!profile.hide_score);
+        assert!(profile.hide_danger);
+        assert!(profile.hide_combo_explosions);
+        assert!(!profile.set_hide_options(true, true, false, true, false, true, true));
+    }
+
+    #[test]
+    fn profile_tilt_thresholds_clamp_and_order() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_tilt_thresholds(120, 10));
+        assert_eq!(profile.tilt_min_threshold_ms, TILT_THRESHOLD_MAX_MS);
+        assert_eq!(profile.tilt_max_threshold_ms, TILT_THRESHOLD_MAX_MS);
+        assert!(!profile.set_tilt_thresholds(120, 10));
+    }
+
+    #[test]
+    fn profile_error_bar_mask_syncs_legacy_fields() {
+        let mut profile = Profile::default();
+        let mask = ErrorBarMask::MONOCHROME | ErrorBarMask::TEXT;
+
+        assert!(profile.set_error_bar_mask(mask));
+        assert_eq!(profile.error_bar_active_mask, mask);
+        assert_eq!(profile.error_bar, ErrorBarStyle::Monochrome);
+        assert!(profile.error_bar_text);
+        assert!(!profile.set_error_bar_mask(mask));
+    }
+
+    #[test]
+    fn profile_position_offsets_clamp_ranges() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_note_field_offset_x(NOTE_FIELD_OFFSET_X_MAX + 1));
+        assert_eq!(profile.note_field_offset_x, NOTE_FIELD_OFFSET_X_MAX);
+        assert!(!profile.set_note_field_offset_x(NOTE_FIELD_OFFSET_X_MAX + 1));
+
+        assert!(profile.set_note_field_offset_y(NOTE_FIELD_OFFSET_Y_MIN - 1));
+        assert_eq!(profile.note_field_offset_y, NOTE_FIELD_OFFSET_Y_MIN);
+
+        assert!(profile.set_judgment_offset_x(HUD_OFFSET_MAX + 1));
+        assert_eq!(profile.judgment_offset_x, HUD_OFFSET_MAX);
+        assert!(profile.set_judgment_offset_y(HUD_OFFSET_MIN - 1));
+        assert_eq!(profile.judgment_offset_y, HUD_OFFSET_MIN);
+
+        assert!(profile.set_combo_offset_x(HUD_OFFSET_MAX + 1));
+        assert_eq!(profile.combo_offset_x, HUD_OFFSET_MAX);
+        assert!(profile.set_combo_offset_y(HUD_OFFSET_MIN - 1));
+        assert_eq!(profile.combo_offset_y, HUD_OFFSET_MIN);
+
+        assert!(profile.set_error_bar_offset_x(HUD_OFFSET_MAX + 1));
+        assert_eq!(profile.error_bar_offset_x, HUD_OFFSET_MAX);
+        assert!(profile.set_error_bar_offset_y(HUD_OFFSET_MIN - 1));
+        assert_eq!(profile.error_bar_offset_y, HUD_OFFSET_MIN);
+    }
+
+    #[test]
+    fn profile_percent_and_timing_offsets_clamp_ranges() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_mini_percent(MINI_PERCENT_MAX + 1));
+        assert_eq!(profile.mini_percent, MINI_PERCENT_MAX);
+        assert!(!profile.set_mini_percent(MINI_PERCENT_MAX + 1));
+
+        assert!(profile.set_spacing_percent(SPACING_PERCENT_MIN - 1));
+        assert_eq!(profile.spacing_percent, SPACING_PERCENT_MIN);
+
+        assert!(profile.set_visual_delay_ms(VISUAL_DELAY_MS_MAX + 1));
+        assert_eq!(profile.visual_delay_ms, VISUAL_DELAY_MS_MAX);
+
+        assert!(profile.set_global_offset_shift_ms(VISUAL_DELAY_MS_MIN - 1));
+        assert_eq!(profile.global_offset_shift_ms, VISUAL_DELAY_MS_MIN);
+    }
+
+    #[test]
+    fn profile_tilt_multiplier_rejects_non_finite() {
+        let mut profile = Profile::default();
+
+        assert!(!profile.set_tilt_multiplier(f32::NAN));
+        assert_eq!(profile.tilt_multiplier, 1.0);
+        assert!(!profile.set_tilt_multiplier(f32::INFINITY));
+        assert_eq!(profile.tilt_multiplier, 1.0);
+
+        assert!(profile.set_tilt_multiplier(1.25));
+        assert_eq!(profile.tilt_multiplier, 1.25);
+        assert!(!profile.set_tilt_multiplier(1.25));
+    }
+
+    #[test]
+    fn profile_error_bar_numeric_settings_normalize() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_custom_fantastic_window_ms(CUSTOM_FANTASTIC_WINDOW_MAX_MS + 1));
+        assert_eq!(
+            profile.custom_fantastic_window_ms,
+            CUSTOM_FANTASTIC_WINDOW_MAX_MS
+        );
+        assert!(!profile.set_custom_fantastic_window_ms(CUSTOM_FANTASTIC_WINDOW_MAX_MS + 1));
+
+        assert!(profile.set_average_error_bar_intensity(1.13));
+        assert!((profile.average_error_bar_intensity - 1.25).abs() < 1e-6);
+        assert!(!profile.set_average_error_bar_intensity(1.13));
+
+        assert!(profile.set_average_error_bar_interval_ms(149));
+        assert_eq!(profile.average_error_bar_interval_ms, 100);
+
+        assert!(profile.set_long_error_bar_intensity(1.13));
+        assert!((profile.long_error_bar_intensity - 1.25).abs() < 1e-6);
+
+        assert!(profile.set_long_error_bar_threshold_ms(LONG_ERROR_BAR_THRESHOLD_MS_MAX + 1));
+        assert_eq!(
+            profile.long_error_bar_threshold_ms,
+            LONG_ERROR_BAR_THRESHOLD_MS_MAX
+        );
+
+        assert!(profile.set_long_error_bar_min_samples(0));
+        assert_eq!(
+            profile.long_error_bar_min_samples,
+            LONG_ERROR_BAR_MIN_SAMPLES_MIN
+        );
+
+        assert!(profile.set_long_error_bar_buffer_cap(LONG_ERROR_BAR_BUFFER_CAP_MAX + 1));
+        assert_eq!(
+            profile.long_error_bar_buffer_cap,
+            LONG_ERROR_BAR_BUFFER_CAP_MAX
+        );
+    }
+
+    #[test]
+    fn error_bar_options_load_legacy_flags_and_numeric_aliases() {
+        let mut options = PlayerOptionsData::default();
+        let values = [
+            ("Colorful", "1"),
+            ("Text", "1"),
+            ("LongAvgTickOnly", "1"),
+            ("HighlightZoom", "1.13x"),
+            ("HighlightAverageMs", "149ms"),
+            ("LongErrorBar", "0"),
+            ("LongErrorBarIntensity", "1.95x"),
+            ("LongErrorBarThresholdMs", "9999ms"),
+            ("LongErrorBarMinSamples", "0"),
+            ("LongErrorBarBufferCap", "9999"),
+        ];
+
+        load_error_bar_options(&mut options, |key| {
+            values
+                .iter()
+                .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
+        });
+
+        assert!(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::COLORFUL)
+        );
+        assert!(options.error_bar_active_mask.contains(ErrorBarMask::TEXT));
+        assert_eq!(options.error_bar, ErrorBarStyle::Colorful);
+        assert!(options.error_bar_text);
+        assert!(!options.short_average_error_bar_enabled);
+        assert!((options.average_error_bar_intensity - 1.25).abs() < 1e-6);
+        assert_eq!(options.average_error_bar_interval_ms, 100);
+        assert!(!options.long_error_bar_enabled);
+        assert!((options.long_error_bar_intensity - 2.0).abs() < 1e-6);
+        assert_eq!(
+            options.long_error_bar_threshold_ms,
+            LONG_ERROR_BAR_THRESHOLD_MS_MAX
+        );
+        assert_eq!(
+            options.long_error_bar_min_samples,
+            LONG_ERROR_BAR_MIN_SAMPLES_MIN
+        );
+        assert_eq!(
+            options.long_error_bar_buffer_cap,
+            LONG_ERROR_BAR_BUFFER_CAP_MAX
+        );
+    }
+
+    #[test]
+    fn visual_player_options_load_graphics_noteskins_and_offsets() {
+        let mut options = PlayerOptionsData::default();
+        let values = [
+            ("BackgroundFilter", "50"),
+            ("HoldJudgmentGraphic", "itg2"),
+            ("HeldGraphic", "none"),
+            ("JudgmentGraphic", "custom.png"),
+            ("ComboFont", "BebasNeue"),
+            ("ComboColors", "RainbowScroll"),
+            ("ComboMode", "CurrentCombo"),
+            ("ComboContinuesBetweenSongs", "1"),
+            ("NoteSkin", "default"),
+            ("MineSkin", "metal"),
+            ("ReceptorSkin", "cyber"),
+            ("TapExplosionSkin", "none"),
+            ("TapExplosionMask", "63"),
+            ("TapExplosionMaskVersion", "1"),
+            ("MiniPercent", "42"),
+            ("Spacing", "-7"),
+            ("Perspective", "Incoming"),
+            ("NoteFieldOffsetX", "12"),
+            ("NoteFieldOffsetY", "-13"),
+            ("JudgmentOffsetX", "14"),
+            ("JudgmentOffsetY", "-15"),
+            ("ComboOffsetX", "16"),
+            ("ComboOffsetY", "-17"),
+            ("ErrorBarOffsetX", "18"),
+            ("ErrorBarOffsetY", "-19"),
+            ("VisualDelay", "21ms"),
+            ("GlobalOffsetShiftMs", "-22ms"),
+        ];
+
+        load_visual_player_options(&mut options, |key| {
+            values
+                .iter()
+                .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
+        });
+
+        assert_eq!(
+            options.background_filter,
+            BackgroundFilter::from_percent(50)
+        );
+        assert_eq!(
+            options.hold_judgment_graphic.as_str(),
+            "hold_judgements/ITG2 1x2 (doubleres).png"
+        );
+        assert_eq!(options.held_miss_graphic.as_str(), "None");
+        assert_eq!(options.judgment_graphic.as_str(), "judgements/custom.png");
+        assert_eq!(options.combo_font, ComboFont::BebasNeue);
+        assert_eq!(options.combo_colors, ComboColors::RainbowScroll);
+        assert_eq!(options.combo_mode, ComboMode::CurrentCombo);
+        assert!(options.carry_combo_between_songs);
+        assert_eq!(options.noteskin, NoteSkin::new("default"));
+        assert_eq!(options.mine_noteskin, Some(NoteSkin::new("metal")));
+        assert_eq!(options.receptor_noteskin, Some(NoteSkin::new("cyber")));
+        assert_eq!(options.tap_explosion_noteskin, Some(NoteSkin::new("none")));
+        assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
+        assert_eq!(options.mini_percent, 42);
+        assert_eq!(options.spacing_percent, -7);
+        assert_eq!(options.perspective, Perspective::Incoming);
+        assert_eq!(options.note_field_offset_x, 12);
+        assert_eq!(options.note_field_offset_y, -13);
+        assert_eq!(options.judgment_offset_x, 14);
+        assert_eq!(options.judgment_offset_y, -15);
+        assert_eq!(options.combo_offset_x, 16);
+        assert_eq!(options.combo_offset_y, -17);
+        assert_eq!(options.error_bar_offset_x, 18);
+        assert_eq!(options.error_bar_offset_y, -19);
+        assert_eq!(options.visual_delay_ms, 21);
+        assert_eq!(options.global_offset_shift_ms, -22);
+    }
+
+    #[test]
+    fn timing_feedback_options_load_legacy_aliases_and_clamps() {
+        let mut options = PlayerOptionsData::default();
+        let values = [
+            ("ShowFaPlusWindow", "1"),
+            ("ShowExScore", "1"),
+            ("ShowHardEXScore", "1"),
+            ("ShowFaPlusPane", "1"),
+            ("SmallerWhite", "1"),
+            ("Split1510ms", "1"),
+            ("TrackEarlyJudgments", "1"),
+            ("ScatterplotGreatMax", "1"),
+            ("ScatterplotMaxWindow", "Excellent"),
+            ("CustomFantasticWindow", "1"),
+            ("CustomFantasticWindowMs", "23"),
+            ("JudgmentTilt", "1"),
+            ("ColumnCues", "1"),
+            ("JudgmentBack", "1"),
+            ("ErrorMSDisplay", "1"),
+            ("DisplayScorebox", "1"),
+            ("LiveTimingStats", "1"),
+            ("LiveTimingStatsMask", "3"),
+            ("RainbowMax", "1"),
+            ("ResponsiveColors", "1"),
+            ("ShowLifePercent", "1"),
+            ("TiltMultiplier", "1.5"),
+            ("TiltCutoffMs", "99ms"),
+            ("TiltMaxThresholdMs", "50ms"),
+        ];
+
+        load_timing_feedback_options(&mut options, |key| {
+            values
+                .iter()
+                .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
+        });
+
+        assert!(options.show_fa_plus_window);
+        assert!(options.show_ex_score);
+        assert!(options.show_hard_ex_score);
+        assert!(options.show_fa_plus_pane);
+        assert!(options.fa_plus_10ms_blue_window);
+        assert!(options.split_15_10ms);
+        assert!(options.track_early_judgments);
+        assert!(options.scale_scatterplot);
+        assert_eq!(
+            options.scatterplot_max_window,
+            ScatterplotMaxWindow::Excellent
+        );
+        assert!(options.custom_fantastic_window);
+        assert_eq!(
+            options.custom_fantastic_window_ms,
+            CUSTOM_FANTASTIC_WINDOW_MAX_MS
+        );
+        assert!(options.judgment_tilt);
+        assert!(options.column_cues);
+        assert!(options.judgment_back);
+        assert!(options.error_ms_display);
+        assert!(options.display_scorebox);
+        assert!(options.live_timing_stats);
+        assert_eq!(
+            options.live_timing_stats_mask,
+            LiveTimingStatsMask::MEAN | LiveTimingStatsMask::MEAN_ABS
+        );
+        assert!(options.rainbow_max);
+        assert!(options.responsive_colors);
+        assert!(options.show_life_percent);
+        assert!((options.tilt_multiplier - 1.5).abs() < f32::EPSILON);
+        assert_eq!(options.tilt_min_threshold_ms, 99);
+        assert_eq!(options.tilt_max_threshold_ms, 99);
+
+        let mut legacy = PlayerOptionsData::default();
+        load_timing_feedback_options(&mut legacy, |key| {
+            (key == "LiveTimingStats").then(|| "1".to_string())
+        });
+        assert!(legacy.live_timing_stats);
+        assert_eq!(legacy.live_timing_stats_mask, LiveTimingStatsMask::all());
+    }
+
+    #[test]
+    fn profile_error_bar_and_measure_counter_options_update() {
+        let mut profile = Profile::default();
+
+        assert!(profile.set_error_bar_options(true, true));
+        assert!(profile.error_bar_up);
+        assert!(profile.error_bar_multi_tick);
+        assert!(!profile.set_error_bar_options(true, true));
+
+        assert!(profile.set_measure_counter_lookahead(9));
+        assert_eq!(profile.measure_counter_lookahead, 4);
+        assert!(!profile.set_measure_counter_lookahead(9));
+
+        assert!(profile.set_measure_counter_options(false, true, true, true, true));
+        assert!(!profile.measure_counter_left);
+        assert!(profile.measure_counter_up);
+        assert!(profile.measure_counter_vert);
+        assert!(profile.broken_run);
+        assert!(profile.run_timer);
+        assert!(!profile.set_measure_counter_options(false, true, true, true, true));
+    }
+
+    #[test]
     fn player_side_indices_and_joined_masks_are_stable() {
         assert_eq!(PLAYER_SLOTS, 2);
         assert_eq!(DEFAULT_PROFILE_ID, "00000000");
@@ -3399,6 +5015,54 @@ mod tests {
             raw.known_pack_names,
             vec!["Alpha".to_string(), "Beta".to_string()]
         );
+    }
+
+    #[test]
+    fn favorites_content_trims_ignores_empty_lines_and_dedupes() {
+        let favorites = parse_favorites_content(" abc123 \n\nxyz789\nabc123\n   \n");
+
+        assert_eq!(favorites.len(), 2);
+        assert!(favorites.contains("abc123"));
+        assert!(favorites.contains("xyz789"));
+    }
+
+    #[test]
+    fn favorites_content_renders_sorted_without_trailing_newline() {
+        let favorites = HashSet::from([
+            "xyz789".to_string(),
+            "abc123".to_string(),
+            "mid456".to_string(),
+        ]);
+
+        assert_eq!(
+            render_favorites_content(&favorites),
+            "abc123\nmid456\nxyz789"
+        );
+        assert_eq!(render_favorites_content(&HashSet::new()), "");
+    }
+
+    #[test]
+    fn known_pack_names_add_only_new_entries() {
+        let mut known = HashSet::from(["Alpha".to_string()]);
+
+        assert!(add_known_pack_names(&mut known, ["Alpha", "Beta"]));
+        assert_eq!(known.len(), 2);
+        assert!(known.contains("Alpha"));
+        assert!(known.contains("Beta"));
+
+        assert!(!add_known_pack_names(&mut known, ["Alpha", "Beta"]));
+    }
+
+    #[test]
+    fn unknown_pack_names_reports_scanned_packs_not_in_profile() {
+        let known = HashSet::from(["Alpha".to_string()]);
+        let scanned = vec!["Alpha".to_string(), "Beta".to_string(), "Gamma".to_string()];
+        let unknown = unknown_pack_names(&known, &scanned);
+
+        assert_eq!(unknown.len(), 2);
+        assert!(unknown.contains("Beta"));
+        assert!(unknown.contains("Gamma"));
+        assert!(!unknown.contains("Alpha"));
     }
 
     #[test]
@@ -3710,6 +5374,35 @@ mod tests {
     }
 
     #[test]
+    fn player_options_section_serializes_persisted_options() {
+        let options = PlayerOptionsData {
+            error_bar_active_mask: ErrorBarMask::COLORFUL | ErrorBarMask::TEXT,
+            average_error_bar_intensity: 1.13,
+            long_error_bar_intensity: 1.95,
+            tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
+            mini_percent: 42,
+            global_offset_shift_ms: -9,
+            ..PlayerOptionsData::default()
+        };
+
+        let mut content = String::new();
+        append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+
+        assert!(content.starts_with("[PlayerOptionsSingles]\n"));
+        assert!(content.contains("ErrorBarMask=5\n"));
+        assert!(content.contains("Colorful=1\n"));
+        assert!(content.contains("Text=1\n"));
+        assert!(content.contains("AverageErrorBarIntensity=1.25\n"));
+        assert!(content.contains("LongErrorBarIntensity=2.00\n"));
+        assert!(content.contains("TapExplosionMask=65\n"));
+        assert!(content.contains(&format!(
+            "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
+        )));
+        assert!(content.contains("MiniPercent=42\n"));
+        assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
+    }
+
+    #[test]
     fn sanitize_player_initials_limits_to_four_ascii_chars() {
         assert_eq!(sanitize_player_initials("ab?c!de"), "AB?C");
         assert_eq!(sanitize_player_initials("a b-c_d"), "ABCD");
@@ -3821,6 +5514,38 @@ mod tests {
     }
 
     #[test]
+    fn last_played_section_loads_present_fields_and_defaults() {
+        let default = LastPlayed {
+            song_music_path: Some("fallback.ogg".to_string()),
+            chart_hash: Some("fallbackhash".to_string()),
+            difficulty_index: 3,
+        };
+        let values = [
+            ("MusicPath", " Songs/Pack/Song.ogg "),
+            ("ChartHash", "abc123"),
+        ];
+
+        let loaded = load_last_played_section(
+            true,
+            |key| {
+                values
+                    .iter()
+                    .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
+            },
+            &default,
+        )
+        .expect("present section should load");
+
+        assert_eq!(
+            loaded.song_music_path,
+            Some("Songs/Pack/Song.ogg".to_string())
+        );
+        assert_eq!(loaded.chart_hash, Some("abc123".to_string()));
+        assert_eq!(loaded.difficulty_index, 3);
+        assert_eq!(load_last_played_section(false, |_| None, &default), None);
+    }
+
+    #[test]
     fn last_played_course_sections_render_empty_and_present_fields() {
         let mut content = String::new();
         append_last_played_course_section(
@@ -3846,6 +5571,25 @@ mod tests {
             content,
             "[LastPlayedCourseDoubles]\nCoursePath=Courses/Test.crs\nDifficultyName=Hard\n\n"
         );
+    }
+
+    #[test]
+    fn last_played_course_section_loads_present_fields() {
+        let values = [
+            ("CoursePath", " Courses/Test.crs "),
+            ("DifficultyName", "Hard"),
+        ];
+
+        let loaded = load_last_played_course_section(true, |key| {
+            values
+                .iter()
+                .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
+        })
+        .expect("present course section should load");
+
+        assert_eq!(loaded.course_path, Some("Courses/Test.crs".to_string()));
+        assert_eq!(loaded.difficulty_name, Some("Hard".to_string()));
+        assert_eq!(load_last_played_course_section(false, |_| None), None);
     }
 
     #[test]
