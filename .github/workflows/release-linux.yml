@@ -121,7 +121,7 @@ jobs:
 
       - name: Upload workflow artifacts
         if: steps.select_arch.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
