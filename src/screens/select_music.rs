@@ -35,6 +35,7 @@ use crate::screens::components::{
 };
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
+    input as screen_input,
 };
 use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
@@ -4194,6 +4195,11 @@ const fn direct_lr_blocked_by_dedicated_menu(
 }
 
 #[inline(always)]
+fn modal_blocks_arrow(action: VirtualAction) -> bool {
+    screen_input::dedicated_blocks_arrow(action, config::get().only_dedicated_menu_buttons)
+}
+
+#[inline(always)]
 fn show_select_music_menu(state: &mut State) {
     state.select_music_menu = select_music_menu::State::Visible(select_music_menu::open());
     rebuild_select_music_menu(state);
@@ -6100,6 +6106,10 @@ fn show_replay_overlay(state: &mut State) {
 }
 
 fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     match lobby_overlay::handle_input(&mut state.lobby_overlay, ev) {
         lobby_overlay::InputOutcome::None => {}
         lobby_overlay::InputOutcome::ChangedSelection => {
@@ -7954,6 +7964,10 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
 }
 
 fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     match &state.sync_overlay {
         SyncOverlayState::Hidden => ScreenAction::None,
         SyncOverlayState::Manual(_) => handle_manual_sync_overlay_input(state, ev),
@@ -7983,6 +7997,10 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     match select_music_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
         select_music_menu::LeaderboardInputOutcome::ChangedPane => {
             audio::play_sfx("assets/sounds/change.ogg");
@@ -7997,6 +8015,10 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 }
 
 fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
         select_music_menu::DownloadsInputOutcome::ChangedSelection => {
             audio::play_sfx("assets/sounds/change.ogg");
@@ -8011,6 +8033,10 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenA
 }
 
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     match select_music_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         select_music_menu::ReplayInputOutcome::ChangedSelection => {
             audio::play_sfx("assets/sounds/change.ogg");
@@ -8031,6 +8057,10 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenActi
 }
 
 fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if modal_blocks_arrow(ev.action) {
+        return ScreenAction::None;
+    }
+
     let Some(overlay) = &mut state.profile_switch_overlay else {
         return ScreenAction::None;
     };
@@ -8087,8 +8117,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if select_music_menu_blocks_gameplay_arrow(ev.action, config::get().only_dedicated_menu_buttons)
-    {
+    if modal_blocks_arrow(ev.action) {
         return ScreenAction::None;
     }
 
@@ -8156,14 +8185,6 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
             ScreenAction::None
         }
     }
-}
-
-#[inline(always)]
-const fn select_music_menu_blocks_gameplay_arrow(
-    action: VirtualAction,
-    only_dedicated_menu_buttons: bool,
-) -> bool {
-    only_dedicated_menu_buttons && action.is_gameplay_arrow()
 }
 
 fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
@@ -8366,6 +8387,9 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         state.song_search,
         select_music_menu::SongSearchState::Hidden
     ) {
+        return ScreenAction::None;
+    }
+    if modal_blocks_arrow(ev.action) {
         return ScreenAction::None;
     }
 
@@ -12365,19 +12389,19 @@ mod tests {
 
     #[test]
     fn only_dedicated_blocks_gameplay_arrows_in_select_music_menu() {
-        assert!(super::select_music_menu_blocks_gameplay_arrow(
+        assert!(crate::screens::input::dedicated_blocks_arrow(
             VirtualAction::p1_left,
             true
         ));
-        assert!(super::select_music_menu_blocks_gameplay_arrow(
+        assert!(crate::screens::input::dedicated_blocks_arrow(
             VirtualAction::p2_down,
             true
         ));
-        assert!(!super::select_music_menu_blocks_gameplay_arrow(
+        assert!(!crate::screens::input::dedicated_blocks_arrow(
             VirtualAction::p1_menu_left,
             true
         ));
-        assert!(!super::select_music_menu_blocks_gameplay_arrow(
+        assert!(!crate::screens::input::dedicated_blocks_arrow(
             VirtualAction::p1_left,
             false
         ));

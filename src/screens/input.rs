@@ -84,6 +84,14 @@ pub fn dedicated_three_key_nav_enabled() -> bool {
 }
 
 #[inline(always)]
+pub const fn dedicated_blocks_arrow(
+    action: VirtualAction,
+    only_dedicated_menu_buttons: bool,
+) -> bool {
+    only_dedicated_menu_buttons && action.is_gameplay_arrow()
+}
+
+#[inline(always)]
 pub const fn menu_lr_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
     match action {
         VirtualAction::p1_left
@@ -355,7 +363,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MenuLrChordTracker, menu_lr_side};
+    use super::{MenuLrChordTracker, dedicated_blocks_arrow, menu_lr_side};
     use deadsync_input::{InputEvent, InputSource, VirtualAction};
     use deadsync_profile::PlayerSide;
     use std::time::{Duration, Instant};
@@ -381,6 +389,15 @@ mod tests {
         );
         assert_eq!(menu_lr_side(VirtualAction::p2_right), Some(PlayerSide::P2));
         assert_eq!(menu_lr_side(VirtualAction::p1_start), None);
+    }
+
+    #[test]
+    fn dedicated_blocks_arrows() {
+        assert!(dedicated_blocks_arrow(VirtualAction::p1_left, true));
+        assert!(dedicated_blocks_arrow(VirtualAction::p2_down, true));
+        assert!(!dedicated_blocks_arrow(VirtualAction::p1_menu_left, true));
+        assert!(!dedicated_blocks_arrow(VirtualAction::p1_start, true));
+        assert!(!dedicated_blocks_arrow(VirtualAction::p1_left, false));
     }
 
     #[test]

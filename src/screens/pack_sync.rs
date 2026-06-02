@@ -634,6 +634,10 @@ pub(crate) fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
 ) -> crate::screens::ScreenAction {
+    if screen_input::dedicated_blocks_arrow(ev.action, config::get().only_dedicated_menu_buttons) {
+        return crate::screens::ScreenAction::None;
+    }
+
     let three_key_action = {
         let OverlayState::Visible(overlay) = state else {
             return crate::screens::ScreenAction::None;
