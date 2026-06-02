@@ -3,6 +3,7 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
+use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -124,6 +125,136 @@ pub fn set_config(pad: usize, config: SmxConfig) {
     if let Some(s) = SHARED.get() {
         s.manager.set_config(pad, config);
     }
+}
+
+const PAD_CONFIG_PANELS: usize = 9;
+const PAD_CONFIG_SENSORS: usize = 4;
+/// Serialized byte length of `PadConfigData`:
+/// 9 panels x (4 fsr_low + 4 fsr_high + lc_low + lc_high) + enabled[5] + tare(2) + debounce(2).
+const PAD_CONFIG_BYTES: usize = PAD_CONFIG_PANELS * 10 + 5 + 2 + 2;
+
+/// One panel's threshold state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PanelThresholds {
+    pub fsr_low: [u8; PAD_CONFIG_SENSORS],
+    pub fsr_high: [u8; PAD_CONFIG_SENSORS],
+    pub load_cell_low: u8,
+    pub load_cell_high: u8,
+}
+
+/// The DeadSync-managed threshold state of a pad, used for user pad-config
+/// profiles. Captured from / applied onto an `SmxConfig` (the remaining config
+/// fields, e.g. lighting/version, are preserved on apply).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PadConfigData {
+    pub panels: [PanelThresholds; PAD_CONFIG_PANELS],
+    pub enabled_sensors: [u8; 5],
+    pub auto_calibration_max_tare: u16,
+    pub panel_debounce_us: u16,
+}
+
+impl PadConfigData {
+    /// Serialize to a compact lowercase-hex blob for `padconfig.ini`.
+    pub fn to_hex(&self) -> String {
+        let mut bytes = Vec::with_capacity(PAD_CONFIG_BYTES);
+        for p in &self.panels {
+            bytes.extend_from_slice(&p.fsr_low);
+            bytes.extend_from_slice(&p.fsr_high);
+            bytes.push(p.load_cell_low);
+            bytes.push(p.load_cell_high);
+        }
+        bytes.extend_from_slice(&self.enabled_sensors);
+        bytes.extend_from_slice(&self.auto_calibration_max_tare.to_le_bytes());
+        bytes.extend_from_slice(&self.panel_debounce_us.to_le_bytes());
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            let _ = write!(s, "{b:02x}");
+        }
+        s
+    }
+
+    /// Parse a hex blob written by `to_hex`. Returns `None` if malformed.
+    pub fn from_hex(s: &str) -> Option<Self> {
+        let s = s.trim();
+        if s.len() != PAD_CONFIG_BYTES * 2 {
+            return None;
+        }
+        let mut bytes = [0u8; PAD_CONFIG_BYTES];
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = u8::from_str_radix(s.get(i * 2..i * 2 + 2)?, 16).ok()?;
+        }
+        let mut off = 0;
+        let mut panels = [PanelThresholds {
+            fsr_low: [0; PAD_CONFIG_SENSORS],
+            fsr_high: [0; PAD_CONFIG_SENSORS],
+            load_cell_low: 0,
+            load_cell_high: 0,
+        }; PAD_CONFIG_PANELS];
+        for p in panels.iter_mut() {
+            p.fsr_low.copy_from_slice(&bytes[off..off + 4]);
+            off += 4;
+            p.fsr_high.copy_from_slice(&bytes[off..off + 4]);
+            off += 4;
+            p.load_cell_low = bytes[off];
+            off += 1;
+            p.load_cell_high = bytes[off];
+            off += 1;
+        }
+        let mut enabled_sensors = [0u8; 5];
+        enabled_sensors.copy_from_slice(&bytes[off..off + 5]);
+        off += 5;
+        let auto_calibration_max_tare = u16::from_le_bytes([bytes[off], bytes[off + 1]]);
+        off += 2;
+        let panel_debounce_us = u16::from_le_bytes([bytes[off], bytes[off + 1]]);
+        Some(Self {
+            panels,
+            enabled_sensors,
+            auto_calibration_max_tare,
+            panel_debounce_us,
+        })
+    }
+}
+
+/// Capture a connected pad's managed threshold state (None if no config yet).
+pub fn capture_config(pad: usize) -> Option<PadConfigData> {
+    let config = get_config(pad)?;
+    let panels = std::array::from_fn(|i| {
+        let s = &config.panel_settings[i];
+        PanelThresholds {
+            fsr_low: s.fsr_low_threshold,
+            fsr_high: s.fsr_high_threshold,
+            load_cell_low: s.load_cell_low_threshold,
+            load_cell_high: s.load_cell_high_threshold,
+        }
+    });
+    let auto_calibration_max_tare = config.auto_calibration_max_tare;
+    let panel_debounce_us = config.panel_debounce_us;
+    Some(PadConfigData {
+        panels,
+        enabled_sensors: config.enabled_sensors,
+        auto_calibration_max_tare,
+        panel_debounce_us,
+    })
+}
+
+/// Overlay a captured config onto a pad's current `SmxConfig` and write it.
+/// Returns false if the pad's config isn't available yet.
+pub fn apply_config_data(pad: usize, data: &PadConfigData) -> bool {
+    let Some(mut config) = get_config(pad) else {
+        return false;
+    };
+    for (i, p) in data.panels.iter().enumerate() {
+        let s = &mut config.panel_settings[i];
+        s.fsr_low_threshold = p.fsr_low;
+        s.fsr_high_threshold = p.fsr_high;
+        s.load_cell_low_threshold = p.load_cell_low;
+        s.load_cell_high_threshold = p.load_cell_high;
+    }
+    config.enabled_sensors = data.enabled_sensors;
+    config.auto_calibration_max_tare = data.auto_calibration_max_tare;
+    config.panel_debounce_us = data.panel_debounce_us;
+    set_config(pad, config);
+    true
 }
 
 /// Threshold values for a built-in pad preset, matching the official SMX config
@@ -391,8 +522,35 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::preset_thresholds;
+    use super::{PadConfigData, PanelThresholds, preset_thresholds};
     use crate::config::SmxPadPreset;
+
+    #[test]
+    fn pad_config_data_hex_round_trips() {
+        let mut data = PadConfigData {
+            panels: [PanelThresholds {
+                fsr_low: [0; 4],
+                fsr_high: [0; 4],
+                load_cell_low: 0,
+                load_cell_high: 0,
+            }; 9],
+            enabled_sensors: [0x12, 0x34, 0x56, 0x78, 0x9a],
+            auto_calibration_max_tare: 0xFFFF,
+            panel_debounce_us: 4000,
+        };
+        for (i, p) in data.panels.iter_mut().enumerate() {
+            let b = i as u8;
+            p.fsr_low = [b, b + 1, b + 2, b + 3];
+            p.fsr_high = [b + 4, b + 5, b + 6, b + 7];
+            p.load_cell_low = b + 8;
+            p.load_cell_high = b + 9;
+        }
+        let hex = data.to_hex();
+        assert_eq!(hex.len(), super::PAD_CONFIG_BYTES * 2);
+        assert_eq!(PadConfigData::from_hex(&hex), Some(data));
+        assert_eq!(PadConfigData::from_hex("nothex"), None);
+        assert_eq!(PadConfigData::from_hex(""), None);
+    }
 
     #[test]
     fn preset_thresholds_match_official_values() {

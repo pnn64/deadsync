@@ -3796,6 +3796,15 @@ impl AppState {
     }
 }
 
+/// Cheap inputs that determine which config resolves for an SMX pad. The
+/// resolver only reloads config files / rewrites the pad when this changes.
+#[derive(Clone, PartialEq, Eq)]
+struct PadResolveKey {
+    preset: config::SmxPadPreset,
+    serial: String,
+    profile_id: Option<String>,
+}
+
 pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
@@ -3805,9 +3814,10 @@ pub struct App {
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
     fsr_pads_active: bool,
-    /// Last built-in preset DeadSync flashed to each SMX pad slot while managing
-    /// pad config, so it only re-applies when the situation actually changes.
-    smx_applied_preset: [Option<config::SmxPadPreset>; 2],
+    /// Cheap "what determines the resolved pad config" key per SMX pad slot, so
+    /// the resolver only loads configs + writes the pad when something relevant
+    /// changes (preset, pad serial, or the active profile). `None` = not managed.
+    smx_resolve_key: [Option<PadResolveKey>; 2],
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
@@ -3953,22 +3963,52 @@ impl App {
         }
     }
 
-    /// When "DeadSync manages pad config" is on, flash the chosen built-in
-    /// preset to each connected StepManiaX pad once. The per-pad guard re-applies
-    /// only when the resolved preset changes, the pad reconnects, or managing is
-    /// toggled — so manual edits in Configure Pads aren't clobbered.
+    /// When "DeadSync manages pad config" is on, resolve and apply the right pad
+    /// config to each connected StepManiaX pad: the active profile's
+    /// serial-matching config → that profile's default config → the machine
+    /// built-in preset (also the fallback for Guest / no-config players). This is
+    /// reactive — when the active player changes, a no-config/guest player resets
+    /// the pad to the machine preset. A cheap per-pad key avoids loading config
+    /// files or rewriting the pad unless something relevant changed (so manual
+    /// Configure Pads edits aren't clobbered). Off → DeadSync writes nothing.
     fn apply_smx_managed_preset(&mut self) {
+        use crate::game::pad_profiles;
         let cfg = config::get();
         for pad in 0..2 {
-            let connected = crate::engine::smx::get_info(pad).connected;
-            if !cfg.smx_input || !cfg.smx_manages_pad_config || !connected {
-                self.smx_applied_preset[pad] = None;
+            let info = crate::engine::smx::get_info(pad);
+            if !cfg.smx_input || !cfg.smx_manages_pad_config || !info.connected {
+                self.smx_resolve_key[pad] = None;
                 continue;
             }
-            if self.smx_applied_preset[pad] != Some(cfg.smx_default_pad_config)
-                && crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config)
-            {
-                self.smx_applied_preset[pad] = Some(cfg.smx_default_pad_config);
+            let side = if info.is_player2 {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            };
+            let profile_id = profile::active_local_profile_id_for_side(side);
+            let key = PadResolveKey {
+                preset: cfg.smx_default_pad_config,
+                serial: info.serial.clone(),
+                profile_id: profile_id.clone(),
+            };
+            if self.smx_resolve_key[pad].as_ref() == Some(&key) {
+                continue; // nothing relevant changed — no file I/O, no rewrite
+            }
+            let applied = match &profile_id {
+                Some(id) => {
+                    let configs = pad_profiles::load(id);
+                    match pad_profiles::resolve(&configs, &info.serial)
+                        .and_then(|c| crate::engine::smx::PadConfigData::from_hex(&c.data_hex))
+                    {
+                        Some(data) => crate::engine::smx::apply_config_data(pad, &data),
+                        // No matching/default config (or corrupt) → machine preset.
+                        None => crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+                    }
+                }
+                None => crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
+            };
+            if applied {
+                self.smx_resolve_key[pad] = Some(key);
             }
         }
     }
@@ -4647,7 +4687,7 @@ impl App {
             _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
             fsr_pads_active: false,
-            smx_applied_preset: [None, None],
+            smx_resolve_key: [None, None],
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),
