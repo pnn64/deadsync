@@ -8187,15 +8187,33 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
         }
         pad_config::EditResult::SaveRequested => perform_pad_profile_save(state),
         pad_config::EditResult::Handled => {
-            // Select opens the save name box (Simple view only; begin_save guards).
+            // Select opens the save name box (Simple view only; begin_save guards),
+            // but only when the cursor pad belongs to a local profile to save to.
             if ev.pressed
                 && matches!(ev.action, VirtualAction::p1_select | VirtualAction::p2_select)
+                && overlay_save_target_profile(state).is_some()
             {
                 pad_config::begin_save(&mut state.pad_config_overlay);
             }
         }
     }
     ScreenAction::None
+}
+
+/// The active local profile id for the pad the Configure Pads cursor is on
+/// (SMX pads only). `None` for FSRIO pads or a Guest player.
+fn overlay_save_target_profile(state: &State) -> Option<String> {
+    let device = pad_config::selected_device(&state.pad_config_overlay)?;
+    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+        return None;
+    }
+    let info = crate::engine::smx::get_info(device.index);
+    let side = if info.is_player2 {
+        profile_data::PlayerSide::P2
+    } else {
+        profile_data::PlayerSide::P1
+    };
+    profile::active_local_profile_id_for_side(side)
 }
 
 /// Save the cursor pad's current tuning to the active player's profile.
@@ -9009,8 +9027,9 @@ pub fn handle_raw_key_event(
         // While the save name box is open, raw keys type the name (and keyboard
         // Enter/Esc confirm/cancel). Otherwise editing is virtual-action driven.
         if pad_config::is_saving(&state.pad_config_overlay) {
-            if let Some(k) = key.filter(|k| k.pressed) {
-                match k.code {
+            match key {
+                // Key-code path: Esc cancels, Enter confirms, Backspace deletes.
+                Some(k) if k.pressed => match k.code {
                     KeyCode::Escape => {
                         let _ = pad_config::take_save(&mut state.pad_config_overlay);
                     }
@@ -9022,9 +9041,12 @@ pub fn handle_raw_key_event(
                     KeyCode::Backspace => {
                         pad_config::save_key_input(&mut state.pad_config_overlay, true, None);
                     }
-                    _ => {
-                        pad_config::save_key_input(&mut state.pad_config_overlay, false, text);
-                    }
+                    _ => {}
+                },
+                Some(_) => {}
+                // Text path (key == None): typed characters for the name.
+                None => {
+                    pad_config::save_key_input(&mut state.pad_config_overlay, false, text);
                 }
             }
         }
