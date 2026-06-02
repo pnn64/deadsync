@@ -2764,11 +2764,18 @@ fn compute_end_times_ns(
 
 #[inline(always)]
 fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
-    if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-        song_time_ns_from_seconds(song.music_length_seconds)
-    } else {
-        0
-    }
+    let chart_end = song.precise_last_second();
+    let audio_len = song.music_length_seconds;
+    let end_seconds = match (
+        chart_end.is_finite() && chart_end > 0.0,
+        audio_len.is_finite() && audio_len > 0.0,
+    ) {
+        (true, true) => chart_end.min(audio_len),
+        (true, false) => chart_end,
+        (false, true) => audio_len,
+        (false, false) => return 0,
+    };
+    song_time_ns_from_seconds(end_seconds)
 }
 
 #[inline(always)]
@@ -5586,7 +5593,7 @@ pub fn init(
     );
 
     let song_seed = turn_seed_for_song(&song);
-    let mut attack_song_length_seconds = song.music_length_seconds.max(song.precise_last_second());
+    let mut attack_song_length_seconds = song.precise_last_second();
     if !attack_song_length_seconds.is_finite() || attack_song_length_seconds <= 0.0 {
         attack_song_length_seconds = song.total_length_seconds.max(0) as f32;
     }
