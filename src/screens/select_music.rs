@@ -4295,22 +4295,36 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
     }
 }
 
-/// Quick-recall "Pad Profile" menu items: for each connected SMX pad with a
-/// joined local profile, the built-in presets + that profile's saved configs.
-/// Selecting one applies it to that physical pad. `None` hides the category.
+/// Quick-recall "Pad Profile" menu items: for each connected, in-play SMX pad,
+/// the built-in presets, plus (if that pad maps to a local profile) its saved
+/// configs. A guest pad still gets the presets so the player can pick a
+/// sensitivity for the session. Selecting one applies it to that physical pad.
+/// `None` hides the category.
 fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::Item>> {
     if !config::get().use_fsrs {
         return None;
     }
-    let mut pads: Vec<(bool, String, usize)> = Vec::new(); // (p2, profile_id, slot)
+    let style = profile::get_session_play_style();
+    let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
     for slot in 0..2 {
         let info = crate::engine::smx::get_info(slot);
         if !info.connected {
             continue;
         }
-        if let Some(pid) = profile::active_local_profile_id_for_pad(info.is_player2) {
-            pads.push((info.is_player2, pid, slot));
+        // In play? Doubles/Versus drive both pads; Singles only the joined side.
+        let in_play = match style {
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
+            profile_data::PlayStyle::Single => profile::is_session_side_joined(if info.is_player2 {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            }),
+        };
+        if !in_play {
+            continue;
         }
+        let pid = profile::active_local_profile_id_for_pad(info.is_player2);
+        pads.push((info.is_player2, pid, slot));
     }
     if pads.is_empty() {
         return None;
@@ -4323,19 +4337,6 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         } else {
             ""
         };
-        // Only the configs that match this pad's sensor type (FSR vs load cell).
-        let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
-        let serial = crate::engine::smx::get_info(*slot).serial;
-        let configs: Vec<_> = crate::game::pad_profiles::load(pid)
-            .into_iter()
-            .filter(|c| {
-                crate::game::pad_profiles::config_matches(
-                    c,
-                    crate::engine::smx::BACKEND_ID,
-                    pad_type.as_deref(),
-                )
-            })
-            .collect();
         let applied = state.smx_applied[usize::from(*p2)].as_ref();
         // The main label goes in `bottom_label` (the large line); `top_label` is
         // the small flavor line, matching every other menu item's two-line style.
@@ -4354,6 +4355,22 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 active,
             ));
         }
+        // Saved configs only for a pad that maps to a local profile (a guest pad
+        // gets presets only).
+        let Some(pid) = pid else { continue };
+        // Only the configs that match this pad's sensor type (FSR vs load cell).
+        let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
+        let serial = crate::engine::smx::get_info(*slot).serial;
+        let configs: Vec<_> = crate::game::pad_profiles::load(pid)
+            .into_iter()
+            .filter(|c| {
+                crate::game::pad_profiles::config_matches(
+                    c,
+                    crate::engine::smx::BACKEND_ID,
+                    pad_type.as_deref(),
+                )
+            })
+            .collect();
         for c in &configs {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
@@ -8391,6 +8408,7 @@ fn perform_pad_profile_save(state: &mut State) {
         return;
     };
     let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    let is_player2 = info.is_player2;
     crate::game::pad_profiles::upsert(
         &profile_id,
         &name,
@@ -8400,6 +8418,12 @@ fn perform_pad_profile_save(state: &mut State) {
         draft.set_default,
         data.to_settings(),
     );
+    // The pad is running exactly these values (we just captured them), so the new
+    // config is what's active — mark it so its `*`/green shows immediately.
+    state.smx_applied[usize::from(is_player2)] = Some(AppliedPadConfig {
+        preset: false,
+        name,
+    });
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
