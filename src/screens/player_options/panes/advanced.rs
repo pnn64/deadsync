@@ -1311,31 +1311,6 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
         ],
     ));
-    b.push(
-        Row::cycle(
-            RowId::TargetScore,
-            lookup_key("PlayerOptions", "TargetScore"),
-            lookup_key("PlayerOptionsHelp", "TargetScoreHelp"),
-            CycleBinding::Index(TARGET_SCORE),
-            vec![
-                tr("PlayerOptions", "TargetScoreCMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreC").to_string(),
-                tr("PlayerOptions", "TargetScoreCPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreBMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreB").to_string(),
-                tr("PlayerOptions", "TargetScoreBPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreAMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreA").to_string(),
-                tr("PlayerOptions", "TargetScoreAPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreSMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreS").to_string(),
-                tr("PlayerOptions", "TargetScoreSPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
-                tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
-            ],
-        )
-        .with_initial_choice_index(10), // S by default
-    );
     b.push(Row::custom(
         RowId::ActionOnMissedTarget,
         lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
@@ -1373,6 +1348,31 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
         ],
     ));
+    b.push(
+        Row::cycle(
+            RowId::TargetScore,
+            lookup_key("PlayerOptions", "TargetScore"),
+            lookup_key("PlayerOptionsHelp", "TargetScoreHelp"),
+            CycleBinding::Index(TARGET_SCORE),
+            vec![
+                tr("PlayerOptions", "TargetScoreCMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreC").to_string(),
+                tr("PlayerOptions", "TargetScoreCPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreBMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreB").to_string(),
+                tr("PlayerOptions", "TargetScoreBPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreAMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreA").to_string(),
+                tr("PlayerOptions", "TargetScoreAPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreSMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreS").to_string(),
+                tr("PlayerOptions", "TargetScoreSPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
+                tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
+            ],
+        )
+        .with_initial_choice_index(10), // S by default
+    );
     b.push(Row::cycle(
         RowId::MiniIndicatorSize,
         lookup_key("PlayerOptions", "MiniIndicatorSize"),
