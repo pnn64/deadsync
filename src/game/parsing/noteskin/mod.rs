@@ -1038,6 +1038,7 @@ pub struct ReceptorStepBehavior {
     pub zoom_start: f32,
     pub zoom_end: f32,
     pub tween: TweenType,
+    pub interrupts: bool,
 }
 
 impl ReceptorStepBehavior {
@@ -1047,6 +1048,7 @@ impl ReceptorStepBehavior {
             zoom_start: 1.0,
             zoom_end: 1.0,
             tween: TweenType::Linear,
+            interrupts: false,
         }
     }
 
@@ -1071,6 +1073,38 @@ impl Default for ReceptorStepBehavior {
             zoom_start: 0.75,
             zoom_end: 1.0,
             tween: TweenType::Linear,
+            interrupts: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ReceptorStepBehaviors {
+    none: ReceptorStepBehavior,
+    miss: ReceptorStepBehavior,
+    windows: [ReceptorStepBehavior; 5],
+}
+
+impl ReceptorStepBehaviors {
+    pub fn for_window(self, window: Option<&str>) -> ReceptorStepBehavior {
+        match window {
+            Some("W1") => self.windows[0],
+            Some("W2") => self.windows[1],
+            Some("W3") => self.windows[2],
+            Some("W4") => self.windows[3],
+            Some("W5") => self.windows[4],
+            Some("Miss") => self.miss,
+            _ => self.none,
+        }
+    }
+}
+
+impl Default for ReceptorStepBehaviors {
+    fn default() -> Self {
+        Self {
+            none: ReceptorStepBehavior::default(),
+            miss: ReceptorStepBehavior::identity(),
+            windows: [ReceptorStepBehavior::identity(); 5],
         }
     }
 }
@@ -1295,7 +1329,7 @@ pub struct Noteskin {
     pub receptor_glow: Vec<Option<SpriteSlot>>,
     pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
-    pub receptor_step_behavior: Vec<ReceptorStepBehavior>,
+    pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
     pub mines: Vec<Option<SpriteSlot>>,
     pub mine_fill_slots: Vec<Option<SpriteSlot>>,
     pub mine_frames: Vec<Option<SpriteSlot>>,
@@ -1586,12 +1620,17 @@ impl Noteskin {
     }
 
     #[inline(always)]
-    pub fn receptor_step_behavior_for_col(&self, col: usize) -> ReceptorStepBehavior {
-        self.receptor_step_behavior
+    pub fn receptor_step_behavior_for_col(
+        &self,
+        col: usize,
+        window: Option<&str>,
+    ) -> ReceptorStepBehavior {
+        self.receptor_step_behaviors
             .get(col)
             .copied()
-            .or_else(|| self.receptor_step_behavior.first().copied())
+            .or_else(|| self.receptor_step_behaviors.first().copied())
             .unwrap_or_default()
+            .for_window(window)
     }
 }
 
@@ -2352,7 +2391,7 @@ fn load_itg_sprite_noteskin_compiled(
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
     let mut receptor_off_reverse = Vec::with_capacity(style.num_cols);
     let mut receptor_glow_reverse = Vec::with_capacity(style.num_cols);
-    let mut receptor_step_behavior = Vec::with_capacity(style.num_cols);
+    let mut receptor_step_behaviors = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
     let mut mine_frames = Vec::with_capacity(style.num_cols);
     let mut hold_columns = Vec::with_capacity(style.num_cols);
@@ -2495,8 +2534,8 @@ fn load_itg_sprite_noteskin_compiled(
         {
             itg_apply_parent_command(&mut receptor_slot, init_command);
         }
-        let step_behavior =
-            itg_receptor_step_behavior(data, receptor_commands, receptor_slot.model_draw.zoom[0]);
+        let step_behaviors =
+            itg_receptor_step_behaviors(data, receptor_commands, receptor_slot.model_draw.zoom[0]);
         let receptor_reverse = receptor_sprites
             .first()
             .map(|s| itg_receptor_reverse_behavior(&s.commands))
@@ -2527,7 +2566,7 @@ fn load_itg_sprite_noteskin_compiled(
         receptor_glow.push(glow_slot);
         receptor_off_reverse.push(receptor_reverse);
         receptor_glow_reverse.push(glow_reverse);
-        receptor_step_behavior.push(step_behavior);
+        receptor_step_behaviors.push(step_behaviors);
 
         let mut mine_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Mine")
@@ -3075,7 +3114,7 @@ fn load_itg_sprite_noteskin_compiled(
         receptor_glow,
         receptor_off_reverse,
         receptor_glow_reverse,
-        receptor_step_behavior,
+        receptor_step_behaviors,
         tap_explosions,
         tap_explosions_by_col,
         mine_hit_explosion,
@@ -3642,22 +3681,26 @@ fn itg_receptor_arrow_command(
         })
 }
 
-fn itg_receptor_step_behavior(
-    data: &noteskin_itg::NoteskinData,
-    commands: Option<&HashMap<String, String>>,
+fn itg_receptor_step_behavior_for_command(
+    command: Option<String>,
     base_zoom: f32,
 ) -> ReceptorStepBehavior {
-    let Some(none_cmd) = itg_receptor_arrow_command(data, commands, "nonecommand", "NoneCommand")
-    else {
+    let Some(command) = command else {
         return ReceptorStepBehavior::identity();
     };
-    let none = itg_parse_command_effect(&none_cmd);
+    let none = itg_parse_command_effect(&command);
     let Some(zoom_start) = none.start_zoom.or(none.target_zoom) else {
-        return ReceptorStepBehavior::identity();
+        return ReceptorStepBehavior {
+            interrupts: none.interrupts,
+            ..ReceptorStepBehavior::identity()
+        };
     };
     let zoom_end = none.target_zoom.or(none.start_zoom).unwrap_or(zoom_start);
     if (zoom_end - zoom_start).abs() <= f32::EPSILON {
-        return ReceptorStepBehavior::identity();
+        return ReceptorStepBehavior {
+            interrupts: none.interrupts,
+            ..ReceptorStepBehavior::identity()
+        };
     }
     let base_zoom = if base_zoom.abs() > f32::EPSILON {
         base_zoom
@@ -3674,6 +3717,31 @@ fn itg_receptor_step_behavior(
         } else {
             TweenType::Linear
         },
+        interrupts: none.interrupts,
+    }
+}
+
+fn itg_receptor_step_behaviors(
+    data: &noteskin_itg::NoteskinData,
+    commands: Option<&HashMap<String, String>>,
+    base_zoom: f32,
+) -> ReceptorStepBehaviors {
+    let behavior = |actor_key, metric_key| {
+        itg_receptor_step_behavior_for_command(
+            itg_receptor_arrow_command(data, commands, actor_key, metric_key),
+            base_zoom,
+        )
+    };
+    ReceptorStepBehaviors {
+        none: behavior("nonecommand", "NoneCommand"),
+        miss: behavior("misscommand", "MissCommand"),
+        windows: [
+            behavior("w1command", "W1Command"),
+            behavior("w2command", "W2Command"),
+            behavior("w3command", "W3Command"),
+            behavior("w4command", "W4Command"),
+            behavior("w5command", "W5Command"),
+        ],
     }
 }
 
@@ -3723,6 +3791,7 @@ struct ItgCommandEffect {
     duration: f32,
     tween: TweenType,
     blend_add: Option<bool>,
+    interrupts: bool,
 }
 
 impl Default for ItgCommandEffect {
@@ -3735,6 +3804,7 @@ impl Default for ItgCommandEffect {
             duration: 0.0,
             tween: TweenType::Linear,
             blend_add: None,
+            interrupts: false,
         }
     }
 }
@@ -4346,6 +4416,10 @@ fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
         if let Some(duration) = parse_script_sleep(cmd.as_str(), &args) {
             pending_duration = duration.max(0.0);
             pending_tween = TweenType::Linear;
+            continue;
+        }
+        if matches!(cmd.as_str(), "stoptweening" | "finishtweening") {
+            out.interrupts = true;
             continue;
         }
         if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
@@ -7570,7 +7644,7 @@ Materials: 1
             "howdy receptor InitCommand should set base zoom to 0.8"
         );
 
-        let behavior = ns.receptor_step_behavior_for_col(0);
+        let behavior = ns.receptor_step_behavior_for_col(0, None);
         assert_eq!(behavior.duration, 0.0);
         assert!(
             (behavior.sample_zoom(0.8) - 1.0).abs() <= 1e-6,
@@ -7627,11 +7701,36 @@ Materials: 1
         };
         let ns = load_itg_skin(&style, "CF_VIBRANTALLOY")
             .expect("CF_VIBRANTALLOY should load from assets/noteskins");
-        let behavior = ns.receptor_step_behavior_for_col(0);
+        let behavior = ns.receptor_step_behavior_for_col(0, None);
 
         assert!((behavior.duration - 0.11).abs() <= 1e-6);
         assert!((behavior.sample_zoom(behavior.duration) - 0.75).abs() <= 1e-6);
         assert!((behavior.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
+
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn devcel_receptor_hit_commands_do_not_use_none_zoom_pulse() {
+        clear_itg_runtime_caches();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "devcel-2024")
+            .expect("dance/devcel-2024 should load from assets/noteskins");
+        let none = ns.receptor_step_behavior_for_col(0, None);
+        let w1 = ns.receptor_step_behavior_for_col(0, Some("W1"));
+        let w3 = ns.receptor_step_behavior_for_col(0, Some("W3"));
+
+        assert!(none.duration > 0.0);
+        assert!((none.sample_zoom(none.duration) - 0.75).abs() <= 1e-6);
+        assert_eq!(w1.duration, 0.0);
+        assert_eq!(w3.duration, 0.0);
+        assert!(w1.interrupts);
+        assert!(w3.interrupts);
+        assert!((w1.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
+        assert!((w3.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
 
         clear_itg_runtime_caches();
     }

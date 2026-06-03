@@ -4962,9 +4962,7 @@ pub fn build_bundles(
             );
             let bop_timer = state.receptor_bop_timers[col];
             let bop_zoom = if bop_timer > 0.0 {
-                receptor_ns
-                    .receptor_step_behavior_for_col(i)
-                    .sample_zoom(bop_timer)
+                state.receptor_bop_behaviors[col].sample_zoom(bop_timer)
             } else {
                 1.0
             };

@@ -131,7 +131,11 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
 }
 
 #[inline(always)]
-fn receptor_step_behavior_for_col(state: &State, col: usize) -> noteskin::ReceptorStepBehavior {
+fn receptor_step_behavior_for_col(
+    state: &State,
+    col: usize,
+    window: Option<&str>,
+) -> noteskin::ReceptorStepBehavior {
     let player = if state.num_players <= 1 || state.cols_per_player == 0 {
         0
     } else {
@@ -143,8 +147,8 @@ fn receptor_step_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
         col % state.cols_per_player
     };
     receptor_glow_behavior_noteskin(state, player)
-        .map(|ns| ns.receptor_step_behavior_for_col(local_col))
-        .unwrap_or_default()
+        .map(|ns| ns.receptor_step_behavior_for_col(local_col, window))
+        .unwrap_or_else(|| noteskin::ReceptorStepBehaviors::default().for_window(window))
 }
 
 #[inline(always)]
@@ -294,13 +298,26 @@ pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
 }
 
 #[inline(always)]
-pub(super) fn trigger_receptor_step_pulse(state: &mut State, col: usize) {
+fn trigger_receptor_step_command(state: &mut State, col: usize, window: Option<&str>) {
     if col >= state.num_cols {
         return;
     }
     start_receptor_glow_press(state, col);
-    let duration = receptor_step_behavior_for_col(state, col).duration;
-    state.receptor_bop_timers[col] = state.receptor_bop_timers[col].max(duration);
+    let behavior = receptor_step_behavior_for_col(state, col, window);
+    if behavior.duration > f32::EPSILON || behavior.interrupts {
+        state.receptor_bop_behaviors[col] = behavior;
+        state.receptor_bop_timers[col] = behavior.duration.max(0.0);
+    }
+}
+
+#[inline(always)]
+pub(super) fn trigger_receptor_step_pulse(state: &mut State, col: usize) {
+    trigger_receptor_step_command(state, col, None);
+}
+
+#[inline(always)]
+pub(super) fn trigger_receptor_score_pulse(state: &mut State, col: usize, window: &'static str) {
+    trigger_receptor_step_command(state, col, Some(window));
 }
 
 #[inline(always)]

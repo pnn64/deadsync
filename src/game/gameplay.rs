@@ -149,7 +149,7 @@ pub use self::input::{
 use self::input::{
     input_queue_cap, lane_is_pressed, process_input_edges, replay_edge_cap,
     sync_active_hold_pressed_state, tap_explosion_noteskin_for_player, tick_visual_effects,
-    trigger_receptor_glow_pulse, trigger_receptor_step_pulse,
+    trigger_receptor_glow_pulse, trigger_receptor_score_pulse, trigger_receptor_step_pulse,
 };
 use self::judging::{
     PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
@@ -984,7 +984,9 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
         let note = &state.notes[note_index];
         let column = note.column;
         if song_lua_hides_note_visual(state, player, column, note.beat) {
-            trigger_receptor_step_pulse(state, column);
+            if let Some(window_key) = grade_to_window(flash_judgment.grade) {
+                trigger_receptor_score_pulse(state, column, window_key);
+            }
             continue;
         }
         trigger_tap_judgment_explosion(state, player, column, &flash_judgment);
@@ -3817,6 +3819,7 @@ pub struct State {
     receptor_glow_lift_start_alpha: [f32; MAX_COLS],
     receptor_glow_lift_start_zoom: [f32; MAX_COLS],
     pub receptor_bop_timers: [f32; MAX_COLS],
+    pub receptor_bop_behaviors: [noteskin::ReceptorStepBehavior; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
@@ -5110,6 +5113,9 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.receptor_glow_lift_start_alpha.fill(0.0);
     state.receptor_glow_lift_start_zoom.fill(0.0);
     state.receptor_bop_timers.fill(0.0);
+    state
+        .receptor_bop_behaviors
+        .fill(noteskin::ReceptorStepBehavior::identity());
     state.decaying_hold_indices.clear();
     state.hold_decay_active.fill(false);
     state.tap_miss_held_window.fill(false);
@@ -6456,6 +6462,7 @@ pub fn init(
         receptor_glow_lift_start_alpha: [0.0; MAX_COLS],
         receptor_glow_lift_start_zoom: [1.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
+        receptor_bop_behaviors: [noteskin::ReceptorStepBehavior::identity(); MAX_COLS],
         tap_explosions: Default::default(),
         column_flashes: Default::default(),
         mine_explosions: Default::default(),
@@ -7680,6 +7687,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
+            let receptor_window = grade_to_window(judgment.grade);
             set_final_note_result(state, note_index, judgment);
 
             log_timing_hit_detail(
@@ -7699,7 +7707,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            trigger_receptor_step_pulse(state, note_col);
+            if let Some(window_key) = receptor_window {
+                trigger_receptor_score_pulse(state, note_col, window_key);
+            }
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
                 && matches!(
                     state.notes[note_index].note_type,
@@ -7772,6 +7782,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
+            let receptor_window = grade_to_window(judgment.grade);
             set_final_note_result(state, idx, judgment);
 
             log_timing_hit_detail(
@@ -7791,7 +7802,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            trigger_receptor_step_pulse(state, note_col);
+            if let Some(window_key) = receptor_window {
+                trigger_receptor_score_pulse(state, note_col, window_key);
+            }
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
                 && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
             {
@@ -7970,6 +7983,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     }
 
     let (judgment, judgment_event_time) = build_final_note_hit_judgment(state, player, hit, rate);
+    let receptor_window = grade_to_window(judgment.grade);
     set_final_note_result(state, note_index, judgment);
 
     log_timing_hit_detail(
@@ -7989,7 +8003,9 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     );
 
     trigger_completed_row_tap_explosions(state, player, note_row_index);
-    trigger_receptor_step_pulse(state, note_col);
+    if let Some(window_key) = receptor_window {
+        trigger_receptor_score_pulse(state, note_col, window_key);
+    }
     true
 }
 
@@ -11090,7 +11106,8 @@ return Def.ActorFrame{}
         trigger_completed_row_tap_explosions(&mut state, 0, row_index);
 
         assert!(state.tap_explosions[column].is_none());
-        assert!(state.receptor_bop_timers[column] > 0.0);
+        assert_eq!(state.receptor_bop_timers[column], 0.0);
+        assert_eq!(state.receptor_bop_behaviors[column].duration, 0.0);
         if supports_press_tween {
             assert!(state.receptor_glow_press_timers[column] > 0.0);
             assert_eq!(state.receptor_glow_timers[column], 0.0);
@@ -11098,7 +11115,7 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn visible_tap_hit_steps_receptor_with_core_flash() {
+    fn visible_tap_hit_uses_score_receptor_command_with_core_flash() {
         let mut state = regression_state([
             profile_data::Profile::default(),
             profile_data::Profile::default(),
@@ -11123,7 +11140,37 @@ return Def.ActorFrame{}
 
         assert!(judge_a_tap(&mut state, column, note_time));
         assert!(state.tap_explosions[column].is_some());
-        assert!(state.receptor_bop_timers[column] > 0.0);
+        assert_eq!(state.receptor_bop_timers[column], 0.0);
+        assert_eq!(state.receptor_bop_behaviors[column].duration, 0.0);
+    }
+
+    #[test]
+    fn devcel_visible_tap_hit_uses_score_receptor_command() {
+        let mut profile = profile_data::Profile::default();
+        profile.noteskin = profile_data::NoteSkin::new("devcel-2024");
+        let mut state = regression_state([profile, profile_data::Profile::default()]);
+        let row_index = 48usize;
+        let column = 1usize;
+        let note_time = song_time_ns_from_seconds(1.0);
+        state.notes = vec![test_note(column, row_index, NoteType::Tap)];
+        state.note_time_cache_ns = vec![note_time];
+        state.lane_note_indices[column].push(0);
+        state.lane_note_row_indices[column].push(0);
+        state.note_row_entry_indices = vec![0];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_entry_ranges = [(0, 1), (0, 0)];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+
+        assert!(judge_a_tap(&mut state, column, note_time));
+        assert!(state.tap_explosions[column].is_some());
+        assert_eq!(state.receptor_bop_timers[column], 0.0);
+        assert_eq!(state.receptor_bop_behaviors[column].duration, 0.0);
     }
 
     #[test]
