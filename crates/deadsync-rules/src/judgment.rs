@@ -259,6 +259,19 @@ pub fn calculate_itg_score_percent_from_points(
 }
 
 #[inline(always)]
+pub fn predictive_itg_score_percents(
+    current_possible_grade_points: i32,
+    possible_grade_points: i32,
+    actual_grade_points: i32,
+) -> (f64, f64, f64) {
+    predictive_score_percents(
+        f64::from(possible_grade_points),
+        f64::from(current_possible_grade_points),
+        f64::from(actual_grade_points),
+    )
+}
+
+#[inline(always)]
 pub fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
     // ITGmania _fallback metrics:
     // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
@@ -1317,6 +1330,24 @@ mod tests {
         assert!((kept - 86.84).abs() <= 1e-9);
         assert!((lost - 13.16).abs() <= 1e-9);
         assert!((pace - 75.60).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn predictive_itg_percents_count_lost_points_from_one_hundred() {
+        let (kept, lost, pace) = predictive_itg_score_percents(0, 100, 0);
+        assert!((kept - 100.0).abs() <= 1e-9);
+        assert!((lost - 0.0).abs() <= 1e-9);
+        assert!((pace - 0.0).abs() <= 1e-9);
+
+        let (kept, lost, pace) = predictive_itg_score_percents(5, 100, 4);
+        assert!((kept - 99.0).abs() <= 1e-9);
+        assert!((lost - 1.0).abs() <= 1e-9);
+        assert!((pace - 80.0).abs() <= 1e-9);
+
+        let (kept, lost, pace) = predictive_itg_score_percents(0, 100, MINE_SCORE_HIT);
+        assert!((kept - 94.0).abs() <= 1e-9);
+        assert!((lost - 6.0).abs() <= 1e-9);
+        assert!((pace - 0.0).abs() <= 1e-9);
     }
 
     #[test]

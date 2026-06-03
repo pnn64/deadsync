@@ -3276,24 +3276,6 @@ fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] 
     }
 }
 
-/// Compute predictive kept/lost/pace percentages for ITG scoring.
-fn predictive_itg_percents(
-    current_possible_dp: i32,
-    possible_dp: i32,
-    actual_dp: i32,
-) -> (f64, f64, f64) {
-    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
-    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
-    let kept = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
-    let lost = (100.0 - kept).max(0.0);
-    let pace = if current_possible_dp > 0 {
-        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
-    } else {
-        0.0
-    };
-    (kept, lost, pace)
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
@@ -3353,8 +3335,11 @@ fn zmod_mini_indicator_progress(
     // Compute predictive percents for the active score type.
     let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
         profile_data::MiniIndicatorScoreType::Itg => {
-            let (kept, lost, pace) =
-                predictive_itg_percents(current_possible_dp, possible_dp, actual_dp);
+            let (kept, lost, pace) = judgment::predictive_itg_score_percents(
+                current_possible_dp,
+                possible_dp,
+                actual_dp,
+            );
             (kept, lost, pace, 0)
         }
         profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {

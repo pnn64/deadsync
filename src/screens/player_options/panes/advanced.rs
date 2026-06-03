@@ -1,7 +1,7 @@
 use super::super::choice;
 use super::super::constants::{
     MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS, MINI_INDICATOR_VARIANTS,
-    SCORE_POSITION_VARIANTS,
+    SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS,
 };
 use super::super::row::{
     BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
@@ -18,7 +18,7 @@ use crate::game::profile as gp;
 use deadsync_profile::{
     ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim, LifeMeterType, MeasureCounter,
     MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
-    PlayerSide, Profile, ScatterplotMaxWindow, ScorePosition, TargetScoreSetting,
+    PlayerSide, Profile, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, TargetScoreSetting,
     TimingWindowsOption, TurnOption,
 };
 
@@ -80,6 +80,21 @@ const SCORE_POSITION: ChoiceBinding<usize> = index_binding!(
             SCORE_POSITION_VARIANTS
                 .iter()
                 .position(|&v| v == p.score_position)
+                .unwrap_or(0)
+        }
+    })
+);
+const SCORE_DISPLAY_MODE: ChoiceBinding<usize> = index_binding!(
+    SCORE_DISPLAY_MODE_VARIANTS,
+    ScoreDisplayMode::Normal,
+    score_display_mode,
+    gp::update_score_display_mode_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            SCORE_DISPLAY_MODE_VARIANTS
+                .iter()
+                .position(|&v| v == p.score_display_mode)
                 .unwrap_or(0)
         }
     })
@@ -1264,6 +1279,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "StepStatisticsPackInfo").to_string(),
             tr("PlayerOptions", "StepStatisticsStepCounts").to_string(),
             tr("PlayerOptions", "StepStatisticsPeakNps").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::ScoreDisplay,
+        lookup_key("PlayerOptions", "ScoreDisplay"),
+        lookup_key("PlayerOptionsHelp", "ScoreDisplayHelp"),
+        CycleBinding::Index(SCORE_DISPLAY_MODE),
+        vec![
+            tr("PlayerOptions", "ScoreDisplayNormal").to_string(),
+            tr("PlayerOptions", "ScoreDisplayPredictive").to_string(),
         ],
     ));
     b.push(Row::cycle(

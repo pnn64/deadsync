@@ -2645,6 +2645,7 @@ pub(super) mod tests {
         p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
         p.step_statistics = StepStatisticsMask::SONG_BANNER | StepStatisticsMask::STEP_COUNTS;
         p.score_position = super::SCORE_POSITION_VARIANTS[1];
+        p.score_display_mode = super::SCORE_DISPLAY_MODE_VARIANTS[1];
         p.display_scorebox = true;
         p.target_score = super::TARGET_SCORE_VARIANTS[1];
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
@@ -2724,6 +2725,12 @@ pub(super) mod tests {
             RowId::ScorePosition,
             &super::SCORE_POSITION_VARIANTS,
             profile.score_position,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ScoreDisplay,
+            &super::SCORE_DISPLAY_MODE_VARIANTS,
+            profile.score_display_mode,
         );
         assert_variant_at_cursor(
             &row_map,

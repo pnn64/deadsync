@@ -7913,17 +7913,22 @@ pub fn push_actors(
                 let show_ex_score = profile.show_ex_score;
                 let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score;
                 let (score_text, score_color) = if show_ex_score {
-                    let ex_percent =
-                        crate::game::gameplay::display_ex_score_percent(state, player_idx);
+                    let ex_percent = crate::game::gameplay::display_gameplay_ex_score_percent(
+                        state,
+                        player_idx,
+                        profile.score_display_mode,
+                    );
                     (
                         cached_score_2dp(ex_percent.max(0.0)),
                         color::JUDGMENT_RGBA[0],
                     )
                 } else {
-                    let score_percent =
-                        (crate::game::gameplay::display_itg_score_percent(state, player_idx)
-                            * 100.0) as f32;
-                    (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
+                    let score_percent = crate::game::gameplay::display_gameplay_itg_score_percent(
+                        state,
+                        player_idx,
+                        profile.score_display_mode,
+                    );
+                    (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
                 };
 
                 let is_p2_side = player_side == profile_data::PlayerSide::P2;
@@ -7939,7 +7944,11 @@ pub fn push_actors(
 
                 if show_hard_ex_score {
                     let hard_ex_percent =
-                        crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
+                        crate::game::gameplay::display_gameplay_hard_ex_score_percent(
+                            state,
+                            player_idx,
+                            profile.score_display_mode,
+                        );
                     let hex = color::HARD_EX_SCORE_RGBA;
                     let (hard_ex_x, hard_ex_y) = if let Some(pos) = step_stats_score_pos {
                         (pos.hard_ex_x, pos.hard_ex_y)

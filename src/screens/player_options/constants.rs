@@ -104,8 +104,8 @@ pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 use deadsync_profile::{
     AttackMode, ComboColors, ComboFont, ComboMode, ErrorBarTrim, HideLightType, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    MiniIndicatorSize, Perspective, ScatterplotMaxWindow, ScorePosition, TargetScoreSetting,
-    TimingWindowsOption, TurnOption,
+    MiniIndicatorSize, Perspective, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition,
+    TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).
@@ -171,6 +171,9 @@ pub(super) const SCATTERPLOT_MAX_WINDOW_VARIANTS: [ScatterplotMaxWindow; 4] = [
 
 pub(super) const SCORE_POSITION_VARIANTS: [ScorePosition; 2] =
     [ScorePosition::Normal, ScorePosition::StepStatistics];
+
+pub(super) const SCORE_DISPLAY_MODE_VARIANTS: [ScoreDisplayMode; 2] =
+    [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive];
 
 pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [
     TargetScoreSetting::CMinus,

@@ -1245,6 +1245,41 @@ impl core::fmt::Display for ScorePosition {
     }
 }
 
+/// Gameplay percent score value semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScoreDisplayMode {
+    #[default]
+    Normal,
+    Predictive,
+}
+
+impl FromStr for ScoreDisplayMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "normal" | "default" | "actual" | "current" => Ok(Self::Normal),
+            "predictive" | "predicted" | "prediction" => Ok(Self::Predictive),
+            other => Err(format!("'{other}' is not a valid ScoreDisplay setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ScoreDisplayMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "Normal"),
+            Self::Predictive => write!(f, "Predictive"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LifeMeterType {
     #[default]
@@ -2656,6 +2691,7 @@ pub struct PlayerOptionsData {
     pub scale_scatterplot: bool,
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
+    pub score_display_mode: ScoreDisplayMode,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     pub judgment_tilt: bool,
@@ -2770,6 +2806,7 @@ fn default_player_options() -> PlayerOptionsData {
         scale_scatterplot: false,
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
+        score_display_mode: ScoreDisplayMode::Normal,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         judgment_tilt: false,
@@ -2976,6 +3013,10 @@ where
     options.score_position = get("ScorePosition")
         .and_then(|s| ScorePosition::from_str(&s).ok())
         .unwrap_or(options.score_position);
+    options.score_display_mode = get("ScoreDisplay")
+        .or_else(|| get("ScoreDisplayMode"))
+        .and_then(|s| ScoreDisplayMode::from_str(&s).ok())
+        .unwrap_or(options.score_display_mode);
     options.custom_fantastic_window = load_u8_bool(
         &mut get,
         "CustomFantasticWindow",
@@ -3279,6 +3320,7 @@ pub fn append_player_options_section(
         options.scatterplot_max_window
     ));
     content.push_str(&format!("ScorePosition={}\n", options.score_position));
+    content.push_str(&format!("ScoreDisplay={}\n", options.score_display_mode));
     content.push_str(&format!(
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
@@ -3581,6 +3623,7 @@ pub struct Profile {
     // selected judgment tier (Chris's SL `ScaleGraph`-per-tier semantics).
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
+    pub score_display_mode: ScoreDisplayMode,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -3749,6 +3792,7 @@ impl Default for Profile {
             scale_scatterplot: player_options.scale_scatterplot,
             scatterplot_max_window: player_options.scatterplot_max_window,
             score_position: player_options.score_position,
+            score_display_mode: player_options.score_display_mode,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             judgment_tilt: player_options.judgment_tilt,
@@ -4284,6 +4328,7 @@ impl Profile {
             scale_scatterplot: self.scale_scatterplot,
             scatterplot_max_window: self.scatterplot_max_window,
             score_position: self.score_position,
+            score_display_mode: self.score_display_mode,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             judgment_tilt: self.judgment_tilt,
@@ -4400,6 +4445,7 @@ impl Profile {
         self.scale_scatterplot = options.scale_scatterplot;
         self.scatterplot_max_window = options.scatterplot_max_window;
         self.score_position = options.score_position;
+        self.score_display_mode = options.score_display_mode;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.judgment_tilt = options.judgment_tilt;
@@ -4590,6 +4636,7 @@ mod tests {
         assert!(options.long_error_bar_enabled);
         assert!(options.step_statistics.is_empty());
         assert_eq!(options.score_position, ScorePosition::Normal);
+        assert_eq!(options.score_display_mode, ScoreDisplayMode::Normal);
         assert_eq!(options.measure_counter_lookahead, 2);
         assert!(options.measure_counter_left);
         assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
@@ -5053,6 +5100,7 @@ mod tests {
             ("ScatterplotGreatMax", "1"),
             ("ScatterplotMaxWindow", "Excellent"),
             ("ScorePosition", "Step Statistics"),
+            ("ScoreDisplay", "Predictive"),
             ("CustomFantasticWindow", "1"),
             ("CustomFantasticWindowMs", "23"),
             ("JudgmentTilt", "1"),
@@ -5089,6 +5137,7 @@ mod tests {
             ScatterplotMaxWindow::Excellent
         );
         assert_eq!(options.score_position, ScorePosition::StepStatistics);
+        assert_eq!(options.score_display_mode, ScoreDisplayMode::Predictive);
         assert!(options.custom_fantastic_window);
         assert_eq!(
             options.custom_fantastic_window_ms,
@@ -5566,6 +5615,7 @@ mod tests {
             long_error_bar_intensity: 1.95,
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
+            score_display_mode: ScoreDisplayMode::Predictive,
             mini_percent: 42,
             global_offset_shift_ms: -9,
             ..PlayerOptionsData::default()
@@ -5582,6 +5632,7 @@ mod tests {
         assert!(content.contains("LongErrorBarIntensity=2.00\n"));
         assert!(content.contains("TapExplosionMask=65\n"));
         assert!(content.contains("ScorePosition=Step Statistics\n"));
+        assert!(content.contains("ScoreDisplay=Predictive\n"));
         assert!(content.contains(&format!(
             "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
         )));
@@ -6176,6 +6227,22 @@ mod tests {
         );
         assert_eq!(ScorePosition::from_str("top"), Ok(ScorePosition::Normal));
         assert!(ScorePosition::from_str("middle").is_err());
+    }
+
+    #[test]
+    fn score_display_mode_round_trips_and_accepts_prediction_alias() {
+        for setting in [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive] {
+            assert_eq!(setting.to_string().parse::<ScoreDisplayMode>(), Ok(setting));
+        }
+        assert_eq!(
+            ScoreDisplayMode::from_str("prediction"),
+            Ok(ScoreDisplayMode::Predictive)
+        );
+        assert_eq!(
+            ScoreDisplayMode::from_str("actual"),
+            Ok(ScoreDisplayMode::Normal)
+        );
+        assert!(ScoreDisplayMode::from_str("middle").is_err());
     }
 
     #[test]

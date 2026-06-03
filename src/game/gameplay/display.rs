@@ -1,3 +1,4 @@
+use deadsync_profile::ScoreDisplayMode;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
 use deadsync_rules::timing::{self, WindowCounts};
 
@@ -221,6 +222,99 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
     )
 }
 
+fn display_itg_score_inputs(
+    state: &State,
+    player_idx: usize,
+) -> Option<(judgment::JudgeCounts, u32, u32, u32, u32, u32, i32)> {
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let carry = display_carry_for_player(state, player_idx);
+    let player = &state.players[player_idx];
+    let mut scoring_counts = player.scoring_counts;
+    for (ix, total) in scoring_counts.iter_mut().enumerate() {
+        *total = total.saturating_add(carry.scoring_counts[ix]);
+    }
+    let holds_held = player
+        .holds_held_for_score
+        .saturating_add(carry.holds_held_for_score);
+    let holds_resolved = holds_held
+        .saturating_add(player.holds_let_go_for_score)
+        .saturating_add(carry.holds_let_go_for_score);
+    let rolls_held = player
+        .rolls_held_for_score
+        .saturating_add(carry.rolls_held_for_score);
+    let rolls_resolved = rolls_held
+        .saturating_add(player.rolls_let_go_for_score)
+        .saturating_add(carry.rolls_let_go_for_score);
+    let mines = player
+        .mines_hit_for_score
+        .saturating_add(carry.mines_hit_for_score);
+    let possible = display_totals_for_player(state, player_idx).possible_grade_points;
+    Some((
+        scoring_counts,
+        holds_held,
+        rolls_held,
+        mines,
+        holds_resolved,
+        rolls_resolved,
+        possible,
+    ))
+}
+
+fn current_possible_grade_points(
+    scoring_counts: &judgment::JudgeCounts,
+    holds_resolved: u32,
+    rolls_resolved: u32,
+) -> i32 {
+    let tap_rows = scoring_counts
+        .iter()
+        .copied()
+        .fold(0u32, |sum, count| sum.saturating_add(count));
+    let resolved = tap_rows
+        .saturating_add(holds_resolved)
+        .saturating_add(rolls_resolved);
+    i32::try_from(resolved)
+        .unwrap_or(i32::MAX)
+        .saturating_mul(judgment::HOLD_SCORE_HELD)
+}
+
+pub fn display_predictive_itg_score_percent(state: &State, player_idx: usize) -> f64 {
+    let Some((
+        scoring_counts,
+        holds_held,
+        rolls_held,
+        mines,
+        holds_resolved,
+        rolls_resolved,
+        possible,
+    )) = display_itg_score_inputs(state, player_idx)
+    else {
+        return 0.0;
+    };
+    let actual = judgment::calculate_itg_grade_points_from_counts(
+        &scoring_counts,
+        holds_held,
+        rolls_held,
+        mines,
+    );
+    let current_possible =
+        current_possible_grade_points(&scoring_counts, holds_resolved, rolls_resolved);
+    let (kept, _, _) = judgment::predictive_itg_score_percents(current_possible, possible, actual);
+    kept
+}
+
+pub fn display_gameplay_itg_score_percent(
+    state: &State,
+    player_idx: usize,
+    mode: ScoreDisplayMode,
+) -> f64 {
+    match mode {
+        ScoreDisplayMode::Normal => display_itg_score_percent(state, player_idx) * 100.0,
+        ScoreDisplayMode::Predictive => display_predictive_itg_score_percent(state, player_idx),
+    }
+}
+
 #[inline(always)]
 pub(super) fn effective_ex_score_inputs(
     player: &PlayerRuntime,
@@ -265,6 +359,30 @@ pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
     judgment::ex_score_percent(&display_scored_ex_score_data(state, player_idx))
 }
 
+pub fn display_gameplay_ex_score_percent(
+    state: &State,
+    player_idx: usize,
+    mode: ScoreDisplayMode,
+) -> f64 {
+    let score = display_scored_ex_score_data(state, player_idx);
+    match mode {
+        ScoreDisplayMode::Normal => judgment::ex_score_percent(&score),
+        ScoreDisplayMode::Predictive => judgment::predictive_ex_score_percents(&score).0,
+    }
+}
+
 pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
     judgment::hard_ex_score_percent(&display_scored_ex_score_data(state, player_idx))
+}
+
+pub fn display_gameplay_hard_ex_score_percent(
+    state: &State,
+    player_idx: usize,
+    mode: ScoreDisplayMode,
+) -> f64 {
+    let score = display_scored_ex_score_data(state, player_idx);
+    match mode {
+        ScoreDisplayMode::Normal => judgment::hard_ex_score_percent(&score),
+        ScoreDisplayMode::Predictive => judgment::predictive_hard_ex_score_percents(&score).0,
+    }
 }

@@ -9,8 +9,8 @@ use deadsync_profile::{
     HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
     LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
     MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, Perspective, Profile, RemoveMask,
-    ScatterplotMaxWindow, ScorePosition, ScrollOption, StepStatisticsMask, TapExplosionMask,
-    TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
+    ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption, StepStatisticsMask,
+    TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
 };
 use std::path::Path;
 
@@ -597,6 +597,12 @@ pub fn update_scatterplot_max_window_for_side(side: PlayerSide, setting: Scatter
 pub fn update_score_position_for_side(side: PlayerSide, setting: ScorePosition) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.score_position, setting)
+    });
+}
+
+pub fn update_score_display_mode_for_side(side: PlayerSide, setting: ScoreDisplayMode) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.score_display_mode, setting)
     });
 }
 

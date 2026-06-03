@@ -125,9 +125,11 @@ use self::display::{
     capture_failed_ex_score_inputs, record_current_combo_window_count, record_display_window_counts,
 };
 pub use self::display::{
-    display_carry_for_player, display_ex_score_percent, display_hard_ex_score_percent,
-    display_itg_score_percent, display_judgment_count, display_live_timing_stats,
-    display_totals_for_player, display_window_counts,
+    display_carry_for_player, display_ex_score_percent, display_gameplay_ex_score_percent,
+    display_gameplay_hard_ex_score_percent, display_gameplay_itg_score_percent,
+    display_hard_ex_score_percent, display_itg_score_percent, display_judgment_count,
+    display_live_timing_stats, display_predictive_itg_score_percent, display_totals_for_player,
+    display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
 #[cfg(test)]

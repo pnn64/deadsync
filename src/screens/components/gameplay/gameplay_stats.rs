@@ -1198,11 +1198,22 @@ pub fn push_versus_step_stats(
 
         let (score_text, score_color) = if player_profile.show_ex_score {
             (
-                cached_score_2dp(gameplay::display_ex_score_percent(state, player_idx).max(0.0)),
+                cached_score_2dp(
+                    gameplay::display_gameplay_ex_score_percent(
+                        state,
+                        player_idx,
+                        player_profile.score_display_mode,
+                    )
+                    .max(0.0),
+                ),
                 color::JUDGMENT_RGBA[0],
             )
         } else {
-            let score_percent = gameplay::display_itg_score_percent(state, player_idx) * 100.0;
+            let score_percent = gameplay::display_gameplay_itg_score_percent(
+                state,
+                player_idx,
+                player_profile.score_display_mode,
+            );
             (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
         };
         let x = center_x + if player_idx == 0 { -7.0 } else { 65.0 };
@@ -1218,7 +1229,11 @@ pub fn push_versus_step_stats(
         ));
 
         if player_profile.show_ex_score && player_profile.show_hard_ex_score {
-            let hard_ex_percent = gameplay::display_hard_ex_score_percent(state, player_idx);
+            let hard_ex_percent = gameplay::display_gameplay_hard_ex_score_percent(
+                state,
+                player_idx,
+                player_profile.score_display_mode,
+            );
             let hex = color::HARD_EX_SCORE_RGBA;
             if player_idx == 0 {
                 actors.push(act!(text:

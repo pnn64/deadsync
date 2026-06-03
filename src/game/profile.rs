@@ -1918,6 +1918,7 @@ mod tests {
         profile.mini_percent = 18;
         profile.show_ex_score = true;
         profile.score_position = deadsync_profile::ScorePosition::StepStatistics;
+        profile.score_display_mode = deadsync_profile::ScoreDisplayMode::Predictive;
         profile.global_offset_shift_ms = 7;
         profile.timing_windows = TimingWindowsOption::WayOffs;
         profile.receptor_noteskin = Some(NoteSkin::new("default"));
@@ -1929,6 +1930,7 @@ mod tests {
         profile.mini_percent = 62;
         profile.show_ex_score = false;
         profile.score_position = deadsync_profile::ScorePosition::Normal;
+        profile.score_display_mode = deadsync_profile::ScoreDisplayMode::Normal;
         profile.global_offset_shift_ms = -13;
         profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
         profile.receptor_noteskin = Some(NoteSkin::new("cyber"));
@@ -1942,6 +1944,10 @@ mod tests {
         assert_eq!(
             profile.score_position,
             deadsync_profile::ScorePosition::StepStatistics
+        );
+        assert_eq!(
+            profile.score_display_mode,
+            deadsync_profile::ScoreDisplayMode::Predictive
         );
         assert_eq!(profile.global_offset_shift_ms, 7);
         assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
@@ -1958,6 +1964,10 @@ mod tests {
         assert_eq!(
             profile.score_position,
             deadsync_profile::ScorePosition::Normal
+        );
+        assert_eq!(
+            profile.score_display_mode,
+            deadsync_profile::ScoreDisplayMode::Normal
         );
         assert_eq!(profile.global_offset_shift_ms, -13);
         assert_eq!(
