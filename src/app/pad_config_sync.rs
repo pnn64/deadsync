@@ -64,9 +64,16 @@ impl PadConfigSync {
             PadConfigIntent::Invalidate { pad } => {
                 if pad < 2 {
                     self.signature[pad] = None;
-                    // Management edits (rename / delete / overwrite / set-default)
-                    // change the saved configs without moving `ProfilesSig`, so
-                    // drop the cached list too — it rebuilds on the next refresh.
+                    // Management edits (delete / overwrite / set-default) change the
+                    // saved configs without moving `ProfilesSig`, so drop the cached
+                    // list too — it rebuilds on the next refresh.
+                    self.profiles_sig[pad] = None;
+                }
+            }
+            // List changed but the applied config didn't → rebuild the list only.
+            // (Re-resolving here would clobber freshly-captured live values.)
+            PadConfigIntent::RefreshList { pad } => {
+                if pad < 2 {
                     self.profiles_sig[pad] = None;
                 }
             }
@@ -176,5 +183,23 @@ mod tests {
         // A management edit can't move the inputs, so it must clear the cache.
         s.apply_intent(PadConfigIntent::Invalidate { pad: 1 });
         assert!(s.profiles_stale(1, Some("p1"), None));
+    }
+
+    #[test]
+    fn refresh_list_rebuilds_list_without_touching_resolve_signature() {
+        let mut s = PadConfigSync::default();
+        s.signature[0] = Some(Sig {
+            preset: crate::config::SmxPadPreset::Medium,
+            serial: "S".to_owned(),
+            profile_id: Some("p1".to_owned()),
+            pad_type: Some("fsr".to_owned()),
+        });
+        s.store_profiles(0, Some("p1".to_owned()), Some("fsr".to_owned()), vec![cfg("A")]);
+        // A new save / rename changed the list but not what's applied to the pad.
+        s.apply_intent(PadConfigIntent::RefreshList { pad: 0 });
+        // List rebuilds...
+        assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
+        // ...but the resolve signature is untouched, so the pad isn't rewritten.
+        assert!(s.signature[0].is_some());
     }
 }

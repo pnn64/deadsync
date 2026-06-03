@@ -1084,6 +1084,10 @@ pub enum PadConfigIntent {
     /// per-pad default edit, overwrite, delete, or a play-style switch) →
     /// re-resolve + re-apply it.
     Invalidate { pad: usize },
+    /// The saved-config *list* changed (new config saved, or a rename) but what's
+    /// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
+    /// (that would rewrite the pad's just-captured live values).
+    RefreshList { pad: usize },
 }
 
 pub struct State {
@@ -8407,23 +8411,32 @@ fn perform_pad_profile_save(state: &mut State) {
     // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
         crate::game::pad_profiles::rename(&profile_id, &old, &name);
+        let pad = usize::from(info.is_player2);
         if draft.set_default {
             crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
-        }
-        // If the renamed config was the active one, keep the marker following it
-        // (checked against the mirror; the override updates the controller).
-        let pad = usize::from(info.is_player2);
-        if state.smx_applied[pad]
-            .as_ref()
-            .is_some_and(|a| !a.preset && a.name == old)
-        {
-            state.pad_config_intents.push(PadConfigIntent::Override {
-                pad,
-                applied: AppliedPadConfig {
-                    preset: false,
-                    name: name.clone(),
-                },
-            });
+            // New default → re-resolve (applies it) and rebuild the list.
+            state
+                .pad_config_intents
+                .push(PadConfigIntent::Invalidate { pad });
+        } else {
+            // Name changed but the applied config didn't → rebuild the list only.
+            state
+                .pad_config_intents
+                .push(PadConfigIntent::RefreshList { pad });
+            // If the renamed config was the active one, keep the marker following
+            // it (checked against the mirror; the override updates the controller).
+            if state.smx_applied[pad]
+                .as_ref()
+                .is_some_and(|a| !a.preset && a.name == old)
+            {
+                state.pad_config_intents.push(PadConfigIntent::Override {
+                    pad,
+                    applied: AppliedPadConfig {
+                        preset: false,
+                        name: name.clone(),
+                    },
+                });
+            }
         }
         audio::play_sfx("assets/sounds/start.ogg");
         return;
@@ -8444,10 +8457,15 @@ fn perform_pad_profile_save(state: &mut State) {
         draft.set_default,
         data.to_settings(),
     );
-    // The pad is running exactly these values (we just captured them), so the new
-    // config is what's active — mark it so its `*`/green shows immediately.
+    // A new config entered the list → rebuild it (but don't re-resolve: the pad is
+    // already running these captured values). Mark the new config active so its
+    // `*`/green shows immediately.
+    let pad = usize::from(is_player2);
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::RefreshList { pad });
     state.pad_config_intents.push(PadConfigIntent::Override {
-        pad: usize::from(is_player2),
+        pad,
         applied: AppliedPadConfig { preset: false, name },
     });
     audio::play_sfx("assets/sounds/start.ogg");
