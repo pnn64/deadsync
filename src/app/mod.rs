@@ -3664,9 +3664,15 @@ impl ScreensState {
                 if matches!(
                     action,
                     Some(ScreenAction::Navigate(CurrentScreen::SelectMusic))
-                ) && let Some(sm) =
+                ) && let Some(mut sm) =
                     profile_load::take_prepared_select_music(&mut self.profile_load_state)
                 {
+                    // Carry the applied-pad-config markers across the swap: the
+                    // managed resolver may have written them during the load, and
+                    // its key-guard (on the app) won't repopulate them afterward
+                    // since the profile hasn't changed. Without this the active
+                    // marker only appears after a manual profile switch.
+                    sm.smx_applied = self.select_music_state.smx_applied.clone();
                     self.select_music_state = sm;
                     self.select_music_state.active_color_index =
                         self.profile_load_state.active_color_index;
