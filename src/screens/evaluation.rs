@@ -1969,6 +1969,7 @@ pub struct State {
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     test_input_state: test_input::State,
+    preview_music_started: bool,
 }
 
 impl Clone for State {
@@ -2014,6 +2015,7 @@ impl Clone for State {
             menu_lr_undo: self.menu_lr_undo,
             favorite_code: self.favorite_code.clone(),
             test_input_state: self.test_input_state.clone(),
+            preview_music_started: self.preview_music_started,
         }
     }
 }
@@ -2607,6 +2609,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        preview_music_started: false,
     }
 }
 
@@ -2759,6 +2762,7 @@ pub fn init_from_score_info(
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        preview_music_started: false,
     }
 }
 
@@ -2935,6 +2939,8 @@ pub fn update(state: &mut State, dt: f32) {
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
+
+    maybe_start_clear_preview_music(state);
 
     online::lobbies::poll_reconnect();
     online::lobbies::update_machine_state_sides_with_stats(
@@ -3210,6 +3216,31 @@ pub(crate) fn all_joined_players_failed(state: &State) -> bool {
         }
     }
     any
+}
+
+fn maybe_start_clear_preview_music(state: &mut State) {
+    if state.preview_music_started {
+        return;
+    }
+    state.preview_music_started = true;
+
+    if !crate::config::get().eval_preview_music {
+        return;
+    }
+    if all_joined_players_failed(state) {
+        return;
+    }
+    let Some(si) = state.score_info.iter().flatten().next() else {
+        return;
+    };
+    if let Some((path, cut)) = crate::screens::select_music::compute_preview_cut(&si.song) {
+        let rate = if si.music_rate.is_finite() && si.music_rate > 0.0 {
+            si.music_rate
+        } else {
+            1.0
+        };
+        crate::engine::audio::play_music(path, cut, false, rate);
+    }
 }
 
 #[inline(always)]

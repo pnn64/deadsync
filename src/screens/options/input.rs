@@ -566,6 +566,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::MineSounds => {
                 config::update_mine_hit_sound(new_index == 1);
             }
+            SubRowId::EvalPreviewMusic => {
+                config::update_eval_preview_music(new_index == 1);
+            }
             SubRowId::RateModPreservesPitch => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
             }

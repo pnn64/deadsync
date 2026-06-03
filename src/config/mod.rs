@@ -344,6 +344,7 @@ pub struct Config {
     pub visual_delay_seconds: f32,
     pub master_volume: u8,
     pub menu_music: bool,
+    pub eval_preview_music: bool,
     pub custom_sounds_enabled: bool,
     pub music_volume: u8,
     // ITGmania PrefsManager "MusicWheelSwitchSpeed" (default 15).
@@ -529,6 +530,7 @@ impl Default for Config {
             visual_delay_seconds: 0.0,
             master_volume: 90,
             menu_music: true,
+            eval_preview_music: false,
             custom_sounds_enabled: true,
             music_volume: 100,
             music_wheel_switch_speed: 15,

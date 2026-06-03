@@ -37,6 +37,17 @@ pub fn update_menu_music(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_eval_preview_music(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.eval_preview_music == enabled {
+            return;
+        }
+        cfg.eval_preview_music = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_software_renderer_threads(threads: u8) {
     {
         let mut cfg = lock_config();

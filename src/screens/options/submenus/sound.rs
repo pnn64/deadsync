@@ -73,6 +73,15 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::EvalPreviewMusic,
+        label: lookup_key("OptionsSound", "EvalPreviewMusic"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::GlobalOffset,
         label: lookup_key("OptionsSound", "GlobalOffset"),
         choices: &[literal_choice("0 ms")],
@@ -179,6 +188,14 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSoundHelp",
             "MineSoundsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SndEvalPreviewMusic,
+        name: lookup_key("OptionsSound", "EvalPreviewMusic"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "EvalPreviewMusicHelp",
         ))],
     },
     Item {
