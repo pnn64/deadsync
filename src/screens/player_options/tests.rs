@@ -2019,6 +2019,13 @@ pub(super) mod tests {
             assert!(main.get(id).is_none(), "{id:?} should move out of Main");
             assert!(display.get(id).is_some(), "{id:?} should be in Display");
         }
+
+        for id in [
+            RowId::AverageErrorBarIntensity,
+            RowId::AverageErrorBarInterval,
+        ] {
+            assert!(main.get(id).is_some(), "{id:?} should be in Main");
+        }
     }
 
     #[test]
@@ -2426,6 +2433,9 @@ pub(super) mod tests {
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
+        p.error_bar_active_mask = ErrorBarMask::AVERAGE;
+        p.average_error_bar_intensity = 1.5;
+        p.average_error_bar_interval_ms = 700;
 
         let profile = state.player_profiles[P1].clone();
         let noteskin_names = super::discover_noteskin_names();
@@ -2462,6 +2472,8 @@ pub(super) mod tests {
         assert_choice_at_cursor(&main_row_map, RowId::BackgroundFilter, "42%");
         assert_choice_at_cursor(&main_row_map, RowId::VisualDelay, "35ms");
         assert_choice_at_cursor(&main_row_map, RowId::GlobalOffsetShift, "-45ms");
+        assert_choice_at_cursor(&main_row_map, RowId::AverageErrorBarIntensity, "1.50x");
+        assert_choice_at_cursor(&main_row_map, RowId::AverageErrorBarInterval, "700ms");
     }
 
     #[test]

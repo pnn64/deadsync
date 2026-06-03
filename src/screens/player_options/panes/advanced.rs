@@ -848,7 +848,7 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
-const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
+pub(super) const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
@@ -877,7 +877,7 @@ const AVERAGE_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
-const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
+pub(super) const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {

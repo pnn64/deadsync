@@ -577,6 +577,9 @@ struct GameplayModsTextKey {
     mini_percent: i16,
     spacing_percent: i16,
     visual_delay_ms: i16,
+    error_bar_mask: u8,
+    avg_error_bar_intensity_centi: i16,
+    avg_error_bar_interval_ms: u16,
     accel: [i16; 5],
     visual: [i16; 9],
     appearance: [i16; 5],
@@ -783,6 +786,20 @@ fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
 }
 
 #[inline(always)]
+fn append_average_error_bar_part(parts: &mut Vec<String>, key: &GameplayModsTextKey) {
+    if key.error_bar_mask & profile_data::ErrorBarMask::AVERAGE.bits() == 0 {
+        return;
+    }
+    let zoom = key.avg_error_bar_intensity_centi as f32 / 100.0;
+    let zoom = cached_fmt2_f32(zoom);
+    let zoom = zoom.trim_end_matches('0').trim_end_matches('.');
+    parts.push(format!(
+        "ErrorBar{}x(Avg:{}ms)",
+        zoom, key.avg_error_bar_interval_ms
+    ));
+}
+
+#[inline(always)]
 fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
     if tilt == 0 && skew == 0 {
         parts.push("Overhead".to_string());
@@ -967,6 +984,15 @@ fn push_transform_parts(parts: &mut Vec<String>, insert_mask: u8, remove_mask: u
 }
 
 #[inline(always)]
+fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data::ErrorBarMask {
+    if profile.error_bar_active_mask.is_empty() {
+        profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text)
+    } else {
+        profile.error_bar_active_mask
+    }
+}
+
+#[inline(always)]
 fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextKey {
     let profile = &state.player_profiles[player_idx];
     let chart_attack = active_chart_attack_effects_for_player(state, player_idx);
@@ -994,6 +1020,11 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
     } else {
         visibility.cover
     };
+    let error_bar_mask = profile_error_bar_mask(profile);
+    let average_error_bar_intensity =
+        profile_data::clamp_average_error_bar_intensity(profile.average_error_bar_intensity);
+    let average_error_bar_interval_ms =
+        profile_data::clamp_average_error_bar_interval_ms(profile.average_error_bar_interval_ms);
     let (speed_tag, speed_bits) = match scroll_speed {
         ScrollSpeedSetting::CMod(value) => (0, value.to_bits()),
         ScrollSpeedSetting::XMod(value) => (1, value.to_bits()),
@@ -1017,6 +1048,9 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         visual_delay_ms: profile
             .visual_delay_ms
             .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+        error_bar_mask: error_bar_mask.bits(),
+        avg_error_bar_intensity_centi: clamp_rounded_i16(average_error_bar_intensity * 100.0),
+        avg_error_bar_interval_ms: average_error_bar_interval_ms as u16,
         accel: [
             mod_percent_key(accel.boost),
             mod_percent_key(accel.brake),
@@ -2388,6 +2422,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         if key.visual_delay_ms != 0 {
             parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
         }
+        append_average_error_bar_part(&mut parts, &key);
         if let Some(disabled_windows) = disabled_timing_windows_name(key.disabled_timing_windows) {
             parts.push(disabled_windows);
         }
@@ -7754,7 +7789,7 @@ pub fn build_bundles(
         if alpha > 0.0 {
             let mods_text = gameplay_mods_text(state, player_idx);
             let mods_line_y =
-                screen_height() * 0.25 * 1.3 + DISPLAY_MODS_LINE_STEP + notefield_offset_y;
+                screen_height() * 0.25 * 1.3 + DISPLAY_MODS_LINE_STEP * 2.0 + notefield_offset_y;
             let mods_line_count = mods_text
                 .split(", ")
                 .filter(|part| !part.is_empty())
@@ -7763,7 +7798,7 @@ pub fn build_bundles(
             if !mods_text.is_empty() {
                 hud_actors.push(act!(text:
                     font("miso"): settext(mods_text):
-                    align(0.5, 0.5): xy(playfield_center_x, mods_line_y):
+                    align(0.5, 0.0): xy(playfield_center_x, mods_line_y):
                     zoom(DISPLAY_MODS_ZOOM): wrapwidthpixels(DISPLAY_MODS_WRAP_WIDTH_PX): horizalign(center):
                     shadowcolor(0.0, 0.0, 0.0, 1.0):
                     shadowlength(1.0):
@@ -8966,8 +9001,9 @@ pub fn build_bundles(
 #[cfg(test)]
 mod tests {
     use super::{
-        MiniIndicatorProgress, TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW,
-        Z_RECEPTOR, Z_RECEPTOR_GLOW, Z_TAP_NOTE, append_mini_part, append_perspective_parts,
+        GameplayModsTextKey, MiniIndicatorProgress, TornadoBounds, Z_ERROR_BAR_AVERAGE,
+        Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW, Z_TAP_NOTE,
+        append_average_error_bar_part, append_mini_part, append_perspective_parts,
         append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
         clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
         disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
@@ -10086,6 +10122,59 @@ mod tests {
         let mut parts = Vec::new();
         append_mini_part(&mut parts, 100);
         assert_eq!(parts, vec!["100% Mini".to_string()]);
+    }
+
+    fn empty_mods_key() -> GameplayModsTextKey {
+        GameplayModsTextKey {
+            speed_tag: 0,
+            speed_bits: 0,
+            noteskin_hash: 0,
+            insert_mask: 0,
+            remove_mask: 0,
+            holds_mask: 0,
+            turn_bits: 0,
+            attack_mode: 0,
+            mini_percent: 0,
+            spacing_percent: 0,
+            visual_delay_ms: 0,
+            error_bar_mask: 0,
+            avg_error_bar_intensity_centi: 100,
+            avg_error_bar_interval_ms: 100,
+            accel: [0; 5],
+            visual: [0; 9],
+            appearance: [0; 5],
+            scroll: [0; 5],
+            perspective_tilt: 0,
+            perspective_skew: 0,
+            dark: 0,
+            blind: 0,
+            cover: 0,
+            disabled_timing_windows: 0,
+        }
+    }
+
+    #[test]
+    fn display_mods_append_average_error_bar_config() {
+        let mut key = empty_mods_key();
+        key.error_bar_mask = profile_data::ErrorBarMask::AVERAGE.bits();
+        key.avg_error_bar_intensity_centi = 175;
+        key.avg_error_bar_interval_ms = 300;
+
+        let mut parts = Vec::new();
+        append_average_error_bar_part(&mut parts, &key);
+
+        assert_eq!(parts, vec!["ErrorBar1.75x(Avg:300ms)".to_string()]);
+    }
+
+    #[test]
+    fn display_mods_skip_average_error_bar_config_when_inactive() {
+        let mut key = empty_mods_key();
+        key.error_bar_mask = profile_data::ErrorBarMask::COLORFUL.bits();
+
+        let mut parts = Vec::new();
+        append_average_error_bar_part(&mut parts, &key);
+
+        assert!(parts.is_empty());
     }
 
     #[test]
