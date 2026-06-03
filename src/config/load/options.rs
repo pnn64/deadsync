@@ -111,6 +111,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "BGBrightness")
         .and_then(|v| v.parse::<f32>().ok())
         .map_or(default.bg_brightness, |v| v.clamp(0.0, 1.0));
+    cfg.gameplay_bg_color = conf
+        .get("Options", "GameplayBgColor")
+        .and_then(|v| parse_hex_rgb(&v))
+        .unwrap_or(default.gameplay_bg_color);
     cfg.center_1player_notefield = conf
         .get("Options", "Center1Player")
         .or_else(|| conf.get("Options", "CenteredP1Notefield"))
@@ -204,6 +208,22 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "LogToFile")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.log_to_file);
+}
+
+/// Parse a `#RRGGBB` / `RRGGBB` hex color (case-insensitive) into linear 0..1
+/// RGB. Returns `None` for malformed input so the caller can fall back to the
+/// default.
+fn parse_hex_rgb(raw: &str) -> Option<[f32; 3]> {
+    let hex = raw.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
+    Some([
+        byte(0)? as f32 / 255.0,
+        byte(2)? as f32 / 255.0,
+        byte(4)? as f32 / 255.0,
+    ])
 }
 
 fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -586,4 +606,33 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             }
         })
         .unwrap_or(default.software_renderer_threads);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_hex_rgb;
+
+    #[test]
+    fn parse_hex_rgb_accepts_hash_and_bare_forms() {
+        assert_eq!(parse_hex_rgb("#000000"), Some([0.0, 0.0, 0.0]));
+        assert_eq!(parse_hex_rgb("FFFFFF"), Some([1.0, 1.0, 1.0]));
+        let gray = parse_hex_rgb("#0C0C0C").unwrap();
+        let expected = 12.0 / 255.0;
+        for ch in gray {
+            assert!((ch - expected).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn parse_hex_rgb_is_case_insensitive_and_trims() {
+        assert_eq!(parse_hex_rgb("  #0c0c0c  "), parse_hex_rgb("#0C0C0C"));
+    }
+
+    #[test]
+    fn parse_hex_rgb_rejects_malformed() {
+        assert_eq!(parse_hex_rgb(""), None);
+        assert_eq!(parse_hex_rgb("#FFF"), None);
+        assert_eq!(parse_hex_rgb("#GGGGGG"), None);
+        assert_eq!(parse_hex_rgb("#1234567"), None);
+    }
 }

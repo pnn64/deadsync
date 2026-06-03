@@ -81,3 +81,14 @@ fn push_line(content: &mut String, key: &str, value: impl std::fmt::Display) {
 fn push_bool(content: &mut String, key: &str, enabled: bool) {
     push_line(content, key, if enabled { 1 } else { 0 });
 }
+
+/// Format linear 0..1 RGB as an uppercase `#RRGGBB` hex string for the ini.
+fn rgb_to_hex(color: [f32; 3]) -> String {
+    let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!(
+        "#{:02X}{:02X}{:02X}",
+        channel(color[0]),
+        channel(color[1]),
+        channel(color[2])
+    )
+}

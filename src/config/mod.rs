@@ -121,6 +121,11 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
+    // Gameplay background color used when a song has no background image (the
+    // fallback that would otherwise be solid black). RGB in 0..1, parsed from a
+    // `#RRGGBB` hex string in `deadsync.ini` (key `GameplayBgColor`). Default is
+    // black so behavior is unchanged unless explicitly overridden.
+    pub gameplay_bg_color: [f32; 3],
     // ITGmania/Simply Love parity: center the active single-player notefield in gameplay.
     pub center_1player_notefield: bool,
     /// ITGmania-style wheel banner cache toggle.
@@ -353,6 +358,7 @@ impl Default for Config {
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
+            gameplay_bg_color: [0.0, 0.0, 0.0],
             center_1player_notefield: false,
             banner_cache: true,
             cdtitle_cache: true,
