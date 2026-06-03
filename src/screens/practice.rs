@@ -39,6 +39,7 @@ const EDIT_SNAP_CURSOR_ZOOM: f32 = 0.5;
 const EDIT_CURSOR_REPEAT_DELAY_SECONDS: f32 = 0.375;
 const EDIT_CURSOR_REPEAT_INTERVAL_SECONDS: f32 = 0.125;
 const MAX_EDIT_CURSOR_REPEATS_PER_FRAME: usize = 64;
+const TAB_FAST_MULTIPLIER: f32 = 4.0;
 const EDIT_INFO_VALUE_CHARS: usize = 28;
 const EDIT_LINE_SOUND: &str = "assets/sounds/change.ogg";
 const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
@@ -102,6 +103,7 @@ pub struct State {
     edit_scroll_speed_index: usize,
     shift_held: bool,
     ctrl_held: bool,
+    tab_held: bool,
     cursor_hold_dir: Option<CursorHoldDir>,
     cursor_hold_up_count: u8,
     cursor_hold_down_count: u8,
@@ -263,6 +265,7 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         edit_scroll_speed_index: 0,
         shift_held: false,
         ctrl_held: false,
+        tab_held: false,
         cursor_hold_dir: None,
         cursor_hold_up_count: 0,
         cursor_hold_down_count: 0,
@@ -302,6 +305,7 @@ pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
     state.shift_anchor = None;
     state.shift_held = false;
     state.ctrl_held = false;
+    state.tab_held = false;
     clear_music_rate_hold_inputs(state);
     state.snap_index = snapshot.snap_index.min(SNAP_LABELS.len().saturating_sub(1));
     state.edit_scroll_speed_index = snapshot
@@ -425,6 +429,10 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
         KeyCode::ControlLeft | KeyCode::ControlRight => {
             state.ctrl_held = raw_key.pressed;
             return (true, ScreenAction::None);
+        }
+        KeyCode::Tab => {
+            state.tab_held = raw_key.pressed;
+            return (false, ScreenAction::None);
         }
         _ => {}
     }
@@ -1111,7 +1119,7 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
         return;
     }
 
-    let mut remaining = delta_time;
+    let mut remaining = edit_scroll_hold_delta_time(state, delta_time);
     if state.cursor_hold_delay_left > 0.0 {
         let elapsed = remaining.min(state.cursor_hold_delay_left);
         state.cursor_hold_delay_left -= elapsed;
@@ -1144,7 +1152,7 @@ fn update_page_hold(state: &mut State, delta_time: f32) {
         return;
     }
 
-    let mut remaining = delta_time;
+    let mut remaining = edit_scroll_hold_delta_time(state, delta_time);
     if state.page_hold_delay_left > 0.0 {
         let elapsed = remaining.min(state.page_hold_delay_left);
         state.page_hold_delay_left -= elapsed;
@@ -1162,6 +1170,19 @@ fn update_page_hold(state: &mut State, delta_time: f32) {
         move_cursor_by_page_dir(state, dir);
         state.page_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
         repeats += 1;
+    }
+}
+
+fn edit_scroll_hold_delta_time(state: &State, delta_time: f32) -> f32 {
+    let cfg = crate::config::get();
+    delta_time * edit_scroll_hold_rate(state.tab_held, cfg.tab_acceleration)
+}
+
+const fn edit_scroll_hold_rate(tab_held: bool, tab_acceleration: bool) -> f32 {
+    if tab_held && tab_acceleration {
+        TAB_FAST_MULTIPLIER
+    } else {
+        1.0
     }
 }
 
@@ -2040,10 +2061,10 @@ mod tests {
     use super::{
         CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
         MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir, PracticeNavMode,
-        clamp_selection, edit_cursor_hold_dir_for_action_in_mode,
-        edit_snap_delta_for_action_in_mode, fmt_music_rate, menu_step_delta_for_action_in_mode,
-        music_rate_delta_for_dir, music_rate_hold_dir_for_key, page_hold_dir_for_key,
-        practice_nav_mode_from_config, quantized_music_rate,
+        TAB_FAST_MULTIPLIER, clamp_selection, edit_cursor_hold_dir_for_action_in_mode,
+        edit_scroll_hold_rate, edit_snap_delta_for_action_in_mode, fmt_music_rate,
+        menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
+        page_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
     };
     use crate::assets::i18n;
     use deadsync_input::VirtualAction;
@@ -2233,6 +2254,13 @@ mod tests {
             Some(PageHoldDir::Down)
         );
         assert_eq!(page_hold_dir_for_key(KeyCode::Home), None);
+    }
+
+    #[test]
+    fn tab_accelerates_practice_edit_scroll_holds_when_enabled() {
+        assert_eq!(edit_scroll_hold_rate(false, true), 1.0);
+        assert_eq!(edit_scroll_hold_rate(true, false), 1.0);
+        assert_eq!(edit_scroll_hold_rate(true, true), TAB_FAST_MULTIPLIER);
     }
 
     #[test]
