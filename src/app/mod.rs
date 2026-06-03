@@ -4039,14 +4039,14 @@ impl App {
         }
     }
 
-    /// When "DeadSync manages pad config" is on, resolve and apply the right pad
-    /// config to each connected StepManiaX pad: the active profile's
-    /// serial-matching config → that profile's default config → the machine
-    /// built-in preset (also the fallback for Guest / no-config players). This is
-    /// reactive — when the active player changes, a no-config/guest player resets
-    /// the pad to the machine preset. A cheap per-pad key avoids loading config
-    /// files or rewriting the pad unless something relevant changed (so manual
-    /// Configure Pads edits aren't clobbered). Off → DeadSync writes nothing.
+    /// Drain UI intents, then (when "DeadSync manages pad config" is on) resolve
+    /// and apply the right pad config to each connected StepManiaX pad: this pad's
+    /// per-pad default → a global default → the machine built-in preset (also the
+    /// fallback for Guest / no-config players). Reactive: when the active player
+    /// changes, a no-config/guest player resets the pad to the machine preset. A
+    /// cheap per-pad signature avoids loading config files or rewriting the pad
+    /// unless something relevant changed (so manual edits aren't clobbered).
+    /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
     fn apply_smx_managed_preset(&mut self) {
         use crate::game::pad_profiles;
         use crate::screens::select_music::AppliedPadConfig;
