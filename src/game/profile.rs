@@ -1917,6 +1917,7 @@ mod tests {
         let mut profile = Profile::default();
         profile.mini_percent = 18;
         profile.show_ex_score = true;
+        profile.score_position = deadsync_profile::ScorePosition::StepStatistics;
         profile.global_offset_shift_ms = 7;
         profile.timing_windows = TimingWindowsOption::WayOffs;
         profile.receptor_noteskin = Some(NoteSkin::new("default"));
@@ -1927,6 +1928,7 @@ mod tests {
 
         profile.mini_percent = 62;
         profile.show_ex_score = false;
+        profile.score_position = deadsync_profile::ScorePosition::Normal;
         profile.global_offset_shift_ms = -13;
         profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
         profile.receptor_noteskin = Some(NoteSkin::new("cyber"));
@@ -1937,6 +1939,10 @@ mod tests {
         profile.apply_player_options_for_style(PlayStyle::Single);
         assert_eq!(profile.mini_percent, 18);
         assert!(profile.show_ex_score);
+        assert_eq!(
+            profile.score_position,
+            deadsync_profile::ScorePosition::StepStatistics
+        );
         assert_eq!(profile.global_offset_shift_ms, 7);
         assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
         assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("default")));
@@ -1949,6 +1955,10 @@ mod tests {
         profile.apply_player_options_for_style(PlayStyle::Double);
         assert_eq!(profile.mini_percent, 62);
         assert!(!profile.show_ex_score);
+        assert_eq!(
+            profile.score_position,
+            deadsync_profile::ScorePosition::Normal
+        );
         assert_eq!(profile.global_offset_shift_ms, -13);
         assert_eq!(
             profile.timing_windows,

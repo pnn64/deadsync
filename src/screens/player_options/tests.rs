@@ -2644,6 +2644,7 @@ pub(super) mod tests {
         p.turn_option = super::TURN_OPTION_VARIANTS[1];
         p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
         p.step_statistics = StepStatisticsMask::SONG_BANNER | StepStatisticsMask::STEP_COUNTS;
+        p.score_position = super::SCORE_POSITION_VARIANTS[1];
         p.display_scorebox = true;
         p.target_score = super::TARGET_SCORE_VARIANTS[1];
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
@@ -2717,6 +2718,12 @@ pub(super) mod tests {
                 .gameplay_extras_more
                 .contains(GameplayExtrasMoreMask::DISPLAY_SCOREBOX),
             "derived GameplayExtrasMore Display Scorebox bit set from sibling profile field",
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ScorePosition,
+            &super::SCORE_POSITION_VARIANTS,
+            profile.score_position,
         );
         assert_variant_at_cursor(
             &row_map,

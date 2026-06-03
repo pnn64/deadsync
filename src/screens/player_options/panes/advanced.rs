@@ -1,6 +1,7 @@
 use super::super::choice;
 use super::super::constants::{
     MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS, MINI_INDICATOR_VARIANTS,
+    SCORE_POSITION_VARIANTS,
 };
 use super::super::row::{
     BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
@@ -17,7 +18,8 @@ use crate::game::profile as gp;
 use deadsync_profile::{
     ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim, LifeMeterType, MeasureCounter,
     MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
-    PlayerSide, Profile, ScatterplotMaxWindow, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    PlayerSide, Profile, ScatterplotMaxWindow, ScorePosition, TargetScoreSetting,
+    TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -63,6 +65,21 @@ const SCATTERPLOT_MAX_WINDOW: ChoiceBinding<usize> = index_binding!(
             SCATTERPLOT_MAX_WINDOW_VARIANTS
                 .iter()
                 .position(|&v| v == p.scatterplot_max_window)
+                .unwrap_or(0)
+        }
+    })
+);
+const SCORE_POSITION: ChoiceBinding<usize> = index_binding!(
+    SCORE_POSITION_VARIANTS,
+    ScorePosition::Normal,
+    score_position,
+    gp::update_score_position_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            SCORE_POSITION_VARIANTS
+                .iter()
+                .position(|&v| v == p.score_position)
                 .unwrap_or(0)
         }
     })
@@ -1247,6 +1264,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "StepStatisticsPackInfo").to_string(),
             tr("PlayerOptions", "StepStatisticsStepCounts").to_string(),
             tr("PlayerOptions", "StepStatisticsPeakNps").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::ScorePosition,
+        lookup_key("PlayerOptions", "ScorePosition"),
+        lookup_key("PlayerOptionsHelp", "ScorePositionHelp"),
+        CycleBinding::Index(SCORE_POSITION),
+        vec![
+            tr("PlayerOptions", "ScorePositionNormal").to_string(),
+            tr("PlayerOptions", "ScorePositionStepStatistics").to_string(),
         ],
     ));
     b.push(Row::cycle(

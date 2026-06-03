@@ -12,7 +12,9 @@ use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
 use crate::engine::space::widescale;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::space::{
+    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+};
 use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
@@ -405,6 +407,47 @@ fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide)
         return None;
     }
     Some(0)
+}
+
+#[derive(Clone, Copy)]
+struct StepStatsScorePos {
+    score_x: f32,
+    score_y: f32,
+    hard_ex_x: f32,
+    hard_ex_y: f32,
+}
+
+fn step_stats_score_pos(
+    player_side: profile_data::PlayerSide,
+    score_x_other: f32,
+    note_field_is_centered: bool,
+) -> StepStatsScorePos {
+    match (player_side, note_field_is_centered) {
+        (profile_data::PlayerSide::P1, true) => StepStatsScorePos {
+            score_x: score_x_other + widescale(-75.0, -124.0),
+            score_y: widescale(150.0, 92.0),
+            hard_ex_x: score_x_other + widescale(-74.0, -123.0),
+            hard_ex_y: widescale(146.0, 90.0),
+        },
+        (profile_data::PlayerSide::P1, false) => StepStatsScorePos {
+            score_x: score_x_other + widescale(-167.0, -244.0),
+            score_y: 75.0,
+            hard_ex_x: score_x_other + widescale(-166.0, -243.0),
+            hard_ex_y: 73.0,
+        },
+        (profile_data::PlayerSide::P2, true) => StepStatsScorePos {
+            score_x: score_x_other + widescale(32.0, 65.0),
+            score_y: widescale(150.0, 92.0),
+            hard_ex_x: score_x_other + widescale(-20.0, 12.0),
+            hard_ex_y: widescale(146.0, 90.0),
+        },
+        (profile_data::PlayerSide::P2, false) => StepStatsScorePos {
+            score_x: score_x_other + widescale(141.0, 189.0),
+            score_y: 75.0,
+            hard_ex_x: score_x_other + widescale(88.0, 135.0),
+            hard_ex_y: 73.0,
+        },
+    }
 }
 
 fn gameplay_lobby_player_stats(
@@ -7833,19 +7876,42 @@ pub fn push_actors(
                 && play_style != profile_data::PlayStyle::Double
                 && nps_graph_at_top
                 && !note_field_is_centered;
-            let score_x = if single_score_swapped {
+            let profile = &state.player_profiles[player_idx];
+            let score_in_single_step_stats = profile.score_position
+                == profile_data::ScorePosition::StepStatistics
+                && !profile.step_statistics.is_empty()
+                && play_style == profile_data::PlayStyle::Single
+                && state.num_cols <= 4;
+            let score_in_versus_step_stats = profile.score_position
+                == profile_data::ScorePosition::StepStatistics
+                && !profile.step_statistics.is_empty()
+                && play_style == profile_data::PlayStyle::Versus
+                && is_wide()
+                && !is_ultrawide;
+            let step_stats_score_pos = if score_in_single_step_stats {
+                Some(step_stats_score_pos(
+                    player_side,
+                    score_x_other,
+                    note_field_is_centered,
+                ))
+            } else {
+                None
+            };
+            let score_x = if let Some(pos) = step_stats_score_pos {
+                pos.score_x
+            } else if single_score_swapped {
                 score_x_other
             } else {
                 score_x_normal
             };
+            let score_y = step_stats_score_pos.map_or(56.0, |pos| pos.score_y);
+            let score_zoom = step_stats_score_pos.map_or(0.5, |_| 0.2);
             let hide_score_for_top_graph =
                 state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
 
-            if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
-                let score_y = 56.0;
-                let show_ex_score = state.player_profiles[player_idx].show_ex_score;
-                let show_hard_ex_score =
-                    show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
+            if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
+                let show_ex_score = profile.show_ex_score;
+                let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score;
                 let (score_text, score_color) = if show_ex_score {
                     let ex_percent =
                         crate::game::gameplay::display_ex_score_percent(state, player_idx);
@@ -7866,7 +7932,7 @@ pub fn push_actors(
                 actors.push(act!(text:
                     font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
                     align(1.0, 1.0): xy(score_x, score_y):
-                    zoom(0.5): horizalign(right):
+                    zoom(score_zoom): horizalign(right):
                     diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
                     z(90)
                 ));
@@ -7875,26 +7941,29 @@ pub fn push_actors(
                     let hard_ex_percent =
                         crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
                     let hex = color::HARD_EX_SCORE_RGBA;
-                    let hard_ex_x = if single_score_swapped {
+                    let (hard_ex_x, hard_ex_y) = if let Some(pos) = step_stats_score_pos {
+                        (pos.hard_ex_x, pos.hard_ex_y)
+                    } else if single_score_swapped {
                         let swapped_base = if is_p2_side {
                             screen_center_x() - clamped_width / 4.3
                         } else {
                             screen_center_x() + clamped_width / 4.3
                         };
-                        swapped_base + 115.0
+                        (swapped_base + 115.0, score_y)
                     } else if is_p2_side {
                         // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
-                        screen_center_x() + clamped_width / 4.3
+                        (screen_center_x() + clamped_width / 4.3, score_y)
                     } else {
-                        score_x
+                        (score_x, score_y)
                     };
+                    let hard_ex_zoom = step_stats_score_pos.map_or(0.25, |_| 0.13);
 
                     if is_p2_side {
                         actors.push(act!(text:
                             font(current_machine_font_key(FontRole::Numbers)):
                             settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                            align(1.0, 0.0): xy(hard_ex_x, score_y):
-                            zoom(0.25): horizalign(right):
+                            align(1.0, 0.0): xy(hard_ex_x, hard_ex_y):
+                            zoom(hard_ex_zoom): horizalign(right):
                             diffuse(hex[0], hex[1], hex[2], hex[3]):
                             z(90)
                         ));
@@ -7902,8 +7971,8 @@ pub fn push_actors(
                         actors.push(act!(text:
                             font(current_machine_font_key(FontRole::Numbers)):
                             settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                            align(0.0, 0.0): xy(hard_ex_x, score_y):
-                            zoom(0.25): horizalign(left):
+                            align(0.0, 0.0): xy(hard_ex_x, hard_ex_y):
+                            zoom(hard_ex_zoom): horizalign(left):
                             diffuse(hex[0], hex[1], hex[2], hex[3]):
                             z(90)
                         ));

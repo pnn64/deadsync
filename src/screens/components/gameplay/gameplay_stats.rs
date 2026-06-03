@@ -980,9 +980,20 @@ pub fn push_versus_step_stats(
             .step_statistics
             .contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER),
     ];
+    let show_score_for: [bool; 2] = [
+        state.player_profiles[0].score_position == profile_data::ScorePosition::StepStatistics
+            && !state.player_profiles[0].step_statistics.is_empty(),
+        state.player_profiles[1].score_position == profile_data::ScorePosition::StepStatistics
+            && !state.player_profiles[1].step_statistics.is_empty(),
+    ];
     let show_song_banner =
         any_step_stats_enabled(state, profile_data::StepStatisticsMask::SONG_BANNER);
-    if !show_judgments_for[0] && !show_judgments_for[1] && !show_song_banner {
+    if !show_judgments_for[0]
+        && !show_judgments_for[1]
+        && !show_score_for[0]
+        && !show_score_for[1]
+        && !show_song_banner
+    {
         return;
     }
 
@@ -1177,11 +1188,14 @@ pub fn push_versus_step_stats(
     }
 
     for (player_idx, show) in show_judgments_for.iter().copied().enumerate() {
-        if !show || !state.player_profiles[player_idx].nps_graph_at_top {
+        let player_profile = &state.player_profiles[player_idx];
+        if !show && !show_score_for[player_idx] {
+            continue;
+        }
+        if !player_profile.nps_graph_at_top && !show_score_for[player_idx] {
             continue;
         }
 
-        let player_profile = &state.player_profiles[player_idx];
         let (score_text, score_color) = if player_profile.show_ex_score {
             (
                 cached_score_2dp(gameplay::display_ex_score_percent(state, player_idx).max(0.0)),
@@ -1202,6 +1216,34 @@ pub fn push_versus_step_stats(
             diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
             z(z_fg)
         ));
+
+        if player_profile.show_ex_score && player_profile.show_hard_ex_score {
+            let hard_ex_percent = gameplay::display_hard_ex_score_percent(state, player_idx);
+            let hex = color::HARD_EX_SCORE_RGBA;
+            if player_idx == 0 {
+                actors.push(act!(text:
+                    font(current_machine_font_key(FontRole::Numbers)):
+                    settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                    align(0.0, 0.0):
+                    horizalign(left):
+                    xy(x + 1.0, screen_center_y() - 154.0):
+                    zoom(0.13):
+                    diffuse(hex[0], hex[1], hex[2], hex[3]):
+                    z(z_fg)
+                ));
+            } else {
+                actors.push(act!(text:
+                    font(current_machine_font_key(FontRole::Numbers)):
+                    settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                    align(1.0, 0.0):
+                    horizalign(right):
+                    xy(x - 52.0, screen_center_y() - 154.0):
+                    zoom(0.13):
+                    diffuse(hex[0], hex[1], hex[2], hex[3]):
+                    z(z_fg)
+                ));
+            }
+        }
     }
 
     if show_song_banner && let Some(key) = &state.song_banner_key {

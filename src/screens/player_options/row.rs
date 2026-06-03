@@ -40,6 +40,7 @@ pub enum RowId {
     LifeMeterType,
     LifeBarOptions,
     DataVisualizations,
+    ScorePosition,
     DensityGraphBackground,
     TargetScore,
     ActionOnMissedTarget,
@@ -1011,6 +1012,7 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::LifeMeterType
         || id == RowId::LifeBarOptions
         || id == RowId::DataVisualizations
+        || id == RowId::ScorePosition
         || id == RowId::DensityGraphBackground
         || id == RowId::ComboColors
         || id == RowId::ComboColorMode
