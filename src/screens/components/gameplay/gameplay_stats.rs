@@ -1697,6 +1697,7 @@ pub fn push_double_step_stats(
             profile_data::PlayerSide::P1,
             timing_label_x,
             timing_label_x + (156.0 * number_zoom),
+            false,
             base_y,
             20.0 * number_zoom,
             label_zoom,
@@ -2234,6 +2235,7 @@ fn push_live_timing_stats_at(
     player_side: profile_data::PlayerSide,
     label_x: f32,
     value_x: f32,
+    value_align_right: bool,
     first_y: f32,
     row_h: f32,
     zoom: f32,
@@ -2282,11 +2284,19 @@ fn push_live_timing_stats_at(
                 zoom(zoom): maxwidth(label_max_w): horizalign(left):
                 diffuse(1.0, 1.0, 1.0, 1.0): z(z)
             ));
-            actors.push(act!(text: font("miso"): settext(value):
-                align(0.0, 0.5): xy(value_x, y):
-                zoom(zoom): horizalign(left):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-            ));
+            if value_align_right {
+                actors.push(act!(text: font("miso"): settext(value):
+                    align(1.0, 0.5): xy(value_x, y):
+                    zoom(zoom): horizalign(right):
+                    diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+                ));
+            } else {
+                actors.push(act!(text: font("miso"): settext(value):
+                    align(0.0, 0.5): xy(value_x, y):
+                    zoom(zoom): horizalign(left):
+                    diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+                ));
+            }
         } else {
             actors.push(act!(text: font("miso"): settext(label):
                 align(1.0, 0.5): xy(label_x, y):
@@ -2725,7 +2735,15 @@ fn build_side_pane(
             } else {
                 time_x - label_offset_total.max(label_offset_remaining) - timing_gap
             };
-            let timing_value_anchor = timing_label_anchor + timing_value_gap;
+            let right_align_timing_values = layout.note_field_is_centered
+                && !layout.is_ultrawide
+                && player_side == profile_data::PlayerSide::P1;
+            let timing_value_anchor = if right_align_timing_values {
+                layout.sidepane_center_x + layout.sidepane_width * 0.5
+                    - 18.0 * layout.banner_data_zoom
+            } else {
+                timing_label_anchor + timing_value_gap
+            };
             push_live_timing_stats_at(
                 actors,
                 state,
@@ -2733,6 +2751,7 @@ fn build_side_pane(
                 player_side,
                 timing_label_anchor,
                 timing_value_anchor,
+                right_align_timing_values,
                 y_pos_remaining,
                 20.0,
                 text_zoom,
