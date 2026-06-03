@@ -1296,7 +1296,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
         ],
     ));
-        b.push(
+    b.push(
         Row::cycle(
             RowId::TargetScore,
             lookup_key("PlayerOptions", "TargetScore"),
