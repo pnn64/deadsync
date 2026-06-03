@@ -7977,8 +7977,7 @@ fn assist_lookahead_future_row(
     slope: f32,
     song_row: i32,
 ) -> i32 {
-    let delay_seconds =
-        audio::get_output_timing_snapshot().estimated_output_delay_ns as f32 * 1e-9;
+    let delay_seconds = audio::get_output_timing_snapshot().estimated_output_delay_ns as f32 * 1e-9;
     let music_horizon = assist_lookahead_music_horizon_seconds(delay_seconds, slope);
     let future_time = song_time_ns_add_seconds(music_time_ns, music_horizon);
     assist_row_no_offset_ns(state, future_time).max(song_row)
@@ -8499,7 +8498,12 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
         let song_row = assist_row_no_offset_ns(state, music_time_ns);
-        run_assist_clap(state, song_row, music_time_ns, song_clock.seconds_per_second);
+        run_assist_clap(
+            state,
+            song_row,
+            music_time_ns,
+            song_clock.seconds_per_second,
+        );
 
         for player in 0..state.num_players {
             let delay =
@@ -8817,19 +8821,18 @@ mod tests {
         advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
         apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
         apply_time_based_mine_avoidance, apply_time_based_tap_misses,
-        autoplay_random_offset_music_ns_for_window, begin_outro_attack_clear,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        assist_lookahead_music_horizon_seconds,
-        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
-        collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
-        effective_appearance_effects_for_player, effective_mini_percent_for_player,
-        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
-        effective_visibility_effects_for_player, effective_visual_effects_for_player,
-        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
-        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row,
+        assist_lookahead_music_horizon_seconds, autoplay_random_offset_music_ns_for_window,
+        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        crossed_mine_held_start_time, effective_appearance_effects_for_player,
+        effective_mini_percent_for_player, effective_player_global_offset_seconds,
+        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
+        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
+        error_bar_average_offset_s, error_bar_long_term_offset_s, error_bar_register_tap,
+        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, grade_to_window, handle_input, hit_mine,
         input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
@@ -8910,8 +8913,7 @@ mod tests {
         let mut samples = VecDeque::from([(0.0, 0.010), (3000.0, 0.020), (3300.0, 0.030)]);
         let mut total = 0.060;
 
-        let (mean, len) =
-            error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 400);
+        let (mean, len) = error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 400);
 
         assert_eq!(len, 3);
         assert_eq!(samples.front().map(|(t, _)| *t), Some(3000.0));
@@ -8923,8 +8925,7 @@ mod tests {
         let mut samples = VecDeque::from([(0.0, 0.010), (3000.0, 0.020), (3300.0, 0.030)]);
         let mut total = 0.060;
 
-        let (mean, len) =
-            error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 200);
+        let (mean, len) = error_bar_long_term_offset_s(&mut samples, &mut total, 6.5, 0.040, 200);
 
         assert_eq!(len, 2);
         assert_eq!(samples.front().map(|(t, _)| *t), Some(3300.0));

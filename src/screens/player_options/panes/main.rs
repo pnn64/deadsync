@@ -785,23 +785,6 @@ fn push_background_filter_row(b: &mut RowBuilder) {
     );
 }
 
-fn push_average_error_bar_rows(b: &mut RowBuilder) {
-    b.push(Row::custom(
-        RowId::AverageErrorBarIntensity,
-        lookup_key("PlayerOptions", "AverageErrorBarIntensity"),
-        lookup_key("PlayerOptionsHelp", "AverageErrorBarIntensityHelp"),
-        super::advanced::AVERAGE_ERROR_BAR_INTENSITY,
-        average_error_bar_intensity_choices(),
-    ));
-    b.push(Row::custom(
-        RowId::AverageErrorBarInterval,
-        lookup_key("PlayerOptions", "AverageErrorBarInterval"),
-        lookup_key("PlayerOptionsHelp", "AverageErrorBarIntervalHelp"),
-        super::advanced::AVERAGE_ERROR_BAR_INTERVAL,
-        average_error_bar_interval_choices(),
-    ));
-}
-
 fn push_notefield_offset_rows(b: &mut RowBuilder) {
     b.push(Row::numeric(
         RowId::NoteFieldOffsetX,
@@ -965,7 +948,6 @@ pub(super) fn build_main_rows(
         vec![speed_mod_value_str], // Display only the current value
     ));
     push_mini_row(&mut b);
-    push_average_error_bar_rows(&mut b);
     push_perspective_row(&mut b);
     push_noteskin_row(&mut b, noteskin_names);
     push_judgment_font_row(&mut b);

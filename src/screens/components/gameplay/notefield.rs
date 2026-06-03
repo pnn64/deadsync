@@ -100,6 +100,7 @@ const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
 const DISPLAY_MODS_WARNING_W: f32 = 90.0;
 const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
+const DISPLAY_MODS_OPTION_SPACE: char = '\u{00A0}';
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
@@ -797,6 +798,28 @@ fn append_average_error_bar_part(parts: &mut Vec<String>, key: &GameplayModsText
         "ErrorBar{}x(Avg:{}ms)",
         zoom, key.avg_error_bar_interval_ms
     ));
+}
+
+fn push_display_mod_option(out: &mut String, option: &str) {
+    for ch in option.chars() {
+        out.push(if ch == ' ' {
+            DISPLAY_MODS_OPTION_SPACE
+        } else {
+            ch
+        });
+    }
+}
+
+fn join_display_mod_parts(parts: &[String]) -> String {
+    let mut out =
+        String::with_capacity(parts.iter().map(String::len).sum::<usize>() + parts.len() * 2);
+    for (idx, part) in parts.iter().enumerate() {
+        if idx != 0 {
+            out.push_str(", ");
+        }
+        push_display_mod_option(&mut out, part);
+    }
+    out
 }
 
 #[inline(always)]
@@ -2427,7 +2450,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
             parts.push(disabled_windows);
         }
 
-        parts.join(", ")
+        join_display_mod_parts(&parts)
     })
 }
 
@@ -7788,8 +7811,7 @@ pub fn build_bundles(
 
         if alpha > 0.0 {
             let mods_text = gameplay_mods_text(state, player_idx);
-            let mods_line_y =
-                screen_height() * 0.25 * 1.3 + DISPLAY_MODS_LINE_STEP * 2.0 + notefield_offset_y;
+            let mods_line_y = screen_height() * 0.25 * 1.3 + notefield_offset_y;
             let mods_line_count = mods_text
                 .split(", ")
                 .filter(|part| !part.is_empty())
@@ -9011,8 +9033,8 @@ mod tests {
         hold_body_segment_budget, hold_draw_span, hold_explosion_active, hold_explosion_enabled,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_x,
         hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, judgment_actor_zoom,
-        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, join_display_mod_parts,
+        judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
         offset_center, player_metric_y, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
@@ -10122,6 +10144,14 @@ mod tests {
         let mut parts = Vec::new();
         append_mini_part(&mut parts, 100);
         assert_eq!(parts, vec!["100% Mini".to_string()]);
+    }
+
+    #[test]
+    fn display_mods_keep_spaces_inside_one_option_atomic() {
+        let text =
+            join_display_mod_parts(&["devcel-2024".to_string(), "-4ms VisualDelay".to_string()]);
+
+        assert_eq!(text, "devcel-2024, -4ms\u{00A0}VisualDelay");
     }
 
     fn empty_mods_key() -> GameplayModsTextKey {

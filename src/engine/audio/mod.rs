@@ -2280,8 +2280,8 @@ impl RenderState {
 
         let buf_len = self.mix_f32.len();
         let mut mixed_sfx = false;
-        self.active_sfx
-            .retain_mut(|(data, cursor, lane, stop_generation, target_stream_frame)| {
+        self.active_sfx.retain_mut(
+            |(data, cursor, lane, stop_generation, target_stream_frame)| {
                 if sfx_is_stale(*lane, *stop_generation) {
                     return false;
                 }
@@ -2316,7 +2316,8 @@ impl RenderState {
                 }
                 *cursor += n;
                 *cursor < data.len()
-            });
+            },
+        );
 
         (popped, mixed_sfx)
     }
