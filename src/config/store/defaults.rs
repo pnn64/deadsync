@@ -402,6 +402,26 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "AllowSwitchProfileInMenu",
         default.allow_switch_profile_in_menu,
     );
+    push_line(
+        content,
+        "SelectMusicShortcutPractice",
+        keycode_to_token(default.music_select_shortcut_practice),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutSongSearch",
+        keycode_to_token(default.music_select_shortcut_song_search),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutLoadSongs",
+        keycode_to_token(default.music_select_shortcut_load_songs),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutTestInput",
+        keycode_to_token(default.music_select_shortcut_test_input),
+    );
     push_bool(
         content,
         "MachineShowSelectStyle",

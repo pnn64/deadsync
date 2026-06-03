@@ -8838,6 +8838,62 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
 }
 
+/// Maps a raw keyboard press to a Select Music menu action using the
+/// user-configurable shortcut keys. Only fires on the main music wheel
+/// (sort menu and song search hidden) and ignores key repeats. The Practice
+/// Mode shortcut additionally requires a song (not a pack header) to be
+/// selected, mirroring the sort-menu availability rule.
+fn configurable_shortcut_action(
+    state: &State,
+    key: Option<&RawKeyboardEvent>,
+) -> Option<select_music_menu::Action> {
+    let key = key?;
+    if key.repeat {
+        return None;
+    }
+    if !matches!(state.select_music_menu, select_music_menu::State::Hidden)
+        || !matches!(
+            state.song_search,
+            select_music_menu::SongSearchState::Hidden
+        )
+        || !matches!(
+            state.leaderboard,
+            select_music_menu::LeaderboardOverlayState::Hidden
+        )
+        || !matches!(
+            state.downloads_overlay,
+            select_music_menu::DownloadsOverlayState::Hidden
+        )
+        || !preview_mute_allowed(state)
+    {
+        return None;
+    }
+    let cfg = config::get();
+    let code = key.code;
+    if code == cfg.music_select_shortcut_practice {
+        // Practice Mode is only available with a song (not a pack header)
+        // selected. When unavailable, fall through so a duplicate key mapping
+        // can still match another shortcut.
+        let has_song_selected = matches!(
+            state.entries.get(state.selected_index),
+            Some(MusicWheelEntry::Song(_))
+        );
+        if has_song_selected {
+            return Some(select_music_menu::Action::PracticeMode);
+        }
+    }
+    if code == cfg.music_select_shortcut_song_search {
+        return Some(select_music_menu::Action::SongSearch);
+    }
+    if code == cfg.music_select_shortcut_load_songs {
+        return Some(select_music_menu::Action::ReloadSongsCourses);
+    }
+    if code == cfg.music_select_shortcut_test_input {
+        return Some(select_music_menu::Action::TestInput);
+    }
+    None
+}
+
 pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
@@ -8959,6 +9015,15 @@ pub fn handle_raw_key_event(
     {
         toggle_preview_mute(state);
         return ScreenAction::ConsumeInput;
+    }
+    if let Some(action) = configurable_shortcut_action(state, key) {
+        // Consume the key even when the dispatched action itself reports
+        // ScreenAction::None, so the shortcut key isn't also translated into a
+        // virtual action (e.g. the default 'S' is also bound to P1 down).
+        return match dispatch_menu_action(state, action) {
+            ScreenAction::None => ScreenAction::ConsumeInput,
+            other => other,
+        };
     }
     if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
@@ -12459,6 +12524,93 @@ mod tests {
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
         assert!(matches!(action, ScreenAction::None));
         assert!(!state.preview_music_muted);
+    }
+
+    #[test]
+    fn music_select_shortcut_song_search_opens_prompt() {
+        let mut state = init_placeholder();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(!matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+    }
+
+    #[test]
+    fn music_select_shortcut_test_input_shows_overlay() {
+        let mut state = init_placeholder();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyT, true, false)), None);
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(state.test_input_overlay_visible);
+    }
+
+    #[test]
+    fn music_select_shortcut_practice_requires_selected_song() {
+        // No song selected: the Practice shortcut does nothing.
+        let mut state = init_placeholder();
+        state.entries = Vec::new();
+        state.selected_index = 0;
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
+        assert!(!matches!(
+            action,
+            ScreenAction::Navigate(super::Screen::Practice)
+        ));
+
+        // With a song selected: the Practice shortcut navigates to Practice.
+        let mut state = init_placeholder();
+        state.entries = vec![super::MusicWheelEntry::Song(test_song("Shortcut Song"))];
+        state.selected_index = 0;
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
+        assert!(matches!(
+            action,
+            ScreenAction::Navigate(super::Screen::Practice)
+        ));
+    }
+
+    #[test]
+    fn music_select_shortcut_ignored_with_menu_open_or_repeat() {
+        // Key repeats are ignored.
+        let mut state = init_placeholder();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, true)), None);
+        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+
+        // The shortcut is suppressed while the options menu is open.
+        let mut state = init_placeholder();
+        state.select_music_menu =
+            super::select_music_menu::State::Visible(super::select_music_menu::open());
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+        assert!(!matches!(action, ScreenAction::ConsumeInput));
+
+        // The shortcut is suppressed while the exit prompt is showing.
+        let mut state = init_placeholder();
+        state.exit_prompt = super::ExitPromptState::Active {
+            elapsed: 0.0,
+            active_choice: 0,
+            switch_from: None,
+            switch_elapsed: 0.0,
+        };
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+        assert!(!matches!(action, ScreenAction::ConsumeInput));
     }
 
     #[test]
