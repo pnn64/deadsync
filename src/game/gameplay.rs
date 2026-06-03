@@ -3855,6 +3855,7 @@ pub struct State {
     assist_clap_rows: Vec<usize>,
     assist_clap_cursor: usize,
     assist_last_crossed_row: i32,
+    assist_sfx_gen_seen: u64,
     toggle_flash_text: Option<&'static str>,
     toggle_flash_timer: f32,
     replay_input: Vec<RecordedLaneEdge>,
@@ -6486,6 +6487,7 @@ pub fn init(
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
+        assist_sfx_gen_seen: audio::assist_sfx_generation(),
         toggle_flash_text: None,
         toggle_flash_timer: 0.0,
         replay_input,
@@ -7901,25 +7903,98 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
 }
 
 #[inline(always)]
-fn run_assist_clap(state: &mut State, current_row: i32) {
+fn run_assist_clap(state: &mut State, current_row: i32, music_time_ns: SongTimeNs, slope: f32) {
     let song_row = current_row.max(0);
-    if song_row < state.assist_last_crossed_row {
-        state.assist_last_crossed_row = song_row;
+
+    // Detect an audio timeline reset (stop / seek / track change). On reset the
+    // mixer drops every scheduled tick from the old timeline, so the scheduling
+    // cursor must re-anchor to the new audible position.
+    let sfx_gen = audio::assist_sfx_generation();
+    let timeline_reset = sfx_gen != state.assist_sfx_gen_seen;
+    if timeline_reset {
+        state.assist_sfx_gen_seen = sfx_gen;
+    }
+
+    if state.tick_mode != TickMode::Assist {
+        // Keep the cursor abreast of the audible position so enabling assist
+        // later doesn't replay already-passed rows.
         state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+        state.assist_last_crossed_row = song_row;
         return;
     }
 
-    let crossed_cursor =
-        assist_clap_cursor_for_row(&state.assist_clap_rows, state.assist_last_crossed_row);
-    if state.tick_mode == TickMode::Assist
-        && crossed_cursor < state.assist_clap_rows.len()
-        && state.assist_clap_rows[crossed_cursor] <= song_row as usize
-    {
-        audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
+    if timeline_reset {
+        state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+        state.assist_last_crossed_row = song_row;
+    } else if song_row > state.assist_last_crossed_row {
+        state.assist_last_crossed_row = song_row;
     }
+    // Minor backward audible jitter (song_row < last_crossed without a timeline
+    // reset) deliberately does NOT rewind the cursor: those rows are already
+    // queued, so re-scheduling them would double-fire.
 
-    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
-    state.assist_last_crossed_row = song_row;
+    let future_row = assist_lookahead_future_row(state, music_time_ns, slope, song_row);
+    let rows_len = state.assist_clap_rows.len();
+    while state.assist_clap_cursor < rows_len {
+        let clap_row = state.assist_clap_rows[state.assist_clap_cursor];
+        if clap_row as i64 > i64::from(future_row) {
+            break;
+        }
+        schedule_assist_clap_row(state, clap_row);
+        state.assist_clap_cursor += 1;
+    }
+}
+
+/// Look-ahead horizon (in real seconds) added on top of the estimated output
+/// delay so each clap row is discovered a few frames before the audible write
+/// head reaches it, leaving the mixer room to place the onset sample-accurately.
+const ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS: f32 = 0.050;
+
+/// Converts the look-ahead horizon from real seconds into music seconds using
+/// the song-clock slope (music seconds per real second, which already folds in
+/// the music rate). A non-positive or non-finite slope falls back to 1.0.
+#[inline(always)]
+fn assist_lookahead_music_horizon_seconds(delay_seconds: f32, slope: f32) -> f32 {
+    let horizon_real = (delay_seconds + ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS).max(0.0);
+    let slope = if slope.is_finite() && slope > 0.0 {
+        slope
+    } else {
+        1.0
+    };
+    horizon_real * slope
+}
+
+/// Highest assist row whose no-offset music time falls within the look-ahead
+/// horizon ahead of the audible position.
+#[inline(always)]
+fn assist_lookahead_future_row(
+    state: &State,
+    music_time_ns: SongTimeNs,
+    slope: f32,
+    song_row: i32,
+) -> i32 {
+    let delay_seconds =
+        audio::get_output_timing_snapshot().estimated_output_delay_ns as f32 * 1e-9;
+    let music_horizon = assist_lookahead_music_horizon_seconds(delay_seconds, slope);
+    let future_time = song_time_ns_add_seconds(music_time_ns, music_horizon);
+    assist_row_no_offset_ns(state, future_time).max(song_row)
+}
+
+/// Schedules a single assist clap row by its absolute stream frame so the mixer
+/// can place the onset sample-accurately. Falls back to immediate playback when
+/// the row has no usable stream-frame mapping (e.g. during lead-in).
+#[inline(always)]
+fn schedule_assist_clap_row(state: &State, clap_row: usize) {
+    let Some(beat) = state.timing.get_beat_for_row(clap_row) else {
+        audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
+        return;
+    };
+    let row_time_ns = state.timing.get_time_for_beat_no_offset_ns(beat);
+    let music_seconds = row_time_ns as f64 * 1e-9;
+    match audio::assist_tick_stream_frame_for_music_seconds(music_seconds) {
+        Some(frame) => audio::play_scheduled_assist_tick(ASSIST_TICK_SFX_PATH, frame),
+        None => audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH),
+    }
 }
 
 #[inline(always)]
@@ -8420,7 +8495,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
         let song_row = assist_row_no_offset_ns(state, music_time_ns);
-        run_assist_clap(state, song_row);
+        run_assist_clap(state, song_row, music_time_ns, song_clock.seconds_per_second);
 
         for player in 0..state.num_players {
             let delay =
@@ -8740,6 +8815,7 @@ mod tests {
         apply_time_based_mine_avoidance, apply_time_based_tap_misses,
         autoplay_random_offset_music_ns_for_window, begin_outro_attack_clear,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        assist_lookahead_music_horizon_seconds,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
@@ -11304,6 +11380,30 @@ return Def.ActorFrame{}
             can_be_judged: true,
         }];
         assert_eq!(build_assist_clap_rows(&notes, (0, 1)), vec![48]);
+    }
+
+    #[test]
+    fn assist_lookahead_horizon_adds_margin_and_scales_by_slope() {
+        // At unit slope the horizon is just delay + margin.
+        let h = assist_lookahead_music_horizon_seconds(0.020, 1.0);
+        assert!((h - 0.070).abs() <= 1e-6, "h={h}");
+
+        // A 2x music rate (slope = 2.0) doubles the music-second horizon.
+        let h2 = assist_lookahead_music_horizon_seconds(0.020, 2.0);
+        assert!((h2 - 0.140).abs() <= 1e-6, "h2={h2}");
+    }
+
+    #[test]
+    fn assist_lookahead_horizon_guards_bad_slope_and_negative_delay() {
+        // Non-positive / non-finite slope falls back to 1.0.
+        let margin = super::ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS;
+        assert!((assist_lookahead_music_horizon_seconds(0.0, 0.0) - margin).abs() <= 1e-6);
+        assert!((assist_lookahead_music_horizon_seconds(0.0, -1.0) - margin).abs() <= 1e-6);
+        assert!((assist_lookahead_music_horizon_seconds(0.0, f32::NAN) - margin).abs() <= 1e-6);
+
+        // Horizon never goes negative even if delay somehow reads negative.
+        let h = assist_lookahead_music_horizon_seconds(-1.0, 1.0);
+        assert!(h >= 0.0, "h={h}");
     }
 
     #[test]

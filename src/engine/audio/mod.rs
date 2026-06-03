@@ -20,6 +20,48 @@ use std::time::Instant;
 const MAX_ACTIVE_SFX: usize = 32;
 const SFX_QUEUE_CAP: usize = 128;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
+/// Upper bound (in device frames) on how far ahead of the audible write head a
+/// scheduled SFX onset may sit before the mixer treats it as stale and drops it.
+/// This is a last-resort sanity bound; seek/stop/track-change staleness is
+/// handled precisely by [`ASSIST_SFX_GEN`]. ~4 s at 48 kHz, ~1 s at 192 kHz.
+const MAX_SCHEDULE_AHEAD_FRAMES: u64 = 192_000;
+
+/// Where a scheduled SFX onset lands relative to the buffer currently being
+/// filled. See [`scheduled_onset_decision`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScheduledOnset {
+    /// Target frame is implausibly far ahead; drop the entry.
+    Drop,
+    /// Onset falls in a later buffer; keep pending without mixing.
+    Pending,
+    /// Mix starting at this sample offset within the current buffer.
+    StartAt(usize),
+}
+
+/// Decides where a scheduled SFX onset lands within the buffer the mixer is
+/// currently filling. `target_stream_frame == 0` means "play immediately".
+/// `total_before` is the absolute write-head frame at the start of this buffer;
+/// `buf_len` is the buffer length in interleaved samples.
+#[inline(always)]
+fn scheduled_onset_decision(
+    target_stream_frame: u64,
+    total_before: u64,
+    device_channels: usize,
+    buf_len: usize,
+) -> ScheduledOnset {
+    if target_stream_frame == 0 {
+        return ScheduledOnset::StartAt(0);
+    }
+    let frames_until = target_stream_frame.saturating_sub(total_before);
+    if frames_until > MAX_SCHEDULE_AHEAD_FRAMES {
+        return ScheduledOnset::Drop;
+    }
+    let offset = (frames_until as usize) * device_channels;
+    if offset >= buf_len {
+        return ScheduledOnset::Pending;
+    }
+    ScheduledOnset::StartAt(offset)
+}
 
 /* ============================== Public API ============================== */
 
@@ -75,6 +117,10 @@ struct QueuedSfx {
     data: Arc<[i16]>,
     lane: SfxLane,
     stop_generation: u64,
+    /// Absolute stream frame (on the `MUSIC_TOTAL_FRAMES` timeline) at which the
+    /// first sample should become audible. `0` means "play immediately" at the
+    /// start of the next buffer (the behaviour for non-scheduled SFX).
+    target_stream_frame: u64,
 }
 
 // Commands to the audio engine
@@ -607,6 +653,11 @@ static MUSIC_TARGET_GAIN_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 static MUSIC_GAIN_SNAP_GEN: AtomicU64 = AtomicU64::new(0);
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
+// Generation counter for scheduled assist ticks. Bumped on every music stream
+// reset (stop / seek / track change) so any in-flight scheduled tick whose
+// target frame belongs to the previous timeline is dropped by the mixer rather
+// than firing a stale clap.
+static ASSIST_SFX_GEN: AtomicU64 = AtomicU64::new(0);
 
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
@@ -992,6 +1043,41 @@ impl PlaybackPosMap {
         }
         closest
     }
+
+    /// Inverse of [`search`]: given a music position in seconds, return the
+    /// track-relative stream frame at which it plays. Prefers the segment that
+    /// contains `music_seconds`; otherwise extrapolates from the nearest segment.
+    fn invert(&self, music_seconds: f64) -> Option<f64> {
+        if self.queue.is_empty() || !music_seconds.is_finite() {
+            return None;
+        }
+        let mut closest = None;
+        let mut closest_dist = f64::INFINITY;
+        for seg in &self.queue {
+            let sec_per_frame = seg.music_sec_per_frame;
+            if !sec_per_frame.is_finite() || sec_per_frame == 0.0 {
+                continue;
+            }
+            let start_sec = seg.music_start_sec;
+            let end_sec = start_sec + sec_per_frame * seg.frames as f64;
+            let (lo, hi) = if start_sec <= end_sec {
+                (start_sec, end_sec)
+            } else {
+                (end_sec, start_sec)
+            };
+            let frame = seg.stream_frame_start as f64 + (music_seconds - start_sec) / sec_per_frame;
+            if music_seconds >= lo && music_seconds < hi {
+                return Some(frame);
+            }
+            let clamped = music_seconds.clamp(lo, hi);
+            let dist = (music_seconds - clamped).abs();
+            if dist < closest_dist {
+                closest_dist = dist;
+                closest = Some(frame);
+            }
+        }
+        closest
+    }
 }
 
 static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
@@ -1081,7 +1167,8 @@ pub fn play_assist_tick(path: &str) {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane: SfxLane::AssistTick,
-            stop_generation: 0,
+            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
+            target_stream_frame: 0,
         });
         return;
     }
@@ -1096,25 +1183,69 @@ pub fn play_preloaded_assist_tick(path: &str) {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane: SfxLane::AssistTick,
-            stop_generation: 0,
+            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
+            target_stream_frame: 0,
         });
         return;
     }
     play_preloaded_sfx_on_lane(path, SfxLane::AssistTick);
 }
 
+/// Plays a preloaded gameplay assist tick scheduled to become audible at an
+/// absolute stream frame (see [`assist_tick_stream_frame_for_music_seconds`]).
+/// Because the target frame lies on the same `MUSIC_TOTAL_FRAMES` timeline the
+/// mixer writes against, output latency is compensated implicitly. Falls back to
+/// immediate playback when `target_stream_frame == 0`.
+pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
+    if target_stream_frame == 0 {
+        play_preloaded_assist_tick(path);
+        return;
+    }
+    if path == ASSIST_TICK_SFX_PATH
+        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
+    {
+        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
+            data: sound_data,
+            lane: SfxLane::AssistTick,
+            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
+            target_stream_frame,
+        });
+        return;
+    }
+    // Cache-miss fallback: schedule whatever is cached for this path.
+    #[cfg(test)]
+    if !is_initialized() {
+        return;
+    }
+    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
+    if let Some(sound_data) = cached {
+        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
+            data: sound_data,
+            lane: SfxLane::AssistTick,
+            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
+            target_stream_frame,
+        });
+    } else {
+        warn!("Scheduled assist tick cache miss for '{path}'; skipping");
+    }
+}
+
 #[inline(always)]
 fn sfx_stop_generation(lane: SfxLane) -> u64 {
     match lane {
         SfxLane::Screen => SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
-        SfxLane::Effect | SfxLane::AssistTick => 0,
+        SfxLane::AssistTick => ASSIST_SFX_GEN.load(Ordering::Acquire),
+        SfxLane::Effect => 0,
     }
 }
 
 #[inline(always)]
 fn sfx_is_stale(lane: SfxLane, stop_generation: u64) -> bool {
-    matches!(lane, SfxLane::Screen)
-        && stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire)
+    match lane {
+        SfxLane::Screen => stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
+        SfxLane::AssistTick => stop_generation != ASSIST_SFX_GEN.load(Ordering::Acquire),
+        SfxLane::Effect => false,
+    }
 }
 
 fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
@@ -1129,6 +1260,7 @@ fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
             data: sound_data,
             lane,
             stop_generation: sfx_stop_generation(lane),
+            target_stream_frame: 0,
         });
         return true;
     }
@@ -1171,6 +1303,7 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
         data: sound_data,
         lane,
         stop_generation: sfx_stop_generation(lane),
+        target_stream_frame: 0,
     });
 }
 
@@ -1225,6 +1358,9 @@ fn reset_music_stream_clock() {
     MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
     MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
     MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
+    // Invalidate any assist ticks scheduled against the previous timeline; their
+    // absolute target frames no longer correspond to the music position.
+    ASSIST_SFX_GEN.fetch_add(1, Ordering::AcqRel);
     clear_music_stream_clock_seed();
     clear_music_pos_map();
 }
@@ -1265,7 +1401,8 @@ fn i16_to_f32(sample: i16) -> f32 {
 mod tests {
     use super::{
         CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
-        fallback_music_position, music_clock_seed_enabled, stream_position_frames_from_window,
+        ScheduledOnset, fallback_music_position, music_clock_seed_enabled,
+        scheduled_onset_decision, stream_position_frames_from_window,
     };
 
     #[test]
@@ -1357,6 +1494,98 @@ mod tests {
         );
 
         assert!((frames - 96.0).abs() <= 1e-6, "frames={frames}");
+    }
+
+    #[test]
+    fn playback_pos_map_invert_round_trips_within_segment() {
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 1_000,
+            frames: 48_000,
+            music_start_sec: 2.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+
+        // 0.5 s into the segment's music => 0.5 * 48_000 = 24_000 frames past start.
+        let frame = map.invert(2.5).unwrap();
+        assert!((frame - 25_000.0).abs() <= 1e-6, "frame={frame}");
+
+        // Round-trips with search().
+        let (music_sec, _) = map.search(frame).unwrap();
+        assert!((music_sec - 2.5).abs() <= 1e-9, "music_sec={music_sec}");
+    }
+
+    #[test]
+    fn playback_pos_map_invert_extrapolates_past_last_segment() {
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 0,
+            frames: 48_000,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+
+        // 1.25 s is past the 1.0 s segment end; linear extrapolation => 60_000.
+        let frame = map.invert(1.25).unwrap();
+        assert!((frame - 60_000.0).abs() <= 1e-6, "frame={frame}");
+    }
+
+    #[test]
+    fn playback_pos_map_invert_rejects_empty_and_non_finite() {
+        let empty = PlaybackPosMap::default();
+        assert!(empty.invert(1.0).is_none());
+
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 0,
+            frames: 48_000,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+        assert!(map.invert(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn scheduled_onset_immediate_when_target_zero() {
+        assert_eq!(
+            scheduled_onset_decision(0, 10_000, 2, 1_024),
+            ScheduledOnset::StartAt(0)
+        );
+    }
+
+    #[test]
+    fn scheduled_onset_starts_at_offset_within_buffer() {
+        // 100 frames ahead, stereo => sample offset 200, inside a 1_024-sample buffer.
+        assert_eq!(
+            scheduled_onset_decision(10_100, 10_000, 2, 1_024),
+            ScheduledOnset::StartAt(200)
+        );
+    }
+
+    #[test]
+    fn scheduled_onset_pending_when_beyond_buffer() {
+        // 600 frames ahead, stereo => 1_200 samples, beyond a 1_024-sample buffer.
+        assert_eq!(
+            scheduled_onset_decision(10_600, 10_000, 2, 1_024),
+            ScheduledOnset::Pending
+        );
+    }
+
+    #[test]
+    fn scheduled_onset_drops_when_implausibly_far_ahead() {
+        assert_eq!(
+            scheduled_onset_decision(super::MAX_SCHEDULE_AHEAD_FRAMES + 10_001, 10_000, 2, 1_024),
+            ScheduledOnset::Drop
+        );
+    }
+
+    #[test]
+    fn scheduled_onset_fires_when_target_already_passed() {
+        // Target frame already behind the write head => fires at offset 0.
+        assert_eq!(
+            scheduled_onset_decision(9_000, 10_000, 2, 1_024),
+            ScheduledOnset::StartAt(0)
+        );
     }
 }
 
@@ -1555,6 +1784,31 @@ fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f
     })
 }
 
+/// Maps a music position (seconds, pre-global-offset stream time) to the
+/// absolute stream frame on the `MUSIC_TOTAL_FRAMES` timeline at which it will
+/// be audible. Returns `None` when there is no usable mapping or the result is
+/// implausible (caller should then fall back to immediate playback).
+///
+/// Runs on the gameplay thread; the lock is fine there since the audio callback
+/// never takes it on its hot path.
+pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<u64> {
+    if !music_seconds.is_finite() {
+        return None;
+    }
+    let track_frame = {
+        let mut map = PLAYBACK_POS_MAP.lock().unwrap();
+        while let Some(seg) = internal::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
+            map.insert(seg);
+        }
+        map.invert(music_seconds)?
+    };
+    if !track_frame.is_finite() || track_frame < 0.0 {
+        return None;
+    }
+    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+    Some(start.saturating_add(track_frame.round() as u64))
+}
+
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = normalized_music_rate(rate);
@@ -1648,6 +1902,13 @@ pub fn set_music_rate(rate: f32) {
 /// continuously instead of in buffer-sized jumps.
 pub fn get_music_stream_position_seconds() -> f32 {
     get_music_stream_clock_snapshot().stream_seconds
+}
+
+/// Current scheduled-assist-tick generation. Changes on every music stream reset
+/// (stop / seek / track change). Gameplay reads this to detect that previously
+/// scheduled ticks were invalidated and that its scheduling cursor must re-anchor.
+pub fn assist_sfx_generation() -> u64 {
+    ASSIST_SFX_GEN.load(Ordering::Acquire)
 }
 
 #[inline(always)]
@@ -1866,13 +2127,19 @@ fn commit_played_music_map(
     }
 }
 
+/// One actively-mixing SFX voice:
+/// `(samples, cursor, lane, stop_generation, target_stream_frame)`.
+/// `target_stream_frame == 0` means "play immediately"; otherwise the onset is
+/// placed at that absolute stream frame for sample-accurate scheduling.
+type ActiveSfx = (Arc<[i16]>, usize, SfxLane, u64, u64);
+
 struct RenderState {
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
     device_channels: usize,
     mix_i16: Vec<i16>,
     mix_f32: Vec<f32>,
-    active_sfx: Vec<(Arc<[i16]>, usize, SfxLane, u64)>,
+    active_sfx: Vec<ActiveSfx>,
     queued_music_map: Arc<internal::SpscRingMusicSeg>,
     played_music_map: Arc<internal::SpscRingMusicSeg>,
     active_music_map: Option<MusicMapSeg>,
@@ -2005,18 +2272,43 @@ impl RenderState {
             if !sfx_is_stale(new_sfx.lane, new_sfx.stop_generation)
                 && self.active_sfx.len() < MAX_ACTIVE_SFX
             {
-                self.active_sfx
-                    .push((new_sfx.data, 0, new_sfx.lane, new_sfx.stop_generation));
+                self.active_sfx.push((
+                    new_sfx.data,
+                    0,
+                    new_sfx.lane,
+                    new_sfx.stop_generation,
+                    new_sfx.target_stream_frame,
+                ));
             }
         }
 
+        let buf_len = self.mix_f32.len();
         let mut mixed_sfx = false;
         self.active_sfx
-            .retain_mut(|(data, cursor, lane, stop_generation)| {
+            .retain_mut(|(data, cursor, lane, stop_generation, target_stream_frame)| {
                 if sfx_is_stale(*lane, *stop_generation) {
                     return false;
                 }
-                let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
+                // Scheduled onset: place the first sample at an absolute stream
+                // frame. Because that frame is on the same timeline the mixer
+                // writes against, output latency is compensated implicitly.
+                let start_sample = match scheduled_onset_decision(
+                    *target_stream_frame,
+                    total_before,
+                    device_channels,
+                    buf_len,
+                ) {
+                    // Implausibly far ahead (e.g. a stale timeline that the
+                    // generation guard somehow missed); drop it.
+                    ScheduledOnset::Drop => return false,
+                    // Onset is in a later buffer: keep pending, do not mix or
+                    // advance the cursor so it stays sample-accurate.
+                    ScheduledOnset::Pending => return true,
+                    ScheduledOnset::StartAt(offset) => offset,
+                };
+                // From here on it behaves like a normal cursor sound.
+                *target_stream_frame = 0;
+                let n = (data.len().saturating_sub(*cursor)).min(buf_len - start_sample);
                 mixed_sfx |= n > 0;
                 let lane_vol = match *lane {
                     SfxLane::Effect | SfxLane::Screen => sfx_vol,
@@ -2024,7 +2316,7 @@ impl RenderState {
                 };
                 for i in 0..n {
                     let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
-                    self.mix_f32[i] += sfx_sample_f32;
+                    self.mix_f32[start_sample + i] += sfx_sample_f32;
                 }
                 *cursor += n;
                 *cursor < data.len()

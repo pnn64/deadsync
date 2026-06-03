@@ -740,6 +740,13 @@ impl TimingData {
             .saturating_sub(self.global_offset_ns)
     }
 
+    /// Returns the internal (pre-global-offset) time for a beat. This lives in
+    /// the same space as the audio stream's music position, so it is the value
+    /// to use when scheduling assist ticks against the playback stream.
+    pub fn get_time_for_beat_no_offset_ns(&self, target_beat: f32) -> i64 {
+        self.get_time_for_beat_internal_ns(target_beat)
+    }
+
     fn get_time_for_beat_internal_ns(&self, target_beat: f32) -> TimingNs {
         let mut starts = GetBeatStarts::default();
         starts.last_time_ns = self.beat_start_time_ns();
@@ -2201,6 +2208,32 @@ mod tests {
 
         assert!((timing_ns_to_seconds(time_ns) - time_sec).abs() < 0.000_001);
         assert!((timing.get_beat_for_time_ns(time_ns) - beat).abs() < 0.0001);
+    }
+
+    #[test]
+    fn time_for_beat_no_offset_excludes_global_offset() {
+        let global_offset = 0.020;
+        let timing = TimingData::from_segments(
+            0.0,
+            global_offset,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+
+        let beat = 8.0;
+        let no_offset_ns = timing.get_time_for_beat_no_offset_ns(beat);
+        let with_offset_ns = timing.get_time_for_beat_ns(beat);
+
+        // The no-offset time is the internal time; get_time_for_beat_ns subtracts
+        // the global offset, so they must differ by exactly that offset.
+        let offset_ns = timing_ns_from_seconds(global_offset);
+        assert_eq!(no_offset_ns - with_offset_ns, offset_ns);
+
+        // At 120 BPM beat 8 lands at 4.0 s of internal music time.
+        assert!((timing_ns_to_seconds(no_offset_ns) - 4.0).abs() < 0.000_001);
     }
 
     #[test]
