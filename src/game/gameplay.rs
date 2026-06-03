@@ -2882,6 +2882,7 @@ pub struct ActiveTapExplosion {
 #[derive(Copy, Clone, Debug)]
 pub struct ActiveColumnFlash {
     pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
     pub started_at_screen_s: f32,
 }
 
@@ -6690,7 +6691,7 @@ fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &J
 }
 
 #[inline(always)]
-pub(super) fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade) {
+fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blue_fantastic: bool) {
     if column >= state.column_flashes.len() {
         return;
     }
@@ -6699,14 +6700,36 @@ pub(super) fn trigger_column_flash(state: &mut State, column: usize, grade: Judg
         return;
     };
     if !profile.column_flash_on_miss
-        || !profile_data::column_flash_mask_enabled(profile.column_flash_mask, grade)
+        || !profile_data::column_flash_mask_enabled(
+            profile.column_flash_mask,
+            grade,
+            blue_fantastic,
+        )
     {
         return;
     }
     state.column_flashes[column] = Some(ActiveColumnFlash {
         grade,
+        blue_fantastic,
         started_at_screen_s: state.total_elapsed_in_screen,
     });
+}
+
+#[inline(always)]
+pub(super) fn trigger_column_flash_for_grade(state: &mut State, column: usize, grade: JudgeGrade) {
+    trigger_column_flash(state, column, grade, false);
+}
+
+#[inline(always)]
+fn trigger_column_flash_for_judgment(
+    state: &mut State,
+    player: usize,
+    column: usize,
+    judgment: &Judgment,
+) {
+    let blue_fantastic = judgment.grade == JudgeGrade::Fantastic
+        && !tap_judgment_uses_bright_explosion(state, player, judgment);
+    trigger_column_flash(state, column, judgment.grade, blue_fantastic);
 }
 
 fn trigger_tap_judgment_explosion(
@@ -6715,7 +6738,7 @@ fn trigger_tap_judgment_explosion(
     column: usize,
     judgment: &Judgment,
 ) {
-    trigger_column_flash(state, column, judgment.grade);
+    trigger_column_flash_for_judgment(state, player, column, judgment);
     let Some(window_key) = grade_to_window(judgment.grade) else {
         return;
     };
@@ -6725,7 +6748,7 @@ fn trigger_tap_judgment_explosion(
 
 #[cfg(test)]
 fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
-    trigger_column_flash(state, column, grade);
+    trigger_column_flash_for_grade(state, column, grade);
     spawn_tap_explosion_for_grade(state, column, grade, false);
 }
 
@@ -7358,7 +7381,7 @@ pub(super) fn render_provisional_early_rescore_feedback(
     }
 
     if !hide_early_dw_column_flash {
-        trigger_column_flash(state, column, judgment.grade);
+        trigger_column_flash_for_judgment(state, player, column, judgment);
     }
 }
 
@@ -11158,6 +11181,85 @@ return Def.ActorFrame{}
         trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
         let flash = enabled.column_flashes[column].expect("Great should trigger column flash");
         assert_eq!(flash.grade, JudgeGrade::Great);
+    }
+
+    fn fantastic_row_state(
+        mask: profile_data::ColumnFlashMask,
+        time_error_ms: f32,
+        window: TimingWindow,
+    ) -> (super::State, usize, usize) {
+        let row_index = 48usize;
+        let column = 1usize;
+        let mut profile = profile_data::Profile::default();
+        profile.noteskin = profile_data::NoteSkin::new(profile_data::NoteSkin::CEL_NAME);
+        profile.show_fa_plus_window = true;
+        profile.column_flash_on_miss = true;
+        profile.column_flash_mask = mask;
+        let mut state = regression_state([profile, profile_data::Profile::default()]);
+        let mut note = note_with_judgment(
+            column,
+            row_index,
+            NoteType::Tap,
+            JudgeGrade::Fantastic,
+            time_error_ms,
+        );
+        note.result
+            .as_mut()
+            .expect("test note should carry a judgment")
+            .window = Some(window);
+        state.notes = vec![note];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+        (state, row_index, column)
+    }
+
+    #[test]
+    fn white_fantastic_column_flash_uses_only_white_mask() {
+        let (mut disabled, row_index, column) = fantastic_row_state(
+            profile_data::ColumnFlashMask::BLUE_FANTASTIC,
+            18.0,
+            TimingWindow::W1,
+        );
+        trigger_completed_row_tap_explosions(&mut disabled, 0, row_index);
+        assert!(disabled.column_flashes[column].is_none());
+
+        let (mut enabled, row_index, column) = fantastic_row_state(
+            profile_data::ColumnFlashMask::WHITE_FANTASTIC,
+            18.0,
+            TimingWindow::W1,
+        );
+        trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
+        let flash = enabled.column_flashes[column].expect("white Fantastic should flash");
+        assert_eq!(flash.grade, JudgeGrade::Fantastic);
+        assert!(!flash.blue_fantastic);
+    }
+
+    #[test]
+    fn blue_fantastic_column_flash_uses_only_blue_mask() {
+        let (mut disabled, row_index, column) = fantastic_row_state(
+            profile_data::ColumnFlashMask::WHITE_FANTASTIC,
+            4.0,
+            TimingWindow::W0,
+        );
+        trigger_completed_row_tap_explosions(&mut disabled, 0, row_index);
+        assert!(disabled.column_flashes[column].is_none());
+
+        let (mut enabled, row_index, column) = fantastic_row_state(
+            profile_data::ColumnFlashMask::BLUE_FANTASTIC,
+            4.0,
+            TimingWindow::W0,
+        );
+        trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
+        let flash = enabled.column_flashes[column].expect("blue Fantastic should flash");
+        assert_eq!(flash.grade, JudgeGrade::Fantastic);
+        assert!(flash.blue_fantastic);
     }
 
     #[test]

@@ -2503,9 +2503,15 @@ fn column_flash_alpha(started_at: f32, current_time: f32, grade: JudgeGrade) -> 
 }
 
 #[inline(always)]
-fn column_flash_color(grade: JudgeGrade, alpha: f32) -> [f32; 4] {
+fn column_flash_color(grade: JudgeGrade, blue_fantastic: bool, alpha: f32) -> [f32; 4] {
     let mut rgba = match grade {
-        JudgeGrade::Fantastic => [1.0, 1.0, 1.0, 1.0],
+        JudgeGrade::Fantastic => {
+            if blue_fantastic {
+                color::JUDGMENT_RGBA[0]
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            }
+        }
         JudgeGrade::Excellent => color::JUDGMENT_RGBA[1],
         JudgeGrade::Great => color::JUDGMENT_RGBA[2],
         JudgeGrade::Decent => color::JUDGMENT_RGBA[3],
@@ -4912,7 +4918,7 @@ pub fn build_bundles(
                     continue;
                 }
                 let x = playfield_center_x + ns.column_xs[i] as f32 * spacing_mult * field_zoom;
-                let color = column_flash_color(flash.grade, alpha);
+                let color = column_flash_color(flash.grade, flash.blue_fantastic, alpha);
                 if column_dirs[i] < 0.0 {
                     let reverse_y =
                         column_cue_reverse_top_y(lane_width, flash_height, notefield_offset_y);

@@ -155,9 +155,18 @@ pub fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
 }
 
 #[inline(always)]
-pub const fn column_flash_mask_for_grade(grade: JudgeGrade) -> ColumnFlashMask {
+pub const fn column_flash_mask_for_grade(
+    grade: JudgeGrade,
+    blue_fantastic: bool,
+) -> ColumnFlashMask {
     match grade {
-        JudgeGrade::Fantastic => ColumnFlashMask::FANTASTIC,
+        JudgeGrade::Fantastic => {
+            if blue_fantastic {
+                ColumnFlashMask::BLUE_FANTASTIC
+            } else {
+                ColumnFlashMask::WHITE_FANTASTIC
+            }
+        }
         JudgeGrade::Excellent => ColumnFlashMask::EXCELLENT,
         JudgeGrade::Great => ColumnFlashMask::GREAT,
         JudgeGrade::Decent => ColumnFlashMask::DECENT,
@@ -167,8 +176,12 @@ pub const fn column_flash_mask_for_grade(grade: JudgeGrade) -> ColumnFlashMask {
 }
 
 #[inline(always)]
-pub const fn column_flash_mask_enabled(mask: ColumnFlashMask, grade: JudgeGrade) -> bool {
-    mask.contains(column_flash_mask_for_grade(grade))
+pub const fn column_flash_mask_enabled(
+    mask: ColumnFlashMask,
+    grade: JudgeGrade,
+    blue_fantastic: bool,
+) -> bool {
+    mask.contains(column_flash_mask_for_grade(grade, blue_fantastic))
 }
 
 #[inline(always)]
@@ -1106,12 +1119,13 @@ bitflags! {
     /// Persisted bitmask of judgments that trigger gameplay column flashes.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
     pub struct ColumnFlashMask: u8 {
-        const FANTASTIC = 1 << 0;
-        const EXCELLENT = 1 << 1;
-        const GREAT     = 1 << 2;
-        const DECENT    = 1 << 3;
-        const WAY_OFF   = 1 << 4;
-        const MISS      = 1 << 5;
+        const BLUE_FANTASTIC  = 1 << 0;
+        const WHITE_FANTASTIC = 1 << 1;
+        const EXCELLENT       = 1 << 2;
+        const GREAT           = 1 << 3;
+        const DECENT          = 1 << 4;
+        const WAY_OFF         = 1 << 5;
+        const MISS            = 1 << 6;
     }
 }
 
@@ -5522,7 +5536,7 @@ mod tests {
             "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
         )));
         assert!(content.contains("HideEarlyDecentWayOffColumnFlash=0\n"));
-        assert!(content.contains("ColumnFlashMask=32\n"));
+        assert!(content.contains("ColumnFlashMask=64\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
     }
@@ -6053,24 +6067,37 @@ mod tests {
 
     #[test]
     fn column_flash_mask_layout_is_stable() {
-        assert_eq!(ColumnFlashMask::FANTASTIC.bits(), 1 << 0);
-        assert_eq!(ColumnFlashMask::EXCELLENT.bits(), 1 << 1);
-        assert_eq!(ColumnFlashMask::GREAT.bits(), 1 << 2);
-        assert_eq!(ColumnFlashMask::DECENT.bits(), 1 << 3);
-        assert_eq!(ColumnFlashMask::WAY_OFF.bits(), 1 << 4);
-        assert_eq!(ColumnFlashMask::MISS.bits(), 1 << 5);
-        assert_eq!(ColumnFlashMask::all().bits(), 0b0011_1111);
+        assert_eq!(ColumnFlashMask::BLUE_FANTASTIC.bits(), 1 << 0);
+        assert_eq!(ColumnFlashMask::WHITE_FANTASTIC.bits(), 1 << 1);
+        assert_eq!(ColumnFlashMask::EXCELLENT.bits(), 1 << 2);
+        assert_eq!(ColumnFlashMask::GREAT.bits(), 1 << 3);
+        assert_eq!(ColumnFlashMask::DECENT.bits(), 1 << 4);
+        assert_eq!(ColumnFlashMask::WAY_OFF.bits(), 1 << 5);
+        assert_eq!(ColumnFlashMask::MISS.bits(), 1 << 6);
+        assert_eq!(ColumnFlashMask::all().bits(), 0b0111_1111);
         assert_eq!(
             ColumnFlashMask::from_bits_truncate(u8::MAX),
             ColumnFlashMask::all()
         );
         assert!(column_flash_mask_enabled(
             ColumnFlashMask::MISS,
-            JudgeGrade::Miss
+            JudgeGrade::Miss,
+            false
         ));
         assert!(!column_flash_mask_enabled(
             ColumnFlashMask::MISS,
-            JudgeGrade::Great
+            JudgeGrade::Great,
+            false
+        ));
+        assert!(column_flash_mask_enabled(
+            ColumnFlashMask::BLUE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            true
+        ));
+        assert!(column_flash_mask_enabled(
+            ColumnFlashMask::WHITE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            false
         ));
     }
 

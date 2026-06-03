@@ -578,7 +578,7 @@ const COLUMN_FLASH_JUDGMENTS: BitmaskBinding = BitmaskBinding::Generic {
         persist_for_side: |s, p| {
             gp::update_column_flash_mask_for_side(s, p.column_flash_mask);
         },
-        bit_mapping: BitMapping::Sequential { width: 6 },
+        bit_mapping: BitMapping::Sequential { width: 7 },
         sync_visibility: false,
     },
 };
@@ -1152,12 +1152,13 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
     let column_flash_choices = vec![
-        tr("Gameplay", "JudgmentFantastic").to_string(),
-        tr("Gameplay", "JudgmentExcellent").to_string(),
-        tr("Gameplay", "JudgmentGreat").to_string(),
-        tr("Gameplay", "JudgmentDecent").to_string(),
-        tr("Gameplay", "JudgmentWayOff").to_string(),
-        tr("Gameplay", "JudgmentMiss").to_string(),
+        tr("PlayerOptions", "ColumnFlashBlueFantastic").to_string(),
+        tr("PlayerOptions", "ColumnFlashWhiteFantastic").to_string(),
+        tr("PlayerOptions", "ColumnFlashExcellent").to_string(),
+        tr("PlayerOptions", "ColumnFlashGreat").to_string(),
+        tr("PlayerOptions", "ColumnFlashDecent").to_string(),
+        tr("PlayerOptions", "ColumnFlashWayOff").to_string(),
+        tr("PlayerOptions", "ColumnFlashMiss").to_string(),
     ];
     let live_timing_stats_choices = vec![
         tr("PlayerOptions", "LiveTimingStatsMean").to_string(),
