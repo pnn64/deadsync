@@ -472,6 +472,14 @@ pub fn is_saving(state: &State) -> bool {
     state.saving.is_some()
 }
 
+/// Toggle the name box's "Set as default" flag (driven by Up/Down on the
+/// keyboard, which the raw-key path otherwise swallows for text entry).
+pub fn toggle_save_default(state: &mut State) {
+    if let Some(d) = state.saving.as_mut() {
+        d.set_default = !d.set_default;
+    }
+}
+
 /// Whether the save box currently has a non-blank name (ready to confirm).
 pub fn save_name_nonempty(state: &State) -> bool {
     state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty())
@@ -629,10 +637,14 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
             ("+ Save current pad as new\u{2026}".to_owned(), ON_TEXT)
         } else {
             let e = &state.profiles[row - 1];
-            let mut label = e.name.clone();
+            // `* ` marks the active (applied) config; `(default)` is independent
+            // so a config that is both reads e.g. "* Soft   (default)".
+            let mut label = String::new();
             if e.is_active {
-                label.push_str("   (active)");
-            } else if e.is_default {
+                label.push_str("* ");
+            }
+            label.push_str(&e.name);
+            if e.is_default {
                 label.push_str("   (default)");
             }
             // The active config is tinted even when the cursor is elsewhere.
@@ -667,8 +679,8 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
     } else if state.delete_armed {
         line(actors, "Press DELETE again to confirm, &BACK; to cancel".to_owned(), bottom - 70.0, CAUTION_TEXT);
     } else {
-        line(actors, "&START; Apply    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
-        line(actors, "R - Rename    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
+        line(actors, "&START; Activate    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
+        line(actors, "R - Rename    O - Overwrite    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
     }
     line(actors, "Press &BACK; to return".to_owned(), bottom - 22.0, [1.0, 1.0, 1.0, 0.85]);
 }

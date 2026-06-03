@@ -4301,12 +4301,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !info.connected {
             continue;
         }
-        let side = if info.is_player2 {
-            profile_data::PlayerSide::P2
-        } else {
-            profile_data::PlayerSide::P1
-        };
-        if let Some(pid) = profile::active_local_profile_id_for_side(side) {
+        if let Some(pid) = profile::active_local_profile_id_for_pad(info.is_player2) {
             pads.push((info.is_player2, pid, slot));
         }
     }
@@ -4336,31 +4331,26 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         let applied = state.smx_applied[usize::from(*p2)].as_ref();
         // The main label goes in `bottom_label` (the large line); `top_label` is
         // the small flavor line, matching every other menu item's two-line style.
+        // `* ` marks the active config; `(default)` is independent, so a config
+        // that is both reads "* Soft (default)".
         for preset in ["Low", "Medium", "High"] {
-            let mark = if applied.is_some_and(|a| a.preset && a.name == preset) {
-                " (active)"
-            } else {
-                ""
-            };
+            let active = applied.is_some_and(|a| a.preset && a.name == preset);
+            let star = if active { "* " } else { "" };
             items.push(select_music_menu::pad_profile_item(
                 format!("{prefix}Sensitivity"),
-                format!("{preset}{mark}"),
+                format!("{star}{preset}"),
                 *p2,
                 true,
                 preset,
             ));
         }
         for c in &configs {
-            let mark = if applied.is_some_and(|a| !a.preset && a.name == c.name) {
-                " (active)"
-            } else if c.is_default {
-                " (default)"
-            } else {
-                ""
-            };
+            let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
+            let star = if active { "* " } else { "" };
+            let default = if c.is_default { " (default)" } else { "" };
             items.push(select_music_menu::pad_profile_item(
                 format!("{prefix}Pad Profile"),
-                format!("{}{mark}", c.name),
+                format!("{star}{}{default}", c.name),
                 *p2,
                 false,
                 c.name.clone(),
@@ -8316,12 +8306,7 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
             Err(()) => false,
         }
     } else {
-        let side = if p2 {
-            profile_data::PlayerSide::P2
-        } else {
-            profile_data::PlayerSide::P1
-        };
-        let Some(pid) = profile::active_local_profile_id_for_side(side) else {
+        let Some(pid) = profile::active_local_profile_id_for_pad(p2) else {
             return false;
         };
         let configs = crate::game::pad_profiles::load(&pid);
@@ -8358,12 +8343,7 @@ fn perform_pad_profile_save(state: &mut State) {
     }
     let slot = device.index;
     let info = crate::engine::smx::get_info(slot);
-    let side = if info.is_player2 {
-        profile_data::PlayerSide::P2
-    } else {
-        profile_data::PlayerSide::P1
-    };
-    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+    let Some(profile_id) = profile::active_local_profile_id_for_pad(info.is_player2) else {
         return; // Guest: no profile to save to.
     };
     // Rename: just relabel the existing config (and honor the default toggle).
@@ -8411,12 +8391,7 @@ fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> 
     }
     let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
     let info = crate::engine::smx::get_info(device.index);
-    let side = if info.is_player2 {
-        profile_data::PlayerSide::P2
-    } else {
-        profile_data::PlayerSide::P1
-    };
-    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    let profile_id = profile::active_local_profile_id_for_pad(info.is_player2)?;
     Some((profile_id, name, device.index))
 }
 
@@ -8438,6 +8413,35 @@ fn perform_pad_profile_apply(state: &mut State) {
         });
         audio::play_sfx("assets/sounds/start.ogg");
     }
+}
+
+/// Overwrite the cursor config with the pad's current live tuning, keeping its
+/// name / default / serial. Lets the user re-capture into an existing profile
+/// without retyping the name.
+fn perform_pad_profile_overwrite(state: &mut State) {
+    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+        return;
+    };
+    let info = crate::engine::smx::get_info(slot);
+    // Preserve the existing config's default flag (upsert keeps it unless we pass
+    // is_default=true, which it never clears — so read current and pass it back).
+    let was_default = crate::game::pad_profiles::load(&profile_id)
+        .iter()
+        .any(|c| c.name == name && c.is_default);
+    let Some(data) = crate::engine::smx::capture_config(slot) else {
+        return;
+    };
+    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    crate::game::pad_profiles::upsert(
+        &profile_id,
+        &name,
+        crate::engine::smx::BACKEND_ID,
+        pad_type,
+        Some(info.serial),
+        was_default,
+        data.to_settings(),
+    );
+    audio::play_sfx("assets/sounds/start.ogg");
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
@@ -9254,6 +9258,11 @@ pub fn handle_raw_key_event(
                     KeyCode::Backspace => {
                         pad_config::save_key_input(&mut state.pad_config_overlay, true, None);
                     }
+                    // Up/Down toggle the "set as default" flag (the virtual-action
+                    // path can't see them — we consume every key while typing).
+                    KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                        pad_config::toggle_save_default(&mut state.pad_config_overlay);
+                    }
                     _ => {}
                 },
                 Some(_) => {}
@@ -9282,6 +9291,10 @@ pub fn handle_raw_key_event(
                         if pad_config::delete_key(&mut state.pad_config_overlay) {
                             perform_pad_profile_delete(state);
                         }
+                        return ScreenAction::ConsumeInput;
+                    }
+                    KeyCode::KeyO => {
+                        perform_pad_profile_overwrite(state);
                         return ScreenAction::ConsumeInput;
                     }
                     _ => {}

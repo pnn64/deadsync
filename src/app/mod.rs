@@ -3997,15 +3997,11 @@ impl App {
             } else {
                 None
             };
-            let cursor_side = cursor_dev.map(|dev| {
-                if crate::engine::smx::get_info(dev.index).is_player2 {
-                    profile_data::PlayerSide::P2
-                } else {
-                    profile_data::PlayerSide::P1
-                }
+            let cursor_profile = cursor_dev.and_then(|dev| {
+                profile::active_local_profile_id_for_pad(
+                    crate::engine::smx::get_info(dev.index).is_player2,
+                )
             });
-            let cursor_profile =
-                cursor_side.and_then(profile::active_local_profile_id_for_side);
             pad_config::set_save_available(target, cursor_profile.is_some());
             // Mark the config currently applied to the cursor pad's side. (Reading
             // `smx_applied` here, after `target`'s last use, avoids a borrow clash.)
@@ -4069,12 +4065,9 @@ impl App {
                 self.smx_resolve_key[pad] = None;
                 continue;
             }
-            let side = if info.is_player2 {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            };
-            let profile_id = profile::active_local_profile_id_for_side(side);
+            // In Doubles both pads belong to the one joined player; otherwise the
+            // pad maps to its own side.
+            let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
             let key = PadResolveKey {
                 preset: cfg.smx_default_pad_config,
                 serial: info.serial.clone(),
