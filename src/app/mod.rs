@@ -5,6 +5,7 @@ mod dynamic_media;
 mod graphics;
 mod input_routing;
 pub(crate) mod media_cache;
+mod pad_config_sync;
 mod screen_nav;
 mod screenshot;
 
@@ -3664,15 +3665,9 @@ impl ScreensState {
                 if matches!(
                     action,
                     Some(ScreenAction::Navigate(CurrentScreen::SelectMusic))
-                ) && let Some(mut sm) =
+                ) && let Some(sm) =
                     profile_load::take_prepared_select_music(&mut self.profile_load_state)
                 {
-                    // Carry the applied-pad-config markers across the swap: the
-                    // managed resolver may have written them during the load, and
-                    // its key-guard (on the app) won't repopulate them afterward
-                    // since the profile hasn't changed. Without this the active
-                    // marker only appears after a manual profile switch.
-                    sm.smx_applied = self.select_music_state.smx_applied.clone();
                     self.select_music_state = sm;
                     self.select_music_state.active_color_index =
                         self.profile_load_state.active_color_index;
@@ -3802,15 +3797,6 @@ impl AppState {
     }
 }
 
-/// Cheap inputs that determine which config resolves for an SMX pad. The
-/// resolver only reloads config files / rewrites the pad when this changes.
-#[derive(Clone, PartialEq, Eq)]
-struct PadResolveKey {
-    preset: config::SmxPadPreset,
-    serial: String,
-    profile_id: Option<String>,
-}
-
 pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
@@ -3820,10 +3806,10 @@ pub struct App {
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
     fsr_pads_active: bool,
-    /// Cheap "what determines the resolved pad config" key per SMX pad slot, so
-    /// the resolver only loads configs + writes the pad when something relevant
-    /// changes (preset, pad serial, or the active profile). `None` = not managed.
-    smx_resolve_key: [Option<PadResolveKey>; 2],
+    /// App-owned source of truth for SMX managed-config resolution + the active
+    /// marker (mirrored to the Song Select screen each frame). See
+    /// [`pad_config_sync`].
+    pad_config_sync: pad_config_sync::PadConfigSync,
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
@@ -3976,7 +3962,7 @@ impl App {
                 // longer matches a stored profile — drop the active marker.
                 if device.backend == input::fsr::BackendKind::Smx {
                     let p2 = crate::engine::smx::get_info(device.index).is_player2;
-                    self.state.screens.select_music_state.smx_applied[usize::from(p2)] = None;
+                    self.pad_config_sync.mark_diverged(usize::from(p2));
                 }
             }
             let target = if on_screen {
@@ -4003,11 +3989,11 @@ impl App {
                 )
             });
             pad_config::set_save_available(target, cursor_profile.is_some());
-            // Mark the config currently applied to the cursor pad's side. (Reading
-            // `smx_applied` here, after `target`'s last use, avoids a borrow clash.)
+            // Mark the config currently applied to the cursor pad's side, read
+            // straight from the authoritative controller (no screen-state alias).
             let active_name = cursor_dev.and_then(|dev| {
                 let p2 = crate::engine::smx::get_info(dev.index).is_player2;
-                self.state.screens.select_music_state.smx_applied[usize::from(p2)]
+                self.pad_config_sync.applied[usize::from(p2)]
                     .as_ref()
                     .filter(|a| !a.preset)
                     .map(|a| a.name.clone())
@@ -4063,40 +4049,42 @@ impl App {
     /// Configure Pads edits aren't clobbered). Off → DeadSync writes nothing.
     fn apply_smx_managed_preset(&mut self) {
         use crate::game::pad_profiles;
+        use crate::screens::select_music::AppliedPadConfig;
+        use pad_config_sync::Sig;
+
+        // Drain UI requests (manual recall/apply/save → Override; default edit /
+        // overwrite / delete / style switch → Invalidate) into the controller.
+        let intents =
+            std::mem::take(&mut self.state.screens.select_music_state.pad_config_intents);
+        for intent in intents {
+            self.pad_config_sync.apply_intent(intent);
+        }
+
         let cfg = config::get();
         for pad in 0..2 {
             let info = crate::engine::smx::get_info(pad);
             if !cfg.smx_input || !cfg.smx_manages_pad_config || !info.connected {
-                self.smx_resolve_key[pad] = None;
+                self.pad_config_sync.signature[pad] = None;
                 continue;
-            }
-            // An explicit invalidation (a per-pad default edit, overwrite/delete,
-            // or a play-style switch) forces a re-resolve even when the key below
-            // is unchanged — those don't affect the key but do affect the result.
-            let idx = usize::from(info.is_player2);
-            if std::mem::take(
-                &mut self.state.screens.select_music_state.smx_resolve_invalidate[idx],
-            ) {
-                self.smx_resolve_key[pad] = None;
             }
             // In Doubles both pads belong to the one joined player; otherwise the
             // pad maps to its own side.
             let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
-            let key = PadResolveKey {
+            let pad_type =
+                crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
+            let sig = Sig {
                 preset: cfg.smx_default_pad_config,
                 serial: info.serial.clone(),
                 profile_id: profile_id.clone(),
+                pad_type: pad_type.clone(),
             };
-            if self.smx_resolve_key[pad].as_ref() == Some(&key) {
+            if self.pad_config_sync.signature[pad].as_ref() == Some(&sig) {
                 continue; // nothing relevant changed — no file I/O, no rewrite
             }
-            use crate::screens::select_music::AppliedPadConfig;
             let preset_label = AppliedPadConfig {
                 preset: true,
                 name: cfg.smx_default_pad_config.as_str().to_owned(),
             };
-            let pad_type =
-                crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             let (applied, label) = match &profile_id {
                 Some(id) => {
                     let configs = pad_profiles::load(id);
@@ -4126,16 +4114,20 @@ impl App {
                     preset_label,
                 ),
             };
-            // Record what deadsync resolved for this pad so the UI can flag the
-            // active preset/config. This is NOT gated on the write ACK: the
-            // resolution is what we intend for the pad, and gating it on a
-            // momentarily-unavailable config (right after connect) would leave
-            // the marker blank. The write itself still retries until it lands.
-            self.state.screens.select_music_state.smx_applied[idx] = Some(label);
+            // Record what deadsync resolved so the UI can flag the active
+            // preset/config. NOT gated on the write ACK: the resolution is what we
+            // intend for the pad; gating it on a momentarily-unavailable config
+            // (right after connect) would leave the marker blank. The write itself
+            // retries until it lands (signature only saved on success).
+            self.pad_config_sync.applied[usize::from(info.is_player2)] = Some(label);
             if applied {
-                self.smx_resolve_key[pad] = Some(key);
+                self.pad_config_sync.signature[pad] = Some(sig);
             }
         }
+
+        // Mirror the authoritative markers to the screen for display. Done every
+        // frame, so a screen rebuild can't lose them.
+        self.state.screens.select_music_state.smx_applied = self.pad_config_sync.snapshot();
     }
 
     fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
@@ -4812,7 +4804,7 @@ impl App {
             _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
             fsr_pads_active: false,
-            smx_resolve_key: [None, None],
+            pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),
@@ -9208,15 +9200,8 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
-                    // The applied-pad-config markers track hardware state, not
-                    // screen state — carry them across the reset so they don't
-                    // blank out on entry (the managed resolver's key-guard would
-                    // otherwise not re-populate them until the profile changes).
-                    let smx_applied =
-                        self.state.screens.select_music_state.smx_applied.clone();
                     self.state.screens.select_music_state = select_music::init();
                     self.state.screens.select_music_state.active_color_index = current_color_index;
-                    self.state.screens.select_music_state.smx_applied = smx_applied;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;
                     self.state
