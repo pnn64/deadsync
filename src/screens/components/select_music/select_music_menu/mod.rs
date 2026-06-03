@@ -43,6 +43,9 @@ pub enum Action {
         p2: bool,
         preset: bool,
         name: String,
+        /// Whether this preset/config is the one currently applied to the pad
+        /// (drives the green "active" tint in the menu).
+        active: bool,
     },
     ToggleFavorite,
     SortByFavorites,
@@ -266,6 +269,7 @@ pub fn pad_profile_item(
     p2: bool,
     preset: bool,
     name: impl Into<String>,
+    active: bool,
 ) -> Item {
     Item {
         top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
@@ -274,6 +278,7 @@ pub fn pad_profile_item(
             p2,
             preset,
             name: name.into(),
+            active,
         },
     }
 }

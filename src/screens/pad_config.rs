@@ -677,10 +677,21 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
     if state.profiles_sel == 0 {
         line(actors, "Press &START; to name and save the current tuning".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
     } else if state.delete_armed {
-        // Keep the warning orange, but put &BACK; on its own gray line so the
-        // button glyph isn't tinted orange (glyphs inherit the text diffuse).
-        line(actors, "Press DELETE again to confirm".to_owned(), bottom - 70.0, CAUTION_TEXT);
-        line(actors, "&BACK; to cancel".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
+        // One line: orange warning + a normal-colored &BACK; glyph. A glyph
+        // inherits its actor's diffuse, so split into two actors that meet at the
+        // center — orange text right-anchored, gray "&BACK; to cancel" left-anchored.
+        let y = bottom - 70.0;
+        actors.push(act!(text:
+            font("miso"): settext("Press DELETE again to confirm   ".to_owned()):
+            align(1.0, 0.5): xy(cx, y): zoom(0.7): horizalign(right):
+            diffuse(CAUTION_TEXT[0], CAUTION_TEXT[1], CAUTION_TEXT[2], CAUTION_TEXT[3]):
+            z(20.0 + zb)
+        ));
+        actors.push(act!(text:
+            font("miso"): settext("&BACK; to cancel".to_owned()):
+            align(0.0, 0.5): xy(cx, y): zoom(0.7): horizalign(left):
+            diffuse(1.0, 1.0, 1.0, 0.85): z(20.0 + zb)
+        ));
     } else {
         line(actors, "&START; Activate    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
         line(actors, "R - Rename    O - Overwrite    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);

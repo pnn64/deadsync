@@ -1113,6 +1113,11 @@ pub struct State {
     /// menus can show which preset/config is currently active. Set by the
     /// managed-config resolver and by manual recall / Apply.
     pub smx_applied: [Option<AppliedPadConfig>; 2],
+    /// Per pad (0 = P1, 1 = P2): request the managed-config resolver to re-resolve
+    /// and re-apply this pad next frame. Set when something the resolve key can't
+    /// see changes (a per-pad default edit, overwrite/delete, or a play-style
+    /// switch); cleared by the resolver. Keeps the active marker in sync.
+    pub smx_resolve_invalidate: [bool; 2],
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
@@ -3550,6 +3555,7 @@ pub fn init() -> State {
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
         smx_applied: [None, None],
+        smx_resolve_invalidate: [false, false],
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3741,6 +3747,7 @@ pub fn init_placeholder() -> State {
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
         smx_applied: [None, None],
+        smx_resolve_invalidate: [false, false],
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -4344,6 +4351,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 *p2,
                 true,
                 preset,
+                active,
             ));
         }
         for c in &configs {
@@ -4360,6 +4368,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 *p2,
                 false,
                 c.name.clone(),
+                active,
             ));
         }
     }
@@ -4543,10 +4552,12 @@ fn show_pad_config_overlay(state: &mut State) {
     state.pad_config_overlay.active_color_index = state.active_color_index;
     pad_config::reset_modes(&mut state.pad_config_overlay);
 
-    // Show only the pads for the active player sides (mirrors Test Input).
+    // Show the pads for the active sides. Doubles and Versus both drive two
+    // physical pads (in Versus the second side may be a guest, but its pad is
+    // still in play and tunable), so show both; Singles shows just the joined side.
     let (mut p1, mut p2) = match profile::get_session_play_style() {
-        profile_data::PlayStyle::Double => (true, true),
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => (
+        profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => (true, true),
+        profile_data::PlayStyle::Single => (
             profile::is_session_side_joined(profile_data::PlayerSide::P1),
             profile::is_session_side_joined(profile_data::PlayerSide::P2),
         ),
@@ -8139,6 +8150,10 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
     profile::set_session_player_side(side);
     profile::set_session_play_style(new_style);
     refresh_after_style_switch(state);
+    // The style switch remaps which profile each pad uses (and the refresh just
+    // rebuilt state, clearing the markers); re-resolve both pads so each pad's
+    // active marker is recomputed rather than left blank.
+    state.smx_resolve_invalidate = [true, true];
     state.selection_animation_timer = 0.0;
     crate::engine::present::runtime::clear_all();
 }
@@ -8445,14 +8460,19 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         false,
         data.to_settings(),
     );
+    // Re-apply if this config is the pad's active/default (its values changed).
+    state.smx_resolve_invalidate[usize::from(info.is_player2)] = true;
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
-        let serial = crate::engine::smx::get_info(slot).serial;
-        crate::game::pad_profiles::set_default(&profile_id, &serial, &name);
+        let info = crate::engine::smx::get_info(slot);
+        crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
+        // A default change doesn't move the resolve key, so ask the resolver to
+        // re-resolve this pad (applies the new default + refreshes the marker).
+        state.smx_resolve_invalidate[usize::from(info.is_player2)] = true;
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8460,12 +8480,14 @@ fn perform_pad_profile_set_default(state: &mut State) {
 fn perform_pad_profile_delete(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         crate::game::pad_profiles::delete(&profile_id, &name);
-        // The deleted config is no longer "active"; forget it for that side.
+        // The deleted config is no longer "active"; forget it for that side and
+        // re-resolve (it may have been this pad's default → falls back).
         let p2 = crate::engine::smx::get_info(slot).is_player2;
         let entry = &mut state.smx_applied[usize::from(p2)];
         if entry.as_ref().is_some_and(|a| !a.preset && a.name == name) {
             *entry = None;
         }
+        state.smx_resolve_invalidate[usize::from(p2)] = true;
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8681,7 +8703,7 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             show_pad_config_overlay(state);
             ScreenAction::None
         }
-        select_music_menu::Action::ApplyPadProfile { p2, preset, name } => {
+        select_music_menu::Action::ApplyPadProfile { p2, preset, name, .. } => {
             hide_select_music_menu(state);
             if apply_pad_profile_recall(state, p2, preset, &name) {
                 audio::play_sfx("assets/sounds/start.ogg");

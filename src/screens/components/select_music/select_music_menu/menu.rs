@@ -585,6 +585,14 @@ fn render_item_text(
 
 #[inline(always)]
 fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
+    // The currently-applied pad profile renders green (focus brightens it).
+    if matches!(&item.action, Action::ApplyPadProfile { active: true, .. }) {
+        return [
+            lerp_scalar(0.22, 0.36, focus_lerp),
+            lerp_scalar(0.62, 0.95, focus_lerp),
+            lerp_scalar(0.32, 0.48, focus_lerp),
+        ];
+    }
     if matches!(&item.action, Action::BackToMain) {
         [
             lerp_scalar(

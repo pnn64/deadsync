@@ -4070,6 +4070,15 @@ impl App {
                 self.smx_resolve_key[pad] = None;
                 continue;
             }
+            // An explicit invalidation (a per-pad default edit, overwrite/delete,
+            // or a play-style switch) forces a re-resolve even when the key below
+            // is unchanged — those don't affect the key but do affect the result.
+            let idx = usize::from(info.is_player2);
+            if std::mem::take(
+                &mut self.state.screens.select_music_state.smx_resolve_invalidate[idx],
+            ) {
+                self.smx_resolve_key[pad] = None;
+            }
             // In Doubles both pads belong to the one joined player; otherwise the
             // pad maps to its own side.
             let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
@@ -4122,7 +4131,6 @@ impl App {
             // resolution is what we intend for the pad, and gating it on a
             // momentarily-unavailable config (right after connect) would leave
             // the marker blank. The write itself still retries until it lands.
-            let idx = usize::from(info.is_player2);
             // TEMP (remove after hardware verification): logged at ERROR level so it
             // shows with the user's current log filter. Traces the resolver inputs +
             // pick per pad so the active marker can be diagnosed.
