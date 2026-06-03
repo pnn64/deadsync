@@ -51,6 +51,11 @@ fn default_keymap_local() -> Keymap {
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
     km.bind(A::p1_operator, &[InputBinding::Key(KeyCode::ScrollLock)]);
+    km.bind(A::system_fast_forward, &[InputBinding::Key(KeyCode::Tab)]);
+    km.bind(
+        A::system_slow_down,
+        &[InputBinding::Key(KeyCode::Backquote)],
+    );
     // Leave dedicated menu buttons, P2 operator, and restart unbound by default for now.
     km
 }
@@ -74,6 +79,9 @@ const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
         A::p2_select => Some(KeyCode::NumpadDecimal),
         A::p2_start => Some(KeyCode::NumpadEnter),
         A::p2_back => Some(KeyCode::Numpad0),
+        // System (non-player) tier: Tab acceleration fast-forward / slow-down.
+        A::system_fast_forward => Some(KeyCode::Tab),
+        A::system_slow_down => Some(KeyCode::Backquote),
         _ => None,
     }
 }
@@ -801,6 +809,38 @@ mod tests {
         assert_eq!(
             protected_default_key_for_action(&remapped, VirtualAction::p1_menu_up),
             None
+        );
+    }
+
+    #[test]
+    fn default_keymap_binds_system_acceleration_keys() {
+        let defaults = default_keymap_local();
+
+        assert_eq!(
+            defaults.binding_at(VirtualAction::system_fast_forward, 0),
+            Some(InputBinding::Key(KeyCode::Tab))
+        );
+        assert_eq!(
+            defaults.binding_at(VirtualAction::system_slow_down, 0),
+            Some(InputBinding::Key(KeyCode::Backquote))
+        );
+    }
+
+    #[test]
+    fn system_acceleration_keys_round_trip_through_ini() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            "[Keymaps]\nSystem_FastForward=KeyCode::Backquote\nSystem_SlowDown=KeyCode::Tab\n",
+        );
+        let keymap = load_keymap_from_ini_local(&conf);
+
+        assert_eq!(
+            keymap.binding_at(VirtualAction::system_fast_forward, 0),
+            Some(InputBinding::Key(KeyCode::Backquote))
+        );
+        assert_eq!(
+            keymap.binding_at(VirtualAction::system_slow_down, 0),
+            Some(InputBinding::Key(KeyCode::Tab))
         );
     }
 }

@@ -4151,6 +4151,7 @@ const fn input_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
         | VirtualAction::p2_select
         | VirtualAction::p2_operator
         | VirtualAction::p2_restart => Some(profile_data::PlayerSide::P2),
+        VirtualAction::system_fast_forward | VirtualAction::system_slow_down => None,
     }
 }
 
