@@ -157,6 +157,11 @@ pub struct State {
     /// Whether the cursor pad can be saved to a profile (set by the app: true
     /// only in-session when the cursor pad maps to a local profile).
     save_available: bool,
+    /// Whether DeadSync is currently managing pad config (set by the app). When
+    /// true on the standalone screen, direct edits are transient (re-applied on
+    /// launch / profile / pad change), so we caption the screen to point the user
+    /// at the Song Select profile flow.
+    managed_active: bool,
     /// When true, the "Profiles" management list is open over the current view.
     profiles_mode: bool,
     /// The cursor pad's saved configs (pushed by the app, like `set_pads`).
@@ -337,6 +342,12 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
 /// Whether saving is available for the cursor pad (set by the app each frame).
 pub fn set_save_available(state: &mut State, available: bool) {
     state.save_available = available;
+}
+
+/// Whether DeadSync is managing pad config (set by the app each frame). Drives the
+/// "edits here are temporary" caption on the standalone Configure Pads screen.
+pub fn set_managed_active(state: &mut State, active: bool) {
+    state.managed_active = active;
 }
 
 /// Open the "save this pad as a profile" name-entry box. No-op if there are no
@@ -594,6 +605,33 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
         ));
         push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false, save_available: false }, zb);
         return actors;
+    }
+
+    // While DeadSync manages pad config, direct edits on the standalone screen are
+    // transient (re-applied on launch / profile / pad change). Caption the screen to
+    // send the user to the persistent path. The Song Select overlay has its own
+    // save/profile flow, so only caption the standalone screen (`!as_overlay`).
+    if !as_overlay && state.managed_active {
+        actors.push(act!(text:
+            font("miso"):
+            settext("DeadSync is managing pad config - edits here are temporary."):
+            align(0.5, 0.0):
+            xy(screen_center_x(), 58.0):
+            zoom(0.66):
+            horizalign(center):
+            diffuse(CAUTION_TEXT[0], CAUTION_TEXT[1], CAUTION_TEXT[2], CAUTION_TEXT[3]):
+            z(20.0 + zb)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext("Save tunings as profiles from Song Select."):
+            align(0.5, 0.0):
+            xy(screen_center_x(), 76.0):
+            zoom(0.62):
+            horizalign(center):
+            diffuse(1.0, 1.0, 1.0, 0.8):
+            z(20.0 + zb)
+        ));
     }
 
     if state.profiles_mode {
@@ -1804,4 +1842,384 @@ fn push_bar(
         xy(x, y + BAR_HEIGHT + 8.0): zoom(1.0): horizalign(center):
         diffuse(label_color[0], label_color[1], label_color[2], label_color[3]): z(z + 3.0)
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::input::fsr::{BackendKind, ButtonView};
+    use std::time::Instant;
+
+    // ── Event + pad fixtures ──
+
+    fn ev(action: VirtualAction) -> InputEvent {
+        ev_from(action, InputSource::Keyboard, true)
+    }
+
+    fn ev_from(action: VirtualAction, source: InputSource, pressed: bool) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed,
+            source,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    fn mk_sensor(fw: usize, threshold: u16) -> SensorView {
+        SensorView {
+            firmware_index: fw,
+            label: None,
+            raw_value: 0,
+            value_norm: 0.0,
+            raw_threshold: threshold,
+            threshold_norm: 0.0,
+            active: false,
+            enabled: true,
+        }
+    }
+
+    fn mk_button(label: &'static str, threshold: u16) -> ButtonView {
+        ButtonView {
+            label,
+            sensors: vec![mk_sensor(0, threshold), mk_sensor(1, threshold), mk_sensor(2, threshold), mk_sensor(3, threshold)],
+            min_raw_threshold: 5,
+            max_raw_threshold: 250,
+            aggregate_value: 0,
+            aggregate_threshold: threshold,
+            active: false,
+            value_scale: 250,
+        }
+    }
+
+    /// A 4-sensor-per-panel FSR-style SMX pad (Advanced + per-sensor toggle).
+    fn smx_pad(index: usize, is_player2: bool) -> PadView {
+        PadView {
+            device_id: PadDeviceId { backend: BackendKind::Smx, index },
+            device_name: format!("SMX {index}"),
+            is_player2,
+            buttons: [mk_button("L", 30), mk_button("D", 30), mk_button("U", 30), mk_button("R", 30)],
+            supports_advanced: true,
+            simple_per_sensor_bars: false,
+            supports_sensor_toggle: true,
+            auto_recalibration: Some(true),
+            debounce_micros: Some(4000),
+        }
+    }
+
+    /// A Simple-only (load-cell) pad: no Advanced view.
+    fn load_cell_pad(index: usize) -> PadView {
+        let mut p = smx_pad(index, false);
+        p.supports_advanced = false;
+        p.simple_per_sensor_bars = true;
+        p.supports_sensor_toggle = false;
+        p.auto_recalibration = None;
+        p.debounce_micros = None;
+        p
+    }
+
+    fn with_pad() -> State {
+        let mut s = init();
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        s
+    }
+
+    // ── Simple-view navigation + editing ──
+
+    #[test]
+    fn simple_nav_wraps_and_targets_the_cursor_button() {
+        let mut s = with_pad();
+        // Raise on the landing bar edits button 0 (a whole-button Simple edit).
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_up), false), EditResult::Handled);
+        let cmds = take_commands(&mut s);
+        assert!(matches!(cmds[0], PadCommand::Threshold { button: 0, sensor: None, .. }));
+        // NextBar advances the cursor button; the 4th press wraps back to 0.
+        for expect in [1usize, 2, 3, 0] {
+            apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
+            apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+            let cmds = take_commands(&mut s);
+            assert!(matches!(cmds[0], PadCommand::Threshold { button, .. } if button == expect));
+        }
+    }
+
+    #[test]
+    fn prev_bar_wraps_to_last_bar() {
+        let mut s = with_pad(); // 4 bars
+        apply_edit(&mut s, &ev(VirtualAction::p1_left), false); // 0 -> 3
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(matches!(cmds[0], PadCommand::Threshold { button: 3, .. }));
+    }
+
+    #[test]
+    fn raise_lower_step_clamp_and_dedup() {
+        let mut s = with_pad();
+        // Two raises in one frame collapse to a single queued command (+5 each).
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert_eq!(cmds.len(), 1);
+        assert!(matches!(cmds[0], PadCommand::Threshold { value: 40, .. })); // 30 -> 40
+        // Lowering past the minimum clamps at min_raw_threshold (5).
+        for _ in 0..20 {
+            apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        }
+        let cmds = take_commands(&mut s);
+        assert!(matches!(cmds.last().unwrap(), PadCommand::Threshold { value: 5, .. }));
+    }
+
+    #[test]
+    fn fine_step_is_one() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), true); // fine = Shift held
+        let cmds = take_commands(&mut s);
+        assert!(matches!(cmds[0], PadCommand::Threshold { value: 31, .. })); // 30 -> 31
+    }
+
+    // ── Input source gating (stepping on a panel must not move the cursor) ──
+
+    #[test]
+    fn gamepad_panel_press_ignored_but_menu_control_allowed() {
+        let mut s = with_pad();
+        // A raw panel press (gamepad, non-menu action) is swallowed: no edit.
+        let r = apply_edit(&mut s, &ev_from(VirtualAction::p1_up, InputSource::Gamepad, true), false);
+        assert_eq!(r, EditResult::Handled);
+        assert!(take_commands(&mut s).is_empty());
+        // A dedicated menu control from the same gamepad does edit.
+        apply_edit(&mut s, &ev_from(VirtualAction::p1_menu_up, InputSource::Gamepad, true), false);
+        assert_eq!(take_commands(&mut s).len(), 1);
+    }
+
+    #[test]
+    fn release_events_are_noops() {
+        let mut s = with_pad();
+        let r = apply_edit(&mut s, &ev_from(VirtualAction::p1_up, InputSource::Keyboard, false), false);
+        assert_eq!(r, EditResult::Handled);
+        assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn p2_actions_also_drive_the_ui() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p2_up), false);
+        assert_eq!(take_commands(&mut s).len(), 1);
+    }
+
+    // ── Back / exit ──
+
+    #[test]
+    fn back_at_simple_level_exits_to_parent() {
+        let mut s = with_pad();
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+    }
+
+    #[test]
+    fn back_exits_even_with_no_pads_connected() {
+        let mut s = init();
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+    }
+
+    // ── Pad set / filtering / cursor tracking ──
+
+    #[test]
+    fn set_pads_filters_by_side() {
+        let mut s = init();
+        set_filter(&mut s, PadFilter::Sides { p1: true, p2: false });
+        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
+        assert_eq!(total_bars(&s), PAD_BUTTON_COUNT); // only the P1 pad survives
+        assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+    }
+
+    #[test]
+    fn selected_device_follows_cursor_across_pads() {
+        let mut s = init();
+        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
+        assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+        for _ in 0..PAD_BUTTON_COUNT {
+            apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // step onto pad 1
+        }
+        assert_eq!(selected_device(&s).map(|d| d.index), Some(1));
+    }
+
+    #[test]
+    fn set_pads_clamps_cursor_when_pads_shrink() {
+        let mut s = init();
+        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]); // 8 bars
+        for _ in 0..7 {
+            apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // cursor at last bar
+        }
+        set_pads(&mut s, vec![smx_pad(0, false)]); // now 4 bars; cursor must clamp
+        assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        assert!(matches!(take_commands(&mut s)[0], PadCommand::Threshold { button: 3, .. }));
+    }
+
+    // ── Advanced view ──
+
+    #[test]
+    fn advanced_edits_one_sensor_then_toggles_auto_recal() {
+        let mut s = with_pad();
+        // Start drills into Advanced; Raise edits the focused sensor's own threshold.
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(matches!(cmds[0], PadCommand::Threshold { button: 0, sensor: Some(0), value: 35, .. }));
+        // Step past the 16 sensors to the AutoRecal target; Start toggles it off.
+        for _ in 0..(PAD_BUTTON_COUNT * 4) {
+            apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert!(matches!(
+            take_commands(&mut s).last().unwrap(),
+            PadCommand::AutoRecalibration { enabled: false, .. }
+        ));
+    }
+
+    #[test]
+    fn start_does_not_enter_advanced_on_simple_only_pad() {
+        let mut s = init();
+        set_pads(&mut s, vec![load_cell_pad(0)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // no-op (Simple only)
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        // Still Simple → a whole-button edit (sensor: None), not a per-sensor one.
+        assert!(matches!(take_commands(&mut s)[0], PadCommand::Threshold { sensor: None, .. }));
+    }
+
+    #[test]
+    fn back_in_advanced_returns_to_simple_not_parent() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // into Advanced
+        // Back here only leaves Advanced (Handled), it must not exit the screen.
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::Handled);
+        // A second Back, now at Simple, exits.
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+    }
+
+    // ── Save box ──
+
+    #[test]
+    fn save_box_gated_on_availability() {
+        let mut s = with_pad();
+        begin_save(&mut s); // save_available defaults to false
+        assert!(!is_saving(&s));
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        assert!(is_saving(&s));
+    }
+
+    #[test]
+    fn save_key_input_filters_chars_and_caps_length() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        save_key_input(&mut s, false, Some("Hi! <there>_1"));
+        assert!(save_name_nonempty(&s));
+        // Fill past the cap; the name never exceeds MAX_PROFILE_NAME_LEN.
+        save_key_input(&mut s, false, Some(&"x".repeat(40)));
+        let draft = take_save(&mut s).unwrap();
+        assert_eq!(draft.name.chars().count(), MAX_PROFILE_NAME_LEN);
+        assert!(draft.name.starts_with("Hi there_1")); // punctuation dropped
+        assert!(!is_saving(&s)); // take_save clears the box
+    }
+
+    #[test]
+    fn save_confirm_requires_a_nonempty_name() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        // Empty name → Start is swallowed (Handled), no SaveRequested.
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::Handled);
+        save_key_input(&mut s, false, Some("Soft"));
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::SaveRequested);
+    }
+
+    #[test]
+    fn toggle_save_default_flips_the_flag() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        toggle_save_default(&mut s);
+        assert!(take_save(&mut s).unwrap().set_default);
+    }
+
+    #[test]
+    fn save_box_back_cancels() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_back), false);
+        assert!(!is_saving(&s));
+    }
+
+    // ── Profiles management list ──
+
+    #[test]
+    fn profiles_list_apply_set_default_and_delete_arming() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        assert!(is_profiles_mode(&s));
+        set_profiles(&mut s, vec![
+            ProfileListEntry { name: "A".into(), is_default: false, is_active: false },
+            ProfileListEntry { name: "B".into(), is_default: true, is_active: false },
+        ]);
+        // Row 0 is "save new"; the first Down moves onto config "A".
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert_eq!(selected_profile_name(&s).as_deref(), Some("A"));
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::ApplyProfile);
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_select), false), EditResult::SetDefaultProfile);
+        // Delete arms on the first press and confirms on the second.
+        assert!(!delete_key(&mut s));
+        assert!(delete_key(&mut s));
+    }
+
+    #[test]
+    fn profiles_save_new_row_opens_the_save_box() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        set_profiles(&mut s, vec![ProfileListEntry { name: "A".into(), is_default: false, is_active: false }]);
+        // Cursor starts on row 0 ("save current as new"); Start opens the name box.
+        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::Handled);
+        assert!(is_saving(&s));
+    }
+
+    #[test]
+    fn delete_key_inert_on_save_new_row() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        set_profiles(&mut s, vec![ProfileListEntry { name: "A".into(), is_default: false, is_active: false }]);
+        // On the "save new" row there is nothing to delete.
+        assert!(!delete_key(&mut s));
+    }
+
+    #[test]
+    fn rename_prefills_name_and_default_from_cursor_config() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        set_profiles(&mut s, vec![ProfileListEntry { name: "Soft".into(), is_default: true, is_active: false }]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false); // onto "Soft"
+        begin_rename(&mut s);
+        assert!(is_saving(&s));
+        let draft = take_save(&mut s).unwrap();
+        assert_eq!(draft.name, "Soft");
+        assert_eq!(draft.rename_of.as_deref(), Some("Soft"));
+        assert!(draft.set_default); // mirrors the entry's default flag
+    }
+
+    #[test]
+    fn reset_modes_returns_to_simple_view() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        reset_modes(&mut s);
+        assert!(!is_profiles_mode(&s));
+        assert!(!is_saving(&s));
+    }
 }

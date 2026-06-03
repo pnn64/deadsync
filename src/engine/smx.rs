@@ -94,14 +94,16 @@ pub fn manager() -> Option<&'static SmxManager> {
     SHARED.get().map(|s| &s.manager)
 }
 
-/// Register a listener for pad input events.
+/// Register a listener for pad input events. Append-only and intended to be
+/// called once at startup; there is no removal.
 pub fn add_input_listener(listener: Box<dyn Fn(PadEvent) + Send>) {
     if let Some(s) = SHARED.get() {
         s.input_listeners.lock().unwrap().push(listener);
     }
 }
 
-/// Register a listener for system events (connect/disconnect).
+/// Register a listener for system events (connect/disconnect). Append-only and
+/// intended to be called once at startup; there is no removal.
 pub fn add_sys_listener(listener: Box<dyn Fn(GpSystemEvent) + Send>) {
     if let Some(s) = SHARED.get() {
         s.sys_listeners.lock().unwrap().push(listener);
@@ -174,8 +176,10 @@ pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
 
 /// `enabled_sensors` nibble layout (official tool `Widgets.cs`): panel `p` uses
 /// byte `p / 2`, the high nibble (`0xF0`) for even panels and the low nibble
-/// (`0x0F`) for odd panels; sensor `s` is bit `base + s`.
-fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
+/// (`0x0F`) for odd panels; sensor `s` is bit `base + s`. Shared by the config
+/// encode/decode here and the live per-sensor edits in the input backend, so the
+/// firmware bit layout has a single source of truth.
+pub(crate) fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
     let byte = panel / 2;
     let base = if panel % 2 == 0 { 4 } else { 0 };
     (byte, 1u8 << (base + sensor))

@@ -8,7 +8,6 @@ use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
-const PANEL_COUNT: usize = 9;
 const PANEL_SENSOR_COUNT: usize = 4;
 
 const MIN_FSR_THRESHOLD: u16 = 5;
@@ -203,7 +202,7 @@ impl Monitor {
             return false;
         }
         let (panel, _) = VIEW_PANELS[button];
-        let (byte, mask) = enabled_bit(panel, sensor);
+        let (byte, mask) = smx::enabled_bit(panel, sensor);
         if enabled {
             config.enabled_sensors[byte] |= mask;
         } else {
@@ -279,7 +278,7 @@ impl Monitor {
             );
             if let Some(config) = smx::get_config(pad) {
                 let _ = writeln!(out, "  is_fsr: {}", is_fsr(&config));
-                for panel in 0..PANEL_COUNT {
+                for panel in 0..smx::PANEL_COUNT {
                     let s = &config.panel_settings[panel];
                     let _ = writeln!(
                         out,
@@ -290,7 +289,7 @@ impl Monitor {
                 }
             }
             if let Some(data) = smx::get_test_data(pad) {
-                for panel in 0..PANEL_COUNT {
+                for panel in 0..smx::PANEL_COUNT {
                     if !data.have_data_from_panel[panel] {
                         let _ = writeln!(out, "  panel {panel} sensors: [no data]");
                         continue;
@@ -415,18 +414,8 @@ fn load_cell_button(
     }
 }
 
-/// `enabled_sensors` packs one panel per nibble: panel `p` uses byte `p / 2`,
-/// the high nibble (`0xF0`) for even panels and the low nibble (`0x0F`) for odd
-/// panels, matching the official SMX config tool (`Widgets.cs`). The four
-/// sensors of a panel are the four bits of that nibble (sensor `s` → bit `s`).
-fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
-    let byte = panel / 2;
-    let base = if panel % 2 == 0 { 4 } else { 0 };
-    (byte, 1u8 << (base + sensor))
-}
-
 fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
-    let (byte, mask) = enabled_bit(panel, sensor);
+    let (byte, mask) = smx::enabled_bit(panel, sensor);
     config.enabled_sensors[byte] & mask != 0
 }
 

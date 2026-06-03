@@ -195,12 +195,14 @@ pub struct Config {
     pub windows_gamepad_backend: WindowsPadBackend,
     /// Enable StepManiaX pad input via rustmaniax-sdk (all platforms).
     pub smx_input: bool,
-    /// When true, DeadSync writes its pad thresholds to connected SMX pads.
-    /// (Auto-apply behavior lands with config profiles; persisted now.)
+    /// When true, DeadSync resolves and writes a pad config to each connected
+    /// SMX pad (this pad's saved default → a global default → the built-in
+    /// `smx_default_pad_config` preset). See `App::apply_smx_managed_preset`.
     pub smx_manages_pad_config: bool,
     /// USB polling interval for the SMX manager, in microseconds (500–1000).
     pub smx_usb_polling_us: u16,
-    /// Built-in pad preset DeadSync would flash when it manages pad config.
+    /// Built-in pad preset flashed as the fallback when DeadSync manages pad
+    /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
     // When using the Software video renderer:
     // 0 = Auto (use all logical cores)

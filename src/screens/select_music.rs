@@ -1075,10 +1075,10 @@ pub struct AppliedPadConfig {
 
 /// A request from the Song Select UI to the App-owned pad-config controller
 /// (`app::pad_config_sync`). The UI can't reach the controller directly, so it
-/// queues these on `State::pad_config_intents` and the app drains them.
+/// queues these on `State::pad_config_intents` and the app drains them. `pad` is
+/// the pad slot (0/1) in every variant — the same key the resolver uses.
 pub enum PadConfigIntent {
-    /// A preset/config was manually applied to a pad (`pad`: 0 = P1, 1 = P2) →
-    /// mark it the active config.
+    /// A preset/config was manually applied to a pad → mark it the active config.
     Override { pad: usize, applied: AppliedPadConfig },
     /// Something the resolver's signature can't see changed for this pad (a
     /// per-pad default edit, overwrite, delete, or a play-style switch) →
@@ -1126,12 +1126,10 @@ pub struct State {
     test_input_overlay: test_input::State,
     pub pad_config_overlay_visible: bool,
     pub pad_config_overlay: pad_config::State,
-    /// What deadsync last applied to each SMX pad (index 0 = P1, 1 = P2), so the
-    /// menus can show which preset/config is currently active. Set by the
-    /// managed-config resolver and by manual recall / Apply.
-    /// Read-only mirror of the App pad-config controller's active markers
-    /// (`app::pad_config_sync`), pushed every frame so the menus can show which
-    /// preset/config is active. Authoritative state lives on the app, so screen
+    /// What deadsync last applied to each SMX pad (index = pad slot 0/1), so the
+    /// menus can show which preset/config is currently active. Read-only mirror of
+    /// the App pad-config controller's active markers (`app::pad_config_sync`),
+    /// pushed every frame; the authoritative state lives on the app, so screen
     /// rebuilds can't lose it.
     pub smx_applied: [Option<AppliedPadConfig>; 2],
     /// Queued requests for the App pad-config controller (drained each frame).
@@ -4355,7 +4353,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         } else {
             ""
         };
-        let applied = state.smx_applied[usize::from(*p2)].as_ref();
+        let applied = state.smx_applied[*slot].as_ref();
         // The main label goes in `bottom_label` (the large line); `top_label` is
         // the small flavor line, matching every other menu item's two-line style.
         // `* ` marks the active config; `(default)` is independent. The star goes
@@ -8347,8 +8345,20 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
     ScreenAction::None
 }
 
-/// Save the cursor pad's current tuning to the active player's profile.
-/// SMX pads only; no-op for a Guest (nothing to save to).
+/// Load the named saved config from `profile_id`, decode it, and write it to the
+/// SMX pad in `slot`. Returns whether it was applied — the shared core of quick
+/// recall and the overlay's Apply, so both resolve a saved config the same way.
+fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
+    let configs = crate::game::pad_profiles::load(profile_id);
+    let Some(c) = configs.iter().find(|c| c.name == name) else {
+        return false;
+    };
+    match crate::engine::smx::PadConfigData::from_settings(&c.settings) {
+        Some(data) => crate::engine::smx::apply_config_data(slot, &data),
+        None => false,
+    }
+}
+
 /// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
 /// (quick recall from the Advanced menu). Returns whether it was applied.
 fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
@@ -8367,18 +8377,11 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
         let Some(pid) = profile::active_local_profile_id_for_pad(p2) else {
             return false;
         };
-        let configs = crate::game::pad_profiles::load(&pid);
-        let Some(c) = configs.iter().find(|c| c.name == name) else {
-            return false;
-        };
-        match crate::engine::smx::PadConfigData::from_settings(&c.settings) {
-            Some(data) => crate::engine::smx::apply_config_data(slot, &data),
-            None => false,
-        }
+        apply_saved_pad_config(&pid, slot, name)
     };
     if applied {
         state.pad_config_intents.push(PadConfigIntent::Override {
-            pad: usize::from(p2),
+            pad: slot,
             applied: AppliedPadConfig {
                 preset,
                 name: name.to_owned(),
@@ -8388,6 +8391,9 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
     applied
 }
 
+/// Handle a confirmed save box: rename an existing config, or capture the cursor
+/// pad's live tuning as a new named config in the active player's profile. SMX
+/// pads only; no-op for a Guest (no profile to save to).
 fn perform_pad_profile_save(state: &mut State) {
     let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
         return;
@@ -8411,7 +8417,7 @@ fn perform_pad_profile_save(state: &mut State) {
     // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
         crate::game::pad_profiles::rename(&profile_id, &old, &name);
-        let pad = usize::from(info.is_player2);
+        let pad = slot;
         if draft.set_default {
             crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
             // New default → re-resolve (applies it) and rebuild the list.
@@ -8447,7 +8453,6 @@ fn perform_pad_profile_save(state: &mut State) {
         return;
     };
     let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
-    let is_player2 = info.is_player2;
     crate::game::pad_profiles::upsert(
         &profile_id,
         &name,
@@ -8460,7 +8465,7 @@ fn perform_pad_profile_save(state: &mut State) {
     // A new config entered the list → rebuild it (but don't re-resolve: the pad is
     // already running these captured values). Mark the new config active so its
     // `*`/green shows immediately.
-    let pad = usize::from(is_player2);
+    let pad = slot;
     state
         .pad_config_intents
         .push(PadConfigIntent::RefreshList { pad });
@@ -8489,16 +8494,9 @@ fn perform_pad_profile_apply(state: &mut State) {
     let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
-    let configs = crate::game::pad_profiles::load(&profile_id);
-    let Some(c) = configs.iter().find(|c| c.name == name) else {
-        return;
-    };
-    if let Some(data) = crate::engine::smx::PadConfigData::from_settings(&c.settings)
-        && crate::engine::smx::apply_config_data(slot, &data)
-    {
-        let p2 = crate::engine::smx::get_info(slot).is_player2;
+    if apply_saved_pad_config(&profile_id, slot, &name) {
         state.pad_config_intents.push(PadConfigIntent::Override {
-            pad: usize::from(p2),
+            pad: slot,
             applied: AppliedPadConfig {
                 preset: false,
                 name: name.clone(),
@@ -8532,9 +8530,7 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         data.to_settings(),
     );
     // Re-apply if this config is the pad's active/default (its values changed).
-    state.pad_config_intents.push(PadConfigIntent::Invalidate {
-        pad: usize::from(info.is_player2),
-    });
+    state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
@@ -8545,9 +8541,7 @@ fn perform_pad_profile_set_default(state: &mut State) {
         crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
-        state.pad_config_intents.push(PadConfigIntent::Invalidate {
-            pad: usize::from(info.is_player2),
-        });
+        state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8557,10 +8551,7 @@ fn perform_pad_profile_delete(state: &mut State) {
         crate::game::pad_profiles::delete(&profile_id, &name);
         // It may have been this pad's active/default config; re-resolve so the
         // controller falls back (and the marker updates).
-        let p2 = crate::engine::smx::get_info(slot).is_player2;
-        state.pad_config_intents.push(PadConfigIntent::Invalidate {
-            pad: usize::from(p2),
-        });
+        state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }

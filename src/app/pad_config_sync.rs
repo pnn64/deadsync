@@ -37,7 +37,7 @@ struct ProfilesSig {
 
 #[derive(Default)]
 pub struct PadConfigSync {
-    /// What deadsync last applied to each pad (index 0 = P1, 1 = P2) — the
+    /// What deadsync last applied to each pad (index = pad slot 0/1) — the
     /// active-marker source of truth.
     pub applied: [Option<AppliedPadConfig>; 2],
     /// Last-resolved inputs per pad slot; `None` forces a re-resolve.
@@ -85,6 +85,29 @@ impl PadConfigSync {
     pub fn mark_diverged(&mut self, pad: usize) {
         if pad < 2 {
             self.applied[pad] = None;
+        }
+    }
+
+    /// Whether the cached resolve signature for `pad` already matches these
+    /// inputs. Compared by borrow so the steady-state hot path allocates nothing
+    /// (no throwaway `Sig`) just to discover that nothing changed; the owned `Sig`
+    /// is only built when we actually re-resolve.
+    pub fn signature_matches(
+        &self,
+        pad: usize,
+        preset: crate::config::SmxPadPreset,
+        serial: &str,
+        profile_id: Option<&str>,
+        pad_type: Option<&str>,
+    ) -> bool {
+        match self.signature.get(pad).and_then(Option::as_ref) {
+            Some(sig) => {
+                sig.preset == preset
+                    && sig.serial == serial
+                    && sig.profile_id.as_deref() == profile_id
+                    && sig.pad_type.as_deref() == pad_type
+            }
+            None => false,
         }
     }
 
@@ -201,5 +224,29 @@ mod tests {
         assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
         // ...but the resolve signature is untouched, so the pad isn't rewritten.
         assert!(s.signature[0].is_some());
+    }
+
+    #[test]
+    fn signature_matches_compares_every_field_by_borrow() {
+        use crate::config::SmxPadPreset;
+        let mut s = PadConfigSync::default();
+        // No cached signature → never matches.
+        assert!(!s.signature_matches(0, SmxPadPreset::Low, "S1", Some("p1"), Some("fsr")));
+        s.signature[0] = Some(Sig {
+            preset: SmxPadPreset::Medium,
+            serial: "S1".to_owned(),
+            profile_id: Some("p1".to_owned()),
+            pad_type: Some("fsr".to_owned()),
+        });
+        // Exact match.
+        assert!(s.signature_matches(0, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
+        // Any single field differing → no match.
+        assert!(!s.signature_matches(0, SmxPadPreset::High, "S1", Some("p1"), Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S2", Some("p1"), Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S1", None, Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S1", Some("p1"), None));
+        // Other slot is independent; out-of-range is safe (no panic).
+        assert!(!s.signature_matches(1, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
+        assert!(!s.signature_matches(9, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
     }
 }

@@ -94,8 +94,9 @@ pub fn update_smx_input(enabled: bool) {
     save_without_keymaps();
 }
 
-/// Persist the "DeadSync manages pad config" toggle. The auto-apply behavior
-/// arrives with config profiles; for now this only records the preference.
+/// Persist the "DeadSync manages pad config" toggle. When on, the app loop
+/// (`apply_smx_managed_preset`) resolves and writes each connected SMX pad's
+/// config every non-gameplay frame; this just records the preference.
 pub fn update_smx_manages_pad_config(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -107,8 +108,8 @@ pub fn update_smx_manages_pad_config(enabled: bool) {
     save_without_keymaps();
 }
 
-/// Persist the built-in default pad preset (Low/Medium/High). Stored only for
-/// now; flashed to pads by the profiles phase.
+/// Persist the built-in default pad preset (Low/Medium/High). Used as the
+/// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
     {
         let mut cfg = lock_config();

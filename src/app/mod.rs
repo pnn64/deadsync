@@ -3902,12 +3902,27 @@ impl App {
     #[inline(always)]
     fn sync_pad_config_fsr(&mut self) {
         use crate::screens::pad_config;
-        let use_fsrs = config::get().use_fsrs;
+        let cfg = config::get();
+        let use_fsrs = cfg.use_fsrs;
         let screen = self.state.screens.current_screen;
         let on_screen = screen == CurrentScreen::ConfigurePads && use_fsrs;
         let on_overlay = screen == CurrentScreen::SelectMusic
             && self.state.screens.select_music_state.pad_config_overlay_visible
             && use_fsrs;
+
+        // `target` is the screen state we're driving: the standalone Configure
+        // Pads screen, or the Song Select overlay. A macro (not a method) so each
+        // use re-borrows inline — the borrow has to release between phases so the
+        // disjoint `self.pad_config_sync` access in between is allowed.
+        macro_rules! target {
+            () => {
+                if on_screen {
+                    &mut self.state.screens.pad_config_state
+                } else {
+                    &mut self.state.screens.select_music_state.pad_config_overlay
+                }
+            };
+        }
 
         if on_screen || on_overlay {
             if !self.fsr_pads_active {
@@ -3918,11 +3933,7 @@ impl App {
             // Drain queued edits in a short-lived borrow so we can touch
             // `smx_applied` (a sibling of `target`) below without a borrow clash.
             let commands = {
-                let target = if on_screen {
-                    &mut self.state.screens.pad_config_state
-                } else {
-                    &mut self.state.screens.select_music_state.pad_config_overlay
-                };
+                let target = target!();
                 pad_config::take_commands(target)
             };
             for cmd in commands {
@@ -3961,16 +3972,13 @@ impl App {
                 // A manual edit diverges from any saved config, so the pad no
                 // longer matches a stored profile — drop the active marker.
                 if device.backend == input::fsr::BackendKind::Smx {
-                    let p2 = crate::engine::smx::get_info(device.index).is_player2;
-                    self.pad_config_sync.mark_diverged(usize::from(p2));
+                    // Markers are keyed by pad slot; `device.index` is that slot.
+                    self.pad_config_sync.mark_diverged(device.index);
                 }
             }
-            let target = if on_screen {
-                &mut self.state.screens.pad_config_state
-            } else {
-                &mut self.state.screens.select_music_state.pad_config_overlay
-            };
+            let target = target!();
             pad_config::set_pads(target, pads);
+            pad_config::set_managed_active(target, cfg.smx_manages_pad_config);
 
             // Saving / profile management is only offered in-session, for a cursor
             // pad that is an SMX pad mapped to a joined local profile (the Options
@@ -3989,11 +3997,10 @@ impl App {
                 )
             });
             pad_config::set_save_available(target, cursor_profile.is_some());
-            // Mark the config currently applied to the cursor pad's side, read
+            // Mark the config currently applied to the cursor pad's slot, read
             // straight from the authoritative controller (no screen-state alias).
             let active_name = cursor_dev.and_then(|dev| {
-                let p2 = crate::engine::smx::get_info(dev.index).is_player2;
-                self.pad_config_sync.applied[usize::from(p2)]
+                self.pad_config_sync.applied[dev.index]
                     .as_ref()
                     .filter(|a| !a.preset)
                     .map(|a| a.name.clone())
@@ -4006,13 +4013,14 @@ impl App {
                 .map(|t| t.as_str().to_owned());
             let cursor_serial =
                 cursor_dev.map(|dev| crate::engine::smx::get_info(dev.index).serial);
-            let cursor_p2 = cursor_dev
-                .map(|dev| usize::from(crate::engine::smx::get_info(dev.index).is_player2));
+            // Cache + markers are keyed by pad slot (always unambiguous, unlike the
+            // player side, which two pads can share).
+            let cursor_slot = cursor_dev.map(|dev| dev.index);
 
             // Refresh the cached config list only when its inputs changed — no
             // per-frame `padconfig.ini` read. Management edits clear the cache via an
             // Invalidate intent (drained in `apply_smx_managed_preset`).
-            if let (Some(pid), Some(pad)) = (cursor_profile.as_deref(), cursor_p2)
+            if let (Some(pid), Some(pad)) = (cursor_profile.as_deref(), cursor_slot)
                 && self
                     .pad_config_sync
                     .profiles_stale(pad, Some(pid), cursor_pad_type.as_deref())
@@ -4033,7 +4041,7 @@ impl App {
 
             // Build the overlay list from the cache; active/default are derived live
             // (cheap, no I/O) since they depend on the marker / this pad's serial.
-            let profiles: Vec<pad_config::ProfileListEntry> = match cursor_p2 {
+            let profiles: Vec<pad_config::ProfileListEntry> = match cursor_slot {
                 Some(pad) if cursor_profile.is_some() => self
                     .pad_config_sync
                     .profiles_for(pad)
@@ -4049,11 +4057,7 @@ impl App {
                 _ => Vec::new(),
             };
             // Re-borrow target (released for the controller access above).
-            let target = if on_screen {
-                &mut self.state.screens.pad_config_state
-            } else {
-                &mut self.state.screens.select_music_state.pad_config_overlay
-            };
+            let target = target!();
             pad_config::set_profiles(target, profiles);
         } else if self.fsr_pads_active {
             self.fsr_monitor.set_active(false);
@@ -4107,13 +4111,16 @@ impl App {
             let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
             let pad_type =
                 crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
-            let sig = Sig {
-                preset: cfg.smx_default_pad_config,
-                serial: info.serial.clone(),
-                profile_id: profile_id.clone(),
-                pad_type: pad_type.clone(),
-            };
-            if self.pad_config_sync.signature[pad].as_ref() == Some(&sig) {
+            // Compare against the cached signature by borrow: the steady-state
+            // path allocates nothing just to find that nothing changed. The owned
+            // `Sig` is built (by moving these values) only when we re-resolve.
+            if self.pad_config_sync.signature_matches(
+                pad,
+                cfg.smx_default_pad_config,
+                &info.serial,
+                profile_id.as_deref(),
+                pad_type.as_deref(),
+            ) {
                 continue; // nothing relevant changed — no file I/O, no rewrite
             }
             let preset_label = AppliedPadConfig {
@@ -4154,9 +4161,15 @@ impl App {
             // intend for the pad; gating it on a momentarily-unavailable config
             // (right after connect) would leave the marker blank. The write itself
             // retries until it lands (signature only saved on success).
-            self.pad_config_sync.applied[usize::from(info.is_player2)] = Some(label);
+            self.pad_config_sync.applied[pad] = Some(label);
             if applied {
-                self.pad_config_sync.signature[pad] = Some(sig);
+                // Move (don't clone) the resolved inputs into the cached signature.
+                self.pad_config_sync.signature[pad] = Some(Sig {
+                    preset: cfg.smx_default_pad_config,
+                    serial: info.serial,
+                    profile_id,
+                    pad_type,
+                });
             }
         }
 

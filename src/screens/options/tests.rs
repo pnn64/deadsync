@@ -721,3 +721,22 @@ fn input_backend_back_returns_to_input_after_visiting_smx_config() {
     settle_submenu(&mut state, &asset_manager);
     assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
 }
+
+#[test]
+fn usb_polling_choice_labels_match_their_values() {
+    let row = SMX_CONFIG_OPTIONS_ROWS
+        .iter()
+        .find(|r| r.id == SubRowId::SmxUsbPolling)
+        .expect("USB polling row present");
+    // The hand-written "<n>us" labels must stay in lockstep with the value table,
+    // so they can't silently drift if the step/count constants change.
+    assert_eq!(row.choices.len(), USB_POLLING_CHOICE_COUNT);
+    for (i, choice) in row.choices.iter().enumerate() {
+        assert_eq!(
+            choice.as_str_static(),
+            Some(format!("{}us", usb_polling_value(i)).as_str())
+        );
+        // The label's value round-trips back to its own index.
+        assert_eq!(usb_polling_choice_index(usb_polling_value(i)), i);
+    }
+}
