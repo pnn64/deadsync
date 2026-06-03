@@ -34,7 +34,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(
         content,
         "GameplayBgColor",
-        rgb_to_hex(default.gameplay_bg_color),
+        default.gameplay_bg_color.to_hex(),
     );
     push_bool(content, "BannerCache", default.banner_cache);
     push_bool(content, "CacheSongs", default.cachesongs);

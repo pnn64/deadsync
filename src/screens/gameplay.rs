@@ -1125,7 +1125,7 @@ fn push_background(
     actors: &mut Vec<Actor>,
     state: &State,
     bg_brightness: f32,
-    base_color: [f32; 3],
+    base_color: crate::config::Color,
 ) {
     let sw = screen_width();
     let sh = screen_height();
@@ -1139,7 +1139,7 @@ fn push_background(
     let mut base =
         shared_banner::cover_sprite(Arc::<str>::from("__white"), cx, cy, sw, sh, 1.0, -101);
     if let Actor::Sprite { tint, .. } = &mut base {
-        *tint = [base_color[0], base_color[1], base_color[2], 1.0];
+        *tint = base_color.to_rgba();
     }
     actors.push(base);
 

@@ -49,11 +49,7 @@ fn push_saved_options(
         cfg.updater_install_enabled,
     );
     push_line(content, "BGBrightness", cfg.bg_brightness.clamp(0.0, 1.0));
-    push_line(
-        content,
-        "GameplayBgColor",
-        rgb_to_hex(cfg.gameplay_bg_color),
-    );
+    push_line(content, "GameplayBgColor", cfg.gameplay_bg_color.to_hex());
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);
     push_bool(content, "CDTitleCache", cfg.cdtitle_cache);

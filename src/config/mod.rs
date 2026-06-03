@@ -1,4 +1,5 @@
 mod audio;
+mod color;
 pub mod dirs;
 mod ini;
 mod keybinds;
@@ -13,6 +14,7 @@ mod theme;
 mod update;
 
 pub use self::audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
+pub use self::color::Color;
 pub use self::ini::SimpleIni;
 pub use self::keybinds::{
     clear_keymap_binding, update_keymap_binding_unique_gamepad,
@@ -121,11 +123,11 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
-    // Gameplay background color used when a song has no background image (the
-    // fallback that would otherwise be solid black). RGB in 0..1, parsed from a
+    // Gameplay background color drawn behind the playfield. The song background
+    // image (if any) is alpha-blended over it by `bg_brightness`. Parsed from a
     // `#RRGGBB` hex string in `deadsync.ini` (key `GameplayBgColor`). Default is
     // black so behavior is unchanged unless explicitly overridden.
-    pub gameplay_bg_color: [f32; 3],
+    pub gameplay_bg_color: Color,
     // ITGmania/Simply Love parity: center the active single-player notefield in gameplay.
     pub center_1player_notefield: bool,
     /// ITGmania-style wheel banner cache toggle.
@@ -358,7 +360,7 @@ impl Default for Config {
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
-            gameplay_bg_color: [0.0, 0.0, 0.0],
+            gameplay_bg_color: Color::BLACK,
             center_1player_notefield: false,
             banner_cache: true,
             cdtitle_cache: true,
