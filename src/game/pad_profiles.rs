@@ -73,8 +73,12 @@ pub fn upsert(
     }
     let mut list = load(profile_id);
     if is_default {
+        // Default is scoped per pad (serial group): only clear the flag on other
+        // configs that share this config's serial, so each pad keeps its own.
         for p in &mut list {
-            p.is_default = false;
+            if p.serial == serial {
+                p.is_default = false;
+            }
         }
     }
     if let Some(existing) = list.iter_mut().find(|p| p.name.eq_ignore_ascii_case(name)) {
@@ -125,11 +129,19 @@ pub fn delete(profile_id: &str, name: &str) {
 // Pure list mutations (testable without touching the filesystem). Each returns
 // whether the list changed.
 fn apply_set_default(list: &mut [PadConfigProfile], name: &str) -> bool {
-    if !list.iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+    // Default is scoped per pad (serial group): mark `name` and clear the flag
+    // only on other configs sharing its serial, so other pads keep their own.
+    let Some(group) = list
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(name))
+        .map(|p| p.serial.clone())
+    else {
         return false;
-    }
+    };
     for p in list.iter_mut() {
-        p.is_default = p.name.eq_ignore_ascii_case(name);
+        if p.serial == group {
+            p.is_default = p.name.eq_ignore_ascii_case(name);
+        }
     }
     true
 }
@@ -168,23 +180,31 @@ pub fn config_matches(profile: &PadConfigProfile, backend: &str, pad_type: Optio
         }
 }
 
-/// Pick the config to apply for a pad: among configs compatible with the pad's
-/// `backend` + `pad_type`, the serial-matching one first, else the default.
+/// Pick the config to apply for a pad. Among configs compatible with the pad's
+/// `backend` + `pad_type`, in order: this pad's serial group's **default**, then
+/// any config matching this serial, then a serial-less **global default**
+/// (a config bound to no pad, e.g. one the user hand-edited to drop its serial).
+/// Defaults are per-serial, so another pad's default never applies here.
 pub fn resolve<'a>(
     profiles: &'a [PadConfigProfile],
     backend: &str,
     pad_type: Option<&str>,
     serial: &str,
 ) -> Option<&'a PadConfigProfile> {
+    let compatible = |p: &&PadConfigProfile| config_matches(p, backend, pad_type);
+    let serial_match = |p: &&PadConfigProfile| p.serial.as_deref() == Some(serial);
+
     profiles
         .iter()
-        .filter(|p| config_matches(p, backend, pad_type))
-        .find(|p| p.serial.as_deref() == Some(serial))
+        .filter(compatible)
+        .filter(serial_match)
+        .find(|p| p.is_default)
+        .or_else(|| profiles.iter().filter(compatible).find(serial_match))
         .or_else(|| {
             profiles
                 .iter()
-                .filter(|p| config_matches(p, backend, pad_type))
-                .find(|p| p.is_default)
+                .filter(compatible)
+                .find(|p| p.serial.is_none() && p.is_default)
         })
 }
 
@@ -400,6 +420,33 @@ Panel0.FsrLow=1 2 3 4
         // An untyped config matches any pad type of its backend.
         let untyped = vec![sample("Any", "smx", None, None, true)];
         assert!(resolve(&untyped, "smx", Some("loadcell"), "x").is_some());
+    }
+
+    #[test]
+    fn default_is_scoped_per_serial() {
+        let mut list = vec![
+            sample("A1", "smx", Some("fsr"), Some("padA"), true), // padA's default
+            sample("A2", "smx", Some("fsr"), Some("padA"), false),
+            sample("B1", "smx", Some("fsr"), Some("padB"), true), // padB's default
+        ];
+        // Making A2 the default clears A1 (same serial) but leaves B1 alone.
+        assert!(apply_set_default(&mut list, "A2"));
+        assert!(!list[0].is_default); // A1
+        assert!(list[1].is_default); // A2
+        assert!(list[2].is_default); // B1 untouched
+        // Each pad resolves to its own default.
+        assert_eq!(resolve(&list, "smx", Some("fsr"), "padA").unwrap().name, "A2");
+        assert_eq!(resolve(&list, "smx", Some("fsr"), "padB").unwrap().name, "B1");
+    }
+
+    #[test]
+    fn resolve_serial_match_default_beats_other_serial_match() {
+        let list = vec![
+            sample("First", "smx", Some("fsr"), Some("pad"), false),
+            sample("Chosen", "smx", Some("fsr"), Some("pad"), true),
+        ];
+        // Two configs share the serial; the one marked default wins (not the first).
+        assert_eq!(resolve(&list, "smx", Some("fsr"), "pad").unwrap().name, "Chosen");
     }
 
     #[test]
