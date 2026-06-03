@@ -4131,18 +4131,6 @@ impl App {
             // resolution is what we intend for the pad, and gating it on a
             // momentarily-unavailable config (right after connect) would leave
             // the marker blank. The write itself still retries until it lands.
-            // TEMP (remove after hardware verification): logged at ERROR level so it
-            // shows with the user's current log filter. Traces the resolver inputs +
-            // pick per pad so the active marker can be diagnosed.
-            log::error!(
-                "smx managed: pad {pad} (P{}) serial='{}' profile={:?} type={:?} -> {} '{}' (applied={applied})",
-                idx + 1,
-                info.serial,
-                profile_id.as_deref(),
-                pad_type.as_deref(),
-                if label.preset { "preset" } else { "config" },
-                label.name,
-            );
             self.state.screens.select_music_state.smx_applied[idx] = Some(label);
             if applied {
                 self.smx_resolve_key[pad] = Some(key);
