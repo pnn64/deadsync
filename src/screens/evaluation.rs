@@ -1957,6 +1957,7 @@ pub struct State {
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
     submit_record_sfx_played: bool,
+    nice_sfx_played: bool,
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -2001,6 +2002,7 @@ impl Clone for State {
             itl_overlay_visible: self.itl_overlay_visible,
             itl_overlay_shown: self.itl_overlay_shown,
             submit_record_sfx_played: self.submit_record_sfx_played,
+            nice_sfx_played: self.nice_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
@@ -2593,6 +2595,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         itl_overlay_visible: false,
         itl_overlay_shown: false,
         submit_record_sfx_played: false,
+        nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2744,6 +2747,7 @@ pub fn init_from_score_info(
         itl_overlay_visible: false,
         itl_overlay_shown: false,
         submit_record_sfx_played: false,
+        nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2827,6 +2831,67 @@ fn sync_submit_record_sfx(state: &mut State) {
     state.submit_record_sfx_played = true;
 }
 
+/// Returns `true` if a `69` appears anywhere notable in a player's score,
+/// mirroring Simply Love's `IsNice()` (ScreenEvaluation PerPlayer/Upper/nice.lua).
+///
+/// Checks, as substrings of their textual form: the ITG percentage
+/// (e.g. `98.69`), every tap-note judgment count (Fantastic..Miss), the radar
+/// actual + possible counts for Holds / Rolls / Mines / Hands, the chart
+/// difficulty meter, and the song title.
+fn score_info_is_nice(si: &ScoreInfo) -> bool {
+    if format!("{:.2}", si.score_percent * 100.0).contains("69") {
+        return true;
+    }
+    if si
+        .judgment_counts
+        .iter()
+        .any(|count| count.to_string().contains("69"))
+    {
+        return true;
+    }
+    let radar_values = [
+        si.holds_held,
+        si.holds_total,
+        si.rolls_held,
+        si.rolls_total,
+        si.mines_avoided,
+        si.mines_hit_for_score,
+        si.mines_total,
+        si.hands_achieved,
+        si.hands_total,
+    ];
+    if radar_values.iter().any(|v| v.to_string().contains("69")) {
+        return true;
+    }
+    if si.chart.meter.to_string().contains("69") {
+        return true;
+    }
+    if si.song.title.contains("69") {
+        return true;
+    }
+    false
+}
+
+/// Fires a one-shot "Nice" SFX (Simply Love parity) the first time the
+/// Evaluation screen shows a score that [`score_info_is_nice`]. Plays at most
+/// once per evaluation visit, regardless of how many joined players are nice.
+///
+/// The sound is sourced from the `assets/sounds/evaluation_nice` folder
+/// (one is chosen at random, files starting with `_` are ignored). It ships
+/// with Simply Love's `nice.ogg` bundled; drop additional `.ogg` files in to
+/// randomize, or disable the whole feature via `CustomSoundsEnabled`.
+fn sync_nice_sfx(state: &mut State) {
+    if state.nice_sfx_played {
+        return;
+    }
+    let is_nice = state.score_info.iter().flatten().any(score_info_is_nice);
+    if !is_nice {
+        return;
+    }
+    crate::engine::audio::folder::play_random_screen_sfx("assets/sounds/evaluation_nice");
+    state.nice_sfx_played = true;
+}
+
 fn sync_missing_submit_status_fallbacks(state: &mut State) {
     for player_idx in 0..MAX_PLAYERS {
         let Some(si) = state.score_info[player_idx].as_ref() else {
@@ -2892,6 +2957,7 @@ pub fn update(state: &mut State, dt: f32) {
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
     sync_submit_record_sfx(state);
+    sync_nice_sfx(state);
     scores::tick_groovestats_auto_retries();
     scores::tick_arrowcloud_auto_retries();
     let play_style = profile::get_session_play_style();
@@ -4078,6 +4144,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(0.0, 0.0, 0.0, 1.0)
                     ));
                 }
+            }
+
+            // "Nice" easter egg graphic (Simply Love PerPlayer/Upper/nice.lua):
+            // when a `69` shows up anywhere notable in the score, draw nice.png
+            // just below the letter grade, matching SL's placement (x = grade x,
+            // y = cy - 94, zoom 0.4).
+            if score_info_is_nice(si) {
+                actors.push(act!(sprite("nice.png"):
+                    align(0.5, 0.5):
+                    xy(upper_origin_x + 70.0 * dir, cy - 94.0):
+                    zoom(0.4):
+                    z(101)
+                ));
             }
 
             // Step artist / description / chart name:

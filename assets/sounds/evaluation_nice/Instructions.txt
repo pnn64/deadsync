@@ -1,0 +1,11 @@
+Plays one `.ogg` at random when the Evaluation screen shows a score whose
+percentage contains "69" anywhere (e.g. 69.42% or 85.69%) -- the Simply Love
+"Nice" easter egg.
+
+This folder ships with `nice.ogg` imported from Simply Love (GPLv3), so the
+sound is active out of the box. Drop additional `.ogg` files in to randomize
+the pick, or remove `nice.ogg` to silence it.
+
+Files starting with `_` are ignored.
+
+Enable / disable the whole feature with `CustomSoundsEnabled` in options.ini.
