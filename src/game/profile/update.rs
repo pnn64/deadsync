@@ -4,13 +4,13 @@ use super::{
 };
 use chrono::Local;
 use deadsync_profile::{
-    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
-    ComboMode, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType, HoldJudgmentGraphic,
-    HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType, LiveTimingStatsMask, MeasureCounter,
-    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
-    NoteSkin, Perspective, Profile, RemoveMask, ScatterplotMaxWindow, ScrollOption,
-    StepStatisticsMask, TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption,
-    VisualEffectsMask,
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ColumnFlashMask,
+    ComboColors, ComboFont, ComboMode, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType,
+    HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
+    LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, Perspective, Profile, RemoveMask,
+    ScatterplotMaxWindow, ScrollOption, StepStatisticsMask, TapExplosionMask, TargetScoreSetting,
+    TimingWindowsOption, TurnOption, VisualEffectsMask,
 };
 use std::path::Path;
 
@@ -224,9 +224,14 @@ pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
     });
 }
 
-pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, hide_flash: bool) {
+pub fn update_early_dw_options_for_side(
+    side: PlayerSide,
+    hide_judgments: bool,
+    hide_flash: bool,
+    hide_column_flash: bool,
+) {
     update_profile_ini(side, |profile| {
-        profile.set_early_dw_options(hide_judgments, hide_flash)
+        profile.set_early_dw_options(hide_judgments, hide_flash, hide_column_flash)
     });
 }
 
@@ -274,6 +279,10 @@ pub fn update_gameplay_extras_for_side(
             nps_graph_at_top,
         )
     });
+}
+
+pub fn update_column_flash_mask_for_side(side: PlayerSide, mask: ColumnFlashMask) {
+    update_profile_ini(side, |profile| profile.set_column_flash_mask(mask));
 }
 
 pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {

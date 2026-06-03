@@ -452,6 +452,53 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn column_flash_judgments_hide_until_parent_toggle_active() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::GameplayExtras,
+                lookup_key("PlayerOptions", "GameplayExtras"),
+                &["ColumnFlashes"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::ColumnFlashJudgments,
+                lookup_key("PlayerOptions", "ColumnFlashJudgments"),
+                &[
+                    "Fantastic",
+                    "Excellent",
+                    "Great",
+                    "Decent",
+                    "WayOff",
+                    "Miss",
+                ],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    gameplay_extras: GameplayExtrasMask::FLASH_COLUMN_FOR_MISS,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn judgment_offsets_hide_when_judgment_font_is_none() {
         ensure_i18n();
         let row_map = test_row_map(vec![

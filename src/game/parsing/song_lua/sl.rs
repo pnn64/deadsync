@@ -174,6 +174,7 @@ fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Resu
     table.set("ErrorBarCap", 5)?;
     table.set("HideEarlyDecentWayOffJudgments", false)?;
     table.set("HideEarlyDecentWayOffFlash", false)?;
+    table.set("HideEarlyDecentWayOffColumnFlash", false)?;
     table.set("FlashMiss", true)?;
     table.set("FlashWayOff", false)?;
     table.set("FlashDecent", false)?;

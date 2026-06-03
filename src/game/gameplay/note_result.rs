@@ -1,7 +1,7 @@
 use deadsync_core::note::NoteType;
 use deadsync_rules::judgment::{JudgeGrade, Judgment};
 
-use super::{HeldMissRenderInfo, MAX_COLS, State};
+use super::{HeldMissRenderInfo, MAX_COLS, State, trigger_column_flash};
 
 #[inline(always)]
 fn mark_row_provisional_early_result(state: &mut State, note_index: usize) {
@@ -52,9 +52,10 @@ pub(super) fn set_final_note_result(state: &mut State, note_index: usize, judgme
     state.notes[note_index].result = Some(judgment);
     if was_unjudged {
         mark_row_note_finalized(state, note_index);
-        if judgment.grade == JudgeGrade::Miss && judgment.miss_because_held {
+        if judgment.grade == JudgeGrade::Miss {
             let column = state.notes[note_index].column;
-            if column < MAX_COLS {
+            trigger_column_flash(state, column, judgment.grade);
+            if judgment.miss_because_held && column < MAX_COLS {
                 state.held_miss_judgments[column] = Some(HeldMissRenderInfo {
                     started_at_screen_s: state.total_elapsed_in_screen,
                 });

@@ -49,7 +49,6 @@ fn push_saved_options(
         cfg.updater_install_enabled,
     );
     push_line(content, "BGBrightness", cfg.bg_brightness.clamp(0.0, 1.0));
-    push_line(content, "GameplayBgColor", cfg.gameplay_bg_color.to_hex());
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);
     push_bool(content, "CDTitleCache", cfg.cdtitle_cache);
@@ -457,26 +456,6 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         content,
         "AllowSwitchProfileInMenu",
         cfg.allow_switch_profile_in_menu,
-    );
-    push_line(
-        content,
-        "SelectMusicShortcutPractice",
-        keycode_to_token(cfg.music_select_shortcut_practice),
-    );
-    push_line(
-        content,
-        "SelectMusicShortcutSongSearch",
-        keycode_to_token(cfg.music_select_shortcut_song_search),
-    );
-    push_line(
-        content,
-        "SelectMusicShortcutLoadSongs",
-        keycode_to_token(cfg.music_select_shortcut_load_songs),
-    );
-    push_line(
-        content,
-        "SelectMusicShortcutTestInput",
-        keycode_to_token(cfg.music_select_shortcut_test_input),
     );
     push_bool(
         content,

@@ -13,16 +13,16 @@ use std::time::Instant;
 mod update;
 
 use deadsync_profile::{
-    AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, DEFAULT_PROFILE_ID,
-    GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask, InsertMask,
-    LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType, LocalProfileSummary,
-    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType,
-    MiniIndicatorSize, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData, PlayerSide,
-    Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask, ScrollOption, StepStatisticsMask,
-    TargetScoreSetting, TimingTickMode, TimingWindowsOption, TurnOption, VisualEffectsMask,
-    active_profile_is_guest, active_profile_local_id, add_known_pack_names,
-    append_last_played_course_section, append_last_played_section, append_player_options_section,
-    clamp_weight_pounds, cmp_profile_ids_case_insensitive,
+    AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, ColumnFlashMask,
+    DEFAULT_PROFILE_ID, GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask,
+    InsertMask, LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType,
+    LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
+    PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
+    ScrollOption, StepStatisticsMask, TargetScoreSetting, TimingTickMode, TimingWindowsOption,
+    TurnOption, VisualEffectsMask, active_profile_is_guest, active_profile_local_id,
+    add_known_pack_names, append_last_played_course_section, append_last_played_section,
+    append_player_options_section, clamp_weight_pounds, cmp_profile_ids_case_insensitive,
     decode_profile_stats as decode_profile_stats_bytes, encode_profile_stats, initials_from_name,
     is_local_profile_id, joined_player_mask, load_error_bar_options,
     load_last_played_course_section, load_last_played_section, load_timing_feedback_options,
@@ -216,6 +216,10 @@ fn load_player_options(
         .get(section, "HideEarlyDecentWayOffFlash")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.hide_early_dw_flash, |v| v != 0);
+    options.hide_early_dw_column_flash = profile_conf
+        .get(section, "HideEarlyDecentWayOffColumnFlash")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_column_flash, |v| v != 0);
     options.timing_windows = profile_conf
         .get(section, "TimingWindows")
         .and_then(|s| TimingWindowsOption::from_str(&s).ok())
@@ -252,6 +256,11 @@ fn load_player_options(
         .get(section, "ColumnFlashOnMiss")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.column_flash_on_miss, |v| v != 0);
+    options.column_flash_mask = profile_conf
+        .get(section, "ColumnFlashMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(ColumnFlashMask::from_bits_truncate)
+        .unwrap_or(options.column_flash_mask);
     options.subtractive_scoring = profile_conf
         .get(section, "SubtractiveScoring")
         .and_then(|s| s.parse::<u8>().ok())

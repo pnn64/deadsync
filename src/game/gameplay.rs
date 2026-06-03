@@ -645,8 +645,22 @@ pub const MINE_EXPLOSION_DURATION: f32 = 0.6;
 pub const HOLD_JUDGMENT_TOTAL_DURATION: f32 = 0.8;
 pub const HELD_MISS_TOTAL_DURATION: f32 = 0.5;
 pub const RECEPTOR_GLOW_DURATION: f32 = 0.2;
+pub const COLUMN_FLASH_MISS_DURATION: f32 = 0.16;
+pub const COLUMN_FLASH_JUDGMENT_DURATION: f32 = 0.33;
 pub const COMBO_HUNDRED_MILESTONE_DURATION: f32 = 0.6;
 pub const COMBO_THOUSAND_MILESTONE_DURATION: f32 = 0.7;
+
+#[inline(always)]
+pub const fn column_flash_duration(grade: JudgeGrade) -> f32 {
+    match grade {
+        JudgeGrade::Miss => COLUMN_FLASH_MISS_DURATION,
+        JudgeGrade::Fantastic
+        | JudgeGrade::Excellent
+        | JudgeGrade::Great
+        | JudgeGrade::Decent
+        | JudgeGrade::WayOff => COLUMN_FLASH_JUDGMENT_DURATION,
+    }
+}
 
 // Simply Love danger overlay semantics (ScreenGameplay underlay/PerPlayer/Danger.lua).
 // Metrics: itgmania/Themes/Simply Love/metrics.ini -> DangerThreshold=0.2
@@ -2865,6 +2879,12 @@ pub struct ActiveTapExplosion {
     pub start_beat: f32,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct ActiveColumnFlash {
+    pub grade: JudgeGrade,
+    pub started_at_screen_s: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ActiveMineExplosion {
     pub elapsed: f32,
@@ -3797,6 +3817,7 @@ pub struct State {
     receptor_glow_lift_start_zoom: [f32; MAX_COLS],
     pub receptor_bop_timers: [f32; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
     pub active_holds: [Option<ActiveHold>; MAX_COLS],
 
@@ -5080,6 +5101,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.hold_judgments = [None; MAX_COLS];
     state.held_miss_judgments = [None; MAX_COLS];
     state.tap_explosions = std::array::from_fn(|_| None);
+    state.column_flashes = std::array::from_fn(|_| None);
     state.mine_explosions = std::array::from_fn(|_| None);
     state.active_holds = std::array::from_fn(|_| None);
     state.receptor_glow_timers.fill(0.0);
@@ -6434,6 +6456,7 @@ pub fn init(
         receptor_glow_lift_start_zoom: [1.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
         tap_explosions: Default::default(),
+        column_flashes: Default::default(),
         mine_explosions: Default::default(),
         active_holds: Default::default(),
         holds_total,
@@ -6666,12 +6689,33 @@ fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &J
     judgment.window == Some(TimingWindow::W1)
 }
 
+#[inline(always)]
+pub(super) fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade) {
+    if column >= state.column_flashes.len() {
+        return;
+    }
+    let player = player_for_col(state, column);
+    let Some(profile) = state.player_profiles.get(player) else {
+        return;
+    };
+    if !profile.column_flash_on_miss
+        || !profile_data::column_flash_mask_enabled(profile.column_flash_mask, grade)
+    {
+        return;
+    }
+    state.column_flashes[column] = Some(ActiveColumnFlash {
+        grade,
+        started_at_screen_s: state.total_elapsed_in_screen,
+    });
+}
+
 fn trigger_tap_judgment_explosion(
     state: &mut State,
     player: usize,
     column: usize,
     judgment: &Judgment,
 ) {
+    trigger_column_flash(state, column, judgment.grade);
     let Some(window_key) = grade_to_window(judgment.grade) else {
         return;
     };
@@ -6679,11 +6723,22 @@ fn trigger_tap_judgment_explosion(
     spawn_tap_explosion(state, column, window_key, bright);
 }
 
+#[cfg(test)]
 fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
+    trigger_column_flash(state, column, grade);
+    spawn_tap_explosion_for_grade(state, column, grade, false);
+}
+
+fn spawn_tap_explosion_for_grade(
+    state: &mut State,
+    column: usize,
+    grade: JudgeGrade,
+    bright: bool,
+) {
     let Some(window_key) = grade_to_window(grade) else {
         return;
     };
-    spawn_tap_explosion(state, column, window_key, false);
+    spawn_tap_explosion(state, column, window_key, bright);
 }
 
 pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
@@ -7282,7 +7337,7 @@ fn set_last_mine_judgment(state: &mut State, player: usize, column: usize, resul
 }
 
 #[inline(always)]
-fn render_provisional_early_rescore_feedback(
+pub(super) fn render_provisional_early_rescore_feedback(
     state: &mut State,
     player: usize,
     column: usize,
@@ -7290,6 +7345,7 @@ fn render_provisional_early_rescore_feedback(
     current_time: f32,
     hide_early_dw_judgments: bool,
     hide_early_dw_flash: bool,
+    hide_early_dw_column_flash: bool,
 ) {
     if !hide_early_dw_judgments {
         set_last_judgment(state, player, *judgment);
@@ -7298,7 +7354,11 @@ fn render_provisional_early_rescore_feedback(
 
     if !hide_early_dw_flash {
         trigger_receptor_glow_pulse(state, column);
-        trigger_tap_explosion(state, column, judgment.grade);
+        spawn_tap_explosion_for_grade(state, column, judgment.grade, false);
+    }
+
+    if !hide_early_dw_column_flash {
+        trigger_column_flash(state, column, judgment.grade);
     }
 }
 
@@ -7314,6 +7374,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
+    let hide_early_dw_column_flash = state.player_profiles[player].hide_early_dw_column_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let lane_notes = &state.lane_note_indices[column];
     let current_row_index = timing_row_nearest(
@@ -7521,6 +7582,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
                         song_time_ns_to_seconds(current_time_ns),
                         hide_early_dw_judgments,
                         hide_early_dw_flash,
+                        hide_early_dw_column_flash,
                     );
                     // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
                     // should immediately drive EarlyHit-style visuals, but the later finalized
@@ -7757,6 +7819,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
+    let hide_early_dw_column_flash = state.player_profiles[player].hide_early_dw_column_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let lane_notes = &state.lane_note_indices[column];
     let current_row_index = timing_row_nearest(
@@ -7850,6 +7913,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
                     song_time_ns_to_seconds(current_time_ns),
                     hide_early_dw_judgments,
                     hide_early_dw_flash,
+                    hide_early_dw_column_flash,
                 );
 
                 log_timing_hit_detail(
@@ -8843,10 +8907,11 @@ mod tests {
         note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        set_final_note_result, settle_completion_rows, single_runtime_player_is_p2,
-        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, start_active_hold,
+        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
+        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
+        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
         step_stats_density_graph_width, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
         tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
@@ -11055,6 +11120,90 @@ return Def.ActorFrame{}
         let mut disabled = regression_state([profile, profile_data::Profile::default()]);
         trigger_tap_explosion(&mut disabled, column, JudgeGrade::Great);
         assert!(disabled.tap_explosions[column].is_none());
+    }
+
+    #[test]
+    fn column_flash_mask_gates_completed_row_flash() {
+        let row_index = 48usize;
+        let column = 1usize;
+        let build_state = |mask| {
+            let mut profile = profile_data::Profile::default();
+            profile.column_flash_on_miss = true;
+            profile.column_flash_mask = mask;
+            let mut state = regression_state([profile, profile_data::Profile::default()]);
+            state.notes = vec![note_with_judgment(
+                column,
+                row_index,
+                NoteType::Tap,
+                JudgeGrade::Great,
+                0.0,
+            )];
+            state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+            state.row_entries = vec![test_row_entry_with_times(
+                &state.notes,
+                &state.note_time_cache_ns,
+                row_index,
+                vec![0],
+            )];
+            state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+            state.row_map_cache[0][row_index] = 0;
+            state
+        };
+
+        let mut disabled = build_state(profile_data::ColumnFlashMask::EXCELLENT);
+        trigger_completed_row_tap_explosions(&mut disabled, 0, row_index);
+        assert!(disabled.column_flashes[column].is_none());
+
+        let mut enabled = build_state(profile_data::ColumnFlashMask::GREAT);
+        trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
+        let flash = enabled.column_flashes[column].expect("Great should trigger column flash");
+        assert_eq!(flash.grade, JudgeGrade::Great);
+    }
+
+    #[test]
+    fn early_dw_column_flash_hide_is_independent_from_notefield_flash() {
+        let column = 1usize;
+        let judgment = Judgment {
+            time_error_ms: -120.0,
+            time_error_music_ns: song_time_ns_from_seconds(-0.12),
+            grade: JudgeGrade::Decent,
+            window: Some(TimingWindow::W4),
+            miss_because_held: false,
+        };
+        let build_state = || {
+            let mut profile = profile_data::Profile::default();
+            profile.column_flash_on_miss = true;
+            profile.column_flash_mask = profile_data::ColumnFlashMask::DECENT;
+            regression_state([profile, profile_data::Profile::default()])
+        };
+
+        let mut hide_notefield = build_state();
+        render_provisional_early_rescore_feedback(
+            &mut hide_notefield,
+            0,
+            column,
+            &judgment,
+            1.0,
+            true,
+            true,
+            false,
+        );
+        assert!(hide_notefield.tap_explosions[column].is_none());
+        assert!(hide_notefield.column_flashes[column].is_some());
+
+        let mut hide_column = build_state();
+        render_provisional_early_rescore_feedback(
+            &mut hide_column,
+            0,
+            column,
+            &judgment,
+            1.0,
+            true,
+            false,
+            true,
+        );
+        assert!(hide_column.tap_explosions[column].is_some());
+        assert!(hide_column.column_flashes[column].is_none());
     }
 
     #[test]

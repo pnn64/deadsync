@@ -18,10 +18,11 @@ use super::{
     HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION,
     RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge,
     SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us,
-    begin_exit_transition, current_music_time_s, elapsed_us_between, gameplay_input_log_enabled,
-    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
-    music_time_ns_from_song_clock, record_step_calories, refresh_roll_life_on_step,
-    single_runtime_player_is_p2, song_time_ns_invalid, song_time_ns_to_seconds,
+    begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
+    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
+    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
+    refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
+    song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -887,6 +888,14 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }
+        }
+    }
+    for slot in &mut state.column_flashes {
+        if let Some(active) = slot
+            && state.total_elapsed_in_screen - active.started_at_screen_s
+                >= column_flash_duration(active.grade)
+        {
+            *slot = None;
         }
     }
     for slot in &mut state.hold_judgments {

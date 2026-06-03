@@ -15,7 +15,7 @@ use crate::game::gameplay::{
     TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
-    active_chart_attack_effects_for_player, active_hold_is_engaged,
+    active_chart_attack_effects_for_player, active_hold_is_engaged, column_flash_duration,
     effective_accel_effects_for_player, effective_appearance_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
@@ -65,6 +65,7 @@ const COLUMN_CUE_TEXT_NORMAL_Y: f32 = 80.0;
 const COLUMN_CUE_TEXT_REVERSE_Y: f32 = 260.0;
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
 const COLUMN_CUE_BASE_ALPHA: f32 = 0.12;
+const COLUMN_FLASH_BASE_ALPHA: f32 = 0.66;
 const LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT: f32 = 140.0; // Each frame in Love 1x2 (doubleres).png is 140px tall
 const HOLD_JUDGMENT_FINAL_HEIGHT: f32 = 32.0; // Matches Simply Love's final on-screen size
 const HOLD_JUDGMENT_INITIAL_HEIGHT: f32 = HOLD_JUDGMENT_FINAL_HEIGHT * 0.8; // Mirrors 0.4->0.5 zoom ramp in metrics
@@ -155,6 +156,7 @@ const Z_RECEPTOR_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
+const Z_COLUMN_FLASH: i32 = 91;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 const Z_MEASURE_LINES: i32 = 80;
 const Z_JUDGMENT_FRONT: i16 = 200;
@@ -2490,6 +2492,31 @@ fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
 }
 
 #[inline(always)]
+fn column_flash_alpha(started_at: f32, current_time: f32, grade: JudgeGrade) -> f32 {
+    let elapsed = current_time - started_at;
+    let duration = column_flash_duration(grade);
+    if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= duration || duration <= 0.0 {
+        return 0.0;
+    }
+    let t = (elapsed / duration).clamp(0.0, 1.0);
+    COLUMN_FLASH_BASE_ALPHA * (1.0 - t * t)
+}
+
+#[inline(always)]
+fn column_flash_color(grade: JudgeGrade, alpha: f32) -> [f32; 4] {
+    let mut rgba = match grade {
+        JudgeGrade::Fantastic => [1.0, 1.0, 1.0, 1.0],
+        JudgeGrade::Excellent => color::JUDGMENT_RGBA[1],
+        JudgeGrade::Great => color::JUDGMENT_RGBA[2],
+        JudgeGrade::Decent => color::JUDGMENT_RGBA[3],
+        JudgeGrade::WayOff => color::JUDGMENT_RGBA[4],
+        JudgeGrade::Miss => color::JUDGMENT_RGBA[5],
+    };
+    rgba[3] = alpha;
+    rgba
+}
+
+#[inline(always)]
 fn column_cue_height() -> f32 {
     (screen_height() - COLUMN_CUE_Y_OFFSET).max(0.0)
 }
@@ -4087,6 +4114,11 @@ pub fn build_bundles(
     let actor_cap = (num_cols * 10).max(28)
         + measure_line_extra
         + if profile.column_cues { num_cols + 4 } else { 0 }
+        + if profile.column_flash_on_miss {
+            num_cols
+        } else {
+            0
+        }
         + if !error_bar_mask.is_empty() { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
@@ -4863,6 +4895,44 @@ pub fn build_bundles(
                             diffuse(1.0, 1.0, 1.0, alpha_mul)
                         ));
                     }
+                }
+            }
+        }
+
+        if profile.column_flash_on_miss {
+            let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
+            let flash_height = column_cue_height();
+            for (i, flash_opt) in state.column_flashes[col_start..col_end].iter().enumerate() {
+                let Some(flash) = flash_opt else {
+                    continue;
+                };
+                let alpha =
+                    column_flash_alpha(flash.started_at_screen_s, elapsed_screen, flash.grade);
+                if alpha <= 0.0 {
+                    continue;
+                }
+                let x = playfield_center_x + ns.column_xs[i] as f32 * spacing_mult * field_zoom;
+                let color = column_flash_color(flash.grade, alpha);
+                if column_dirs[i] < 0.0 {
+                    let reverse_y =
+                        column_cue_reverse_top_y(lane_width, flash_height, notefield_offset_y);
+                    actors.push(act!(quad:
+                        align(0.5, 0.0):
+                        xy(x, reverse_y):
+                        zoomto(lane_width, flash_height):
+                        fadetop(0.333):
+                        diffuse(color[0], color[1], color[2], color[3]):
+                        z(Z_COLUMN_FLASH)
+                    ));
+                } else {
+                    actors.push(act!(quad:
+                        align(0.5, 0.0):
+                        xy(x, COLUMN_CUE_Y_OFFSET + notefield_offset_y):
+                        zoomto(lane_width, flash_height):
+                        fadebottom(0.333):
+                        diffuse(color[0], color[1], color[2], color[3]):
+                        z(Z_COLUMN_FLASH)
+                    ));
                 }
             }
         }

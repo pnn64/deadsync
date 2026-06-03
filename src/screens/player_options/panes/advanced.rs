@@ -7,10 +7,10 @@ use super::super::row::{
 };
 use super::super::row::{fanout_bitmask_binding, index_binding};
 use super::super::state::{
-    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
-    HideMask, LifeBarOptionsMask, LiveTimingStatsMask, MeasureCounterOptionsMask,
-    PlayerOptionMasks, ResultsExtrasMask, STEP_STATISTICS_ROW_WIDTH, ScrollMask,
-    step_statistics_choice_bits, step_statistics_mask_from_choice_bits,
+    ColumnFlashMask, EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask,
+    GameplayExtrasMoreMask, HideMask, LifeBarOptionsMask, LiveTimingStatsMask,
+    MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask, STEP_STATISTICS_ROW_WIDTH,
+    ScrollMask, step_statistics_choice_bits, step_statistics_mask_from_choice_bits,
 };
 use super::*;
 use crate::game::profile as gp;
@@ -555,6 +555,33 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
         sync_visibility: true,
     },
 };
+const COLUMN_FLASH_JUDGMENTS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        from_profile: |p| p.column_flash_mask.bits() as u32,
+        get_active: |m| m.column_flash.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "ColumnFlashMask init bits exceed u8 width",
+            );
+            m.column_flash = ColumnFlashMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, b| {
+            let mask = ColumnFlashMask::from_bits_truncate(b as u8);
+            p.column_flash_mask = mask;
+            m.column_flash = mask;
+        },
+        persist_for_side: |s, p| {
+            gp::update_column_flash_mask_for_side(s, p.column_flash_mask);
+        },
+        bit_mapping: BitMapping::Sequential { width: 6 },
+        sync_visibility: false,
+    },
+};
 const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
         from_profile: |p| p.live_timing_stats_mask.bits() as u32,
@@ -758,9 +785,15 @@ const EARLY_DW_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
     fields = [
         (HIDE_JUDGMENTS, hide_early_dw_judgments),
         (HIDE_FLASH, hide_early_dw_flash),
+        (HIDE_COLUMN_FLASH, hide_early_dw_column_flash),
     ],
     persist_for_side = |s, p| {
-        gp::update_early_dw_options_for_side(s, p.hide_early_dw_judgments, p.hide_early_dw_flash);
+        gp::update_early_dw_options_for_side(
+            s,
+            p.hide_early_dw_judgments,
+            p.hide_early_dw_flash,
+            p.hide_early_dw_column_flash,
+        );
     },
     sync_visibility = false,
 );
@@ -1118,6 +1151,14 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
+    let column_flash_choices = vec![
+        tr("Gameplay", "JudgmentFantastic").to_string(),
+        tr("Gameplay", "JudgmentExcellent").to_string(),
+        tr("Gameplay", "JudgmentGreat").to_string(),
+        tr("Gameplay", "JudgmentDecent").to_string(),
+        tr("Gameplay", "JudgmentWayOff").to_string(),
+        tr("Gameplay", "JudgmentMiss").to_string(),
+    ];
     let live_timing_stats_choices = vec![
         tr("PlayerOptions", "LiveTimingStatsMean").to_string(),
         tr("PlayerOptions", "LiveTimingStatsMeanAbs").to_string(),
@@ -1305,6 +1346,13 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "GameplayExtrasHelp"),
         GAMEPLAY_EXTRAS,
         gameplay_extras_choices,
+    ));
+    b.push(Row::bitmask(
+        RowId::ColumnFlashJudgments,
+        lookup_key("PlayerOptions", "ColumnFlashJudgments"),
+        lookup_key("PlayerOptionsHelp", "ColumnFlashJudgmentsHelp"),
+        COLUMN_FLASH_JUDGMENTS,
+        column_flash_choices,
     ));
     b.push(Row::bitmask(
         RowId::LiveTimingStats,
@@ -1591,6 +1639,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
                 "EarlyDecentWayOffOptionsHideNoteFieldFlash",
             )
             .to_string(),
+            tr("PlayerOptions", "EarlyDecentWayOffOptionsHideColumnFlash").to_string(),
         ],
     ));
     b.push(Row::bitmask(

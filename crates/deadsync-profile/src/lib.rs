@@ -1,6 +1,7 @@
 use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
+use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::HashSet;
@@ -53,6 +54,7 @@ pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
 pub const TAP_EXPLOSION_MASK_VERSION: u8 = 2;
+pub const DEFAULT_COLUMN_FLASH_MASK: ColumnFlashMask = ColumnFlashMask::MISS;
 
 #[inline(always)]
 pub const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
@@ -150,6 +152,23 @@ pub fn normalize_tap_explosion_mask(bits: u8, version: u8) -> TapExplosionMask {
         mask.insert(TapExplosionMask::MISS | TapExplosionMask::HOLDING);
     }
     mask
+}
+
+#[inline(always)]
+pub const fn column_flash_mask_for_grade(grade: JudgeGrade) -> ColumnFlashMask {
+    match grade {
+        JudgeGrade::Fantastic => ColumnFlashMask::FANTASTIC,
+        JudgeGrade::Excellent => ColumnFlashMask::EXCELLENT,
+        JudgeGrade::Great => ColumnFlashMask::GREAT,
+        JudgeGrade::Decent => ColumnFlashMask::DECENT,
+        JudgeGrade::WayOff => ColumnFlashMask::WAY_OFF,
+        JudgeGrade::Miss => ColumnFlashMask::MISS,
+    }
+}
+
+#[inline(always)]
+pub const fn column_flash_mask_enabled(mask: ColumnFlashMask, grade: JudgeGrade) -> bool {
+    mask.contains(column_flash_mask_for_grade(grade))
 }
 
 #[inline(always)]
@@ -1080,6 +1099,19 @@ bitflags! {
         const HELD      = 1 << 5;
         const MISS      = 1 << 6;
         const HOLDING   = 1 << 7;
+    }
+}
+
+bitflags! {
+    /// Persisted bitmask of judgments that trigger gameplay column flashes.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct ColumnFlashMask: u8 {
+        const FANTASTIC = 1 << 0;
+        const EXCELLENT = 1 << 1;
+        const GREAT     = 1 << 2;
+        const DECENT    = 1 << 3;
+        const WAY_OFF   = 1 << 4;
+        const MISS      = 1 << 5;
     }
 }
 
@@ -2563,6 +2595,7 @@ pub struct PlayerOptionsData {
     pub rescore_early_hits: bool,
     pub hide_early_dw_judgments: bool,
     pub hide_early_dw_flash: bool,
+    pub hide_early_dw_column_flash: bool,
     pub timing_windows: TimingWindowsOption,
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,
@@ -2621,6 +2654,7 @@ pub struct PlayerOptionsData {
     pub hide_danger: bool,
     pub hide_combo_explosions: bool,
     pub column_flash_on_miss: bool,
+    pub column_flash_mask: ColumnFlashMask,
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
@@ -2674,6 +2708,7 @@ fn default_player_options() -> PlayerOptionsData {
         rescore_early_hits: true,
         hide_early_dw_judgments: false,
         hide_early_dw_flash: false,
+        hide_early_dw_column_flash: false,
         timing_windows: TimingWindowsOption::default(),
         show_fa_plus_window: false,
         show_ex_score: false,
@@ -2732,6 +2767,7 @@ fn default_player_options() -> PlayerOptionsData {
         hide_danger: false,
         hide_combo_explosions: false,
         column_flash_on_miss: false,
+        column_flash_mask: DEFAULT_COLUMN_FLASH_MASK,
         subtractive_scoring: false,
         pacemaker: false,
         nps_graph_at_top: false,
@@ -3093,6 +3129,10 @@ pub fn append_player_options_section(
         "HideEarlyDecentWayOffFlash={}\n",
         i32::from(options.hide_early_dw_flash)
     ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffColumnFlash={}\n",
+        i32::from(options.hide_early_dw_column_flash)
+    ));
     content.push_str(&format!("TimingWindows={}\n", options.timing_windows));
     content.push_str(&format!(
         "HideTargets={}\n",
@@ -3113,6 +3153,10 @@ pub fn append_player_options_section(
     content.push_str(&format!(
         "ColumnFlashOnMiss={}\n",
         i32::from(options.column_flash_on_miss)
+    ));
+    content.push_str(&format!(
+        "ColumnFlashMask={}\n",
+        options.column_flash_mask.bits()
     ));
     content.push_str(&format!(
         "SubtractiveScoring={}\n",
@@ -3456,6 +3500,7 @@ pub struct Profile {
     // Visual behavior for early Decent/Way Off hits (Simply Love semantics).
     pub hide_early_dw_judgments: bool,
     pub hide_early_dw_flash: bool,
+    pub hide_early_dw_column_flash: bool,
     pub timing_windows: TimingWindowsOption,
     // FA+ visual options (Simply Love semantics).
     // These do not change core timing semantics; they only affect HUD/UX.
@@ -3540,6 +3585,7 @@ pub struct Profile {
     pub hide_combo_explosions: bool,
     // Gameplay extras (Simply Love semantics).
     pub column_flash_on_miss: bool,
+    pub column_flash_mask: ColumnFlashMask,
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
@@ -3635,6 +3681,7 @@ impl Default for Profile {
             rescore_early_hits: player_options.rescore_early_hits,
             hide_early_dw_judgments: player_options.hide_early_dw_judgments,
             hide_early_dw_flash: player_options.hide_early_dw_flash,
+            hide_early_dw_column_flash: player_options.hide_early_dw_column_flash,
             timing_windows: player_options.timing_windows,
             show_fa_plus_window: player_options.show_fa_plus_window,
             show_ex_score: player_options.show_ex_score,
@@ -3693,6 +3740,7 @@ impl Default for Profile {
             hide_danger: player_options.hide_danger,
             hide_combo_explosions: player_options.hide_combo_explosions,
             column_flash_on_miss: player_options.column_flash_on_miss,
+            column_flash_mask: player_options.column_flash_mask,
             subtractive_scoring: player_options.subtractive_scoring,
             pacemaker: player_options.pacemaker,
             nps_graph_at_top: player_options.nps_graph_at_top,
@@ -3849,13 +3897,29 @@ impl Profile {
         true
     }
 
-    pub fn set_early_dw_options(&mut self, hide_judgments: bool, hide_flash: bool) -> bool {
-        if self.hide_early_dw_judgments == hide_judgments && self.hide_early_dw_flash == hide_flash
+    pub fn set_column_flash_mask(&mut self, mask: ColumnFlashMask) -> bool {
+        if self.column_flash_mask == mask {
+            return false;
+        }
+        self.column_flash_mask = mask;
+        true
+    }
+
+    pub fn set_early_dw_options(
+        &mut self,
+        hide_judgments: bool,
+        hide_flash: bool,
+        hide_column_flash: bool,
+    ) -> bool {
+        if self.hide_early_dw_judgments == hide_judgments
+            && self.hide_early_dw_flash == hide_flash
+            && self.hide_early_dw_column_flash == hide_column_flash
         {
             return false;
         }
         self.hide_early_dw_judgments = hide_judgments;
         self.hide_early_dw_flash = hide_flash;
+        self.hide_early_dw_column_flash = hide_column_flash;
         true
     }
 
@@ -4151,6 +4215,7 @@ impl Profile {
             rescore_early_hits: self.rescore_early_hits,
             hide_early_dw_judgments: self.hide_early_dw_judgments,
             hide_early_dw_flash: self.hide_early_dw_flash,
+            hide_early_dw_column_flash: self.hide_early_dw_column_flash,
             timing_windows: self.timing_windows,
             show_fa_plus_window: self.show_fa_plus_window,
             show_ex_score: self.show_ex_score,
@@ -4209,6 +4274,7 @@ impl Profile {
             hide_danger: self.hide_danger,
             hide_combo_explosions: self.hide_combo_explosions,
             column_flash_on_miss: self.column_flash_on_miss,
+            column_flash_mask: self.column_flash_mask,
             subtractive_scoring: self.subtractive_scoring,
             pacemaker: self.pacemaker,
             nps_graph_at_top: self.nps_graph_at_top,
@@ -4264,6 +4330,7 @@ impl Profile {
         self.rescore_early_hits = options.rescore_early_hits;
         self.hide_early_dw_judgments = options.hide_early_dw_judgments;
         self.hide_early_dw_flash = options.hide_early_dw_flash;
+        self.hide_early_dw_column_flash = options.hide_early_dw_column_flash;
         self.timing_windows = options.timing_windows;
         self.show_fa_plus_window = options.show_fa_plus_window;
         self.show_ex_score = options.show_ex_score;
@@ -4322,6 +4389,7 @@ impl Profile {
         self.hide_danger = options.hide_danger;
         self.hide_combo_explosions = options.hide_combo_explosions;
         self.column_flash_on_miss = options.column_flash_on_miss;
+        self.column_flash_mask = options.column_flash_mask;
         self.subtractive_scoring = options.subtractive_scoring;
         self.pacemaker = options.pacemaker;
         self.nps_graph_at_top = options.nps_graph_at_top;
@@ -4465,6 +4533,7 @@ mod tests {
         assert_eq!(options.measure_counter_lookahead, 2);
         assert!(options.measure_counter_left);
         assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
+        assert_eq!(options.column_flash_mask, DEFAULT_COLUMN_FLASH_MASK);
     }
 
     #[test]
@@ -4661,10 +4730,11 @@ mod tests {
     fn profile_grouped_visibility_options_update_together() {
         let mut profile = Profile::default();
 
-        assert!(profile.set_early_dw_options(true, true));
+        assert!(profile.set_early_dw_options(true, true, true));
         assert!(profile.hide_early_dw_judgments);
         assert!(profile.hide_early_dw_flash);
-        assert!(!profile.set_early_dw_options(true, true));
+        assert!(profile.hide_early_dw_column_flash);
+        assert!(!profile.set_early_dw_options(true, true, true));
 
         assert!(profile.set_hide_options(true, true, false, true, false, true, true));
         assert!(profile.hide_targets);
@@ -4790,7 +4860,6 @@ mod tests {
             profile.long_error_bar_min_samples,
             LONG_ERROR_BAR_MIN_SAMPLES_MIN
         );
-
     }
 
     #[test]
@@ -5452,6 +5521,8 @@ mod tests {
         assert!(content.contains(&format!(
             "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
         )));
+        assert!(content.contains("HideEarlyDecentWayOffColumnFlash=0\n"));
+        assert!(content.contains("ColumnFlashMask=32\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
     }
@@ -5978,6 +6049,29 @@ mod tests {
             TapExplosionMask::from_bits_truncate(u8::MAX),
             TapExplosionMask::all()
         );
+    }
+
+    #[test]
+    fn column_flash_mask_layout_is_stable() {
+        assert_eq!(ColumnFlashMask::FANTASTIC.bits(), 1 << 0);
+        assert_eq!(ColumnFlashMask::EXCELLENT.bits(), 1 << 1);
+        assert_eq!(ColumnFlashMask::GREAT.bits(), 1 << 2);
+        assert_eq!(ColumnFlashMask::DECENT.bits(), 1 << 3);
+        assert_eq!(ColumnFlashMask::WAY_OFF.bits(), 1 << 4);
+        assert_eq!(ColumnFlashMask::MISS.bits(), 1 << 5);
+        assert_eq!(ColumnFlashMask::all().bits(), 0b0011_1111);
+        assert_eq!(
+            ColumnFlashMask::from_bits_truncate(u8::MAX),
+            ColumnFlashMask::all()
+        );
+        assert!(column_flash_mask_enabled(
+            ColumnFlashMask::MISS,
+            JudgeGrade::Miss
+        ));
+        assert!(!column_flash_mask_enabled(
+            ColumnFlashMask::MISS,
+            JudgeGrade::Great
+        ));
     }
 
     #[test]

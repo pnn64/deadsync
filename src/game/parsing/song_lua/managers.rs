@@ -895,6 +895,7 @@ const OPTION_MEASURE_LINES: &[&str] = &["Off", "Measure", "Quarter", "Eighth"];
 const OPTION_TIMING_WINDOW_OPTIONS: &[&str] = &[
     "HideEarlyDecentWayOffJudgments",
     "HideEarlyDecentWayOffFlash",
+    "HideEarlyDecentWayOffColumnFlash",
 ];
 const OPTION_TIMING_WINDOWS: &[&str] = &["All", "Hide Way Off", "Hide Decents and Way Offs"];
 const OPTION_FA_PLUS: &[&str] = &["ShowFaPlusWindow", "ShowExScore", "ShowFaPlusPane"];

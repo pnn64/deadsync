@@ -21,6 +21,7 @@ pub(super) struct RowVisibility {
     pub(super) show_indicator_score_type: bool,
     pub(super) show_mini_indicator_size: bool,
     pub(super) show_mini_indicator_color: bool,
+    pub(super) show_column_flash_judgments: bool,
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
@@ -98,6 +99,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::MiniIndicatorColor {
         return visibility.show_mini_indicator_color;
     }
+    if id == RowId::ColumnFlashJudgments {
+        return visibility.show_column_flash_judgments;
+    }
     if id == RowId::LiveTimingStats {
         return visibility.show_live_timing_stats;
     }
@@ -165,7 +169,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     {
         return Some(RowId::MiniIndicator);
     }
-    if id == RowId::LiveTimingStats {
+    if id == RowId::ColumnFlashJudgments || id == RowId::LiveTimingStats {
         return Some(RowId::GameplayExtras);
     }
     if id == RowId::TapExplosionOptions {
@@ -496,6 +500,23 @@ fn mini_indicator_visible_for(
     !any_active
 }
 
+pub(super) fn column_flash_judgments_visible(
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if option_masks[player_idx]
+            .gameplay_extras
+            .contains(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
 pub(super) fn live_timing_stats_visible(
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
@@ -567,6 +588,7 @@ pub(super) fn row_visibility(
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
         show_mini_indicator_size: mini_indicator_size_visible(row_map, active),
         show_mini_indicator_color: mini_indicator_color_visible(row_map, active),
+        show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),

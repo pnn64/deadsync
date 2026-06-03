@@ -1,7 +1,7 @@
 use super::*;
 use bitflags::bitflags;
 pub use deadsync_profile::{
-    AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
+    AccelEffectsMask, AppearanceEffectsMask, ColumnFlashMask, ErrorBarMask, HoldsMask, InsertMask,
     LiveTimingStatsMask, RemoveMask, StepStatisticsMask, TapExplosionMask, VisualEffectsMask,
 };
 
@@ -104,8 +104,9 @@ bitflags! {
     /// Active toggles for the Early Decent / Way Off Options row.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct EarlyDwMask: u8 {
-        const HIDE_JUDGMENTS = 1 << 0;
-        const HIDE_FLASH     = 1 << 1;
+        const HIDE_JUDGMENTS    = 1 << 0;
+        const HIDE_FLASH        = 1 << 1;
+        const HIDE_COLUMN_FLASH = 1 << 2;
     }
 }
 
@@ -188,6 +189,7 @@ pub struct PlayerOptionMasks {
     pub early_dw: EarlyDwMask,
     pub step_statistics: StepStatisticsMask,
     pub gameplay_extras: GameplayExtrasMask,
+    pub column_flash: ColumnFlashMask,
     pub live_timing_stats: LiveTimingStatsMask,
     pub gameplay_extras_more: GameplayExtrasMoreMask,
     pub results_extras: ResultsExtrasMask,
