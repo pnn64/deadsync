@@ -4323,6 +4323,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         };
         let configs = crate::game::pad_profiles::load(pid);
         let applied = state.smx_applied[usize::from(*p2)].as_ref();
+        // The main label goes in `bottom_label` (the large line); `top_label` is
+        // the small flavor line, matching every other menu item's two-line style.
         for preset in ["Low", "Medium", "High"] {
             let mark = if applied.is_some_and(|a| a.preset && a.name == preset) {
                 " (active)"
@@ -4330,8 +4332,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 ""
             };
             items.push(select_music_menu::pad_profile_item(
-                format!("{prefix}{preset}{mark}"),
-                "",
+                format!("{prefix}Sensitivity"),
+                format!("{preset}{mark}"),
                 *p2,
                 true,
                 preset,
@@ -4346,8 +4348,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 ""
             };
             items.push(select_music_menu::pad_profile_item(
-                format!("{prefix}{}{mark}", c.name),
-                "",
+                format!("{prefix}Pad Profile"),
+                format!("{}{mark}", c.name),
                 *p2,
                 false,
                 c.name.clone(),
