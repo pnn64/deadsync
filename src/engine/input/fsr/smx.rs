@@ -4,7 +4,7 @@ use crate::engine::input::fsr::{
     BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
 };
 use crate::engine::smx;
-use rustmaniax_sdk::{ConfigFlags, SensorTestData, SensorTestMode, SmxConfig};
+use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
@@ -431,7 +431,7 @@ fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
 }
 
 fn is_fsr(config: &SmxConfig) -> bool {
-    config.master_version >= 4 && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
+    crate::engine::smx::is_fsr(config)
 }
 
 /// Scale a raw calibrated FSR sensor reading to the 0-250 range used by the

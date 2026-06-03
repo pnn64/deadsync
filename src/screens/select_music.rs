@@ -4295,7 +4295,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
     if !config::get().use_fsrs {
         return None;
     }
-    let mut pads: Vec<(bool, String)> = Vec::new(); // (p2, profile_id)
+    let mut pads: Vec<(bool, String, usize)> = Vec::new(); // (p2, profile_id, slot)
     for slot in 0..2 {
         let info = crate::engine::smx::get_info(slot);
         if !info.connected {
@@ -4307,7 +4307,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
             profile_data::PlayerSide::P1
         };
         if let Some(pid) = profile::active_local_profile_id_for_side(side) {
-            pads.push((info.is_player2, pid));
+            pads.push((info.is_player2, pid, slot));
         }
     }
     if pads.is_empty() {
@@ -4315,13 +4315,24 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
     }
     let show_side = pads.len() > 1;
     let mut items = Vec::new();
-    for (p2, pid) in &pads {
+    for (p2, pid, slot) in &pads {
         let prefix = if show_side {
             if *p2 { "P2 " } else { "P1 " }
         } else {
             ""
         };
-        let configs = crate::game::pad_profiles::load(pid);
+        // Only the configs that match this pad's sensor type (FSR vs load cell).
+        let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
+        let configs: Vec<_> = crate::game::pad_profiles::load(pid)
+            .into_iter()
+            .filter(|c| {
+                crate::game::pad_profiles::config_matches(
+                    c,
+                    crate::engine::smx::BACKEND_ID,
+                    pad_type.as_deref(),
+                )
+            })
+            .collect();
         let applied = state.smx_applied[usize::from(*p2)].as_ref();
         // The main label goes in `bottom_label` (the large line); `top_label` is
         // the small flavor line, matching every other menu item's two-line style.
@@ -8317,7 +8328,7 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
         let Some(c) = configs.iter().find(|c| c.name == name) else {
             return false;
         };
-        match crate::engine::smx::PadConfigData::from_hex(&c.data_hex) {
+        match crate::engine::smx::PadConfigData::from_settings(&c.settings) {
             Some(data) => crate::engine::smx::apply_config_data(slot, &data),
             None => false,
         }
@@ -8372,16 +8383,20 @@ fn perform_pad_profile_save(state: &mut State) {
         audio::play_sfx("assets/sounds/start.ogg");
         return;
     }
-    // Save new: capture the pad's live tuning under the given name.
+    // Save new: capture the pad's live tuning under the given name, tagged with
+    // the backend + sensor type so it only applies to a matching pad.
     let Some(data) = crate::engine::smx::capture_config(slot) else {
         return;
     };
+    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
     crate::game::pad_profiles::upsert(
         &profile_id,
         &name,
+        crate::engine::smx::BACKEND_ID,
+        pad_type,
         Some(info.serial),
         draft.set_default,
-        data.to_hex(),
+        data.to_settings(),
     );
     audio::play_sfx("assets/sounds/start.ogg");
 }
@@ -8413,7 +8428,7 @@ fn perform_pad_profile_apply(state: &mut State) {
     let Some(c) = configs.iter().find(|c| c.name == name) else {
         return;
     };
-    if let Some(data) = crate::engine::smx::PadConfigData::from_hex(&c.data_hex)
+    if let Some(data) = crate::engine::smx::PadConfigData::from_settings(&c.settings)
         && crate::engine::smx::apply_config_data(slot, &data)
     {
         let p2 = crate::engine::smx::get_info(slot).is_player2;

@@ -4022,10 +4022,21 @@ impl App {
             } else {
                 &mut self.state.screens.select_music_state.pad_config_overlay
             };
+            // Only list configs that match the cursor pad's backend + sensor type.
+            let cursor_pad_type = cursor_dev
+                .and_then(|dev| crate::engine::smx::pad_sensor_type(dev.index))
+                .map(|t| t.as_str().to_owned());
             let profiles = cursor_profile
                 .map(|pid| {
                     crate::game::pad_profiles::load(&pid)
                         .into_iter()
+                        .filter(|c| {
+                            crate::game::pad_profiles::config_matches(
+                                c,
+                                crate::engine::smx::BACKEND_ID,
+                                cursor_pad_type.as_deref(),
+                            )
+                        })
                         .map(|c| pad_config::ProfileListEntry {
                             is_active: active_name.as_deref() == Some(c.name.as_str()),
                             name: c.name,
@@ -4077,11 +4088,19 @@ impl App {
                 preset: true,
                 name: cfg.smx_default_pad_config.as_str().to_owned(),
             };
+            let pad_type =
+                crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             let (applied, label) = match &profile_id {
                 Some(id) => {
                     let configs = pad_profiles::load(id);
-                    match pad_profiles::resolve(&configs, &info.serial).and_then(|c| {
-                        crate::engine::smx::PadConfigData::from_hex(&c.data_hex)
+                    match pad_profiles::resolve(
+                        &configs,
+                        crate::engine::smx::BACKEND_ID,
+                        pad_type.as_deref(),
+                        &info.serial,
+                    )
+                    .and_then(|c| {
+                        crate::engine::smx::PadConfigData::from_settings(&c.settings)
                             .map(|d| (c.name.clone(), d))
                     }) {
                         Some((name, data)) => (

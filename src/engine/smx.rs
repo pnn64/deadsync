@@ -3,12 +3,13 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
-use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use rustmaniax_sdk::{SmxConfig, SmxEvent, SmxInfo, SmxManager, SensorTestData, SensorTestMode};
+use rustmaniax_sdk::{
+    ConfigFlags, SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
+};
 
 use crate::engine::input::{GpSystemEvent, PadBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadEvent, PadId};
@@ -129,9 +130,56 @@ pub fn set_config(pad: usize, config: SmxConfig) {
 
 const PAD_CONFIG_PANELS: usize = 9;
 const PAD_CONFIG_SENSORS: usize = 4;
-/// Serialized byte length of `PadConfigData`:
-/// 9 panels x (4 fsr_low + 4 fsr_high + lc_low + lc_high) + enabled[5] + tare(2) + debounce(2).
-const PAD_CONFIG_BYTES: usize = PAD_CONFIG_PANELS * 10 + 5 + 2 + 2;
+
+/// Backend identifier stored with saved pad configs, so an SMX-tuned config is
+/// only ever applied to a StepManiaX pad (FSRio and future FSR backends use their
+/// own, different config schema).
+pub const BACKEND_ID: &str = "smx";
+
+/// Sensor technology of an SMX pad. FSR and load-cell pads interpret the
+/// thresholds differently, so a config tuned for one must not be applied to the
+/// other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SmxPadType {
+    Fsr,
+    LoadCell,
+}
+
+impl SmxPadType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fsr => "fsr",
+            Self::LoadCell => "loadcell",
+        }
+    }
+}
+
+/// Whether a pad's config describes an FSR pad (vs a load-cell pad), matching the
+/// official tool: master version >= 4 with the FSR flag set.
+pub fn is_fsr(config: &SmxConfig) -> bool {
+    config.master_version >= 4
+        && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
+}
+
+/// The sensor type of a connected pad (`None` if its config isn't available yet).
+pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
+    get_config(pad).map(|c| {
+        if is_fsr(&c) {
+            SmxPadType::Fsr
+        } else {
+            SmxPadType::LoadCell
+        }
+    })
+}
+
+/// `enabled_sensors` nibble layout (official tool `Widgets.cs`): panel `p` uses
+/// byte `p / 2`, the high nibble (`0xF0`) for even panels and the low nibble
+/// (`0x0F`) for odd panels; sensor `s` is bit `base + s`.
+fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
+    let byte = panel / 2;
+    let base = if panel % 2 == 0 { 4 } else { 0 };
+    (byte, 1u8 << (base + sensor))
+}
 
 /// One panel's threshold state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -154,58 +202,87 @@ pub struct PadConfigData {
 }
 
 impl PadConfigData {
-    /// Serialize to a compact lowercase-hex blob for `padconfig.ini`.
-    pub fn to_hex(&self) -> String {
-        let mut bytes = Vec::with_capacity(PAD_CONFIG_BYTES);
-        for p in &self.panels {
-            bytes.extend_from_slice(&p.fsr_low);
-            bytes.extend_from_slice(&p.fsr_high);
-            bytes.push(p.load_cell_low);
-            bytes.push(p.load_cell_high);
+    /// Encode to a human-readable, hand-editable key/value list for
+    /// `padconfig.ini`: per-panel FSR low/high arrays, load-cell low/high, and
+    /// per-panel sensor enables, plus the auto-calibration tare and the panel
+    /// debounce (in milliseconds).
+    pub fn to_settings(&self) -> Vec<(String, String)> {
+        let join = |xs: &[u8]| {
+            xs.iter()
+                .map(u8::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let mut out = Vec::with_capacity(PAD_CONFIG_PANELS * 5 + 2);
+        for (p, panel) in self.panels.iter().enumerate() {
+            out.push((format!("Panel{p}.FsrLow"), join(&panel.fsr_low)));
+            out.push((format!("Panel{p}.FsrHigh"), join(&panel.fsr_high)));
+            out.push((format!("Panel{p}.LoadCellLow"), panel.load_cell_low.to_string()));
+            out.push((format!("Panel{p}.LoadCellHigh"), panel.load_cell_high.to_string()));
+            let enabled: Vec<u8> = (0..PAD_CONFIG_SENSORS)
+                .map(|s| {
+                    let (byte, mask) = enabled_bit(p, s);
+                    u8::from(self.enabled_sensors[byte] & mask != 0)
+                })
+                .collect();
+            out.push((format!("Panel{p}.Enabled"), join(&enabled)));
         }
-        bytes.extend_from_slice(&self.enabled_sensors);
-        bytes.extend_from_slice(&self.auto_calibration_max_tare.to_le_bytes());
-        bytes.extend_from_slice(&self.panel_debounce_us.to_le_bytes());
-        let mut s = String::with_capacity(bytes.len() * 2);
-        for b in bytes {
-            let _ = write!(s, "{b:02x}");
-        }
-        s
+        out.push((
+            "AutoCalibrationMaxTare".to_string(),
+            self.auto_calibration_max_tare.to_string(),
+        ));
+        out.push((
+            "DebounceMs".to_string(),
+            format!("{}", f32::from(self.panel_debounce_us) / 1000.0),
+        ));
+        out
     }
 
-    /// Parse a hex blob written by `to_hex`. Returns `None` if malformed.
-    pub fn from_hex(s: &str) -> Option<Self> {
-        let s = s.trim();
-        if s.len() != PAD_CONFIG_BYTES * 2 {
-            return None;
-        }
-        let mut bytes = [0u8; PAD_CONFIG_BYTES];
-        for (i, b) in bytes.iter_mut().enumerate() {
-            *b = u8::from_str_radix(s.get(i * 2..i * 2 + 2)?, 16).ok()?;
-        }
-        let mut off = 0;
+    /// Decode from the key/value list written by `to_settings`. Returns `None`
+    /// if any expected key is missing or malformed.
+    pub fn from_settings(settings: &[(String, String)]) -> Option<Self> {
+        let get = |key: &str| {
+            settings
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.as_str())
+        };
+        let arr = |key: &str| -> Option<[u8; PAD_CONFIG_SENSORS]> {
+            let nums: Vec<u8> = get(key)?
+                .split_whitespace()
+                .map(|t| t.parse::<u8>().ok())
+                .collect::<Option<Vec<u8>>>()?;
+            if nums.len() != PAD_CONFIG_SENSORS {
+                return None;
+            }
+            let mut a = [0u8; PAD_CONFIG_SENSORS];
+            a.copy_from_slice(&nums);
+            Some(a)
+        };
+        let byte = |key: &str| get(key)?.trim().parse::<u8>().ok();
+
         let mut panels = [PanelThresholds {
             fsr_low: [0; PAD_CONFIG_SENSORS],
             fsr_high: [0; PAD_CONFIG_SENSORS],
             load_cell_low: 0,
             load_cell_high: 0,
         }; PAD_CONFIG_PANELS];
-        for p in panels.iter_mut() {
-            p.fsr_low.copy_from_slice(&bytes[off..off + 4]);
-            off += 4;
-            p.fsr_high.copy_from_slice(&bytes[off..off + 4]);
-            off += 4;
-            p.load_cell_low = bytes[off];
-            off += 1;
-            p.load_cell_high = bytes[off];
-            off += 1;
-        }
         let mut enabled_sensors = [0u8; 5];
-        enabled_sensors.copy_from_slice(&bytes[off..off + 5]);
-        off += 5;
-        let auto_calibration_max_tare = u16::from_le_bytes([bytes[off], bytes[off + 1]]);
-        off += 2;
-        let panel_debounce_us = u16::from_le_bytes([bytes[off], bytes[off + 1]]);
+        for (p, panel) in panels.iter_mut().enumerate() {
+            panel.fsr_low = arr(&format!("Panel{p}.FsrLow"))?;
+            panel.fsr_high = arr(&format!("Panel{p}.FsrHigh"))?;
+            panel.load_cell_low = byte(&format!("Panel{p}.LoadCellLow"))?;
+            panel.load_cell_high = byte(&format!("Panel{p}.LoadCellHigh"))?;
+            for (s, &e) in arr(&format!("Panel{p}.Enabled"))?.iter().enumerate() {
+                if e != 0 {
+                    let (bidx, mask) = enabled_bit(p, s);
+                    enabled_sensors[bidx] |= mask;
+                }
+            }
+        }
+        let auto_calibration_max_tare = get("AutoCalibrationMaxTare")?.trim().parse::<u16>().ok()?;
+        let debounce_ms = get("DebounceMs")?.trim().parse::<f32>().ok()?;
+        let panel_debounce_us = (debounce_ms * 1000.0).round().clamp(0.0, f32::from(u16::MAX)) as u16;
         Some(Self {
             panels,
             enabled_sensors,
@@ -530,7 +607,7 @@ mod tests {
     use crate::config::SmxPadPreset;
 
     #[test]
-    fn pad_config_data_hex_round_trips() {
+    fn pad_config_data_settings_round_trips() {
         let mut data = PadConfigData {
             panels: [PanelThresholds {
                 fsr_low: [0; 4],
@@ -538,9 +615,12 @@ mod tests {
                 load_cell_low: 0,
                 load_cell_high: 0,
             }; 9],
-            enabled_sensors: [0x12, 0x34, 0x56, 0x78, 0x9a],
+            // Mixed enable bits to exercise the nibble packing both ways. Byte 4's
+            // low nibble must stay 0 — there is no panel 9, so those bits are
+            // unused and would (correctly) not survive a per-panel round trip.
+            enabled_sensors: [0x12, 0x34, 0x56, 0x78, 0x90],
             auto_calibration_max_tare: 0xFFFF,
-            panel_debounce_us: 4000,
+            panel_debounce_us: 4500,
         };
         for (i, p) in data.panels.iter_mut().enumerate() {
             let b = i as u8;
@@ -549,11 +629,17 @@ mod tests {
             p.load_cell_low = b + 8;
             p.load_cell_high = b + 9;
         }
-        let hex = data.to_hex();
-        assert_eq!(hex.len(), super::PAD_CONFIG_BYTES * 2);
-        assert_eq!(PadConfigData::from_hex(&hex), Some(data));
-        assert_eq!(PadConfigData::from_hex("nothex"), None);
-        assert_eq!(PadConfigData::from_hex(""), None);
+        let settings = data.to_settings();
+        // Human-readable: e.g. "Panel0.FsrLow" -> "0 1 2 3", "DebounceMs" -> "4.5".
+        assert!(settings.iter().any(|(k, v)| k == "Panel0.FsrLow" && v == "0 1 2 3"));
+        assert!(settings.iter().any(|(k, v)| k == "DebounceMs" && v == "4.5"));
+        assert_eq!(PadConfigData::from_settings(&settings), Some(data));
+
+        // Missing a required key -> None.
+        let mut missing = data.to_settings();
+        missing.retain(|(k, _)| k != "Panel3.FsrHigh");
+        assert_eq!(PadConfigData::from_settings(&missing), None);
+        assert_eq!(PadConfigData::from_settings(&[]), None);
     }
 
     #[test]
