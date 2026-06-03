@@ -1213,10 +1213,6 @@ pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
         return;
     }
     // Cache-miss fallback: schedule whatever is cached for this path.
-    #[cfg(test)]
-    if !is_initialized() {
-        return;
-    }
     let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
     if let Some(sound_data) = cached {
         let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
