@@ -9185,8 +9185,15 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
+                    // The applied-pad-config markers track hardware state, not
+                    // screen state — carry them across the reset so they don't
+                    // blank out on entry (the managed resolver's key-guard would
+                    // otherwise not re-populate them until the profile changes).
+                    let smx_applied =
+                        self.state.screens.select_music_state.smx_applied.clone();
                     self.state.screens.select_music_state = select_music::init();
                     self.state.screens.select_music_state.active_color_index = current_color_index;
+                    self.state.screens.select_music_state.smx_applied = smx_applied;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;
                     self.state
