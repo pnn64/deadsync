@@ -4094,10 +4094,23 @@ impl App {
                     preset_label,
                 ),
             };
+            // Record what deadsync resolved for this pad so the UI can flag the
+            // active preset/config. This is NOT gated on the write ACK: the
+            // resolution is what we intend for the pad, and gating it on a
+            // momentarily-unavailable config (right after connect) would leave
+            // the marker blank. The write itself still retries until it lands.
+            let idx = usize::from(info.is_player2);
+            // TEMP (remove after hardware verification): trace which config the
+            // managed resolver picks per pad so the active marker can be diagnosed.
+            log::info!(
+                "smx managed: pad {pad} (P{}) -> {} '{}' (applied={applied})",
+                idx + 1,
+                if label.preset { "preset" } else { "config" },
+                label.name,
+            );
+            self.state.screens.select_music_state.smx_applied[idx] = Some(label);
             if applied {
                 self.smx_resolve_key[pad] = Some(key);
-                let idx = usize::from(info.is_player2);
-                self.state.screens.select_music_state.smx_applied[idx] = Some(label);
             }
         }
     }
