@@ -3998,40 +3998,62 @@ impl App {
                     .filter(|a| !a.preset)
                     .map(|a| a.name.clone())
             });
-            // Re-borrow target (released for the immutable read above).
-            let target = if on_screen {
-                &mut self.state.screens.pad_config_state
-            } else {
-                &mut self.state.screens.select_music_state.pad_config_overlay
-            };
-            // Only list configs that match the cursor pad's backend + sensor type;
-            // `is_default` is per-pad (this cursor pad's serial).
+            // Cursor pad identity (Copy device → safe to read alongside the
+            // controller borrow below). The config *list* only depends on the
+            // profile + sensor type; `is_default` is per-serial, computed per entry.
             let cursor_pad_type = cursor_dev
                 .and_then(|dev| crate::engine::smx::pad_sensor_type(dev.index))
                 .map(|t| t.as_str().to_owned());
             let cursor_serial =
                 cursor_dev.map(|dev| crate::engine::smx::get_info(dev.index).serial);
-            let profiles = cursor_profile
-                .map(|pid| {
-                    crate::game::pad_profiles::load(&pid)
-                        .into_iter()
-                        .filter(|c| {
-                            crate::game::pad_profiles::config_matches(
-                                c,
-                                crate::engine::smx::BACKEND_ID,
-                                cursor_pad_type.as_deref(),
-                            )
-                        })
-                        .map(|c| pad_config::ProfileListEntry {
-                            is_active: active_name.as_deref() == Some(c.name.as_str()),
-                            is_default: cursor_serial
-                                .as_deref()
-                                .is_some_and(|s| crate::game::pad_profiles::is_default_for(&c, s)),
-                            name: c.name,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
+            let cursor_p2 = cursor_dev
+                .map(|dev| usize::from(crate::engine::smx::get_info(dev.index).is_player2));
+
+            // Refresh the cached config list only when its inputs changed — no
+            // per-frame `padconfig.ini` read. Management edits clear the cache via an
+            // Invalidate intent (drained in `apply_smx_managed_preset`).
+            if let (Some(pid), Some(pad)) = (cursor_profile.as_deref(), cursor_p2)
+                && self
+                    .pad_config_sync
+                    .profiles_stale(pad, Some(pid), cursor_pad_type.as_deref())
+            {
+                let list = crate::game::pad_profiles::load(pid)
+                    .into_iter()
+                    .filter(|c| {
+                        crate::game::pad_profiles::config_matches(
+                            c,
+                            crate::engine::smx::BACKEND_ID,
+                            cursor_pad_type.as_deref(),
+                        )
+                    })
+                    .collect();
+                self.pad_config_sync
+                    .store_profiles(pad, Some(pid.to_owned()), cursor_pad_type.clone(), list);
+            }
+
+            // Build the overlay list from the cache; active/default are derived live
+            // (cheap, no I/O) since they depend on the marker / this pad's serial.
+            let profiles: Vec<pad_config::ProfileListEntry> = match cursor_p2 {
+                Some(pad) if cursor_profile.is_some() => self
+                    .pad_config_sync
+                    .profiles_for(pad)
+                    .iter()
+                    .map(|c| pad_config::ProfileListEntry {
+                        is_active: active_name.as_deref() == Some(c.name.as_str()),
+                        is_default: cursor_serial
+                            .as_deref()
+                            .is_some_and(|s| crate::game::pad_profiles::is_default_for(c, s)),
+                        name: c.name.clone(),
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            // Re-borrow target (released for the controller access above).
+            let target = if on_screen {
+                &mut self.state.screens.pad_config_state
+            } else {
+                &mut self.state.screens.select_music_state.pad_config_overlay
+            };
             pad_config::set_profiles(target, profiles);
         } else if self.fsr_pads_active {
             self.fsr_monitor.set_active(false);
