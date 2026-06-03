@@ -1121,23 +1121,46 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // --- DRAWING ---
 
-fn build_background(state: &State, bg_brightness: f32) -> Actor {
+fn push_background(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    bg_brightness: f32,
+    base_color: crate::config::Color,
+) {
     let sw = screen_width();
     let sh = screen_height();
+    let cx = screen_center_x();
+    let cy = screen_center_y();
     let bg_brightness = bg_brightness.clamp(0.0, 1.0);
-    let mut actor = shared_banner::cover_sprite(
-        state.background_texture_key.clone(),
-        screen_center_x(),
-        screen_center_y(),
-        sw,
-        sh,
-        1.0,
-        -100,
-    );
-    if let Actor::Sprite { tint, .. } = &mut actor {
-        *tint = [bg_brightness, bg_brightness, bg_brightness, 1.0];
+
+    // Solid base fill behind everything. This is what shows when the song has no
+    // background image, and what the song background is dimmed toward as
+    // BGBrightness drops. Defaults to black, preserving the original look.
+    let mut base =
+        shared_banner::cover_sprite(Arc::<str>::from("__white"), cx, cy, sw, sh, 1.0, -101);
+    if let Actor::Sprite { tint, .. } = &mut base {
+        *tint = base_color.to_rgba();
     }
-    actor
+    actors.push(base);
+
+    // Song background image (when one exists), alpha-blended over the base so
+    // BGBrightness fades it toward the base color. With a black base this matches
+    // the previous RGB-dimming behavior exactly.
+    if &*state.background_texture_key != "__black" {
+        let mut img = shared_banner::cover_sprite(
+            state.background_texture_key.clone(),
+            cx,
+            cy,
+            sw,
+            sh,
+            1.0,
+            -100,
+        );
+        if let Actor::Sprite { tint, .. } = &mut img {
+            *tint = [1.0, 1.0, 1.0, bg_brightness];
+        }
+        actors.push(img);
+    }
 }
 
 fn song_lua_has_visible_tex(
@@ -7081,7 +7104,7 @@ pub fn push_actors(
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
-    actors.push(build_background(state, cfg.bg_brightness));
+    push_background(&mut actors, state, cfg.bg_brightness, cfg.gameplay_bg_color);
     for (layer_idx, layer) in state.song_lua_background_visual_layers.iter().enumerate() {
         if state.current_music_time_display < layer.start_second {
             continue;

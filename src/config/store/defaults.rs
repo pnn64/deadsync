@@ -31,6 +31,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         default.updater_install_enabled,
     );
     push_line(content, "BGBrightness", default.bg_brightness);
+    push_line(
+        content,
+        "GameplayBgColor",
+        default.gameplay_bg_color.to_hex(),
+    );
     push_bool(content, "BannerCache", default.banner_cache);
     push_bool(content, "CacheSongs", default.cachesongs);
     push_bool(content, "CDTitleCache", default.cdtitle_cache);
