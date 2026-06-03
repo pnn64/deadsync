@@ -19,7 +19,8 @@ pub use self::keybinds::{
     update_keymap_binding_unique_keyboard,
 };
 pub(crate) use self::keybinds::{
-    editable_key_binding_slot_indices, protected_default_key_for_action,
+    editable_key_binding_slot_indices, keycode_to_token, parse_keycode_to_key,
+    protected_default_key_for_action,
 };
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
@@ -59,6 +60,7 @@ use crate::engine::logging;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
+use winit::keyboard::KeyCode;
 
 const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 
@@ -195,6 +197,14 @@ pub struct Config {
     pub machine_show_select_profile: bool,
     /// Whether "Switch Profile" appears in the select music sort menu.
     pub allow_switch_profile_in_menu: bool,
+    /// Select Music keyboard shortcut: open Practice Mode for the selected song.
+    pub music_select_shortcut_practice: KeyCode,
+    /// Select Music keyboard shortcut: open the Song Search prompt.
+    pub music_select_shortcut_song_search: KeyCode,
+    /// Select Music keyboard shortcut: reload songs & courses ("Load New Songs").
+    pub music_select_shortcut_load_songs: KeyCode,
+    /// Select Music keyboard shortcut: open the Test Input overlay.
+    pub music_select_shortcut_test_input: KeyCode,
     /// Startup flow: show Select Color before continuing.
     pub machine_show_select_color: bool,
     /// Startup flow: show Select Style before continuing.
@@ -395,6 +405,10 @@ impl Default for Config {
             random_background_mode: RandomBackgroundMode::Off,
             machine_show_select_profile: true,
             allow_switch_profile_in_menu: false,
+            music_select_shortcut_practice: KeyCode::KeyP,
+            music_select_shortcut_song_search: KeyCode::KeyS,
+            music_select_shortcut_load_songs: KeyCode::KeyL,
+            music_select_shortcut_test_input: KeyCode::KeyT,
             machine_show_select_color: true,
             machine_show_select_style: true,
             machine_show_select_play_mode: true,
