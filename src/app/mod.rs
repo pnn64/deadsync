@@ -4018,10 +4018,13 @@ impl App {
             } else {
                 &mut self.state.screens.select_music_state.pad_config_overlay
             };
-            // Only list configs that match the cursor pad's backend + sensor type.
+            // Only list configs that match the cursor pad's backend + sensor type;
+            // `is_default` is per-pad (this cursor pad's serial).
             let cursor_pad_type = cursor_dev
                 .and_then(|dev| crate::engine::smx::pad_sensor_type(dev.index))
                 .map(|t| t.as_str().to_owned());
+            let cursor_serial =
+                cursor_dev.map(|dev| crate::engine::smx::get_info(dev.index).serial);
             let profiles = cursor_profile
                 .map(|pid| {
                     crate::game::pad_profiles::load(&pid)
@@ -4035,8 +4038,10 @@ impl App {
                         })
                         .map(|c| pad_config::ProfileListEntry {
                             is_active: active_name.as_deref() == Some(c.name.as_str()),
+                            is_default: cursor_serial
+                                .as_deref()
+                                .is_some_and(|s| crate::game::pad_profiles::is_default_for(&c, s)),
                             name: c.name,
-                            is_default: c.is_default,
                         })
                         .collect()
                 })

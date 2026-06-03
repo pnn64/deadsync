@@ -4318,6 +4318,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         };
         // Only the configs that match this pad's sensor type (FSR vs load cell).
         let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
+        let serial = crate::engine::smx::get_info(*slot).serial;
         let configs: Vec<_> = crate::game::pad_profiles::load(pid)
             .into_iter()
             .filter(|c| {
@@ -4348,7 +4349,11 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         for c in &configs {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if c.is_default { " (default)" } else { "" };
+            let default = if crate::game::pad_profiles::is_default_for(c, &serial) {
+                " (default)"
+            } else {
+                ""
+            };
             items.push(select_music_menu::pad_profile_item(
                 format!("{star}{prefix}Pad Profile"),
                 format!("{}{default}", c.name),
@@ -8347,11 +8352,12 @@ fn perform_pad_profile_save(state: &mut State) {
     let Some(profile_id) = profile::active_local_profile_id_for_pad(info.is_player2) else {
         return; // Guest: no profile to save to.
     };
-    // Rename: just relabel the existing config (and honor the default toggle).
+    // Rename: just relabel the existing config (and honor the default toggle,
+    // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
         crate::game::pad_profiles::rename(&profile_id, &old, &name);
         if draft.set_default {
-            crate::game::pad_profiles::set_default(&profile_id, &name);
+            crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
         }
         // Keep the active-config label following the rename.
         let entry = &mut state.smx_applied[usize::from(info.is_player2)];
@@ -8424,11 +8430,8 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         return;
     };
     let info = crate::engine::smx::get_info(slot);
-    // Preserve the existing config's default flag (upsert keeps it unless we pass
-    // is_default=true, which it never clears — so read current and pass it back).
-    let was_default = crate::game::pad_profiles::load(&profile_id)
-        .iter()
-        .any(|c| c.name == name && c.is_default);
+    // upsert preserves the config's existing default associations, so overwrite
+    // passes make_default=false (it only re-captures the threshold values).
     let Some(data) = crate::engine::smx::capture_config(slot) else {
         return;
     };
@@ -8439,15 +8442,17 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         crate::engine::smx::BACKEND_ID,
         pad_type,
         Some(info.serial),
-        was_default,
+        false,
         data.to_settings(),
     );
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
-    if let Some((profile_id, name, _)) = pad_overlay_profile_target(state) {
-        crate::game::pad_profiles::set_default(&profile_id, &name);
+    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
+        // Default is per pad: make this config the default for the cursor pad.
+        let serial = crate::engine::smx::get_info(slot).serial;
+        crate::game::pad_profiles::set_default(&profile_id, &serial, &name);
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
