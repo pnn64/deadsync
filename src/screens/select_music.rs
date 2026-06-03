@@ -4331,14 +4331,15 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         let applied = state.smx_applied[usize::from(*p2)].as_ref();
         // The main label goes in `bottom_label` (the large line); `top_label` is
         // the small flavor line, matching every other menu item's two-line style.
-        // `* ` marks the active config; `(default)` is independent, so a config
-        // that is both reads "* Soft (default)".
+        // `* ` marks the active config; `(default)` is independent. The star goes
+        // in the top (flavor) line, which renders in miso — the bold machine font
+        // used for the main line has no `*` glyph (it shows a button sprite).
         for preset in ["Low", "Medium", "High"] {
             let active = applied.is_some_and(|a| a.preset && a.name == preset);
             let star = if active { "* " } else { "" };
             items.push(select_music_menu::pad_profile_item(
-                format!("{prefix}Sensitivity"),
-                format!("{star}{preset}"),
+                format!("{star}{prefix}Sensitivity"),
+                preset.to_string(),
                 *p2,
                 true,
                 preset,
@@ -4349,8 +4350,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
             let star = if active { "* " } else { "" };
             let default = if c.is_default { " (default)" } else { "" };
             items.push(select_music_menu::pad_profile_item(
-                format!("{prefix}Pad Profile"),
-                format!("{star}{}{default}", c.name),
+                format!("{star}{prefix}Pad Profile"),
+                format!("{}{default}", c.name),
                 *p2,
                 false,
                 c.name.clone(),

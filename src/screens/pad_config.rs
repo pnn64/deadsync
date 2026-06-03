@@ -677,7 +677,10 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
     if state.profiles_sel == 0 {
         line(actors, "Press &START; to name and save the current tuning".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
     } else if state.delete_armed {
-        line(actors, "Press DELETE again to confirm, &BACK; to cancel".to_owned(), bottom - 70.0, CAUTION_TEXT);
+        // Keep the warning orange, but put &BACK; on its own gray line so the
+        // button glyph isn't tinted orange (glyphs inherit the text diffuse).
+        line(actors, "Press DELETE again to confirm".to_owned(), bottom - 70.0, CAUTION_TEXT);
+        line(actors, "&BACK; to cancel".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
     } else {
         line(actors, "&START; Activate    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
         line(actors, "R - Rename    O - Overwrite    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
