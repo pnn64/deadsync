@@ -429,6 +429,10 @@ impl CompiledKeymap {
             for &action in actions {
                 mask |= action.bit();
             }
+            mask &= !deadsync_input::SYSTEM_ACTION_MASK;
+            if mask == 0 {
+                continue;
+            }
             key_rev[ix] = CompiledBindingRev {
                 mask,
                 slot: next_key_slot,
@@ -440,6 +444,10 @@ impl CompiledKeymap {
             let mut mask = 0;
             for &action in actions {
                 mask |= action.bit();
+            }
+            mask &= !deadsync_input::SYSTEM_ACTION_MASK;
+            if mask == 0 {
+                continue;
             }
             key_rev_extra.insert(
                 code,
@@ -456,7 +464,7 @@ impl CompiledKeymap {
             for &action in actions {
                 mask |= action.bit();
             }
-            pad_dir_rev[ix] = mask;
+            pad_dir_rev[ix] = mask & !deadsync_input::SYSTEM_ACTION_MASK;
         }
         let mut pad_dir_on_rev = HashMap::with_capacity(km.pad_dir_on_rev.len());
         let mut max_pad_device: Option<usize> = None;
@@ -464,6 +472,10 @@ impl CompiledKeymap {
             let mut mask = 0;
             for &action in actions {
                 mask |= action.bit();
+            }
+            mask &= !deadsync_input::SYSTEM_ACTION_MASK;
+            if mask == 0 {
+                continue;
             }
             max_pad_device = Some(max_pad_device.map_or(key.0, |max| max.max(key.0)));
             pad_dir_on_rev.insert(key, mask);
@@ -473,6 +485,9 @@ impl CompiledKeymap {
         for (&code, entries) in &km.pad_code_rev {
             let mut compiled_entries = Vec::with_capacity(entries.len());
             for entry in entries {
+                if entry.act.is_system() {
+                    continue;
+                }
                 if let Some(existing) =
                     compiled_entries
                         .iter_mut()

@@ -6,7 +6,7 @@ mod defaults;
 #[path = "store/save.rs"]
 mod save;
 
-const DEFAULT_KEYMAP_LINES: [(&str, &str); 26] = [
+const DEFAULT_KEYMAP_LINES: [(&str, &str); 28] = [
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA"),
@@ -33,6 +33,8 @@ const DEFAULT_KEYMAP_LINES: [(&str, &str); 26] = [
     ("P2_Select", "KeyCode::NumpadDecimal"),
     ("P2_Start", "KeyCode::NumpadEnter"),
     ("P2_Up", "KeyCode::Numpad8"),
+    ("System_FastForward", "KeyCode::Tab"),
+    ("System_SlowDown", "KeyCode::Backquote"),
 ];
 
 pub(super) fn normalize_machine_default_noteskin(raw: &str) -> String {

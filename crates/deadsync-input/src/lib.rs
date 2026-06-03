@@ -235,10 +235,13 @@ pub enum VirtualAction {
     p2_select,
     p2_operator,
     p2_restart,
+    // System (non-player-scoped) tier.
+    system_fast_forward,
+    system_slow_down,
 }
 
 impl VirtualAction {
-    pub const COUNT: usize = Self::p2_restart as usize + 1;
+    pub const COUNT: usize = Self::system_slow_down as usize + 1;
 
     #[inline(always)]
     pub const fn from_ix(ix: usize) -> Option<Self> {
@@ -269,6 +272,8 @@ impl VirtualAction {
             23 => Some(Self::p2_select),
             24 => Some(Self::p2_operator),
             25 => Some(Self::p2_restart),
+            26 => Some(Self::system_fast_forward),
+            27 => Some(Self::system_slow_down),
             _ => None,
         }
     }
@@ -281,6 +286,15 @@ impl VirtualAction {
     #[inline(always)]
     pub const fn bit(self) -> u32 {
         1u32 << (self.ix() as u32)
+    }
+
+    /// True for the non-player-scoped `System` tier actions. These are excluded
+    /// from the normalized input-event pipeline and the per-player Mappings
+    /// screen; they are consumed directly via keymap lookups (e.g. Tab
+    /// acceleration).
+    #[inline(always)]
+    pub const fn is_system(self) -> bool {
+        matches!(self, Self::system_fast_forward | Self::system_slow_down)
     }
 
     #[inline(always)]
@@ -356,7 +370,15 @@ pub const ALL_VIRTUAL_ACTIONS: [VirtualAction; VirtualAction::COUNT] = [
     VirtualAction::p2_select,
     VirtualAction::p2_start,
     VirtualAction::p2_up,
+    VirtualAction::system_fast_forward,
+    VirtualAction::system_slow_down,
 ];
+
+/// Bitmask of all `System`-tier actions. Used to strip system actions from the
+/// compiled keymap masks so they never enter the normalized input-event
+/// pipeline (they are read directly via keymap lookups instead).
+pub const SYSTEM_ACTION_MASK: u32 =
+    VirtualAction::system_fast_forward.bit() | VirtualAction::system_slow_down.bit();
 
 #[inline(always)]
 pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
@@ -393,6 +415,8 @@ pub fn action_from_ini_key_lower(key: &str) -> Option<VirtualAction> {
         "p2_select" => Some(p2_select),
         "p2_operator" => Some(p2_operator),
         "p2_restart" => Some(p2_restart),
+        "system_fastforward" => Some(VirtualAction::system_fast_forward),
+        "system_slowdown" => Some(VirtualAction::system_slow_down),
         _ => None,
     }
 }
@@ -432,6 +456,8 @@ pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
         p2_select => "P2_Select",
         p2_operator => "P2_Operator",
         p2_restart => "P2_Restart",
+        VirtualAction::system_fast_forward => "System_FastForward",
+        VirtualAction::system_slow_down => "System_SlowDown",
     }
 }
 
@@ -753,7 +779,17 @@ mod tests {
         assert!(!VirtualAction::p1_start.is_gameplay_arrow());
         assert_eq!(VirtualAction::from_ix(0), Some(VirtualAction::p1_up));
         assert_eq!(VirtualAction::from_ix(VirtualAction::COUNT), None);
-        assert_eq!(VirtualAction::p2_restart.ix(), VirtualAction::COUNT - 1);
+        assert_eq!(
+            VirtualAction::system_slow_down.ix(),
+            VirtualAction::COUNT - 1
+        );
+        assert!(VirtualAction::system_fast_forward.is_system());
+        assert!(VirtualAction::system_slow_down.is_system());
+        assert!(!VirtualAction::p2_restart.is_system());
+        assert_eq!(
+            VirtualAction::from_ix(VirtualAction::system_fast_forward.ix()),
+            Some(VirtualAction::system_fast_forward)
+        );
         assert_eq!(
             VirtualAction::p1_left.bit(),
             1 << VirtualAction::p1_left.ix()

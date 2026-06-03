@@ -1482,8 +1482,8 @@ pub struct ShellState {
     shift_held: bool,
     ctrl_held: bool,
     alt_held: bool,
-    tab_held: bool,
-    backquote_held: bool,
+    fast_forward_held: bool,
+    slow_down_held: bool,
     tab_acceleration_enabled: bool,
     window_focused: bool,
     window_occluded: bool,
@@ -1661,8 +1661,8 @@ impl ShellState {
             shift_held: false,
             ctrl_held: false,
             alt_held: false,
-            tab_held: false,
-            backquote_held: false,
+            fast_forward_held: false,
+            slow_down_held: false,
             tab_acceleration_enabled: cfg.tab_acceleration,
             // Default to unfocused so background input backends (Win32 RawInput,
             // evdev, IOHID) drop globally-observed key events until the window
@@ -3867,8 +3867,8 @@ impl App {
             self.state.shell.shift_held = false;
             self.state.shell.ctrl_held = false;
             self.state.shell.alt_held = false;
-            self.state.shell.tab_held = false;
-            self.state.shell.backquote_held = false;
+            self.state.shell.fast_forward_held = false;
+            self.state.shell.slow_down_held = false;
             input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
@@ -4143,8 +4143,8 @@ impl App {
         let logic_dt = apply_tab_acceleration(
             delta_time,
             self.state.screens.current_screen,
-            self.state.shell.tab_held,
-            self.state.shell.backquote_held,
+            self.state.shell.fast_forward_held,
+            self.state.shell.slow_down_held,
             self.state.shell.tab_acceleration_enabled,
         );
         crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
@@ -7247,13 +7247,22 @@ impl App {
             KeyCode::AltLeft | KeyCode::AltRight => {
                 self.state.shell.alt_held = raw_key.pressed;
             }
-            KeyCode::Tab => {
-                self.state.shell.tab_held = raw_key.pressed;
-            }
-            KeyCode::Backquote => {
-                self.state.shell.backquote_held = raw_key.pressed;
-            }
             _ => {}
+        }
+
+        if input::with_keymap(|km| {
+            km.raw_key_event_has_action(&raw_key, |action| {
+                action == VirtualAction::system_fast_forward
+            })
+        }) {
+            self.state.shell.fast_forward_held = raw_key.pressed;
+        }
+        if input::with_keymap(|km| {
+            km.raw_key_event_has_action(&raw_key, |action| {
+                action == VirtualAction::system_slow_down
+            })
+        }) {
+            self.state.shell.slow_down_held = raw_key.pressed;
         }
 
         if raw_key.pressed && raw_key.code == KeyCode::F4 && self.state.shell.alt_held {
