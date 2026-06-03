@@ -17,7 +17,8 @@ use deadsync_profile::{
     DEFAULT_PROFILE_ID, GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask,
     InsertMask, LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType,
     LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
+    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
     PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
     ScrollOption, StepStatisticsMask, TargetScoreSetting, TimingTickMode, TimingWindowsOption,
     TurnOption, VisualEffectsMask, active_profile_is_guest, active_profile_local_id,
@@ -299,6 +300,10 @@ fn load_player_options(
         .get(section, "MiniIndicatorScoreType")
         .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
         .unwrap_or(options.mini_indicator_score_type);
+    options.mini_indicator_subtractive_display = profile_conf
+        .get(section, "MiniIndicatorSubtractiveDisplay")
+        .and_then(|s| MiniIndicatorSubtractiveDisplay::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_subtractive_display);
     options.mini_indicator_size = profile_conf
         .get(section, "MiniIndicatorSize")
         .and_then(|s| MiniIndicatorSize::from_str(&s).ok())
@@ -307,6 +312,10 @@ fn load_player_options(
         .get(section, "MiniIndicatorColor")
         .and_then(|s| MiniIndicatorColor::from_str(&s).ok())
         .unwrap_or(options.mini_indicator_color);
+    options.mini_indicator_position = profile_conf
+        .get(section, "MiniIndicatorPosition")
+        .and_then(|s| MiniIndicatorPosition::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_position);
     options.scroll_option = profile_conf
         .get(section, "Scroll")
         .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -1750,8 +1759,9 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorSize, NoteSkin, PlayStyle,
-        Profile, TimingWindowsOption, parse_groovestats_is_pad_player,
+        LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorSize,
+        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, Profile, TimingWindowsOption,
+        parse_groovestats_is_pad_player,
     };
     use deadsync_profile::{
         DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, ErrorBarMask, ErrorBarStyle,
@@ -1778,6 +1788,22 @@ mod tests {
             MiniIndicatorColor::from_str(&MiniIndicatorColor::Detailed.to_string()).unwrap(),
             MiniIndicatorColor::Detailed
         );
+        assert_eq!(
+            MiniIndicatorColor::from_str(&MiniIndicatorColor::Combo.to_string()).unwrap(),
+            MiniIndicatorColor::Combo
+        );
+        assert_eq!(
+            MiniIndicatorSubtractiveDisplay::from_str(
+                &MiniIndicatorSubtractiveDisplay::Points.to_string(),
+            )
+            .unwrap(),
+            MiniIndicatorSubtractiveDisplay::Points
+        );
+        assert_eq!(
+            MiniIndicatorPosition::from_str(&MiniIndicatorPosition::UnderUpArrow.to_string())
+                .unwrap(),
+            MiniIndicatorPosition::UnderUpArrow
+        );
     }
 
     #[test]
@@ -1785,6 +1811,14 @@ mod tests {
         let profile = Profile::default();
         assert_eq!(profile.mini_indicator_size, MiniIndicatorSize::Default);
         assert_eq!(profile.mini_indicator_color, MiniIndicatorColor::Default);
+        assert_eq!(
+            profile.mini_indicator_subtractive_display,
+            MiniIndicatorSubtractiveDisplay::Percent
+        );
+        assert_eq!(
+            profile.mini_indicator_position,
+            MiniIndicatorPosition::Default
+        );
     }
 
     #[test]

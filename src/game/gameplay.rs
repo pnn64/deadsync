@@ -142,7 +142,7 @@ use self::holds::{
 #[cfg(test)]
 use self::input::{
     active_hold_counts_as_pressed, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-    lane_release_finished, update_lane_input_slot,
+    lane_release_finished, trigger_receptor_step_pulse, update_lane_input_slot,
 };
 pub use self::input::{
     handle_input, queue_input_edge, receptor_glow_visual_for_col, replay_capture_enabled,
@@ -151,7 +151,7 @@ pub use self::input::{
 use self::input::{
     input_queue_cap, lane_is_pressed, process_input_edges, replay_edge_cap,
     sync_active_hold_pressed_state, tap_explosion_noteskin_for_player, tick_visual_effects,
-    trigger_receptor_glow_pulse, trigger_receptor_score_pulse, trigger_receptor_step_pulse,
+    trigger_receptor_glow_pulse, trigger_receptor_score_pulse,
 };
 use self::judging::{
     PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
@@ -3064,6 +3064,40 @@ fn player_side_for_index(
         }
     } else {
         session_side
+    }
+}
+
+fn mini_indicator_personal_best_percent(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    score_type: profile_data::MiniIndicatorScoreType,
+) -> Option<f64> {
+    match score_type {
+        profile_data::MiniIndicatorScoreType::Itg => {
+            scores::get_cached_score_for_side(chart_hash, side)
+                .map(|s| (s.score_percent * 100.0).clamp(0.0, 100.0))
+        }
+        profile_data::MiniIndicatorScoreType::Ex => {
+            scores::get_cached_local_ex_score_for_side(chart_hash, side)
+                .map(|s| s.percent.clamp(0.0, 100.0))
+        }
+        profile_data::MiniIndicatorScoreType::HardEx => {
+            scores::get_cached_local_hard_ex_score_for_side(chart_hash, side)
+                .map(|s| s.percent.clamp(0.0, 100.0))
+        }
+    }
+}
+
+fn mini_indicator_machine_best_percent(
+    chart_hash: &str,
+    score_type: profile_data::MiniIndicatorScoreType,
+) -> Option<f64> {
+    match score_type {
+        profile_data::MiniIndicatorScoreType::Itg => scores::get_machine_record_local(chart_hash)
+            .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0)),
+        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
+            None
+        }
     }
 }
 
@@ -6103,10 +6137,9 @@ pub fn init(
 
         let side = player_side_for_index(play_style, player_side, p);
         let chart_hash = charts[p].short_hash.as_str();
-        let personal_best = scores::get_cached_score_for_side(chart_hash, side)
-            .map(|s| (s.score_percent * 100.0).clamp(0.0, 100.0));
-        let machine_best = scores::get_machine_record_local(chart_hash)
-            .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0));
+        let score_type = player_profiles[p].mini_indicator_score_type;
+        let personal_best = mini_indicator_personal_best_percent(chart_hash, side, score_type);
+        let machine_best = mini_indicator_machine_best_percent(chart_hash, score_type);
 
         let target = match player_profiles[p].target_score {
             profile_data::TargetScoreSetting::MachineBest => machine_best.or(personal_best),

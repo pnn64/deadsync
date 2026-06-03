@@ -19,8 +19,10 @@ pub(super) struct RowVisibility {
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
+    pub(super) show_mini_indicator_subtractive_display: bool,
     pub(super) show_mini_indicator_size: bool,
     pub(super) show_mini_indicator_color: bool,
+    pub(super) show_mini_indicator_position: bool,
     pub(super) show_column_flash_judgments: bool,
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
@@ -93,11 +95,17 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::IndicatorScoreType {
         return visibility.show_indicator_score_type;
     }
+    if id == RowId::MiniIndicatorSubtractiveDisplay {
+        return visibility.show_mini_indicator_subtractive_display;
+    }
     if id == RowId::MiniIndicatorSize {
         return visibility.show_mini_indicator_size;
     }
     if id == RowId::MiniIndicatorColor {
         return visibility.show_mini_indicator_color;
+    }
+    if id == RowId::MiniIndicatorPosition {
+        return visibility.show_mini_indicator_position;
     }
     if id == RowId::ColumnFlashJudgments {
         return visibility.show_column_flash_judgments;
@@ -164,8 +172,10 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         return Some(RowId::Hide);
     }
     if id == RowId::IndicatorScoreType
+        || id == RowId::MiniIndicatorSubtractiveDisplay
         || id == RowId::MiniIndicatorSize
         || id == RowId::MiniIndicatorColor
+        || id == RowId::MiniIndicatorPosition
     {
         return Some(RowId::MiniIndicator);
     }
@@ -465,7 +475,18 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
             MiniIndicator::SubtractiveScoring
                 | MiniIndicator::PredictiveScoring
                 | MiniIndicator::PaceScoring
+                | MiniIndicator::RivalScoring
+                | MiniIndicator::Pacemaker
         )
+    })
+}
+
+pub(super) fn mini_indicator_subtractive_display_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    mini_indicator_visible_for(row_map, active, |mode| {
+        mode == MiniIndicator::SubtractiveScoring
     })
 }
 
@@ -475,6 +496,13 @@ pub(super) fn mini_indicator_size_visible(row_map: &RowMap, active: [bool; PLAYE
 
 pub(super) fn mini_indicator_color_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
     indicator_score_type_visible(row_map, active)
+}
+
+pub(super) fn mini_indicator_position_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    mini_indicator_visible_for(row_map, active, |mode| mode != MiniIndicator::None)
 }
 
 fn mini_indicator_visible_for(
@@ -586,8 +614,12 @@ pub(super) fn row_visibility(
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
+        show_mini_indicator_subtractive_display: mini_indicator_subtractive_display_visible(
+            row_map, active,
+        ),
         show_mini_indicator_size: mini_indicator_size_visible(row_map, active),
         show_mini_indicator_color: mini_indicator_color_visible(row_map, active),
+        show_mini_indicator_position: mini_indicator_position_visible(row_map, active),
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,

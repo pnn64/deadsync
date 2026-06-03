@@ -570,6 +570,15 @@ fn ex_current_possible_points(data: &ExScoreData) -> f64 {
 }
 
 #[inline(always)]
+pub fn ex_current_possible_ratio(data: &ExScoreData) -> f64 {
+    let total = ex_total_possible(data);
+    if total <= 0.0 {
+        return 0.0;
+    }
+    (ex_current_possible_points(data) / total).clamp(0.0, 1.0)
+}
+
+#[inline(always)]
 fn floor_percent(points: f64, total: f64) -> f64 {
     if total <= 0.0 {
         return 0.0;

@@ -8,7 +8,8 @@ use deadsync_profile::{
     ComboColors, ComboFont, ComboMode, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType,
     HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
     LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorScoreType, MiniIndicatorSize, NoteSkin, Perspective, Profile, RemoveMask,
+    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, NoteSkin, Perspective, Profile, RemoveMask,
     ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption, StepStatisticsMask,
     TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
 };
@@ -306,6 +307,15 @@ pub fn update_mini_indicator_score_type_for_side(
     });
 }
 
+pub fn update_mini_indicator_subtractive_display_for_side(
+    side: PlayerSide,
+    setting: MiniIndicatorSubtractiveDisplay,
+) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.mini_indicator_subtractive_display, setting)
+    });
+}
+
 pub fn update_mini_indicator_size_for_side(side: PlayerSide, setting: MiniIndicatorSize) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.mini_indicator_size, setting)
@@ -315,6 +325,12 @@ pub fn update_mini_indicator_size_for_side(side: PlayerSide, setting: MiniIndica
 pub fn update_mini_indicator_color_for_side(side: PlayerSide, setting: MiniIndicatorColor) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.mini_indicator_color, setting)
+    });
+}
+
+pub fn update_mini_indicator_position_for_side(side: PlayerSide, setting: MiniIndicatorPosition) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.mini_indicator_position, setting)
     });
 }
 

@@ -746,6 +746,12 @@ pub(super) mod tests {
                 [0, 0],
             ),
             test_row(
+                RowId::MiniIndicatorSubtractiveDisplay,
+                lookup_key("PlayerOptions", "MiniIndicatorSubtractiveDisplay"),
+                &["Percent", "Points"],
+                [0, 0],
+            ),
+            test_row(
                 RowId::MiniIndicatorSize,
                 lookup_key("PlayerOptions", "MiniIndicatorSize"),
                 &["Default", "Large"],
@@ -754,30 +760,64 @@ pub(super) mod tests {
             test_row(
                 RowId::MiniIndicatorColor,
                 lookup_key("PlayerOptions", "MiniIndicatorColor"),
-                &["Default", "Detailed"],
+                &["Default", "Detailed", "Combo"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::MiniIndicatorPosition,
+                lookup_key("PlayerOptions", "MiniIndicatorPosition"),
+                &["Default", "Under Up Arrow"],
                 [0, 0],
             ),
         ]);
 
         assert!(!row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(!row_id_visible_for(
+            &row_map,
+            RowId::MiniIndicatorSubtractiveDisplay
+        ));
         assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
         assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+        assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorPosition));
 
         row_map
             .get_mut(RowId::MiniIndicator)
             .unwrap()
             .selected_choice_index[P1] = 1;
         assert!(row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(row_id_visible_for(
+            &row_map,
+            RowId::MiniIndicatorSubtractiveDisplay
+        ));
         assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
         assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorPosition));
 
         row_map
             .get_mut(RowId::MiniIndicator)
             .unwrap()
             .selected_choice_index[P1] = 4;
+        assert!(row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(!row_id_visible_for(
+            &row_map,
+            RowId::MiniIndicatorSubtractiveDisplay
+        ));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorPosition));
+
+        row_map
+            .get_mut(RowId::MiniIndicator)
+            .unwrap()
+            .selected_choice_index[P1] = 6;
         assert!(!row_id_visible_for(&row_map, RowId::IndicatorScoreType));
+        assert!(!row_id_visible_for(
+            &row_map,
+            RowId::MiniIndicatorSubtractiveDisplay
+        ));
         assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorSize));
         assert!(!row_id_visible_for(&row_map, RowId::MiniIndicatorColor));
+        assert!(row_id_visible_for(&row_map, RowId::MiniIndicatorPosition));
     }
 
     #[test]
@@ -2649,8 +2689,11 @@ pub(super) mod tests {
         p.display_scorebox = true;
         p.target_score = super::TARGET_SCORE_VARIANTS[1];
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
+        p.mini_indicator_subtractive_display =
+            super::MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS[1];
         p.mini_indicator_size = super::MINI_INDICATOR_SIZE_VARIANTS[1];
         p.mini_indicator_color = super::MINI_INDICATOR_COLOR_VARIANTS[1];
+        p.mini_indicator_position = super::MINI_INDICATOR_POSITION_VARIANTS[1];
         p.combo_colors = super::COMBO_COLORS_VARIANTS[1];
         p.combo_mode = super::COMBO_MODE_VARIANTS[1];
         p.error_bar_trim = super::ERROR_BAR_TRIM_VARIANTS[1];
@@ -2746,6 +2789,12 @@ pub(super) mod tests {
         );
         assert_variant_at_cursor(
             &row_map,
+            RowId::MiniIndicatorSubtractiveDisplay,
+            &super::MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS,
+            profile.mini_indicator_subtractive_display,
+        );
+        assert_variant_at_cursor(
+            &row_map,
             RowId::MiniIndicatorSize,
             &super::MINI_INDICATOR_SIZE_VARIANTS,
             profile.mini_indicator_size,
@@ -2755,6 +2804,12 @@ pub(super) mod tests {
             RowId::MiniIndicatorColor,
             &super::MINI_INDICATOR_COLOR_VARIANTS,
             profile.mini_indicator_color,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MiniIndicatorPosition,
+            &super::MINI_INDICATOR_POSITION_VARIANTS,
+            profile.mini_indicator_position,
         );
         assert_variant_at_cursor(
             &row_map,

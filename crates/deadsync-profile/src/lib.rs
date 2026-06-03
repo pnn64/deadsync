@@ -1729,6 +1729,42 @@ impl core::fmt::Display for MiniIndicatorScoreType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorSubtractiveDisplay {
+    #[default]
+    Percent,
+    Points,
+}
+
+impl FromStr for MiniIndicatorSubtractiveDisplay {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "percent" | "percentage" => Ok(Self::Percent),
+            "points" | "point" | "dancepoints" | "dp" => Ok(Self::Points),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorSubtractiveDisplay setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorSubtractiveDisplay {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Percent => write!(f, "Percent"),
+            Self::Points => write!(f, "Points"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MiniIndicatorSize {
     #[default]
     Default,
@@ -1769,6 +1805,7 @@ pub enum MiniIndicatorColor {
     #[default]
     Default,
     Detailed,
+    Combo,
 }
 
 impl FromStr for MiniIndicatorColor {
@@ -1784,6 +1821,7 @@ impl FromStr for MiniIndicatorColor {
         match key.as_str() {
             "" | "default" => Ok(Self::Default),
             "detailed" => Ok(Self::Detailed),
+            "combo" | "combocolor" | "combocolour" => Ok(Self::Combo),
             other => Err(format!(
                 "'{other}' is not a valid MiniIndicatorColor setting"
             )),
@@ -1796,6 +1834,43 @@ impl core::fmt::Display for MiniIndicatorColor {
         match self {
             Self::Default => write!(f, "Default"),
             Self::Detailed => write!(f, "Detailed"),
+            Self::Combo => write!(f, "Combo"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorPosition {
+    #[default]
+    Default,
+    UnderUpArrow,
+}
+
+impl FromStr for MiniIndicatorPosition {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "default" | "normal" => Ok(Self::Default),
+            "underuparrow" | "uparrow" | "arrow" | "left" => Ok(Self::UnderUpArrow),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorPosition setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorPosition {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Default => write!(f, "Default"),
+            Self::UnderUpArrow => write!(f, "UnderUpArrow"),
         }
     }
 }
@@ -2747,8 +2822,10 @@ pub struct PlayerOptionsData {
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
     pub mini_indicator_size: MiniIndicatorSize,
     pub mini_indicator_color: MiniIndicatorColor,
+    pub mini_indicator_position: MiniIndicatorPosition,
     pub mini_percent: i32,
     pub spacing_percent: i32,
     pub perspective: Perspective,
@@ -2862,8 +2939,10 @@ fn default_player_options() -> PlayerOptionsData {
         transparent_density_graph_bg: false,
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
+        mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay::Percent,
         mini_indicator_size: MiniIndicatorSize::Default,
         mini_indicator_color: MiniIndicatorColor::Default,
+        mini_indicator_position: MiniIndicatorPosition::Default,
         mini_percent: 0,
         spacing_percent: 0,
         perspective: Perspective::default(),
@@ -3272,12 +3351,20 @@ pub fn append_player_options_section(
         options.mini_indicator_score_type
     ));
     content.push_str(&format!(
+        "MiniIndicatorSubtractiveDisplay={}\n",
+        options.mini_indicator_subtractive_display
+    ));
+    content.push_str(&format!(
         "MiniIndicatorSize={}\n",
         options.mini_indicator_size
     ));
     content.push_str(&format!(
         "MiniIndicatorColor={}\n",
         options.mini_indicator_color
+    ));
+    content.push_str(&format!(
+        "MiniIndicatorPosition={}\n",
+        options.mini_indicator_position
     ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
@@ -3691,8 +3778,10 @@ pub struct Profile {
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
     pub mini_indicator_size: MiniIndicatorSize,
     pub mini_indicator_color: MiniIndicatorColor,
+    pub mini_indicator_position: MiniIndicatorPosition,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -3848,8 +3937,10 @@ impl Default for Profile {
             transparent_density_graph_bg: player_options.transparent_density_graph_bg,
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
+            mini_indicator_subtractive_display: player_options.mini_indicator_subtractive_display,
             mini_indicator_size: player_options.mini_indicator_size,
             mini_indicator_color: player_options.mini_indicator_color,
+            mini_indicator_position: player_options.mini_indicator_position,
             mini_percent: player_options.mini_percent,
             spacing_percent: player_options.spacing_percent,
             perspective: player_options.perspective,
@@ -4384,8 +4475,10 @@ impl Profile {
             transparent_density_graph_bg: self.transparent_density_graph_bg,
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
+            mini_indicator_subtractive_display: self.mini_indicator_subtractive_display,
             mini_indicator_size: self.mini_indicator_size,
             mini_indicator_color: self.mini_indicator_color,
+            mini_indicator_position: self.mini_indicator_position,
             mini_percent: self.mini_percent,
             spacing_percent: self.spacing_percent,
             perspective: self.perspective,
@@ -4501,8 +4594,10 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
+        self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;
         self.mini_indicator_size = options.mini_indicator_size;
         self.mini_indicator_color = options.mini_indicator_color;
+        self.mini_indicator_position = options.mini_indicator_position;
         self.mini_percent = options.mini_percent;
         self.spacing_percent = options.spacing_percent;
         self.perspective = options.perspective;
@@ -5633,6 +5728,8 @@ mod tests {
         assert!(content.contains("TapExplosionMask=65\n"));
         assert!(content.contains("ScorePosition=Step Statistics\n"));
         assert!(content.contains("ScoreDisplay=Predictive\n"));
+        assert!(content.contains("MiniIndicatorSubtractiveDisplay=Percent\n"));
+        assert!(content.contains("MiniIndicatorPosition=Default\n"));
         assert!(content.contains(&format!(
             "TapExplosionMaskVersion={TAP_EXPLOSION_MASK_VERSION}\n"
         )));
@@ -6462,13 +6559,55 @@ mod tests {
 
     #[test]
     fn mini_indicator_color_round_trips() {
-        for setting in [MiniIndicatorColor::Default, MiniIndicatorColor::Detailed] {
+        for setting in [
+            MiniIndicatorColor::Default,
+            MiniIndicatorColor::Detailed,
+            MiniIndicatorColor::Combo,
+        ] {
             assert_eq!(
                 setting.to_string().parse::<MiniIndicatorColor>(),
                 Ok(setting)
             );
         }
         assert!(MiniIndicatorColor::from_str("rainbow").is_err());
+    }
+
+    #[test]
+    fn mini_indicator_subtractive_display_round_trips() {
+        for setting in [
+            MiniIndicatorSubtractiveDisplay::Percent,
+            MiniIndicatorSubtractiveDisplay::Points,
+        ] {
+            assert_eq!(
+                setting
+                    .to_string()
+                    .parse::<MiniIndicatorSubtractiveDisplay>(),
+                Ok(setting)
+            );
+        }
+        assert_eq!(
+            MiniIndicatorSubtractiveDisplay::from_str("dance points"),
+            Ok(MiniIndicatorSubtractiveDisplay::Points)
+        );
+        assert!(MiniIndicatorSubtractiveDisplay::from_str("combo").is_err());
+    }
+
+    #[test]
+    fn mini_indicator_position_round_trips() {
+        for setting in [
+            MiniIndicatorPosition::Default,
+            MiniIndicatorPosition::UnderUpArrow,
+        ] {
+            assert_eq!(
+                setting.to_string().parse::<MiniIndicatorPosition>(),
+                Ok(setting)
+            );
+        }
+        assert_eq!(
+            MiniIndicatorPosition::from_str("under up arrow"),
+            Ok(MiniIndicatorPosition::UnderUpArrow)
+        );
+        assert!(MiniIndicatorPosition::from_str("score").is_err());
     }
 
     #[test]

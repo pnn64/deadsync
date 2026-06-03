@@ -104,7 +104,7 @@ const CREDITS: &[CreditLine] = &[
     name("saucepan"),
     name("din"),
     name("madewithlinux"),
-    name("Bkid"),
+    name("Ben Pryor (Bkid)"),
     name("DolphinChips"),
     name("rehtlaw"),
     name("Scott Brenner"),

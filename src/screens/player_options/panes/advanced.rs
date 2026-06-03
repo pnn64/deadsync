@@ -1,6 +1,7 @@
 use super::super::choice;
 use super::super::constants::{
-    MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS, MINI_INDICATOR_VARIANTS,
+    MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_POSITION_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS,
+    MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS, MINI_INDICATOR_VARIANTS,
     SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS,
 };
 use super::super::row::{
@@ -17,9 +18,9 @@ use super::*;
 use crate::game::profile as gp;
 use deadsync_profile::{
     ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim, LifeMeterType, MeasureCounter,
-    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorScoreType, MiniIndicatorSize,
-    PlayerSide, Profile, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, TargetScoreSetting,
-    TimingWindowsOption, TurnOption,
+    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
+    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, PlayerSide, Profile, ScatterplotMaxWindow,
+    ScoreDisplayMode, ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -129,6 +130,21 @@ const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
         }
     })
 );
+const MINI_INDICATOR_SUBTRACTIVE_DISPLAY: ChoiceBinding<usize> = index_binding!(
+    MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS,
+    MiniIndicatorSubtractiveDisplay::Percent,
+    mini_indicator_subtractive_display,
+    gp::update_mini_indicator_subtractive_display_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS
+                .iter()
+                .position(|&v| v == p.mini_indicator_subtractive_display)
+                .unwrap_or(0)
+        }
+    })
+);
 const MINI_INDICATOR_SIZE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SIZE_VARIANTS,
     MiniIndicatorSize::Default,
@@ -155,6 +171,21 @@ const MINI_INDICATOR_COLOR: ChoiceBinding<usize> = index_binding!(
             MINI_INDICATOR_COLOR_VARIANTS
                 .iter()
                 .position(|&v| v == p.mini_indicator_color)
+                .unwrap_or(0)
+        }
+    })
+);
+const MINI_INDICATOR_POSITION: ChoiceBinding<usize> = index_binding!(
+    MINI_INDICATOR_POSITION_VARIANTS,
+    MiniIndicatorPosition::Default,
+    mini_indicator_position,
+    gp::update_mini_indicator_position_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MINI_INDICATOR_POSITION_VARIANTS
+                .iter()
+                .position(|&v| v == p.mini_indicator_position)
                 .unwrap_or(0)
         }
     })
@@ -1348,6 +1379,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
         ],
     ));
+    b.push(Row::cycle(
+        RowId::MiniIndicatorSubtractiveDisplay,
+        lookup_key("PlayerOptions", "MiniIndicatorSubtractiveDisplay"),
+        lookup_key("PlayerOptionsHelp", "MiniIndicatorSubtractiveDisplayHelp"),
+        CycleBinding::Index(MINI_INDICATOR_SUBTRACTIVE_DISPLAY),
+        vec![
+            tr("PlayerOptions", "MiniIndicatorSubtractiveDisplayPercent").to_string(),
+            tr("PlayerOptions", "MiniIndicatorSubtractiveDisplayPoints").to_string(),
+        ],
+    ));
     b.push(
         Row::cycle(
             RowId::TargetScore,
@@ -1391,6 +1432,17 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "MiniIndicatorColorDefault").to_string(),
             tr("PlayerOptions", "MiniIndicatorColorDetailed").to_string(),
+            tr("PlayerOptions", "MiniIndicatorColorCombo").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::MiniIndicatorPosition,
+        lookup_key("PlayerOptions", "MiniIndicatorPosition"),
+        lookup_key("PlayerOptionsHelp", "MiniIndicatorPositionHelp"),
+        CycleBinding::Index(MINI_INDICATOR_POSITION),
+        vec![
+            tr("PlayerOptions", "MiniIndicatorPositionDefault").to_string(),
+            tr("PlayerOptions", "MiniIndicatorPositionUnderUpArrow").to_string(),
         ],
     ));
     b.push(Row::bitmask(

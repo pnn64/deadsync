@@ -2758,6 +2758,7 @@ struct ZmodLayoutYs {
     combo_y: f32,
     measure_counter_y: Option<f32>,
     subtractive_scoring_y: f32,
+    subtractive_scoring_addx: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2824,14 +2825,29 @@ fn zmod_layout_ys(
     }
 
     // Zmod: HideLookahead is not implemented in deadsync, so we always take the normal branch.
-    let subtractive_scoring_y = if has_measure_counter && profile.measure_counter_up {
-        let y = bottom_y + 8.0;
-        bottom_y += 16.0;
-        y
-    } else {
-        let y = top_y - 8.0;
-        top_y -= 16.0;
-        y
+    let (subtractive_scoring_y, subtractive_scoring_addx) = match profile.mini_indicator_position {
+        profile_data::MiniIndicatorPosition::Default => {
+            if has_measure_counter && profile.measure_counter_up {
+                let y = bottom_y + 8.0;
+                bottom_y += 16.0;
+                (y, 0.0)
+            } else {
+                let y = top_y - 8.0;
+                top_y -= 16.0;
+                (y, 0.0)
+            }
+        }
+        profile_data::MiniIndicatorPosition::UnderUpArrow => {
+            if has_measure_counter && profile.measure_counter_up {
+                let y = top_y + 16.0;
+                top_y -= 16.0;
+                (y, -60.0)
+            } else {
+                let y = top_y - 8.0;
+                top_y -= 16.0;
+                (y, 0.0)
+            }
+        }
     };
 
     let combo_y = if reverse {
@@ -2844,6 +2860,7 @@ fn zmod_layout_ys(
         combo_y,
         measure_counter_y,
         subtractive_scoring_y,
+        subtractive_scoring_addx,
     }
 }
 
@@ -3276,15 +3293,83 @@ fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] 
     }
 }
 
+fn zmod_resolved_combo_color(
+    state: &State,
+    p: &PlayerRuntime,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+) -> [f32; 4] {
+    let quint_active = zmod_combo_quint_active(state, player_idx, profile);
+    match profile.combo_colors {
+        profile_data::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
+        profile_data::ComboColors::Rainbow => {
+            if profile.combo_mode == profile_data::ComboMode::FullCombo {
+                if matches!(
+                    p.full_combo_grade,
+                    Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
+                ) {
+                    zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
+                }
+            } else {
+                zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
+            }
+        }
+        profile_data::ComboColors::RainbowScroll => {
+            if profile.combo_mode == profile_data::ComboMode::FullCombo {
+                if matches!(
+                    p.full_combo_grade,
+                    Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
+                ) {
+                    zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
+                }
+            } else {
+                zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
+            }
+        }
+        profile_data::ComboColors::Glow => {
+            let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
+                p.full_combo_grade
+            } else {
+                p.current_combo_grade
+            };
+            if let Some(grade) = combo_grade {
+                let (color1, color2) =
+                    zmod_combo_glow_pair(grade, quint_active && grade == JudgeGrade::Fantastic);
+                zmod_combo_glow_color(color1, color2, state.total_elapsed_in_screen)
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            }
+        }
+        profile_data::ComboColors::Solid => {
+            let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
+                p.full_combo_grade
+            } else {
+                p.current_combo_grade
+            };
+            if let Some(grade) = combo_grade {
+                zmod_combo_solid_color(grade, quint_active && grade == JudgeGrade::Fantastic)
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
     lost_percent: f64,
     pace_percent: f64,
+    current_score_percent: f64,
+    current_possible_ratio: f64,
     current_possible_dp: i32,
-    possible_dp: i32,
     actual_dp: i32,
     white_count: u32,
+    white_10ms_count: u32,
     w2: u32,
     w3: u32,
     w4: u32,
@@ -3293,6 +3378,14 @@ struct MiniIndicatorProgress {
     let_go: u32,
     mines_hit: u32,
     judged_any: bool,
+}
+
+#[inline(always)]
+fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
+    if total <= 0 {
+        return 0.0;
+    }
+    ((f64::from(points.max(0)) / f64::from(total)) * 10000.0).floor() / 100.0
 }
 
 fn zmod_mini_indicator_progress(
@@ -3330,27 +3423,65 @@ fn zmod_mini_indicator_progress(
         .saturating_mul(HOLD_SCORE_HELD);
 
     let possible_dp = state.possible_grade_points[player_idx].max(1);
-    let actual_dp = p.earned_grade_points.max(0);
+    let actual_dp = p.earned_grade_points;
 
     // Compute predictive percents for the active score type.
-    let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
+    let (
+        kept_percent,
+        lost_percent,
+        pace_percent,
+        current_score_percent,
+        current_possible_ratio,
+        white_count,
+        white_10ms_count,
+    ) = match score_type {
         profile_data::MiniIndicatorScoreType::Itg => {
             let (kept, lost, pace) = judgment::predictive_itg_score_percents(
                 current_possible_dp,
                 possible_dp,
                 actual_dp,
             );
-            (kept, lost, pace, 0)
+            let current_score = zmod_percent_from_points(actual_dp, possible_dp);
+            let current_possible_ratio =
+                (f64::from(current_possible_dp.max(0)) / f64::from(possible_dp)).clamp(0.0, 1.0);
+            (
+                kept,
+                lost,
+                pace,
+                current_score,
+                current_possible_ratio,
+                0,
+                0,
+            )
         }
         profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
             let score = crate::game::gameplay::display_scored_ex_score_data(state, player_idx);
             let white_count = score.counts.w1;
+            let fantastic_total = score.counts.w0.saturating_add(score.counts.w1);
+            let white_10ms_count = fantastic_total.saturating_sub(score.counts_10ms.w0);
+            let current_possible_ratio = judgment::ex_current_possible_ratio(&score);
             if score_type == profile_data::MiniIndicatorScoreType::Ex {
                 let (kept, lost, pace) = judgment::predictive_ex_score_percents(&score);
-                (kept, lost, pace, white_count)
+                (
+                    kept,
+                    lost,
+                    pace,
+                    judgment::ex_score_percent(&score),
+                    current_possible_ratio,
+                    white_count,
+                    white_10ms_count,
+                )
             } else {
                 let (kept, lost, pace) = judgment::predictive_hard_ex_score_percents(&score);
-                (kept, lost, pace, white_count)
+                (
+                    kept,
+                    lost,
+                    pace,
+                    judgment::hard_ex_score_percent(&score),
+                    current_possible_ratio,
+                    white_count,
+                    white_10ms_count,
+                )
             }
         }
     };
@@ -3360,10 +3491,12 @@ fn zmod_mini_indicator_progress(
         kept_percent,
         lost_percent,
         pace_percent,
+        current_score_percent,
+        current_possible_ratio,
         current_possible_dp,
-        possible_dp,
         actual_dp,
         white_count,
+        white_10ms_count,
         w2,
         w3,
         w4,
@@ -3390,12 +3523,53 @@ fn zmod_subtractive_counter_state(
         profile_data::MiniIndicatorScoreType::Itg => {
             (progress.w2, forced_percent || progress.w2 > 10)
         }
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            (
-                progress.white_count,
-                forced_percent || progress.w2 > 0 || progress.white_count > 10,
+        profile_data::MiniIndicatorScoreType::Ex => (
+            progress.white_count,
+            forced_percent || progress.w2 > 0 || progress.white_count > 10,
+        ),
+        profile_data::MiniIndicatorScoreType::HardEx => (
+            progress.white_10ms_count,
+            forced_percent || progress.w2 > 0 || progress.white_10ms_count > 10,
+        ),
+    }
+}
+
+#[inline(always)]
+fn zmod_subtractive_points(
+    progress: &MiniIndicatorProgress,
+    score_type: profile_data::MiniIndicatorScoreType,
+) -> u32 {
+    match score_type {
+        profile_data::MiniIndicatorScoreType::Itg => progress
+            .current_possible_dp
+            .saturating_sub(progress.actual_dp)
+            .max(0) as u32,
+        profile_data::MiniIndicatorScoreType::Ex => progress
+            .white_count
+            .saturating_add(progress.w2.saturating_mul(3))
+            .saturating_add(progress.w3.saturating_mul(5))
+            .saturating_add(
+                progress
+                    .w4
+                    .saturating_add(progress.w5)
+                    .saturating_add(progress.miss)
+                    .saturating_mul(7),
             )
-        }
+            .saturating_add(progress.let_go.saturating_mul(2))
+            .saturating_add(progress.mines_hit.saturating_mul(2)),
+        profile_data::MiniIndicatorScoreType::HardEx => progress
+            .white_10ms_count
+            .saturating_add(progress.w2.saturating_mul(5))
+            .saturating_add(
+                progress
+                    .w3
+                    .saturating_add(progress.w4)
+                    .saturating_add(progress.w5)
+                    .saturating_add(progress.miss)
+                    .saturating_mul(7),
+            )
+            .saturating_add(progress.let_go.saturating_mul(2))
+            .saturating_add(progress.mines_hit.saturating_mul(2)),
     }
 }
 
@@ -3455,6 +3629,23 @@ fn zmod_indicator_score_color(
     match style {
         profile_data::MiniIndicatorColor::Default => zmod_indicator_default_color(score_percent),
         profile_data::MiniIndicatorColor::Detailed => zmod_indicator_detailed_color(score_percent),
+        profile_data::MiniIndicatorColor::Combo => zmod_indicator_default_color(score_percent),
+    }
+}
+
+#[inline(always)]
+fn zmod_mini_indicator_score_color(
+    score_percent: f64,
+    state: &State,
+    p: &PlayerRuntime,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+) -> [f32; 4] {
+    match profile.mini_indicator_color {
+        profile_data::MiniIndicatorColor::Combo => {
+            zmod_resolved_combo_color(state, p, profile, player_idx)
+        }
+        style => zmod_indicator_score_color(score_percent, style),
     }
 }
 
@@ -3539,55 +3730,71 @@ fn zmod_mini_indicator_text(
 
     match mode {
         profile_data::MiniIndicator::SubtractiveScoring => {
+            if profile.mini_indicator_subtractive_display
+                == profile_data::MiniIndicatorSubtractiveDisplay::Points
+            {
+                let points = zmod_subtractive_points(&progress, profile.mini_indicator_score_type);
+                let score = progress.kept_percent.clamp(0.0, 100.0);
+                return Some((
+                    cached_neg_int_u32(points),
+                    zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
+                ));
+            }
+
             let (count, entered_percent_mode) =
                 zmod_subtractive_counter_state(&progress, profile.mini_indicator_score_type);
             if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
-                return Some((cached_neg_int_u32(count), color::rgba_hex("#ff55cc")));
+                let rgba =
+                    if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
+                        zmod_resolved_combo_color(state, p, profile, player_idx)
+                    } else {
+                        color::rgba_hex("#ff55cc")
+                    };
+                return Some((cached_neg_int_u32(count), rgba));
             }
 
             let pcts = &progress;
             let score = pcts.kept_percent.clamp(0.0, 100.0);
             Some((
                 cached_signed_percent2_f64(pcts.lost_percent.clamp(0.0, 100.0), true),
-                zmod_indicator_score_color(score, profile.mini_indicator_color),
+                zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
             ))
         }
         profile_data::MiniIndicator::PredictiveScoring => {
             let score = progress.kept_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(score),
-                zmod_indicator_score_color(score, profile.mini_indicator_color),
+                zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
             ))
         }
         profile_data::MiniIndicator::PaceScoring => {
             let pace = progress.pace_percent.clamp(0.0, 100.0);
             Some((
                 cached_percent2_f64(pace),
-                zmod_indicator_score_color(pace, profile.mini_indicator_color),
+                zmod_mini_indicator_score_color(pace, state, p, profile, player_idx),
             ))
         }
         profile_data::MiniIndicator::RivalScoring => {
-            let possible = f64::from(progress.possible_dp.max(1));
-            let current_possible = f64::from(progress.current_possible_dp.max(0));
-            let actual = f64::from(progress.actual_dp.max(0));
-            let pace = ((actual / possible) * 10000.0).floor() / 100.0;
+            let pace = progress.current_score_percent.clamp(0.0, 100.0);
             let rival_score =
                 state.mini_indicator_rival_score_percent[player_idx].clamp(0.0, 100.0);
             let rival_pace =
-                ((current_possible / possible) * 10000.0 * rival_score).floor() / 10000.0;
+                (progress.current_possible_ratio * 10000.0 * rival_score).floor() / 10000.0;
             let diff = (pace - rival_pace).abs();
             let text = cached_signed_percent2_f64(diff, pace < rival_pace);
-            Some((text, zmod_rival_color(pace, rival_pace)))
+            let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
+                zmod_resolved_combo_color(state, p, profile, player_idx)
+            } else {
+                zmod_rival_color(pace, rival_pace)
+            };
+            Some((text, rgba))
         }
         profile_data::MiniIndicator::Pacemaker => {
-            let possible = f64::from(progress.possible_dp.max(1));
-            let current_possible = f64::from(progress.current_possible_dp.max(0));
-            let actual = f64::from(progress.actual_dp.max(0));
-            let pace = (actual / possible * 10000.0).floor();
+            let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
             let target_ratio =
                 (state.mini_indicator_target_score_percent[player_idx] / 100.0).clamp(0.0, 1.0);
             let rival_pace =
-                ((current_possible / possible) * 1_000_000.0 * target_ratio).floor() / 100.0;
+                (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;
 
             let text = if pace < rival_pace {
                 let diff = ((rival_pace - pace).floor() / 100.0).max(0.0);
@@ -3596,7 +3803,12 @@ fn zmod_mini_indicator_text(
                 let diff = ((pace - rival_pace).floor() / 100.0).max(0.0);
                 cached_signed_percent2_f64(diff, false)
             };
-            Some((text, zmod_pacemaker_color(pace, rival_pace)))
+            let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
+                zmod_resolved_combo_color(state, p, profile, player_idx)
+            } else {
+                zmod_pacemaker_color(pace, rival_pace)
+            };
+            Some((text, rgba))
         }
         profile_data::MiniIndicator::StreamProg => {
             let completion = zmod_stream_prog_completion(state, player_idx)?;
@@ -8013,69 +8225,7 @@ pub fn build_bundles(
                 ));
             }
         } else if p.combo >= SHOW_COMBO_AT {
-            let quint_active = zmod_combo_quint_active(state, player_idx, profile);
-            let final_color = match profile.combo_colors {
-                profile_data::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
-                profile_data::ComboColors::Rainbow => {
-                    if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                        if matches!(
-                            p.full_combo_grade,
-                            Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
-                        ) {
-                            zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
-                        } else {
-                            [1.0, 1.0, 1.0, 1.0]
-                        }
-                    } else {
-                        zmod_combo_rainbow_color(state.total_elapsed_in_screen, false, p.combo)
-                    }
-                }
-                profile_data::ComboColors::RainbowScroll => {
-                    if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                        if matches!(
-                            p.full_combo_grade,
-                            Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
-                        ) {
-                            zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
-                        } else {
-                            [1.0, 1.0, 1.0, 1.0]
-                        }
-                    } else {
-                        zmod_combo_rainbow_color(state.total_elapsed_in_screen, true, p.combo)
-                    }
-                }
-                profile_data::ComboColors::Glow => {
-                    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                        p.full_combo_grade
-                    } else {
-                        p.current_combo_grade
-                    };
-                    if let Some(grade) = combo_grade {
-                        let (color1, color2) = zmod_combo_glow_pair(
-                            grade,
-                            quint_active && grade == JudgeGrade::Fantastic,
-                        );
-                        zmod_combo_glow_color(color1, color2, state.total_elapsed_in_screen)
-                    } else {
-                        [1.0, 1.0, 1.0, 1.0]
-                    }
-                }
-                profile_data::ComboColors::Solid => {
-                    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                        p.full_combo_grade
-                    } else {
-                        p.current_combo_grade
-                    };
-                    if let Some(grade) = combo_grade {
-                        zmod_combo_solid_color(
-                            grade,
-                            quint_active && grade == JudgeGrade::Fantastic,
-                        )
-                    } else {
-                        [1.0, 1.0, 1.0, 1.0]
-                    }
-                }
-            };
+            let final_color = zmod_resolved_combo_color(state, p, profile, player_idx);
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
                     font(font_name): settext(cached_int_u32(p.combo)):
@@ -8844,7 +8994,12 @@ pub fn build_bundles(
     // Mini Indicator (zmod SubtractiveScoring.lua parity).
     if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-        let mut x = playfield_center_x + column_width;
+        let mut x = match profile.mini_indicator_position {
+            profile_data::MiniIndicatorPosition::Default => playfield_center_x + column_width,
+            profile_data::MiniIndicatorPosition::UnderUpArrow => {
+                playfield_center_x + column_width - 45.0 + zmod_layout.subtractive_scoring_addx
+            }
+        };
         let mut h_align = 0.5;
         let mini_indicator_zoom = zmod_mini_indicator_zoom(profile.mini_indicator_size);
         if !profile.measure_counter_left {
@@ -9100,7 +9255,7 @@ mod tests {
         receptor_row_center, scale_effect_size, scroll_receptor_y, song_lua_hides_note_window,
         tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
         top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_indicator_score_color,
-        zmod_mini_indicator_zoom, zmod_subtractive_counter_state,
+        zmod_mini_indicator_zoom, zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
     use crate::engine::gfx::BlendMode;
@@ -9732,12 +9887,66 @@ mod tests {
 
         let hard_ex = MiniIndicatorProgress {
             w2: 1,
-            white_count: 7,
+            white_10ms_count: 7,
             ..MiniIndicatorProgress::default()
         };
         assert_eq!(
             zmod_subtractive_counter_state(&hard_ex, profile_data::MiniIndicatorScoreType::HardEx),
             (7, true)
+        );
+    }
+
+    #[test]
+    fn subtractive_points_supports_all_score_types() {
+        let itg = MiniIndicatorProgress {
+            current_possible_dp: 20,
+            actual_dp: 16,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&itg, profile_data::MiniIndicatorScoreType::Itg),
+            4
+        );
+
+        let itg_mine = MiniIndicatorProgress {
+            current_possible_dp: 0,
+            actual_dp: -6,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&itg_mine, profile_data::MiniIndicatorScoreType::Itg),
+            6
+        );
+
+        let ex = MiniIndicatorProgress {
+            white_count: 3,
+            w2: 1,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&ex, profile_data::MiniIndicatorScoreType::Ex),
+            6
+        );
+
+        let ex_with_great = MiniIndicatorProgress {
+            white_count: 3,
+            w2: 1,
+            w3: 1,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&ex_with_great, profile_data::MiniIndicatorScoreType::Ex),
+            11
+        );
+
+        let hard_ex = MiniIndicatorProgress {
+            white_10ms_count: 3,
+            w2: 1,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&hard_ex, profile_data::MiniIndicatorScoreType::HardEx),
+            8
         );
     }
 
