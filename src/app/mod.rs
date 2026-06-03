@@ -4118,11 +4118,14 @@ impl App {
             // momentarily-unavailable config (right after connect) would leave
             // the marker blank. The write itself still retries until it lands.
             let idx = usize::from(info.is_player2);
-            // TEMP (remove after hardware verification): trace which config the
-            // managed resolver picks per pad so the active marker can be diagnosed.
+            // TEMP (remove after hardware verification): trace the resolver inputs +
+            // pick per pad so the active marker can be diagnosed.
             log::info!(
-                "smx managed: pad {pad} (P{}) -> {} '{}' (applied={applied})",
+                "smx managed: pad {pad} (P{}) serial='{}' profile={:?} type={:?} -> {} '{}' (applied={applied})",
                 idx + 1,
+                info.serial,
+                profile_id.as_deref(),
+                pad_type.as_deref(),
                 if label.preset { "preset" } else { "config" },
                 label.name,
             );
