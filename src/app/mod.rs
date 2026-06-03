@@ -4074,6 +4074,19 @@ impl App {
         use crate::screens::select_music::AppliedPadConfig;
         use pad_config_sync::Sig;
 
+        // Skip entirely on the gameplay hot path. Pad config can't change mid-song
+        // (the UI that touches it isn't reachable here, so no intents queue up), and
+        // rewriting pad thresholds while a chart is playing would be disruptive — a
+        // mid-song hot-plug just re-resolves on the first non-gameplay frame via the
+        // signature compare. The marker mirror is for the song-select UI, which is
+        // hidden during gameplay, so there's nothing to refresh either.
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            return;
+        }
+
         // Drain UI requests (manual recall/apply/save → Override; default edit /
         // overwrite / delete / style switch → Invalidate) into the controller.
         let intents =
