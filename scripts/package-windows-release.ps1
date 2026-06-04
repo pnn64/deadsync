@@ -17,6 +17,7 @@ $ErrorActionPreference = 'Stop'
 function Map-Arch([string]$Value) {
     switch ($Value.ToLowerInvariant()) {
         { $_ -in 'x64', 'amd64', 'x86_64' } { return 'x86_64' }
+        { $_ -in 'x86', 'i386', 'i686' }     { return 'i686' }
         { $_ -in 'arm64', 'aarch64' }        { return 'arm64' }
         default {
             Write-Error "unknown arch: $Value"

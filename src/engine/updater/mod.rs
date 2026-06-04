@@ -307,6 +307,8 @@ pub const fn host_target() -> Option<HostTarget> {
     // names.  Anything not listed is treated as unsupported.
     const ARCH: Option<&str> = if cfg!(target_arch = "x86_64") {
         Some("x86_64")
+    } else if cfg!(target_arch = "x86") {
+        Some("i686")
     } else if cfg!(target_arch = "aarch64") {
         Some("arm64")
     } else {
@@ -541,6 +543,15 @@ mod tests {
                     .into(),
             ),
         });
+        assets.push(ReleaseAsset {
+            name: "deadsync-v0.3.871-i686-win7.zip".into(),
+            browser_download_url: "https://github.com/pnn64/deadsync/releases/download/v0.3.871/deadsync-v0.3.871-i686-win7.zip".into(),
+            size: 39_000_000,
+            digest: Some(
+                "sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68"
+                    .into(),
+            ),
+        });
         assets
     }
 
@@ -565,6 +576,11 @@ mod tests {
             expected_asset_name("v0.3.871", win7),
             "deadsync-v0.3.871-x86_64-win7.zip"
         );
+        let win7_i686 = target("i686", "win7", "zip");
+        assert_eq!(
+            expected_asset_name("v0.3.871", win7_i686),
+            "deadsync-v0.3.871-i686-win7.zip"
+        );
     }
 
     #[test]
@@ -573,6 +589,7 @@ mod tests {
         let cases = [
             ("x86_64", "windows", "zip"),
             ("x86_64", "win7", "zip"),
+            ("i686", "win7", "zip"),
             ("x86_64", "linux", "tar.gz"),
             ("arm64", "linux", "tar.gz"),
             ("x86_64", "macos", "tar.gz"),
@@ -615,6 +632,7 @@ mod tests {
         // of them).
         if cfg!(any(
             all(target_arch = "x86_64", target_os = "windows"),
+            all(target_arch = "x86", target_os = "windows"),
             all(target_arch = "x86_64", target_os = "linux"),
             all(target_arch = "x86_64", target_os = "macos"),
             all(target_arch = "x86_64", target_os = "freebsd"),
