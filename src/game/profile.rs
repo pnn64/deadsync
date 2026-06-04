@@ -1784,12 +1784,13 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 mod tests {
     use super::{
         LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorSize,
-        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, Profile, TimingWindowsOption,
-        parse_groovestats_is_pad_player,
+        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, PlayerOptionsData, Profile, SimpleIni,
+        TimingWindowsOption, append_player_options_section, load_player_options,
+        parse_groovestats_is_pad_player, player_options_section,
     };
     use deadsync_profile::{
         DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, ErrorBarMask, ErrorBarStyle,
-        LiveTimingStatsMask, TapExplosionMask, error_bar_mask_from_style,
+        LiveTimingStatsMask, NoCmodAlternative, TapExplosionMask, error_bar_mask_from_style,
         error_bar_style_from_mask, error_bar_text_from_mask, normalize_tap_explosion_mask,
     };
     use std::str::FromStr;
@@ -1828,6 +1829,30 @@ mod tests {
                 .unwrap(),
             MiniIndicatorPosition::UnderUpArrow
         );
+    }
+
+    #[test]
+    fn no_cmod_alternative_round_trips_through_player_options_ini() {
+        let section = player_options_section(PlayStyle::Single);
+        for alt in [
+            NoCmodAlternative::None,
+            NoCmodAlternative::XMod,
+            NoCmodAlternative::MMod,
+        ] {
+            let options = PlayerOptionsData {
+                no_cmod_alternative: alt,
+                ..PlayerOptionsData::default()
+            };
+            let mut content = String::new();
+            append_player_options_section(&mut content, section, &options);
+
+            let mut ini = SimpleIni::new();
+            ini.load_str(&content);
+            let loaded = load_player_options(&ini, section, &PlayerOptionsData::default())
+                .expect("section has keys, so it should load");
+
+            assert_eq!(loaded.no_cmod_alternative, alt);
+        }
     }
 
     #[test]
