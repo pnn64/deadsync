@@ -54,12 +54,19 @@ pub enum ItemId {
     // Input Options submenu (launcher)
     InpConfigureMappings,
     InpTestInput,
+    InpConfigurePads,
     InpInputOptions,
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,
+    // StepManiaX config sub-page
+    InpSmxConfig,
+    InpSmxManagesPadConfig,
+    InpSmxUsbPolling,
+    InpSmxDefaultPadConfig,
     InpMenuNavigation,
     InpOptionsNavigation,
     InpMenuButtons,

@@ -95,6 +95,7 @@ fn input_backend_items_match_rows() {
     let expected = [
         (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
         (SubRowId::UseFsrs, ItemId::InpUseFsrs),
+        (SubRowId::SmxConfig, ItemId::InpSmxConfig),
         (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),
         (SubRowId::MenuNavigation, ItemId::InpMenuNavigation),
         (SubRowId::OptionsNavigation, ItemId::InpOptionsNavigation),
@@ -111,6 +112,32 @@ fn input_backend_items_match_rows() {
         assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS[idx].id, item_id);
     }
     assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
+fn smx_config_items_match_rows() {
+    let expected = [
+        (SubRowId::SmxInput, ItemId::InpSmxInput),
+        (
+            SubRowId::SmxManagesPadConfig,
+            ItemId::InpSmxManagesPadConfig,
+        ),
+        (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),
+        (
+            SubRowId::SmxDefaultPadConfig,
+            ItemId::InpSmxDefaultPadConfig,
+        ),
+    ];
+
+    assert_eq!(
+        SMX_CONFIG_OPTIONS_ROWS.len() + 1,
+        SMX_CONFIG_OPTIONS_ITEMS.len()
+    );
+    for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
+        assert_eq!(SMX_CONFIG_OPTIONS_ROWS[idx].id, row_id);
+        assert_eq!(SMX_CONFIG_OPTIONS_ITEMS[idx].id, item_id);
+    }
+    assert_eq!(SMX_CONFIG_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
 }
 
 #[test]
@@ -631,4 +658,91 @@ fn folder_path_for_row_resolves_each_folder_row() {
 
     assert!(folder_path_for_row(SubRowId::Game).is_none());
     assert!(!is_folder_row(SubRowId::Game));
+}
+
+/// Run pending submenu fades to completion (cap iterations so a stuck transition
+/// fails the test rather than hanging).
+fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
+    for _ in 0..16 {
+        if matches!(state.submenu_transition, SubmenuTransition::None) {
+            return;
+        }
+        update(state, SUBMENU_FADE_DURATION + 0.001, asset_manager);
+    }
+    panic!("submenu transition did not settle");
+}
+
+#[test]
+fn input_backend_back_returns_to_input_not_root() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    // In the Input submenu, whose parent is the main list (no parent kind).
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.submenu_parent_kind = None;
+
+    // Open the inner Input Options (InputBackend) page.
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::InputOptions);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend));
+    assert_eq!(state.submenu_parent_kind, Some(SubmenuKind::Input));
+
+    // Back from the inner page must land on the parent Input submenu, not root.
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
+}
+
+#[test]
+fn input_backend_back_returns_to_input_after_visiting_smx_config() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.submenu_parent_kind = None;
+
+    // Input -> InputBackend.
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::InputOptions);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+
+    // The SMX Config row only shows when FSRs are enabled.
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::UseFsrs,
+        yes_no_choice_index(true),
+    );
+
+    // InputBackend -> SmxConfig, then back to InputBackend.
+    select_visible_row(&mut state, SubmenuKind::InputBackend, SubRowId::SmxConfig);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::SmxConfig));
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend));
+
+    // The parent link back to Input must survive the round trip.
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Input));
+}
+
+#[test]
+fn usb_polling_choice_labels_match_their_values() {
+    let row = SMX_CONFIG_OPTIONS_ROWS
+        .iter()
+        .find(|r| r.id == SubRowId::SmxUsbPolling)
+        .expect("USB polling row present");
+    // The hand-written "<n>us" labels must stay in lockstep with the value table,
+    // so they can't silently drift if the step/count constants change.
+    assert_eq!(row.choices.len(), USB_POLLING_CHOICE_COUNT);
+    for (i, choice) in row.choices.iter().enumerate() {
+        assert_eq!(
+            choice.as_str_static(),
+            Some(format!("{}us", usb_polling_value(i)).as_str())
+        );
+        // The label's value round-trips back to its own index.
+        assert_eq!(usb_polling_choice_index(usb_polling_value(i)), i);
+    }
 }

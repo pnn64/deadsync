@@ -225,6 +225,15 @@ impl App {
             self.state.screens.menu_state.active_color_index = current_color_index;
         } else if target_screen == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
+        } else if target_screen == CurrentScreen::ConfigurePads {
+            // The full screen is reached only from Options (Song Select uses an
+            // in-place overlay instead): return there and show all pads.
+            let pad_state = &mut self.state.screens.pad_config_state;
+            crate::screens::pad_config::set_return_screen(pad_state, CurrentScreen::Options);
+            crate::screens::pad_config::set_filter(
+                pad_state,
+                crate::screens::pad_config::PadFilter::All,
+            );
         } else if target_screen == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();
@@ -571,6 +580,7 @@ impl App {
             CurrentScreen::Initials => initials::out_transition(),
             CurrentScreen::GameOver => gameover::out_transition(),
             CurrentScreen::Input => input_screen::out_transition(),
+            CurrentScreen::ConfigurePads => crate::screens::pad_config::out_transition(),
         }
     }
 
@@ -613,6 +623,7 @@ impl App {
             CurrentScreen::Initials => initials::in_transition(),
             CurrentScreen::GameOver => gameover::in_transition(),
             CurrentScreen::Input => input_screen::in_transition(),
+            CurrentScreen::ConfigurePads => crate::screens::pad_config::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
     }

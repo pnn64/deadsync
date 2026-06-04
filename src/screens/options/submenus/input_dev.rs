@@ -1,5 +1,22 @@
 use super::super::*;
 
+// USB polling choice list bounds: index N maps to 500 + N*50 microseconds.
+const USB_POLLING_MIN_US: u16 = 500;
+const USB_POLLING_STEP_US: u16 = 50;
+pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 11;
+
+/// Choice index for a polling value in microseconds (clamped to the list).
+pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
+    let max = USB_POLLING_MIN_US + USB_POLLING_STEP_US * (USB_POLLING_CHOICE_COUNT as u16 - 1);
+    let v = value.clamp(USB_POLLING_MIN_US, max);
+    ((v - USB_POLLING_MIN_US) / USB_POLLING_STEP_US) as usize
+}
+
+/// Polling value in microseconds for a choice index (clamped to the list).
+pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
+    USB_POLLING_MIN_US + (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
+}
+
 pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ConfigureMappings,
@@ -10,6 +27,12 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::TestInput,
         label: lookup_key("OptionsInput", "TestInput"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::ConfigurePads,
+        label: lookup_key("OptionsInput", "ConfigurePads"),
         choices: &[localized_choice("Common", "Open")],
         inline: false,
     },
@@ -39,12 +62,21 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::InpConfigurePads,
+        name: lookup_key("OptionsInput", "ConfigurePads"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "ConfigurePadsHelp",
+        ))],
+    },
+    Item {
         id: ItemId::InpInputOptions,
         name: lookup_key("OptionsInput", "InputOptions"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "UseFSRs")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxConfig")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "DebugFsrDump")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
@@ -77,6 +109,12 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
             localized_choice("Common", "Yes"),
         ],
         inline: true,
+    },
+    SubRow {
+        id: SubRowId::SmxConfig,
+        label: lookup_key("OptionsInput", "SmxConfig"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
     },
     SubRow {
         id: SubRowId::DebugFsrDump,
@@ -137,6 +175,14 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::InpSmxConfig,
+        name: lookup_key("OptionsInput", "SmxConfig"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxConfigHelp",
+        ))],
+    },
+    Item {
         id: ItemId::InpDebugFsrDump,
         name: lookup_key("OptionsInput", "DebugFsrDump"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -174,6 +220,99 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "DebounceHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::Exit,
+        name: lookup_key("Options", "Exit"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
+    },
+];
+
+pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        id: SubRowId::SmxInput,
+        label: lookup_key("OptionsInput", "SmxInput"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::SmxManagesPadConfig,
+        label: lookup_key("OptionsInput", "SmxManagesPadConfig"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::SmxUsbPolling,
+        // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
+        label: lookup_key("OptionsInput", "UsbPolling"),
+        choices: &[
+            literal_choice("500us"),
+            literal_choice("550us"),
+            literal_choice("600us"),
+            literal_choice("650us"),
+            literal_choice("700us"),
+            literal_choice("750us"),
+            literal_choice("800us"),
+            literal_choice("850us"),
+            literal_choice("900us"),
+            literal_choice("950us"),
+            literal_choice("1000us"),
+        ],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::SmxDefaultPadConfig,
+        label: lookup_key("OptionsInput", "DefaultPadConfig"),
+        choices: &[
+            localized_choice("OptionsInput", "PresetLow"),
+            localized_choice("OptionsInput", "PresetMedium"),
+            localized_choice("OptionsInput", "PresetHigh"),
+        ],
+        inline: true,
+    },
+];
+
+pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        id: ItemId::InpSmxInput,
+        name: lookup_key("OptionsInput", "SmxInput"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxInputHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxManagesPadConfig,
+        name: lookup_key("OptionsInput", "SmxManagesPadConfig"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxManagesPadConfigHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxUsbPolling,
+        name: lookup_key("OptionsInput", "UsbPolling"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "UsbPollingHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxDefaultPadConfig,
+        name: lookup_key("OptionsInput", "DefaultPadConfig"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "DefaultPadConfigHelp",
         ))],
     },
     Item {

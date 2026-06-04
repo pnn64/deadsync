@@ -33,6 +33,7 @@ use crate::screens::components::{
         timers, transitions, visual_style_bg,
     },
 };
+use crate::screens::pad_config;
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
     input as screen_input,
@@ -1064,6 +1065,34 @@ struct PlaylistSongLookup {
     by_group: HashMap<String, Vec<Arc<SongData>>>,
 }
 
+/// What deadsync last applied to an SMX pad, so the UI can flag the active one.
+/// `preset` = a built-in preset (name is its label); otherwise a saved config.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AppliedPadConfig {
+    pub preset: bool,
+    pub name: String,
+}
+
+/// A request from the Song Select UI to the App-owned pad-config controller
+/// (`app::pad_config_sync`). The UI can't reach the controller directly, so it
+/// queues these on `State::pad_config_intents` and the app drains them. `pad` is
+/// the pad slot (0/1) in every variant — the same key the resolver uses.
+pub enum PadConfigIntent {
+    /// A preset/config was manually applied to a pad → mark it the active config.
+    Override {
+        pad: usize,
+        applied: AppliedPadConfig,
+    },
+    /// Something the resolver's signature can't see changed for this pad (a
+    /// per-pad default edit, overwrite, delete, or a play-style switch) →
+    /// re-resolve + re-apply it.
+    Invalidate { pad: usize },
+    /// The saved-config *list* changed (new config saved, or a rename) but what's
+    /// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
+    /// (that would rewrite the pad's just-captured live values).
+    RefreshList { pad: usize },
+}
+
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -1098,6 +1127,16 @@ pub struct State {
     pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
+    pub pad_config_overlay_visible: bool,
+    pub pad_config_overlay: pad_config::State,
+    /// What deadsync last applied to each SMX pad (index = pad slot 0/1), so the
+    /// menus can show which preset/config is currently active. Read-only mirror of
+    /// the App pad-config controller's active markers (`app::pad_config_sync`),
+    /// pushed every frame; the authoritative state lives on the app, so screen
+    /// rebuilds can't lose it.
+    pub smx_applied: [Option<AppliedPadConfig>; 2],
+    /// Queued requests for the App pad-config controller (drained each frame).
+    pub pad_config_intents: Vec<PadConfigIntent>,
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
     pending_replay: Option<select_music_menu::ReplayStartPayload>,
@@ -3532,6 +3571,10 @@ pub fn init() -> State {
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
+        pad_config_overlay_visible: false,
+        pad_config_overlay: pad_config::State::default(),
+        smx_applied: [None, None],
+        pad_config_intents: Vec::new(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -3720,6 +3763,10 @@ pub fn init_placeholder() -> State {
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
+        pad_config_overlay_visible: false,
+        pad_config_overlay: pad_config::State::default(),
+        smx_applied: [None, None],
+        pad_config_intents: Vec::new(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
         pending_replay: None,
@@ -4267,6 +4314,105 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
     }
 }
 
+/// Quick-recall "Pad Profile" menu items: for each connected, in-play SMX pad,
+/// the built-in presets, plus (if that pad maps to a local profile) its saved
+/// configs. A guest pad still gets the presets so the player can pick a
+/// sensitivity for the session. Selecting one applies it to that physical pad.
+/// `None` hides the category.
+fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::Item>> {
+    if !config::get().use_fsrs {
+        return None;
+    }
+    let style = profile::get_session_play_style();
+    let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
+    for slot in 0..2 {
+        let info = crate::engine::smx::get_info(slot);
+        if !info.connected {
+            continue;
+        }
+        // In play? Doubles/Versus drive both pads; Singles only the joined side.
+        let in_play = match style {
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
+            profile_data::PlayStyle::Single => {
+                profile::is_session_side_joined(if info.is_player2 {
+                    profile_data::PlayerSide::P2
+                } else {
+                    profile_data::PlayerSide::P1
+                })
+            }
+        };
+        if !in_play {
+            continue;
+        }
+        let pid = profile::active_local_profile_id_for_pad(info.is_player2);
+        pads.push((info.is_player2, pid, slot));
+    }
+    if pads.is_empty() {
+        return None;
+    }
+    let show_side = pads.len() > 1;
+    let mut items = Vec::new();
+    for (p2, pid, slot) in &pads {
+        let prefix = if show_side {
+            if *p2 { "P2 " } else { "P1 " }
+        } else {
+            ""
+        };
+        let applied = state.smx_applied[*slot].as_ref();
+        // The main label goes in `bottom_label` (the large line); `top_label` is
+        // the small flavor line, matching every other menu item's two-line style.
+        // `* ` marks the active config; `(default)` is independent. The star goes
+        // in the top (flavor) line, which renders in miso — the bold machine font
+        // used for the main line has no `*` glyph (it shows a button sprite).
+        for preset in ["Low", "Medium", "High"] {
+            let active = applied.is_some_and(|a| a.preset && a.name == preset);
+            let star = if active { "* " } else { "" };
+            items.push(select_music_menu::pad_profile_item(
+                format!("{star}{prefix}Sensitivity"),
+                preset.to_string(),
+                *p2,
+                true,
+                preset,
+                active,
+            ));
+        }
+        // Saved configs only for a pad that maps to a local profile (a guest pad
+        // gets presets only).
+        let Some(pid) = pid else { continue };
+        // Only the configs that match this pad's sensor type (FSR vs load cell).
+        let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
+        let serial = crate::engine::smx::get_info(*slot).serial;
+        let configs: Vec<_> = crate::game::pad_profiles::load(pid)
+            .into_iter()
+            .filter(|c| {
+                crate::game::pad_profiles::config_matches(
+                    c,
+                    crate::engine::smx::BACKEND_ID,
+                    pad_type.as_deref(),
+                )
+            })
+            .collect();
+        for c in &configs {
+            let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
+            let star = if active { "* " } else { "" };
+            let default = if crate::game::pad_profiles::is_default_for(c, &serial) {
+                " (default)"
+            } else {
+                ""
+            };
+            items.push(select_music_menu::pad_profile_item(
+                format!("{star}{prefix}Pad Profile"),
+                format!("{}{default}", c.name),
+                *p2,
+                false,
+                c.name.clone(),
+                active,
+            ));
+        }
+    }
+    Some(items)
+}
+
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let replays_enabled = config::get().machine_enable_replays;
     let downloads_enabled = crate::game::online::downloads::sort_menu_available();
@@ -4329,6 +4475,9 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 
     let mut advanced = Vec::with_capacity(10);
     advanced.push(select_music_menu::ITEM_TEST_INPUT);
+    if config::get().use_fsrs {
+        advanced.push(select_music_menu::ITEM_CONFIGURE_PADS);
+    }
     advanced.push(select_music_menu::ITEM_RELOAD_SONGS_COURSES);
     advanced.push(select_music_menu::ITEM_SHOW_LOBBIES);
     if downloads_enabled {
@@ -4378,6 +4527,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         sorts,
         profile: profile_items,
         advanced,
+        pad_profile: build_pad_profile_menu_items(state),
         styles,
         playlists,
     }
@@ -4420,6 +4570,51 @@ fn show_test_input_overlay(state: &mut State) {
 #[inline(always)]
 fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
+}
+
+fn show_pad_config_overlay(state: &mut State) {
+    clear_preview(state);
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    state.profile_switch_overlay = None;
+    clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
+    clear_nav_hold(state);
+    state.test_input_overlay_visible = false;
+    state.pad_config_overlay_visible = true;
+    state.pad_config_overlay.active_color_index = state.active_color_index;
+    pad_config::reset_modes(&mut state.pad_config_overlay);
+
+    // Show the pads for the active sides. Doubles and Versus both drive two
+    // physical pads (in Versus the second side may be a guest, but its pad is
+    // still in play and tunable), so show both; Singles shows just the joined side.
+    let (mut p1, mut p2) = match profile::get_session_play_style() {
+        profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => (true, true),
+        profile_data::PlayStyle::Single => (
+            profile::is_session_side_joined(profile_data::PlayerSide::P1),
+            profile::is_session_side_joined(profile_data::PlayerSide::P2),
+        ),
+    };
+    if !p1 && !p2 {
+        match profile::get_session_player_side() {
+            profile_data::PlayerSide::P1 => p1 = true,
+            profile_data::PlayerSide::P2 => p2 = true,
+        }
+    }
+    pad_config::set_filter(
+        &mut state.pad_config_overlay,
+        pad_config::PadFilter::Sides { p1, p2 },
+    );
+}
+
+#[inline(always)]
+fn hide_pad_config_overlay(state: &mut State) {
+    state.pad_config_overlay_visible = false;
 }
 
 fn show_lobby_overlay(state: &mut State) {
@@ -7993,6 +8188,16 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
     profile::set_session_player_side(side);
     profile::set_session_play_style(new_style);
     refresh_after_style_switch(state);
+    // The style switch remaps which profile each pad uses, so re-resolve both
+    // pads (the controller recomputes each pad's active marker). The refresh
+    // rebuilt `state`, but the markers are mirrored from the app controller each
+    // frame, so they aren't lost.
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: 0 });
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
     crate::engine::present::runtime::clear_all();
 }
@@ -8115,6 +8320,261 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
         audio::play_sfx("assets/sounds/start.ogg");
     }
     ScreenAction::None
+}
+
+fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
+    // Start drills into Advanced and Back steps back out of it, all handled
+    // inside pad_config. Only a Back at the top (simple) level closes the
+    // overlay, and only from a joined side.
+    match pad_config::apply_edit(&mut state.pad_config_overlay, ev, fine) {
+        pad_config::EditResult::ExitToParent => {
+            let close_side = match ev.action {
+                VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
+                VirtualAction::p2_back => Some(profile_data::PlayerSide::P2),
+                _ => None,
+            };
+            if close_side.is_some_and(profile::is_session_side_joined) {
+                hide_pad_config_overlay(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
+        }
+        pad_config::EditResult::SaveRequested => perform_pad_profile_save(state),
+        pad_config::EditResult::ApplyProfile => perform_pad_profile_apply(state),
+        pad_config::EditResult::SetDefaultProfile => perform_pad_profile_set_default(state),
+        pad_config::EditResult::Handled => {
+            // Select opens the Profiles management list. begin_profiles self-gates
+            // on `save_available` (set by the app: in-session + local profile).
+            if ev.pressed
+                && matches!(
+                    ev.action,
+                    VirtualAction::p1_select | VirtualAction::p2_select
+                )
+            {
+                pad_config::begin_profiles(&mut state.pad_config_overlay);
+            }
+        }
+    }
+    ScreenAction::None
+}
+
+/// Load the named saved config from `profile_id`, decode it, and write it to the
+/// SMX pad in `slot`. Returns whether it was applied — the shared core of quick
+/// recall and the overlay's Apply, so both resolve a saved config the same way.
+fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
+    let configs = crate::game::pad_profiles::load(profile_id);
+    let Some(c) = configs.iter().find(|c| c.name == name) else {
+        return false;
+    };
+    match crate::engine::smx::PadConfigData::from_settings(&c.settings) {
+        Some(data) => crate::engine::smx::apply_config_data(slot, &data),
+        None => false,
+    }
+}
+
+/// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
+/// (quick recall from the Advanced menu). Returns whether it was applied.
+fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
+    let Some(slot) = (0..2).find(|&s| {
+        let i = crate::engine::smx::get_info(s);
+        i.connected && i.is_player2 == p2
+    }) else {
+        return false;
+    };
+    let applied = if preset {
+        match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
+            Ok(p) => crate::engine::smx::apply_preset(slot, p),
+            Err(()) => false,
+        }
+    } else {
+        let Some(pid) = profile::active_local_profile_id_for_pad(p2) else {
+            return false;
+        };
+        apply_saved_pad_config(&pid, slot, name)
+    };
+    if applied {
+        state.pad_config_intents.push(PadConfigIntent::Override {
+            pad: slot,
+            applied: AppliedPadConfig {
+                preset,
+                name: name.to_owned(),
+            },
+        });
+    }
+    applied
+}
+
+/// Handle a confirmed save box: rename an existing config, or capture the cursor
+/// pad's live tuning as a new named config in the active player's profile. SMX
+/// pads only; no-op for a Guest (no profile to save to).
+fn perform_pad_profile_save(state: &mut State) {
+    let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
+        return;
+    };
+    let name = draft.name.trim().to_owned();
+    if name.is_empty() {
+        return;
+    }
+    let Some(device) = pad_config::selected_device(&state.pad_config_overlay) else {
+        return;
+    };
+    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+        return;
+    }
+    let slot = device.index;
+    let info = crate::engine::smx::get_info(slot);
+    let Some(profile_id) = profile::active_local_profile_id_for_pad(info.is_player2) else {
+        return; // Guest: no profile to save to.
+    };
+    // Rename: just relabel the existing config (and honor the default toggle,
+    // scoped to the pad being edited).
+    if let Some(old) = draft.rename_of {
+        crate::game::pad_profiles::rename(&profile_id, &old, &name);
+        let pad = slot;
+        if draft.set_default {
+            crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
+            // New default → re-resolve (applies it) and rebuild the list.
+            state
+                .pad_config_intents
+                .push(PadConfigIntent::Invalidate { pad });
+        } else {
+            // Name changed but the applied config didn't → rebuild the list only.
+            state
+                .pad_config_intents
+                .push(PadConfigIntent::RefreshList { pad });
+            // If the renamed config was the active one, keep the marker following
+            // it (checked against the mirror; the override updates the controller).
+            if state.smx_applied[pad]
+                .as_ref()
+                .is_some_and(|a| !a.preset && a.name == old)
+            {
+                state.pad_config_intents.push(PadConfigIntent::Override {
+                    pad,
+                    applied: AppliedPadConfig {
+                        preset: false,
+                        name: name.clone(),
+                    },
+                });
+            }
+        }
+        audio::play_sfx("assets/sounds/start.ogg");
+        return;
+    }
+    // Save new: capture the pad's live tuning under the given name, tagged with
+    // the backend + sensor type so it only applies to a matching pad.
+    let Some(data) = crate::engine::smx::capture_config(slot) else {
+        return;
+    };
+    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    crate::game::pad_profiles::upsert(
+        &profile_id,
+        &name,
+        crate::engine::smx::BACKEND_ID,
+        pad_type,
+        Some(info.serial),
+        draft.set_default,
+        data.to_settings(),
+    );
+    // A new config entered the list → rebuild it (but don't re-resolve: the pad is
+    // already running these captured values). Mark the new config active so its
+    // `*`/green shows immediately.
+    let pad = slot;
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::RefreshList { pad });
+    state.pad_config_intents.push(PadConfigIntent::Override {
+        pad,
+        applied: AppliedPadConfig {
+            preset: false,
+            name,
+        },
+    });
+    audio::play_sfx("assets/sounds/start.ogg");
+}
+
+/// Resolve the profiles-list cursor to `(profile_id, config_name, smx_slot)` for
+/// the management actions. `None` unless the cursor pad is an in-session SMX pad
+/// with a local profile and the cursor is on a saved config (not "save new").
+fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> {
+    let device = pad_config::selected_device(&state.pad_config_overlay)?;
+    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+        return None;
+    }
+    let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
+    let info = crate::engine::smx::get_info(device.index);
+    let profile_id = profile::active_local_profile_id_for_pad(info.is_player2)?;
+    Some((profile_id, name, device.index))
+}
+
+fn perform_pad_profile_apply(state: &mut State) {
+    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+        return;
+    };
+    if apply_saved_pad_config(&profile_id, slot, &name) {
+        state.pad_config_intents.push(PadConfigIntent::Override {
+            pad: slot,
+            applied: AppliedPadConfig {
+                preset: false,
+                name: name.clone(),
+            },
+        });
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
+}
+
+/// Overwrite the cursor config with the pad's current live tuning, keeping its
+/// name / default / serial. Lets the user re-capture into an existing profile
+/// without retyping the name.
+fn perform_pad_profile_overwrite(state: &mut State) {
+    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+        return;
+    };
+    let info = crate::engine::smx::get_info(slot);
+    // upsert preserves the config's existing default associations, so overwrite
+    // passes make_default=false (it only re-captures the threshold values).
+    let Some(data) = crate::engine::smx::capture_config(slot) else {
+        return;
+    };
+    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    crate::game::pad_profiles::upsert(
+        &profile_id,
+        &name,
+        crate::engine::smx::BACKEND_ID,
+        pad_type,
+        Some(info.serial),
+        false,
+        data.to_settings(),
+    );
+    // Re-apply if this config is the pad's active/default (its values changed).
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: slot });
+    audio::play_sfx("assets/sounds/start.ogg");
+}
+
+fn perform_pad_profile_set_default(state: &mut State) {
+    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
+        // Default is per pad: make this config the default for the cursor pad.
+        let info = crate::engine::smx::get_info(slot);
+        crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
+        // A default change doesn't move the resolve signature, so ask the
+        // controller to re-resolve (applies the new default + refreshes marker).
+        state
+            .pad_config_intents
+            .push(PadConfigIntent::Invalidate { pad: slot });
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
+}
+
+fn perform_pad_profile_delete(state: &mut State) {
+    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
+        crate::game::pad_profiles::delete(&profile_id, &name);
+        // It may have been this pad's active/default config; re-resolve so the
+        // controller falls back (and the marker updates).
+        state
+            .pad_config_intents
+            .push(PadConfigIntent::Invalidate { pad: slot });
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -8321,6 +8781,20 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         select_music_menu::Action::TestInput => {
             hide_select_music_menu(state);
             show_test_input_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ConfigurePads => {
+            hide_select_music_menu(state);
+            show_pad_config_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ApplyPadProfile {
+            p2, preset, name, ..
+        } => {
+            hide_select_music_menu(state);
+            if apply_pad_profile_recall(state, p2, preset, &name) {
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
             ScreenAction::None
         }
         select_music_menu::Action::SongSearch => {
@@ -8881,6 +9355,70 @@ pub fn handle_raw_key_event(
         }
         return ScreenAction::None;
     }
+    if state.pad_config_overlay_visible {
+        // While the save name box is open, raw keys type the name (and keyboard
+        // Enter/Esc confirm/cancel). Otherwise editing is virtual-action driven.
+        if pad_config::is_saving(&state.pad_config_overlay) {
+            match key {
+                // Key-code path: Esc cancels, Enter confirms, Backspace deletes.
+                Some(k) if k.pressed => match k.code {
+                    KeyCode::Escape => {
+                        let _ = pad_config::take_save(&mut state.pad_config_overlay);
+                    }
+                    KeyCode::Enter | KeyCode::NumpadEnter => {
+                        if pad_config::save_name_nonempty(&state.pad_config_overlay) {
+                            perform_pad_profile_save(state);
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        pad_config::save_key_input(&mut state.pad_config_overlay, true, None);
+                    }
+                    // Up/Down toggle the "set as default" flag (the virtual-action
+                    // path can't see them — we consume every key while typing).
+                    KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                        pad_config::toggle_save_default(&mut state.pad_config_overlay);
+                    }
+                    _ => {}
+                },
+                Some(_) => {}
+                // Text path (key == None): typed characters for the name.
+                None => {
+                    pad_config::save_key_input(&mut state.pad_config_overlay, false, text);
+                }
+            }
+            // Consume so this key isn't ALSO mapped to a virtual action and
+            // re-processed (which would leak Enter/Back through to the pad UI).
+            return ScreenAction::ConsumeInput;
+        }
+        // Profiles management list: navigation / apply / set-default come through
+        // virtual actions (handled in apply_edit); rename and delete are
+        // keyboard-only (no spare gamepad buttons) and handled here.
+        if pad_config::is_profiles_mode(&state.pad_config_overlay) {
+            if let Some(k) = key
+                && k.pressed
+            {
+                match k.code {
+                    KeyCode::KeyR => {
+                        pad_config::begin_rename(&mut state.pad_config_overlay);
+                        return ScreenAction::ConsumeInput;
+                    }
+                    KeyCode::Delete => {
+                        if pad_config::delete_key(&mut state.pad_config_overlay) {
+                            perform_pad_profile_delete(state);
+                        }
+                        return ScreenAction::ConsumeInput;
+                    }
+                    KeyCode::KeyO => {
+                        perform_pad_profile_overwrite(state);
+                        return ScreenAction::ConsumeInput;
+                    }
+                    _ => {}
+                }
+            }
+            return ScreenAction::None;
+        }
+        return ScreenAction::None;
+    }
     if state.test_input_overlay_visible {
         if let Some(key) = key {
             test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
@@ -8980,18 +9518,15 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
-#[inline(always)]
-pub fn set_fsr_view(state: &mut State, view: Option<test_input::FsrView>) {
-    test_input::set_fsr_view(&mut state.test_input_overlay, view);
-}
-
-#[inline(always)]
-pub fn take_fsr_command(state: &mut State) -> Option<test_input::FsrCommand> {
-    test_input::take_fsr_command(&mut state.test_input_overlay)
-}
-
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
     update_select_hold_state(state, ev);
+
+    // The Configure Pads overlay is a focused modal: handle its input first, so
+    // the pre-overlay logic (e.g. the ignore-next-back/select swallow used when
+    // closing menus) can't eat the overlay's first Select/Back press.
+    if state.pad_config_overlay_visible {
+        return handle_pad_config_overlay_input(state, ev, fine);
+    }
 
     if state.reload_ui.is_some() {
         return ScreenAction::None;
@@ -9808,6 +10343,7 @@ pub fn allows_late_join(state: &State) -> bool {
         )
         && state.profile_switch_overlay.is_none()
         && !state.test_input_overlay_visible
+        && !state.pad_config_overlay_visible
 }
 
 // Fast non-allocating formatters where possible
@@ -9877,6 +10413,7 @@ fn delayed_selection_updates_blocked(state: &State) -> bool {
         )
         || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible
+        || state.pad_config_overlay_visible
 }
 
 #[inline(always)]
@@ -11550,6 +12087,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     }
     if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
         actors.extend(sync_overlay);
+        return actors;
+    }
+    if state.pad_config_overlay_visible {
+        actors.push(act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.7):
+            z(1451)
+        ));
+        actors.extend(pad_config::build_content(&state.pad_config_overlay, true));
         return actors;
     }
     if state.test_input_overlay_visible {

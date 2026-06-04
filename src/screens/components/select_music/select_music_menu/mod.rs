@@ -37,11 +37,22 @@ pub enum Action {
     SortByTopGradesP1,
     SortByTopGradesP2,
     SortByPlaylist(String),
+    /// Apply a pad-config preset/profile to a physical pad (quick recall).
+    /// `preset` distinguishes a built-in preset name from a saved config name.
+    ApplyPadProfile {
+        p2: bool,
+        preset: bool,
+        name: String,
+        /// Whether this preset/config is the one currently applied to the pad
+        /// (drives the green "active" tint in the menu).
+        active: bool,
+    },
     ToggleFavorite,
     SortByFavorites,
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
+    ConfigurePads,
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
@@ -158,6 +169,11 @@ pub const ITEM_TEST_INPUT: Item = Item {
     bottom_label: TextContent::Static("Test Input"),
     action: Action::TestInput,
 };
+pub const ITEM_CONFIGURE_PADS: Item = Item {
+    top_label: TextContent::Static("Dial It In"),
+    bottom_label: TextContent::Static("Configure Pads"),
+    action: Action::ConfigurePads,
+};
 pub const ITEM_SONG_SEARCH: Item = Item {
     top_label: TextContent::Static("Wherefore Art Thou?"),
     bottom_label: TextContent::Static("Song Search"),
@@ -243,6 +259,27 @@ pub fn playlist_item(
         top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
         bottom_label: TextContent::Shared(Arc::<str>::from(bottom_label.into())),
         action: Action::SortByPlaylist(id.into()),
+    }
+}
+
+/// Build a "Pad Profile" recall item that applies a preset/saved config on select.
+pub fn pad_profile_item(
+    top_label: impl Into<String>,
+    bottom_label: impl Into<String>,
+    p2: bool,
+    preset: bool,
+    name: impl Into<String>,
+    active: bool,
+) -> Item {
+    Item {
+        top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
+        bottom_label: TextContent::Shared(Arc::<str>::from(bottom_label.into())),
+        action: Action::ApplyPadProfile {
+            p2,
+            preset,
+            name: name.into(),
+            active,
+        },
     }
 }
 

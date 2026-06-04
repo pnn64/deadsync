@@ -102,6 +102,18 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "FullscreenType", default.fullscreen_type.as_str());
     push_line(content, "Game", default.game_flag.as_str());
     push_line(content, "GamepadBackend", default.windows_gamepad_backend);
+    push_bool(content, "SmxInput", default.smx_input);
+    push_bool(
+        content,
+        "SmxManagesPadConfig",
+        default.smx_manages_pad_config,
+    );
+    push_line(content, "SmxUsbPollingUs", default.smx_usb_polling_us);
+    push_line(
+        content,
+        "SmxDefaultPadConfig",
+        default.smx_default_pad_config.as_str(),
+    );
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
     push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);

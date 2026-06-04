@@ -8,6 +8,7 @@ pub mod lights;
 pub mod logging;
 pub mod open_path;
 pub mod present;
+pub mod smx;
 pub mod space;
 pub mod updater;
 pub mod version;

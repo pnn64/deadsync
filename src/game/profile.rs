@@ -1284,6 +1284,20 @@ pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
     active_profile_local_id(&session.active_profiles[side_ix(side)]).map(str::to_owned)
 }
 
+/// The local profile that owns a given physical pad. In Doubles one player drives
+/// both pads, so both map to the joined player's side; otherwise the pad maps to
+/// its own side (the P2 pad → P2, else P1).
+pub fn active_local_profile_id_for_pad(is_player2: bool) -> Option<String> {
+    let side = if get_session_play_style() == PlayStyle::Double {
+        get_session_player_side()
+    } else if is_player2 {
+        PlayerSide::P2
+    } else {
+        PlayerSide::P1
+    };
+    active_local_profile_id_for_side(side)
+}
+
 pub fn known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
     let session = lock_session();
     let profiles = lock_profiles();

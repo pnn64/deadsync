@@ -184,6 +184,22 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())
         .unwrap_or(default.windows_gamepad_backend);
+    cfg.smx_input = conf
+        .get("Options", "SmxInput")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.smx_input, |v| v != 0);
+    cfg.smx_manages_pad_config = conf
+        .get("Options", "SmxManagesPadConfig")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.smx_manages_pad_config, |v| v != 0);
+    cfg.smx_usb_polling_us = conf
+        .get("Options", "SmxUsbPollingUs")
+        .and_then(|v| v.parse::<u16>().ok())
+        .map_or(default.smx_usb_polling_us, |v| v.clamp(500, 1000));
+    cfg.smx_default_pad_config = conf
+        .get("Options", "SmxDefaultPadConfig")
+        .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())
+        .unwrap_or(default.smx_default_pad_config);
     cfg.gfx_debug = conf
         .get("Options", "GfxDebug")
         .and_then(|v| v.parse::<u8>().ok())

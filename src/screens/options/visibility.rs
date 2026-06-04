@@ -20,6 +20,7 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
+        SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ROWS,
         SubmenuKind::Lights => LIGHTS_OPTIONS_ROWS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ROWS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ROWS,
@@ -44,6 +45,7 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
         SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
+        SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ITEMS,
         SubmenuKind::Lights => LIGHTS_OPTIONS_ITEMS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ITEMS,
         SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ITEMS,
@@ -68,6 +70,7 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
+        SubmenuKind::SmxConfig => "STEPMANIAX",
         SubmenuKind::Lights => "LIGHTS OPTIONS",
         SubmenuKind::OnlineScoring => "ONLINE SCORE SERVICES",
         SubmenuKind::NullOrDie => "NULL-OR-DIE OPTIONS",
@@ -118,7 +121,9 @@ pub(super) fn submenu_visible_row_indices(
                 .collect()
         }
         SubmenuKind::InputBackend => {
-            let show_fsr_dump = get_choice_by_id(
+            // The StepManiaX config page and the FSR debug dump only make sense
+            // when FSRs are enabled.
+            let show_fsr = get_choice_by_id(
                 &state.sub[SubmenuKind::InputBackend].choice_indices,
                 INPUT_BACKEND_OPTIONS_ROWS,
                 SubRowId::UseFsrs,
@@ -127,7 +132,7 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::DebugFsrDump && !show_fsr_dump {
+                    if matches!(row.id, SubRowId::DebugFsrDump | SubRowId::SmxConfig) && !show_fsr {
                         None
                     } else {
                         Some(idx)

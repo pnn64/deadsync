@@ -1016,6 +1016,15 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             format!("Pad {device} Dir {dir:?}")
         }
         InputBinding::GamepadCode(binding) => {
+            // Prefer a friendly SMX label (e.g. "SMX[40ea] R") when the binding
+            // belongs to a connected StepManiaX pad; otherwise fall back to the
+            // generic "Pad N Btn 0x.." form.
+            if let Some(label) = binding
+                .device
+                .and_then(|dev| crate::engine::smx::trigger_label(dev, binding.code_u32))
+            {
+                return label;
+            }
             let dev = binding.device.unwrap_or(0);
             // Display the full code but cropped at the first non-zero hex
             // digit for readability, e.g.:

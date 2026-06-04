@@ -18,6 +18,7 @@ pub enum SubmenuKind {
     Graphics,
     Input,
     InputBackend,
+    SmxConfig,
     Lights,
     OnlineScoring,
     NullOrDie,
@@ -36,11 +37,12 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 19] = [
+    pub(super) const ALL: [Self; 20] = [
         Self::System,
         Self::Graphics,
         Self::Input,
         Self::InputBackend,
+        Self::SmxConfig,
         Self::Lights,
         Self::OnlineScoring,
         Self::NullOrDie,
@@ -485,6 +487,31 @@ pub fn init() -> State {
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::UseFsrs,
         yes_no_choice_index(cfg.use_fsrs),
+    );
+    // StepManiaX config sub-page choices.
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxInput,
+        yes_no_choice_index(cfg.smx_input),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxManagesPadConfig,
+        yes_no_choice_index(cfg.smx_manages_pad_config),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxUsbPolling,
+        usb_polling_choice_index(cfg.smx_usb_polling_us),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxDefaultPadConfig,
+        cfg.smx_default_pad_config.index(),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::InputBackend].choice_indices,

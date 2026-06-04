@@ -5,7 +5,10 @@
     target_os = "macos"
 ))]
 mod imp {
-    use crate::engine::input::fsr::{BarView as FsrBarView, VIEW_SENSOR_COUNT, View as FsrView};
+    use crate::engine::input::fsr::{
+        BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView,
+        SensorView,
+    };
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
     use std::fmt::Write as _;
@@ -60,39 +63,141 @@ mod imp {
             Self::default()
         }
 
-        pub fn poll_view(&mut self) -> Option<FsrView> {
+        /// FSRIO streams sensor values continuously, so there's no test mode to
+        /// toggle; live reads happen in `poll_pads`.
+        pub fn set_active(&mut self, _active: bool) {}
+
+        /// Expose the connected FSRIO board as a single `PadView`, grouping
+        /// sensors into L/D/U/R by the board's sensor→button mapping.
+        pub fn poll_pads(&mut self) -> Vec<PadView> {
             self.ensure_device();
             self.read_pending_reports();
-            self.device.as_ref()?;
-            Some(FsrView {
-                device_name: self.device_name.clone(),
-                bars: std::array::from_fn(|i| FsrBarView {
-                    label: sensor_label(i),
-                    raw_value: self.input.sensor_values[i],
-                    value_norm: normalize_sensor_value(self.input.sensor_values[i]),
-                    raw_threshold: self.config.sensor_thresholds[i],
-                    threshold_norm: normalize_sensor_value(self.config.sensor_thresholds[i]),
+            if self.device.is_none() {
+                return Vec::new();
+            }
+            let buttons = std::array::from_fn(|b| {
+                let sensors: Vec<SensorView> = self
+                    .button_sensor_indices(b)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(k, i)| {
+                        let raw_value = self.input.sensor_values[i];
+                        let raw_threshold = self.config.sensor_thresholds[i];
+                        SensorView {
+                            // `set_threshold` addresses FSRIO sensors by their
+                            // position within the button, not the HID index.
+                            firmware_index: k,
+                            label: None,
+                            raw_value,
+                            value_norm: normalize_sensor_value(raw_value),
+                            raw_threshold,
+                            threshold_norm: normalize_sensor_value(raw_threshold),
+                            active: raw_value >= raw_threshold && raw_threshold > 0,
+                            enabled: true,
+                        }
+                    })
+                    .collect();
+                let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+                let aggregate_threshold =
+                    sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+                ButtonView {
+                    label: PAD_BUTTON_LABELS[b],
+                    sensors,
                     min_raw_threshold: 0,
                     max_raw_threshold: MAX_SENSOR_VALUE,
-                    active: self.input.sensor_values[i] >= self.config.sensor_thresholds[i],
-                }),
-            })
+                    aggregate_value,
+                    aggregate_threshold,
+                    active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
+                    value_scale: MAX_SENSOR_VALUE,
+                }
+            });
+            vec![PadView {
+                device_id: PadDeviceId {
+                    backend: BackendKind::Fsrio,
+                    index: 0,
+                },
+                device_name: self
+                    .device_name
+                    .clone()
+                    .unwrap_or_else(|| "FSR Pad".to_owned()),
+                is_player2: false,
+                buttons,
+                supports_advanced: true,
+                simple_per_sensor_bars: false,
+                supports_sensor_toggle: false,
+                auto_recalibration: None,
+                debounce_micros: None,
+            }]
         }
 
-        pub fn update_threshold(&mut self, sensor_index: usize, threshold: u16) -> bool {
-            if sensor_index >= VIEW_SENSOR_COUNT || threshold > MAX_SENSOR_VALUE {
+        /// Set the threshold for one or all hardware sensors mapped to a button.
+        pub fn set_threshold(
+            &mut self,
+            device: PadDeviceId,
+            button: usize,
+            sensor: Option<usize>,
+            value: u16,
+        ) -> bool {
+            if device.backend != BackendKind::Fsrio
+                || button >= PAD_BUTTON_COUNT
+                || value > MAX_SENSOR_VALUE
+            {
                 return false;
             }
             self.ensure_device();
+            let indices = self.button_sensor_indices(button);
+            let targets: Vec<usize> = match sensor {
+                Some(k) => match indices.get(k) {
+                    Some(&i) => vec![i],
+                    None => return false,
+                },
+                None => indices,
+            };
+            if targets.is_empty() {
+                return false;
+            }
             let Some(device) = self.device.as_ref() else {
                 return false;
             };
-            self.config.sensor_thresholds[sensor_index] = threshold;
+            for i in &targets {
+                self.config.sensor_thresholds[*i] = value;
+            }
             if write_config(device, &self.config).is_ok() {
                 return true;
             }
             self.drop_device();
             false
+        }
+
+        /// FSRIO has no per-sensor enable bit; Advanced exposes thresholds only.
+        pub fn set_sensor_enabled(
+            &mut self,
+            _device: PadDeviceId,
+            _button: usize,
+            _sensor: usize,
+            _enabled: bool,
+        ) -> bool {
+            false
+        }
+
+        /// FSRIO does not expose auto-recalibration.
+        pub fn set_auto_recalibration(&mut self, _device: PadDeviceId, _enabled: bool) -> bool {
+            false
+        }
+
+        /// FSRIO does not expose a panel debounce setting.
+        pub fn set_debounce_micros(&mut self, _device: PadDeviceId, _micros: u16) -> bool {
+            false
+        }
+
+        /// Hardware sensor indices mapped to button `b`, in ascending order.
+        fn button_sensor_indices(&self, b: usize) -> Vec<usize> {
+            (0..SENSOR_COUNT)
+                .filter(|&i| {
+                    let m = self.config.sensor_to_button_mapping[i];
+                    m >= 0 && m as usize == b
+                })
+                .collect()
         }
 
         pub fn debug_dump(&mut self) -> String {
@@ -434,16 +539,6 @@ mod imp {
 
     fn opt_owned_str(value: Option<String>) -> String {
         value.unwrap_or_else(|| "<none>".to_owned())
-    }
-
-    fn sensor_label(index: usize) -> &'static str {
-        match index {
-            0 => "S0",
-            1 => "S1",
-            2 => "S2",
-            3 => "S3",
-            _ => "FSR",
-        }
     }
 
     fn read_name_from_device(device: &HidDevice) -> Result<String, ()> {

@@ -46,11 +46,18 @@ pub enum SubRowId {
     // Input Options (launcher)
     ConfigureMappings,
     TestInput,
+    ConfigurePads,
     InputOptions,
     // Input Backend Options
     GamepadBackend,
+    SmxInput,
     UseFsrs,
     DebugFsrDump,
+    // StepManiaX config sub-page
+    SmxConfig,
+    SmxManagesPadConfig,
+    SmxUsbPolling,
+    SmxDefaultPadConfig,
     MenuNavigation,
     OptionsNavigation,
     MenuButtons,

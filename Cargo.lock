@@ -1026,6 +1026,7 @@ dependencies = [
  "rubato",
  "rust-ini",
  "rustc-hash 2.1.2",
+ "rustmaniax-sdk",
  "semver",
  "serde",
  "serde_json",
@@ -3912,6 +3913,19 @@ dependencies = [
  "ring",
  "rustls-pki-types",
  "untrusted",
+]
+
+[[package]]
+name = "rustmaniax-sdk"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fd73834c75f26ecec7376e1050b65e19b37f75ea0a13a6f7d66498870c0a54a"
+dependencies = [
+ "bitflags 2.12.1",
+ "bytemuck",
+ "hidapi",
+ "image",
+ "log",
 ]
 
 [[package]]
