@@ -8403,6 +8403,32 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
     applied
 }
 
+/// Pure decision behind [`refresh_sibling_pad_list`]: given the edited `slot`, the
+/// profile it was edited under, and the sibling slot's presence + profile, return
+/// the intent to queue for the sibling — or `None` when the sibling isn't present
+/// or doesn't share the edited profile. Kept free of the global SMX/session reads
+/// so it can be unit-tested.
+fn sibling_refresh_intent(
+    slot: usize,
+    sibling_connected: bool,
+    sibling_profile: Option<&str>,
+    edited_profile: &str,
+    reresolve: bool,
+) -> Option<PadConfigIntent> {
+    if slot >= 2 {
+        return None;
+    }
+    let other = 1 - slot;
+    if !sibling_connected || sibling_profile != Some(edited_profile) {
+        return None;
+    }
+    Some(if reresolve {
+        PadConfigIntent::Invalidate { pad: other }
+    } else {
+        PadConfigIntent::RefreshList { pad: other }
+    })
+}
+
 /// After a management edit to a profile's `padconfig.ini`, queue a refresh for the
 /// *other* pad slot when it views the same profile (always the case in Doubles,
 /// where both pads share the one joined player's profile). The config list is
@@ -8413,24 +8439,21 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
 /// `RefreshList`.
 fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, reresolve: bool) {
     if slot >= 2 {
-        return;
+        return; // avoid the 1 - slot underflow below for an unexpected slot
     }
-    let other = 1 - slot;
-    let other_info = crate::engine::smx::get_info(other);
-    // A disconnected sibling has no list to keep in sync; computing its profile off
-    // stale info would be meaningless anyway.
-    if !other_info.connected {
-        return;
+    // A disconnected sibling has no list to sync, and its profile read off stale
+    // info would be meaningless; the pure helper folds both cases into `None`.
+    let other_info = crate::engine::smx::get_info(1 - slot);
+    let sibling_profile = profile::active_local_profile_id_for_pad(other_info.is_player2);
+    if let Some(intent) = sibling_refresh_intent(
+        slot,
+        other_info.connected,
+        sibling_profile.as_deref(),
+        profile_id,
+        reresolve,
+    ) {
+        state.pad_config_intents.push(intent);
     }
-    if profile::active_local_profile_id_for_pad(other_info.is_player2).as_deref() != Some(profile_id)
-    {
-        return;
-    }
-    state.pad_config_intents.push(if reresolve {
-        PadConfigIntent::Invalidate { pad: other }
-    } else {
-        PadConfigIntent::RefreshList { pad: other }
-    });
 }
 
 /// Handle a confirmed save box: rename an existing config, or capture the cursor
@@ -12613,6 +12636,39 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         })
+    }
+
+    #[test]
+    fn sibling_refresh_intent_targets_other_slot_when_profile_matches() {
+        use super::{PadConfigIntent, sibling_refresh_intent};
+        // Same profile + connected sibling: save/rename (reresolve=false) refreshes
+        // the *other* slot's list; delete (reresolve=true) re-resolves it.
+        assert!(matches!(
+            sibling_refresh_intent(0, true, Some("p"), "p", false),
+            Some(PadConfigIntent::RefreshList { pad: 1 })
+        ));
+        assert!(matches!(
+            sibling_refresh_intent(0, true, Some("p"), "p", true),
+            Some(PadConfigIntent::Invalidate { pad: 1 })
+        ));
+        // Symmetric: editing slot 1 targets slot 0.
+        assert!(matches!(
+            sibling_refresh_intent(1, true, Some("p"), "p", false),
+            Some(PadConfigIntent::RefreshList { pad: 0 })
+        ));
+    }
+
+    #[test]
+    fn sibling_refresh_intent_skips_unrelated_or_absent_sibling() {
+        use super::sibling_refresh_intent;
+        // Different profile (two single-player profiles) → leave the sibling alone.
+        assert!(sibling_refresh_intent(0, true, Some("other"), "p", false).is_none());
+        // Sibling not connected → nothing to refresh.
+        assert!(sibling_refresh_intent(0, false, Some("p"), "p", false).is_none());
+        // Sibling has no joined profile (Guest) → nothing to refresh.
+        assert!(sibling_refresh_intent(0, true, None, "p", false).is_none());
+        // Out-of-range editing slot is a no-op (and never underflows).
+        assert!(sibling_refresh_intent(2, true, Some("p"), "p", false).is_none());
     }
 
     #[test]
