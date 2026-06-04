@@ -161,7 +161,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         return Some(RowId::DataVisualizations);
     }
     if id == RowId::TargetScore {
-        return Some(RowId::DataVisualizations);
+        return Some(RowId::MiniIndicator);
     }
     if id == RowId::ComboColors
         || id == RowId::ComboColorMode
