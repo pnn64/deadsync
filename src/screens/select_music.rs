@@ -8403,6 +8403,36 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
     applied
 }
 
+/// After a management edit to a profile's `padconfig.ini`, queue a refresh for the
+/// *other* pad slot when it views the same profile (always the case in Doubles,
+/// where both pads share the one joined player's profile). The config list is
+/// cached per pad slot, so without this a config added/renamed/deleted via one pad
+/// stays invisible in the sibling pad's list until something else invalidates it.
+/// `reresolve` picks the stronger `Invalidate` (re-resolve + rebuild) for edits
+/// that can change what the sibling should apply (delete); otherwise a list-only
+/// `RefreshList`.
+fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, reresolve: bool) {
+    if slot >= 2 {
+        return;
+    }
+    let other = 1 - slot;
+    let other_info = crate::engine::smx::get_info(other);
+    // A disconnected sibling has no list to keep in sync; computing its profile off
+    // stale info would be meaningless anyway.
+    if !other_info.connected {
+        return;
+    }
+    if profile::active_local_profile_id_for_pad(other_info.is_player2).as_deref() != Some(profile_id)
+    {
+        return;
+    }
+    state.pad_config_intents.push(if reresolve {
+        PadConfigIntent::Invalidate { pad: other }
+    } else {
+        PadConfigIntent::RefreshList { pad: other }
+    });
+}
+
 /// Handle a confirmed save box: rename an existing config, or capture the cursor
 /// pad's live tuning as a new named config in the active player's profile. SMX
 /// pads only; no-op for a Guest (no profile to save to).
@@ -8456,6 +8486,9 @@ fn perform_pad_profile_save(state: &mut State) {
                 });
             }
         }
+        // The rename changed a name the sibling pad (same profile, e.g. Doubles)
+        // also lists; refresh its cached copy so it doesn't show the stale name.
+        refresh_sibling_pad_list(state, slot, &profile_id, false);
         audio::play_sfx("assets/sounds/start.ogg");
         return;
     }
@@ -8488,6 +8521,9 @@ fn perform_pad_profile_save(state: &mut State) {
             name,
         },
     });
+    // The sibling pad (same profile, e.g. Doubles) caches its own copy of the list;
+    // refresh it so the new config shows there too without another edit.
+    refresh_sibling_pad_list(state, slot, &profile_id, false);
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
@@ -8573,6 +8609,9 @@ fn perform_pad_profile_delete(state: &mut State) {
         state
             .pad_config_intents
             .push(PadConfigIntent::Invalidate { pad: slot });
+        // The delete removes the config for every pad sharing this profile; the
+        // sibling (e.g. Doubles) re-resolves too in case it was that pad's default.
+        refresh_sibling_pad_list(state, slot, &profile_id, true);
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
