@@ -1079,7 +1079,10 @@ pub struct AppliedPadConfig {
 /// the pad slot (0/1) in every variant — the same key the resolver uses.
 pub enum PadConfigIntent {
     /// A preset/config was manually applied to a pad → mark it the active config.
-    Override { pad: usize, applied: AppliedPadConfig },
+    Override {
+        pad: usize,
+        applied: AppliedPadConfig,
+    },
     /// Something the resolver's signature can't see changed for this pad (a
     /// per-pad default edit, overwrite, delete, or a play-style switch) →
     /// re-resolve + re-apply it.
@@ -4330,11 +4333,13 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // In play? Doubles/Versus drive both pads; Singles only the joined side.
         let in_play = match style {
             profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
-            profile_data::PlayStyle::Single => profile::is_session_side_joined(if info.is_player2 {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            }),
+            profile_data::PlayStyle::Single => {
+                profile::is_session_side_joined(if info.is_player2 {
+                    profile_data::PlayerSide::P2
+                } else {
+                    profile_data::PlayerSide::P1
+                })
+            }
         };
         if !in_play {
             continue;
@@ -8187,8 +8192,12 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
     // pads (the controller recomputes each pad's active marker). The refresh
     // rebuilt `state`, but the markers are mirrored from the app controller each
     // frame, so they aren't lost.
-    state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: 0 });
-    state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: 1 });
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: 0 });
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
     crate::engine::present::runtime::clear_all();
 }
@@ -8336,7 +8345,10 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
             // Select opens the Profiles management list. begin_profiles self-gates
             // on `save_available` (set by the app: in-session + local profile).
             if ev.pressed
-                && matches!(ev.action, VirtualAction::p1_select | VirtualAction::p2_select)
+                && matches!(
+                    ev.action,
+                    VirtualAction::p1_select | VirtualAction::p2_select
+                )
             {
                 pad_config::begin_profiles(&mut state.pad_config_overlay);
             }
@@ -8471,7 +8483,10 @@ fn perform_pad_profile_save(state: &mut State) {
         .push(PadConfigIntent::RefreshList { pad });
     state.pad_config_intents.push(PadConfigIntent::Override {
         pad,
-        applied: AppliedPadConfig { preset: false, name },
+        applied: AppliedPadConfig {
+            preset: false,
+            name,
+        },
     });
     audio::play_sfx("assets/sounds/start.ogg");
 }
@@ -8530,7 +8545,9 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         data.to_settings(),
     );
     // Re-apply if this config is the pad's active/default (its values changed).
-    state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
+    state
+        .pad_config_intents
+        .push(PadConfigIntent::Invalidate { pad: slot });
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
@@ -8541,7 +8558,9 @@ fn perform_pad_profile_set_default(state: &mut State) {
         crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
-        state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
+        state
+            .pad_config_intents
+            .push(PadConfigIntent::Invalidate { pad: slot });
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8551,7 +8570,9 @@ fn perform_pad_profile_delete(state: &mut State) {
         crate::game::pad_profiles::delete(&profile_id, &name);
         // It may have been this pad's active/default config; re-resolve so the
         // controller falls back (and the marker updates).
-        state.pad_config_intents.push(PadConfigIntent::Invalidate { pad: slot });
+        state
+            .pad_config_intents
+            .push(PadConfigIntent::Invalidate { pad: slot });
         audio::play_sfx("assets/sounds/start.ogg");
     }
 }
@@ -8767,7 +8788,9 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             show_pad_config_overlay(state);
             ScreenAction::None
         }
-        select_music_menu::Action::ApplyPadProfile { p2, preset, name, .. } => {
+        select_music_menu::Action::ApplyPadProfile {
+            p2, preset, name, ..
+        } => {
             hide_select_music_menu(state);
             if apply_pad_profile_recall(state, p2, preset, &name) {
                 audio::play_sfx("assets/sounds/start.ogg");

@@ -3896,7 +3896,6 @@ impl App {
         }
     }
 
-
     /// Drive the Configure Pads screen: enable live FSR reads while it's open,
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
@@ -3907,7 +3906,11 @@ impl App {
         let screen = self.state.screens.current_screen;
         let on_screen = screen == CurrentScreen::ConfigurePads && use_fsrs;
         let on_overlay = screen == CurrentScreen::SelectMusic
-            && self.state.screens.select_music_state.pad_config_overlay_visible
+            && self
+                .state
+                .screens
+                .select_music_state
+                .pad_config_overlay_visible
             && use_fsrs;
 
         // `target` is the screen state we're driving: the standalone Configure
@@ -3950,7 +3953,9 @@ impl App {
                         sensor,
                         value,
                     } => {
-                        let _ = self.fsr_monitor.set_threshold(device, button, sensor, value);
+                        let _ = self
+                            .fsr_monitor
+                            .set_threshold(device, button, sensor, value);
                     }
                     pad_config::PadCommand::SensorEnabled {
                         device,
@@ -4035,8 +4040,12 @@ impl App {
                         )
                     })
                     .collect();
-                self.pad_config_sync
-                    .store_profiles(pad, Some(pid.to_owned()), cursor_pad_type.clone(), list);
+                self.pad_config_sync.store_profiles(
+                    pad,
+                    Some(pid.to_owned()),
+                    cursor_pad_type.clone(),
+                    list,
+                );
             }
 
             // Build the overlay list from the cache; active/default are derived live
@@ -4093,8 +4102,7 @@ impl App {
 
         // Drain UI requests (manual recall/apply/save → Override; default edit /
         // overwrite / delete / style switch → Invalidate) into the controller.
-        let intents =
-            std::mem::take(&mut self.state.screens.select_music_state.pad_config_intents);
+        let intents = std::mem::take(&mut self.state.screens.select_music_state.pad_config_intents);
         for intent in intents {
             self.pad_config_sync.apply_intent(intent);
         }
@@ -4109,8 +4117,7 @@ impl App {
             // In Doubles both pads belong to the one joined player; otherwise the
             // pad maps to its own side.
             let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
-            let pad_type =
-                crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
+            let pad_type = crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             // Compare against the cached signature by borrow: the steady-state
             // path allocates nothing just to find that nothing changed. The owned
             // `Sig` is built (by moving these values) only when we re-resolve.
@@ -4142,7 +4149,10 @@ impl App {
                     }) {
                         Some((name, data)) => (
                             crate::engine::smx::apply_config_data(pad, &data),
-                            AppliedPadConfig { preset: false, name },
+                            AppliedPadConfig {
+                                preset: false,
+                                name,
+                            },
                         ),
                         // No matching/default config (or corrupt) → machine preset.
                         None => (

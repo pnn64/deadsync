@@ -186,7 +186,12 @@ mod tests {
         let mut s = PadConfigSync::default();
         // Never loaded → stale.
         assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
-        s.store_profiles(0, Some("p1".to_owned()), Some("fsr".to_owned()), vec![cfg("A")]);
+        s.store_profiles(
+            0,
+            Some("p1".to_owned()),
+            Some("fsr".to_owned()),
+            vec![cfg("A")],
+        );
         // Same inputs → cache is served, no reload.
         assert!(!s.profiles_stale(0, Some("p1"), Some("fsr")));
         assert_eq!(s.profiles_for(0).len(), 1);
@@ -217,7 +222,12 @@ mod tests {
             profile_id: Some("p1".to_owned()),
             pad_type: Some("fsr".to_owned()),
         });
-        s.store_profiles(0, Some("p1".to_owned()), Some("fsr".to_owned()), vec![cfg("A")]);
+        s.store_profiles(
+            0,
+            Some("p1".to_owned()),
+            Some("fsr".to_owned()),
+            vec![cfg("A")],
+        );
         // A new save / rename changed the list but not what's applied to the pad.
         s.apply_intent(PadConfigIntent::RefreshList { pad: 0 });
         // List rebuilds...

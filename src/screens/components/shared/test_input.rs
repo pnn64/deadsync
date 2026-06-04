@@ -1009,5 +1009,4 @@ mod tests {
         assert_eq!(format_hz(1000), "1000 Hz");
         assert_eq!(format_hz(1001), ">1000 Hz");
     }
-
 }

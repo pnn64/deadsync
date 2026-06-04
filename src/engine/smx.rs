@@ -212,18 +212,19 @@ impl PadConfigData {
     /// per-panel sensor enables, plus the auto-calibration tare and the panel
     /// debounce (in milliseconds).
     pub fn to_settings(&self) -> Vec<(String, String)> {
-        let join = |xs: &[u8]| {
-            xs.iter()
-                .map(u8::to_string)
-                .collect::<Vec<_>>()
-                .join(" ")
-        };
+        let join = |xs: &[u8]| xs.iter().map(u8::to_string).collect::<Vec<_>>().join(" ");
         let mut out = Vec::with_capacity(PAD_CONFIG_PANELS * 5 + 2);
         for (p, panel) in self.panels.iter().enumerate() {
             out.push((format!("Panel{p}.FsrLow"), join(&panel.fsr_low)));
             out.push((format!("Panel{p}.FsrHigh"), join(&panel.fsr_high)));
-            out.push((format!("Panel{p}.LoadCellLow"), panel.load_cell_low.to_string()));
-            out.push((format!("Panel{p}.LoadCellHigh"), panel.load_cell_high.to_string()));
+            out.push((
+                format!("Panel{p}.LoadCellLow"),
+                panel.load_cell_low.to_string(),
+            ));
+            out.push((
+                format!("Panel{p}.LoadCellHigh"),
+                panel.load_cell_high.to_string(),
+            ));
             let enabled: Vec<u8> = (0..PAD_CONFIG_SENSORS)
                 .map(|s| {
                     let (byte, mask) = enabled_bit(p, s);
@@ -285,9 +286,12 @@ impl PadConfigData {
                 }
             }
         }
-        let auto_calibration_max_tare = get("AutoCalibrationMaxTare")?.trim().parse::<u16>().ok()?;
+        let auto_calibration_max_tare =
+            get("AutoCalibrationMaxTare")?.trim().parse::<u16>().ok()?;
         let debounce_ms = get("DebounceMs")?.trim().parse::<f32>().ok()?;
-        let panel_debounce_us = (debounce_ms * 1000.0).round().clamp(0.0, f32::from(u16::MAX)) as u16;
+        let panel_debounce_us = (debounce_ms * 1000.0)
+            .round()
+            .clamp(0.0, f32::from(u16::MAX)) as u16;
         Some(Self {
             panels,
             enabled_sensors,
@@ -536,7 +540,9 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             if changed == 0 {
                 return;
             }
-            log::debug!("SMX: pad {pad} input {prev:#06x} -> {state:#06x} (changed {changed:#06x})");
+            log::debug!(
+                "SMX: pad {pad} input {prev:#06x} -> {state:#06x} (changed {changed:#06x})"
+            );
 
             let timestamp = Instant::now();
             let host_nanos = crate::engine::host_time::now_nanos();
@@ -643,8 +649,16 @@ mod tests {
         }
         let settings = data.to_settings();
         // Human-readable: e.g. "Panel0.FsrLow" -> "0 1 2 3", "DebounceMs" -> "4.5".
-        assert!(settings.iter().any(|(k, v)| k == "Panel0.FsrLow" && v == "0 1 2 3"));
-        assert!(settings.iter().any(|(k, v)| k == "DebounceMs" && v == "4.5"));
+        assert!(
+            settings
+                .iter()
+                .any(|(k, v)| k == "Panel0.FsrLow" && v == "0 1 2 3")
+        );
+        assert!(
+            settings
+                .iter()
+                .any(|(k, v)| k == "DebounceMs" && v == "4.5")
+        );
         assert_eq!(PadConfigData::from_settings(&settings), Some(data));
 
         // Missing a required key -> None.
@@ -658,13 +672,23 @@ mod tests {
     fn preset_thresholds_match_official_values() {
         let low = preset_thresholds(SmxPadPreset::Low);
         assert_eq!(
-            (low.load_cell_low, low.load_cell_high, low.fsr_low, low.fsr_high),
+            (
+                low.load_cell_low,
+                low.load_cell_high,
+                low.fsr_low,
+                low.fsr_high
+            ),
             (70, 80, 217, 218)
         );
 
         let med = preset_thresholds(SmxPadPreset::Medium);
         assert_eq!(
-            (med.load_cell_low, med.load_cell_high, med.fsr_low, med.fsr_high),
+            (
+                med.load_cell_low,
+                med.load_cell_high,
+                med.fsr_low,
+                med.fsr_high
+            ),
             (33, 42, 174, 175)
         );
         // Center panel uses its own pair.

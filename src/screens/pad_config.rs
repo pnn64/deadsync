@@ -295,10 +295,17 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         if is_back(ev.action) {
             state.saving = None;
         } else if is_start(ev.action) || is_select(ev.action) {
-            if state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty()) {
+            if state
+                .saving
+                .as_ref()
+                .is_some_and(|d| !d.name.trim().is_empty())
+            {
                 return EditResult::SaveRequested;
             }
-        } else if matches!(ui_action(ev.action), Some(UiAction::Raise | UiAction::Lower)) {
+        } else if matches!(
+            ui_action(ev.action),
+            Some(UiAction::Raise | UiAction::Lower)
+        ) {
             if let Some(d) = state.saving.as_mut() {
                 d.set_default = !d.set_default;
             }
@@ -503,7 +510,10 @@ pub fn toggle_save_default(state: &mut State) {
 
 /// Whether the save box currently has a non-blank name (ready to confirm).
 pub fn save_name_nonempty(state: &State) -> bool {
-    state.saving.as_ref().is_some_and(|d| !d.name.trim().is_empty())
+    state
+        .saving
+        .as_ref()
+        .is_some_and(|d| !d.name.trim().is_empty())
 }
 
 /// Take the confirmed save draft, clearing save mode.
@@ -598,7 +608,15 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.8):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false, save_available: false }, zb);
+        push_footer(
+            &mut actors,
+            Footer::Simple {
+                as_overlay,
+                advanced_available: false,
+                save_available: false,
+            },
+            zb,
+        );
         return actors;
     }
 
@@ -613,7 +631,15 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(20.0 + zb)
         ));
-        push_footer(&mut actors, Footer::Simple { as_overlay, advanced_available: false, save_available: false }, zb);
+        push_footer(
+            &mut actors,
+            Footer::Simple {
+                as_overlay,
+                advanced_available: false,
+                save_available: false,
+            },
+            zb,
+        );
         return actors;
     }
 
@@ -681,7 +707,15 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
         if selected {
             // push_quad is top-anchored; center it on the row's text baseline (y).
             let qh = row_h - 6.0;
-            push_quad(actors, cx, y - qh * 0.5, 540.0, qh, with_alpha(theme.frame, 0.30), 9.0 + zb);
+            push_quad(
+                actors,
+                cx,
+                y - qh * 0.5,
+                540.0,
+                qh,
+                with_alpha(theme.frame, 0.30),
+                9.0 + zb,
+            );
         }
         let (label, color) = if row == 0 {
             ("+ Save current pad as new\u{2026}".to_owned(), ON_TEXT)
@@ -723,9 +757,19 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
             diffuse(color[0], color[1], color[2], color[3]): z(20.0 + zb)
         ));
     };
-    line(actors, "Up/Down - Select".to_owned(), bottom - 94.0, [1.0, 1.0, 1.0, 0.85]);
+    line(
+        actors,
+        "Up/Down - Select".to_owned(),
+        bottom - 94.0,
+        [1.0, 1.0, 1.0, 0.85],
+    );
     if state.profiles_sel == 0 {
-        line(actors, "Press &START; to name and save the current tuning".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
+        line(
+            actors,
+            "Press &START; to name and save the current tuning".to_owned(),
+            bottom - 70.0,
+            [1.0, 1.0, 1.0, 0.85],
+        );
     } else if state.delete_armed {
         // One line: orange warning + a normal-colored &BACK; glyph. A glyph
         // inherits its actor's diffuse, so split into two actors that meet at the
@@ -743,10 +787,25 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
             diffuse(1.0, 1.0, 1.0, 0.85): z(20.0 + zb)
         ));
     } else {
-        line(actors, "&START; Activate    &SELECT; Set default".to_owned(), bottom - 70.0, [1.0, 1.0, 1.0, 0.85]);
-        line(actors, "R - Rename    O - Overwrite    DELETE - Delete".to_owned(), bottom - 46.0, [1.0, 1.0, 1.0, 0.85]);
+        line(
+            actors,
+            "&START; Activate    &SELECT; Set default".to_owned(),
+            bottom - 70.0,
+            [1.0, 1.0, 1.0, 0.85],
+        );
+        line(
+            actors,
+            "R - Rename    O - Overwrite    DELETE - Delete".to_owned(),
+            bottom - 46.0,
+            [1.0, 1.0, 1.0, 0.85],
+        );
     }
-    line(actors, "Press &BACK; to return".to_owned(), bottom - 22.0, [1.0, 1.0, 1.0, 0.85]);
+    line(
+        actors,
+        "Press &BACK; to return".to_owned(),
+        bottom - 22.0,
+        [1.0, 1.0, 1.0, 0.85],
+    );
 }
 
 /// Modal name-entry box drawn over the Simple view while saving a pad profile.
@@ -756,7 +815,15 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
     // High z so it sits above everything (overlay base z is ~1450).
     let z = 60.0 + zb;
     // Dim + panel.
-    push_quad(actors, cx, cy - 90.0, 520.0, 180.0, [0.0, 0.0, 0.0, 0.92], z);
+    push_quad(
+        actors,
+        cx,
+        cy - 90.0,
+        520.0,
+        180.0,
+        [0.0, 0.0, 0.0, 0.92],
+        z,
+    );
     let pad_name = selected_device(state)
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
         .map_or("", |p| p.device_name.as_str());
@@ -815,7 +882,15 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
     let mut panel_cx = screen_center_x() - total_w * 0.5 + panel_w * 0.5;
 
     for (pad_idx, pad) in state.pads.iter().enumerate() {
-        push_frame(actors, panel_cx, top_y, panel_w, panel_h, theme.frame, 10.0 + zb);
+        push_frame(
+            actors,
+            panel_cx,
+            top_y,
+            panel_w,
+            panel_h,
+            theme.frame,
+            10.0 + zb,
+        );
         actors.push(act!(text:
             font("miso"):
             settext(pad.device_name.clone()):
@@ -948,11 +1023,17 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         for (s, sensor) in button.sensors.iter().enumerate() {
             let x = group_left + ADV_BAR_W * 0.5 + s as f32 * (ADV_BAR_W + ADV_BAR_GAP);
             let fw = sensor.firmware_index;
-            let threshold =
-                current_sensor_threshold(state, device, btn_idx, fw).unwrap_or(sensor.raw_threshold);
+            let threshold = current_sensor_threshold(state, device, btn_idx, fw)
+                .unwrap_or(sensor.raw_threshold);
             let enabled = current_sensor_enabled(state, device, btn_idx, fw, sensor.enabled);
-            let is_focused = focused == Some(AdvTarget::Sensor { button: btn_idx, sensor: s });
-            let bar_label = sensor.label.map_or_else(|| (s + 1).to_string(), str::to_owned);
+            let is_focused = focused
+                == Some(AdvTarget::Sensor {
+                    button: btn_idx,
+                    sensor: s,
+                });
+            let bar_label = sensor
+                .label
+                .map_or_else(|| (s + 1).to_string(), str::to_owned);
             push_sensor_bar(
                 actors,
                 x,
@@ -991,13 +1072,33 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     if pad.auto_recalibration.is_some() {
         let on = current_auto_recal(state, device, pad.auto_recalibration.unwrap_or(true));
         let focused_here = focused == Some(AdvTarget::AutoRecal);
-        push_setting_row(actors, "Auto-recalibration", if on { "ON" } else { "OFF" }, on, focused_here, ey, zb);
+        push_setting_row(
+            actors,
+            "Auto-recalibration",
+            if on { "ON" } else { "OFF" },
+            on,
+            focused_here,
+            ey,
+            zb,
+        );
         ey += 24.0;
     }
     if pad.debounce_micros.is_some() {
-        let us = current_debounce(state, device, pad.debounce_micros.unwrap_or(DEBOUNCE_DEFAULT_US));
+        let us = current_debounce(
+            state,
+            device,
+            pad.debounce_micros.unwrap_or(DEBOUNCE_DEFAULT_US),
+        );
         let focused_here = focused == Some(AdvTarget::Debounce);
-        push_setting_row(actors, "Debounce", &format_ms(us), true, focused_here, ey, zb);
+        push_setting_row(
+            actors,
+            "Debounce",
+            &format_ms(us),
+            true,
+            focused_here,
+            ey,
+            zb,
+        );
     }
 
     push_footer(
@@ -1037,12 +1138,28 @@ fn push_sensor_bar(
         if !enabled {
             fill[3] *= 0.35; // dim a disabled sensor's fill
         }
-        push_quad(actors, x, y + ADV_BAR_HEIGHT - fill_h, ADV_BAR_W, fill_h, fill, z + 1.0);
+        push_quad(
+            actors,
+            x,
+            y + ADV_BAR_HEIGHT - fill_h,
+            ADV_BAR_W,
+            fill_h,
+            fill,
+            z + 1.0,
+        );
     }
 
     let threshold_h = 2.0_f32;
     let threshold_y = y + (1.0 - threshold_norm) * ADV_BAR_HEIGHT - threshold_h * 0.5;
-    push_quad(actors, x, threshold_y, ADV_BAR_W, threshold_h, THRESHOLD_COLOR, z + 2.0);
+    push_quad(
+        actors,
+        x,
+        threshold_y,
+        ADV_BAR_W,
+        threshold_h,
+        THRESHOLD_COLOR,
+        z + 2.0,
+    );
 
     if selected {
         let ox = x - (ADV_BAR_W + 8.0) * 0.5;
@@ -1061,7 +1178,11 @@ fn push_sensor_bar(
         ));
     }
 
-    let text_color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.95] };
+    let text_color = if selected {
+        SELECTED_TEXT
+    } else {
+        [1.0, 1.0, 1.0, 0.95]
+    };
     // Threshold value above the bar.
     actors.push(act!(text:
         font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
@@ -1076,7 +1197,11 @@ fn push_sensor_bar(
     ));
     // Enable indicator under the identifier (only where the backend supports it).
     if supports_toggle {
-        let (label, c) = if enabled { ("ON", ON_TEXT) } else { ("off", OFF_TEXT) };
+        let (label, c) = if enabled {
+            ("ON", ON_TEXT)
+        } else {
+            ("off", OFF_TEXT)
+        };
         actors.push(act!(text:
             font("miso"): settext(label.to_string()): align(0.5, 0.0):
             xy(x, y + ADV_BAR_HEIGHT + 17.0): zoom(0.46): horizalign(center):
@@ -1095,7 +1220,11 @@ fn push_setting_row(
     zb: f32,
 ) {
     let cx = screen_center_x();
-    let label_color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.92] };
+    let label_color = if selected {
+        SELECTED_TEXT
+    } else {
+        [1.0, 1.0, 1.0, 0.92]
+    };
     actors.push(act!(text:
         font("miso"): settext(format!("{label}:")): align(1.0, 0.5):
         xy(cx - 8.0, y): zoom(0.75): horizalign(right):
@@ -1158,7 +1287,10 @@ fn advanced_targets(state: &State) -> Vec<AdvTarget> {
     let mut targets = Vec::with_capacity(18);
     for (b, button) in pad.buttons.iter().enumerate() {
         for s in 0..button.sensors.len() {
-            targets.push(AdvTarget::Sensor { button: b, sensor: s });
+            targets.push(AdvTarget::Sensor {
+                button: b,
+                sensor: s,
+            });
         }
     }
     if pad.auto_recalibration.is_some() {
@@ -1204,17 +1336,36 @@ fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool
             adjust_sensor_threshold(state, dev, button, sensor, if up { step } else { -step });
         }
         AdvTarget::AutoRecal => {
-            queue_unique(state, PadCommand::AutoRecalibration { device: dev, enabled: up });
+            queue_unique(
+                state,
+                PadCommand::AutoRecalibration {
+                    device: dev,
+                    enabled: up,
+                },
+            );
         }
         AdvTarget::Debounce => {
-            let Some(pad) = pad_by_device(state, dev) else { return };
+            let Some(pad) = pad_by_device(state, dev) else {
+                return;
+            };
             let live = pad.debounce_micros.unwrap_or(DEBOUNCE_DEFAULT_US);
             let current = current_debounce(state, dev, live);
-            let step = if fine { DEBOUNCE_FINE_US } else { DEBOUNCE_STEP_US } as i32;
+            let step = if fine {
+                DEBOUNCE_FINE_US
+            } else {
+                DEBOUNCE_STEP_US
+            } as i32;
             let next = (i32::from(current) + if up { step } else { -step })
-                .clamp(i32::from(DEBOUNCE_MIN_US), i32::from(DEBOUNCE_MAX_US)) as u16;
+                .clamp(i32::from(DEBOUNCE_MIN_US), i32::from(DEBOUNCE_MAX_US))
+                as u16;
             if next != current {
-                queue_unique(state, PadCommand::Debounce { device: dev, micros: next });
+                queue_unique(
+                    state,
+                    PadCommand::Debounce {
+                        device: dev,
+                        micros: next,
+                    },
+                );
             }
         }
     }
@@ -1222,8 +1373,13 @@ fn edit_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget, up: bool
 
 fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
     match target {
-        AdvTarget::Sensor { button, sensor: disp } => {
-            let Some(pad) = pad_by_device(state, dev) else { return };
+        AdvTarget::Sensor {
+            button,
+            sensor: disp,
+        } => {
+            let Some(pad) = pad_by_device(state, dev) else {
+                return;
+            };
             if !pad.supports_sensor_toggle {
                 return;
             }
@@ -1243,7 +1399,9 @@ fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
             );
         }
         AdvTarget::AutoRecal => {
-            let Some(pad) = pad_by_device(state, dev) else { return };
+            let Some(pad) = pad_by_device(state, dev) else {
+                return;
+            };
             let live = pad.auto_recalibration.unwrap_or(true);
             let current = current_auto_recal(state, dev, live);
             queue_unique(
@@ -1266,7 +1424,8 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     };
     let bar = &pad.buttons[button];
     let device = pad.device_id;
-    let current = pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
+    let current =
+        pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
     let next = (i32::from(current) + delta).clamp(
         i32::from(bar.min_raw_threshold),
         i32::from(bar.max_raw_threshold),
@@ -1331,12 +1490,32 @@ fn same_target(a: &PadCommand, b: &PadCommand) -> bool {
     use PadCommand::*;
     match (a, b) {
         (
-            Threshold { device: d1, button: b1, sensor: s1, .. },
-            Threshold { device: d2, button: b2, sensor: s2, .. },
+            Threshold {
+                device: d1,
+                button: b1,
+                sensor: s1,
+                ..
+            },
+            Threshold {
+                device: d2,
+                button: b2,
+                sensor: s2,
+                ..
+            },
         ) => d1 == d2 && b1 == b2 && s1 == s2,
         (
-            SensorEnabled { device: d1, button: b1, sensor: s1, .. },
-            SensorEnabled { device: d2, button: b2, sensor: s2, .. },
+            SensorEnabled {
+                device: d1,
+                button: b1,
+                sensor: s1,
+                ..
+            },
+            SensorEnabled {
+                device: d2,
+                button: b2,
+                sensor: s2,
+                ..
+            },
         ) => d1 == d2 && b1 == b2 && s1 == s2,
         (AutoRecalibration { device: d1, .. }, AutoRecalibration { device: d2, .. }) => d1 == d2,
         (Debounce { device: d1, .. }, Debounce { device: d2, .. }) => d1 == d2,
@@ -1349,11 +1528,12 @@ fn same_target(a: &PadCommand, b: &PadCommand) -> bool {
 /// Most recently queued Simple-mode (whole-button) threshold for a pad+button.
 fn pending_simple_threshold(state: &State, device: PadDeviceId, button: usize) -> Option<u16> {
     state.pending.iter().rev().find_map(|c| match *c {
-        PadCommand::Threshold { device: d, button: b, sensor: None, value }
-            if d == device && b == button =>
-        {
-            Some(value)
-        }
+        PadCommand::Threshold {
+            device: d,
+            button: b,
+            sensor: None,
+            value,
+        } if d == device && b == button => Some(value),
         _ => None,
     })
 }
@@ -1366,11 +1546,12 @@ fn current_sensor_threshold(
     sensor: usize,
 ) -> Option<u16> {
     state.pending.iter().rev().find_map(|c| match *c {
-        PadCommand::Threshold { device: d, button: b, sensor: Some(s), value }
-            if d == device && b == button && s == sensor =>
-        {
-            Some(value)
-        }
+        PadCommand::Threshold {
+            device: d,
+            button: b,
+            sensor: Some(s),
+            value,
+        } if d == device && b == button && s == sensor => Some(value),
         _ => None,
     })
 }
@@ -1387,11 +1568,12 @@ fn current_sensor_enabled(
         .iter()
         .rev()
         .find_map(|c| match *c {
-            PadCommand::SensorEnabled { device: d, button: b, sensor: s, enabled }
-                if d == device && b == button && s == sensor =>
-            {
-                Some(enabled)
-            }
+            PadCommand::SensorEnabled {
+                device: d,
+                button: b,
+                sensor: s,
+                enabled,
+            } if d == device && b == button && s == sensor => Some(enabled),
             _ => None,
         })
         .unwrap_or(live)
@@ -1557,7 +1739,11 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             advanced_available,
             save_available,
         } => {
-            line(actors, "Left/Right - Select Panel".to_owned(), bottom - 94.0);
+            line(
+                actors,
+                "Left/Right - Select Panel".to_owned(),
+                bottom - 94.0,
+            );
             line(
                 actors,
                 format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"),
@@ -1585,10 +1771,16 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             supports_toggle,
             save_available,
         } => {
-            line(actors, "Left/Right - Select   Up/Down - Adjust (Shift = fine)".to_owned(), bottom - 70.0);
+            line(
+                actors,
+                "Left/Right - Select   Up/Down - Adjust (Shift = fine)".to_owned(),
+                bottom - 70.0,
+            );
             let action_line = match (supports_toggle, save_available) {
                 (true, true) => Some("&START; toggle sensor    &SELECT; Profiles".to_owned()),
-                (true, false) => Some("Press &START; to toggle the selected sensor on/off".to_owned()),
+                (true, false) => {
+                    Some("Press &START; to toggle the selected sensor on/off".to_owned())
+                }
                 (false, true) => Some("Press &SELECT; for pad profiles".to_owned()),
                 (false, false) => None,
             };
@@ -1643,7 +1835,15 @@ fn push_frame(
     let left = center_x - panel_w * 0.5;
     let right = center_x + panel_w * 0.5;
     push_quad(actors, center_x, top_y, panel_w, panel_h, PANEL_BG, z);
-    push_quad(actors, center_x, top_y, panel_w, PANEL_BORDER_H, frame_color, z + 1.0);
+    push_quad(
+        actors,
+        center_x,
+        top_y,
+        panel_w,
+        PANEL_BORDER_H,
+        frame_color,
+        z + 1.0,
+    );
     push_quad(
         actors,
         center_x,
@@ -1700,11 +1900,27 @@ fn push_value_cluster(
         let vn = normalize(sensor.raw_value, value_scale);
         let fill_h = vn * BAR_HEIGHT;
         if fill_h > 0.0 {
-            let fill = if sensor.active { ACTIVE_FILL } else { theme.fill_idle };
-            push_quad(actors, bx, y + BAR_HEIGHT - fill_h, thin_w, fill_h, fill, z + 1.0);
+            let fill = if sensor.active {
+                ACTIVE_FILL
+            } else {
+                theme.fill_idle
+            };
+            push_quad(
+                actors,
+                bx,
+                y + BAR_HEIGHT - fill_h,
+                thin_w,
+                fill_h,
+                fill,
+                z + 1.0,
+            );
         }
         // Sensor number (1-based) below its bar.
-        let nc = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.9] };
+        let nc = if selected {
+            SELECTED_TEXT
+        } else {
+            [1.0, 1.0, 1.0, 0.9]
+        };
         actors.push(act!(text:
             font("miso"): settext((i + 1).to_string()): align(0.5, 0.0):
             xy(bx, y + BAR_HEIGHT + 6.0): zoom(0.5): horizalign(center):
@@ -1715,7 +1931,15 @@ fn push_value_cluster(
     // One shared threshold line across the whole cluster.
     let threshold_h = 3.0_f32;
     let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
-    push_quad(actors, x_center, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
+    push_quad(
+        actors,
+        x_center,
+        threshold_y,
+        BAR_WIDTH,
+        threshold_h,
+        THRESHOLD_COLOR,
+        z + 2.0,
+    );
 
     if selected {
         let ox = x_center - (BAR_WIDTH + 12.0) * 0.5;
@@ -1734,7 +1958,11 @@ fn push_value_cluster(
         ));
     }
 
-    let text_color = if selected { SELECTED_TEXT } else { [1.0, 1.0, 1.0, 0.95] };
+    let text_color = if selected {
+        SELECTED_TEXT
+    } else {
+        [1.0, 1.0, 1.0, 0.95]
+    };
     // Shared threshold value above the line.
     actors.push(act!(text:
         font("miso"): settext(threshold_label): align(0.5, 1.0):
@@ -1742,7 +1970,11 @@ fn push_value_cluster(
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
     // Button label below the cluster.
-    let label_color = if button_active { ACTIVE_FILL } else { text_color };
+    let label_color = if button_active {
+        ACTIVE_FILL
+    } else {
+        text_color
+    };
     actors.push(act!(text:
         font("miso"): settext(label.to_string()): align(0.5, 0.0):
         xy(x_center, y + BAR_HEIGHT + 20.0): zoom(1.0): horizalign(center):
@@ -1798,7 +2030,11 @@ fn push_bar(
 
     // Whole panel disabled (every sensor turned off in Advanced): just say so.
     if disabled {
-        let off = if selected { SELECTED_TEXT } else { CAUTION_TEXT };
+        let off = if selected {
+            SELECTED_TEXT
+        } else {
+            CAUTION_TEXT
+        };
         actors.push(act!(text:
             font("miso"): settext("OFF"): align(0.5, 0.5):
             xy(x, y + BAR_HEIGHT * 0.5): zoom(0.82): horizalign(center):
@@ -1818,13 +2054,29 @@ fn push_bar(
     let fill_h = value_norm * BAR_HEIGHT;
     if fill_h > 0.0 {
         let fill_color = if active { ACTIVE_FILL } else { theme.fill_idle };
-        push_quad(actors, x, y + BAR_HEIGHT - fill_h, BAR_WIDTH, fill_h, fill_color, z + 1.0);
+        push_quad(
+            actors,
+            x,
+            y + BAR_HEIGHT - fill_h,
+            BAR_WIDTH,
+            fill_h,
+            fill_color,
+            z + 1.0,
+        );
     }
 
     // Activation-threshold line.
     let threshold_h = 3.0_f32;
     let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
-    push_quad(actors, x, threshold_y, BAR_WIDTH, threshold_h, THRESHOLD_COLOR, z + 2.0);
+    push_quad(
+        actors,
+        x,
+        threshold_y,
+        BAR_WIDTH,
+        threshold_h,
+        THRESHOLD_COLOR,
+        z + 2.0,
+    );
 
     // Current pressure value, kept high above the bar so a near-max threshold
     // number doesn't clip into it.
@@ -1898,7 +2150,12 @@ mod tests {
     fn mk_button(label: &'static str, threshold: u16) -> ButtonView {
         ButtonView {
             label,
-            sensors: vec![mk_sensor(0, threshold), mk_sensor(1, threshold), mk_sensor(2, threshold), mk_sensor(3, threshold)],
+            sensors: vec![
+                mk_sensor(0, threshold),
+                mk_sensor(1, threshold),
+                mk_sensor(2, threshold),
+                mk_sensor(3, threshold),
+            ],
             min_raw_threshold: 5,
             max_raw_threshold: 250,
             aggregate_value: 0,
@@ -1911,10 +2168,18 @@ mod tests {
     /// A 4-sensor-per-panel FSR-style SMX pad (Advanced + per-sensor toggle).
     fn smx_pad(index: usize, is_player2: bool) -> PadView {
         PadView {
-            device_id: PadDeviceId { backend: BackendKind::Smx, index },
+            device_id: PadDeviceId {
+                backend: BackendKind::Smx,
+                index,
+            },
             device_name: format!("SMX {index}"),
             is_player2,
-            buttons: [mk_button("L", 30), mk_button("D", 30), mk_button("U", 30), mk_button("R", 30)],
+            buttons: [
+                mk_button("L", 30),
+                mk_button("D", 30),
+                mk_button("U", 30),
+                mk_button("R", 30),
+            ],
             supports_advanced: true,
             simple_per_sensor_bars: false,
             supports_sensor_toggle: true,
@@ -1946,9 +2211,19 @@ mod tests {
     fn simple_nav_wraps_and_targets_the_cursor_button() {
         let mut s = with_pad();
         // Raise on the landing bar edits button 0 (a whole-button Simple edit).
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_up), false), EditResult::Handled);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_up), false),
+            EditResult::Handled
+        );
         let cmds = take_commands(&mut s);
-        assert!(matches!(cmds[0], PadCommand::Threshold { button: 0, sensor: None, .. }));
+        assert!(matches!(
+            cmds[0],
+            PadCommand::Threshold {
+                button: 0,
+                sensor: None,
+                ..
+            }
+        ));
         // NextBar advances the cursor button; the 4th press wraps back to 0.
         for expect in [1usize, 2, 3, 0] {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
@@ -1981,7 +2256,10 @@ mod tests {
             apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
         }
         let cmds = take_commands(&mut s);
-        assert!(matches!(cmds.last().unwrap(), PadCommand::Threshold { value: 5, .. }));
+        assert!(matches!(
+            cmds.last().unwrap(),
+            PadCommand::Threshold { value: 5, .. }
+        ));
     }
 
     #[test]
@@ -1998,18 +2276,30 @@ mod tests {
     fn gamepad_panel_press_ignored_but_menu_control_allowed() {
         let mut s = with_pad();
         // A raw panel press (gamepad, non-menu action) is swallowed: no edit.
-        let r = apply_edit(&mut s, &ev_from(VirtualAction::p1_up, InputSource::Gamepad, true), false);
+        let r = apply_edit(
+            &mut s,
+            &ev_from(VirtualAction::p1_up, InputSource::Gamepad, true),
+            false,
+        );
         assert_eq!(r, EditResult::Handled);
         assert!(take_commands(&mut s).is_empty());
         // A dedicated menu control from the same gamepad does edit.
-        apply_edit(&mut s, &ev_from(VirtualAction::p1_menu_up, InputSource::Gamepad, true), false);
+        apply_edit(
+            &mut s,
+            &ev_from(VirtualAction::p1_menu_up, InputSource::Gamepad, true),
+            false,
+        );
         assert_eq!(take_commands(&mut s).len(), 1);
     }
 
     #[test]
     fn release_events_are_noops() {
         let mut s = with_pad();
-        let r = apply_edit(&mut s, &ev_from(VirtualAction::p1_up, InputSource::Keyboard, false), false);
+        let r = apply_edit(
+            &mut s,
+            &ev_from(VirtualAction::p1_up, InputSource::Keyboard, false),
+            false,
+        );
         assert_eq!(r, EditResult::Handled);
         assert!(take_commands(&mut s).is_empty());
     }
@@ -2026,13 +2316,19 @@ mod tests {
     #[test]
     fn back_at_simple_level_exits_to_parent() {
         let mut s = with_pad();
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_back), false),
+            EditResult::ExitToParent
+        );
     }
 
     #[test]
     fn back_exits_even_with_no_pads_connected() {
         let mut s = init();
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_back), false),
+            EditResult::ExitToParent
+        );
     }
 
     // ── Pad set / filtering / cursor tracking ──
@@ -2040,7 +2336,13 @@ mod tests {
     #[test]
     fn set_pads_filters_by_side() {
         let mut s = init();
-        set_filter(&mut s, PadFilter::Sides { p1: true, p2: false });
+        set_filter(
+            &mut s,
+            PadFilter::Sides {
+                p1: true,
+                p2: false,
+            },
+        );
         set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
         assert_eq!(total_bars(&s), PAD_BUTTON_COUNT); // only the P1 pad survives
         assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
@@ -2067,7 +2369,10 @@ mod tests {
         set_pads(&mut s, vec![smx_pad(0, false)]); // now 4 bars; cursor must clamp
         assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
-        assert!(matches!(take_commands(&mut s)[0], PadCommand::Threshold { button: 3, .. }));
+        assert!(matches!(
+            take_commands(&mut s)[0],
+            PadCommand::Threshold { button: 3, .. }
+        ));
     }
 
     // ── Advanced view ──
@@ -2079,7 +2384,15 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         let cmds = take_commands(&mut s);
-        assert!(matches!(cmds[0], PadCommand::Threshold { button: 0, sensor: Some(0), value: 35, .. }));
+        assert!(matches!(
+            cmds[0],
+            PadCommand::Threshold {
+                button: 0,
+                sensor: Some(0),
+                value: 35,
+                ..
+            }
+        ));
         // Step past the 16 sensors to the AutoRecal target; Start toggles it off.
         for _ in 0..(PAD_BUTTON_COUNT * 4) {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
@@ -2098,7 +2411,10 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // no-op (Simple only)
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         // Still Simple → a whole-button edit (sensor: None), not a per-sensor one.
-        assert!(matches!(take_commands(&mut s)[0], PadCommand::Threshold { sensor: None, .. }));
+        assert!(matches!(
+            take_commands(&mut s)[0],
+            PadCommand::Threshold { sensor: None, .. }
+        ));
     }
 
     #[test]
@@ -2106,9 +2422,15 @@ mod tests {
         let mut s = with_pad();
         apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // into Advanced
         // Back here only leaves Advanced (Handled), it must not exit the screen.
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::Handled);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_back), false),
+            EditResult::Handled
+        );
         // A second Back, now at Simple, exits.
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_back), false), EditResult::ExitToParent);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_back), false),
+            EditResult::ExitToParent
+        );
     }
 
     // ── Save box ──
@@ -2144,9 +2466,15 @@ mod tests {
         set_save_available(&mut s, true);
         begin_save(&mut s);
         // Empty name → Start is swallowed (Handled), no SaveRequested.
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::Handled);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_start), false),
+            EditResult::Handled
+        );
         save_key_input(&mut s, false, Some("Soft"));
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::SaveRequested);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_start), false),
+            EditResult::SaveRequested
+        );
     }
 
     #[test]
@@ -2175,15 +2503,32 @@ mod tests {
         set_save_available(&mut s, true);
         begin_profiles(&mut s);
         assert!(is_profiles_mode(&s));
-        set_profiles(&mut s, vec![
-            ProfileListEntry { name: "A".into(), is_default: false, is_active: false },
-            ProfileListEntry { name: "B".into(), is_default: true, is_active: false },
-        ]);
+        set_profiles(
+            &mut s,
+            vec![
+                ProfileListEntry {
+                    name: "A".into(),
+                    is_default: false,
+                    is_active: false,
+                },
+                ProfileListEntry {
+                    name: "B".into(),
+                    is_default: true,
+                    is_active: false,
+                },
+            ],
+        );
         // Row 0 is "save new"; the first Down moves onto config "A".
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
         assert_eq!(selected_profile_name(&s).as_deref(), Some("A"));
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::ApplyProfile);
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_select), false), EditResult::SetDefaultProfile);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_start), false),
+            EditResult::ApplyProfile
+        );
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_select), false),
+            EditResult::SetDefaultProfile
+        );
         // Delete arms on the first press and confirms on the second.
         assert!(!delete_key(&mut s));
         assert!(delete_key(&mut s));
@@ -2194,9 +2539,19 @@ mod tests {
         let mut s = with_pad();
         set_save_available(&mut s, true);
         begin_profiles(&mut s);
-        set_profiles(&mut s, vec![ProfileListEntry { name: "A".into(), is_default: false, is_active: false }]);
+        set_profiles(
+            &mut s,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
         // Cursor starts on row 0 ("save current as new"); Start opens the name box.
-        assert_eq!(apply_edit(&mut s, &ev(VirtualAction::p1_start), false), EditResult::Handled);
+        assert_eq!(
+            apply_edit(&mut s, &ev(VirtualAction::p1_start), false),
+            EditResult::Handled
+        );
         assert!(is_saving(&s));
     }
 
@@ -2205,7 +2560,14 @@ mod tests {
         let mut s = with_pad();
         set_save_available(&mut s, true);
         begin_profiles(&mut s);
-        set_profiles(&mut s, vec![ProfileListEntry { name: "A".into(), is_default: false, is_active: false }]);
+        set_profiles(
+            &mut s,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
         // On the "save new" row there is nothing to delete.
         assert!(!delete_key(&mut s));
     }
@@ -2215,7 +2577,14 @@ mod tests {
         let mut s = with_pad();
         set_save_available(&mut s, true);
         begin_profiles(&mut s);
-        set_profiles(&mut s, vec![ProfileListEntry { name: "Soft".into(), is_default: true, is_active: false }]);
+        set_profiles(
+            &mut s,
+            vec![ProfileListEntry {
+                name: "Soft".into(),
+                is_default: true,
+                is_active: false,
+            }],
+        );
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false); // onto "Soft"
         begin_rename(&mut s);
         assert!(is_saving(&s));

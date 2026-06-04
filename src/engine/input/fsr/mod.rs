@@ -163,7 +163,9 @@ impl Monitor {
         enabled: bool,
     ) -> bool {
         match device.backend {
-            BackendKind::Fsrio => self.fsrio.set_sensor_enabled(device, button, sensor, enabled),
+            BackendKind::Fsrio => self
+                .fsrio
+                .set_sensor_enabled(device, button, sensor, enabled),
             BackendKind::Smx => self.smx.set_sensor_enabled(device, button, sensor, enabled),
         }
     }

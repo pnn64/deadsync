@@ -370,7 +370,9 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_smx_usb_polling(usb_polling_value(new_index));
         }
         if row.id == SubRowId::SmxDefaultPadConfig {
-            config::update_smx_default_pad_config(crate::config::SmxPadPreset::from_index(new_index));
+            config::update_smx_default_pad_config(crate::config::SmxPadPreset::from_index(
+                new_index,
+            ));
         }
     } else if matches!(kind, SubmenuKind::Lights) {
         let row = &rows[row_index];
@@ -947,9 +949,9 @@ pub(super) fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
     match kind {
         SubmenuKind::InputBackend => Some(SubmenuKind::Input),
         SubmenuKind::SmxConfig => Some(SubmenuKind::InputBackend),
-        SubmenuKind::GrooveStats
-        | SubmenuKind::ArrowCloud
-        | SubmenuKind::ScoreImport => Some(SubmenuKind::OnlineScoring),
+        SubmenuKind::GrooveStats | SubmenuKind::ArrowCloud | SubmenuKind::ScoreImport => {
+            Some(SubmenuKind::OnlineScoring)
+        }
         SubmenuKind::NullOrDieOptions | SubmenuKind::SyncPacks => Some(SubmenuKind::NullOrDie),
         _ => None,
     }

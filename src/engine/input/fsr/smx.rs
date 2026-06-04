@@ -211,7 +211,8 @@ impl Monitor {
         if !info.connected || info.firmware_version < 5 {
             log::trace!(
                 "SMX: set_sensor_enabled pad {pad} rejected (connected={}, fw {})",
-                info.connected, info.firmware_version
+                info.connected,
+                info.firmware_version
             );
             return false;
         }
@@ -220,7 +221,9 @@ impl Monitor {
             return false;
         };
         if !is_fsr(&config) {
-            log::trace!("SMX: set_sensor_enabled pad {pad} rejected (load-cell pad has no per-sensor toggle)");
+            log::trace!(
+                "SMX: set_sensor_enabled pad {pad} rejected (load-cell pad has no per-sensor toggle)"
+            );
             return false;
         }
         let (panel, _) = VIEW_PANELS[button];
@@ -246,7 +249,8 @@ impl Monitor {
         if !info.connected || info.firmware_version < 5 {
             log::trace!(
                 "SMX: set_auto_recalibration pad {pad} rejected (connected={}, fw {})",
-                info.connected, info.firmware_version
+                info.connected,
+                info.firmware_version
             );
             return false;
         }
@@ -276,7 +280,8 @@ impl Monitor {
         if !info.connected || info.firmware_version < 5 {
             log::trace!(
                 "SMX: set_debounce_micros pad {pad} rejected (connected={}, fw {})",
-                info.connected, info.firmware_version
+                info.connected,
+                info.firmware_version
             );
             return false;
         }
@@ -320,8 +325,10 @@ impl Monitor {
                     let _ = writeln!(
                         out,
                         "  panel {panel} fsr_low: [{}, {}, {}, {}]",
-                        s.fsr_low_threshold[0], s.fsr_low_threshold[1],
-                        s.fsr_low_threshold[2], s.fsr_low_threshold[3]
+                        s.fsr_low_threshold[0],
+                        s.fsr_low_threshold[1],
+                        s.fsr_low_threshold[2],
+                        s.fsr_low_threshold[3]
                     );
                 }
             }
@@ -334,8 +341,10 @@ impl Monitor {
                     let _ = writeln!(
                         out,
                         "  panel {panel} sensors: [{}, {}, {}, {}]",
-                        data.sensor_level[panel][0], data.sensor_level[panel][1],
-                        data.sensor_level[panel][2], data.sensor_level[panel][3]
+                        data.sensor_level[panel][0],
+                        data.sensor_level[panel][1],
+                        data.sensor_level[panel][2],
+                        data.sensor_level[panel][3]
                     );
                 }
             }
@@ -343,7 +352,6 @@ impl Monitor {
         }
         out
     }
-
 }
 
 impl Drop for Monitor {

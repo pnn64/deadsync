@@ -206,7 +206,12 @@ pub fn resolve<'a>(
         .iter()
         .filter(compatible)
         .find(|p| is_default_for(p, serial))
-        .or_else(|| profiles.iter().filter(compatible).find(|p| p.global_default))
+        .or_else(|| {
+            profiles
+                .iter()
+                .filter(compatible)
+                .find(|p| p.global_default)
+        })
 }
 
 fn serialize(profiles: &[PadConfigProfile]) -> String {
@@ -256,10 +261,7 @@ fn parse(content: &str) -> Vec<PadConfigProfile> {
                 backend: std::mem::take(backend).trim().to_string(),
                 pad_type: opt(pad_type),
                 serial: opt(serial),
-                default_for_serials: default_for
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .collect(),
+                default_for_serials: default_for.split_whitespace().map(str::to_string).collect(),
                 global_default: *global_default,
                 settings: std::mem::take(settings),
             });
@@ -403,12 +405,24 @@ Panel0.FsrLow=1 2 3 4
         // Pad S1 -> Soft, Pad S2 -> Soft (same config for both pads).
         assert!(apply_set_default(&mut list, "S1", "Soft"));
         assert!(apply_set_default(&mut list, "S2", "Soft"));
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S1").unwrap().name, "Soft");
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S2").unwrap().name, "Soft");
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S1").unwrap().name,
+            "Soft"
+        );
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S2").unwrap().name,
+            "Soft"
+        );
         // Re-point pad S2 at Hard; S1 stays on Soft.
         assert!(apply_set_default(&mut list, "S2", "Hard"));
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S1").unwrap().name, "Soft");
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S2").unwrap().name, "Hard");
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S1").unwrap().name,
+            "Soft"
+        );
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S2").unwrap().name,
+            "Hard"
+        );
         // list is in insertion order here (parse sorts; these are built directly).
         assert!(is_default_for(&list[0], "S1")); // Soft -> S1
         assert!(!is_default_for(&list[0], "S2")); // Soft no longer S2 (Hard took it)
@@ -421,7 +435,10 @@ Panel0.FsrLow=1 2 3 4
         // No per-pad default and no global -> nothing.
         assert!(resolve(&list, "smx", Some("fsr"), "S9").is_none());
         list[0].global_default = true;
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S9").unwrap().name, "Any");
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S9").unwrap().name,
+            "Any"
+        );
     }
 
     #[test]
@@ -436,7 +453,10 @@ Panel0.FsrLow=1 2 3 4
             resolve(&list, "smx", Some("loadcell"), "S1").unwrap().name,
             "LoadCell"
         );
-        assert_eq!(resolve(&list, "smx", Some("fsr"), "S1").unwrap().name, "Fsr");
+        assert_eq!(
+            resolve(&list, "smx", Some("fsr"), "S1").unwrap().name,
+            "Fsr"
+        );
     }
 
     #[test]

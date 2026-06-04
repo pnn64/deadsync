@@ -118,9 +118,15 @@ fn input_backend_items_match_rows() {
 fn smx_config_items_match_rows() {
     let expected = [
         (SubRowId::SmxInput, ItemId::InpSmxInput),
-        (SubRowId::SmxManagesPadConfig, ItemId::InpSmxManagesPadConfig),
+        (
+            SubRowId::SmxManagesPadConfig,
+            ItemId::InpSmxManagesPadConfig,
+        ),
         (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),
-        (SubRowId::SmxDefaultPadConfig, ItemId::InpSmxDefaultPadConfig),
+        (
+            SubRowId::SmxDefaultPadConfig,
+            ItemId::InpSmxDefaultPadConfig,
+        ),
     ];
 
     assert_eq!(
