@@ -4439,13 +4439,12 @@ impl App {
         let total_elapsed = redraw_started
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        crate::engine::present::runtime::tick(delta_time);
 
-        // Tab/`-acceleration: scale the dt fed to non-gameplay screens and
-        // their fade transitions. Wall-clock dt (`delta_time`) is preserved
-        // for the present runtime tick above and for the gameplay step that
-        // continues running under the FadingOut→Evaluation and FadingIn
-        // transitions below, so timing-sensitive paths stay on real time.
+        // Tab/`-acceleration: scale the dt fed to non-gameplay screens,
+        // actor tweens, and their fade transitions. Gameplay and Practice
+        // return wall-clock dt from `apply_tab_acceleration`, and the gameplay
+        // step that continues running under the FadingOut→Evaluation and
+        // FadingIn transitions below also stays on wall-clock `delta_time`.
         // See `apply_tab_acceleration` and issue #174.
         let logic_dt = apply_tab_acceleration(
             delta_time,
@@ -4454,6 +4453,7 @@ impl App {
             self.state.shell.slow_down_held,
             self.state.shell.tab_acceleration_enabled,
         );
+        crate::engine::present::runtime::tick(logic_dt);
         crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
