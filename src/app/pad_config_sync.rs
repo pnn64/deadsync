@@ -267,6 +267,34 @@ mod tests {
     }
 
     #[test]
+    fn override_keeps_signature_so_only_a_session_reset_reresolves() {
+        use crate::config::SmxPadPreset;
+        let mut s = PadConfigSync::default();
+        // The managed resolver has already run for pad 0 (signature cached).
+        s.signature[0] = Some(Sig {
+            preset: SmxPadPreset::Low,
+            serial: "S".to_owned(),
+            profile_id: Some("p".to_owned()),
+            pad_type: Some("fsr".to_owned()),
+        });
+        // A manual Apply marks a config active but must NOT touch the signature —
+        // otherwise the resolver keeps short-circuiting and never reverts to the default.
+        s.apply_intent(PadConfigIntent::Override {
+            pad: 0,
+            applied: AppliedPadConfig {
+                preset: false,
+                name: "FS".to_owned(),
+            },
+        });
+        assert!(s.signature[0].is_some());
+        assert_eq!(s.snapshot()[0].as_ref().unwrap().name, "FS");
+        // Starting a new session drops the signature, so the next resolve reapplies
+        // the managed default instead of leaving the override in place.
+        s.reset_signatures();
+        assert!(s.signature[0].is_none());
+    }
+
+    #[test]
     fn signature_matches_compares_every_field_by_borrow() {
         use crate::config::SmxPadPreset;
         let mut s = PadConfigSync::default();
