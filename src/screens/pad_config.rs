@@ -253,6 +253,16 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /// `fine` (Shift held) makes adjustments use the fine step instead of coarse.
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
+    // FSR support off → the screen shows a disabled message (see build_content), so
+    // don't let directional input edit the (possibly stale) pad snapshot; only Back
+    // exits. Without this, edits made here queue and then apply the next time FSRs
+    // are re-enabled.
+    if !crate::config::get().use_fsrs {
+        if ev.pressed && is_back(ev.action) {
+            return ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options));
+        }
+        return ScreenAction::None;
+    }
     match apply_edit(state, ev, fine) {
         EditResult::ExitToParent => {
             ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options))
@@ -610,8 +620,10 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
     // While DeadSync manages pad config, direct edits on the standalone screen are
     // transient (re-applied on launch / profile / pad change). Caption the screen to
     // send the user to the persistent path. The Song Select overlay has its own
-    // save/profile flow, so only caption the standalone screen (`!as_overlay`).
-    if !as_overlay && state.managed_active {
+    // save/profile flow (`!as_overlay`); the Advanced view's top area is too packed
+    // to fit this without clipping the pad name, and you always reach Advanced from
+    // the simple view anyway, so only caption the simple view (`advanced_pad.is_none()`).
+    if !as_overlay && state.managed_active && advanced_pad.is_none() {
         actors.push(act!(text:
             font("miso"):
             settext("DeadSync is managing pad config - edits here are temporary."):
@@ -2221,5 +2233,27 @@ mod tests {
         reset_modes(&mut s);
         assert!(!is_profiles_mode(&s));
         assert!(!is_saving(&s));
+    }
+
+    #[test]
+    fn handle_input_is_inert_while_fsr_support_off() {
+        // In tests config::get().use_fsrs is false - the disabled state the screen
+        // shows. Directional input must not edit or queue commands then; otherwise
+        // they would apply the next time FSRs are re-enabled.
+        let mut s = with_pad();
+        assert!(matches!(
+            handle_input(&mut s, &ev(VirtualAction::p1_up), false),
+            ScreenAction::None
+        ));
+        assert!(matches!(
+            handle_input(&mut s, &ev(VirtualAction::p1_right), false),
+            ScreenAction::None
+        ));
+        assert!(take_commands(&mut s).is_empty());
+        // Back still exits to the parent screen.
+        assert!(matches!(
+            handle_input(&mut s, &ev(VirtualAction::p1_back), false),
+            ScreenAction::Navigate(_)
+        ));
     }
 }
