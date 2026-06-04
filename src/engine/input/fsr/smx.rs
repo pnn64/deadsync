@@ -207,25 +207,9 @@ impl Monitor {
             return false;
         }
         let pad = device.index;
-        let info = smx::get_info(pad);
-        if !info.connected || info.firmware_version < 5 {
-            log::trace!(
-                "SMX: set_sensor_enabled pad {pad} rejected (connected={}, fw {})",
-                info.connected,
-                info.firmware_version
-            );
-            return false;
-        }
-        let Some(mut config) = smx::get_config(pad) else {
-            log::trace!("SMX: set_sensor_enabled pad {pad} rejected (config unavailable)");
+        let Some(mut config) = fsr_config_for_edit(pad, "set_sensor_enabled") else {
             return false;
         };
-        if !is_fsr(&config) {
-            log::trace!(
-                "SMX: set_sensor_enabled pad {pad} rejected (load-cell pad has no per-sensor toggle)"
-            );
-            return false;
-        }
         let (panel, _) = VIEW_PANELS[button];
         let (byte, mask) = smx::enabled_bit(panel, sensor);
         if enabled {
@@ -245,23 +229,9 @@ impl Monitor {
             return false;
         }
         let pad = device.index;
-        let info = smx::get_info(pad);
-        if !info.connected || info.firmware_version < 5 {
-            log::trace!(
-                "SMX: set_auto_recalibration pad {pad} rejected (connected={}, fw {})",
-                info.connected,
-                info.firmware_version
-            );
-            return false;
-        }
-        let Some(mut config) = smx::get_config(pad) else {
-            log::trace!("SMX: set_auto_recalibration pad {pad} rejected (config unavailable)");
+        let Some(mut config) = fsr_config_for_edit(pad, "set_auto_recalibration") else {
             return false;
         };
-        if !is_fsr(&config) {
-            log::trace!("SMX: set_auto_recalibration pad {pad} rejected (load-cell pad)");
-            return false;
-        }
         config.auto_calibration_max_tare = if enabled { 0xFFFF } else { 0 };
         smx::set_config(pad, config);
         log::trace!("SMX: set_auto_recalibration pad {pad} -> {enabled}");
@@ -276,23 +246,9 @@ impl Monitor {
             return false;
         }
         let pad = device.index;
-        let info = smx::get_info(pad);
-        if !info.connected || info.firmware_version < 5 {
-            log::trace!(
-                "SMX: set_debounce_micros pad {pad} rejected (connected={}, fw {})",
-                info.connected,
-                info.firmware_version
-            );
-            return false;
-        }
-        let Some(mut config) = smx::get_config(pad) else {
-            log::trace!("SMX: set_debounce_micros pad {pad} rejected (config unavailable)");
+        let Some(mut config) = fsr_config_for_edit(pad, "set_debounce_micros") else {
             return false;
         };
-        if !is_fsr(&config) {
-            log::trace!("SMX: set_debounce_micros pad {pad} rejected (load-cell pad)");
-            return false;
-        }
         config.panel_debounce_us = micros;
         smx::set_config(pad, config);
         log::trace!("SMX: set_debounce_micros pad {pad} -> {micros}us");
@@ -462,6 +418,31 @@ fn load_cell_button(
 fn sensor_enabled(config: &SmxConfig, panel: usize, sensor: usize) -> bool {
     let (byte, mask) = smx::enabled_bit(panel, sensor);
     config.enabled_sensors[byte] & mask != 0
+}
+
+/// Fetch a firmware-5+ FSR pad's config for an FSR-only edit (per-sensor toggle,
+/// auto-recalibration, debounce). Returns `None` — logging why — for a
+/// disconnected pad, pre-v5 firmware, an unavailable config, or a load-cell pad.
+/// `op` names the calling edit for the log line.
+fn fsr_config_for_edit(pad: usize, op: &str) -> Option<SmxConfig> {
+    let info = smx::get_info(pad);
+    if !info.connected || info.firmware_version < 5 {
+        log::trace!(
+            "SMX: {op} pad {pad} rejected (connected={}, fw {})",
+            info.connected,
+            info.firmware_version
+        );
+        return None;
+    }
+    let Some(config) = smx::get_config(pad) else {
+        log::trace!("SMX: {op} pad {pad} rejected (config unavailable)");
+        return None;
+    };
+    if !is_fsr(&config) {
+        log::trace!("SMX: {op} pad {pad} rejected (load-cell pad)");
+        return None;
+    }
+    Some(config)
 }
 
 fn is_fsr(config: &SmxConfig) -> bool {

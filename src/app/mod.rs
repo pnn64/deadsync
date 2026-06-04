@@ -3939,48 +3939,7 @@ impl App {
                 let target = target!();
                 pad_config::take_commands(target)
             };
-            for cmd in commands {
-                let device = match &cmd {
-                    pad_config::PadCommand::Threshold { device, .. }
-                    | pad_config::PadCommand::SensorEnabled { device, .. }
-                    | pad_config::PadCommand::AutoRecalibration { device, .. }
-                    | pad_config::PadCommand::Debounce { device, .. } => *device,
-                };
-                match cmd {
-                    pad_config::PadCommand::Threshold {
-                        device,
-                        button,
-                        sensor,
-                        value,
-                    } => {
-                        let _ = self
-                            .fsr_monitor
-                            .set_threshold(device, button, sensor, value);
-                    }
-                    pad_config::PadCommand::SensorEnabled {
-                        device,
-                        button,
-                        sensor,
-                        enabled,
-                    } => {
-                        let _ = self
-                            .fsr_monitor
-                            .set_sensor_enabled(device, button, sensor, enabled);
-                    }
-                    pad_config::PadCommand::AutoRecalibration { device, enabled } => {
-                        let _ = self.fsr_monitor.set_auto_recalibration(device, enabled);
-                    }
-                    pad_config::PadCommand::Debounce { device, micros } => {
-                        let _ = self.fsr_monitor.set_debounce_micros(device, micros);
-                    }
-                }
-                // A manual edit diverges from any saved config, so the pad no
-                // longer matches a stored profile — drop the active marker.
-                if device.backend == input::fsr::BackendKind::Smx {
-                    // Markers are keyed by pad slot; `device.index` is that slot.
-                    self.pad_config_sync.mark_diverged(device.index);
-                }
-            }
+            self.apply_pad_commands(commands);
             let target = target!();
             pad_config::set_pads(target, pads);
             pad_config::set_managed_active(target, cfg.smx_manages_pad_config);
@@ -4074,6 +4033,94 @@ impl App {
         }
     }
 
+    /// Apply queued pad-config edits to hardware. A manual edit diverges the pad
+    /// from any saved config, so each touched SMX pad drops its active marker
+    /// (markers are keyed by pad slot, which is `device.index`).
+    fn apply_pad_commands(&mut self, commands: Vec<crate::screens::pad_config::PadCommand>) {
+        use crate::screens::pad_config::PadCommand;
+        for cmd in commands {
+            let device = match &cmd {
+                PadCommand::Threshold { device, .. }
+                | PadCommand::SensorEnabled { device, .. }
+                | PadCommand::AutoRecalibration { device, .. }
+                | PadCommand::Debounce { device, .. } => *device,
+            };
+            match cmd {
+                PadCommand::Threshold {
+                    device,
+                    button,
+                    sensor,
+                    value,
+                } => {
+                    let _ = self
+                        .fsr_monitor
+                        .set_threshold(device, button, sensor, value);
+                }
+                PadCommand::SensorEnabled {
+                    device,
+                    button,
+                    sensor,
+                    enabled,
+                } => {
+                    let _ = self
+                        .fsr_monitor
+                        .set_sensor_enabled(device, button, sensor, enabled);
+                }
+                PadCommand::AutoRecalibration { device, enabled } => {
+                    let _ = self.fsr_monitor.set_auto_recalibration(device, enabled);
+                }
+                PadCommand::Debounce { device, micros } => {
+                    let _ = self.fsr_monitor.set_debounce_micros(device, micros);
+                }
+            }
+            if device.backend == input::fsr::BackendKind::Smx {
+                self.pad_config_sync.mark_diverged(device.index);
+            }
+        }
+    }
+
+    /// Resolve and write the config for one managed SMX pad: the pad's saved
+    /// default → a global default → the built-in `preset` (also the Guest /
+    /// no-profile fallback). Returns the write-ack and the marker describing what
+    /// was applied.
+    fn resolve_pad_config(
+        pad: usize,
+        profile_id: Option<&str>,
+        pad_type: Option<&str>,
+        serial: &str,
+        preset: crate::config::SmxPadPreset,
+    ) -> (bool, crate::screens::select_music::AppliedPadConfig) {
+        use crate::screens::select_music::AppliedPadConfig;
+        let preset_label = AppliedPadConfig {
+            preset: true,
+            name: preset.as_str().to_owned(),
+        };
+        let Some(id) = profile_id else {
+            return (crate::engine::smx::apply_preset(pad, preset), preset_label);
+        };
+        let configs = crate::game::pad_profiles::load(id);
+        match crate::game::pad_profiles::resolve(
+            &configs,
+            crate::engine::smx::BACKEND_ID,
+            pad_type,
+            serial,
+        )
+        .and_then(|c| {
+            crate::engine::smx::PadConfigData::from_settings(&c.settings)
+                .map(|d| (c.name.clone(), d))
+        }) {
+            Some((name, data)) => (
+                crate::engine::smx::apply_config_data(pad, &data),
+                AppliedPadConfig {
+                    preset: false,
+                    name,
+                },
+            ),
+            // No matching/default config (or corrupt) → machine preset.
+            None => (crate::engine::smx::apply_preset(pad, preset), preset_label),
+        }
+    }
+
     /// Drain UI intents, then (when "DeadSync manages pad config" is on) resolve
     /// and apply the right pad config to each connected StepManiaX pad: this pad's
     /// per-pad default → a global default → the machine built-in preset (also the
@@ -4083,8 +4130,6 @@ impl App {
     /// unless something relevant changed (so manual edits aren't clobbered).
     /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
     fn apply_smx_managed_preset(&mut self) {
-        use crate::game::pad_profiles;
-        use crate::screens::select_music::AppliedPadConfig;
         use pad_config_sync::Sig;
 
         // Skip entirely on the gameplay hot path. Pad config can't change mid-song
@@ -4130,42 +4175,13 @@ impl App {
             ) {
                 continue; // nothing relevant changed — no file I/O, no rewrite
             }
-            let preset_label = AppliedPadConfig {
-                preset: true,
-                name: cfg.smx_default_pad_config.as_str().to_owned(),
-            };
-            let (applied, label) = match &profile_id {
-                Some(id) => {
-                    let configs = pad_profiles::load(id);
-                    match pad_profiles::resolve(
-                        &configs,
-                        crate::engine::smx::BACKEND_ID,
-                        pad_type.as_deref(),
-                        &info.serial,
-                    )
-                    .and_then(|c| {
-                        crate::engine::smx::PadConfigData::from_settings(&c.settings)
-                            .map(|d| (c.name.clone(), d))
-                    }) {
-                        Some((name, data)) => (
-                            crate::engine::smx::apply_config_data(pad, &data),
-                            AppliedPadConfig {
-                                preset: false,
-                                name,
-                            },
-                        ),
-                        // No matching/default config (or corrupt) → machine preset.
-                        None => (
-                            crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
-                            preset_label,
-                        ),
-                    }
-                }
-                None => (
-                    crate::engine::smx::apply_preset(pad, cfg.smx_default_pad_config),
-                    preset_label,
-                ),
-            };
+            let (applied, label) = Self::resolve_pad_config(
+                pad,
+                profile_id.as_deref(),
+                pad_type.as_deref(),
+                &info.serial,
+                cfg.smx_default_pad_config,
+            );
             // One line per actual (re)resolve — fires only past the signature
             // short-circuit above (connect, profile/style switch, preset change,
             // pad type becoming known), not every frame. The primary diagnostic for
