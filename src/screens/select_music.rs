@@ -8,7 +8,7 @@ use crate::config::{
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::engine::input::RawKeyboardEvent;
+use crate::engine::input::{RawKeyboardEvent, with_keymap};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -9377,15 +9377,16 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
 
 /// Maps a raw keyboard press to a Select Music menu action using the
 /// user-configurable shortcut keys. Only fires on the main music wheel
-/// (sort menu and song search hidden) and ignores key repeats. The Practice
-/// Mode shortcut additionally requires a song (not a pack header) to be
-/// selected, mirroring the sort-menu availability rule.
+/// (sort menu and song search hidden), ignores key repeats, and yields to
+/// any mapped player/menu input so wheel navigation keeps priority. The
+/// Practice Mode shortcut additionally requires a song (not a pack header)
+/// to be selected, mirroring the sort-menu availability rule.
 fn configurable_shortcut_action(
     state: &State,
     key: Option<&RawKeyboardEvent>,
 ) -> Option<select_music_menu::Action> {
     let key = key?;
-    if key.repeat {
+    if !key.pressed || key.repeat || key_bound_to_player_input(key) {
         return None;
     }
     if !matches!(state.select_music_menu, select_music_menu::State::Hidden)
@@ -9429,6 +9430,16 @@ fn configurable_shortcut_action(
         return Some(select_music_menu::Action::TestInput);
     }
     None
+}
+
+#[inline(always)]
+fn key_bound_to_player_input(key: &RawKeyboardEvent) -> bool {
+    with_keymap(|km| keymap_has_player_input(km, key))
+}
+
+#[inline(always)]
+fn keymap_has_player_input(km: &crate::engine::input::Keymap, key: &RawKeyboardEvent) -> bool {
+    km.raw_key_event_has_action(key, |action| !action.is_system())
 }
 
 pub fn handle_raw_key_event(
@@ -9611,7 +9622,10 @@ pub fn handle_raw_key_event(
     if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
     }
-    if key.is_some_and(|key| key.code == KeyCode::KeyM && !key.repeat)
+    if let Some(key) = key
+        && key.code == KeyCode::KeyM
+        && !key.repeat
+        && !key_bound_to_player_input(key)
         && preview_mute_allowed(state)
     {
         toggle_preview_mute(state);
@@ -9619,14 +9633,16 @@ pub fn handle_raw_key_event(
     }
     if let Some(action) = configurable_shortcut_action(state, key) {
         // Consume the key even when the dispatched action itself reports
-        // ScreenAction::None, so the shortcut key isn't also translated into a
-        // virtual action (e.g. the default 'S' is also bound to P1 down).
+        // ScreenAction::None, so a successful raw shortcut stays single-action.
         return match dispatch_menu_action(state, action) {
             ScreenAction::None => ScreenAction::ConsumeInput,
             other => other,
         };
     }
-    if key.is_some_and(|key| key.code == KeyCode::F7) {
+    if let Some(key) = key
+        && key.code == KeyCode::F7
+        && !key_bound_to_player_input(key)
+    {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
             && let Some(chart) =
@@ -12573,11 +12589,11 @@ mod tests {
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
-        init_placeholder, reset_preview_after_gameplay, select_music_lobby_lock_text_for,
-        steps_index_for_side, sync_low_confidence_warning,
+        init_placeholder, keymap_has_player_input, reset_preview_after_gameplay,
+        select_music_lobby_lock_text_for, steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::engine::input::RawKeyboardEvent;
+    use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
     use deadsync_input::{PadDir, VirtualAction};
@@ -13180,6 +13196,22 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
+    }
+
+    #[test]
+    fn music_select_shortcuts_defer_to_bound_player_keys() {
+        let search_key = raw_key(KeyCode::KeyS, true, false);
+        let mut keymap = Keymap::default();
+        assert!(!keymap_has_player_input(&keymap, &search_key));
+
+        keymap.bind(
+            VirtualAction::system_fast_forward,
+            &[InputBinding::Key(KeyCode::KeyS)],
+        );
+        assert!(!keymap_has_player_input(&keymap, &search_key));
+
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::KeyS)]);
+        assert!(keymap_has_player_input(&keymap, &search_key));
     }
 
     #[test]
