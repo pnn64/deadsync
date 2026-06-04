@@ -31,6 +31,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         default.updater_install_enabled,
     );
     push_line(content, "BGBrightness", default.bg_brightness);
+    push_line(
+        content,
+        "GameplayBgColor",
+        default.gameplay_bg_color.to_hex(),
+    );
     push_bool(content, "BannerCache", default.banner_cache);
     push_bool(content, "CacheSongs", default.cachesongs);
     push_bool(content, "CDTitleCache", default.cdtitle_cache);
@@ -413,6 +418,26 @@ fn push_default_theme(content: &mut String, default: &Config) {
         content,
         "AllowSwitchProfileInMenu",
         default.allow_switch_profile_in_menu,
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutPractice",
+        keycode_to_token(default.music_select_shortcut_practice),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutSongSearch",
+        keycode_to_token(default.music_select_shortcut_song_search),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutLoadSongs",
+        keycode_to_token(default.music_select_shortcut_load_songs),
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutTestInput",
+        keycode_to_token(default.music_select_shortcut_test_input),
     );
     push_bool(
         content,

@@ -314,6 +314,22 @@ pub(crate) fn parse_keycode(t: &str) -> Option<InputBinding> {
     .map(InputBinding::Key)
 }
 
+/// Serialize a single `KeyCode` to its `KeyCode::Name` INI token.
+#[inline(always)]
+pub(crate) fn keycode_to_token(code: KeyCode) -> String {
+    binding_to_token(InputBinding::Key(code))
+}
+
+/// Parse a `KeyCode::Name` INI token into a bare `KeyCode`, ignoring any
+/// non-keyboard binding tokens (pad/gamepad).
+#[inline(always)]
+pub(crate) fn parse_keycode_to_key(t: &str) -> Option<KeyCode> {
+    match parse_keycode(t)? {
+        InputBinding::Key(code) => Some(code),
+        _ => None,
+    }
+}
+
 #[inline(always)]
 pub(crate) fn parse_pad_code(t: &str) -> Option<InputBinding> {
     parse_gamepad_code_binding(t).map(InputBinding::GamepadCode)
