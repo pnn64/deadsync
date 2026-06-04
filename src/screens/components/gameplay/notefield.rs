@@ -9012,6 +9012,12 @@ pub fn build_bundles(
 
     // Mini Indicator (zmod SubtractiveScoring.lua parity).
     if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
+        // Grey out the mini indicator once the player has failed the song.
+        let rgba = if p.is_failing || p.life <= 0.0 {
+            [0.5, 0.5, 0.5, rgba[3]]
+        } else {
+            rgba
+        };
         let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
         let mut x = match profile.mini_indicator_position {
             profile_data::MiniIndicatorPosition::Default => playfield_center_x + column_width,
