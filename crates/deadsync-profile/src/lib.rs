@@ -2508,6 +2508,7 @@ pub struct GameplayHudPlayerSnapshot {
     pub guest: bool,
     pub display_name: String,
     pub avatar_texture_key: Option<String>,
+    pub hide_username: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -2814,6 +2815,7 @@ pub struct PlayerOptionsData {
     pub hide_score: bool,
     pub hide_danger: bool,
     pub hide_combo_explosions: bool,
+    pub hide_username: bool,
     pub column_flash_on_miss: bool,
     pub column_flash_mask: ColumnFlashMask,
     pub subtractive_scoring: bool,
@@ -2931,6 +2933,7 @@ fn default_player_options() -> PlayerOptionsData {
         hide_score: false,
         hide_danger: false,
         hide_combo_explosions: false,
+        hide_username: false,
         column_flash_on_miss: false,
         column_flash_mask: DEFAULT_COLUMN_FLASH_MASK,
         subtractive_scoring: false,
@@ -3323,6 +3326,10 @@ pub fn append_player_options_section(
     content.push_str(&format!(
         "HideComboExplosions={}\n",
         i32::from(options.hide_combo_explosions)
+    ));
+    content.push_str(&format!(
+        "HideUsername={}\n",
+        i32::from(options.hide_username)
     ));
     content.push_str(&format!(
         "ColumnFlashOnMiss={}\n",
@@ -3769,6 +3776,7 @@ pub struct Profile {
     pub hide_score: bool,
     pub hide_danger: bool,
     pub hide_combo_explosions: bool,
+    pub hide_username: bool,
     // Gameplay extras (Simply Love semantics).
     pub column_flash_on_miss: bool,
     pub column_flash_mask: ColumnFlashMask,
@@ -3929,6 +3937,7 @@ impl Default for Profile {
             hide_score: player_options.hide_score,
             hide_danger: player_options.hide_danger,
             hide_combo_explosions: player_options.hide_combo_explosions,
+            hide_username: player_options.hide_username,
             column_flash_on_miss: player_options.column_flash_on_miss,
             column_flash_mask: player_options.column_flash_mask,
             subtractive_scoring: player_options.subtractive_scoring,
@@ -4124,6 +4133,7 @@ impl Profile {
         hide_score: bool,
         hide_danger: bool,
         hide_combo_explosions: bool,
+        hide_username: bool,
     ) -> bool {
         if self.hide_targets == hide_targets
             && self.hide_song_bg == hide_song_bg
@@ -4132,6 +4142,7 @@ impl Profile {
             && self.hide_score == hide_score
             && self.hide_danger == hide_danger
             && self.hide_combo_explosions == hide_combo_explosions
+            && self.hide_username == hide_username
         {
             return false;
         }
@@ -4142,6 +4153,7 @@ impl Profile {
         self.hide_score = hide_score;
         self.hide_danger = hide_danger;
         self.hide_combo_explosions = hide_combo_explosions;
+        self.hide_username = hide_username;
         true
     }
 
@@ -4467,6 +4479,7 @@ impl Profile {
             hide_score: self.hide_score,
             hide_danger: self.hide_danger,
             hide_combo_explosions: self.hide_combo_explosions,
+            hide_username: self.hide_username,
             column_flash_on_miss: self.column_flash_on_miss,
             column_flash_mask: self.column_flash_mask,
             subtractive_scoring: self.subtractive_scoring,
@@ -4586,6 +4599,7 @@ impl Profile {
         self.hide_score = options.hide_score;
         self.hide_danger = options.hide_danger;
         self.hide_combo_explosions = options.hide_combo_explosions;
+        self.hide_username = options.hide_username;
         self.column_flash_on_miss = options.column_flash_on_miss;
         self.column_flash_mask = options.column_flash_mask;
         self.subtractive_scoring = options.subtractive_scoring;
@@ -4938,7 +4952,7 @@ mod tests {
         assert!(profile.hide_early_dw_column_flash);
         assert!(!profile.set_early_dw_options(true, true, true));
 
-        assert!(profile.set_hide_options(true, true, false, true, false, true, true));
+        assert!(profile.set_hide_options(true, true, false, true, false, true, true, true));
         assert!(profile.hide_targets);
         assert!(profile.hide_song_bg);
         assert!(!profile.hide_combo);
@@ -4946,7 +4960,8 @@ mod tests {
         assert!(!profile.hide_score);
         assert!(profile.hide_danger);
         assert!(profile.hide_combo_explosions);
-        assert!(!profile.set_hide_options(true, true, false, true, false, true, true));
+        assert!(profile.hide_username);
+        assert!(!profile.set_hide_options(true, true, false, true, false, true, true, true));
     }
 
     #[test]

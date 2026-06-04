@@ -251,6 +251,7 @@ pub fn update_hide_options_for_side(
     hide_score: bool,
     hide_danger: bool,
     hide_combo_explosions: bool,
+    hide_username: bool,
 ) {
     update_profile_ini(side, |profile| {
         profile.set_hide_options(
@@ -261,6 +262,7 @@ pub fn update_hide_options_for_side(
             hide_score,
             hide_danger,
             hide_combo_explosions,
+            hide_username,
         )
     });
 }

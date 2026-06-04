@@ -500,6 +500,7 @@ const HIDE: BitmaskBinding = fanout_bitmask_binding!(
         (SCORE, hide_score),
         (DANGER, hide_danger),
         (COMBO_EXPLOSIONS, hide_combo_explosions),
+        (USERNAME, hide_username),
     ],
     persist_for_side = |s, p| gp::update_hide_options_for_side(
         s,
@@ -510,6 +511,7 @@ const HIDE: BitmaskBinding = fanout_bitmask_binding!(
         p.hide_score,
         p.hide_danger,
         p.hide_combo_explosions,
+        p.hide_username,
     ),
     sync_visibility = true,
 );
@@ -1273,6 +1275,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "HideScore").to_string(),
             tr("PlayerOptions", "HideDanger").to_string(),
             tr("PlayerOptions", "HideComboExplosions").to_string(),
+            tr("PlayerOptions", "HideUsername").to_string(),
         ],
     ));
     b.push(Row::cycle(
