@@ -88,6 +88,17 @@ impl PadConfigSync {
         }
     }
 
+    /// Drop every pad's resolve signature so the managed resolver re-runs and
+    /// re-applies each pad's default on the next frame. Called when a new play
+    /// session begins: a manual Apply from the previous session set `applied` and
+    /// wrote the pad but left the signature intact, so without this the override
+    /// would carry into the next session instead of the managed default being
+    /// reasserted. (A full app restart already resolves fresh; this makes a
+    /// session restart behave the same.)
+    pub fn reset_signatures(&mut self) {
+        self.signature = [None, None];
+    }
+
     /// Whether the cached resolve signature for `pad` already matches these
     /// inputs. Compared by borrow so the steady-state hot path allocates nothing
     /// (no throwaway `Sig`) just to discover that nothing changed; the owned `Sig`
@@ -234,6 +245,25 @@ mod tests {
         assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
         // ...but the resolve signature is untouched, so the pad isn't rewritten.
         assert!(s.signature[0].is_some());
+    }
+
+    #[test]
+    fn reset_signatures_clears_all_so_managed_resolve_reruns() {
+        use crate::config::SmxPadPreset;
+        let mut s = PadConfigSync::default();
+        for pad in 0..2 {
+            s.signature[pad] = Some(Sig {
+                preset: SmxPadPreset::Medium,
+                serial: "S".to_owned(),
+                profile_id: Some("p1".to_owned()),
+                pad_type: Some("fsr".to_owned()),
+            });
+        }
+        // A new play session drops every signature so the resolver re-runs and
+        // re-applies each pad's default (discarding a prior session's manual Apply).
+        s.reset_signatures();
+        assert!(s.signature[0].is_none());
+        assert!(s.signature[1].is_none());
     }
 
     #[test]

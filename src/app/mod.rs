@@ -8090,6 +8090,23 @@ impl App {
         commands
     }
 
+    /// Begin a new play session: start the session timer, clear per-session state,
+    /// and drop the SMX managed-config resolve signatures so each connected pad's
+    /// default is reasserted for the new session. (A manual Apply from a prior
+    /// session writes the pad + marker but not the resolve signature, so without
+    /// the reset the override would persist into the next session — unlike a full
+    /// app restart, which always resolves fresh.) No-op if a session is active.
+    fn begin_play_session(&mut self) {
+        if self.state.session.session_start_time.is_some() {
+            return;
+        }
+        self.state.session.session_start_time = Some(Instant::now());
+        self.state.session.played_stages.clear();
+        self.state.session.course_individual_stage_indices.clear();
+        self.pad_config_sync.reset_signatures();
+        debug!("Session timer started.");
+    }
+
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
@@ -9180,12 +9197,7 @@ impl App {
 
         if target == CurrentScreen::SelectMusic {
             self.clear_course_runtime();
-            if self.state.session.session_start_time.is_none() {
-                self.state.session.session_start_time = Some(Instant::now());
-                self.state.session.played_stages.clear();
-                self.state.session.course_individual_stage_indices.clear();
-                debug!("Session timer started.");
-            }
+            self.begin_play_session();
 
             match prev {
                 CurrentScreen::PlayerOptions => {
@@ -9447,12 +9459,7 @@ impl App {
                         })
                 });
             self.clear_course_runtime();
-            if self.state.session.session_start_time.is_none() {
-                self.state.session.session_start_time = Some(Instant::now());
-                self.state.session.played_stages.clear();
-                self.state.session.course_individual_stage_indices.clear();
-                debug!("Session timer started.");
-            }
+            self.begin_play_session();
 
             match prev {
                 CurrentScreen::ProfileLoad | CurrentScreen::EvaluationSummary => {
