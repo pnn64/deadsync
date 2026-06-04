@@ -133,7 +133,7 @@ impl GlApi {
                 tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
             },
             #[cfg(all(unix, not(target_os = "macos")))]
-            Self::Gles => ShaderSet {
+            (Self::Gles, GlPath::Modern) => ShaderSet {
                 sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
                 sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
                 mesh_vert: include_str!("../shaders/opengl_mesh_gles.vert"),
