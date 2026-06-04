@@ -104,10 +104,17 @@ pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 use deadsync_profile::{
     AttackMode, ComboColors, ComboFont, ComboMode, ErrorBarTrim, HideLightType, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition,
-    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, Perspective,
-    ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, TargetScoreSetting, TimingWindowsOption,
-    TurnOption,
+    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoCmodAlternative,
+    Perspective, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, TargetScoreSetting,
+    TimingWindowsOption, TurnOption,
 };
+
+/// `NoCmodAlternative` variants in row-choice order (index ↔ enum).
+pub(super) const NO_CMOD_ALTERNATIVE_VARIANTS: [NoCmodAlternative; 3] = [
+    NoCmodAlternative::None,
+    NoCmodAlternative::XMod,
+    NoCmodAlternative::MMod,
+];
 
 /// MiniIndicator variants in row-choice order (index ↔ enum).
 pub(super) const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [

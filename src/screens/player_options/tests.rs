@@ -9,7 +9,8 @@ pub(super) mod tests {
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
         RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
-        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
+        effective_scroll_speed_with_alt, handle_arcade_start_event, handle_nav_event,
+        handle_start_event, hud_offset_choices,
         init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
         judgment_tilt_options_visible, on_start_press, player_option_column_x,
         repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
@@ -22,8 +23,8 @@ pub(super) mod tests {
     use crate::test_support::{compose_scenarios, notefield_bench};
     use deadsync_profile::Profile;
     use deadsync_profile::{
-        BackgroundFilter, ComboFont, Perspective, PlayStyle, PlayerSide, ScrollOption,
-        StepStatisticsMask,
+        BackgroundFilter, ComboFont, NoCmodAlternative, Perspective, PlayStyle, PlayerSide,
+        ScrollOption, StepStatisticsMask,
     };
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use std::time::Duration;
@@ -145,6 +146,76 @@ pub(super) mod tests {
             },
         );
         assert_eq!(profile.scroll_speed, ScrollSpeedSetting::CMod(600.0));
+    }
+
+    #[test]
+    fn no_cmod_alternative_substitutes_only_cmod_on_no_cmod_charts() {
+        let cmod = SpeedMod {
+            mod_type: SpeedModType::C,
+            value: 600.0,
+        };
+        // reference_bpm 150, rate 1.0 → C600 is visually X4.0 / M600.
+        let (reference_bpm, rate) = (150.0, 1.0);
+
+        // No substitution when the chart is not tagged no-cmod.
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &cmod,
+                NoCmodAlternative::XMod,
+                false,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::CMod(600.0)
+        );
+        // No substitution when the alternative is None.
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &cmod,
+                NoCmodAlternative::None,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::CMod(600.0)
+        );
+        // No-cmod chart + CMod + XMod alternative → equivalent XMod.
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &cmod,
+                NoCmodAlternative::XMod,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::XMod(4.0)
+        );
+        // No-cmod chart + CMod + MMod alternative → equivalent MMod.
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &cmod,
+                NoCmodAlternative::MMod,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::MMod(600.0)
+        );
+        // A player already off CMod is never altered, even on a no-cmod chart.
+        let xmod = SpeedMod {
+            mod_type: SpeedModType::X,
+            value: 2.0,
+        };
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &xmod,
+                NoCmodAlternative::MMod,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::XMod(2.0)
+        );
     }
 
     #[test]

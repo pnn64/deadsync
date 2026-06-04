@@ -9,7 +9,7 @@ use deadsync_profile::{
     HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
     LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
     MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
-    MiniIndicatorSubtractiveDisplay, NoteSkin, Perspective, Profile, RemoveMask,
+    MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective, Profile, RemoveMask,
     ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption, StepStatisticsMask,
     TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
 };
@@ -409,6 +409,12 @@ pub fn update_spacing_percent_for_side(side: PlayerSide, percent: i32) {
 pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.perspective, perspective)
+    });
+}
+
+pub fn update_no_cmod_alternative_for_side(side: PlayerSide, setting: NoCmodAlternative) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.no_cmod_alternative, setting)
     });
 }
 

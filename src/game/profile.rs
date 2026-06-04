@@ -162,6 +162,10 @@ fn load_player_options(
         .get(section, "ScrollSpeed")
         .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
         .unwrap_or(options.scroll_speed);
+    options.no_cmod_alternative = profile_conf
+        .get(section, "NoCmodAlternative")
+        .and_then(|s| deadsync_profile::NoCmodAlternative::from_str(&s).ok())
+        .unwrap_or(options.no_cmod_alternative);
     options.turn_option = profile_conf
         .get(section, "Turn")
         .and_then(|s| TurnOption::from_str(&s).ok())

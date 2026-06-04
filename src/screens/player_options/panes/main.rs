@@ -5,12 +5,27 @@ use crate::game::profile as gp;
 use deadsync_profile::{
     BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
     MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
-    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayerSide,
-    TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
+    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoCmodAlternative, NoteSkin, Perspective,
+    PlayerSide, TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
 };
 
 // =============================== Bindings ===============================
 
+const NO_CMOD_ALTERNATIVE: ChoiceBinding<usize> = index_binding!(
+    NO_CMOD_ALTERNATIVE_VARIANTS,
+    NoCmodAlternative::None,
+    no_cmod_alternative,
+    gp::update_no_cmod_alternative_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            NO_CMOD_ALTERNATIVE_VARIANTS
+                .iter()
+                .position(|&v| v == p.no_cmod_alternative)
+                .unwrap_or(0)
+        }
+    })
+);
 const PERSPECTIVE: ChoiceBinding<usize> = index_binding!(
     PERSPECTIVE_VARIANTS,
     Perspective::Overhead,
@@ -411,30 +426,14 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
             1.0
         };
         let speed_mod = {
-            let speed_mod = &mut state.speed_mod[player_idx];
-            let old_type = speed_mod.mod_type;
-            let old_value = speed_mod.value;
-            let target_bpm: f32 = match old_type {
-                SpeedModType::C | SpeedModType::M => old_value,
-                SpeedModType::X => (reference_bpm * rate * old_value).round(),
-            };
-            let new_value = match new_type {
-                SpeedModType::X => {
-                    let denom = reference_bpm * rate;
-                    let raw = if denom.is_finite() && denom > 0.0 {
-                        target_bpm / denom
-                    } else {
-                        1.0
-                    };
-                    round_to_step(raw, 0.05).clamp(0.05, 20.0)
-                }
-                SpeedModType::C | SpeedModType::M => {
-                    round_to_step(target_bpm, 5.0).clamp(5.0, 2000.0)
-                }
-            };
-            speed_mod.mod_type = new_type;
-            speed_mod.value = new_value;
-            speed_mod.clone()
+            let converted = convert_speed_mod_to_type(
+                &state.speed_mod[player_idx],
+                new_type,
+                reference_bpm,
+                rate,
+            );
+            state.speed_mod[player_idx] = converted.clone();
+            converted
         };
         sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
         Outcome::persisted()
@@ -946,6 +945,17 @@ pub(super) fn build_main_rows(
         lookup_key("PlayerOptionsHelp", "SpeedModHelp"),
         SPEED_MOD,
         vec![speed_mod_value_str], // Display only the current value
+    ));
+    b.push(Row::cycle(
+        RowId::NoCmodAlternative,
+        lookup_key("PlayerOptions", "NoCmodAlternative"),
+        lookup_key("PlayerOptionsHelp", "NoCmodAlternativeHelp"),
+        CycleBinding::Index(NO_CMOD_ALTERNATIVE),
+        vec![
+            tr("PlayerOptions", "NoCmodAlternativeNone").to_string(),
+            tr("PlayerOptions", "NoCmodAlternativeXMod").to_string(),
+            tr("PlayerOptions", "NoCmodAlternativeMMod").to_string(),
+        ],
     ));
     push_mini_row(&mut b);
     push_perspective_row(&mut b);

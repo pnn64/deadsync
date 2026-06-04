@@ -8374,7 +8374,7 @@ impl App {
         }
         if target == CurrentScreen::Practice {
             crate::engine::audio::stop_music();
-            if let Some(po_state) = self.state.screens.player_options_state.take() {
+            if let Some(mut po_state) = self.state.screens.player_options_state.take() {
                 let edit_snapshot = (prev == CurrentScreen::PlayerOptions
                     && po_state.return_screen == CurrentScreen::Practice)
                     .then(|| {
@@ -8531,15 +8531,10 @@ impl App {
                         resolved_steps_index[last_played_idx];
                 }
 
-                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
-                    player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
-                    player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
-                    player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
-                };
-                let scroll_speeds = [
-                    to_scroll_speed(&po_state.speed_mod[0]),
-                    to_scroll_speed(&po_state.speed_mod[1]),
-                ];
+                // Auto-switch CMod → the player's configured alternative for
+                // no-cmod charts (this play only; the persisted profile is
+                // untouched, so song select restores CMod).
+                let scroll_speeds = player_options::apply_no_cmod_alternative(&mut po_state);
 
                 let init_started = Instant::now();
                 let mut gs = gameplay::init(
@@ -8677,7 +8672,7 @@ impl App {
                     payload.score / 100.0
                 ))
             });
-            if let Some(po_state) = self.state.screens.player_options_state.take() {
+            if let Some(mut po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song.clone();
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
@@ -8918,15 +8913,23 @@ impl App {
                     }
                 }
 
-                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
-                    player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
-                    player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
-                    player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
+                // Auto-switch CMod → the player's configured alternative for
+                // no-cmod charts (this play only; the persisted profile is
+                // untouched, so song select restores CMod). Replays must
+                // reproduce the recorded scroll speed, so skip the swap there.
+                let scroll_speeds = if replay_pending.is_none() {
+                    player_options::apply_no_cmod_alternative(&mut po_state)
+                } else {
+                    let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
+                        player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
+                        player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
+                        player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
+                    };
+                    [
+                        to_scroll_speed(&po_state.speed_mod[0]),
+                        to_scroll_speed(&po_state.speed_mod[1]),
+                    ]
                 };
-                let scroll_speeds = [
-                    to_scroll_speed(&po_state.speed_mod[0]),
-                    to_scroll_speed(&po_state.speed_mod[1]),
-                ];
 
                 let color_index = po_state.active_color_index;
                 let lead_in_timing = self.state.session.course_run.as_ref().and_then(|course| {
