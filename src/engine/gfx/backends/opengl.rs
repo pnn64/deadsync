@@ -75,6 +75,28 @@ fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const MODERN_DESKTOP_GL: GlVersion = GlVersion { major: 3, minor: 3 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct GlVersion {
+    major: u32,
+    minor: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GlPath {
+    Modern,
+    Legacy,
+}
+
+impl GlPath {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Modern => "modern",
+            Self::Legacy => "legacy GL2",
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GlApi {
@@ -92,9 +114,17 @@ impl GlApi {
         }
     }
 
-    const fn shaders(self) -> ShaderSet {
-        match self {
-            Self::Desktop => ShaderSet {
+    const fn shaders(self, path: GlPath) -> ShaderSet {
+        match (self, path) {
+            (_, GlPath::Legacy) => ShaderSet {
+                sprite_vert: include_str!("../shaders/opengl_shader_legacy.vert"),
+                sprite_frag: include_str!("../shaders/opengl_shader_legacy.frag"),
+                mesh_vert: include_str!("../shaders/opengl_mesh_legacy.vert"),
+                mesh_frag: include_str!("../shaders/opengl_mesh_legacy.frag"),
+                tmesh_vert: include_str!("../shaders/opengl_tmesh_legacy.vert"),
+                tmesh_frag: include_str!("../shaders/opengl_tmesh_legacy.frag"),
+            },
+            (Self::Desktop, GlPath::Modern) => ShaderSet {
                 sprite_vert: include_str!("../shaders/opengl_shader.vert"),
                 sprite_frag: include_str!("../shaders/opengl_shader.frag"),
                 mesh_vert: include_str!("../shaders/opengl_mesh.vert"),
@@ -125,6 +155,39 @@ struct ShaderSet {
     tmesh_frag: &'static str,
 }
 
+const SPRITE_ATTRIBS: [(u32, &str); 12] = [
+    (0, "a_pos"),
+    (1, "a_tex_coord"),
+    (2, "i_center"),
+    (3, "i_size"),
+    (4, "i_rot_sin_cos"),
+    (5, "i_tint"),
+    (6, "i_uv_scale"),
+    (7, "i_uv_offset"),
+    (8, "i_local_offset"),
+    (9, "i_local_offset_rot_sin_cos"),
+    (10, "i_edge_fade"),
+    (11, "i_texture_mask"),
+];
+
+const MESH_ATTRIBS: [(u32, &str); 2] = [(0, "a_pos"), (1, "a_color")];
+
+const TMESH_ATTRIBS: [(u32, &str); 13] = [
+    (0, "a_pos"),
+    (1, "a_uv"),
+    (2, "a_color"),
+    (3, "a_tex_matrix_scale"),
+    (4, "i_model_col0"),
+    (5, "i_model_col1"),
+    (6, "i_model_col2"),
+    (7, "i_model_col3"),
+    (8, "i_tint"),
+    (9, "i_uv_scale"),
+    (10, "i_uv_offset"),
+    (11, "i_uv_tex_shift"),
+    (12, "i_texture_mask"),
+];
+
 // A handle to an OpenGL texture on the GPU.
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
@@ -134,10 +197,35 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+#[derive(Clone, Copy)]
+struct LegacySpriteUniforms {
+    center: UniformLocation,
+    size: UniformLocation,
+    rot_sin_cos: UniformLocation,
+    tint: UniformLocation,
+    uv_scale: UniformLocation,
+    uv_offset: UniformLocation,
+    local_offset: UniformLocation,
+    local_offset_rot_sin_cos: UniformLocation,
+    edge_fade: UniformLocation,
+    texture_mask: UniformLocation,
+}
+
+#[derive(Clone, Copy)]
+struct LegacyTMeshUniforms {
+    model: UniformLocation,
+    tint: UniformLocation,
+    uv_scale: UniformLocation,
+    uv_offset: UniformLocation,
+    uv_tex_shift: UniformLocation,
+    texture_mask: UniformLocation,
+}
+
 pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
+    path: GlPath,
     program: glow::Program,
     mesh_program: glow::Program,
     tmesh_program: glow::Program,
@@ -146,19 +234,21 @@ pub struct State {
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
     texture_location: UniformLocation,
+    legacy_sprite_uniforms: Option<LegacySpriteUniforms>,
+    legacy_tmesh_uniforms: Option<LegacyTMeshUniforms>,
     projection: Matrix4,
     window_size: (u32, u32),
     // A single, shared set of buffers for a unit quad.
-    shared_vao: glow::VertexArray,
-    _shared_vbo: glow::Buffer,
-    _shared_ibo: glow::Buffer,
-    shared_instance_vbo: glow::Buffer,
+    shared_vao: Option<glow::VertexArray>,
+    shared_vbo: glow::Buffer,
+    shared_ibo: glow::Buffer,
+    shared_instance_vbo: Option<glow::Buffer>,
     index_count: i32,
-    mesh_vao: glow::VertexArray,
+    mesh_vao: Option<glow::VertexArray>,
     mesh_vbo: glow::Buffer,
-    tmesh_vao: glow::VertexArray,
+    tmesh_vao: Option<glow::VertexArray>,
     tmesh_vbo: glow::Buffer,
-    tmesh_instance_vbo: glow::Buffer,
+    tmesh_instance_vbo: Option<glow::Buffer>,
     prep: DrawScratch,
     cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
@@ -184,19 +274,31 @@ pub fn init(
     set_macos_opengl_high_dpi_surface(&window, high_dpi_enabled);
     info!("OpenGL context API: {}", api.label());
     log_opengl_driver_info(&gl);
-    let shaders = api.shaders();
+    let path = select_gl_path(&gl, api);
+    info!("OpenGL render path: {}", path.label());
+    let shaders = api.shaders(path);
     let (program, mvp_location, texture_location) =
         create_graphics_program(&gl, shaders.sprite_vert, shaders.sprite_frag)?;
     let (mesh_program, mesh_mvp_location) =
         create_mesh_program(&gl, shaders.mesh_vert, shaders.mesh_frag)?;
     let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) =
         create_tmesh_program(&gl, shaders.tmesh_vert, shaders.tmesh_frag)?;
+    let legacy_sprite_uniforms = if path == GlPath::Legacy {
+        Some(legacy_sprite_uniforms(&gl, program)?)
+    } else {
+        None
+    };
+    let legacy_tmesh_uniforms = if path == GlPath::Legacy {
+        Some(legacy_tmesh_uniforms(&gl, tmesh_program)?)
+    } else {
+        None
+    };
 
     // Create shared static unit quad + index buffer.
     // SAFETY: the OpenGL context created above is current on this thread for the
     // duration of initialization, so creating and configuring these GL objects is
     // valid here.
-    let (shared_vao, _shared_vbo, _shared_ibo, shared_instance_vbo, index_count) = unsafe {
+    let (shared_vao, shared_vbo, shared_ibo, shared_instance_vbo, index_count) = unsafe {
         const UNIT_QUAD_VERTICES: [[f32; 4]; 4] = [
             [-0.5, -0.5, 0.0, 1.0],
             [0.5, -0.5, 1.0, 1.0],
@@ -205,12 +307,22 @@ pub fn init(
         ];
         const QUAD_INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
-        let vao = gl.create_vertex_array()?;
+        let vao = if path == GlPath::Modern {
+            Some(gl.create_vertex_array()?)
+        } else {
+            None
+        };
         let vbo = gl.create_buffer()?;
         let ibo = gl.create_buffer()?;
-        let instance_vbo = gl.create_buffer()?;
+        let instance_vbo = if path == GlPath::Modern {
+            Some(gl.create_buffer()?)
+        } else {
+            None
+        };
 
-        gl.bind_vertex_array(Some(vao));
+        if let Some(vao) = vao {
+            gl.bind_vertex_array(Some(vao));
+        }
 
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
@@ -226,107 +338,116 @@ pub fn init(
             glow::STATIC_DRAW,
         );
 
-        // Per-vertex attributes: a_pos (location 0), a_tex_coord (location 1)
-        let stride = (4 * mem::size_of::<f32>()) as i32;
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(
-            1,
-            2,
-            glow::FLOAT,
-            false,
-            stride,
-            (2 * mem::size_of::<f32>()) as i32,
-        );
+        if let Some(instance_vbo) = instance_vbo {
+            // Per-vertex attributes: a_pos (location 0), a_tex_coord (location 1)
+            let stride = (4 * mem::size_of::<f32>()) as i32;
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(
+                1,
+                2,
+                glow::FLOAT,
+                false,
+                stride,
+                (2 * mem::size_of::<f32>()) as i32,
+            );
 
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
-        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
+            gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
-        let inst_stride = mem::size_of::<SpriteInstanceRaw>() as i32;
-        let vec2_size = (2 * mem::size_of::<f32>()) as i32;
-        let vec4_size = (4 * mem::size_of::<f32>()) as i32;
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, 0);
-        gl.vertex_attrib_divisor(2, 1);
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec4_size);
-        gl.vertex_attrib_divisor(3, 1);
-        gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_f32(4, 2, glow::FLOAT, false, inst_stride, vec4_size + vec2_size);
-        gl.vertex_attrib_divisor(4, 1);
-        gl.enable_vertex_attrib_array(5);
-        gl.vertex_attrib_pointer_f32(
-            5,
-            4,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            vec4_size + 2 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(5, 1);
-        gl.enable_vertex_attrib_array(6);
-        gl.vertex_attrib_pointer_f32(
-            6,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            2 * vec4_size + 2 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(6, 1);
-        gl.enable_vertex_attrib_array(7);
-        gl.vertex_attrib_pointer_f32(
-            7,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            2 * vec4_size + 3 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(7, 1);
-        gl.enable_vertex_attrib_array(8);
-        gl.vertex_attrib_pointer_f32(
-            8,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            2 * vec4_size + 4 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(8, 1);
-        gl.enable_vertex_attrib_array(9);
-        gl.vertex_attrib_pointer_f32(
-            9,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            2 * vec4_size + 5 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(9, 1);
-        gl.enable_vertex_attrib_array(10);
-        gl.vertex_attrib_pointer_f32(
-            10,
-            4,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            2 * vec4_size + 6 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(10, 1);
-        gl.enable_vertex_attrib_array(11);
-        gl.vertex_attrib_pointer_f32(
-            11,
-            1,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            3 * vec4_size + 6 * vec2_size,
-        );
-        gl.vertex_attrib_divisor(11, 1);
+            let inst_stride = mem::size_of::<SpriteInstanceRaw>() as i32;
+            let vec2_size = (2 * mem::size_of::<f32>()) as i32;
+            let vec4_size = (4 * mem::size_of::<f32>()) as i32;
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, 0);
+            gl.vertex_attrib_divisor(2, 1);
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec4_size);
+            gl.vertex_attrib_divisor(3, 1);
+            gl.enable_vertex_attrib_array(4);
+            gl.vertex_attrib_pointer_f32(
+                4,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                vec4_size + vec2_size,
+            );
+            gl.vertex_attrib_divisor(4, 1);
+            gl.enable_vertex_attrib_array(5);
+            gl.vertex_attrib_pointer_f32(
+                5,
+                4,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                vec4_size + 2 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(5, 1);
+            gl.enable_vertex_attrib_array(6);
+            gl.vertex_attrib_pointer_f32(
+                6,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                2 * vec4_size + 2 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(6, 1);
+            gl.enable_vertex_attrib_array(7);
+            gl.vertex_attrib_pointer_f32(
+                7,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                2 * vec4_size + 3 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(7, 1);
+            gl.enable_vertex_attrib_array(8);
+            gl.vertex_attrib_pointer_f32(
+                8,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                2 * vec4_size + 4 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(8, 1);
+            gl.enable_vertex_attrib_array(9);
+            gl.vertex_attrib_pointer_f32(
+                9,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                2 * vec4_size + 5 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(9, 1);
+            gl.enable_vertex_attrib_array(10);
+            gl.vertex_attrib_pointer_f32(
+                10,
+                4,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                2 * vec4_size + 6 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(10, 1);
+            gl.enable_vertex_attrib_array(11);
+            gl.vertex_attrib_pointer_f32(
+                11,
+                1,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                3 * vec4_size + 6 * vec2_size,
+            );
+            gl.vertex_attrib_divisor(11, 1);
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
+        }
 
         (vao, vbo, ibo, instance_vbo, QUAD_INDICES.len() as i32)
     };
@@ -334,131 +455,151 @@ pub fn init(
     // SAFETY: the OpenGL context is still current on this thread, so creating and
     // configuring the mesh VAO/VBO pair is valid here.
     let (mesh_vao, mesh_vbo) = unsafe {
-        let vao = gl.create_vertex_array()?;
+        let vao = if path == GlPath::Modern {
+            Some(gl.create_vertex_array()?)
+        } else {
+            None
+        };
         let vbo = gl.create_buffer()?;
 
-        gl.bind_vertex_array(Some(vao));
+        if let Some(vao) = vao {
+            gl.bind_vertex_array(Some(vao));
+        }
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
-        // a_pos (location 0), a_color (location 1)
-        let stride = std::mem::size_of::<crate::engine::gfx::MeshVertex>() as i32;
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(
-            1,
-            4,
-            glow::FLOAT,
-            false,
-            stride,
-            (2 * std::mem::size_of::<f32>()) as i32,
-        );
+        if path == GlPath::Modern {
+            // a_pos (location 0), a_color (location 1)
+            let stride = std::mem::size_of::<crate::engine::gfx::MeshVertex>() as i32;
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(
+                1,
+                4,
+                glow::FLOAT,
+                false,
+                stride,
+                (2 * std::mem::size_of::<f32>()) as i32,
+            );
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
+        }
         (vao, vbo)
     };
     // SAFETY: the OpenGL context is still current on this thread, so creating and
     // configuring the textured-mesh VAO/VBO pair is valid here.
     let (tmesh_vao, tmesh_vbo, tmesh_instance_vbo) = unsafe {
-        let vao = gl.create_vertex_array()?;
+        let vao = if path == GlPath::Modern {
+            Some(gl.create_vertex_array()?)
+        } else {
+            None
+        };
         let vbo = gl.create_buffer()?;
-        let instance_vbo = gl.create_buffer()?;
+        let instance_vbo = if path == GlPath::Modern {
+            Some(gl.create_buffer()?)
+        } else {
+            None
+        };
 
-        gl.bind_vertex_array(Some(vao));
+        if let Some(vao) = vao {
+            gl.bind_vertex_array(Some(vao));
+        }
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
-        // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
-        let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(
-            1,
-            2,
-            glow::FLOAT,
-            false,
-            stride,
-            (3 * std::mem::size_of::<f32>()) as i32,
-        );
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_f32(
-            2,
-            4,
-            glow::FLOAT,
-            false,
-            stride,
-            (5 * std::mem::size_of::<f32>()) as i32,
-        );
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(
-            3,
-            2,
-            glow::FLOAT,
-            false,
-            stride,
-            (9 * std::mem::size_of::<f32>()) as i32,
-        );
+        if let Some(instance_vbo) = instance_vbo {
+            // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
+            let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(
+                1,
+                2,
+                glow::FLOAT,
+                false,
+                stride,
+                (3 * std::mem::size_of::<f32>()) as i32,
+            );
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(
+                2,
+                4,
+                glow::FLOAT,
+                false,
+                stride,
+                (5 * std::mem::size_of::<f32>()) as i32,
+            );
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(
+                3,
+                2,
+                glow::FLOAT,
+                false,
+                stride,
+                (9 * std::mem::size_of::<f32>()) as i32,
+            );
 
-        // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
-        // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask (9..12)
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
-        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+            // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
+            // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask (9..12)
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
+            gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
-        let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-        let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-        let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
-        gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, 0);
-        gl.vertex_attrib_divisor(4, 1);
-        gl.enable_vertex_attrib_array(5);
-        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, col_size);
-        gl.vertex_attrib_divisor(5, 1);
-        gl.enable_vertex_attrib_array(6);
-        gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
-        gl.vertex_attrib_divisor(6, 1);
-        gl.enable_vertex_attrib_array(7);
-        gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
-        gl.vertex_attrib_divisor(7, 1);
-        gl.enable_vertex_attrib_array(8);
-        gl.vertex_attrib_pointer_f32(8, 4, glow::FLOAT, false, inst_stride, 4 * col_size);
-        gl.vertex_attrib_divisor(8, 1);
-        gl.enable_vertex_attrib_array(9);
-        gl.vertex_attrib_pointer_f32(9, 2, glow::FLOAT, false, inst_stride, 5 * col_size);
-        gl.vertex_attrib_divisor(9, 1);
-        gl.enable_vertex_attrib_array(10);
-        gl.vertex_attrib_pointer_f32(
-            10,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            5 * col_size + uv_size,
-        );
-        gl.vertex_attrib_divisor(10, 1);
-        gl.enable_vertex_attrib_array(11);
-        gl.vertex_attrib_pointer_f32(
-            11,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            5 * col_size + 2 * uv_size,
-        );
-        gl.vertex_attrib_divisor(11, 1);
-        gl.enable_vertex_attrib_array(12);
-        gl.vertex_attrib_pointer_f32(
-            12,
-            1,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            5 * col_size + 3 * uv_size,
-        );
-        gl.vertex_attrib_divisor(12, 1);
+            let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
+            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
+            gl.enable_vertex_attrib_array(4);
+            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, 0);
+            gl.vertex_attrib_divisor(4, 1);
+            gl.enable_vertex_attrib_array(5);
+            gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, col_size);
+            gl.vertex_attrib_divisor(5, 1);
+            gl.enable_vertex_attrib_array(6);
+            gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
+            gl.vertex_attrib_divisor(6, 1);
+            gl.enable_vertex_attrib_array(7);
+            gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
+            gl.vertex_attrib_divisor(7, 1);
+            gl.enable_vertex_attrib_array(8);
+            gl.vertex_attrib_pointer_f32(8, 4, glow::FLOAT, false, inst_stride, 4 * col_size);
+            gl.vertex_attrib_divisor(8, 1);
+            gl.enable_vertex_attrib_array(9);
+            gl.vertex_attrib_pointer_f32(9, 2, glow::FLOAT, false, inst_stride, 5 * col_size);
+            gl.vertex_attrib_divisor(9, 1);
+            gl.enable_vertex_attrib_array(10);
+            gl.vertex_attrib_pointer_f32(
+                10,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                5 * col_size + uv_size,
+            );
+            gl.vertex_attrib_divisor(10, 1);
+            gl.enable_vertex_attrib_array(11);
+            gl.vertex_attrib_pointer_f32(
+                11,
+                2,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                5 * col_size + 2 * uv_size,
+            );
+            gl.vertex_attrib_divisor(11, 1);
+            gl.enable_vertex_attrib_array(12);
+            gl.vertex_attrib_pointer_f32(
+                12,
+                1,
+                glow::FLOAT,
+                false,
+                inst_stride,
+                5 * col_size + 3 * uv_size,
+            );
+            gl.vertex_attrib_divisor(12, 1);
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
+        }
         (vao, vbo, instance_vbo)
     };
 
@@ -490,6 +631,7 @@ pub fn init(
         gl,
         gl_surface,
         gl_context,
+        path,
         program,
         mesh_program,
         tmesh_program,
@@ -498,11 +640,13 @@ pub fn init(
         tmesh_mvp_location,
         tmesh_texture_location,
         texture_location,
+        legacy_sprite_uniforms,
+        legacy_tmesh_uniforms,
         projection,
         window_size: (initial_width, initial_height),
         shared_vao,
-        _shared_vbo,
-        _shared_ibo,
+        shared_vbo,
+        shared_ibo,
         shared_instance_vbo,
         index_count,
         mesh_vao,
@@ -567,6 +711,33 @@ fn log_opengl_driver_info(gl: &glow::Context) {
             renderer, vendor, version, glsl
         );
     }
+}
+
+fn select_gl_path(gl: &glow::Context, api: GlApi) -> GlPath {
+    // SAFETY: driver string queries only read state from the current OpenGL
+    // context and do not retain Rust pointers.
+    let version = unsafe { gl.get_parameter_string(glow::VERSION) };
+    if api == GlApi::Desktop && parse_gl_version(&version).is_some_and(|v| v < MODERN_DESKTOP_GL) {
+        return GlPath::Legacy;
+    }
+    GlPath::Modern
+}
+
+fn parse_gl_version(version: &str) -> Option<GlVersion> {
+    let start = version.find(|c: char| c.is_ascii_digit())?;
+    let mut parts = version[start..].splitn(3, '.');
+    let major = parts.next()?.parse().ok()?;
+    let minor_part = parts.next()?;
+    let minor_end = minor_part
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(minor_part.len());
+    if minor_end == 0 {
+        return None;
+    }
+    Some(GlVersion {
+        major,
+        minor: minor_part[..minor_end].parse().ok()?,
+    })
 }
 
 pub fn create_texture(
@@ -811,7 +982,7 @@ pub fn draw(
         let c = render_list.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
-        gl.clear_depth_f32(1.0);
+        gl.clear_depth(1.0);
         gl.depth_mask(true);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         gl.depth_mask(false);
@@ -835,8 +1006,11 @@ pub fn draw(
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_depth_test = Some(false);
 
-        if !render_list.sprite_instances.is_empty() {
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
+        if state.path == GlPath::Modern && !render_list.sprite_instances.is_empty() {
+            let shared_instance_vbo = state
+                .shared_instance_vbo
+                .expect("modern OpenGL path creates a sprite instance VBO");
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(shared_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 bytemuck::cast_slice(render_list.sprite_instances.as_slice()),
@@ -859,8 +1033,11 @@ pub fn draw(
                 glow::DYNAMIC_DRAW,
             );
         }
-        if !state.prep.tmesh_instances.is_empty() {
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
+        if state.path == GlPath::Modern && !state.prep.tmesh_instances.is_empty() {
+            let tmesh_instance_vbo = state
+                .tmesh_instance_vbo
+                .expect("modern OpenGL path creates a textured mesh instance VBO");
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 bytemuck::cast_slice(state.prep.tmesh_instances.as_slice()),
@@ -868,344 +1045,708 @@ pub fn draw(
             );
         }
 
-        for op in state.prep.ops.iter().copied() {
-            match op {
-                DrawOp::Sprite(run) => {
-                    apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth_test);
+        if state.path == GlPath::Modern {
+            let shared_vao = state
+                .shared_vao
+                .expect("modern OpenGL path creates a sprite VAO");
+            let shared_instance_vbo = state
+                .shared_instance_vbo
+                .expect("modern OpenGL path creates a sprite instance VBO");
+            let mesh_vao = state
+                .mesh_vao
+                .expect("modern OpenGL path creates a mesh VAO");
+            let tmesh_vao = state
+                .tmesh_vao
+                .expect("modern OpenGL path creates a textured mesh VAO");
+            let tmesh_instance_vbo = state
+                .tmesh_instance_vbo
+                .expect("modern OpenGL path creates a textured mesh instance VBO");
 
-                    let cam = render_list
-                        .cameras
-                        .get(run.camera as usize)
-                        .copied()
-                        .unwrap_or(state.projection);
+            for op in state.prep.ops.iter().copied() {
+                match op {
+                    DrawOp::Sprite(run) => {
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, false, &mut last_depth_test);
 
-                    if last_prog != Some(0) {
-                        gl.use_program(Some(state.program));
-                        gl.bind_vertex_array(Some(state.shared_vao));
-                        gl.uniform_1_i32(Some(&state.texture_location), 0);
-                        last_prog = Some(0);
-                        last_sprite_instance_start = None;
-                        last_tmesh_source = None;
-                    }
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
 
-                    if last_sprite_instance_start != Some(run.instance_start) {
-                        let inst_stride = std::mem::size_of::<SpriteInstanceRaw>() as i32;
-                        let vec2_size = (2 * std::mem::size_of::<f32>()) as i32;
-                        let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
-                        let base = (run.instance_start as i32) * inst_stride;
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
-                        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, base);
-                        gl.vertex_attrib_pointer_f32(
-                            3,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + vec4_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            4,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + vec4_size + vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            5,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + vec4_size + 2 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            6,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * vec4_size + 2 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            7,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * vec4_size + 3 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            8,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * vec4_size + 4 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            9,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * vec4_size + 5 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            10,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * vec4_size + 6 * vec2_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            11,
-                            1,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 3 * vec4_size + 6 * vec2_size,
-                        );
-                        last_sprite_instance_start = Some(run.instance_start);
-                    }
-
-                    let mvp_array = cam.to_cols_array_2d();
-                    gl.uniform_matrix_4_f32_slice(
-                        Some(&state.mvp_location),
-                        false,
-                        bytemuck::cast_slice(&mvp_array),
-                    );
-
-                    let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                        if let RendererTexture::OpenGL(texture) = texture {
-                            Some(texture.0)
-                        } else {
-                            None
+                        if last_prog != Some(0) {
+                            gl.use_program(Some(state.program));
+                            gl.bind_vertex_array(Some(shared_vao));
+                            gl.uniform_1_i32(Some(&state.texture_location), 0);
+                            last_prog = Some(0);
+                            last_sprite_instance_start = None;
+                            last_tmesh_source = None;
                         }
-                    }) else {
-                        continue;
-                    };
 
-                    if last_bound_tex != Some(texture) {
-                        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                        last_bound_tex = Some(texture);
-                    }
+                        if last_sprite_instance_start != Some(run.instance_start) {
+                            let inst_stride = std::mem::size_of::<SpriteInstanceRaw>() as i32;
+                            let vec2_size = (2 * std::mem::size_of::<f32>()) as i32;
+                            let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
+                            let base = (run.instance_start as i32) * inst_stride;
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(shared_instance_vbo));
+                            gl.vertex_attrib_pointer_f32(
+                                2,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                3,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + vec4_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                4,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + vec4_size + vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                5,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + vec4_size + 2 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                6,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * vec4_size + 2 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                7,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * vec4_size + 3 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                8,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * vec4_size + 4 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                9,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * vec4_size + 5 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                10,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * vec4_size + 6 * vec2_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                11,
+                                1,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 3 * vec4_size + 6 * vec2_size,
+                            );
+                            last_sprite_instance_start = Some(run.instance_start);
+                        }
 
-                    gl.draw_elements_instanced(
-                        glow::TRIANGLES,
-                        state.index_count,
-                        glow::UNSIGNED_SHORT,
-                        0,
-                        run.instance_count as i32,
-                    );
-                    vertices = vertices.saturating_add(4 * run.instance_count);
-                }
-                DrawOp::Mesh(run) => {
-                    if run.vertex_count == 0 {
-                        continue;
-                    }
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
 
-                    apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth_test);
-
-                    let cam = render_list
-                        .cameras
-                        .get(run.camera as usize)
-                        .copied()
-                        .unwrap_or(state.projection);
-
-                    if last_prog != Some(1) {
-                        gl.use_program(Some(state.mesh_program));
-                        gl.bind_vertex_array(Some(state.mesh_vao));
-                        last_prog = Some(1);
-                        last_tmesh_source = None;
-                    }
-
-                    let mvp_array = cam.to_cols_array_2d();
-                    gl.uniform_matrix_4_f32_slice(
-                        Some(&state.mesh_mvp_location),
-                        false,
-                        bytemuck::cast_slice(&mvp_array),
-                    );
-
-                    gl.draw_arrays(
-                        glow::TRIANGLES,
-                        run.vertex_start as i32,
-                        run.vertex_count as i32,
-                    );
-                    vertices = vertices.saturating_add(run.vertex_count);
-                }
-                DrawOp::TexturedMesh(run) => {
-                    apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, run.depth_test, &mut last_depth_test);
-
-                    if last_prog != Some(2) {
-                        gl.use_program(Some(state.tmesh_program));
-                        gl.bind_vertex_array(Some(state.tmesh_vao));
-                        gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
-                        last_prog = Some(2);
-                        last_tmesh_instance_start = None;
-                        last_tmesh_source = None;
-                    }
-
-                    if last_tmesh_source != Some(run.source) {
-                        let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-                        let Some(vertex_buffer) = (match run.source {
-                            TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
-                            TexturedMeshSource::Cached { cache_key, .. } => {
-                                state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
+                            if let RendererTexture::OpenGL(texture) = texture {
+                                Some(texture.0)
+                            } else {
+                                None
                             }
                         }) else {
                             continue;
                         };
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                        gl.vertex_attrib_pointer_f32(
-                            1,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            stride,
-                            (3 * std::mem::size_of::<f32>()) as i32,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            2,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            stride,
-                            (5 * std::mem::size_of::<f32>()) as i32,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            3,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            stride,
-                            (9 * std::mem::size_of::<f32>()) as i32,
-                        );
-                        last_tmesh_source = Some(run.source);
-                    }
 
-                    if last_tmesh_instance_start != Some(run.instance_start) {
-                        let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-                        let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-                        let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
-                        let base = (run.instance_start as i32) * inst_stride;
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
-                        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, base);
-                        gl.vertex_attrib_pointer_f32(
-                            5,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + col_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            6,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 2 * col_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            7,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 3 * col_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            8,
-                            4,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 4 * col_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            9,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 5 * col_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            10,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 5 * col_size + uv_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            11,
-                            2,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 5 * col_size + 2 * uv_size,
-                        );
-                        gl.vertex_attrib_pointer_f32(
-                            12,
-                            1,
-                            glow::FLOAT,
-                            false,
-                            inst_stride,
-                            base + 5 * col_size + 3 * uv_size,
-                        );
-                        last_tmesh_instance_start = Some(run.instance_start);
-                    }
-
-                    let cam = render_list
-                        .cameras
-                        .get(run.camera as usize)
-                        .copied()
-                        .unwrap_or(state.projection);
-                    let mvp_array = cam.to_cols_array_2d();
-                    gl.uniform_matrix_4_f32_slice(
-                        Some(&state.tmesh_mvp_location),
-                        false,
-                        bytemuck::cast_slice(&mvp_array),
-                    );
-
-                    let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                        if let RendererTexture::OpenGL(texture) = texture {
-                            Some(texture.0)
-                        } else {
-                            None
+                        if last_bound_tex != Some(texture) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                            last_bound_tex = Some(texture);
                         }
-                    }) else {
-                        continue;
-                    };
 
-                    if last_bound_tex != Some(texture) {
-                        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                        last_bound_tex = Some(texture);
+                        gl.draw_elements_instanced(
+                            glow::TRIANGLES,
+                            state.index_count,
+                            glow::UNSIGNED_SHORT,
+                            0,
+                            run.instance_count as i32,
+                        );
+                        vertices = vertices.saturating_add(4 * run.instance_count);
                     }
+                    DrawOp::Mesh(run) => {
+                        if run.vertex_count == 0 {
+                            continue;
+                        }
 
-                    let draw_start = run.source.vertex_start() as i32;
-                    let draw_count = run.source.vertex_count() as i32;
-                    gl.draw_arrays_instanced(
-                        glow::TRIANGLES,
-                        draw_start,
-                        draw_count,
-                        run.instance_count as i32,
-                    );
-                    let tri_count = run.source.vertex_count() / 3;
-                    vertices =
-                        vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, false, &mut last_depth_test);
+
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+
+                        if last_prog != Some(1) {
+                            gl.use_program(Some(state.mesh_program));
+                            gl.bind_vertex_array(Some(mesh_vao));
+                            last_prog = Some(1);
+                            last_tmesh_source = None;
+                        }
+
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
+
+                        gl.draw_arrays(
+                            glow::TRIANGLES,
+                            run.vertex_start as i32,
+                            run.vertex_count as i32,
+                        );
+                        vertices = vertices.saturating_add(run.vertex_count);
+                    }
+                    DrawOp::TexturedMesh(run) => {
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+
+                        if last_prog != Some(2) {
+                            gl.use_program(Some(state.tmesh_program));
+                            gl.bind_vertex_array(Some(tmesh_vao));
+                            gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
+                            last_prog = Some(2);
+                            last_tmesh_instance_start = None;
+                            last_tmesh_source = None;
+                        }
+
+                        if last_tmesh_source != Some(run.source) {
+                            let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
+                            let Some(vertex_buffer) = (match run.source {
+                                TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
+                                TexturedMeshSource::Cached { cache_key, .. } => {
+                                    state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                                }
+                            }) else {
+                                continue;
+                            };
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
+                            gl.vertex_attrib_pointer_f32(
+                                1,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (3 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                2,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (5 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                3,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (9 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            last_tmesh_source = Some(run.source);
+                        }
+
+                        if last_tmesh_instance_start != Some(run.instance_start) {
+                            let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+                            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
+                            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
+                            let base = (run.instance_start as i32) * inst_stride;
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
+                            gl.vertex_attrib_pointer_f32(
+                                4,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                5,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + col_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                6,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 2 * col_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                7,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 3 * col_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                8,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 4 * col_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                9,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 5 * col_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                10,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 5 * col_size + uv_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                11,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 5 * col_size + 2 * uv_size,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                12,
+                                1,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 5 * col_size + 3 * uv_size,
+                            );
+                            last_tmesh_instance_start = Some(run.instance_start);
+                        }
+
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.tmesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
+
+                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
+                            if let RendererTexture::OpenGL(texture) = texture {
+                                Some(texture.0)
+                            } else {
+                                None
+                            }
+                        }) else {
+                            continue;
+                        };
+
+                        if last_bound_tex != Some(texture) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                            last_bound_tex = Some(texture);
+                        }
+
+                        let draw_start = run.source.vertex_start() as i32;
+                        let draw_count = run.source.vertex_count() as i32;
+                        gl.draw_arrays_instanced(
+                            glow::TRIANGLES,
+                            draw_start,
+                            draw_count,
+                            run.instance_count as i32,
+                        );
+                        let tri_count = run.source.vertex_count() / 3;
+                        vertices =
+                            vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
+                    }
+                }
+            }
+        } else {
+            let sprite_uniforms = state
+                .legacy_sprite_uniforms
+                .expect("legacy OpenGL path creates sprite uniforms");
+            let tmesh_uniforms = state
+                .legacy_tmesh_uniforms
+                .expect("legacy OpenGL path creates textured mesh uniforms");
+
+            for op in state.prep.ops.iter().copied() {
+                match op {
+                    DrawOp::Sprite(run) => {
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, false, &mut last_depth_test);
+
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+
+                        if last_prog != Some(0) {
+                            gl.use_program(Some(state.program));
+                            gl.uniform_1_i32(Some(&state.texture_location), 0);
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
+                            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
+                            let stride = (4 * mem::size_of::<f32>()) as i32;
+                            gl.enable_vertex_attrib_array(0);
+                            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                            gl.enable_vertex_attrib_array(1);
+                            gl.vertex_attrib_pointer_f32(
+                                1,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (2 * mem::size_of::<f32>()) as i32,
+                            );
+                            gl.disable_vertex_attrib_array(2);
+                            gl.disable_vertex_attrib_array(3);
+                            last_prog = Some(0);
+                            last_tmesh_source = None;
+                        }
+
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
+
+                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
+                            if let RendererTexture::OpenGL(texture) = texture {
+                                Some(texture.0)
+                            } else {
+                                None
+                            }
+                        }) else {
+                            continue;
+                        };
+
+                        if last_bound_tex != Some(texture) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                            last_bound_tex = Some(texture);
+                        }
+
+                        let end = run.instance_start.saturating_add(run.instance_count);
+                        for idx in run.instance_start..end {
+                            let Some(instance) = render_list.sprite_instances.get(idx as usize)
+                            else {
+                                continue;
+                            };
+                            gl.uniform_4_f32(
+                                Some(&sprite_uniforms.center),
+                                instance.center[0],
+                                instance.center[1],
+                                instance.center[2],
+                                instance.center[3],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.size),
+                                instance.size[0],
+                                instance.size[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.rot_sin_cos),
+                                instance.rot_sin_cos[0],
+                                instance.rot_sin_cos[1],
+                            );
+                            gl.uniform_4_f32(
+                                Some(&sprite_uniforms.tint),
+                                instance.tint[0],
+                                instance.tint[1],
+                                instance.tint[2],
+                                instance.tint[3],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.uv_scale),
+                                instance.uv_scale[0],
+                                instance.uv_scale[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.uv_offset),
+                                instance.uv_offset[0],
+                                instance.uv_offset[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.local_offset),
+                                instance.local_offset[0],
+                                instance.local_offset[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&sprite_uniforms.local_offset_rot_sin_cos),
+                                instance.local_offset_rot_sin_cos[0],
+                                instance.local_offset_rot_sin_cos[1],
+                            );
+                            gl.uniform_4_f32(
+                                Some(&sprite_uniforms.edge_fade),
+                                instance.edge_fade[0],
+                                instance.edge_fade[1],
+                                instance.edge_fade[2],
+                                instance.edge_fade[3],
+                            );
+                            gl.uniform_1_f32(
+                                Some(&sprite_uniforms.texture_mask),
+                                instance.texture_mask,
+                            );
+                            gl.draw_elements(
+                                glow::TRIANGLES,
+                                state.index_count,
+                                glow::UNSIGNED_SHORT,
+                                0,
+                            );
+                            vertices = vertices.saturating_add(4);
+                        }
+                    }
+                    DrawOp::Mesh(run) => {
+                        if run.vertex_count == 0 {
+                            continue;
+                        }
+
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, false, &mut last_depth_test);
+
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+
+                        if last_prog != Some(1) {
+                            gl.use_program(Some(state.mesh_program));
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
+                            let stride =
+                                std::mem::size_of::<crate::engine::gfx::MeshVertex>() as i32;
+                            gl.enable_vertex_attrib_array(0);
+                            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                            gl.enable_vertex_attrib_array(1);
+                            gl.vertex_attrib_pointer_f32(
+                                1,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (2 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            gl.disable_vertex_attrib_array(2);
+                            gl.disable_vertex_attrib_array(3);
+                            last_prog = Some(1);
+                            last_tmesh_source = None;
+                        }
+
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.mesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
+
+                        gl.draw_arrays(
+                            glow::TRIANGLES,
+                            run.vertex_start as i32,
+                            run.vertex_count as i32,
+                        );
+                        vertices = vertices.saturating_add(run.vertex_count);
+                    }
+                    DrawOp::TexturedMesh(run) => {
+                        apply_blend(gl, run.blend, &mut last_blend);
+                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+
+                        if last_prog != Some(2) {
+                            gl.use_program(Some(state.tmesh_program));
+                            gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
+                            gl.enable_vertex_attrib_array(0);
+                            gl.enable_vertex_attrib_array(1);
+                            gl.enable_vertex_attrib_array(2);
+                            gl.enable_vertex_attrib_array(3);
+                            last_prog = Some(2);
+                            last_tmesh_source = None;
+                        }
+
+                        if last_tmesh_source != Some(run.source) {
+                            let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
+                            let Some(vertex_buffer) = (match run.source {
+                                TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
+                                TexturedMeshSource::Cached { cache_key, .. } => {
+                                    state.cached_tmesh.get(&cache_key).map(|entry| entry.vbo)
+                                }
+                            }) else {
+                                continue;
+                            };
+                            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
+                            gl.vertex_attrib_pointer_f32(
+                                1,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (3 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                2,
+                                4,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (5 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            gl.vertex_attrib_pointer_f32(
+                                3,
+                                2,
+                                glow::FLOAT,
+                                false,
+                                stride,
+                                (9 * std::mem::size_of::<f32>()) as i32,
+                            );
+                            last_tmesh_source = Some(run.source);
+                        }
+
+                        let cam = render_list
+                            .cameras
+                            .get(run.camera as usize)
+                            .copied()
+                            .unwrap_or(state.projection);
+                        let mvp_array = cam.to_cols_array_2d();
+                        gl.uniform_matrix_4_f32_slice(
+                            Some(&state.tmesh_mvp_location),
+                            false,
+                            bytemuck::cast_slice(&mvp_array),
+                        );
+
+                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
+                            if let RendererTexture::OpenGL(texture) = texture {
+                                Some(texture.0)
+                            } else {
+                                None
+                            }
+                        }) else {
+                            continue;
+                        };
+
+                        if last_bound_tex != Some(texture) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                            last_bound_tex = Some(texture);
+                        }
+
+                        let draw_start = run.source.vertex_start() as i32;
+                        let draw_count = run.source.vertex_count() as i32;
+                        let tri_count = run.source.vertex_count() / 3;
+                        let end = run.instance_start.saturating_add(run.instance_count);
+                        for idx in run.instance_start..end {
+                            let Some(instance) = state.prep.tmesh_instances.get(idx as usize)
+                            else {
+                                continue;
+                            };
+                            let model = [
+                                instance.model_col0[0],
+                                instance.model_col0[1],
+                                instance.model_col0[2],
+                                instance.model_col0[3],
+                                instance.model_col1[0],
+                                instance.model_col1[1],
+                                instance.model_col1[2],
+                                instance.model_col1[3],
+                                instance.model_col2[0],
+                                instance.model_col2[1],
+                                instance.model_col2[2],
+                                instance.model_col2[3],
+                                instance.model_col3[0],
+                                instance.model_col3[1],
+                                instance.model_col3[2],
+                                instance.model_col3[3],
+                            ];
+                            gl.uniform_matrix_4_f32_slice(
+                                Some(&tmesh_uniforms.model),
+                                false,
+                                &model,
+                            );
+                            gl.uniform_4_f32(
+                                Some(&tmesh_uniforms.tint),
+                                instance.tint[0],
+                                instance.tint[1],
+                                instance.tint[2],
+                                instance.tint[3],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&tmesh_uniforms.uv_scale),
+                                instance.uv_scale[0],
+                                instance.uv_scale[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&tmesh_uniforms.uv_offset),
+                                instance.uv_offset[0],
+                                instance.uv_offset[1],
+                            );
+                            gl.uniform_2_f32(
+                                Some(&tmesh_uniforms.uv_tex_shift),
+                                instance.uv_tex_shift[0],
+                                instance.uv_tex_shift[1],
+                            );
+                            gl.uniform_1_f32(
+                                Some(&tmesh_uniforms.texture_mask),
+                                instance.texture_mask,
+                            );
+                            gl.draw_arrays(glow::TRIANGLES, draw_start, draw_count);
+                            vertices = vertices.saturating_add(tri_count);
+                        }
+                    }
                 }
             }
         }
         apply_depth_test(gl, false, &mut last_depth_test);
-        gl.bind_vertex_array(None);
+        if state.path == GlPath::Modern {
+            gl.bind_vertex_array(None);
+        }
         gl.use_program(None);
     }
     stats.backend_record_us = elapsed_us_since(backend_record_started);
@@ -1314,19 +1855,29 @@ pub fn cleanup(state: &mut State) {
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
         state.gl.delete_program(state.tmesh_program);
-        state.gl.delete_vertex_array(state.shared_vao);
-        state.gl.delete_buffer(state._shared_vbo);
-        state.gl.delete_buffer(state._shared_ibo);
-        state.gl.delete_buffer(state.shared_instance_vbo);
-        state.gl.delete_vertex_array(state.mesh_vao);
+        if let Some(vao) = state.shared_vao {
+            state.gl.delete_vertex_array(vao);
+        }
+        state.gl.delete_buffer(state.shared_vbo);
+        state.gl.delete_buffer(state.shared_ibo);
+        if let Some(vbo) = state.shared_instance_vbo {
+            state.gl.delete_buffer(vbo);
+        }
+        if let Some(vao) = state.mesh_vao {
+            state.gl.delete_vertex_array(vao);
+        }
         state.gl.delete_buffer(state.mesh_vbo);
-        state.gl.delete_vertex_array(state.tmesh_vao);
+        if let Some(vao) = state.tmesh_vao {
+            state.gl.delete_vertex_array(vao);
+        }
         for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
             state.gl.delete_buffer(geom.vbo);
         }
         state.cached_tmesh_bytes = 0;
         state.gl.delete_buffer(state.tmesh_vbo);
-        state.gl.delete_buffer(state.tmesh_instance_vbo);
+        if let Some(vbo) = state.tmesh_instance_vbo {
+            state.gl.delete_buffer(vbo);
+        }
     }
     info!("OpenGL resources cleaned up.");
 }
@@ -1551,6 +2102,9 @@ fn create_graphics_program(
     // exit path below.
     unsafe {
         let program = gl.create_program()?;
+        for (index, name) in SPRITE_ATTRIBS {
+            gl.bind_attrib_location(program, index, name);
+        }
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
             let sh = gl.create_shader(ty)?;
             gl.shader_source(sh, src);
@@ -1604,6 +2158,9 @@ fn create_mesh_program(
     // exit path below.
     unsafe {
         let program = gl.create_program()?;
+        for (index, name) in MESH_ATTRIBS {
+            gl.bind_attrib_location(program, index, name);
+        }
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
             let sh = gl.create_shader(ty)?;
             gl.shader_source(sh, src);
@@ -1654,6 +2211,9 @@ fn create_tmesh_program(
     // exit path below.
     unsafe {
         let program = gl.create_program()?;
+        for (index, name) in TMESH_ATTRIBS {
+            gl.bind_attrib_location(program, index, name);
+        }
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
             let sh = gl.create_shader(ty)?;
             gl.shader_source(sh, src);
@@ -1695,6 +2255,51 @@ fn create_tmesh_program(
 
         Ok((program, mvp_location, texture_location))
     }
+}
+
+fn uniform_location(
+    gl: &glow::Context,
+    program: glow::Program,
+    name: &str,
+) -> Result<UniformLocation, String> {
+    // SAFETY: uniform lookup only reads program metadata from the current GL
+    // context and does not retain Rust pointers.
+    unsafe {
+        gl.get_uniform_location(program, name)
+            .ok_or_else(|| name.to_string())
+    }
+}
+
+fn legacy_sprite_uniforms(
+    gl: &glow::Context,
+    program: glow::Program,
+) -> Result<LegacySpriteUniforms, String> {
+    Ok(LegacySpriteUniforms {
+        center: uniform_location(gl, program, "u_center")?,
+        size: uniform_location(gl, program, "u_size")?,
+        rot_sin_cos: uniform_location(gl, program, "u_rot_sin_cos")?,
+        tint: uniform_location(gl, program, "u_tint")?,
+        uv_scale: uniform_location(gl, program, "u_uv_scale")?,
+        uv_offset: uniform_location(gl, program, "u_uv_offset")?,
+        local_offset: uniform_location(gl, program, "u_local_offset")?,
+        local_offset_rot_sin_cos: uniform_location(gl, program, "u_local_offset_rot_sin_cos")?,
+        edge_fade: uniform_location(gl, program, "u_edge_fade")?,
+        texture_mask: uniform_location(gl, program, "u_texture_mask")?,
+    })
+}
+
+fn legacy_tmesh_uniforms(
+    gl: &glow::Context,
+    program: glow::Program,
+) -> Result<LegacyTMeshUniforms, String> {
+    Ok(LegacyTMeshUniforms {
+        model: uniform_location(gl, program, "u_model")?,
+        tint: uniform_location(gl, program, "u_tint")?,
+        uv_scale: uniform_location(gl, program, "u_uv_scale")?,
+        uv_offset: uniform_location(gl, program, "u_uv_offset")?,
+        uv_tex_shift: uniform_location(gl, program, "u_uv_tex_shift")?,
+        texture_mask: uniform_location(gl, program, "u_texture_mask")?,
+    })
 }
 
 fn find_config(
@@ -1751,7 +2356,7 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
 
 #[cfg(test)]
 mod tests {
-    use super::surface_extent;
+    use super::{GlVersion, parse_gl_version, surface_extent};
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -1759,5 +2364,22 @@ mod tests {
         assert_eq!(surface_extent(0, 0).1.get(), 1);
         assert_eq!(surface_extent(1920, 1080).0.get(), 1920);
         assert_eq!(surface_extent(1920, 1080).1.get(), 1080);
+    }
+
+    #[test]
+    fn parse_gl_version_reads_driver_prefixes() {
+        assert_eq!(
+            parse_gl_version("2.1.0 - Build 8.15.10.2555"),
+            Some(GlVersion { major: 2, minor: 1 })
+        );
+        assert_eq!(
+            parse_gl_version("4.6.0 NVIDIA 551.86"),
+            Some(GlVersion { major: 4, minor: 6 })
+        );
+        assert_eq!(
+            parse_gl_version("OpenGL ES 3.0 Mesa 24.0.0"),
+            Some(GlVersion { major: 3, minor: 0 })
+        );
+        assert_eq!(parse_gl_version("unknown"), None);
     }
 }
