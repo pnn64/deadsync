@@ -575,6 +575,7 @@ fn build_song_search_candidates(
             }
         }
     }
+    out.sort_by_cached_key(|c| c.song.display_full_title(false).to_ascii_lowercase());
 
     out
 }
