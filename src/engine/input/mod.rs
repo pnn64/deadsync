@@ -34,7 +34,7 @@ pub enum PadBackend {
     FreeBsdEvdev,
     #[cfg(target_os = "macos")]
     MacOsIohid,
-    /// StepManiaX pad via rustmaniax-sdk (all platforms).
+    /// StepManiaX pad via the RustManiaX SDK (all platforms).
     Smx,
 }
 

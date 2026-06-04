@@ -193,7 +193,7 @@ pub struct Config {
     pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
-    /// Enable StepManiaX pad input via rustmaniax-sdk (all platforms).
+    /// Enable StepManiaX pad input via the RustManiaX SDK (all platforms).
     pub smx_input: bool,
     /// When true, DeadSync resolves and writes a pad config to each connected
     /// SMX pad (this pad's saved default → a global default → the built-in
