@@ -4156,6 +4156,19 @@ impl App {
                     preset_label,
                 ),
             };
+            // One line per actual (re)resolve — fires only past the signature
+            // short-circuit above (connect, profile/style switch, preset change,
+            // pad type becoming known), not every frame. The primary diagnostic for
+            // "why did this pad get this config" on hardware we can't test here.
+            log::debug!(
+                "SMX: pad {pad} resolved {} '{}' (serial={}, fw={}, type={}, profile={:?}, applied={applied})",
+                if label.preset { "preset" } else { "config" },
+                label.name,
+                info.serial,
+                info.firmware_version,
+                pad_type.as_deref().unwrap_or("unknown"),
+                profile_id.as_deref(),
+            );
             // Record what deadsync resolved so the UI can flag the active
             // preset/config. NOT gated on the write ACK: the resolution is what we
             // intend for the pad; gating it on a momentarily-unavailable config

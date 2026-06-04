@@ -134,9 +134,11 @@ impl Monitor {
         let pad = device.index;
         let info = smx::get_info(pad);
         if !info.connected {
+            log::trace!("SMX: set_threshold pad {pad} rejected (not connected)");
             return false;
         }
         let Some(mut config) = smx::get_config(pad) else {
+            log::trace!("SMX: set_threshold pad {pad} rejected (config unavailable)");
             return false;
         };
         let (panel, _) = VIEW_PANELS[button];
@@ -147,6 +149,10 @@ impl Monitor {
             if info.firmware_version < 5
                 || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value)
             {
+                log::trace!(
+                    "SMX: set_threshold pad {pad} panel {panel} rejected (fsr, fw {}, value {value} not in {MIN_FSR_THRESHOLD}..={MAX_FSR_THRESHOLD})",
+                    info.firmware_version
+                );
                 return false;
             }
             let high = value as u8;
@@ -156,7 +162,10 @@ impl Monitor {
                     settings.fsr_high_threshold[s] = high;
                     settings.fsr_low_threshold[s] = low;
                 }
-                Some(_) => return false,
+                Some(s) => {
+                    log::trace!("SMX: set_threshold pad {pad} rejected (sensor {s} out of range)");
+                    return false;
+                }
                 None => {
                     for s in 0..PANEL_SENSOR_COUNT {
                         settings.fsr_high_threshold[s] = high;
@@ -167,12 +176,19 @@ impl Monitor {
         } else {
             // Load cell: one threshold per panel; the sensor index is ignored.
             if !(MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD).contains(&value) {
+                log::trace!(
+                    "SMX: set_threshold pad {pad} panel {panel} rejected (load-cell, value {value} not in {MIN_LOADCELL_THRESHOLD}..={MAX_LOADCELL_THRESHOLD})"
+                );
                 return false;
             }
             settings.load_cell_high_threshold = value as u8;
             settings.load_cell_low_threshold = (value as u8).saturating_sub(1);
         }
         smx::set_config(pad, config);
+        log::trace!(
+            "SMX: set_threshold pad {pad} panel {panel} sensor {sensor:?} -> {value} ({})",
+            if fsr { "fsr" } else { "load-cell" }
+        );
         true
     }
 
@@ -193,12 +209,18 @@ impl Monitor {
         let pad = device.index;
         let info = smx::get_info(pad);
         if !info.connected || info.firmware_version < 5 {
+            log::trace!(
+                "SMX: set_sensor_enabled pad {pad} rejected (connected={}, fw {})",
+                info.connected, info.firmware_version
+            );
             return false;
         }
         let Some(mut config) = smx::get_config(pad) else {
+            log::trace!("SMX: set_sensor_enabled pad {pad} rejected (config unavailable)");
             return false;
         };
         if !is_fsr(&config) {
+            log::trace!("SMX: set_sensor_enabled pad {pad} rejected (load-cell pad has no per-sensor toggle)");
             return false;
         }
         let (panel, _) = VIEW_PANELS[button];
@@ -209,6 +231,7 @@ impl Monitor {
             config.enabled_sensors[byte] &= !mask;
         }
         smx::set_config(pad, config);
+        log::trace!("SMX: set_sensor_enabled pad {pad} panel {panel} sensor {sensor} -> {enabled}");
         true
     }
 
@@ -221,16 +244,23 @@ impl Monitor {
         let pad = device.index;
         let info = smx::get_info(pad);
         if !info.connected || info.firmware_version < 5 {
+            log::trace!(
+                "SMX: set_auto_recalibration pad {pad} rejected (connected={}, fw {})",
+                info.connected, info.firmware_version
+            );
             return false;
         }
         let Some(mut config) = smx::get_config(pad) else {
+            log::trace!("SMX: set_auto_recalibration pad {pad} rejected (config unavailable)");
             return false;
         };
         if !is_fsr(&config) {
+            log::trace!("SMX: set_auto_recalibration pad {pad} rejected (load-cell pad)");
             return false;
         }
         config.auto_calibration_max_tare = if enabled { 0xFFFF } else { 0 };
         smx::set_config(pad, config);
+        log::trace!("SMX: set_auto_recalibration pad {pad} -> {enabled}");
         true
     }
 
@@ -244,16 +274,23 @@ impl Monitor {
         let pad = device.index;
         let info = smx::get_info(pad);
         if !info.connected || info.firmware_version < 5 {
+            log::trace!(
+                "SMX: set_debounce_micros pad {pad} rejected (connected={}, fw {})",
+                info.connected, info.firmware_version
+            );
             return false;
         }
         let Some(mut config) = smx::get_config(pad) else {
+            log::trace!("SMX: set_debounce_micros pad {pad} rejected (config unavailable)");
             return false;
         };
         if !is_fsr(&config) {
+            log::trace!("SMX: set_debounce_micros pad {pad} rejected (load-cell pad)");
             return false;
         }
         config.panel_debounce_us = micros;
         smx::set_config(pad, config);
+        log::trace!("SMX: set_debounce_micros pad {pad} -> {micros}us");
         true
     }
 

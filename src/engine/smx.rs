@@ -86,6 +86,7 @@ pub fn set_usb_polling_us(micros: u16) {
     if let Some(s) = SHARED.get() {
         s.manager
             .set_polling_rate(DEFAULT_MAIN_THREAD_MS, i32::from(micros));
+        log::debug!("SMX: USB polling interval set to {micros}us");
     }
 }
 
@@ -298,7 +299,10 @@ impl PadConfigData {
 
 /// Capture a connected pad's managed threshold state (None if no config yet).
 pub fn capture_config(pad: usize) -> Option<PadConfigData> {
-    let config = get_config(pad)?;
+    let Some(config) = get_config(pad) else {
+        log::trace!("SMX: capture_config pad {pad} skipped (config unavailable)");
+        return None;
+    };
     let panels = std::array::from_fn(|i| {
         let s = &config.panel_settings[i];
         PanelThresholds {
@@ -322,6 +326,7 @@ pub fn capture_config(pad: usize) -> Option<PadConfigData> {
 /// Returns false if the pad's config isn't available yet.
 pub fn apply_config_data(pad: usize, data: &PadConfigData) -> bool {
     let Some(mut config) = get_config(pad) else {
+        log::trace!("SMX: apply_config_data pad {pad} skipped (config unavailable)");
         return false;
     };
     for (i, p) in data.panels.iter().enumerate() {
@@ -335,6 +340,7 @@ pub fn apply_config_data(pad: usize, data: &PadConfigData) -> bool {
     config.auto_calibration_max_tare = data.auto_calibration_max_tare;
     config.panel_debounce_us = data.panel_debounce_us;
     set_config(pad, config);
+    log::trace!("SMX: apply_config_data pad {pad} written");
     true
 }
 
@@ -393,6 +399,7 @@ fn preset_thresholds(preset: crate::config::SmxPadPreset) -> PresetThresholds {
 /// if the pad's config isn't available yet.
 pub fn apply_preset(pad: usize, preset: crate::config::SmxPadPreset) -> bool {
     let Some(mut config) = get_config(pad) else {
+        log::trace!("SMX: apply_preset pad {pad} skipped (config unavailable)");
         return false;
     };
     let t = preset_thresholds(preset);
@@ -420,6 +427,7 @@ pub fn apply_preset(pad: usize, preset: crate::config::SmxPadPreset) -> bool {
     config.auto_calibration_max_tare = 0xFFFF;
     config.panel_debounce_us = 4000;
     set_config(pad, config);
+    log::debug!("SMX: apply_preset pad {pad} -> {} preset", preset.as_str());
     true
 }
 
