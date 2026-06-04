@@ -16,6 +16,25 @@ report.
 
 ---
 
+## Why connect to the pads directly?
+
+Reading the pads through the SDK instead of as generic OS gamepad input buys two
+things you don't get otherwise:
+
+- **Readable input labels.** Each panel reports as a named SMX trigger (e.g.
+  `SMX[40ea] L`, where `40ea` is the start of the pad's serial), so bindings and
+  the Test Input screen show *which pad and which panel* an input came from
+  instead of an anonymous button number.
+- **Stable, per-pad player assignment.** An SMX pad carries its own serial and
+  its own player side, so DeadSync keys bindings and saved configs to the
+  *physical pad* and a pad always maps to the same player. Generic OS gamepad
+  input instead assigns players by USB **enumeration order** (first pad → P1,
+  second → P2), which the OS can reshuffle on a reconnect or reboot — so P1 and
+  P2 silently swap when the OS decides the other pad enumerated first. Talking to
+  the pads directly avoids that entirely.
+
+---
+
 ## 1. Quick start
 
 1. **Options → Input Options → Input Options** (the input *backend* page).
@@ -128,7 +147,7 @@ Open the **Song Select** menu and use:
   - **Select** opens the **Profiles** list for the cursor pad.
 - **Profiles** list actions:
   - **Save current as new** — capture the pad's live tuning under a name.
-  - **Apply** (Start) — write a saved config to the pad now.
+  - **Activate** (Start) — write a saved config to the pad now.
   - **Set default** (Select) — make it this pad's default (per serial).
   - **Rename** / **Delete** / **Overwrite** — manage saved configs (delete asks
     for a confirm press).
