@@ -1121,6 +1121,7 @@ pub struct State {
     reload_ui: Option<ReloadUiState>,
     song_search: select_music_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
+    song_search_ignore_next_text: bool,
     replay_overlay: select_music_menu::ReplayOverlayState,
     lobby_overlay: lobby_overlay::OverlayState,
     sync_overlay: SyncOverlayState,
@@ -3565,6 +3566,7 @@ pub fn init() -> State {
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
+        song_search_ignore_next_text: false,
         replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
         lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
@@ -3757,6 +3759,7 @@ pub fn init_placeholder() -> State {
         reload_ui: None,
         song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
+        song_search_ignore_next_text: false,
         replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
         lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
@@ -4648,6 +4651,7 @@ fn start_song_search_prompt(state: &mut State) {
     clear_overlay_nav_hold(state);
     clear_nav_hold(state);
     state.song_search = select_music_menu::begin_song_search_prompt();
+    state.song_search_ignore_next_text = false;
 }
 
 fn show_profile_switch_overlay(state: &mut State) {
@@ -4727,18 +4731,21 @@ fn restore_select_music_menu_after_profile_overlay(state: &mut State) {
 #[inline(always)]
 fn close_song_search(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.song_search_ignore_next_text = false;
     clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn cancel_song_search(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.song_search_ignore_next_text = false;
     clear_overlay_nav_hold(state);
     state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
     clear_overlay_nav_hold(state);
+    state.song_search_ignore_next_text = false;
     state.song_search =
         select_music_menu::begin_song_search_results(&state.group_entries, search_text);
 }
@@ -9442,6 +9449,15 @@ fn keymap_has_player_input(km: &crate::engine::input::Keymap, key: &RawKeyboardE
     km.raw_key_event_has_action(key, |action| !action.is_system())
 }
 
+#[inline(always)]
+fn take_song_search_ignored_text(state: &mut State) -> bool {
+    if !state.song_search_ignore_next_text {
+        return false;
+    }
+    state.song_search_ignore_next_text = false;
+    true
+}
+
 pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
@@ -9576,6 +9592,10 @@ pub fn handle_raw_key_event(
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
+        let ignore_text = text.is_some() && state.song_search_ignore_next_text;
+        if key.is_some() && state.song_search_ignore_next_text {
+            state.song_search_ignore_next_text = false;
+        }
         if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
             if let Some(key) = key {
                 let code = key.code;
@@ -9596,6 +9616,7 @@ pub fn handle_raw_key_event(
 
             if !prompt_close
                 && prompt_start.is_none()
+                && !ignore_text
                 && let Some(text) = text
             {
                 select_music_menu::song_search_add_text(entry, text);
@@ -9613,10 +9634,14 @@ pub fn handle_raw_key_event(
         }
     } else if key.is_none()
         && let Some(text) = text
-        && let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search
     {
-        select_music_menu::song_search_add_text(entry, text);
-        return ScreenAction::None;
+        if take_song_search_ignored_text(state) {
+            return ScreenAction::None;
+        }
+        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            select_music_menu::song_search_add_text(entry, text);
+            return ScreenAction::None;
+        }
     }
 
     if !key.is_some_and(|key| key.pressed) {
@@ -9632,12 +9657,22 @@ pub fn handle_raw_key_event(
         return ScreenAction::ConsumeInput;
     }
     if let Some(action) = configurable_shortcut_action(state, key) {
+        let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
         // ScreenAction::None, so a successful raw shortcut stays single-action.
-        return match dispatch_menu_action(state, action) {
+        let action = match dispatch_menu_action(state, action) {
             ScreenAction::None => ScreenAction::ConsumeInput,
             other => other,
         };
+        if ignore_open_text
+            && matches!(
+                state.song_search,
+                select_music_menu::SongSearchState::TextEntry(_)
+            )
+        {
+            state.song_search_ignore_next_text = true;
+        }
+        return action;
     }
     if let Some(key) = key
         && key.code == KeyCode::F7
@@ -12615,6 +12650,13 @@ mod tests {
         }
     }
 
+    fn song_search_query(state: &super::State) -> Option<&str> {
+        match &state.song_search {
+            super::select_music_menu::SongSearchState::TextEntry(entry) => Some(&entry.query),
+            _ => None,
+        }
+    }
+
     fn test_song(title: &str) -> Arc<SongData> {
         Arc::new(SongData {
             simfile_path: PathBuf::from(format!("{title}.ssc")),
@@ -13196,6 +13238,22 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
+    }
+
+    #[test]
+    fn song_search_shortcut_ignores_opening_text_event() {
+        let mut state = init_placeholder();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+
+        let action = handle_raw_key_event(&mut state, None, Some("s"));
+        assert!(matches!(action, ScreenAction::None));
+        assert_eq!(song_search_query(&state), Some(""));
+
+        let action = handle_raw_key_event(&mut state, None, Some("abc"));
+        assert!(matches!(action, ScreenAction::None));
+        assert_eq!(song_search_query(&state), Some("abc"));
     }
 
     #[test]
