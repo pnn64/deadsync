@@ -253,6 +253,10 @@ fn load_player_options(
         .get(section, "HideComboExplosions")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.hide_combo_explosions, |v| v != 0);
+    options.hide_username = profile_conf
+        .get(section, "HideUsername")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_username, |v| v != 0);
     options.column_flash_on_miss = profile_conf
         .get(section, "ColumnFlashOnMiss")
         .and_then(|s| s.parse::<u8>().ok())
@@ -1253,12 +1257,14 @@ pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
             guest: p1_guest,
             display_name: p1_profile.display_name.clone(),
             avatar_texture_key: p1_profile.avatar_texture_key.clone(),
+            hide_username: p1_profile.hide_username,
         },
         p2: GameplayHudPlayerSnapshot {
             joined: player_side_is_joined(joined_mask, PlayerSide::P2),
             guest: p2_guest,
             display_name: p2_profile.display_name.clone(),
             avatar_texture_key: p2_profile.avatar_texture_key.clone(),
+            hide_username: p2_profile.hide_username,
         },
     }
 }

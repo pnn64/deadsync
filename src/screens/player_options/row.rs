@@ -653,11 +653,12 @@ pub(crate) use simple_bitmask_binding;
 ///         (SCORE, hide_score),
 ///         (DANGER, hide_danger),
 ///         (COMBO_EXPLOSIONS, hide_combo_explosions),
+///         (USERNAME, hide_username),
 ///     ],
 ///     persist_for_side = |s, p| gp::update_hide_options_for_side(
 ///         s,
 ///         p.hide_targets, p.hide_song_bg, p.hide_combo, p.hide_lifebar,
-///         p.hide_score, p.hide_danger, p.hide_combo_explosions,
+///         p.hide_score, p.hide_danger, p.hide_combo_explosions, p.hide_username,
 ///     ),
 ///     sync_visibility = true,
 /// );

@@ -84,6 +84,7 @@ bitflags! {
         const SCORE            = 1 << 4;
         const DANGER           = 1 << 5;
         const COMBO_EXPLOSIONS = 1 << 6;
+        const USERNAME         = 1 << 7;
     }
 }
 
