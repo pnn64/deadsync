@@ -3359,6 +3359,25 @@ fn zmod_resolved_combo_color(
     }
 }
 
+fn zmod_static_combo_color(
+    state: &State,
+    p: &PlayerRuntime,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+) -> [f32; 4] {
+    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
+        p.full_combo_grade
+    } else {
+        p.current_combo_grade
+    };
+    if let Some(grade) = combo_grade {
+        let quint_active = zmod_combo_quint_active(state, player_idx, profile);
+        zmod_combo_solid_color(grade, quint_active && grade == JudgeGrade::Fantastic)
+    } else {
+        [1.0, 1.0, 1.0, 1.0]
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
@@ -3643,7 +3662,7 @@ fn zmod_mini_indicator_score_color(
 ) -> [f32; 4] {
     match profile.mini_indicator_color {
         profile_data::MiniIndicatorColor::Combo => {
-            zmod_resolved_combo_color(state, p, profile, player_idx)
+            zmod_static_combo_color(state, p, profile, player_idx)
         }
         style => zmod_indicator_score_color(score_percent, style),
     }
@@ -3746,7 +3765,7 @@ fn zmod_mini_indicator_text(
             if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
                 let rgba =
                     if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                        zmod_resolved_combo_color(state, p, profile, player_idx)
+                        zmod_static_combo_color(state, p, profile, player_idx)
                     } else {
                         color::rgba_hex("#ff55cc")
                     };
@@ -3783,7 +3802,7 @@ fn zmod_mini_indicator_text(
             let diff = (pace - rival_pace).abs();
             let text = cached_signed_percent2_f64(diff, pace < rival_pace);
             let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                zmod_resolved_combo_color(state, p, profile, player_idx)
+                zmod_static_combo_color(state, p, profile, player_idx)
             } else {
                 zmod_rival_color(pace, rival_pace)
             };
@@ -3804,7 +3823,7 @@ fn zmod_mini_indicator_text(
                 cached_signed_percent2_f64(diff, false)
             };
             let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                zmod_resolved_combo_color(state, p, profile, player_idx)
+                zmod_static_combo_color(state, p, profile, player_idx)
             } else {
                 zmod_pacemaker_color(pace, rival_pace)
             };
