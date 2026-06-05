@@ -1316,6 +1316,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         ],
     ));
     b.push(Row::cycle(
+        RowId::DensityGraphBackground,
+        lookup_key("PlayerOptions", "DensityGraphBackground"),
+        lookup_key("PlayerOptionsHelp", "DensityGraphBackgroundHelp"),
+        CycleBinding::Bool(DENSITY_GRAPH_BACKGROUND),
+        vec![
+            tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
+            tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
         RowId::ScoreDisplay,
         lookup_key("PlayerOptions", "ScoreDisplay"),
         lookup_key("PlayerOptionsHelp", "ScoreDisplayHelp"),
@@ -1333,16 +1343,6 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "ScorePositionNormal").to_string(),
             tr("PlayerOptions", "ScorePositionStepStatistics").to_string(),
-        ],
-    ));
-    b.push(Row::cycle(
-        RowId::DensityGraphBackground,
-        lookup_key("PlayerOptions", "DensityGraphBackground"),
-        lookup_key("PlayerOptionsHelp", "DensityGraphBackgroundHelp"),
-        CycleBinding::Bool(DENSITY_GRAPH_BACKGROUND),
-        vec![
-            tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
-            tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
         ],
     ));
     b.push(Row::custom(
