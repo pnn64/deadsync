@@ -47,6 +47,9 @@ use std::time::Instant;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
+const DIFFICULTY_METER_Y: f32 = 56.0;
+const DIFFICULTY_METER_SIZE: f32 = 30.0;
+const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 
 pub use crate::screens::components::gameplay::notefield::ViewOverride as NotefieldViewOverride;
 
@@ -58,11 +61,12 @@ pub struct ActorViewOverride {
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
-    GameplayAction, GameplayExit, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
+    GameplayAction, GameplayExit, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
-    handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
-    update as gameplay_update,
+    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_scroll_effects_for_player,
+    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
+    scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -447,6 +451,123 @@ fn step_stats_score_pos(
             hard_ex_x: score_x_other + widescale(88.0, 135.0),
             hard_ex_y: 73.0,
         },
+    }
+}
+
+#[inline(always)]
+fn ranges_overlap(a_center: f32, a_size: f32, b_center: f32, b_size: f32) -> bool {
+    let a_half = a_size * 0.5;
+    let b_half = b_size * 0.5;
+    a_center - a_half < b_center + b_half && b_center - b_half < a_center + a_half
+}
+
+fn difficulty_meter_hits_targets(
+    state: &State,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+    field_x: f32,
+    field_w: f32,
+    meter_x: f32,
+    meter_y: f32,
+    view: notefield::ViewOverride,
+) -> bool {
+    if player_idx >= state.num_players
+        || !field_x.is_finite()
+        || !field_w.is_finite()
+        || !meter_x.is_finite()
+        || !meter_y.is_finite()
+        || field_w <= 0.0
+    {
+        return false;
+    }
+    if !ranges_overlap(field_x, field_w, meter_x, DIFFICULTY_METER_SIZE) {
+        return false;
+    }
+
+    let col_start = player_idx.saturating_mul(state.cols_per_player);
+    let num_cols = (col_start + state.cols_per_player)
+        .min(state.num_cols)
+        .saturating_sub(col_start);
+    if num_cols == 0 {
+        return false;
+    }
+
+    let offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
+    let receptor_y_override = view.receptor_y.map(|y| y + offset_y);
+    let receptor_y_normal = receptor_y_override.unwrap_or_else(|| {
+        screen_center_y()
+            + if view.center_receptors_y {
+                0.0
+            } else {
+                RECEPTOR_Y_OFFSET_FROM_CENTER
+            }
+            + offset_y
+    });
+    let receptor_y_reverse = receptor_y_override.unwrap_or_else(|| {
+        screen_center_y()
+            + if view.center_receptors_y {
+                0.0
+            } else {
+                RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
+            }
+            + offset_y
+    });
+    let receptor_y_centered = receptor_y_override.unwrap_or(screen_center_y() + offset_y);
+    let scroll = effective_scroll_effects_for_player(state, player_idx);
+    let centered_percent = if view.receptor_y.is_some() || view.center_receptors_y {
+        1.0
+    } else {
+        scroll.centered
+    };
+
+    (0..num_cols).any(|col| {
+        let receptor_y = scroll_receptor_y(
+            scroll.reverse_percent_for_column(col, num_cols),
+            centered_percent,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        );
+        ranges_overlap(
+            receptor_y,
+            TARGET_ARROW_PIXEL_SIZE,
+            meter_y,
+            DIFFICULTY_METER_SIZE,
+        )
+    })
+}
+
+#[inline(always)]
+fn side_difficulty_meter_x(player_side: profile_data::PlayerSide) -> f32 {
+    match player_side {
+        profile_data::PlayerSide::P1 => DIFFICULTY_METER_SIZE * 0.5,
+        profile_data::PlayerSide::P2 => screen_width() - DIFFICULTY_METER_SIZE * 0.5,
+    }
+}
+
+fn difficulty_meter_x(
+    state: &State,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+    player_side: profile_data::PlayerSide,
+    field_x: f32,
+    field_w: f32,
+    normal_x: f32,
+    view: notefield::ViewOverride,
+) -> f32 {
+    if difficulty_meter_hits_targets(
+        state,
+        profile,
+        player_idx,
+        field_x,
+        field_w,
+        normal_x,
+        DIFFICULTY_METER_Y,
+        view,
+    ) {
+        side_difficulty_meter_x(player_side)
+    } else {
+        normal_x
     }
 }
 
@@ -7862,6 +7983,17 @@ pub fn push_actors(
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
             &players[..player_count]
         {
+            let profile = &state.player_profiles[player_idx];
+            let diff_x = difficulty_meter_x(
+                state,
+                profile,
+                player_idx,
+                player_side,
+                field_x,
+                notefield_width(player_idx),
+                diff_x,
+                notefield_view,
+            );
             let chart = &state.charts[player_idx];
             let difficulty_color =
                 color::difficulty_rgba(&chart.difficulty, state.active_color_index);
@@ -7870,7 +8002,7 @@ pub fn push_actors(
                 color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
 
             // Difficulty Box
-            let y = 56.0;
+            let y = DIFFICULTY_METER_Y;
             actors.push(act!(quad:
                 align(0.5, 0.5): xy(diff_x, y): zoomto(30.0, 30.0):
                 diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0):
@@ -7899,7 +8031,6 @@ pub fn push_actors(
                 && play_style != profile_data::PlayStyle::Double
                 && nps_graph_at_top
                 && !note_field_is_centered;
-            let profile = &state.player_profiles[player_idx];
             let score_in_single_step_stats = profile.score_position
                 == profile_data::ScorePosition::StepStatistics
                 && !profile.step_statistics.is_empty()
@@ -8771,6 +8902,34 @@ mod tests {
         assert_eq!(
             song_lua_player_target_x(None, 320.0, 800.0, notefield::ViewOverride::default()),
             320.0
+        );
+    }
+
+    #[test]
+    fn difficulty_meter_overlap_catches_shifted_targets() {
+        assert!(ranges_overlap(
+            90.0,
+            TARGET_ARROW_PIXEL_SIZE,
+            56.0,
+            DIFFICULTY_METER_SIZE
+        ));
+        assert!(!ranges_overlap(
+            115.0,
+            TARGET_ARROW_PIXEL_SIZE,
+            56.0,
+            DIFFICULTY_METER_SIZE
+        ));
+    }
+
+    #[test]
+    fn side_difficulty_meter_uses_player_side() {
+        assert_eq!(
+            side_difficulty_meter_x(profile_data::PlayerSide::P1),
+            DIFFICULTY_METER_SIZE * 0.5
+        );
+        assert_eq!(
+            side_difficulty_meter_x(profile_data::PlayerSide::P2),
+            screen_width() - DIFFICULTY_METER_SIZE * 0.5
         );
     }
 
