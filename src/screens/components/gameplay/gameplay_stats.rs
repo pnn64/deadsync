@@ -2728,12 +2728,17 @@ fn build_side_pane(
                 ));
             }
 
+            let max_time_label_offset = label_offset_total.max(label_offset_remaining);
             let timing_gap = 104.0 * layout.banner_data_zoom;
             let timing_value_gap = 156.0 * layout.banner_data_zoom;
             let timing_label_anchor = if player_side == profile_data::PlayerSide::P1 {
-                time_x + label_offset_total.max(label_offset_remaining) + timing_gap
+                time_x + max_time_label_offset + timing_gap
+            } else if layout.note_field_is_centered {
+                time_x - max_time_label_offset - timing_gap
             } else {
-                time_x - label_offset_total.max(label_offset_remaining) - timing_gap
+                // SL OffsetCalc.lua P2 anchors live timing to the left of Time.lua.
+                // Keep the non-centered P2 pane from drifting back into duration text.
+                time_x - max_time_label_offset - 160.0 * layout.banner_data_zoom
             };
             let right_align_timing_values = layout.note_field_is_centered
                 && !layout.is_ultrawide
@@ -2741,6 +2746,9 @@ fn build_side_pane(
             let timing_value_anchor = if right_align_timing_values {
                 layout.sidepane_center_x + layout.sidepane_width * 0.5
                     - 18.0 * layout.banner_data_zoom
+            } else if player_side == profile_data::PlayerSide::P2 && !layout.note_field_is_centered
+            {
+                time_x - max_time_label_offset - 95.0 * layout.banner_data_zoom
             } else {
                 timing_label_anchor + timing_value_gap
             };
