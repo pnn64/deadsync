@@ -1784,8 +1784,8 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 mod tests {
     use super::{
         LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorSize,
-        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, PlayerOptionsData, Profile, SimpleIni,
-        TimingWindowsOption, append_player_options_section, load_player_options,
+        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, PlayerOptionsData, Profile,
+        SimpleIni, TimingWindowsOption, append_player_options_section, load_player_options,
         parse_groovestats_is_pad_player, player_options_section,
     };
     use deadsync_profile::{

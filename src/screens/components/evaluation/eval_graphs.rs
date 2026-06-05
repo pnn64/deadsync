@@ -153,6 +153,14 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
 }
 
 #[inline(always)]
+fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
+    match scale {
+        ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => 1.0,
+        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => 0.666,
+    }
+}
+
+#[inline(always)]
 fn hist_bin_abs_ms(bin: i32) -> f32 {
     if bin < 0 {
         bin.unsigned_abs() as f32 - 0.5
@@ -316,7 +324,7 @@ pub fn build_scatter_mesh(
                 let x = x.clamp(0.0, (w - POINT_W).max(0.0));
                 let y = (t * (h - POINT_H).max(0.0)).clamp(0.0, (h - POINT_H).max(0.0));
                 let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale);
-                let c = [base[0], base[1], base[2], 0.666];
+                let c = [base[0], base[1], base[2], scatter_hit_alpha(scale)];
                 push_quad(&mut out, x, y, POINT_W, POINT_H, c);
             }
             None => {
@@ -475,4 +483,58 @@ pub fn build_offset_histogram_mesh(
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scatter_point(offset_ms: f32) -> ScatterPoint {
+        ScatterPoint {
+            time_sec: 1.0,
+            offset_ms: Some(offset_ms),
+            direction_code: 1,
+            is_stream: true,
+            is_left_foot: true,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn judgment_scatter_hits_use_full_alpha() {
+        let verts = build_scatter_mesh(
+            &[scatter_point(120.0)],
+            0.0,
+            2.0,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Itg,
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert!(verts.iter().all(|v| v.color
+            == [
+                color::JUDGMENT_RGBA[3][0],
+                color::JUDGMENT_RGBA[3][1],
+                color::JUDGMENT_RGBA[3][2],
+                1.0,
+            ]));
+    }
+
+    #[test]
+    fn arrow_scatter_hits_keep_reference_alpha() {
+        let verts = build_scatter_mesh(
+            &[scatter_point(10.0)],
+            0.0,
+            2.0,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Arrow,
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert!(verts.iter().all(|v| v.color == [1.0, 0.0, 0.0, 0.666]));
+    }
 }

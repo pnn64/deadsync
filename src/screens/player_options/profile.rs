@@ -157,9 +157,9 @@ pub(super) fn effective_scroll_speed_with_alt(
     rate: f32,
 ) -> ScrollSpeedSetting {
     match no_cmod_alt_speed_mod_type(alt) {
-        Some(new_type) if is_no_cmod && base.mod_type == SpeedModType::C => {
-            scroll_speed_for_mod(&convert_speed_mod_to_type(base, new_type, reference_bpm, rate))
-        }
+        Some(new_type) if is_no_cmod && base.mod_type == SpeedModType::C => scroll_speed_for_mod(
+            &convert_speed_mod_to_type(base, new_type, reference_bpm, rate),
+        ),
         _ => scroll_speed_for_mod(base),
     }
 }

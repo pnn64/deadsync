@@ -597,7 +597,9 @@ impl FromStr for NoCmodAlternative {
             "" | "none" | "off" => Ok(Self::None),
             "xmod" | "x" => Ok(Self::XMod),
             "mmod" | "m" => Ok(Self::MMod),
-            other => Err(format!("'{other}' is not a valid NoCmodAlternative setting")),
+            other => Err(format!(
+                "'{other}' is not a valid NoCmodAlternative setting"
+            )),
         }
     }
 }
