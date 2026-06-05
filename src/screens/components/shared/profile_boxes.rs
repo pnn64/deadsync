@@ -551,6 +551,36 @@ fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::
     (p1, p2)
 }
 
+const fn play_style_for_joined(
+    style: profile_data::PlayStyle,
+    p1_joined: bool,
+    p2_joined: bool,
+) -> profile_data::PlayStyle {
+    if p1_joined && p2_joined {
+        profile_data::PlayStyle::Versus
+    } else {
+        match style {
+            profile_data::PlayStyle::Versus => profile_data::PlayStyle::Single,
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => style,
+        }
+    }
+}
+
+fn sync_play_style_for_joined(p1_joined: bool, p2_joined: bool) {
+    let style = play_style_for_joined(profile::get_session_play_style(), p1_joined, p2_joined);
+    profile::set_session_play_style(style);
+}
+
+fn commit_profile_box_session(state: &State) {
+    profile::set_session_player_side(if state.p1_joined {
+        profile_data::PlayerSide::P1
+    } else {
+        profile_data::PlayerSide::P2
+    });
+    profile::set_session_joined(state.p1_joined, state.p2_joined);
+    sync_play_style_for_joined(state.p1_joined, state.p2_joined);
+}
+
 fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
     if is_p1 {
         state.p1_shake_t = 0.0;
@@ -751,12 +781,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
-                profile::set_session_player_side(if state.p1_joined {
-                    profile_data::PlayerSide::P1
-                } else {
-                    profile_data::PlayerSide::P2
-                });
-                profile::set_session_joined(state.p1_joined, state.p2_joined);
+                commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
                 return ScreenAction::SelectProfiles { p1, p2 };
             }
@@ -826,12 +851,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
-                profile::set_session_player_side(if state.p1_joined {
-                    profile_data::PlayerSide::P1
-                } else {
-                    profile_data::PlayerSide::P2
-                });
-                profile::set_session_joined(state.p1_joined, state.p2_joined);
+                commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
                 return ScreenAction::SelectProfiles { p1, p2 };
             }
@@ -1890,4 +1910,29 @@ pub fn get_actors(
     }));
     actors.extend(build_box_actors(state, asset_manager, alpha_multiplier));
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn play_style_follows_profile_box_join_count() {
+        assert_eq!(
+            play_style_for_joined(profile_data::PlayStyle::Single, true, true),
+            profile_data::PlayStyle::Versus
+        );
+        assert_eq!(
+            play_style_for_joined(profile_data::PlayStyle::Double, true, true),
+            profile_data::PlayStyle::Versus
+        );
+        assert_eq!(
+            play_style_for_joined(profile_data::PlayStyle::Double, true, false),
+            profile_data::PlayStyle::Double
+        );
+        assert_eq!(
+            play_style_for_joined(profile_data::PlayStyle::Versus, false, true),
+            profile_data::PlayStyle::Single
+        );
+    }
 }
