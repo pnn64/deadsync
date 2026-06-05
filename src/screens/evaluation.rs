@@ -2940,7 +2940,7 @@ pub fn update(state: &mut State, dt: f32) {
         state.screen_elapsed += dt;
     }
 
-    maybe_start_clear_preview_music(state);
+    maybe_start_preview_music(state);
 
     online::lobbies::poll_reconnect();
     online::lobbies::update_machine_state_sides_with_stats(
@@ -3218,16 +3218,13 @@ pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     any
 }
 
-fn maybe_start_clear_preview_music(state: &mut State) {
+fn maybe_start_preview_music(state: &mut State) {
     if state.preview_music_started {
         return;
     }
     state.preview_music_started = true;
 
     if !crate::config::get().eval_preview_music {
-        return;
-    }
-    if all_joined_players_failed(state) {
         return;
     }
     let Some(si) = state.score_info.iter().flatten().next() else {
