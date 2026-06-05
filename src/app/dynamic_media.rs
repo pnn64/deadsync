@@ -81,6 +81,7 @@ pub(crate) struct DynamicMedia {
     gameplay_background_prep_rx: mpsc::Receiver<GameplayBackgroundPrepResult>,
     failed_gameplay_background_key: Option<String>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
+    preloaded_profile_avatar_keys: HashSet<String>,
 }
 
 impl DynamicMedia {
@@ -106,6 +107,7 @@ impl DynamicMedia {
             gameplay_background_prep_rx,
             failed_gameplay_background_key: None,
             current_profile_avatars: std::array::from_fn(|_| None),
+            preloaded_profile_avatar_keys: HashSet::new(),
         }
     }
 
@@ -118,6 +120,8 @@ impl DynamicMedia {
         for p in profile::scan_local_profiles() {
             if let Some(path) = p.avatar_path {
                 media_cache::ensure_banner_texture(assets, backend, &path);
+                self.preloaded_profile_avatar_keys
+                    .insert(path.to_string_lossy().into_owned());
             }
         }
         self.set_profile_avatar(assets, backend, profile.avatar_path);
@@ -939,6 +943,7 @@ impl DynamicMedia {
                 .iter()
                 .flatten()
                 .any(|(owned, _)| owned == key)
+            || self.preloaded_profile_avatar_keys.contains(key)
     }
 
     #[inline(always)]
