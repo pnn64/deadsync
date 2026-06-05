@@ -65,7 +65,8 @@ const JUDGMENT_INFO: [LabeledColor; 6] = [
     },
 ];
 
-const RADAR_LABELS: [LookupKey; 3] = [
+const RADAR_LABELS: [LookupKey; 4] = [
+    lookup_key("Gameplay", "HandsLabel"),
     lookup_key("Gameplay", "HoldsLabel"),
     lookup_key("Gameplay", "MinesLabel"),
     lookup_key("Gameplay", "RollsLabel"),
@@ -181,11 +182,31 @@ fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
 }
 
 #[inline(always)]
-fn actor_capacity(show_fa_plus_pane: bool, show_10ms_blue: bool, digits_to_fmt: usize) -> usize {
+fn actor_capacity(
+    show_fa_plus_pane: bool,
+    show_10ms_blue: bool,
+    show_hands_row: bool,
+    digits_to_fmt: usize,
+) -> usize {
     let judgment_rows = if show_fa_plus_pane { 7 } else { 6 };
     let judgment_labels = judgment_rows + usize::from(show_10ms_blue);
-    let radar_rows = 3;
+    let radar_rows = radar_rows_for_pane(show_hands_row);
     judgment_labels + (judgment_rows * digits_to_fmt) + (radar_rows * 8)
+}
+
+#[inline(always)]
+const fn show_hands_row_for_pane(pane: EvalPane) -> bool {
+    matches!(pane, EvalPane::Standard)
+}
+
+#[inline(always)]
+const fn radar_start_index(show_hands_row: bool) -> usize {
+    if show_hands_row { 0 } else { 1 }
+}
+
+#[inline(always)]
+const fn radar_rows_for_pane(show_hands_row: bool) -> usize {
+    if show_hands_row { 4 } else { 3 }
 }
 
 /// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
@@ -216,6 +237,7 @@ pub(crate) fn build_stats_pane(
     };
     let judgment_counts = JUDGMENT_ORDER.map(|grade| score_info.judgment_count(grade));
     let show_standard_judgments = !show_fa_plus_pane;
+    let show_hands_row = show_hands_row_for_pane(pane);
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if show_standard_judgments {
@@ -240,6 +262,7 @@ pub(crate) fn build_stats_pane(
     let mut actors = Vec::with_capacity(actor_capacity(
         show_fa_plus_pane,
         show_10ms_blue,
+        show_hands_row,
         digits_to_fmt,
     ));
 
@@ -375,16 +398,19 @@ pub(crate) fn build_stats_pane(
 
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
-            (score_info.holds_held, score_info.holds_total),
-            (score_info.mines_avoided, score_info.mines_total),
-            (score_info.rolls_held, score_info.rolls_total),
+            (0, score_info.hands_achieved, score_info.hands_total),
+            (1, score_info.holds_held, score_info.holds_total),
+            (2, score_info.mines_avoided, score_info.mines_total),
+            (3, score_info.rolls_held, score_info.rolls_total),
         ];
+        let radar_start_index = radar_start_index(show_hands_row);
+        let radar_categories = &radar_categories[radar_start_index..];
 
         const GRAY_POSSIBLE: [f32; 4] = color::rgba_hex("#5A6166");
         const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
-        for (i, (achieved, possible)) in radar_categories.iter().copied().enumerate() {
+        for (i, (label_idx, achieved, possible)) in radar_categories.iter().copied().enumerate() {
             let sl_row = i as f32 + 1.0;
             let label_local_x = if controller == profile_data::PlayerSide::P1 {
                 -160.0
@@ -392,7 +418,7 @@ pub(crate) fn build_stats_pane(
                 90.0
             };
             let label_local_y = sl_row.mul_add(28.0, 41.0);
-            actors.push(act!(text: font("miso"): settext(radar_label_text(i)):
+            actors.push(act!(text: font("miso"): settext(radar_label_text(label_idx)):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
 
@@ -471,4 +497,20 @@ pub(crate) fn build_stats_pane(
     }));
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn radar_hands_row_only_shows_for_single_score_pane() {
+        assert!(show_hands_row_for_pane(EvalPane::Standard));
+        assert!(!show_hands_row_for_pane(EvalPane::FaPlus));
+        assert!(!show_hands_row_for_pane(EvalPane::HardEx));
+        assert_eq!(radar_start_index(true), 0);
+        assert_eq!(radar_start_index(false), 1);
+        assert_eq!(radar_rows_for_pane(true), 4);
+        assert_eq!(radar_rows_for_pane(false), 3);
+    }
 }
