@@ -8,6 +8,7 @@ use deadsync_profile::Profile;
 pub enum RowId {
     TypeOfSpeedMod,
     SpeedMod,
+    NoCmodAlternative,
     Mini,
     Spacing,
     Perspective,

@@ -185,6 +185,18 @@ impl SongData {
         }
     }
 
+    /// Whether this song is tagged as not allowing CMod.
+    ///
+    /// Event organizers mark such charts by putting "no cmod" somewhere in the
+    /// title or subtitle. Matching is case-insensitive and spans the combined
+    /// title + subtitle so the tag is found regardless of which field carries
+    /// it. Used by the player-options "No CMod alternative" auto-switch.
+    pub fn is_no_cmod(&self) -> bool {
+        self.display_full_title(false)
+            .to_ascii_lowercase()
+            .contains("no cmod")
+    }
+
     #[inline(always)]
     fn parse_display_bpm_tag(s: &str) -> Option<(f64, f64)> {
         let parse_pair = |a: &str, b: &str| -> Option<(f64, f64)> {
@@ -373,6 +385,19 @@ mod tests {
 
         assert_eq!(song.display_full_title(false), "Original Mix");
         assert_eq!(song.display_full_title(true), "Translit Mix");
+    }
+
+    #[test]
+    fn is_no_cmod_matches_title_or_subtitle_case_insensitively() {
+        let mut song = song_data();
+        assert!(!song.is_no_cmod());
+
+        song.subtitle = "(NO CMOD)".to_string();
+        assert!(song.is_no_cmod());
+
+        song.subtitle = "Mix".to_string();
+        song.title = "Hard Song [No CMod]".to_string();
+        assert!(song.is_no_cmod());
     }
 
     #[test]

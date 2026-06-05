@@ -95,6 +95,111 @@ pub(super) fn sync_profile_scroll_speed(
     profile.scroll_speed = scroll_speed_for_mod(speed_mod);
 }
 
+/// Map the persisted `NoCmodAlternative` preference to the speed-mod type the
+/// player should be switched to, or `None` when no auto-switch is requested.
+#[inline(always)]
+pub(super) fn no_cmod_alt_speed_mod_type(
+    alt: deadsync_profile::NoCmodAlternative,
+) -> Option<SpeedModType> {
+    match alt {
+        deadsync_profile::NoCmodAlternative::None => None,
+        deadsync_profile::NoCmodAlternative::XMod => Some(SpeedModType::X),
+        deadsync_profile::NoCmodAlternative::MMod => Some(SpeedModType::M),
+    }
+}
+
+/// Convert `speed_mod` to `new_type` while preserving the on-screen scroll
+/// speed. This is the same math the Type-of-Speed-Mod row applies when the
+/// player flips the type by hand: it derives the target BPM implied by the
+/// current mod, then re-expresses it in the new mod's units. `reference_bpm` is
+/// the chart's reference BPM and `rate` the active music rate.
+pub(super) fn convert_speed_mod_to_type(
+    speed_mod: &SpeedMod,
+    new_type: SpeedModType,
+    reference_bpm: f32,
+    rate: f32,
+) -> SpeedMod {
+    let target_bpm: f32 = match speed_mod.mod_type {
+        SpeedModType::C | SpeedModType::M => speed_mod.value,
+        SpeedModType::X => (reference_bpm * rate * speed_mod.value).round(),
+    };
+    let value = match new_type {
+        SpeedModType::X => {
+            let denom = reference_bpm * rate;
+            let raw = if denom.is_finite() && denom > 0.0 {
+                target_bpm / denom
+            } else {
+                1.0
+            };
+            round_to_step(raw, 0.05).clamp(0.05, 20.0)
+        }
+        SpeedModType::C | SpeedModType::M => round_to_step(target_bpm, 5.0).clamp(5.0, 2000.0),
+    };
+    SpeedMod {
+        mod_type: new_type,
+        value,
+    }
+}
+
+/// Pure core of the no-cmod substitution for a single player: given the
+/// player's configured `base` speed mod, their `alt` preference, whether the
+/// chart is no-cmod, and the chart `reference_bpm` + music `rate`, return the
+/// scroll speed they should actually play with.
+///
+/// The substitution applies only when all three hold: the chart is no-cmod, the
+/// player is on CMod, and a non-`None` alternative is set. Otherwise the base
+/// speed is returned unchanged.
+pub(super) fn effective_scroll_speed_with_alt(
+    base: &SpeedMod,
+    alt: deadsync_profile::NoCmodAlternative,
+    is_no_cmod: bool,
+    reference_bpm: f32,
+    rate: f32,
+) -> ScrollSpeedSetting {
+    match no_cmod_alt_speed_mod_type(alt) {
+        Some(new_type) if is_no_cmod && base.mod_type == SpeedModType::C => {
+            scroll_speed_for_mod(&convert_speed_mod_to_type(base, new_type, reference_bpm, rate))
+        }
+        _ => scroll_speed_for_mod(base),
+    }
+}
+
+/// Resolve the scroll speed each player will actually use for the upcoming
+/// play, applying the "No CMod alternative" substitution for charts tagged
+/// "no cmod".
+///
+/// For any player who is on CMod, is about to play a no-cmod chart, and has a
+/// non-`None` alternative configured, their CMod speed is converted (preserving
+/// on-screen speed) to the chosen X/M type. The substitution is written into
+/// the (non-persisted) `player_profiles[..].scroll_speed` snapshot as well as
+/// returned, so both the arrow-scroll path (which reads the returned array) and
+/// the score-validity path (which reads `player_profiles`) observe the same
+/// effective speed. The persisted profile is never touched, so returning to
+/// song select restores CMod automatically.
+pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
+    let is_no_cmod = state.song.is_no_cmod();
+    let reference_bpm = reference_bpm_for_song(
+        &state.song,
+        resolve_p1_chart(&state.song, &state.chart_steps_index),
+    );
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    std::array::from_fn(|player_idx| {
+        let effective = effective_scroll_speed_with_alt(
+            &state.speed_mod[player_idx],
+            state.player_profiles[player_idx].no_cmod_alternative,
+            is_no_cmod,
+            reference_bpm,
+            rate,
+        );
+        state.player_profiles[player_idx].scroll_speed = effective;
+        effective
+    })
+}
+
 pub(super) fn fmt_music_rate(rate: f32) -> String {
     let scaled = (rate * 100.0).round() as i32;
     let int_part = scaled / 100;

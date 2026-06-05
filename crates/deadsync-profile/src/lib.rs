@@ -568,6 +568,50 @@ impl core::fmt::Display for Perspective {
     }
 }
 
+/// Alternative speed-mod type to auto-apply when a chart is tagged "no CMod".
+///
+/// When a player is on CMod and selects a chart whose title/subtitle contains
+/// "no cmod", the game transparently switches them to this mod type for that
+/// play only. The persisted CMod setting is never written, so returning to
+/// song select restores it. `None` leaves the player on CMod (they must switch
+/// manually). See `player_options::apply_no_cmod_alternative`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NoCmodAlternative {
+    #[default]
+    None,
+    XMod,
+    MMod,
+}
+
+impl FromStr for NoCmodAlternative {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "none" | "off" => Ok(Self::None),
+            "xmod" | "x" => Ok(Self::XMod),
+            "mmod" | "m" => Ok(Self::MMod),
+            other => Err(format!("'{other}' is not a valid NoCmodAlternative setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for NoCmodAlternative {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::XMod => write!(f, "XMod"),
+            Self::MMod => write!(f, "MMod"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TurnOption {
     #[default]
@@ -2741,6 +2785,7 @@ pub struct PlayerOptionsData {
     pub tap_explosion_noteskin: Option<NoteSkin>,
     pub tap_explosion_active_mask: TapExplosionMask,
     pub scroll_speed: ScrollSpeedSetting,
+    pub no_cmod_alternative: NoCmodAlternative,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
     pub turn_option: TurnOption,
@@ -2859,6 +2904,7 @@ fn default_player_options() -> PlayerOptionsData {
         tap_explosion_noteskin: None,
         tap_explosion_active_mask: TapExplosionMask::all(),
         scroll_speed: ScrollSpeedSetting::default(),
+        no_cmod_alternative: NoCmodAlternative::default(),
         scroll_option: ScrollOption::default(),
         reverse_scroll: false,
         turn_option: TurnOption::default(),
@@ -3269,6 +3315,10 @@ pub fn append_player_options_section(
     content.push_str(&format!("[{section}]\n"));
     content.push_str(&format!("BackgroundFilter={}\n", options.background_filter));
     content.push_str(&format!("ScrollSpeed={}\n", options.scroll_speed));
+    content.push_str(&format!(
+        "NoCmodAlternative={}\n",
+        options.no_cmod_alternative
+    ));
     content.push_str(&format!("Scroll={}\n", options.scroll_option));
     content.push_str(&format!("Turn={}\n", options.turn_option));
     content.push_str(&format!(
@@ -3673,6 +3723,7 @@ pub struct Profile {
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
+    pub no_cmod_alternative: NoCmodAlternative,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
     pub turn_option: TurnOption,
@@ -3863,6 +3914,7 @@ impl Default for Profile {
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: player_options.scroll_speed,
+            no_cmod_alternative: player_options.no_cmod_alternative,
             scroll_option: player_options.scroll_option,
             reverse_scroll: player_options.reverse_scroll,
             turn_option: player_options.turn_option,
@@ -4405,6 +4457,7 @@ impl Profile {
             tap_explosion_noteskin: self.tap_explosion_noteskin.clone(),
             tap_explosion_active_mask: self.tap_explosion_active_mask,
             scroll_speed: self.scroll_speed,
+            no_cmod_alternative: self.no_cmod_alternative,
             scroll_option: self.scroll_option,
             reverse_scroll: self.reverse_scroll,
             turn_option: self.turn_option,
@@ -4525,6 +4578,7 @@ impl Profile {
             .clone_from(&options.tap_explosion_noteskin);
         self.tap_explosion_active_mask = options.tap_explosion_active_mask;
         self.scroll_speed = options.scroll_speed;
+        self.no_cmod_alternative = options.no_cmod_alternative;
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;
         self.turn_option = options.turn_option;
@@ -5728,6 +5782,7 @@ mod tests {
             score_display_mode: ScoreDisplayMode::Predictive,
             mini_percent: 42,
             global_offset_shift_ms: -9,
+            no_cmod_alternative: NoCmodAlternative::XMod,
             ..PlayerOptionsData::default()
         };
 
@@ -5743,6 +5798,7 @@ mod tests {
         assert!(content.contains("TapExplosionMask=65\n"));
         assert!(content.contains("ScorePosition=Step Statistics\n"));
         assert!(content.contains("ScoreDisplay=Predictive\n"));
+        assert!(content.contains("NoCmodAlternative=XMod\n"));
         assert!(content.contains("MiniIndicatorSubtractiveDisplay=Percent\n"));
         assert!(content.contains("MiniIndicatorPosition=Default\n"));
         assert!(content.contains(&format!(
@@ -5752,6 +5808,36 @@ mod tests {
         assert!(content.contains("ColumnFlashMask=64\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
+    }
+
+    #[test]
+    fn no_cmod_alternative_parses_display_and_aliases() {
+        // Display round-trips.
+        for v in [
+            NoCmodAlternative::None,
+            NoCmodAlternative::XMod,
+            NoCmodAlternative::MMod,
+        ] {
+            assert_eq!(NoCmodAlternative::from_str(&v.to_string()).unwrap(), v);
+        }
+        // Case-insensitive aliases and empty/off map to None.
+        assert_eq!(
+            NoCmodAlternative::from_str("xmod").unwrap(),
+            NoCmodAlternative::XMod
+        );
+        assert_eq!(
+            NoCmodAlternative::from_str("M").unwrap(),
+            NoCmodAlternative::MMod
+        );
+        assert_eq!(
+            NoCmodAlternative::from_str("").unwrap(),
+            NoCmodAlternative::None
+        );
+        assert_eq!(
+            NoCmodAlternative::from_str("off").unwrap(),
+            NoCmodAlternative::None
+        );
+        assert!(NoCmodAlternative::from_str("zmod").is_err());
     }
 
     #[test]
