@@ -209,6 +209,11 @@ const fn radar_rows_for_pane(show_hands_row: bool) -> usize {
     if show_hands_row { 4 } else { 3 }
 }
 
+#[inline(always)]
+const fn radar_row_offset(show_hands_row: bool) -> f32 {
+    if show_hands_row { 0.0 } else { 1.0 }
+}
+
 /// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
 pub(crate) fn build_stats_pane(
     score_info: &ScoreInfo,
@@ -405,13 +410,14 @@ pub(crate) fn build_stats_pane(
         ];
         let radar_start_index = radar_start_index(show_hands_row);
         let radar_categories = &radar_categories[radar_start_index..];
+        let radar_row_offset = radar_row_offset(show_hands_row);
 
         const GRAY_POSSIBLE: [f32; 4] = color::rgba_hex("#5A6166");
         const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
         for (i, (label_idx, achieved, possible)) in radar_categories.iter().copied().enumerate() {
-            let sl_row = i as f32 + 1.0;
+            let sl_row = i as f32 + radar_row_offset;
             let label_local_x = if controller == profile_data::PlayerSide::P1 {
                 -160.0
             } else {
@@ -512,5 +518,7 @@ mod tests {
         assert_eq!(radar_start_index(false), 1);
         assert_eq!(radar_rows_for_pane(true), 4);
         assert_eq!(radar_rows_for_pane(false), 3);
+        assert_eq!(radar_row_offset(true), 0.0);
+        assert_eq!(radar_row_offset(false), 1.0);
     }
 }
