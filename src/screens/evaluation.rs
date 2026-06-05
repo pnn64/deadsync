@@ -3845,9 +3845,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // --- Lower Stats Pane Background ---
     {
-        let pane_y_top = screen_center_y() - 56.0;
-        let pane_y_bottom = (screen_center_y() + 34.0) + 180.0;
-        let pane_height = pane_y_bottom - pane_y_top;
+        let pane_height = 180.0;
+        let pane_y_top = screen_center_y() + 34.0 - pane_height * 0.5;
         let pane_bg_color = color::rgba_hex("#1E282F");
 
         let pane_x_left = screen_center_x() - 305.0;

@@ -65,8 +65,7 @@ const JUDGMENT_INFO: [LabeledColor; 6] = [
     },
 ];
 
-const RADAR_LABELS: [LookupKey; 4] = [
-    lookup_key("Gameplay", "HandsLabel"),
+const RADAR_LABELS: [LookupKey; 3] = [
     lookup_key("Gameplay", "HoldsLabel"),
     lookup_key("Gameplay", "MinesLabel"),
     lookup_key("Gameplay", "RollsLabel"),
@@ -185,7 +184,7 @@ fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
 fn actor_capacity(show_fa_plus_pane: bool, show_10ms_blue: bool, digits_to_fmt: usize) -> usize {
     let judgment_rows = if show_fa_plus_pane { 7 } else { 6 };
     let judgment_labels = judgment_rows + usize::from(show_10ms_blue);
-    let radar_rows = 4;
+    let radar_rows = 3;
     judgment_labels + (judgment_rows * digits_to_fmt) + (radar_rows * 8)
 }
 
@@ -376,23 +375,23 @@ pub(crate) fn build_stats_pane(
 
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
-            ("hands", score_info.hands_achieved, score_info.hands_total),
-            ("holds", score_info.holds_held, score_info.holds_total),
-            ("mines", score_info.mines_avoided, score_info.mines_total),
-            ("rolls", score_info.rolls_held, score_info.rolls_total),
+            (score_info.holds_held, score_info.holds_total),
+            (score_info.mines_avoided, score_info.mines_total),
+            (score_info.rolls_held, score_info.rolls_total),
         ];
 
         const GRAY_POSSIBLE: [f32; 4] = color::rgba_hex("#5A6166");
         const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
-        for (i, (_, achieved, possible)) in radar_categories.iter().copied().enumerate() {
+        for (i, (achieved, possible)) in radar_categories.iter().copied().enumerate() {
+            let sl_row = i as f32 + 1.0;
             let label_local_x = if controller == profile_data::PlayerSide::P1 {
                 -160.0
             } else {
                 90.0
             };
-            let label_local_y = (i as f32).mul_add(28.0, 41.0);
+            let label_local_y = sl_row.mul_add(28.0, 41.0);
             actors.push(act!(text: font("miso"): settext(radar_label_text(i)):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
@@ -401,7 +400,7 @@ pub(crate) fn build_stats_pane(
             let achieved_clamped = achieved.min(999);
             let achieved_rolling = rolling_number_value(achieved_clamped, elapsed_s);
 
-            let number_local_y = (i as f32).mul_add(35.0, 53.0);
+            let number_local_y = sl_row.mul_add(35.0, 53.0);
             let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
 
             // --- Group 1: "Achieved" Numbers (Anchored at -180, separated from Slash) ---
