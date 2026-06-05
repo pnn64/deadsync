@@ -10,7 +10,7 @@ use crate::screens::evaluation::ScoreInfo;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 
-use super::utils::pane_origin_x;
+use super::utils::{eval_style_alpha, pane_origin_x};
 
 #[derive(Clone, Copy)]
 struct TimingBand {
@@ -154,12 +154,14 @@ pub fn build_timing_pane(
 
     let mut children = Vec::new();
     const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");
+    let topbar_alpha = eval_style_alpha(1.0, 0.5);
+    let early_alpha = eval_style_alpha(1.0, 0.5);
 
     // Top and Bottom bars
     children.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
         setsize(pane_width, topbar_height):
-        diffuse(BAR_BG_COLOR[0], BAR_BG_COLOR[1], BAR_BG_COLOR[2], 1.0)
+        diffuse(BAR_BG_COLOR[0], BAR_BG_COLOR[1], BAR_BG_COLOR[2], topbar_alpha)
     ));
     children.push(act!(quad:
         align(0.0, 1.0): xy(0.0, pane_height):
@@ -179,6 +181,7 @@ pub fn build_timing_pane(
     children.push(act!(text: font(current_machine_font_key_for_text(FontRole::Header, "Early")): settext("Early"):
         align(0.0, 0.0): xy(10.0, early_late_y):
         zoom(0.3):
+        diffusealpha(early_alpha)
     ));
     children.push(act!(text: font(current_machine_font_key_for_text(FontRole::Header, "Late")): settext("Late"):
         align(1.0, 0.0): xy(pane_width - 10.0, early_late_y):

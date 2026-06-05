@@ -12,7 +12,7 @@ pub mod pane_timing;
 pub mod pane_timing_arrows;
 mod utils;
 
-pub(crate) use utils::pane_origin_x as test_input_pane_origin_x;
+pub(crate) use utils::{eval_style_alpha, pane_origin_x as test_input_pane_origin_x};
 
 pub use event_progress::build_itl_event_overlay;
 pub use event_progress::build_itl_progress_box;

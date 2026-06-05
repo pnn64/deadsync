@@ -1,3 +1,4 @@
+use crate::config::VisualStyle;
 use crate::engine::space::screen_center_x;
 use deadsync_profile as profile_data;
 
@@ -10,6 +11,16 @@ pub(crate) fn pane_origin_x(controller: profile_data::PlayerSide) -> f32 {
     match controller {
         profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
         profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
+    }
+}
+
+pub(crate) fn eval_style_alpha(default_alpha: f32, technique_alpha: f32) -> f32 {
+    let style = std::panic::catch_unwind(|| crate::config::get().visual_style)
+        .unwrap_or(VisualStyle::Hearts);
+    if style == VisualStyle::Technique {
+        technique_alpha
+    } else {
+        default_alpha
     }
 }
 

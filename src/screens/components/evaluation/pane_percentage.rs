@@ -6,7 +6,7 @@ use crate::engine::present::color;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadsync_profile as profile_data;
 
-use super::utils::pane_origin_x;
+use super::utils::{eval_style_alpha, pane_origin_x};
 
 // Simply Love uses Wendy/_wendy white for evaluation percentages. Arrow Cloud's
 // Mega path uses ThemeFont Bold with larger zooms so the narrower Mega glyphs
@@ -54,6 +54,7 @@ pub(crate) fn build_pane_percentage_display(
     let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));
     let hard_ex_percent_text = format!("{:.2}", score_info.hard_ex_score_percent.max(0.0));
     let score_bg_color = color::rgba_hex("#101519");
+    let score_bg_alpha = eval_style_alpha(1.0, 0.5);
     let machine_font = crate::config::get().machine_font;
     let score_zoom = choose_score_zoom(machine_font, SCORE_ZOOM_WENDY, SCORE_ZOOM_MEGA);
     let small_score_zoom =
@@ -94,7 +95,7 @@ pub(crate) fn build_pane_percentage_display(
                 align(0.5, 0.5):
                 xy(0.0, -2.0):
                 setsize(70.0, 28.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
                 font(current_machine_font_key(FontRole::Headline)):
@@ -130,7 +131,7 @@ pub(crate) fn build_pane_percentage_display(
                 align(bg_align_x, 0.5):
                 xy(bg_x, 14.0):
                 setsize(158.5, 88.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
                 font(current_machine_font_key(FontRole::Headline)):
@@ -175,7 +176,7 @@ pub(crate) fn build_pane_percentage_display(
                 align(bg_align_x, 0.5):
                 xy(bg_x, 14.0):
                 setsize(158.5, 88.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
 
             let ex_color = color::JUDGMENT_RGBA[0];
@@ -220,7 +221,7 @@ pub(crate) fn build_pane_percentage_display(
                 align(bg_align_x, 0.5):
                 xy(bg_x, 0.0):
                 setsize(158.5, 60.0):
-                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
+                diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:
                 font(current_machine_font_key(FontRole::Headline)):

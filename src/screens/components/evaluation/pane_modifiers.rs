@@ -4,6 +4,8 @@ use crate::engine::present::color;
 use crate::screens::evaluation::ScoreInfo;
 use std::sync::Arc;
 
+use super::utils::eval_style_alpha;
+
 pub fn build_modifiers_pane(
     score_info: &ScoreInfo,
     bar_center_x: f32,
@@ -26,12 +28,13 @@ fn build_modifiers_pane_with_text(
     let text_y = frame_center_y - 5.0;
 
     let bg = color::rgba_hex("#1E282F");
+    let bg_alpha = eval_style_alpha(1.0, 0.75);
     vec![
         act!(quad:
             align(0.5, 0.5):
             xy(bar_center_x, frame_center_y):
             zoomto(bar_width, 26.0):
-            diffuse(bg[0], bg[1], bg[2], 1.0):
+            diffuse(bg[0], bg[1], bg[2], bg_alpha):
             z(101)
         ),
         act!(text:

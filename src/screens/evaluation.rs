@@ -942,6 +942,7 @@ fn course_graph_stripe_actors(
         (25.0 / 255.0) * 1.25 * 1.25,
         0.5,
     ];
+    let stripe_alpha = eval_panes::eval_style_alpha(STRIPE_RGBA[3], 0.6);
 
     let spans = course_graph_stage_spans(stages, graph_width);
     let mut actors = Vec::with_capacity((spans.len() + 1) / 2);
@@ -953,7 +954,7 @@ fn course_graph_stripe_actors(
             align(0.0, 0.0):
             xy(x, 0.0):
             setsize(w, graph_height):
-            diffuse(STRIPE_RGBA[0], STRIPE_RGBA[1], STRIPE_RGBA[2], STRIPE_RGBA[3]):
+            diffuse(STRIPE_RGBA[0], STRIPE_RGBA[1], STRIPE_RGBA[2], stripe_alpha):
             // The parent frame sits at z=2; keep local z at 0 so course
             // stripes stay below the scatter mesh at z=3.
             z(0)
@@ -3791,6 +3792,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let cfg = crate::config::get();
+    let sl_header_alpha = eval_panes::eval_style_alpha(1.0, 0.5);
+    let sl_panel_alpha = eval_panes::eval_style_alpha(1.0, 0.75);
     let mut actors = Vec::with_capacity(20);
 
     // 1. Background
@@ -3856,7 +3859,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(0.0, 0.0):
                     xy(x, pane_y_top):
                     zoomto(pane_w, pane_height):
-                    diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], 1.0):
+                    diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], sl_panel_alpha):
                     z(100)
                 ));
             }
@@ -3866,7 +3869,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 align(0.0, 0.0):
                 xy(pane_x_left, pane_y_top):
                 zoomto(pane_w, pane_height):
-                diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], 1.0):
+                diffuse(pane_bg_color[0], pane_bg_color[1], pane_bg_color[2], sl_panel_alpha):
                 z(100)
             ));
         }
@@ -3894,7 +3897,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             children: vec![
                 shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
-                act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, 1.0): z(1)),
+                act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
             ],
             background: None,
@@ -3945,7 +3948,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             offset: [screen_center_x(), 175.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             children: vec![
-                act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 16.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, 1.0): z(0) ),
+                act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 16.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(0) ),
                 act!(text: font("miso"): settext(score_info.song.artist.clone()): align(0.0, 0.5): xy(-145.0, 0.0): zoom(0.6): maxwidth(418.0 / 3.5): z(1) ),
                 act!(text: font("miso"): settext(bpm_text): align(0.5, 0.5): xy(0.0, 0.0): zoom(0.6): maxwidth(418.0 / 0.875): z(1) ),
                 act!(text: font("miso"): settext(length_text): align(1.0, 0.5): xy(145.0, 0.0): zoom(0.6): z(1) ),
@@ -4710,7 +4713,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         align(0.0, 0.0):
                         xy(0.0, 0.0):
                         setsize(graph_width, graph_height):
-                        diffuse(16.0/255.0, 21.0/255.0, 25.0/255.0, 1.0):
+                        diffuse(16.0/255.0, 21.0/255.0, 25.0/255.0, sl_panel_alpha):
                         z(0)
                     ),
                     {
