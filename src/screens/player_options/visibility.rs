@@ -107,7 +107,10 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::MiniIndicatorPosition {
         return visibility.show_mini_indicator_position;
     }
-    if id == RowId::ColumnFlashJudgments {
+    if id == RowId::ColumnFlashJudgments
+        || id == RowId::ColumnFlashBrightness
+        || id == RowId::ColumnFlashSize
+    {
         return visibility.show_column_flash_judgments;
     }
     if id == RowId::LiveTimingStats {
@@ -179,7 +182,11 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     {
         return Some(RowId::MiniIndicator);
     }
-    if id == RowId::ColumnFlashJudgments || id == RowId::LiveTimingStats {
+    if id == RowId::ColumnFlashJudgments
+        || id == RowId::ColumnFlashBrightness
+        || id == RowId::ColumnFlashSize
+        || id == RowId::LiveTimingStats
+    {
         return Some(RowId::GameplayExtras);
     }
     if id == RowId::TapExplosionOptions {

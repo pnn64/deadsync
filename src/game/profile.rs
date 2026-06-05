@@ -13,24 +13,24 @@ use std::time::Instant;
 mod update;
 
 use deadsync_profile::{
-    AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, ColumnFlashMask,
-    DEFAULT_PROFILE_ID, GameplayHudPlayerSnapshot, GameplayHudSnapshot, HideLightType, HoldsMask,
-    InsertMask, LOCAL_PROFILE_MAX_ID, LastPlayed, LastPlayedCourse, LifeMeterType,
-    LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
-    MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
-    PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
-    ScrollOption, StepStatisticsMask, TargetScoreSetting, TimingTickMode, TimingWindowsOption,
-    TurnOption, VisualEffectsMask, active_profile_is_guest, active_profile_local_id,
-    add_known_pack_names, append_last_played_course_section, append_last_played_section,
-    append_player_options_section, clamp_weight_pounds, cmp_profile_ids_case_insensitive,
-    decode_profile_stats as decode_profile_stats_bytes, encode_profile_stats, initials_from_name,
-    is_local_profile_id, joined_player_mask, load_error_bar_options,
-    load_last_played_course_section, load_last_played_section, load_timing_feedback_options,
-    load_visual_player_options, next_local_profile_id, parse_favorites_content,
-    parse_groovestats_is_pad_player, player_options_section, player_side_index as side_ix,
-    player_side_is_joined, render_favorites_content, rewrite_profile_display_name_content,
-    sanitize_player_initials, unknown_pack_names,
+    AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, ColumnFlashBrightness,
+    ColumnFlashMask, ColumnFlashSize, DEFAULT_PROFILE_ID, GameplayHudPlayerSnapshot,
+    GameplayHudSnapshot, HideLightType, HoldsMask, InsertMask, LOCAL_PROFILE_MAX_ID, LastPlayed,
+    LastPlayedCourse, LifeMeterType, LocalProfileSummary, MeasureCounter, MeasureLines,
+    MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
+    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode,
+    PlayStyle, PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError,
+    RemoveMask, ScrollOption, StepStatisticsMask, TargetScoreSetting, TimingTickMode,
+    TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
+    active_profile_local_id, add_known_pack_names, append_last_played_course_section,
+    append_last_played_section, append_player_options_section, clamp_weight_pounds,
+    cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
+    encode_profile_stats, initials_from_name, is_local_profile_id, joined_player_mask,
+    load_error_bar_options, load_last_played_course_section, load_last_played_section,
+    load_timing_feedback_options, load_visual_player_options, next_local_profile_id,
+    parse_favorites_content, parse_groovestats_is_pad_player, player_options_section,
+    player_side_index as side_ix, player_side_is_joined, render_favorites_content,
+    rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
 };
 pub use update::*;
 
@@ -270,6 +270,14 @@ fn load_player_options(
         .and_then(|s| s.parse::<u8>().ok())
         .map(ColumnFlashMask::from_bits_truncate)
         .unwrap_or(options.column_flash_mask);
+    options.column_flash_brightness = profile_conf
+        .get(section, "ColumnFlashBrightness")
+        .and_then(|s| ColumnFlashBrightness::from_str(&s).ok())
+        .unwrap_or(options.column_flash_brightness);
+    options.column_flash_size = profile_conf
+        .get(section, "ColumnFlashSize")
+        .and_then(|s| ColumnFlashSize::from_str(&s).ok())
+        .unwrap_or(options.column_flash_size);
     options.subtractive_scoring = profile_conf
         .get(section, "SubtractiveScoring")
         .and_then(|s| s.parse::<u8>().ok())

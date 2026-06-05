@@ -4,14 +4,15 @@ use super::{
 };
 use chrono::Local;
 use deadsync_profile::{
-    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ColumnFlashMask,
-    ComboColors, ComboFont, ComboMode, ErrorBarMask, ErrorBarTrim, HeldMissGraphic, HideLightType,
-    HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
-    LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
-    MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective, Profile, RemoveMask,
-    ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption, StepStatisticsMask,
-    TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ColumnFlashBrightness,
+    ColumnFlashMask, ColumnFlashSize, ComboColors, ComboFont, ComboMode, ErrorBarMask,
+    ErrorBarTrim, HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask,
+    JudgmentGraphic, LifeMeterType, LiveTimingStatsMask, MeasureCounter, MeasureLines,
+    MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
+    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective,
+    Profile, RemoveMask, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption,
+    StepStatisticsMask, TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    VisualEffectsMask,
 };
 use std::path::Path;
 
@@ -286,6 +287,18 @@ pub fn update_gameplay_extras_for_side(
 
 pub fn update_column_flash_mask_for_side(side: PlayerSide, mask: ColumnFlashMask) {
     update_profile_ini(side, |profile| profile.set_column_flash_mask(mask));
+}
+
+pub fn update_column_flash_brightness_for_side(side: PlayerSide, setting: ColumnFlashBrightness) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.column_flash_brightness, setting)
+    });
+}
+
+pub fn update_column_flash_size_for_side(side: PlayerSide, setting: ColumnFlashSize) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.column_flash_size, setting)
+    });
 }
 
 pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {

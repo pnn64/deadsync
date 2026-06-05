@@ -1,6 +1,7 @@
 use super::super::choice;
 use super::super::constants::{
-    MINI_INDICATOR_COLOR_VARIANTS, MINI_INDICATOR_POSITION_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS,
+    COLUMN_FLASH_BRIGHTNESS_VARIANTS, COLUMN_FLASH_SIZE_VARIANTS, MINI_INDICATOR_COLOR_VARIANTS,
+    MINI_INDICATOR_POSITION_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS,
     MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS, MINI_INDICATOR_VARIANTS,
     SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS,
 };
@@ -17,10 +18,11 @@ use super::super::state::{
 use super::*;
 use crate::game::profile as gp;
 use deadsync_profile::{
-    ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim, LifeMeterType, MeasureCounter,
-    MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
-    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, PlayerSide, Profile, ScatterplotMaxWindow,
-    ScoreDisplayMode, ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    ColumnFlashBrightness, ColumnFlashSize, ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim,
+    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, PlayerSide, Profile, ScatterplotMaxWindow, ScoreDisplayMode,
+    ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -647,6 +649,36 @@ const COLUMN_FLASH_JUDGMENTS: BitmaskBinding = BitmaskBinding::Generic {
         sync_visibility: false,
     },
 };
+const COLUMN_FLASH_BRIGHTNESS: ChoiceBinding<usize> = index_binding!(
+    COLUMN_FLASH_BRIGHTNESS_VARIANTS,
+    ColumnFlashBrightness::Normal,
+    column_flash_brightness,
+    gp::update_column_flash_brightness_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            COLUMN_FLASH_BRIGHTNESS_VARIANTS
+                .iter()
+                .position(|&v| v == p.column_flash_brightness)
+                .unwrap_or(0)
+        }
+    })
+);
+const COLUMN_FLASH_SIZE: ChoiceBinding<usize> = index_binding!(
+    COLUMN_FLASH_SIZE_VARIANTS,
+    ColumnFlashSize::Default,
+    column_flash_size,
+    gp::update_column_flash_size_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            COLUMN_FLASH_SIZE_VARIANTS
+                .iter()
+                .position(|&v| v == p.column_flash_size)
+                .unwrap_or(0)
+        }
+    })
+);
 const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
         from_profile: |p| p.live_timing_stats_mask.bits() as u32,
@@ -1461,6 +1493,26 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "ColumnFlashJudgmentsHelp"),
         COLUMN_FLASH_JUDGMENTS,
         column_flash_choices,
+    ));
+    b.push(Row::cycle(
+        RowId::ColumnFlashBrightness,
+        lookup_key("PlayerOptions", "ColumnFlashBrightness"),
+        lookup_key("PlayerOptionsHelp", "ColumnFlashBrightnessHelp"),
+        CycleBinding::Index(COLUMN_FLASH_BRIGHTNESS),
+        vec![
+            tr("PlayerOptions", "ColumnFlashBrightnessNormal").to_string(),
+            tr("PlayerOptions", "ColumnFlashBrightnessDimmed").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::ColumnFlashSize,
+        lookup_key("PlayerOptions", "ColumnFlashSize"),
+        lookup_key("PlayerOptionsHelp", "ColumnFlashSizeHelp"),
+        CycleBinding::Index(COLUMN_FLASH_SIZE),
+        vec![
+            tr("PlayerOptions", "ColumnFlashSizeDefault").to_string(),
+            tr("PlayerOptions", "ColumnFlashSizeCompact").to_string(),
+        ],
     ));
     b.push(Row::bitmask(
         RowId::LiveTimingStats,

@@ -1176,6 +1176,76 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ColumnFlashBrightness {
+    #[default]
+    Normal,
+    Dimmed,
+}
+
+impl FromStr for ColumnFlashBrightness {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "normal" | "default" | "standard" => Ok(Self::Normal),
+            "dimmed" | "dim" | "chris" | "compact" => Ok(Self::Dimmed),
+            other => Err(format!(
+                "'{other}' is not a valid ColumnFlashBrightness setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for ColumnFlashBrightness {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "Normal"),
+            Self::Dimmed => write!(f, "Dimmed"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ColumnFlashSize {
+    #[default]
+    Default,
+    Compact,
+}
+
+impl FromStr for ColumnFlashSize {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "default" | "normal" | "full" | "standard" => Ok(Self::Default),
+            "compact" | "short" | "shorter" | "chris" => Ok(Self::Compact),
+            other => Err(format!("'{other}' is not a valid ColumnFlashSize setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for ColumnFlashSize {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Default => write!(f, "Default"),
+            Self::Compact => write!(f, "Compact"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AttackMode {
     Off,
     #[default]
@@ -2865,6 +2935,8 @@ pub struct PlayerOptionsData {
     pub hide_username: bool,
     pub column_flash_on_miss: bool,
     pub column_flash_mask: ColumnFlashMask,
+    pub column_flash_brightness: ColumnFlashBrightness,
+    pub column_flash_size: ColumnFlashSize,
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
@@ -2984,6 +3056,8 @@ fn default_player_options() -> PlayerOptionsData {
         hide_username: false,
         column_flash_on_miss: false,
         column_flash_mask: DEFAULT_COLUMN_FLASH_MASK,
+        column_flash_brightness: ColumnFlashBrightness::Normal,
+        column_flash_size: ColumnFlashSize::Default,
         subtractive_scoring: false,
         pacemaker: false,
         nps_graph_at_top: false,
@@ -3391,6 +3465,11 @@ pub fn append_player_options_section(
         "ColumnFlashMask={}\n",
         options.column_flash_mask.bits()
     ));
+    content.push_str(&format!(
+        "ColumnFlashBrightness={}\n",
+        options.column_flash_brightness
+    ));
+    content.push_str(&format!("ColumnFlashSize={}\n", options.column_flash_size));
     content.push_str(&format!(
         "SubtractiveScoring={}\n",
         i32::from(options.subtractive_scoring)
@@ -3833,6 +3912,8 @@ pub struct Profile {
     // Gameplay extras (Simply Love semantics).
     pub column_flash_on_miss: bool,
     pub column_flash_mask: ColumnFlashMask,
+    pub column_flash_brightness: ColumnFlashBrightness,
+    pub column_flash_size: ColumnFlashSize,
     pub subtractive_scoring: bool,
     pub pacemaker: bool,
     pub nps_graph_at_top: bool,
@@ -3994,6 +4075,8 @@ impl Default for Profile {
             hide_username: player_options.hide_username,
             column_flash_on_miss: player_options.column_flash_on_miss,
             column_flash_mask: player_options.column_flash_mask,
+            column_flash_brightness: player_options.column_flash_brightness,
+            column_flash_size: player_options.column_flash_size,
             subtractive_scoring: player_options.subtractive_scoring,
             pacemaker: player_options.pacemaker,
             nps_graph_at_top: player_options.nps_graph_at_top,
@@ -4537,6 +4620,8 @@ impl Profile {
             hide_username: self.hide_username,
             column_flash_on_miss: self.column_flash_on_miss,
             column_flash_mask: self.column_flash_mask,
+            column_flash_brightness: self.column_flash_brightness,
+            column_flash_size: self.column_flash_size,
             subtractive_scoring: self.subtractive_scoring,
             pacemaker: self.pacemaker,
             nps_graph_at_top: self.nps_graph_at_top,
@@ -4658,6 +4743,8 @@ impl Profile {
         self.hide_username = options.hide_username;
         self.column_flash_on_miss = options.column_flash_on_miss;
         self.column_flash_mask = options.column_flash_mask;
+        self.column_flash_brightness = options.column_flash_brightness;
+        self.column_flash_size = options.column_flash_size;
         self.subtractive_scoring = options.subtractive_scoring;
         self.pacemaker = options.pacemaker;
         self.nps_graph_at_top = options.nps_graph_at_top;
@@ -4806,6 +4893,11 @@ mod tests {
         assert!(options.measure_counter_left);
         assert_eq!(options.tap_explosion_active_mask, TapExplosionMask::all());
         assert_eq!(options.column_flash_mask, DEFAULT_COLUMN_FLASH_MASK);
+        assert_eq!(
+            options.column_flash_brightness,
+            ColumnFlashBrightness::Normal
+        );
+        assert_eq!(options.column_flash_size, ColumnFlashSize::Default);
     }
 
     #[test]
@@ -5782,6 +5874,8 @@ mod tests {
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
             score_display_mode: ScoreDisplayMode::Predictive,
+            column_flash_brightness: ColumnFlashBrightness::Dimmed,
+            column_flash_size: ColumnFlashSize::Compact,
             mini_percent: 42,
             global_offset_shift_ms: -9,
             no_cmod_alternative: NoCmodAlternative::XMod,
@@ -5808,6 +5902,8 @@ mod tests {
         )));
         assert!(content.contains("HideEarlyDecentWayOffColumnFlash=0\n"));
         assert!(content.contains("ColumnFlashMask=64\n"));
+        assert!(content.contains("ColumnFlashBrightness=Dimmed\n"));
+        assert!(content.contains("ColumnFlashSize=Compact\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
     }
@@ -6400,6 +6496,33 @@ mod tests {
             JudgeGrade::Fantastic,
             false
         ));
+    }
+
+    #[test]
+    fn column_flash_visual_options_round_trip() {
+        for setting in [ColumnFlashBrightness::Normal, ColumnFlashBrightness::Dimmed] {
+            assert_eq!(
+                setting.to_string().parse::<ColumnFlashBrightness>(),
+                Ok(setting)
+            );
+        }
+        for setting in [ColumnFlashSize::Default, ColumnFlashSize::Compact] {
+            assert_eq!(setting.to_string().parse::<ColumnFlashSize>(), Ok(setting));
+        }
+        assert_eq!(
+            ColumnFlashBrightness::from_str("standard"),
+            Ok(ColumnFlashBrightness::Normal)
+        );
+        assert_eq!(
+            ColumnFlashBrightness::from_str("dim"),
+            Ok(ColumnFlashBrightness::Dimmed)
+        );
+        assert_eq!(
+            ColumnFlashSize::from_str("short"),
+            Ok(ColumnFlashSize::Compact)
+        );
+        assert!(ColumnFlashBrightness::from_str("brightest").is_err());
+        assert!(ColumnFlashSize::from_str("wide").is_err());
     }
 
     #[test]

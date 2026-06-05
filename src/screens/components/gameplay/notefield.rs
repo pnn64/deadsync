@@ -65,7 +65,13 @@ const COLUMN_CUE_TEXT_NORMAL_Y: f32 = 80.0;
 const COLUMN_CUE_TEXT_REVERSE_Y: f32 = 260.0;
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
 const COLUMN_CUE_BASE_ALPHA: f32 = 0.12;
-const COLUMN_FLASH_BASE_ALPHA: f32 = 0.66;
+const COLUMN_FLASH_NORMAL_ALPHA: f32 = 0.66;
+const COLUMN_FLASH_DIMMED_ALPHA: f32 = 0.3;
+const COLUMN_FLASH_DEFAULT_Y_OFFSET: f32 = 80.0;
+const COLUMN_FLASH_COMPACT_Y_OFFSET: f32 = 70.0;
+const COLUMN_FLASH_COMPACT_HEIGHT_TRIM: f32 = 270.0;
+const COLUMN_FLASH_DEFAULT_FADE: f32 = 0.333;
+const COLUMN_FLASH_COMPACT_FADE: f32 = 0.2;
 const LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT: f32 = 140.0; // Each frame in Love 1x2 (doubleres).png is 140px tall
 const HOLD_JUDGMENT_FINAL_HEIGHT: f32 = 32.0; // Matches Simply Love's final on-screen size
 const HOLD_JUDGMENT_INITIAL_HEIGHT: f32 = HOLD_JUDGMENT_FINAL_HEIGHT * 0.8; // Mirrors 0.4->0.5 zoom ramp in metrics
@@ -2494,14 +2500,27 @@ fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
 }
 
 #[inline(always)]
-fn column_flash_alpha(started_at: f32, current_time: f32, grade: JudgeGrade) -> f32 {
+fn column_flash_base_alpha(brightness: profile_data::ColumnFlashBrightness) -> f32 {
+    match brightness {
+        profile_data::ColumnFlashBrightness::Normal => COLUMN_FLASH_NORMAL_ALPHA,
+        profile_data::ColumnFlashBrightness::Dimmed => COLUMN_FLASH_DIMMED_ALPHA,
+    }
+}
+
+#[inline(always)]
+fn column_flash_alpha(
+    started_at: f32,
+    current_time: f32,
+    grade: JudgeGrade,
+    brightness: profile_data::ColumnFlashBrightness,
+) -> f32 {
     let elapsed = current_time - started_at;
     let duration = column_flash_duration(grade);
     if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= duration || duration <= 0.0 {
         return 0.0;
     }
     let t = (elapsed / duration).clamp(0.0, 1.0);
-    COLUMN_FLASH_BASE_ALPHA * (1.0 - t * t)
+    column_flash_base_alpha(brightness) * (1.0 - t * t)
 }
 
 #[inline(always)]
@@ -2514,14 +2533,64 @@ fn column_flash_color(grade: JudgeGrade, blue_fantastic: bool, alpha: f32) -> [f
                 [1.0, 1.0, 1.0, 1.0]
             }
         }
-        JudgeGrade::Excellent => color::JUDGMENT_RGBA[1],
-        JudgeGrade::Great => color::JUDGMENT_RGBA[2],
-        JudgeGrade::Decent => color::JUDGMENT_RGBA[3],
-        JudgeGrade::WayOff => color::JUDGMENT_RGBA[4],
-        JudgeGrade::Miss => color::JUDGMENT_RGBA[5],
+        JudgeGrade::Excellent => [0.88, 0.61, 0.09, 1.0],
+        JudgeGrade::Great => [0.40, 0.79, 0.33, 1.0],
+        JudgeGrade::Decent => [0.70, 0.36, 1.00, 1.0],
+        JudgeGrade::WayOff => [0.78, 0.52, 0.36, 1.0],
+        JudgeGrade::Miss => [1.0, 0.0, 0.0, 1.0],
     };
     rgba[3] = alpha;
     rgba
+}
+
+#[derive(Clone, Copy)]
+struct ColumnFlashLayout {
+    y_offset: f32,
+    height_trim: f32,
+    fade: f32,
+}
+
+#[inline(always)]
+fn column_flash_layout(size: profile_data::ColumnFlashSize) -> ColumnFlashLayout {
+    match size {
+        profile_data::ColumnFlashSize::Default => ColumnFlashLayout {
+            y_offset: COLUMN_FLASH_DEFAULT_Y_OFFSET,
+            height_trim: 0.0,
+            fade: COLUMN_FLASH_DEFAULT_FADE,
+        },
+        profile_data::ColumnFlashSize::Compact => ColumnFlashLayout {
+            y_offset: COLUMN_FLASH_COMPACT_Y_OFFSET,
+            height_trim: COLUMN_FLASH_COMPACT_HEIGHT_TRIM,
+            fade: COLUMN_FLASH_COMPACT_FADE,
+        },
+    }
+}
+
+#[inline(always)]
+fn column_flash_height(layout: ColumnFlashLayout) -> f32 {
+    (screen_height() - layout.y_offset - layout.height_trim).max(0.0)
+}
+
+#[inline(always)]
+fn column_flash_reverse_bottom_y(
+    layout: ColumnFlashLayout,
+    lane_width: f32,
+    notefield_offset_y: f32,
+) -> f32 {
+    layout.y_offset * 3.0
+        + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
+        + lane_width * 0.5
+        + notefield_offset_y
+}
+
+#[inline(always)]
+fn column_flash_reverse_top_y(
+    layout: ColumnFlashLayout,
+    lane_width: f32,
+    flash_height: f32,
+    notefield_offset_y: f32,
+) -> f32 {
+    column_flash_reverse_bottom_y(layout, lane_width, notefield_offset_y) - flash_height
 }
 
 #[inline(always)]
@@ -5125,35 +5194,44 @@ pub fn build_bundles(
 
         if profile.column_flash_on_miss {
             let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-            let flash_height = column_cue_height();
+            let flash_layout = column_flash_layout(profile.column_flash_size);
+            let flash_height = column_flash_height(flash_layout);
             for (i, flash_opt) in state.column_flashes[col_start..col_end].iter().enumerate() {
                 let Some(flash) = flash_opt else {
                     continue;
                 };
-                let alpha =
-                    column_flash_alpha(flash.started_at_screen_s, elapsed_screen, flash.grade);
+                let alpha = column_flash_alpha(
+                    flash.started_at_screen_s,
+                    elapsed_screen,
+                    flash.grade,
+                    profile.column_flash_brightness,
+                );
                 if alpha <= 0.0 {
                     continue;
                 }
                 let x = playfield_center_x + ns.column_xs[i] as f32 * spacing_mult * field_zoom;
                 let color = column_flash_color(flash.grade, flash.blue_fantastic, alpha);
                 if column_dirs[i] < 0.0 {
-                    let reverse_y =
-                        column_cue_reverse_top_y(lane_width, flash_height, notefield_offset_y);
+                    let reverse_y = column_flash_reverse_top_y(
+                        flash_layout,
+                        lane_width,
+                        flash_height,
+                        notefield_offset_y,
+                    );
                     actors.push(act!(quad:
                         align(0.5, 0.0):
                         xy(x, reverse_y):
                         zoomto(lane_width, flash_height):
-                        fadetop(0.333):
+                        fadetop(flash_layout.fade):
                         diffuse(color[0], color[1], color[2], color[3]):
                         z(Z_COLUMN_FLASH)
                     ));
                 } else {
                     actors.push(act!(quad:
                         align(0.5, 0.0):
-                        xy(x, COLUMN_CUE_Y_OFFSET + notefield_offset_y):
+                        xy(x, flash_layout.y_offset + notefield_offset_y):
                         zoomto(lane_width, flash_height):
-                        fadebottom(0.333):
+                        fadebottom(flash_layout.fade):
                         diffuse(color[0], color[1], color[2], color[3]):
                         z(Z_COLUMN_FLASH)
                     ));
@@ -9764,6 +9842,71 @@ mod tests {
         assert!((cue_height - 400.0).abs() <= 1e-6);
         assert!((top - 17.0).abs() <= 1e-6);
         assert!((bottom - 417.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn column_flash_alpha_matches_brightness_options() {
+        let normal = super::column_flash_alpha(
+            0.0,
+            0.0,
+            JudgeGrade::Miss,
+            profile_data::ColumnFlashBrightness::Normal,
+        );
+        let dimmed = super::column_flash_alpha(
+            0.0,
+            0.0,
+            JudgeGrade::Miss,
+            profile_data::ColumnFlashBrightness::Dimmed,
+        );
+
+        assert!((normal - 0.66).abs() <= 1e-6);
+        assert!((dimmed - 0.3).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn column_flash_default_layout_matches_original_simply_love() {
+        let lane_width = 64.0;
+        let layout = super::column_flash_layout(profile_data::ColumnFlashSize::Default);
+        let height = super::column_flash_height(layout);
+        let top = super::column_flash_reverse_top_y(layout, lane_width, height, 0.0);
+        let bottom = top + height;
+
+        assert!((layout.y_offset - 80.0).abs() <= 1e-6);
+        assert!((layout.fade - 0.333).abs() <= 1e-6);
+        assert!((height - 400.0).abs() <= 1e-6);
+        assert!((top - 17.0).abs() <= 1e-6);
+        assert!((bottom - 417.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn column_flash_compact_layout_matches_chris_reference() {
+        let lane_width = 64.0;
+        let layout = super::column_flash_layout(profile_data::ColumnFlashSize::Compact);
+        let height = super::column_flash_height(layout);
+        let top = super::column_flash_reverse_top_y(layout, lane_width, height, 0.0);
+        let bottom = top + height;
+
+        assert!((layout.y_offset - 70.0).abs() <= 1e-6);
+        assert!((layout.fade - 0.2).abs() <= 1e-6);
+        assert!((height - 140.0).abs() <= 1e-6);
+        assert!((top - 247.0).abs() <= 1e-6);
+        assert!((bottom - 387.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn column_flash_colors_match_reference_palette() {
+        assert_eq!(
+            super::column_flash_color(JudgeGrade::Miss, false, 0.3),
+            [1.0, 0.0, 0.0, 0.3]
+        );
+        assert_eq!(
+            super::column_flash_color(JudgeGrade::Decent, false, 0.3),
+            [0.70, 0.36, 1.00, 0.3]
+        );
+        assert_eq!(
+            super::column_flash_color(JudgeGrade::Fantastic, false, 0.3),
+            [1.0, 1.0, 1.0, 0.3]
+        );
     }
 
     #[test]

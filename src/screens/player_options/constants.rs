@@ -102,11 +102,11 @@ pub(super) const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
 use deadsync_profile::{
-    AttackMode, ComboColors, ComboFont, ComboMode, ErrorBarTrim, HideLightType, LifeMeterType,
-    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition,
-    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoCmodAlternative,
-    Perspective, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, TargetScoreSetting,
-    TimingWindowsOption, TurnOption,
+    AttackMode, ColumnFlashBrightness, ColumnFlashSize, ComboColors, ComboFont, ComboMode,
+    ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, NoCmodAlternative, Perspective, ScatterplotMaxWindow,
+    ScoreDisplayMode, ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 /// `NoCmodAlternative` variants in row-choice order (index ↔ enum).
@@ -126,6 +126,12 @@ pub(super) const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [
     MiniIndicator::Pacemaker,
     MiniIndicator::StreamProg,
 ];
+
+pub(super) const COLUMN_FLASH_BRIGHTNESS_VARIANTS: [ColumnFlashBrightness; 2] =
+    [ColumnFlashBrightness::Normal, ColumnFlashBrightness::Dimmed];
+
+pub(super) const COLUMN_FLASH_SIZE_VARIANTS: [ColumnFlashSize; 2] =
+    [ColumnFlashSize::Default, ColumnFlashSize::Compact];
 
 pub(super) const TURN_OPTION_VARIANTS: [TurnOption; 9] = [
     TurnOption::None,

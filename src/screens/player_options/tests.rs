@@ -546,6 +546,18 @@ pub(super) mod tests {
                 ],
                 [0, 0],
             ),
+            test_row(
+                RowId::ColumnFlashBrightness,
+                lookup_key("PlayerOptions", "ColumnFlashBrightness"),
+                &["Normal", "Dimmed"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::ColumnFlashSize,
+                lookup_key("PlayerOptions", "ColumnFlashSize"),
+                &["Default", "Compact"],
+                [0, 0],
+            ),
         ]);
         let visibility = row_visibility(
             &row_map,
@@ -554,6 +566,8 @@ pub(super) mod tests {
             false,
         );
         assert!(!is_row_visible(&row_map, 1, visibility));
+        assert!(!is_row_visible(&row_map, 2, visibility));
+        assert!(!is_row_visible(&row_map, 3, visibility));
 
         let visibility = row_visibility(
             &row_map,
@@ -568,6 +582,8 @@ pub(super) mod tests {
             false,
         );
         assert!(is_row_visible(&row_map, 1, visibility));
+        assert!(is_row_visible(&row_map, 2, visibility));
+        assert!(is_row_visible(&row_map, 3, visibility));
     }
 
     #[test]
