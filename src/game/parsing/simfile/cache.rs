@@ -471,4 +471,46 @@ mod tests {
         assert!(load_cached_song_for_gameplay(&simfile, &cache_path, false).is_some());
         let _ = fs::remove_dir_all(root);
     }
+
+    // Regression for #493: a song folder that was missing its music file is cached with
+    // `music_path: None`, which the path-existence check reports as "present". Only the
+    // directory hash notices the music file once it is added, so an explicit reload (which
+    // verifies freshness) must invalidate the stale cache, while the fastload startup path
+    // intentionally keeps trusting it.
+    #[test]
+    fn reload_detects_added_music_file_when_verifying() {
+        let root = test_dir("reload-added-music-verify");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Old;#MUSIC:song.ogg;").unwrap();
+        write_song_cache(&cache_path, &cached_song(&simfile), 0.0);
+
+        // Music file was missing at scan time; now the user adds it.
+        fs::write(root.join("song.ogg"), b"audio bytes").unwrap();
+
+        // Explicit reload verifies freshness -> stale cache is rejected and the song reparses.
+        assert!(load_song_from_cache(&simfile, &cache_path, true).is_none());
+        // Fastload startup keeps trusting the cache (fast launch, detection deferred to reload).
+        assert!(load_song_from_cache(&simfile, &cache_path, false).is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    // The directory-hash check is symmetric: removing a file from a cached folder must also
+    // invalidate the cache when verifying freshness (e.g. delete-and-re-add workflows).
+    #[test]
+    fn reload_detects_removed_file_when_verifying() {
+        let root = test_dir("reload-removed-file-verify");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Old;").unwrap();
+        fs::write(&music, b"audio bytes").unwrap();
+        write_song_cache(&cache_path, &cached_song(&simfile), 0.0);
+
+        fs::remove_file(&music).unwrap();
+
+        assert!(load_song_from_cache(&simfile, &cache_path, true).is_none());
+        assert!(load_song_from_cache(&simfile, &cache_path, false).is_some());
+        let _ = fs::remove_dir_all(root);
+    }
 }

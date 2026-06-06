@@ -4855,7 +4855,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts(
+        song_loading::reload_all_songs_with_progress_counts(
             &dirs::app_dirs().songs_dir(),
             &mut on_song,
         );
