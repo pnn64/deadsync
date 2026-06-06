@@ -6,6 +6,8 @@ pub(super) fn build_content(
     keymap: &Keymap,
     machine_default_noteskin: &str,
     additional_song_folders: &str,
+    smx_p1_serial: &str,
+    smx_p2_serial: &str,
 ) -> String {
     let mut content = String::with_capacity(4096);
     push_saved_options(
@@ -13,6 +15,8 @@ pub(super) fn build_content(
         cfg,
         machine_default_noteskin,
         additional_song_folders,
+        smx_p1_serial,
+        smx_p2_serial,
     );
     push_saved_keymaps(&mut content, keymap);
     push_saved_theme(&mut content, cfg);
@@ -24,6 +28,8 @@ fn push_saved_options(
     cfg: &Config,
     machine_default_noteskin: &str,
     additional_song_folders: &str,
+    smx_p1_serial: &str,
+    smx_p2_serial: &str,
 ) {
     let audio_output_device = cfg
         .audio_output_device_index
@@ -178,6 +184,8 @@ fn push_saved_options(
         "SmxDefaultPadConfig",
         cfg.smx_default_pad_config.as_str(),
     );
+    push_line(content, "SmxP1Serial", smx_p1_serial);
+    push_line(content, "SmxP2Serial", smx_p2_serial);
     push_bool(content, "GfxDebug", cfg.gfx_debug);
     push_bool(content, "HighDPI", cfg.high_dpi);
     push_bool(content, "HideMouseCursor", cfg.hide_mouse_cursor);

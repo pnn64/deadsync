@@ -23,6 +23,12 @@ pub(super) static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 pub(super) static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(String::new()));
+/// SMX pad → player serial assignment (slot 0 = P1, slot 1 = P2). Stored outside
+/// the `Copy` `Config` because serials are owned strings. `None` = follow jumper.
+pub(super) static SMX_P1_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
+pub(super) static SMX_P2_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
     std::sync::LazyLock::new(start_save_worker);
 
@@ -213,6 +219,15 @@ pub fn audio_mix_levels() -> AudioMixLevels {
 
 pub fn machine_default_noteskin() -> String {
     MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone()
+}
+
+/// The saved SMX pad → player serial assignment: `(p1_serial, p2_serial)`.
+/// Either side is `None` when not assigned (that side follows the jumper).
+pub fn smx_pad_assignment() -> (Option<String>, Option<String>) {
+    (
+        SMX_P1_SERIAL.lock().unwrap().clone(),
+        SMX_P2_SERIAL.lock().unwrap().clone(),
+    )
 }
 
 pub fn additional_song_folders() -> String {

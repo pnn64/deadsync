@@ -83,7 +83,9 @@ rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 
 # StepManiaX pad SDK
-rustmaniax-sdk = "0.1.1"
+# Dev: tracks the local pad-assignment branch (sibling checkout) for the new
+# set_player_assignment API. Switch back to a published version before merging.
+rustmaniax-sdk = { path = "../rustmaniax-sdk" }
 
 # Software renderer
 softbuffer = "0.4.8"

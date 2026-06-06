@@ -73,6 +73,12 @@ pub fn init() -> bool {
 
     let _ = SHARED.set(shared);
     set_usb_polling_us(crate::config::get().smx_usb_polling_us);
+    // Push any saved pad→player assignment so the SDK orders slots by serial as
+    // pads connect (overriding the jumper). No-op when nothing is saved.
+    let (p1, p2) = crate::config::smx_pad_assignment();
+    if p1.is_some() || p2.is_some() {
+        set_player_assignment(p1, p2);
+    }
     log::info!("SMX: SDK initialized, polling for pads");
     true
 }
@@ -454,6 +460,33 @@ pub fn set_serial_numbers() {
     }
 }
 
+/// Pin pad serials to player slots (`p1` → slot 0, `p2` → slot 1), overriding the
+/// hardware P1/P2 jumper. `None` for a side follows the jumper. Pushed to the SDK,
+/// which re-orders the slots live.
+pub fn set_player_assignment(p1: Option<String>, p2: Option<String>) {
+    if let Some(s) = SHARED.get() {
+        s.manager.set_player_assignment(p1, p2);
+    }
+}
+
+/// The serial connected at each slot — index 0 = P1, 1 = P2 — or `None` if that
+/// slot has no connected pad (or its serial isn't known yet). This reflects the
+/// SDK's *current* ordering, i.e. what is actually assigned right now.
+pub fn connected_serials() -> [Option<String>; 2] {
+    std::array::from_fn(|slot| {
+        let info = get_info(slot);
+        (info.connected && !info.serial.is_empty()).then_some(info.serial)
+    })
+}
+
+/// True when both pads are connected and report the *same* P1/P2 jumper, so the
+/// SDK can't order them by jumper alone — the user should assign them manually.
+pub fn same_jumper_conflict() -> bool {
+    let a = get_info(0);
+    let b = get_info(1);
+    a.connected && b.connected && a.is_player2 == b.is_player2
+}
+
 // ─── Internal Event Dispatch ─────────────────────────────────────────────────
 
 fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
@@ -471,7 +504,8 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             *shared.serial[pad].lock().unwrap() = info.serial.clone();
 
             log::info!(
-                "SMX: pad {pad} connected (P{}, fw {}, serial {}, has_serial={})",
+                "SMX: pad {pad} connected (P{} slot, jumper P{}, fw {}, serial {}, has_serial={})",
+                if pad == 1 { 2 } else { 1 },
                 if info.is_player2 { 2 } else { 1 },
                 info.firmware_version,
                 info.serial,
@@ -497,7 +531,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
 
             let name = format!(
                 "StepManiaX P{} (fw {})",
-                if info.is_player2 { 2 } else { 1 },
+                if pad == 1 { 2 } else { 1 },
                 info.firmware_version
             );
             let sys_event = GpSystemEvent::Connected {

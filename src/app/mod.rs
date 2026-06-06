@@ -3956,9 +3956,10 @@ impl App {
                 None
             };
             let cursor_profile = cursor_dev.and_then(|dev| {
-                profile::active_local_profile_id_for_pad(
-                    crate::engine::smx::get_info(dev.index).is_player2,
-                )
+                // Slot is the source of truth for player side (the SDK orders
+                // slot 0 = P1, slot 1 = P2 per the pad→player assignment), so map
+                // the config by slot, not the raw jumper bit.
+                profile::active_local_profile_id_for_pad(dev.index == 1)
             });
             pad_config::set_save_available(target, cursor_profile.is_some());
             // Mark the config currently applied to the cursor pad's slot, read
@@ -4129,6 +4130,44 @@ impl App {
     /// cheap per-pad signature avoids loading config files or rewriting the pad
     /// unless something relevant changed (so manual edits aren't clobbered).
     /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
+    /// Once both pads are present with real serials and *distinct* jumpers, and
+    /// nothing is saved yet, persist the jumper-derived P1/P2 serial map. This
+    /// pins the (unambiguous) good case so it stays stable even if a pad later
+    /// loses or shares a jumper, and gives the UI a concrete assignment to show.
+    /// The ambiguous same-jumper case is left for the user to assign manually.
+    fn reconcile_smx_assignment(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            return;
+        }
+        if !config::get().smx_input {
+            return;
+        }
+        // Only auto-save when no assignment exists yet.
+        let (p1, p2) = config::smx_pad_assignment();
+        if p1.is_some() || p2.is_some() {
+            return;
+        }
+        let a = crate::engine::smx::get_info(0);
+        let b = crate::engine::smx::get_info(1);
+        if a.connected
+            && b.connected
+            && a.has_serial_number
+            && b.has_serial_number
+            && a.is_player2 != b.is_player2
+        {
+            // SDK orders slot 0 = P1-jumpered, slot 1 = P2-jumpered.
+            log::info!(
+                "SMX: auto-saving pad assignment from jumpers (P1={}, P2={})",
+                a.serial,
+                b.serial
+            );
+            config::update_smx_pad_assignment(Some(a.serial), Some(b.serial));
+        }
+    }
+
     fn apply_smx_managed_preset(&mut self) {
         use pad_config_sync::Sig;
 
@@ -4160,8 +4199,9 @@ impl App {
                 continue;
             }
             // In Doubles both pads belong to the one joined player; otherwise the
-            // pad maps to its own side.
-            let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
+            // pad maps to its own side. Side is the slot (the SDK orders slot 0 =
+            // P1, slot 1 = P2 per the pad→player assignment), not the raw jumper.
+            let profile_id = profile::active_local_profile_id_for_pad(pad == 1);
             let pad_type = crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             // Compare against the cached signature by borrow: the steady-state
             // path allocates nothing just to find that nothing changed. The owned
@@ -4458,6 +4498,7 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.sync_pad_config_fsr();
+        self.reconcile_smx_assignment();
         self.apply_smx_managed_preset();
         self.state.shell.update_gamepad_overlay(redraw_started);
 

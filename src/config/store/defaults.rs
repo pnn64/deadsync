@@ -119,6 +119,9 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SmxDefaultPadConfig",
         default.smx_default_pad_config.as_str(),
     );
+    // No pad→player assignment by default (slots follow the hardware jumper).
+    push_line(content, "SmxP1Serial", "");
+    push_line(content, "SmxP2Serial", "");
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
     push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);
