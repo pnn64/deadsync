@@ -682,7 +682,8 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         | CurrentScreen::SelectCourse
         | CurrentScreen::Sandbox
         | CurrentScreen::PlayerOptions
-        | CurrentScreen::ConfigurePads => LightMode::MenuStartAndDirections,
+        | CurrentScreen::ConfigurePads
+        | CurrentScreen::SmxAssignPads => LightMode::MenuStartAndDirections,
     }
 }
 
@@ -759,6 +760,7 @@ const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
             | CurrentScreen::Input
             | CurrentScreen::TestLights
             | CurrentScreen::OverscanAdjustment
+            | CurrentScreen::SmxAssignPads
     )
 }
 
@@ -1575,6 +1577,11 @@ pub struct ScreensState {
     pad_config_state: crate::screens::pad_config::State,
     test_lights_state: test_lights::State,
     overscan_adjustment_state: overscan_adjustment::State,
+    smx_assign_state: crate::screens::smx_assign::State,
+    /// Latched while a same-jumper SMX conflict is being auto-prompted, so the
+    /// assignment screen is only opened once per conflict episode (cleared when
+    /// the conflict resolves). See `App::maybe_autoprompt_smx_assign`.
+    smx_autoprompt_latched: bool,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -3518,6 +3525,9 @@ impl ScreensState {
         let mut overscan_adjustment_state = overscan_adjustment::init();
         overscan_adjustment_state.active_color_index = color_index;
 
+        let mut smx_assign_state = crate::screens::smx_assign::init();
+        smx_assign_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -3550,6 +3560,8 @@ impl ScreensState {
             },
             test_lights_state,
             overscan_adjustment_state,
+            smx_assign_state,
+            smx_autoprompt_latched: false,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -3618,6 +3630,10 @@ impl ScreensState {
             ),
             CurrentScreen::OverscanAdjustment => (
                 overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time),
+                false,
+            ),
+            CurrentScreen::SmxAssignPads => (
+                crate::screens::smx_assign::update(&mut self.smx_assign_state, delta_time),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -4168,6 +4184,31 @@ impl App {
         }
     }
 
+    /// From the main Menu, if two pads share a P1/P2 jumper and no assignment
+    /// resolves them, open the assignment screen automatically (once per conflict
+    /// episode). Cancelling won't re-prompt until the conflict clears and returns.
+    fn maybe_autoprompt_smx_assign(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Menu
+            || !matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            return;
+        }
+        let conflict = config::get().smx_input && crate::engine::smx::same_jumper_conflict();
+        if !conflict {
+            // No (or resolved) conflict — re-arm for the next episode.
+            self.state.screens.smx_autoprompt_latched = false;
+            return;
+        }
+        // A saved assignment covering both pads already resolves the ambiguity.
+        let (p1, p2) = config::smx_pad_assignment();
+        if (p1.is_some() && p2.is_some()) || self.state.screens.smx_autoprompt_latched {
+            return;
+        }
+        self.state.screens.smx_autoprompt_latched = true;
+        crate::screens::smx_assign::set_pending_return(CurrentScreen::Menu);
+        self.handle_navigation_action(CurrentScreen::SmxAssignPads);
+    }
+
     fn apply_smx_managed_preset(&mut self) {
         use pad_config_sync::Sig;
 
@@ -4499,6 +4540,7 @@ impl App {
         self.sync_gameplay_input_capture();
         self.sync_pad_config_fsr();
         self.reconcile_smx_assignment();
+        self.maybe_autoprompt_smx_assign();
         self.apply_smx_managed_preset();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
@@ -6352,6 +6394,10 @@ impl App {
                 &mut self.state.screens.overscan_adjustment_state,
                 &ev,
             ),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::handle_input(
+                &mut self.state.screens.smx_assign_state,
+                &ev,
+            ),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
@@ -6704,6 +6750,10 @@ impl App {
             ),
             CurrentScreen::OverscanAdjustment => overscan_adjustment::get_actors(
                 &self.state.screens.overscan_adjustment_state,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::get_actors(
+                &self.state.screens.smx_assign_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::PlayerOptions => {
@@ -8199,6 +8249,11 @@ impl App {
                 .overscan_adjustment_state
                 .active_color_index = color_index;
             overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
+        } else if target == CurrentScreen::SmxAssignPads {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.smx_assign_state = crate::screens::smx_assign::init();
+            self.state.screens.smx_assign_state.active_color_index = color_index;
+            crate::screens::smx_assign::on_enter(&mut self.state.screens.smx_assign_state);
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();

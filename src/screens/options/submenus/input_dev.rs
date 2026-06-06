@@ -280,6 +280,18 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::SmxAssignPads,
+        label: lookup_key("OptionsInput", "SmxAssignPads"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::SmxSwapPads,
+        label: lookup_key("OptionsInput", "SmxSwapPads"),
+        choices: &[localized_choice("OptionsInput", "SmxSwapPadsAction")],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
@@ -313,6 +325,22 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "DefaultPadConfigHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxAssignPads,
+        name: lookup_key("OptionsInput", "SmxAssignPads"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxAssignPadsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxSwapPads,
+        name: lookup_key("OptionsInput", "SmxSwapPads"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxSwapPadsHelp",
         ))],
     },
     Item {

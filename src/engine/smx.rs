@@ -487,6 +487,27 @@ pub fn same_jumper_conflict() -> bool {
     a.connected && b.connected && a.is_player2 == b.is_player2
 }
 
+/// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
+/// P2 slot; `None` turns that pad off). One-shot — re-send to hold the colour.
+pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+    if let Some(s) = SHARED.get() {
+        s.manager.set_solid_lights(colors);
+    }
+}
+
+/// Re-enable the pads' built-in automatic lighting (call when leaving a screen
+/// that drove the lights directly, so the pads stop showing our static colour).
+pub fn reenable_auto_lights() {
+    if let Some(s) = SHARED.get() {
+        s.manager.reenable_auto_lights();
+    }
+}
+
+/// Player-indicator colours: P1 = blue, P2 = red. Used by the pad-assignment
+/// screen so the user can see which physical pad is which without reading serials.
+pub const PLAYER1_LIGHT: [u8; 3] = [0, 80, 255];
+pub const PLAYER2_LIGHT: [u8; 3] = [255, 40, 40];
+
 // ─── Internal Event Dispatch ─────────────────────────────────────────────────
 
 fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
