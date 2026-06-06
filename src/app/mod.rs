@@ -4197,15 +4197,12 @@ impl App {
         {
             return;
         }
-        let conflict = config::get().smx_input && crate::engine::smx::same_jumper_conflict();
-        if !conflict {
-            // No (or resolved) conflict — re-arm for the next episode.
+        if !(config::get().smx_input && crate::engine::smx::conflict_warning_active()) {
+            // No unresolved conflict — re-arm for the next episode.
             self.state.screens.smx_autoprompt_latched = false;
             return;
         }
-        // A saved assignment covering both pads already resolves the ambiguity.
-        let (p1, p2) = config::smx_pad_assignment();
-        if (p1.is_some() && p2.is_some()) || self.state.screens.smx_autoprompt_latched {
+        if self.state.screens.smx_autoprompt_latched {
             return;
         }
         self.state.screens.smx_autoprompt_latched = true;

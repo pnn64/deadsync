@@ -488,6 +488,26 @@ pub fn same_jumper_conflict() -> bool {
     a.connected && b.connected && a.is_player2 == b.is_player2
 }
 
+/// TEMP (visual check): force the same-jumper conflict warnings on regardless of
+/// the real jumper/assignment state, so placements can be verified without
+/// physically re-jumpering the pads. MUST be set back to `false` before merge.
+const FORCE_CONFLICT_WARNINGS: bool = true;
+
+/// Whether to surface the "both pads share a jumper — assign them" warning: an
+/// unresolved same-jumper conflict (no saved assignment covers both pads). Single
+/// source of truth for the main-Menu badge, the options-page warning, and the
+/// auto-prompt, so they always agree.
+pub fn conflict_warning_active() -> bool {
+    if FORCE_CONFLICT_WARNINGS {
+        return get_info(0).connected && get_info(1).connected;
+    }
+    if !same_jumper_conflict() {
+        return false;
+    }
+    let (p1, p2) = crate::config::smx_pad_assignment();
+    p1.is_none() || p2.is_none()
+}
+
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
 /// P2 slot; `None` turns that pad off). One-shot — re-send to hold the colour.
 pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {

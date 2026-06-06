@@ -32,13 +32,10 @@ fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
         }
     };
     let mut s = format!("Now: P1 = {} (blue), P2 = {} (red)", label(0), label(1));
-    if smx::same_jumper_conflict() {
-        let (p1, p2) = crate::config::smx_pad_assignment();
-        if p1.is_none() || p2.is_none() {
-            s.push_str(
-                "\n\nBoth pads share a jumper — assign them so the engine can tell them apart.",
-            );
-        }
+    if smx::conflict_warning_active() {
+        s.push_str(
+            "\n\nBoth pads share a jumper — assign them so the engine can tell them apart.",
+        );
     }
     std::borrow::Cow::Owned(s)
 }
