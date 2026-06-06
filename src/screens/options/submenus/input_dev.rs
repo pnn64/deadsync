@@ -28,13 +28,13 @@ fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
         if info.connected && !info.serial.is_empty() {
             format!("SMX[{}]", info.serial.chars().take(4).collect::<String>())
         } else {
-            "—".to_owned()
+            "(none)".to_owned()
         }
     };
     let mut s = format!("Now: P1 = {} (blue), P2 = {} (red)", label(0), label(1));
     if smx::conflict_warning_active() {
         s.push_str(
-            "\n\nBoth pads share a jumper — assign them so the engine can tell them apart.",
+            "\n\nBoth pads share a jumper. Assign them so the engine can tell them apart.",
         );
     }
     std::borrow::Cow::Owned(s)

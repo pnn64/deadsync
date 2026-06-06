@@ -306,7 +306,7 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let line = |label: &str, serial: &Option<String>, rgb: [u8; 3]| -> (String, [f32; 3]) {
         let val = serial
             .as_deref()
-            .map_or_else(|| "—".to_owned(), |s| format!("SMX[{}]", serial_prefix(s)));
+            .map_or_else(|| "(none)".to_owned(), |s| format!("SMX[{}]", serial_prefix(s)));
         (
             format!("{label}: {val}"),
             [
