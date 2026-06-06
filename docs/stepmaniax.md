@@ -60,9 +60,38 @@ FSRs** is on):
 | **DeadSync Manages Pad Config** | No / Yes | See [§3](#3-two-ways-to-configure-a-pad). When on, DeadSync writes a resolved config to each pad. |
 | **USB Polling** | 500–1000 µs (50 µs steps) | How often the SDK polls the pads over USB. Lower = more responsive, more CPU. Applied **live**. Default 1000 µs. |
 | **Default Pad Config** | Low / Medium / High | Built-in sensitivity preset (matches the official SMX tool's presets). Used as the fallback when DeadSync manages config and nothing else resolves. |
+| **Assign Pads to Players** | (opens screen) | Press-a-panel flow to choose which physical pad is P1 vs P2. See [§2a](#2a-which-pad-is-p1-vs-p2). Its help text shows the current mapping live. |
+| **Swap P1/P2 Pads** | (action) | One-tap swap of the two pads' player assignment. Both pads must be connected. |
 
-All four are persisted to `deadsync.ini` under `[Options]`
-(`SmxInput`, `SmxManagesPadConfig`, `SmxUsbPollingUs`, `SmxDefaultPadConfig`).
+These persist to `deadsync.ini` under `[Options]` (`SmxInput`,
+`SmxManagesPadConfig`, `SmxUsbPollingUs`, `SmxDefaultPadConfig`, and the pad
+assignment serials `SmxP1Serial` / `SmxP2Serial`).
+
+---
+
+## 2a. Which pad is P1 vs P2?
+
+By default each pad's **player side is decided by its hardware P1/P2 jumper** —
+the SDK orders the pads so the P1‑jumpered pad is Player 1 and the P2‑jumpered
+pad is Player 2. DeadSync keys both **input routing** and **pad‑config profiles**
+off this slot order, so in the normal case there's nothing to do, and once two
+correctly‑jumpered pads are seen the mapping is saved automatically.
+
+Two situations need a manual assignment:
+
+- **Both pads share a jumper** (e.g. both set to P1). The SDK can't tell them
+  apart, so the main Menu shows an amber *"both pads share a jumper — assign
+  pads"* warning and the assignment screen auto‑opens.
+- **Pads installed on the wrong sides** (jumpers are correct, but the pads are
+  physically swapped). Moving a 100‑lb pad is hard — swap them in software.
+
+**Assign Pads to Players** walks you through it: step on a panel of the pad you
+want as **Player 1** (it lights **blue**), then the pad you want as **Player 2**
+(it lights **red**). The pressed pad's serial is pinned to that player slot, which
+overrides the jumper. **Swap P1/P2 Pads** does the same in one tap when both pads
+are connected. The assignment is stored by serial in `deadsync.ini`
+(`SmxP1Serial` / `SmxP2Serial`) and pushed to the SDK on launch, so it survives
+reconnects and restarts.
 
 ---
 
@@ -233,6 +262,15 @@ it queues `PadConfigIntent`s (`Override` / `Invalidate` / `RefreshList`) on the
 Song Select state that the app drains each frame. Markers, the resolve cache,
 and intents are all keyed by **pad slot (0/1)**, the one always-unambiguous key.
 
+Pad slot is the single source of truth for player side. The SDK orders the slots
+(slot 0 = P1, slot 1 = P2) from the jumper, or from the saved serial→player
+assignment when one is set (`SmxManager::set_player_assignment`, pushed at init
+and on change from `engine::smx`). Input routing and config→profile mapping both
+key off the slot, so they never diverge even when two pads share a jumper. The
+assignment screen lives in `screens::smx_assign`; the App auto-saves a clean
+jumper‑derived map and auto‑prompts on an unresolved conflict
+(`App::reconcile_smx_assignment` / `maybe_autoprompt_smx_assign`).
+
 The `SmxManager` event callback fires while the SDK holds its internal lock, so
 the callback must never call back into the manager (it would deadlock the USB
 thread); identity (UUID/serial) is cached at connect and read from our own
@@ -293,3 +331,4 @@ exact device behavior offline.
 | Configure Pads edits don't stick | **DeadSync Manages Pad Config** is on — they're re-applied on launch. Save as a profile from Song Select instead. |
 | Pad detected as wrong type | Capture with `SMX_CAPTURE_DIR` and share the `.smxhid`; the resolve log shows the detected `type=`. |
 | Can't save a profile | Only available in Song Select with a **joined local profile** (not Guest, not the Options screen). |
+| Pads act as the wrong player (P1/P2 swapped), or a "share a jumper" warning | Use **Assign Pads to Players** (or **Swap P1/P2 Pads**) on the StepManiaX page — see [§2a](#2a-which-pad-is-p1-vs-p2). |
