@@ -545,9 +545,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             );
             if let Actor::Text { color, .. } = &mut actor {
                 // Amber warning (alpha already applied by status_text_actor).
-                color[0] = 1.0;
-                color[1] = 0.78;
-                color[2] = 0.2;
+                color[..3].copy_from_slice(&crate::engine::smx::CONFLICT_WARNING_RGB);
             }
             actors.push(actor);
         }

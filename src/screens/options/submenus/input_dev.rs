@@ -21,20 +21,25 @@ pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
 /// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
 /// not yet assigned.
 fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
+    use crate::assets::i18n::{tr, tr_fmt};
     use crate::engine::smx;
     let label = |slot: usize| -> String {
         let info = smx::get_info(slot);
         if info.connected && !info.serial.is_empty() {
-            format!("SMX[{}]", info.serial.chars().take(4).collect::<String>())
+            format!("SMX[{}]", smx::serial_prefix(&info.serial))
         } else {
-            "(none)".to_owned()
+            tr("OptionsInput", "SmxAssignStatusNone").to_string()
         }
     };
-    let mut s = format!("Now: P1 = {} (blue), P2 = {} (red)", label(0), label(1));
+    let mut s = tr_fmt(
+        "OptionsInput",
+        "SmxAssignStatusLine",
+        &[("p1", &label(0)), ("p2", &label(1))],
+    )
+    .to_string();
     if smx::conflict_warning_active() {
-        s.push_str(
-            "\n\nBoth pads share a jumper. Assign them so the engine can tell them apart.",
-        );
+        s.push_str("\n\n");
+        s.push_str(&tr("OptionsInput", "SmxAssignStatusConflict"));
     }
     std::borrow::Cow::Owned(s)
 }

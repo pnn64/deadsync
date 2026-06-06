@@ -480,6 +480,16 @@ pub fn connected_serials() -> [Option<String>; 2] {
     })
 }
 
+/// First 4 chars of a serial, for a compact pad label (e.g. `40ea`). An empty
+/// serial (not read yet) yields `????` so the label keeps its width.
+pub fn serial_prefix(serial: &str) -> String {
+    if serial.is_empty() {
+        "????".to_owned()
+    } else {
+        serial.chars().take(4).collect()
+    }
+}
+
 /// Pure: do two pads' jumpers conflict? Both connected and reporting the same
 /// P1/P2 jumper, so the SDK can't order them by jumper alone and the user must
 /// assign them manually.
@@ -554,6 +564,10 @@ pub const PLAYER2_LIGHT: [u8; 3] = [255, 0, 0];
 /// Shown when a connected pad's player side is ambiguous (both pads share a
 /// jumper and no assignment resolves them).
 pub const PLAYER_UNCONFIGURED_LIGHT: [u8; 3] = [110, 110, 110];
+
+/// On-screen amber used to flag an unresolved pad-assignment conflict (the main
+/// Menu badge and the assignment screen). RGB only; callers apply their own alpha.
+pub const CONFLICT_WARNING_RGB: [f32; 3] = [1.0, 0.78, 0.2];
 
 /// Pure: indicator colour for a slot. P1 (slot 0) blue, P2 (slot 1) red, white
 /// when the assignment is ambiguous, `None` for an empty slot.

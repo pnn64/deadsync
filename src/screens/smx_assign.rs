@@ -203,15 +203,6 @@ fn pad_serial(slot: usize) -> Option<String> {
     (info.connected && !info.serial.is_empty()).then_some(info.serial)
 }
 
-/// First 4 hex chars of a serial, for a compact pad label (e.g. `40ea`).
-fn serial_prefix(serial: &str) -> String {
-    if serial.is_empty() {
-        "????".to_owned()
-    } else {
-        serial.chars().take(4).collect()
-    }
-}
-
 /// Drive the pad indicator lights for the current phase.
 fn apply_lights(state: &State) {
     let mut colors: [Option<[u8; 3]>; 2] = [None, None];
@@ -279,6 +270,7 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     // When there's an unresolved same-jumper conflict (incl. the case that
     // auto-opened this screen), explain why the user is here.
     if smx::conflict_warning_active() {
+        let amber = smx::CONFLICT_WARNING_RGB;
         actors.push(act!(text:
             font("miso"):
             settext(tr("ScreenSmxAssignPads", "ConflictExplanation")):
@@ -287,7 +279,7 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
             zoom(0.72):
             maxwidth(screen_w * 0.8):
             horizalign(center):
-            diffuse(1.0, 0.78, 0.2, 0.95 * alpha_mul):
+            diffuse(amber[0], amber[1], amber[2], 0.95 * alpha_mul):
             strokecolor(0.0, 0.0, 0.0, 0.75 * alpha_mul):
             shadowlength(1.0):
             z(86)
@@ -321,7 +313,7 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let line = |label: &str, serial: &Option<String>, rgb: [u8; 3]| -> (String, [f32; 3]) {
         let val = serial
             .as_deref()
-            .map_or_else(|| "(none)".to_owned(), |s| format!("SMX[{}]", serial_prefix(s)));
+            .map_or_else(|| "(none)".to_owned(), |s| format!("SMX[{}]", smx::serial_prefix(s)));
         (
             format!("{label}: {val}"),
             [

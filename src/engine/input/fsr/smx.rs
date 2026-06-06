@@ -85,7 +85,7 @@ impl Monitor {
             let device_name = format!(
                 "StepManiaX P{} [{}]",
                 if pad == 1 { 2 } else { 1 },
-                serial_prefix(&info.serial),
+                smx::serial_prefix(&info.serial),
             );
 
             let buttons = std::array::from_fn(|i| {
@@ -322,15 +322,6 @@ impl Drop for Monitor {
                 }
             }
         }
-    }
-}
-
-/// First 4 hex chars of a serial, for compact pad labels (e.g. `40ea`).
-fn serial_prefix(serial: &str) -> String {
-    if serial.is_empty() {
-        "?".to_owned()
-    } else {
-        serial.chars().take(4).collect()
     }
 }
 

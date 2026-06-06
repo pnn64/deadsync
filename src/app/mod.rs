@@ -1585,6 +1585,11 @@ pub struct ScreensState {
     /// Latched while the StepManiaX options page is driving the pad indicator
     /// lights, so auto-lighting is restored exactly once on leaving the page.
     smx_options_lights_active: bool,
+    /// Last indicator colours pushed to the pads on the options page, so the
+    /// lights are only re-sent on change or to hold them, not every frame.
+    smx_options_last_lights: [Option<[u8; 3]>; 2],
+    /// Time since the last options-page light send, for the periodic hold.
+    smx_options_light_timer: f32,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -3566,6 +3571,8 @@ impl ScreensState {
             smx_assign_state,
             smx_autoprompt_latched: false,
             smx_options_lights_active: false,
+            smx_options_last_lights: [None, None],
+            smx_options_light_timer: 0.0,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -4206,15 +4213,29 @@ impl App {
     /// (P2) — white when ambiguous — so the user can see the assignment, and so a
     /// live Swap is reflected on the pads immediately. Restores auto-lighting when
     /// leaving the page. (Driven from the app loop so the lifecycle is in one place.)
-    fn drive_smx_options_lights(&mut self) {
+    fn drive_smx_options_lights(&mut self, dt: f32) {
+        // Re-send at most this often to hold the colour (a one-shot set_lights
+        // lapses back to auto-lighting), plus immediately on any colour change so
+        // a live Swap shows at once. Avoids re-sending a full frame every tick.
+        const RESEND_INTERVAL: f32 = 0.25;
         let active = self.state.screens.current_screen == CurrentScreen::Options
             && config::get().smx_input
             && options::is_smx_config_view(&self.state.screens.options_state);
         if active {
-            crate::engine::smx::set_player_lights(crate::engine::smx::player_indicator_colors());
+            let colors = crate::engine::smx::player_indicator_colors();
+            self.state.screens.smx_options_light_timer += dt;
+            if colors != self.state.screens.smx_options_last_lights
+                || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
+            {
+                crate::engine::smx::set_player_lights(colors);
+                self.state.screens.smx_options_last_lights = colors;
+                self.state.screens.smx_options_light_timer = 0.0;
+            }
             self.state.screens.smx_options_lights_active = true;
         } else if self.state.screens.smx_options_lights_active {
             self.state.screens.smx_options_lights_active = false;
+            self.state.screens.smx_options_light_timer = 0.0;
+            self.state.screens.smx_options_last_lights = [None, None];
             crate::engine::smx::reenable_auto_lights();
         }
     }
@@ -4551,7 +4572,7 @@ impl App {
         self.sync_pad_config_fsr();
         self.reconcile_smx_assignment();
         self.maybe_autoprompt_smx_assign();
-        self.drive_smx_options_lights();
+        self.drive_smx_options_lights(delta_time);
         self.apply_smx_managed_preset();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
