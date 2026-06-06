@@ -181,7 +181,7 @@ const MAIN_MENU: MenuDef = MenuDef {
             action: Some(action_set_selection_end),
         },
         MenuRow {
-            label: lookup_key("Practice", "MenuEditorOptions"),
+            label: lookup_key("Practice", "MenuPracticeModeOptions"),
             action: Some(action_editor_options),
         },
         MenuRow {
