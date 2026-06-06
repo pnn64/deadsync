@@ -1,10 +1,9 @@
 use super::super::*;
 
-// USB polling choice list bounds: index N maps to 250 + N*50 microseconds
-// (250us .. 1000us; 250us = 4000Hz, already overkill).
-const USB_POLLING_MIN_US: u16 = 250;
+// USB polling choice list bounds: index N maps to 500 + N*50 microseconds.
+const USB_POLLING_MIN_US: u16 = 500;
 const USB_POLLING_STEP_US: u16 = 50;
-pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 16;
+pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 11;
 
 /// Choice index for a polling value in microseconds (clamped to the list).
 pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
@@ -298,27 +297,20 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::SmxUsbPolling,
-        // 250-1000us in 50us steps; choice index N maps to 250 + N*50 us. The
-        // "(NHz)" suffix is the rounded poll rate (1_000_000 / us); kept in lockstep
-        // with the value table by `usb_polling_choice_labels_match_their_values`.
+        // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
         label: lookup_key("OptionsInput", "UsbPolling"),
         choices: &[
-            literal_choice("250us (4000Hz)"),
-            literal_choice("300us (3333Hz)"),
-            literal_choice("350us (2857Hz)"),
-            literal_choice("400us (2500Hz)"),
-            literal_choice("450us (2222Hz)"),
-            literal_choice("500us (2000Hz)"),
-            literal_choice("550us (1818Hz)"),
-            literal_choice("600us (1667Hz)"),
-            literal_choice("650us (1538Hz)"),
-            literal_choice("700us (1429Hz)"),
-            literal_choice("750us (1333Hz)"),
-            literal_choice("800us (1250Hz)"),
-            literal_choice("850us (1176Hz)"),
-            literal_choice("900us (1111Hz)"),
-            literal_choice("950us (1053Hz)"),
-            literal_choice("1000us (1000Hz)"),
+            literal_choice("500us"),
+            literal_choice("550us"),
+            literal_choice("600us"),
+            literal_choice("650us"),
+            literal_choice("700us"),
+            literal_choice("750us"),
+            literal_choice("800us"),
+            literal_choice("850us"),
+            literal_choice("900us"),
+            literal_choice("950us"),
+            literal_choice("1000us"),
         ],
         inline: false,
     },

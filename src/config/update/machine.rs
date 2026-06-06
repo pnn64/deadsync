@@ -124,7 +124,7 @@ pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
 /// Persist the SMX USB polling interval (microseconds) and apply it live to the
 /// running SMX manager.
 pub fn update_smx_usb_polling(micros: u16) {
-    let micros = micros.clamp(250, 1000);
+    let micros = micros.clamp(500, 1000);
     {
         let mut cfg = lock_config();
         if cfg.smx_usb_polling_us == micros {

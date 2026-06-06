@@ -58,7 +58,7 @@ FSRs** is on):
 | --- | --- | --- |
 | **Use StepManiaX** | No / Yes | Master switch for native SMX input. Applied on next launch. |
 | **DeadSync Manages Pad Config** | No / Yes | See [§3](#3-two-ways-to-configure-a-pad). When on, DeadSync writes a resolved config to each pad. |
-| **USB Polling** | 250–1000 µs (50 µs steps) | How often the SDK polls the pads over USB. Lower = more responsive, more CPU (250 µs = 4000 Hz). Applied **live**. Default 1000 µs. |
+| **USB Polling** | 500–1000 µs (50 µs steps) | How often the SDK polls the pads over USB. Lower = more responsive, more CPU. Applied **live**. Default 1000 µs. |
 | **Default Pad Config** | Low / Medium / High | Built-in sensitivity preset (matches the official SMX tool's presets). Used as the fallback when DeadSync manages config and nothing else resolves. |
 | **Assign Pads to Players** | (opens screen) | Press-a-panel flow to choose which physical pad is P1 vs P2. See [§2a](#2a-which-pad-is-p1-vs-p2). Its help text shows the current mapping live. |
 | **Swap P1/P2 Pads** | (action) | One-tap swap of the two pads' player assignment. Both pads must be connected. |
