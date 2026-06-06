@@ -106,30 +106,30 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
 
     // Rising-edge press detection per slot (raw bitmask, independent of keymap).
     let input = current_input();
-    let pressed_slot = (0..2).find(|&s| (input[s] & !state.prev_input[s]) != 0);
+    let pressed = pressed_slot(state.prev_input, input);
     state.prev_input = input;
 
     match state.phase {
         Phase::AwaitP1 => {
-            if let Some(serial) = pressed_slot.and_then(pad_serial) {
+            if let Some(serial) = pressed.and_then(pad_serial) {
                 state.p1_serial = Some(serial);
                 state.phase = Phase::AwaitP2;
                 apply_lights(state);
             }
         }
         Phase::AwaitP2 => {
-            if let Some(serial) = pressed_slot.and_then(pad_serial) {
-                // Must be the *other* pad, not the one already chosen for P1.
-                if Some(&serial) != state.p1_serial.as_ref() {
-                    state.p2_serial = Some(serial);
-                    state.phase = Phase::Done;
-                    // Apply now — the SDK re-orders the slots immediately.
-                    crate::config::update_smx_pad_assignment(
-                        state.p1_serial.clone(),
-                        state.p2_serial.clone(),
-                    );
-                    apply_lights(state);
-                }
+            // Accept only the *other* pad, not the one already chosen for P1.
+            if let Some(serial) =
+                accept_p2_serial(pressed.and_then(pad_serial), state.p1_serial.as_deref())
+            {
+                state.p2_serial = Some(serial);
+                state.phase = Phase::Done;
+                // Apply now: the SDK re-orders the slots immediately.
+                crate::config::update_smx_pad_assignment(
+                    state.p1_serial.clone(),
+                    state.p2_serial.clone(),
+                );
+                apply_lights(state);
             }
         }
         Phase::NeedTwoPads | Phase::Done => {}
@@ -180,6 +180,21 @@ fn connected_count() -> usize {
 fn current_input() -> [u16; 2] {
     let m = smx::manager();
     std::array::from_fn(|s| m.map_or(0, |m| m.get_input_state(s)))
+}
+
+/// Rising-edge press detection: the first slot whose raw input bitmask gained a
+/// set bit since the previous frame, if any.
+fn pressed_slot(prev: [u16; 2], cur: [u16; 2]) -> Option<usize> {
+    (0..2).find(|&s| (cur[s] & !prev[s]) != 0)
+}
+
+/// In `AwaitP2`, accept the pressed pad's serial only if it is a real serial for
+/// the *other* pad (different from the P1 choice); otherwise ignore the press.
+fn accept_p2_serial(pressed: Option<String>, p1: Option<&str>) -> Option<String> {
+    match pressed {
+        Some(s) if Some(s.as_str()) != p1 => Some(s),
+        _ => None,
+    }
 }
 
 /// Serial of the pad at `slot`, if connected with a real serial.
@@ -355,4 +370,37 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     ));
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{accept_p2_serial, pressed_slot};
+
+    #[test]
+    fn pressed_slot_detects_rising_edge_only() {
+        // No change: nothing pressed.
+        assert_eq!(pressed_slot([0, 0], [0, 0]), None);
+        assert_eq!(pressed_slot([0b1, 0], [0b1, 0]), None);
+        // A newly set bit on slot 0.
+        assert_eq!(pressed_slot([0, 0], [0b10, 0]), Some(0));
+        // A newly set bit on slot 1 only.
+        assert_eq!(pressed_slot([0, 0], [0, 0b1]), Some(1));
+        // A released bit is not a press.
+        assert_eq!(pressed_slot([0b1, 0], [0, 0]), None);
+        // Slot 0 wins when both gain a bit on the same frame.
+        assert_eq!(pressed_slot([0, 0], [0b1, 0b1]), Some(0));
+    }
+
+    #[test]
+    fn accept_p2_serial_requires_the_other_pad() {
+        // Same pad as P1: rejected.
+        assert_eq!(accept_p2_serial(Some("A".to_owned()), Some("A")), None);
+        // Different pad: accepted.
+        assert_eq!(
+            accept_p2_serial(Some("B".to_owned()), Some("A")),
+            Some("B".to_owned())
+        );
+        // No press: nothing to accept.
+        assert_eq!(accept_p2_serial(None, Some("A")), None);
+    }
 }

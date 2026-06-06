@@ -108,7 +108,7 @@ impl Monitor {
                     index: pad,
                 },
                 device_name,
-                is_player2: pad == 1,
+                is_p2_side: pad == 1,
                 buttons,
                 supports_advanced: fsr,
                 simple_per_sensor_bars: !fsr,

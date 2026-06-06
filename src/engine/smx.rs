@@ -480,12 +480,37 @@ pub fn connected_serials() -> [Option<String>; 2] {
     })
 }
 
-/// True when both pads are connected and report the *same* P1/P2 jumper, so the
-/// SDK can't order them by jumper alone — the user should assign them manually.
-pub fn same_jumper_conflict() -> bool {
-    let a = get_info(0);
-    let b = get_info(1);
+/// Pure: do two pads' jumpers conflict? Both connected and reporting the same
+/// P1/P2 jumper, so the SDK can't order them by jumper alone and the user must
+/// assign them manually.
+fn jumpers_conflict(a: &SmxInfo, b: &SmxInfo) -> bool {
     a.connected && b.connected && a.is_player2 == b.is_player2
+}
+
+/// Pure: is a same-jumper conflict still unresolved? True when the jumpers
+/// conflict and the saved assignment does not pin both player sides.
+fn conflict_unresolved(jumpers_conflict: bool, p1_assigned: bool, p2_assigned: bool) -> bool {
+    jumpers_conflict && (!p1_assigned || !p2_assigned)
+}
+
+/// The jumper-derived P1/P2 serial pair to auto-save for a clean, unambiguous pad
+/// pair: both connected, both with real serials, and *distinct* jumpers. The SDK
+/// orders slot 0 = P1-jumper and slot 1 = P2-jumper, so slot 0's serial is P1 and
+/// slot 1's is P2. Returns `None` when the pair is incomplete or ambiguous (same
+/// jumper), leaving it for manual assignment.
+pub fn jumper_derived_pair(a: &SmxInfo, b: &SmxInfo) -> Option<(String, String)> {
+    let distinct = a.connected
+        && b.connected
+        && a.has_serial_number
+        && b.has_serial_number
+        && a.is_player2 != b.is_player2;
+    distinct.then(|| (a.serial.clone(), b.serial.clone()))
+}
+
+/// True when both pads are connected and report the *same* P1/P2 jumper, so the
+/// SDK can't order them by jumper alone and the user should assign them manually.
+pub fn same_jumper_conflict() -> bool {
+    jumpers_conflict(&get_info(0), &get_info(1))
 }
 
 /// Whether to surface the "both pads share a jumper, assign them" warning: an
@@ -493,11 +518,8 @@ pub fn same_jumper_conflict() -> bool {
 /// source of truth for the main-Menu badge, the options-page warning, and the
 /// auto-prompt, so they always agree.
 pub fn conflict_warning_active() -> bool {
-    if !same_jumper_conflict() {
-        return false;
-    }
     let (p1, p2) = crate::config::smx_pad_assignment();
-    p1.is_none() || p2.is_none()
+    conflict_unresolved(same_jumper_conflict(), p1.is_some(), p2.is_some())
 }
 
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
@@ -528,30 +550,31 @@ pub fn reenable_auto_lights() {
 /// Player-indicator colours: P1 = blue, P2 = red. Used by the pad-assignment
 /// screen so the user can see which physical pad is which without reading serials.
 pub const PLAYER1_LIGHT: [u8; 3] = [0, 80, 255];
-pub const PLAYER2_LIGHT: [u8; 3] = [255, 40, 40];
+pub const PLAYER2_LIGHT: [u8; 3] = [255, 0, 0];
 /// Shown when a connected pad's player side is ambiguous (both pads share a
 /// jumper and no assignment resolves them).
 pub const PLAYER_UNCONFIGURED_LIGHT: [u8; 3] = [110, 110, 110];
+
+/// Pure: indicator colour for a slot. P1 (slot 0) blue, P2 (slot 1) red, white
+/// when the assignment is ambiguous, `None` for an empty slot.
+fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Option<[u8; 3]> {
+    if !connected {
+        None
+    } else if ambiguous {
+        Some(PLAYER_UNCONFIGURED_LIGHT)
+    } else if slot == 1 {
+        Some(PLAYER2_LIGHT)
+    } else {
+        Some(PLAYER1_LIGHT)
+    }
+}
 
 /// Per-slot indicator colours for the StepManiaX options page: P1 (slot 0) blue,
 /// P2 (slot 1) red, or white when the assignment is ambiguous; `None` for an
 /// empty slot. Recomputed each frame so a live swap is reflected immediately.
 pub fn player_indicator_colors() -> [Option<[u8; 3]>; 2] {
-    let ambiguous = same_jumper_conflict() && {
-        let (p1, p2) = crate::config::smx_pad_assignment();
-        p1.is_none() || p2.is_none()
-    };
-    std::array::from_fn(|slot| {
-        if !get_info(slot).connected {
-            None
-        } else if ambiguous {
-            Some(PLAYER_UNCONFIGURED_LIGHT)
-        } else if slot == 1 {
-            Some(PLAYER2_LIGHT)
-        } else {
-            Some(PLAYER1_LIGHT)
-        }
-    })
+    let ambiguous = conflict_warning_active();
+    std::array::from_fn(|slot| indicator_color(get_info(slot).connected, ambiguous, slot))
 }
 
 // ─── Internal Event Dispatch ─────────────────────────────────────────────────
@@ -719,8 +742,13 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PadConfigData, PanelThresholds, preset_thresholds};
+    use super::{
+        PLAYER1_LIGHT, PLAYER2_LIGHT, PLAYER_UNCONFIGURED_LIGHT, PadConfigData, PanelThresholds,
+        conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
+        preset_thresholds,
+    };
     use crate::config::SmxPadPreset;
+    use rustmaniax_sdk::SmxInfo;
 
     #[test]
     fn pad_config_data_settings_round_trips() {
@@ -810,5 +838,75 @@ mod tests {
             ),
             (20, 25, 152, 153)
         );
+    }
+
+    /// Build an `SmxInfo` with just the fields the assignment logic reads.
+    fn info(connected: bool, is_player2: bool, has_serial: bool, serial: &str) -> SmxInfo {
+        SmxInfo {
+            connected,
+            is_player2,
+            has_serial_number: has_serial,
+            serial: serial.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn jumpers_conflict_only_when_both_connected_same_jumper() {
+        let p1 = info(true, false, true, "A");
+        // Distinct jumpers: no conflict.
+        assert!(!jumpers_conflict(&p1, &info(true, true, true, "B")));
+        // Same jumper, both connected: conflict.
+        assert!(jumpers_conflict(&p1, &info(true, false, true, "B")));
+        // Same jumper but one disconnected: no conflict (the lone pad orders fine).
+        assert!(!jumpers_conflict(&p1, &info(false, false, false, "")));
+    }
+
+    #[test]
+    fn conflict_unresolved_needs_both_sides_assigned() {
+        // No jumper conflict: never unresolved, whatever the assignment.
+        assert!(!conflict_unresolved(false, false, false));
+        // Conflict, nothing assigned: unresolved.
+        assert!(conflict_unresolved(true, false, false));
+        // Conflict, only one side assigned: still unresolved.
+        assert!(conflict_unresolved(true, true, false));
+        assert!(conflict_unresolved(true, false, true));
+        // Conflict, both sides assigned: resolved.
+        assert!(!conflict_unresolved(true, true, true));
+    }
+
+    #[test]
+    fn jumper_derived_pair_orders_by_slot_when_distinct() {
+        let slot0 = info(true, false, true, "P1SERIAL");
+        let slot1 = info(true, true, true, "P2SERIAL");
+        // Distinct jumpers: slot 0 -> P1, slot 1 -> P2.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &slot1),
+            Some(("P1SERIAL".to_owned(), "P2SERIAL".to_owned()))
+        );
+        // Same jumper: ambiguous, leave for manual assignment.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &info(true, false, true, "P2SERIAL")),
+            None
+        );
+        // Missing serial: not safe to pin.
+        assert_eq!(jumper_derived_pair(&slot0, &info(true, true, false, "")), None);
+        // Only one pad connected: no pair.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &info(false, false, false, "")),
+            None
+        );
+    }
+
+    #[test]
+    fn indicator_color_maps_slot_to_player_colour() {
+        // Empty slot: no colour.
+        assert_eq!(indicator_color(false, false, 0), None);
+        // Connected, unambiguous: slot 0 blue (P1), slot 1 red (P2).
+        assert_eq!(indicator_color(true, false, 0), Some(PLAYER1_LIGHT));
+        assert_eq!(indicator_color(true, false, 1), Some(PLAYER2_LIGHT));
+        // Ambiguous: white regardless of slot.
+        assert_eq!(indicator_color(true, true, 0), Some(PLAYER_UNCONFIGURED_LIGHT));
+        assert_eq!(indicator_color(true, true, 1), Some(PLAYER_UNCONFIGURED_LIGHT));
     }
 }

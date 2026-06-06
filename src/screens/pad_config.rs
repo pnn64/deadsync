@@ -198,7 +198,7 @@ pub fn set_pads(state: &mut State, pads: Vec<PadView>) {
         .filter(|p| match state.filter {
             PadFilter::All => true,
             PadFilter::Sides { p1, p2 } => {
-                if p.is_player2 {
+                if p.is_p2_side {
                     p2
                 } else {
                     p1
@@ -2166,14 +2166,14 @@ mod tests {
     }
 
     /// A 4-sensor-per-panel FSR-style SMX pad (Advanced + per-sensor toggle).
-    fn smx_pad(index: usize, is_player2: bool) -> PadView {
+    fn smx_pad(index: usize, is_p2_side: bool) -> PadView {
         PadView {
             device_id: PadDeviceId {
                 backend: BackendKind::Smx,
                 index,
             },
             device_name: format!("SMX {index}"),
-            is_player2,
+            is_p2_side,
             buttons: [
                 mk_button("L", 30),
                 mk_button("D", 30),

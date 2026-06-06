@@ -4172,19 +4172,11 @@ impl App {
         }
         let a = crate::engine::smx::get_info(0);
         let b = crate::engine::smx::get_info(1);
-        if a.connected
-            && b.connected
-            && a.has_serial_number
-            && b.has_serial_number
-            && a.is_player2 != b.is_player2
-        {
-            // SDK orders slot 0 = P1-jumpered, slot 1 = P2-jumpered.
-            log::info!(
-                "SMX: auto-saving pad assignment from jumpers (P1={}, P2={})",
-                a.serial,
-                b.serial
-            );
-            config::update_smx_pad_assignment(Some(a.serial), Some(b.serial));
+        // SDK orders slot 0 = P1-jumpered, slot 1 = P2-jumpered, so the pair is
+        // already in (P1, P2) order when the jumpers are distinct.
+        if let Some((p1, p2)) = crate::engine::smx::jumper_derived_pair(&a, &b) {
+            log::info!("SMX: auto-saving pad assignment from jumpers (P1={p1}, P2={p2})");
+            config::update_smx_pad_assignment(Some(p1), Some(p2));
         }
     }
 

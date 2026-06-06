@@ -80,8 +80,9 @@ pub struct ButtonView {
 pub struct PadView {
     pub device_id: PadDeviceId,
     pub device_name: String,
-    /// Player side the pad maps to (P2 vs P1), used to filter by play style.
-    pub is_player2: bool,
+    /// Player side the pad maps to (P2 vs P1), used to filter by play style. Taken
+    /// from the device slot (slot 1 = P2 for SMX), not the hardware jumper.
+    pub is_p2_side: bool,
     pub buttons: [ButtonView; PAD_BUTTON_COUNT],
     /// Whether the Advanced view is available for this pad. Load-cell pads are
     /// Simple-only (per-sensor config isn't possible on them).
