@@ -199,7 +199,7 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.smx_usb_polling_us = conf
         .get("Options", "SmxUsbPollingUs")
         .and_then(|v| v.parse::<u16>().ok())
-        .map_or(default.smx_usb_polling_us, |v| v.clamp(500, 1000));
+        .map_or(default.smx_usb_polling_us, |v| v.clamp(250, 1000));
     cfg.smx_default_pad_config = conf
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())

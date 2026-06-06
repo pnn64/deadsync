@@ -1,9 +1,10 @@
 use super::super::*;
 
-// USB polling choice list bounds: index N maps to 500 + N*50 microseconds.
-const USB_POLLING_MIN_US: u16 = 500;
+// USB polling choice list bounds: index N maps to 250 + N*50 microseconds
+// (250us .. 1000us; 250us = 4000Hz, already overkill).
+const USB_POLLING_MIN_US: u16 = 250;
 const USB_POLLING_STEP_US: u16 = 50;
-pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 11;
+pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 16;
 
 /// Choice index for a polling value in microseconds (clamped to the list).
 pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
@@ -277,25 +278,6 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::SmxUsbPolling,
-        // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
-        label: lookup_key("OptionsInput", "UsbPolling"),
-        choices: &[
-            literal_choice("500us"),
-            literal_choice("550us"),
-            literal_choice("600us"),
-            literal_choice("650us"),
-            literal_choice("700us"),
-            literal_choice("750us"),
-            literal_choice("800us"),
-            literal_choice("850us"),
-            literal_choice("900us"),
-            literal_choice("950us"),
-            literal_choice("1000us"),
-        ],
-        inline: false,
-    },
-    SubRow {
         id: SubRowId::SmxDefaultPadConfig,
         label: lookup_key("OptionsInput", "DefaultPadConfig"),
         choices: &[
@@ -317,6 +299,30 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[localized_choice("OptionsInput", "SmxSwapPadsAction")],
         inline: false,
     },
+    SubRow {
+        id: SubRowId::SmxUsbPolling,
+        // 250-1000us in 50us steps; choice index N maps to 250 + N*50 us.
+        label: lookup_key("OptionsInput", "UsbPolling"),
+        choices: &[
+            literal_choice("250us"),
+            literal_choice("300us"),
+            literal_choice("350us"),
+            literal_choice("400us"),
+            literal_choice("450us"),
+            literal_choice("500us"),
+            literal_choice("550us"),
+            literal_choice("600us"),
+            literal_choice("650us"),
+            literal_choice("700us"),
+            literal_choice("750us"),
+            literal_choice("800us"),
+            literal_choice("850us"),
+            literal_choice("900us"),
+            literal_choice("950us"),
+            literal_choice("1000us"),
+        ],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
@@ -334,14 +340,6 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxManagesPadConfigHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::InpSmxUsbPolling,
-        name: lookup_key("OptionsInput", "UsbPolling"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsInputHelp",
-            "UsbPollingHelp",
         ))],
     },
     Item {
@@ -366,6 +364,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxSwapPadsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxUsbPolling,
+        name: lookup_key("OptionsInput", "UsbPolling"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "UsbPollingHelp",
         ))],
     },
     Item {
