@@ -17,6 +17,31 @@ pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
     USB_POLLING_MIN_US + (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
 }
 
+/// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
+/// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
+/// not yet assigned.
+fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
+    use crate::engine::smx;
+    let label = |slot: usize| -> String {
+        let info = smx::get_info(slot);
+        if info.connected && !info.serial.is_empty() {
+            format!("SMX[{}]", info.serial.chars().take(4).collect::<String>())
+        } else {
+            "—".to_owned()
+        }
+    };
+    let mut s = format!("Now: P1 = {} (blue), P2 = {} (red)", label(0), label(1));
+    if smx::same_jumper_conflict() {
+        let (p1, p2) = crate::config::smx_pad_assignment();
+        if p1.is_none() || p2.is_none() {
+            s.push_str(
+                "\n\nBoth pads share a jumper — assign them so the engine can tell them apart.",
+            );
+        }
+    }
+    std::borrow::Cow::Owned(s)
+}
+
 pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ConfigureMappings,
@@ -330,10 +355,10 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::InpSmxAssignPads,
         name: lookup_key("OptionsInput", "SmxAssignPads"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsInputHelp",
-            "SmxAssignPadsHelp",
-        ))],
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxAssignPadsHelp")),
+            HelpEntry::Dynamic(smx_assignment_status),
+        ],
     },
     Item {
         id: ItemId::InpSmxSwapPads,
