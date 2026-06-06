@@ -488,10 +488,10 @@ pub fn same_jumper_conflict() -> bool {
     a.connected && b.connected && a.is_player2 == b.is_player2
 }
 
-/// TEMP (visual check): force the same-jumper conflict warnings on regardless of
-/// the real jumper/assignment state, so placements can be verified without
-/// physically re-jumpering the pads. MUST be set back to `false` before merge.
-const FORCE_CONFLICT_WARNINGS: bool = true;
+/// Debug aid: force the same-jumper conflict warnings on regardless of the real
+/// jumper/assignment state, so placements can be verified without physically
+/// re-jumpering the pads. Keep `false`; flip to `true` only for a visual check.
+const FORCE_CONFLICT_WARNINGS: bool = false;
 
 /// Whether to surface the "both pads share a jumper — assign them" warning: an
 /// unresolved same-jumper conflict (no saved assignment covers both pads). Single
