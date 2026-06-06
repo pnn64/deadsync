@@ -261,6 +261,24 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
         z(85)
     ));
 
+    // When there's an unresolved same-jumper conflict (incl. the case that
+    // auto-opened this screen), explain why the user is here.
+    if smx::conflict_warning_active() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(tr("ScreenSmxAssignPads", "ConflictExplanation")):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_h * 0.30):
+            zoom(0.72):
+            maxwidth(screen_w * 0.8):
+            horizalign(center):
+            diffuse(1.0, 0.78, 0.2, 0.95 * alpha_mul):
+            strokecolor(0.0, 0.0, 0.0, 0.75 * alpha_mul):
+            shadowlength(1.0):
+            z(86)
+        ));
+    }
+
     // Prompt for the current phase.
     let prompt = match state.phase {
         Phase::NeedTwoPads => tr("ScreenSmxAssignPads", "NeedTwoPads"),

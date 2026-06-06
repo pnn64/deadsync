@@ -530,22 +530,27 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     if crate::config::get().smx_input && crate::engine::smx::conflict_warning_active() {
         let smx_base_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
             .mul_add(STATUS_ZOOM, ac_base_y + STATUS_BLOCK_GAP);
-        let mut actor = status_text_actor(
-            tr("Menu", "SmxAssignWarning"),
-            0.0,
-            STATUS_BASE_X,
-            smx_base_y,
-            STATUS_ZOOM,
-            alpha_multiplier,
-            TextAlign::Left,
-        );
-        if let Actor::Text { color, .. } = &mut actor {
-            // Amber warning (alpha already applied by status_text_actor).
-            color[0] = 1.0;
-            color[1] = 0.78;
-            color[2] = 0.2;
+        // Two short lines (kept compact for the main screen).
+        let lines = [tr("Menu", "SmxAssignWarning1"), tr("Menu", "SmxAssignWarning2")];
+        for (i, text) in lines.into_iter().enumerate() {
+            let y = (STATUS_LINE_HEIGHT * i as f32).mul_add(STATUS_ZOOM, smx_base_y);
+            let mut actor = status_text_actor(
+                text,
+                0.0,
+                STATUS_BASE_X,
+                y,
+                STATUS_ZOOM,
+                alpha_multiplier,
+                TextAlign::Left,
+            );
+            if let Actor::Text { color, .. } = &mut actor {
+                // Amber warning (alpha already applied by status_text_actor).
+                color[0] = 1.0;
+                color[1] = 0.78;
+                color[2] = 0.2;
+            }
+            actors.push(actor);
         }
-        actors.push(actor);
     }
 
     actors
