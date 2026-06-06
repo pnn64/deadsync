@@ -8,14 +8,15 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use rustmaniax_sdk::{
-    ConfigFlags, SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
+    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID,
+    SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
 };
 
 use crate::engine::input::{GpSystemEvent, PadBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadEvent, PadId};
 
-/// Number of panels per SMX pad.
-pub const PANEL_COUNT: usize = 9;
+/// Number of panels per SMX pad (from the SDK's hardware-shape constants).
+pub const PANEL_COUNT: usize = NUM_PANELS;
 
 /// Shared state accessible by both the input backend and FSR monitor.
 struct SmxShared {
@@ -490,9 +491,18 @@ pub fn same_jumper_conflict() -> bool {
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
 /// P2 slot; `None` turns that pad off). One-shot — re-send to hold the colour.
 pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
-    if let Some(s) = SHARED.get() {
-        s.manager.set_solid_lights(colors);
+    let Some(s) = SHARED.get() else { return };
+    // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED
+    // pads ignores the inner-ring bytes, so one buffer size covers both.
+    let mut buf = vec![0u8; 2 * BYTES_PER_PAD_25];
+    for (pad, color) in colors.iter().enumerate() {
+        let Some(rgb) = color else { continue };
+        let base = pad * BYTES_PER_PAD_25;
+        for led in buf[base..base + BYTES_PER_PAD_25].chunks_exact_mut(3) {
+            led.copy_from_slice(rgb);
+        }
     }
+    s.manager.set_lights(&buf);
 }
 
 /// Re-enable the pads' built-in automatic lighting (call when leaving a screen
@@ -582,8 +592,8 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             let sys_event = GpSystemEvent::Connected {
                 name,
                 id: pad_device_id(pad),
-                vendor_id: Some(0x2341),
-                product_id: Some(0x8037),
+                vendor_id: Some(SMX_USB_VENDOR_ID),
+                product_id: Some(SMX_USB_PRODUCT_ID),
                 backend: PadBackend::Smx,
                 initial: false,
             };
