@@ -182,6 +182,19 @@ pub fn open_lights_submenu(state: &mut State) {
     open_submenu_now(state, SubmenuKind::Lights);
 }
 
+/// Jump straight to the StepManiaX config submenu (nested under Input Backend).
+/// Used when returning from the pad-assignment screen so the user lands back on
+/// the page they launched it from.
+pub fn open_smx_config_submenu(state: &mut State) {
+    open_submenu_now(state, SubmenuKind::SmxConfig);
+    state.submenu_parent_kind = Some(SubmenuKind::InputBackend);
+}
+
+/// Whether the options screen is currently showing the StepManiaX config submenu.
+pub fn is_smx_config_view(state: &State) -> bool {
+    matches!(state.view, OptionsView::Submenu(SubmenuKind::SmxConfig))
+}
+
 pub fn open_graphics_submenu(state: &mut State) {
     open_submenu_now(state, SubmenuKind::Graphics);
 }

@@ -507,6 +507,30 @@ pub fn reenable_auto_lights() {
 /// screen so the user can see which physical pad is which without reading serials.
 pub const PLAYER1_LIGHT: [u8; 3] = [0, 80, 255];
 pub const PLAYER2_LIGHT: [u8; 3] = [255, 40, 40];
+/// Shown when a connected pad's player side is ambiguous (both pads share a
+/// jumper and no assignment resolves them).
+pub const PLAYER_UNCONFIGURED_LIGHT: [u8; 3] = [110, 110, 110];
+
+/// Per-slot indicator colours for the StepManiaX options page: P1 (slot 0) blue,
+/// P2 (slot 1) red, or white when the assignment is ambiguous; `None` for an
+/// empty slot. Recomputed each frame so a live swap is reflected immediately.
+pub fn player_indicator_colors() -> [Option<[u8; 3]>; 2] {
+    let ambiguous = same_jumper_conflict() && {
+        let (p1, p2) = crate::config::smx_pad_assignment();
+        p1.is_none() || p2.is_none()
+    };
+    std::array::from_fn(|slot| {
+        if !get_info(slot).connected {
+            None
+        } else if ambiguous {
+            Some(PLAYER_UNCONFIGURED_LIGHT)
+        } else if slot == 1 {
+            Some(PLAYER2_LIGHT)
+        } else {
+            Some(PLAYER1_LIGHT)
+        }
+    })
+}
 
 // ─── Internal Event Dispatch ─────────────────────────────────────────────────
 
@@ -645,13 +669,14 @@ fn pad_device_id(pad: usize) -> PadId {
 /// SMX panel index → 3x3-grid label, matching the SDK's panel naming.
 const PANEL_NAMES: [&str; PANEL_COUNT] = ["UL", "U", "UR", "L", "C", "R", "DL", "D", "DR"];
 
-/// Friendly label for an SMX trigger, e.g. `SMX[40ea] R`.
+/// Friendly label for an SMX trigger, e.g. `SMX P1 R`.
 ///
 /// `device` is the pad slot (the `PadId`/device index carried by a binding or
-/// raw event) and `code` is the panel index. Returns `None` unless that slot
-/// currently has a connected SMX pad and the code is in range, so callers can
-/// fall back to a generic label. The serial prefix (first 4 hex chars)
-/// disambiguates two pads even when both are assigned to the same player.
+/// raw event) and `code` is the panel index. The slot is authoritative for the
+/// player side (slot 0 = P1, slot 1 = P2, per the pad→player assignment), so the
+/// label names the player rather than the opaque serial. Returns `None` unless
+/// that slot currently has a connected SMX pad and the code is in range, so
+/// callers can fall back to a generic label.
 ///
 /// NOTE: identification is by slot index, which can collide with a native
 /// gamepad sharing that index (see `pad_device_id`); the label is best-effort.
@@ -666,12 +691,8 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     if *s.uuid[device].lock().unwrap() == [0u8; 16] {
         return None;
     }
-    let prefix: String = s.serial[device].lock().unwrap().chars().take(4).collect();
-    if prefix.is_empty() {
-        Some(format!("SMX {panel}"))
-    } else {
-        Some(format!("SMX[{prefix}] {panel}"))
-    }
+    let player = if device == 1 { 2 } else { 1 };
+    Some(format!("SMX P{player} {panel}"))
 }
 
 #[cfg(test)]
