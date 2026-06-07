@@ -4211,8 +4211,9 @@ impl App {
 
     /// While the StepManiaX options page is open, light the pads blue (P1) / red
     /// (P2), white when ambiguous, so the user can see the assignment, and so a
-    /// live Swap is reflected on the pads immediately. Restores auto-lighting when
-    /// leaving the page. (Driven from the app loop so the lifecycle is in one place.)
+    /// live Swap is reflected on the pads immediately. Restores auto-lighting on
+    /// leaving the page, unless the assignment screen is taking the lights over.
+    /// (Driven from the app loop so the lifecycle is in one place.)
     fn drive_smx_options_lights(&mut self, dt: f32) {
         // Re-send at most this often to hold the colour (a one-shot set_lights
         // lapses back to auto-lighting), plus immediately on any colour change so
