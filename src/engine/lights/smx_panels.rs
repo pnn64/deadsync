@@ -9,9 +9,14 @@
 //! phases; for now this is a self-contained, unit-tested module.
 #![allow(dead_code)] // Items are wired into the worker + app in later phases; remove then.
 
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
 use deadsync_rules::judgment::{JudgeGrade, judge_grade_ix};
 
 use crate::engine::present::color::{JUDGMENT_FA_PLUS_WHITE_RGBA, JUDGMENT_RGBA};
+use crate::engine::smx;
 
 /// Pads addressed by the SMX SDK (slot 0 and slot 1).
 pub const PADS: usize = 2;
@@ -192,6 +197,194 @@ pub fn put_panel(frame: &mut [u8; FRAME_BYTES], pad: usize, panel: usize, color:
     }
 }
 
+// ─── 30Hz worker thread ──────────────────────────────────────────────────────
+
+/// One frame interval at ~30Hz. The SDK also throttles its sends to this rate and
+/// coalesces to the newest frame, so this only governs how often we rebuild a frame.
+const FRAME_INTERVAL: Duration = Duration::from_micros(33_333);
+
+/// Messages from the app diff to the worker. Small and `Copy`; pad/panel/colour are
+/// resolved app-side so the worker stays free of gameplay and style knowledge.
+#[derive(Clone, Copy, Debug)]
+enum Ev {
+    Flash {
+        pad: u8,
+        panel: u8,
+        color: Rgb,
+        dur_s: f32,
+    },
+    HoldStart {
+        pad: u8,
+        panel: u8,
+        color: Rgb,
+    },
+    HoldEnd {
+        pad: u8,
+        panel: u8,
+    },
+    /// Enter (true) or leave (false) the gameplay screens. Leaving hands the pad back to
+    /// its firmware idle lighting.
+    Active(bool),
+    Shutdown,
+}
+
+/// Handle to the SMX panel lighting worker thread.
+///
+/// The app pushes events; the worker owns the effect state, ticks at 30Hz, and calls
+/// `set_lights`. Every send is non-blocking and silently no-ops if the thread failed to
+/// spawn, so callers never have to special-case "no pad".
+pub struct SmxPanelLights {
+    tx: Option<Sender<Ev>>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl Default for SmxPanelLights {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SmxPanelLights {
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel();
+        let join = thread::Builder::new()
+            .name("deadsync-smx-lights".to_owned())
+            .spawn(move || run_worker(rx))
+            .ok();
+        let tx = join.as_ref().map(|_| tx);
+        Self { tx, join }
+    }
+
+    /// Flash a panel its judgement colour for `dur_s` seconds.
+    pub fn flash(&self, pad: usize, panel: usize, color: Rgb, dur_s: f32) {
+        self.send(Ev::Flash {
+            pad: pad as u8,
+            panel: panel as u8,
+            color,
+            dur_s,
+        });
+    }
+
+    /// Light a panel a sustained colour (an active freeze or roll).
+    pub fn hold_start(&self, pad: usize, panel: usize, color: Rgb) {
+        self.send(Ev::HoldStart {
+            pad: pad as u8,
+            panel: panel as u8,
+            color,
+        });
+    }
+
+    /// Clear a panel's sustained colour.
+    pub fn hold_end(&self, pad: usize, panel: usize) {
+        self.send(Ev::HoldEnd {
+            pad: pad as u8,
+            panel: panel as u8,
+        });
+    }
+
+    /// Mark whether gameplay is active. On `false` the worker clears the panels and hands
+    /// the pad back to its firmware idle lighting.
+    pub fn set_active(&self, active: bool) {
+        self.send(Ev::Active(active));
+    }
+
+    fn send(&self, ev: Ev) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(ev);
+        }
+    }
+}
+
+impl Drop for SmxPanelLights {
+    fn drop(&mut self) {
+        if let Some(tx) = self.tx.take() {
+            let _ = tx.send(Ev::Active(false));
+            let _ = tx.send(Ev::Shutdown);
+        }
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+fn run_worker(rx: Receiver<Ev>) {
+    let mut fx = PanelFx::new();
+    let mut active = false;
+    let mut last_tick = Instant::now();
+
+    'outer: loop {
+        // Block up to one frame for the next event, then drain any burst behind it.
+        match rx.recv_timeout(FRAME_INTERVAL) {
+            Ok(ev) => {
+                if handle(&mut fx, &mut active, ev) {
+                    break 'outer;
+                }
+                while let Ok(ev) = rx.try_recv() {
+                    if handle(&mut fx, &mut active, ev) {
+                        break 'outer;
+                    }
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break 'outer,
+        }
+
+        let now = Instant::now();
+        let dt = now.saturating_duration_since(last_tick);
+        if dt >= FRAME_INTERVAL {
+            last_tick = now;
+            if active {
+                let frame = fx.tick(dt.as_secs_f32());
+                send_lights(&frame);
+            }
+        }
+    }
+
+    // On exit, leave the panels dark and restore the pad firmware idle lighting.
+    fx.clear_all();
+    let frame = fx.tick(0.0);
+    send_lights(&frame);
+    reenable_auto();
+}
+
+/// Apply one event to the effect state. Returns `true` when the worker should stop.
+fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
+    match ev {
+        Ev::Flash {
+            pad,
+            panel,
+            color,
+            dur_s,
+        } => fx.flash(pad.into(), panel.into(), color, dur_s),
+        Ev::HoldStart { pad, panel, color } => fx.hold_start(pad.into(), panel.into(), color),
+        Ev::HoldEnd { pad, panel } => fx.hold_end(pad.into(), panel.into()),
+        Ev::Active(a) => {
+            *active = a;
+            fx.clear_all();
+            if !a {
+                // Going idle: push one black frame and hand the pad back to firmware.
+                let frame = fx.tick(0.0);
+                send_lights(&frame);
+                reenable_auto();
+            }
+        }
+        Ev::Shutdown => return true,
+    }
+    false
+}
+
+fn send_lights(frame: &[u8]) {
+    if let Some(m) = smx::manager() {
+        m.set_lights(frame);
+    }
+}
+
+fn reenable_auto() {
+    if let Some(m) = smx::manager() {
+        m.reenable_auto_lights();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -282,13 +475,19 @@ mod tests {
         assert_eq!(white, rgba_to_rgb(JUDGMENT_FA_PLUS_WHITE_RGBA));
         // Other grades use their palette colour regardless of the flag.
         let miss = flash_color(JudgeGrade::Miss, false);
-        assert_eq!(miss, rgba_to_rgb(JUDGMENT_RGBA[judge_grade_ix(JudgeGrade::Miss)]));
+        assert_eq!(
+            miss,
+            rgba_to_rgb(JUDGMENT_RGBA[judge_grade_ix(JudgeGrade::Miss)])
+        );
     }
 
     #[test]
     fn flash_duration_miss_is_shorter() {
         assert_eq!(flash_duration(JudgeGrade::Miss), FLASH_SECONDS_MISS);
-        assert_eq!(flash_duration(JudgeGrade::Fantastic), FLASH_SECONDS_JUDGMENT);
+        assert_eq!(
+            flash_duration(JudgeGrade::Fantastic),
+            FLASH_SECONDS_JUDGMENT
+        );
         assert_eq!(flash_duration(JudgeGrade::WayOff), FLASH_SECONDS_JUDGMENT);
     }
 
@@ -324,5 +523,18 @@ mod tests {
         assert_eq!(smx_panel_for_col(0, 1, 0), None);
         // A column beyond two pads' worth is out of range.
         assert_eq!(smx_panel_for_col(4, 2, 8), None);
+    }
+
+    #[test]
+    fn worker_lifecycle_runs_without_a_pad() {
+        // With no SMX manager initialized, set_lights and reenable are no-ops, so this
+        // exercises the channel, thread, event handling, and a clean Drop/join.
+        let lights = SmxPanelLights::new();
+        lights.set_active(true);
+        lights.flash(0, 3, [1, 2, 3], 0.05);
+        lights.hold_start(0, 5, [4, 5, 6]);
+        lights.hold_end(0, 5);
+        lights.set_active(false);
+        drop(lights); // joins the worker thread
     }
 }
