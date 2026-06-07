@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.544"
+version = "0.4.548"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -89,7 +89,7 @@ rustmaniax-sdk = "1.1.0"
 softbuffer = "0.4.8"
 
 # Math
-glam = "0.33.0"
+glam = "0.33.1"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 
 # OpenGL Dependencies
@@ -127,7 +127,7 @@ rust-ini = "0.21.3"
 sys-locale = "0.3.2"
 semver = "1.0.28"
 tokio = { version = "1.52.3", features = ["rt"] }
-bitflags = "2.12.1"
+bitflags = "2.13.0"
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
