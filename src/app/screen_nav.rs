@@ -147,6 +147,7 @@ impl App {
                 | CurrentScreen::Input
                 | CurrentScreen::TestLights
                 | CurrentScreen::OverscanAdjustment
+                | CurrentScreen::SmxAssignPads
         )
     }
 
@@ -275,6 +276,11 @@ impl App {
                 .overscan_adjustment_state
                 .active_color_index = color_index;
             overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
+        } else if target_screen == CurrentScreen::SmxAssignPads {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.smx_assign_state = crate::screens::smx_assign::init();
+            self.state.screens.smx_assign_state.active_color_index = color_index;
+            crate::screens::smx_assign::on_enter(&mut self.state.screens.smx_assign_state);
         }
 
         if prev == CurrentScreen::SelectColor {
@@ -426,6 +432,8 @@ impl App {
             || (from == CurrentScreen::TestLights && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::OverscanAdjustment)
             || (from == CurrentScreen::OverscanAdjustment && to == CurrentScreen::Options)
+            || (from == CurrentScreen::Options && to == CurrentScreen::SmxAssignPads)
+            || (from == CurrentScreen::SmxAssignPads && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
             || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
     }
@@ -581,6 +589,7 @@ impl App {
             CurrentScreen::GameOver => gameover::out_transition(),
             CurrentScreen::Input => input_screen::out_transition(),
             CurrentScreen::ConfigurePads => crate::screens::pad_config::out_transition(),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::out_transition(),
         }
     }
 
@@ -624,6 +633,7 @@ impl App {
             CurrentScreen::GameOver => gameover::in_transition(),
             CurrentScreen::Input => input_screen::in_transition(),
             CurrentScreen::ConfigurePads => crate::screens::pad_config::in_transition(),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
     }

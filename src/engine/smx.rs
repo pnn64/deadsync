@@ -8,14 +8,15 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use rustmaniax_sdk::{
-    ConfigFlags, SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
+    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID,
+    SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
 };
 
 use crate::engine::input::{GpSystemEvent, PadBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadEvent, PadId};
 
-/// Number of panels per SMX pad.
-pub const PANEL_COUNT: usize = 9;
+/// Number of panels per SMX pad (from the SDK's hardware-shape constants).
+pub const PANEL_COUNT: usize = NUM_PANELS;
 
 /// Shared state accessible by both the input backend and FSR monitor.
 struct SmxShared {
@@ -73,6 +74,12 @@ pub fn init() -> bool {
 
     let _ = SHARED.set(shared);
     set_usb_polling_us(crate::config::get().smx_usb_polling_us);
+    // Push any saved pad→player assignment so the SDK orders slots by serial as
+    // pads connect (overriding the jumper). No-op when nothing is saved.
+    let (p1, p2) = crate::config::smx_pad_assignment();
+    if p1.is_some() || p2.is_some() {
+        set_player_assignment(p1, p2);
+    }
     log::info!("SMX: SDK initialized, polling for pads");
     true
 }
@@ -454,6 +461,136 @@ pub fn set_serial_numbers() {
     }
 }
 
+/// Pin pad serials to player slots (`p1` → slot 0, `p2` → slot 1), overriding the
+/// hardware P1/P2 jumper. `None` for a side follows the jumper. Pushed to the SDK,
+/// which re-orders the slots live.
+pub fn set_player_assignment(p1: Option<String>, p2: Option<String>) {
+    if let Some(s) = SHARED.get() {
+        s.manager.set_player_assignment(p1, p2);
+    }
+}
+
+/// The serial connected at each slot (index 0 = P1, 1 = P2), or `None` if that
+/// slot has no connected pad (or its serial isn't known yet). This reflects the
+/// SDK's *current* ordering, i.e. what is actually assigned right now.
+pub fn connected_serials() -> [Option<String>; 2] {
+    std::array::from_fn(|slot| {
+        let info = get_info(slot);
+        (info.connected && !info.serial.is_empty()).then_some(info.serial)
+    })
+}
+
+/// First 4 chars of a serial, for a compact pad label (e.g. `40ea`). An empty
+/// serial (not read yet) yields `????` so the label keeps its width.
+pub fn serial_prefix(serial: &str) -> String {
+    if serial.is_empty() {
+        "????".to_owned()
+    } else {
+        serial.chars().take(4).collect()
+    }
+}
+
+/// Pure: do two pads' jumpers conflict? Both connected and reporting the same
+/// P1/P2 jumper, so the SDK can't order them by jumper alone and the user must
+/// assign them manually.
+fn jumpers_conflict(a: &SmxInfo, b: &SmxInfo) -> bool {
+    a.connected && b.connected && a.is_player2 == b.is_player2
+}
+
+/// Pure: is a same-jumper conflict still unresolved? True when the jumpers
+/// conflict and the saved assignment does not pin both player sides.
+fn conflict_unresolved(jumpers_conflict: bool, p1_assigned: bool, p2_assigned: bool) -> bool {
+    jumpers_conflict && (!p1_assigned || !p2_assigned)
+}
+
+/// The jumper-derived P1/P2 serial pair to auto-save for a clean, unambiguous pad
+/// pair: both connected, both with real serials, and *distinct* jumpers. The SDK
+/// orders slot 0 = P1-jumper and slot 1 = P2-jumper, so slot 0's serial is P1 and
+/// slot 1's is P2. Returns `None` when the pair is incomplete or ambiguous (same
+/// jumper), leaving it for manual assignment.
+pub fn jumper_derived_pair(a: &SmxInfo, b: &SmxInfo) -> Option<(String, String)> {
+    let distinct = a.connected
+        && b.connected
+        && a.has_serial_number
+        && b.has_serial_number
+        && a.is_player2 != b.is_player2;
+    distinct.then(|| (a.serial.clone(), b.serial.clone()))
+}
+
+/// True when both pads are connected and report the *same* P1/P2 jumper, so the
+/// SDK can't order them by jumper alone and the user should assign them manually.
+pub fn same_jumper_conflict() -> bool {
+    jumpers_conflict(&get_info(0), &get_info(1))
+}
+
+/// Whether to surface the "both pads share a jumper, assign them" warning: an
+/// unresolved same-jumper conflict (no saved assignment covers both pads). Single
+/// source of truth for the main-Menu badge, the options-page warning, and the
+/// auto-prompt, so they always agree.
+pub fn conflict_warning_active() -> bool {
+    let (p1, p2) = crate::config::smx_pad_assignment();
+    conflict_unresolved(same_jumper_conflict(), p1.is_some(), p2.is_some())
+}
+
+/// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
+/// P2 slot; `None` turns that pad off). One-shot, so re-send to hold the colour.
+pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+    let Some(s) = SHARED.get() else { return };
+    // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED
+    // pads ignores the inner-ring bytes, so one buffer size covers both.
+    let mut buf = vec![0u8; 2 * BYTES_PER_PAD_25];
+    for (pad, color) in colors.iter().enumerate() {
+        let Some(rgb) = color else { continue };
+        let base = pad * BYTES_PER_PAD_25;
+        for led in buf[base..base + BYTES_PER_PAD_25].chunks_exact_mut(3) {
+            led.copy_from_slice(rgb);
+        }
+    }
+    s.manager.set_lights(&buf);
+}
+
+/// Re-enable the pads' built-in automatic lighting (call when leaving a screen
+/// that drove the lights directly, so the pads stop showing our static colour).
+pub fn reenable_auto_lights() {
+    if let Some(s) = SHARED.get() {
+        s.manager.reenable_auto_lights();
+    }
+}
+
+/// Player-indicator colours: P1 = blue, P2 = red. Used by the pad-assignment
+/// screen so the user can see which physical pad is which without reading serials.
+pub const PLAYER1_LIGHT: [u8; 3] = [0, 80, 255];
+pub const PLAYER2_LIGHT: [u8; 3] = [255, 0, 0];
+/// Shown when a connected pad's player side is ambiguous (both pads share a
+/// jumper and no assignment resolves them).
+pub const PLAYER_UNCONFIGURED_LIGHT: [u8; 3] = [110, 110, 110];
+
+/// On-screen amber used to flag an unresolved pad-assignment conflict (the main
+/// Menu badge and the assignment screen). RGB only; callers apply their own alpha.
+pub const CONFLICT_WARNING_RGB: [f32; 3] = [1.0, 0.78, 0.2];
+
+/// Pure: indicator colour for a slot. P1 (slot 0) blue, P2 (slot 1) red, white
+/// when the assignment is ambiguous, `None` for an empty slot.
+fn indicator_color(connected: bool, ambiguous: bool, slot: usize) -> Option<[u8; 3]> {
+    if !connected {
+        None
+    } else if ambiguous {
+        Some(PLAYER_UNCONFIGURED_LIGHT)
+    } else if slot == 1 {
+        Some(PLAYER2_LIGHT)
+    } else {
+        Some(PLAYER1_LIGHT)
+    }
+}
+
+/// Per-slot indicator colours for the StepManiaX options page: P1 (slot 0) blue,
+/// P2 (slot 1) red, or white when the assignment is ambiguous; `None` for an
+/// empty slot. Recomputed each frame so a live swap is reflected immediately.
+pub fn player_indicator_colors() -> [Option<[u8; 3]>; 2] {
+    let ambiguous = conflict_warning_active();
+    std::array::from_fn(|slot| indicator_color(get_info(slot).connected, ambiguous, slot))
+}
+
 // ─── Internal Event Dispatch ─────────────────────────────────────────────────
 
 fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
@@ -471,7 +608,8 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             *shared.serial[pad].lock().unwrap() = info.serial.clone();
 
             log::info!(
-                "SMX: pad {pad} connected (P{}, fw {}, serial {}, has_serial={})",
+                "SMX: pad {pad} connected (P{} slot, jumper P{}, fw {}, serial {}, has_serial={})",
+                if pad == 1 { 2 } else { 1 },
                 if info.is_player2 { 2 } else { 1 },
                 info.firmware_version,
                 info.serial,
@@ -497,14 +635,14 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
 
             let name = format!(
                 "StepManiaX P{} (fw {})",
-                if info.is_player2 { 2 } else { 1 },
+                if pad == 1 { 2 } else { 1 },
                 info.firmware_version
             );
             let sys_event = GpSystemEvent::Connected {
                 name,
                 id: pad_device_id(pad),
-                vendor_id: Some(0x2341),
-                product_id: Some(0x8037),
+                vendor_id: Some(SMX_USB_VENDOR_ID),
+                product_id: Some(SMX_USB_PRODUCT_ID),
                 backend: PadBackend::Smx,
                 initial: false,
             };
@@ -590,13 +728,14 @@ fn pad_device_id(pad: usize) -> PadId {
 /// SMX panel index → 3x3-grid label, matching the SDK's panel naming.
 const PANEL_NAMES: [&str; PANEL_COUNT] = ["UL", "U", "UR", "L", "C", "R", "DL", "D", "DR"];
 
-/// Friendly label for an SMX trigger, e.g. `SMX[40ea] R`.
+/// Friendly label for an SMX trigger, e.g. `SMX P1 R`.
 ///
 /// `device` is the pad slot (the `PadId`/device index carried by a binding or
-/// raw event) and `code` is the panel index. Returns `None` unless that slot
-/// currently has a connected SMX pad and the code is in range, so callers can
-/// fall back to a generic label. The serial prefix (first 4 hex chars)
-/// disambiguates two pads even when both are assigned to the same player.
+/// raw event) and `code` is the panel index. The slot is authoritative for the
+/// player side (slot 0 = P1, slot 1 = P2, per the pad→player assignment), so the
+/// label names the player rather than the opaque serial. Returns `None` unless
+/// that slot currently has a connected SMX pad and the code is in range, so
+/// callers can fall back to a generic label.
 ///
 /// NOTE: identification is by slot index, which can collide with a native
 /// gamepad sharing that index (see `pad_device_id`); the label is best-effort.
@@ -611,18 +750,19 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     if *s.uuid[device].lock().unwrap() == [0u8; 16] {
         return None;
     }
-    let prefix: String = s.serial[device].lock().unwrap().chars().take(4).collect();
-    if prefix.is_empty() {
-        Some(format!("SMX {panel}"))
-    } else {
-        Some(format!("SMX[{prefix}] {panel}"))
-    }
+    let player = if device == 1 { 2 } else { 1 };
+    Some(format!("SMX P{player} {panel}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PadConfigData, PanelThresholds, preset_thresholds};
+    use super::{
+        PLAYER1_LIGHT, PLAYER2_LIGHT, PLAYER_UNCONFIGURED_LIGHT, PadConfigData, PanelThresholds,
+        conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
+        preset_thresholds,
+    };
     use crate::config::SmxPadPreset;
+    use rustmaniax_sdk::SmxInfo;
 
     #[test]
     fn pad_config_data_settings_round_trips() {
@@ -712,5 +852,75 @@ mod tests {
             ),
             (20, 25, 152, 153)
         );
+    }
+
+    /// Build an `SmxInfo` with just the fields the assignment logic reads.
+    fn info(connected: bool, is_player2: bool, has_serial: bool, serial: &str) -> SmxInfo {
+        SmxInfo {
+            connected,
+            is_player2,
+            has_serial_number: has_serial,
+            serial: serial.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn jumpers_conflict_only_when_both_connected_same_jumper() {
+        let p1 = info(true, false, true, "A");
+        // Distinct jumpers: no conflict.
+        assert!(!jumpers_conflict(&p1, &info(true, true, true, "B")));
+        // Same jumper, both connected: conflict.
+        assert!(jumpers_conflict(&p1, &info(true, false, true, "B")));
+        // Same jumper but one disconnected: no conflict (the lone pad orders fine).
+        assert!(!jumpers_conflict(&p1, &info(false, false, false, "")));
+    }
+
+    #[test]
+    fn conflict_unresolved_needs_both_sides_assigned() {
+        // No jumper conflict: never unresolved, whatever the assignment.
+        assert!(!conflict_unresolved(false, false, false));
+        // Conflict, nothing assigned: unresolved.
+        assert!(conflict_unresolved(true, false, false));
+        // Conflict, only one side assigned: still unresolved.
+        assert!(conflict_unresolved(true, true, false));
+        assert!(conflict_unresolved(true, false, true));
+        // Conflict, both sides assigned: resolved.
+        assert!(!conflict_unresolved(true, true, true));
+    }
+
+    #[test]
+    fn jumper_derived_pair_orders_by_slot_when_distinct() {
+        let slot0 = info(true, false, true, "P1SERIAL");
+        let slot1 = info(true, true, true, "P2SERIAL");
+        // Distinct jumpers: slot 0 -> P1, slot 1 -> P2.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &slot1),
+            Some(("P1SERIAL".to_owned(), "P2SERIAL".to_owned()))
+        );
+        // Same jumper: ambiguous, leave for manual assignment.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &info(true, false, true, "P2SERIAL")),
+            None
+        );
+        // Missing serial: not safe to pin.
+        assert_eq!(jumper_derived_pair(&slot0, &info(true, true, false, "")), None);
+        // Only one pad connected: no pair.
+        assert_eq!(
+            jumper_derived_pair(&slot0, &info(false, false, false, "")),
+            None
+        );
+    }
+
+    #[test]
+    fn indicator_color_maps_slot_to_player_colour() {
+        // Empty slot: no colour.
+        assert_eq!(indicator_color(false, false, 0), None);
+        // Connected, unambiguous: slot 0 blue (P1), slot 1 red (P2).
+        assert_eq!(indicator_color(true, false, 0), Some(PLAYER1_LIGHT));
+        assert_eq!(indicator_color(true, false, 1), Some(PLAYER2_LIGHT));
+        // Ambiguous: white regardless of slot.
+        assert_eq!(indicator_color(true, true, 0), Some(PLAYER_UNCONFIGURED_LIGHT));
+        assert_eq!(indicator_color(true, true, 1), Some(PLAYER_UNCONFIGURED_LIGHT));
     }
 }

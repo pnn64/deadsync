@@ -17,6 +17,33 @@ pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
     USB_POLLING_MIN_US + (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
 }
 
+/// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
+/// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
+/// not yet assigned.
+fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
+    use crate::assets::i18n::{tr, tr_fmt};
+    use crate::engine::smx;
+    let label = |slot: usize| -> String {
+        let info = smx::get_info(slot);
+        if info.connected && !info.serial.is_empty() {
+            format!("SMX[{}]", smx::serial_prefix(&info.serial))
+        } else {
+            tr("OptionsInput", "SmxAssignStatusNone").to_string()
+        }
+    };
+    let mut s = tr_fmt(
+        "OptionsInput",
+        "SmxAssignStatusLine",
+        &[("p1", &label(0)), ("p2", &label(1))],
+    )
+    .to_string();
+    if smx::conflict_warning_active() {
+        s.push_str("\n\n");
+        s.push_str(&tr("OptionsInput", "SmxAssignStatusConflict"));
+    }
+    std::borrow::Cow::Owned(s)
+}
+
 pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ConfigureMappings,
@@ -252,6 +279,28 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SmxDefaultPadConfig,
+        label: lookup_key("OptionsInput", "DefaultPadConfig"),
+        choices: &[
+            localized_choice("OptionsInput", "PresetLow"),
+            localized_choice("OptionsInput", "PresetMedium"),
+            localized_choice("OptionsInput", "PresetHigh"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::SmxAssignPads,
+        label: lookup_key("OptionsInput", "SmxAssignPads"),
+        choices: &[localized_choice("Common", "Open")],
+        inline: false,
+    },
+    SubRow {
+        id: SubRowId::SmxSwapPads,
+        label: lookup_key("OptionsInput", "SmxSwapPads"),
+        choices: &[localized_choice("OptionsInput", "SmxSwapPadsAction")],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::SmxUsbPolling,
         // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
         label: lookup_key("OptionsInput", "UsbPolling"),
@@ -269,16 +318,6 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
             literal_choice("1000us"),
         ],
         inline: false,
-    },
-    SubRow {
-        id: SubRowId::SmxDefaultPadConfig,
-        label: lookup_key("OptionsInput", "DefaultPadConfig"),
-        choices: &[
-            localized_choice("OptionsInput", "PresetLow"),
-            localized_choice("OptionsInput", "PresetMedium"),
-            localized_choice("OptionsInput", "PresetHigh"),
-        ],
-        inline: true,
     },
 ];
 
@@ -300,19 +339,35 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::InpSmxUsbPolling,
-        name: lookup_key("OptionsInput", "UsbPolling"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsInputHelp",
-            "UsbPollingHelp",
-        ))],
-    },
-    Item {
         id: ItemId::InpSmxDefaultPadConfig,
         name: lookup_key("OptionsInput", "DefaultPadConfig"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "DefaultPadConfigHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxAssignPads,
+        name: lookup_key("OptionsInput", "SmxAssignPads"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxAssignPadsHelp")),
+            HelpEntry::Dynamic(smx_assignment_status),
+        ],
+    },
+    Item {
+        id: ItemId::InpSmxSwapPads,
+        name: lookup_key("OptionsInput", "SmxSwapPads"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxSwapPadsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxUsbPolling,
+        name: lookup_key("OptionsInput", "UsbPolling"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "UsbPollingHelp",
         ))],
     },
     Item {

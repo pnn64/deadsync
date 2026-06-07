@@ -525,6 +525,32 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
     }
 
+    // --- StepManiaX pad warning (only when two pads share a P1/P2 jumper and no
+    // assignment resolves them, so the user knows to assign their pads). ---
+    if crate::config::get().smx_input && crate::engine::smx::conflict_warning_active() {
+        let smx_base_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
+            .mul_add(STATUS_ZOOM, ac_base_y + STATUS_BLOCK_GAP);
+        // Two short lines (kept compact for the main screen).
+        let lines = [tr("Menu", "SmxAssignWarning1"), tr("Menu", "SmxAssignWarning2")];
+        for (i, text) in lines.into_iter().enumerate() {
+            let y = (STATUS_LINE_HEIGHT * i as f32).mul_add(STATUS_ZOOM, smx_base_y);
+            let mut actor = status_text_actor(
+                text,
+                0.0,
+                STATUS_BASE_X,
+                y,
+                STATUS_ZOOM,
+                alpha_multiplier,
+                TextAlign::Left,
+            );
+            if let Actor::Text { color, .. } = &mut actor {
+                // Amber warning (alpha already applied by status_text_actor).
+                color[..3].copy_from_slice(&crate::engine::smx::CONFLICT_WARNING_RGB);
+            }
+            actors.push(actor);
+        }
+    }
+
     actors
 }
 

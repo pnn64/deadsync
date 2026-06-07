@@ -682,7 +682,8 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
         | CurrentScreen::SelectCourse
         | CurrentScreen::Sandbox
         | CurrentScreen::PlayerOptions
-        | CurrentScreen::ConfigurePads => LightMode::MenuStartAndDirections,
+        | CurrentScreen::ConfigurePads
+        | CurrentScreen::SmxAssignPads => LightMode::MenuStartAndDirections,
     }
 }
 
@@ -759,6 +760,7 @@ const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
             | CurrentScreen::Input
             | CurrentScreen::TestLights
             | CurrentScreen::OverscanAdjustment
+            | CurrentScreen::SmxAssignPads
     )
 }
 
@@ -1575,6 +1577,19 @@ pub struct ScreensState {
     pad_config_state: crate::screens::pad_config::State,
     test_lights_state: test_lights::State,
     overscan_adjustment_state: overscan_adjustment::State,
+    smx_assign_state: crate::screens::smx_assign::State,
+    /// Latched while a same-jumper SMX conflict is being auto-prompted, so the
+    /// assignment screen is only opened once per conflict episode (cleared when
+    /// the conflict resolves). See `App::maybe_autoprompt_smx_assign`.
+    smx_autoprompt_latched: bool,
+    /// Latched while the StepManiaX options page is driving the pad indicator
+    /// lights, so auto-lighting is restored exactly once on leaving the page.
+    smx_options_lights_active: bool,
+    /// Last indicator colours pushed to the pads on the options page, so the
+    /// lights are only re-sent on change or to hold them, not every frame.
+    smx_options_last_lights: [Option<[u8; 3]>; 2],
+    /// Time since the last options-page light send, for the periodic hold.
+    smx_options_light_timer: f32,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -3518,6 +3533,9 @@ impl ScreensState {
         let mut overscan_adjustment_state = overscan_adjustment::init();
         overscan_adjustment_state.active_color_index = color_index;
 
+        let mut smx_assign_state = crate::screens::smx_assign::init();
+        smx_assign_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -3550,6 +3568,11 @@ impl ScreensState {
             },
             test_lights_state,
             overscan_adjustment_state,
+            smx_assign_state,
+            smx_autoprompt_latched: false,
+            smx_options_lights_active: false,
+            smx_options_last_lights: [None, None],
+            smx_options_light_timer: 0.0,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -3618,6 +3641,10 @@ impl ScreensState {
             ),
             CurrentScreen::OverscanAdjustment => (
                 overscan_adjustment::update(&mut self.overscan_adjustment_state, delta_time),
+                false,
+            ),
+            CurrentScreen::SmxAssignPads => (
+                crate::screens::smx_assign::update(&mut self.smx_assign_state, delta_time),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -3956,9 +3983,10 @@ impl App {
                 None
             };
             let cursor_profile = cursor_dev.and_then(|dev| {
-                profile::active_local_profile_id_for_pad(
-                    crate::engine::smx::get_info(dev.index).is_player2,
-                )
+                // Slot is the source of truth for player side (the SDK orders
+                // slot 0 = P1, slot 1 = P2 per the pad→player assignment), so map
+                // the config by slot, not the raw jumper bit.
+                profile::active_local_profile_id_for_pad(dev.index == 1)
             });
             pad_config::set_save_available(target, cursor_profile.is_some());
             // Mark the config currently applied to the cursor pad's slot, read
@@ -4129,6 +4157,94 @@ impl App {
     /// cheap per-pad signature avoids loading config files or rewriting the pad
     /// unless something relevant changed (so manual edits aren't clobbered).
     /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
+    /// Once both pads are present with real serials and *distinct* jumpers, and
+    /// nothing is saved yet, persist the jumper-derived P1/P2 serial map. This
+    /// pins the (unambiguous) good case so it stays stable even if a pad later
+    /// loses or shares a jumper, and gives the UI a concrete assignment to show.
+    /// The ambiguous same-jumper case is left for the user to assign manually.
+    fn reconcile_smx_assignment(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            return;
+        }
+        if !config::get().smx_input {
+            return;
+        }
+        // Only auto-save when no assignment exists yet.
+        let (p1, p2) = config::smx_pad_assignment();
+        if p1.is_some() || p2.is_some() {
+            return;
+        }
+        let a = crate::engine::smx::get_info(0);
+        let b = crate::engine::smx::get_info(1);
+        // SDK orders slot 0 = P1-jumpered, slot 1 = P2-jumpered, so the pair is
+        // already in (P1, P2) order when the jumpers are distinct.
+        if let Some((p1, p2)) = crate::engine::smx::jumper_derived_pair(&a, &b) {
+            log::info!("SMX: auto-saving pad assignment from jumpers (P1={p1}, P2={p2})");
+            config::update_smx_pad_assignment(Some(p1), Some(p2));
+        }
+    }
+
+    /// From the main Menu, if two pads share a P1/P2 jumper and no assignment
+    /// resolves them, open the assignment screen automatically (once per conflict
+    /// episode). Cancelling won't re-prompt until the conflict clears and returns.
+    fn maybe_autoprompt_smx_assign(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Menu
+            || !matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            return;
+        }
+        if !(config::get().smx_input && crate::engine::smx::conflict_warning_active()) {
+            // No unresolved conflict, so re-arm for the next episode.
+            self.state.screens.smx_autoprompt_latched = false;
+            return;
+        }
+        if self.state.screens.smx_autoprompt_latched {
+            return;
+        }
+        self.state.screens.smx_autoprompt_latched = true;
+        crate::screens::smx_assign::set_pending_return(CurrentScreen::Menu);
+        self.handle_navigation_action(CurrentScreen::SmxAssignPads);
+    }
+
+    /// While the StepManiaX options page is open, light the pads blue (P1) / red
+    /// (P2), white when ambiguous, so the user can see the assignment, and so a
+    /// live Swap is reflected on the pads immediately. Restores auto-lighting on
+    /// leaving the page, unless the assignment screen is taking the lights over.
+    /// (Driven from the app loop so the lifecycle is in one place.)
+    fn drive_smx_options_lights(&mut self, dt: f32) {
+        // Re-send at most this often to hold the colour (a one-shot set_lights
+        // lapses back to auto-lighting), plus immediately on any colour change so
+        // a live Swap shows at once. Avoids re-sending a full frame every tick.
+        const RESEND_INTERVAL: f32 = 0.25;
+        let active = self.state.screens.current_screen == CurrentScreen::Options
+            && config::get().smx_input
+            && options::is_smx_config_view(&self.state.screens.options_state);
+        if active {
+            let colors = crate::engine::smx::player_indicator_colors();
+            self.state.screens.smx_options_light_timer += dt;
+            if colors != self.state.screens.smx_options_last_lights
+                || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
+            {
+                crate::engine::smx::set_player_lights(colors);
+                self.state.screens.smx_options_last_lights = colors;
+                self.state.screens.smx_options_light_timer = 0.0;
+            }
+            self.state.screens.smx_options_lights_active = true;
+        } else if self.state.screens.smx_options_lights_active {
+            self.state.screens.smx_options_lights_active = false;
+            self.state.screens.smx_options_light_timer = 0.0;
+            self.state.screens.smx_options_last_lights = [None, None];
+            // The assignment screen drives the pad lights itself, so don't restore
+            // auto-lighting when handing off to it (avoids a one-frame flicker).
+            if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
+                crate::engine::smx::reenable_auto_lights();
+            }
+        }
+    }
+
     fn apply_smx_managed_preset(&mut self) {
         use pad_config_sync::Sig;
 
@@ -4160,8 +4276,9 @@ impl App {
                 continue;
             }
             // In Doubles both pads belong to the one joined player; otherwise the
-            // pad maps to its own side.
-            let profile_id = profile::active_local_profile_id_for_pad(info.is_player2);
+            // pad maps to its own side. Side is the slot (the SDK orders slot 0 =
+            // P1, slot 1 = P2 per the pad→player assignment), not the raw jumper.
+            let profile_id = profile::active_local_profile_id_for_pad(pad == 1);
             let pad_type = crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             // Compare against the cached signature by borrow: the steady-state
             // path allocates nothing just to find that nothing changed. The owned
@@ -4458,6 +4575,9 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.sync_pad_config_fsr();
+        self.reconcile_smx_assignment();
+        self.maybe_autoprompt_smx_assign();
+        self.drive_smx_options_lights(delta_time);
         self.apply_smx_managed_preset();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
@@ -4871,6 +4991,8 @@ impl App {
             options::open_input_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::TestLights {
             options::open_lights_submenu(&mut self.state.screens.options_state);
+        } else if from == CurrentScreen::SmxAssignPads {
+            options::open_smx_config_submenu(&mut self.state.screens.options_state);
         }
     }
 
@@ -6311,6 +6433,10 @@ impl App {
                 &mut self.state.screens.overscan_adjustment_state,
                 &ev,
             ),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::handle_input(
+                &mut self.state.screens.smx_assign_state,
+                &ev,
+            ),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
@@ -6663,6 +6789,10 @@ impl App {
             ),
             CurrentScreen::OverscanAdjustment => overscan_adjustment::get_actors(
                 &self.state.screens.overscan_adjustment_state,
+                screen_alpha_multiplier,
+            ),
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::get_actors(
+                &self.state.screens.smx_assign_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::PlayerOptions => {
@@ -8159,6 +8289,11 @@ impl App {
                 .overscan_adjustment_state
                 .active_color_index = color_index;
             overscan_adjustment::on_enter(&mut self.state.screens.overscan_adjustment_state);
+        } else if target == CurrentScreen::SmxAssignPads {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.smx_assign_state = crate::screens::smx_assign::init();
+            self.state.screens.smx_assign_state.active_color_index = color_index;
+            crate::screens::smx_assign::on_enter(&mut self.state.screens.smx_assign_state);
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();

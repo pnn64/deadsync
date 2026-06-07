@@ -86,6 +86,8 @@ fn publish_keymap(conf: &SimpleIni) {
 fn load_defaults_after_error() {
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
     *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
+    *SMX_P1_SERIAL.lock().unwrap() = None;
+    *SMX_P2_SERIAL.lock().unwrap() = None;
 }
 
 fn load_runtime_state(conf: &SimpleIni) {
@@ -95,6 +97,14 @@ fn load_runtime_state(conf: &SimpleIni) {
         .unwrap_or_else(|| DEFAULT_MACHINE_NOTESKIN.to_string());
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
     *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = load_additional_song_folders(conf);
+    // SMX pad assignment serials: missing/blank means "no assignment" (jumper).
+    let serial = |key| {
+        conf.get("Options", key)
+            .map(|v| v.trim().to_owned())
+            .filter(|v| !v.is_empty())
+    };
+    *SMX_P1_SERIAL.lock().unwrap() = serial("SmxP1Serial");
+    *SMX_P2_SERIAL.lock().unwrap() = serial("SmxP2Serial");
 }
 
 fn apply_input_runtime_state() {

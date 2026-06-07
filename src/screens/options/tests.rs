@@ -122,11 +122,13 @@ fn smx_config_items_match_rows() {
             SubRowId::SmxManagesPadConfig,
             ItemId::InpSmxManagesPadConfig,
         ),
-        (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),
         (
             SubRowId::SmxDefaultPadConfig,
             ItemId::InpSmxDefaultPadConfig,
         ),
+        (SubRowId::SmxAssignPads, ItemId::InpSmxAssignPads),
+        (SubRowId::SmxSwapPads, ItemId::InpSmxSwapPads),
+        (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),
     ];
 
     assert_eq!(

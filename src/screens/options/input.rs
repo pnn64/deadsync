@@ -1246,6 +1246,32 @@ pub(super) fn activate_current_selection(
                         _ => {}
                     }
                 }
+            } else if matches!(kind, SubmenuKind::SmxConfig) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ScreenAction::None;
+                };
+                if let Some(row) = rows.get(row_idx) {
+                    match row.id {
+                        SubRowId::SmxAssignPads => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            crate::screens::smx_assign::set_pending_return(Screen::Options);
+                            return ScreenAction::Navigate(Screen::SmxAssignPads);
+                        }
+                        SubRowId::SmxSwapPads => {
+                            // Immediate action: swap P1/P2 and stay on the page so
+                            // the user can watch the pad colours swap. Needs both
+                            // pads; otherwise it is a no-op, so signal that.
+                            if config::swap_smx_pad_assignment() {
+                                audio::play_sfx("assets/sounds/start.ogg");
+                            } else {
+                                audio::play_sfx("assets/sounds/common_invalid.ogg");
+                            }
+                            return ScreenAction::None;
+                        }
+                        _ => {}
+                    }
+                }
             } else if matches!(kind, SubmenuKind::Lights) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {

@@ -4333,11 +4333,14 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !info.connected {
             continue;
         }
+        // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2 per the
+        // pad→player assignment), not the raw jumper bit.
+        let is_p2 = slot == 1;
         // In play? Doubles/Versus drive both pads; Singles only the joined side.
         let in_play = match style {
             profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
             profile_data::PlayStyle::Single => {
-                profile::is_session_side_joined(if info.is_player2 {
+                profile::is_session_side_joined(if is_p2 {
                     profile_data::PlayerSide::P2
                 } else {
                     profile_data::PlayerSide::P1
@@ -4347,8 +4350,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !in_play {
             continue;
         }
-        let pid = profile::active_local_profile_id_for_pad(info.is_player2);
-        pads.push((info.is_player2, pid, slot));
+        let pid = profile::active_local_profile_id_for_pad(is_p2);
+        pads.push((is_p2, pid, slot));
     }
     if pads.is_empty() {
         return None;
@@ -8381,12 +8384,12 @@ fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
 /// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
 /// (quick recall from the Advanced menu). Returns whether it was applied.
 fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
-    let Some(slot) = (0..2).find(|&s| {
-        let i = crate::engine::smx::get_info(s);
-        i.connected && i.is_player2 == p2
-    }) else {
+    // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2 per the
+    // pad→player assignment): P1 -> slot 0, P2 -> slot 1.
+    let slot = usize::from(p2);
+    if !crate::engine::smx::get_info(slot).connected {
         return false;
-    };
+    }
     let applied = if preset {
         match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
             Ok(p) => crate::engine::smx::apply_preset(slot, p),
@@ -8450,8 +8453,10 @@ fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, re
     }
     // A disconnected sibling has no list to sync, and its profile read off stale
     // info would be meaningless; the pure helper folds both cases into `None`.
-    let other_info = crate::engine::smx::get_info(1 - slot);
-    let sibling_profile = profile::active_local_profile_id_for_pad(other_info.is_player2);
+    let other = 1 - slot;
+    let other_info = crate::engine::smx::get_info(other);
+    // Sibling's player side is its slot, not the raw jumper bit.
+    let sibling_profile = profile::active_local_profile_id_for_pad(other == 1);
     if let Some(intent) = sibling_refresh_intent(
         slot,
         other_info.connected,
@@ -8482,7 +8487,9 @@ fn perform_pad_profile_save(state: &mut State) {
     }
     let slot = device.index;
     let info = crate::engine::smx::get_info(slot);
-    let Some(profile_id) = profile::active_local_profile_id_for_pad(info.is_player2) else {
+    // Player side is the slot, not the raw jumper bit (the serial below still
+    // comes from whichever pad occupies this slot).
+    let Some(profile_id) = profile::active_local_profile_id_for_pad(slot == 1) else {
         return; // Guest: no profile to save to.
     };
     // Rename: just relabel the existing config (and honor the default toggle,
@@ -8566,8 +8573,8 @@ fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> 
         return None;
     }
     let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
-    let info = crate::engine::smx::get_info(device.index);
-    let profile_id = profile::active_local_profile_id_for_pad(info.is_player2)?;
+    // Player side is the slot (device.index), not the raw jumper bit.
+    let profile_id = profile::active_local_profile_id_for_pad(device.index == 1)?;
     Some((profile_id, name, device.index))
 }
 

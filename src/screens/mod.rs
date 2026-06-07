@@ -15,6 +15,7 @@ pub mod mappings;
 pub mod menu;
 pub mod options;
 pub mod overscan_adjustment;
+pub mod smx_assign;
 pub(crate) mod pack_sync;
 pub mod pad_config;
 pub mod player_options;
@@ -146,6 +147,7 @@ pub enum Screen {
     TestLights,
     OverscanAdjustment,
     ConfigurePads,
+    SmxAssignPads,
 }
 
 impl Screen {
@@ -179,6 +181,7 @@ impl Screen {
             Self::TestLights => "ScreenTestLights",
             Self::OverscanAdjustment => "ScreenOverscanConfig",
             Self::ConfigurePads => "ScreenConfigurePads",
+            Self::SmxAssignPads => "ScreenSmxAssignPads",
         }
     }
 }

@@ -58,6 +58,8 @@ pub enum SubRowId {
     SmxManagesPadConfig,
     SmxUsbPolling,
     SmxDefaultPadConfig,
+    SmxAssignPads,
+    SmxSwapPads,
     MenuNavigation,
     OptionsNavigation,
     MenuButtons,

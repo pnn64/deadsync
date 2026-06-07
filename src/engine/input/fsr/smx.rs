@@ -80,10 +80,12 @@ impl Monitor {
             }
             let test_data = smx::get_test_data(pad);
             let input_state = smx::manager().map_or(0, |m| m.get_input_state(pad));
+            // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2
+            // per the pad→player assignment), not the raw jumper bit.
             let device_name = format!(
                 "StepManiaX P{} [{}]",
-                if info.is_player2 { 2 } else { 1 },
-                serial_prefix(&info.serial),
+                if pad == 1 { 2 } else { 1 },
+                smx::serial_prefix(&info.serial),
             );
 
             let buttons = std::array::from_fn(|i| {
@@ -106,7 +108,7 @@ impl Monitor {
                     index: pad,
                 },
                 device_name,
-                is_player2: info.is_player2,
+                is_p2_side: pad == 1,
                 buttons,
                 supports_advanced: fsr,
                 simple_per_sensor_bars: !fsr,
@@ -269,7 +271,8 @@ impl Monitor {
             }
             let _ = writeln!(
                 out,
-                "Pad {pad}: P{} fw={} serial={}",
+                "Pad {pad}: P{} (jumper P{}) fw={} serial={}",
+                if pad == 1 { 2 } else { 1 },
                 if info.is_player2 { 2 } else { 1 },
                 info.firmware_version,
                 info.serial
@@ -319,15 +322,6 @@ impl Drop for Monitor {
                 }
             }
         }
-    }
-}
-
-/// First 4 hex chars of a serial, for compact pad labels (e.g. `40ea`).
-fn serial_prefix(serial: &str) -> String {
-    if serial.is_empty() {
-        "?".to_owned()
-    } else {
-        serial.chars().take(4).collect()
     }
 }
 

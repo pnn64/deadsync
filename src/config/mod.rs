@@ -28,6 +28,7 @@ pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::runtime::{
     additional_song_folders, audio_mix_levels, flush_pending_saves, get, machine_default_noteskin,
+    smx_pad_assignment,
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
@@ -51,8 +52,8 @@ use self::null_or_die_cfg::{
     parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
 };
 use self::runtime::{
-    ADDITIONAL_SONG_FOLDERS, MACHINE_DEFAULT_NOTESKIN, lock_config, queue_save_write,
-    sync_audio_mix_levels_from_config,
+    ADDITIONAL_SONG_FOLDERS, MACHINE_DEFAULT_NOTESKIN, SMX_P1_SERIAL, SMX_P2_SERIAL, lock_config,
+    queue_save_write, sync_audio_mix_levels_from_config,
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use crate::engine::gfx::{BackendType, PresentModePolicy};

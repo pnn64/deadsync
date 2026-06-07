@@ -136,6 +136,38 @@ pub fn update_smx_usb_polling(micros: u16) {
     save_without_keymaps();
 }
 
+/// Persist the SMX pad → player serial assignment and push it live to the SDK,
+/// which re-orders the device slots so slot 0 = P1, slot 1 = P2. A `None` clears
+/// that side (falling back to the hardware jumper). No-op if unchanged.
+pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<String>) {
+    {
+        let mut p1 = SMX_P1_SERIAL.lock().unwrap();
+        let mut p2 = SMX_P2_SERIAL.lock().unwrap();
+        if *p1 == p1_serial && *p2 == p2_serial {
+            return;
+        }
+        *p1 = p1_serial.clone();
+        *p2 = p2_serial.clone();
+    }
+    crate::engine::smx::set_player_assignment(p1_serial, p2_serial);
+    save_without_keymaps();
+}
+
+/// Swap which physical pad is P1 vs P2. Uses the serials currently connected at
+/// slot 0 and slot 1 and pins them reversed, so the swap is immediate and works
+/// whether or not an assignment was already saved. Returns whether it swapped:
+/// `false` (no-op) unless both pads are connected, since a swap is undefined with
+/// fewer than two pads.
+pub fn swap_smx_pad_assignment() -> bool {
+    let [s0, s1] = crate::engine::smx::connected_serials();
+    if let (Some(a), Some(b)) = (s0, s1) {
+        update_smx_pad_assignment(Some(b), Some(a));
+        true
+    } else {
+        false
+    }
+}
+
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     let enabled = {
         let mut cfg = lock_config();
