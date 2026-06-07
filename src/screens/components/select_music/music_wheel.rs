@@ -451,8 +451,8 @@ pub struct MusicWheelParams<'a> {
     pub default_sync_offset: DefaultSyncOffset,
 }
 
-pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 9 + 1);
+pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
+    actors.reserve(NUM_WHEEL_SLOTS * 9 + 1);
     let cfg = config::get();
     let translated_titles = cfg.translated_titles;
     let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
@@ -1252,7 +1252,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
         diffuse(highlight_col[0], highlight_col[1], highlight_col[2], highlight_col[3]):
         z(62)
     ));
+}
 
+pub fn build(p: MusicWheelParams) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 9 + 1);
+    push(&mut actors, p);
     actors
 }
 

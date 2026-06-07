@@ -383,11 +383,10 @@ fn status_text_actor(
     actor
 }
 
-// Signature changed to accept the alpha_multiplier
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
     sync_i18n_cache(state);
     let lp = LogoParams::default();
-    let mut actors: Vec<Actor> = Vec::with_capacity(96);
+    actors.reserve(96);
 
     // 1) background component (never fades)
     let backdrop = if state.rainbow_mode {
@@ -403,7 +402,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // If fully faded, don't create the other actors
     if alpha_multiplier <= 0.0 {
-        return actors;
+        return;
     }
 
     // --- The rest of the function is the same, but uses the passed-in alpha_multiplier ---
@@ -553,7 +552,12 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
             actors.push(actor);
         }
     }
+}
 
+// Signature changed to accept the alpha_multiplier
+pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(96);
+    push_actors(&mut actors, state, alpha_multiplier);
     actors
 }
 

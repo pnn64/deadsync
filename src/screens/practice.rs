@@ -612,20 +612,25 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 }
 
-pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(128);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &mut State, asset_manager: &AssetManager) {
+    actors.reserve(128);
     let view = practice_view(state);
-    gameplay_screen::push_actors(&mut actors, &mut state.gameplay, asset_manager, view);
+    gameplay_screen::push_actors(actors, &mut state.gameplay, asset_manager, view);
     if matches!(state.mode, Mode::Editing) {
-        append_edit_markers(state, &mut actors);
-        append_edit_overlay(state, &mut actors);
+        append_edit_markers(state, actors);
+        append_edit_overlay(state, actors);
     }
     if state.menu.is_some() {
-        append_main_menu(state, &mut actors);
+        append_main_menu(state, actors);
     }
     // Render any active flash text regardless of mode so music-rate changes
     // (and other transient feedback) are visible during loop playback as well.
-    append_flash_overlay(state, &mut actors);
+    append_flash_overlay(state, actors);
+}
+
+pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(128);
+    push_actors(&mut actors, state, asset_manager);
     actors
 }
 

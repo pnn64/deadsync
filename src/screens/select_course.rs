@@ -2468,30 +2468,33 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
-    actors.extend(music_wheel::build(music_wheel::MusicWheelParams {
-        entries: &state.entries,
-        selected_index: state.selected_index,
-        position_offset_from_selection: state.wheel_offset_from_selection,
-        selection_animation_timer: state.selection_animation_timer,
-        selection_animation_beat,
-        color_pack_headers: true,
-        selected_charts: [None, None],
-        preferred_difficulty_index: [0, 0],
-        song_box_color: None,
-        song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
-        song_text_color_overrides: Some(&state.course_text_color_overrides),
-        song_has_edit_ptrs: None,
-        show_music_wheel_grades: true,
-        show_music_wheel_lamps: true,
-        itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
-        itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
-        song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
-        expanded_pack_name: None,
-        allow_online_fetch: false,
-        new_pack_names: None,
-        pack_sync_prefs: None,
-        default_sync_offset: crate::config::DefaultSyncOffset::Null,
-    }));
+    music_wheel::push(
+        &mut actors,
+        music_wheel::MusicWheelParams {
+            entries: &state.entries,
+            selected_index: state.selected_index,
+            position_offset_from_selection: state.wheel_offset_from_selection,
+            selection_animation_timer: state.selection_animation_timer,
+            selection_animation_beat,
+            color_pack_headers: true,
+            selected_charts: [None, None],
+            preferred_difficulty_index: [0, 0],
+            song_box_color: None,
+            song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
+            song_text_color_overrides: Some(&state.course_text_color_overrides),
+            song_has_edit_ptrs: None,
+            show_music_wheel_grades: true,
+            show_music_wheel_lamps: true,
+            itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
+            itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+            song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+            expanded_pack_name: None,
+            allow_online_fetch: false,
+            new_pack_names: None,
+            pack_sync_prefs: None,
+            default_sync_offset: crate::config::DefaultSyncOffset::Null,
+        },
+    );
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {
         actors.push(act!(text:

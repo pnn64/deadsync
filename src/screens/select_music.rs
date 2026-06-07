@@ -10909,8 +10909,13 @@ fn push_folder_stats_overlay(
     });
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(256);
+pub fn push_actors(
+    mut actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    stage_number: usize,
+) {
+    actors.reserve(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
     let is_p2_single =
@@ -12023,35 +12028,39 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     // Music Wheel
     let selection_animation_beat = sl_selection_anim_beat(entry_opt, state);
-    actors.extend(music_wheel::build(music_wheel::MusicWheelParams {
-        entries: &state.entries,
-        selected_index: state.selected_index,
-        position_offset_from_selection: state.wheel_offset_from_selection,
-        selection_animation_timer: state.selection_animation_timer,
-        selection_animation_beat,
-        color_pack_headers: state.sort_mode == WheelSortMode::Group,
-        selected_charts: [immediate_chart_p1, immediate_chart_p2],
-        preferred_difficulty_index: [
-            state.preferred_difficulty_index,
-            state.p2_preferred_difficulty_index,
-        ],
-        song_box_color: None,
-        song_text_color: None,
-        song_text_color_overrides: None,
-        song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
-        show_music_wheel_grades: cfg.show_music_wheel_grades,
-        show_music_wheel_lamps: cfg.show_music_wheel_lamps,
-        itl_rank_mode: cfg.select_music_itl_rank_mode,
-        itl_wheel_mode: cfg.select_music_itl_wheel_mode,
-        song_select_bg_mode: cfg.select_music_song_select_bg_mode,
-        expanded_pack_name: state.expanded_pack_name.as_deref(),
-        allow_online_fetch: allow_gs_fetch,
-        new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
-        pack_sync_prefs: cfg
-            .machine_pack_ini_offsets
-            .then_some(&state.pack_sync_prefs),
-        default_sync_offset: cfg.machine_default_sync_offset,
-    }));
+    music_wheel::push(
+        &mut actors,
+        music_wheel::MusicWheelParams {
+            entries: &state.entries,
+            selected_index: state.selected_index,
+            position_offset_from_selection: state.wheel_offset_from_selection,
+            selection_animation_timer: state.selection_animation_timer,
+            selection_animation_beat,
+            color_pack_headers: state.sort_mode == WheelSortMode::Group,
+            selected_charts: [immediate_chart_p1, immediate_chart_p2],
+            preferred_difficulty_index: [
+                state.preferred_difficulty_index,
+                state.p2_preferred_difficulty_index,
+            ],
+            song_box_color: None,
+            song_text_color: None,
+            song_text_color_overrides: None,
+            song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
+            show_music_wheel_grades: cfg.show_music_wheel_grades,
+            show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+            itl_rank_mode: cfg.select_music_itl_rank_mode,
+            itl_wheel_mode: cfg.select_music_itl_wheel_mode,
+            song_select_bg_mode: cfg.select_music_song_select_bg_mode,
+            expanded_pack_name: state.expanded_pack_name.as_deref(),
+            allow_online_fetch: allow_gs_fetch,
+            new_pack_names: (state.sort_mode == WheelSortMode::Group)
+                .then_some(&state.new_pack_names),
+            pack_sync_prefs: cfg
+                .machine_pack_ini_offsets
+                .then_some(&state.pack_sync_prefs),
+            default_sync_offset: cfg.machine_default_sync_offset,
+        },
+    );
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
@@ -12247,14 +12256,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     if let Some(reload) = &state.reload_ui {
         push_reload_overlay(&mut actors, reload, state.active_color_index);
-        return actors;
+        return;
     }
 
     if let Some(song_search_overlay) =
         select_music_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
     {
         actors.extend(song_search_overlay);
-        return actors;
+        return;
     }
     if let Some(overlay) = state.profile_switch_overlay.as_ref() {
         actors.push(act!(quad:
@@ -12270,23 +12279,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             1.0,
             1451,
         ));
-        return actors;
+        return;
     }
     if let Some(replay_overlay) =
         select_music_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
     {
         actors.extend(replay_overlay);
-        return actors;
+        return;
     }
     if let Some(pack_sync_overlay) =
         pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
     {
         actors.extend(pack_sync_overlay);
-        return actors;
+        return;
     }
     if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
         actors.extend(sync_overlay);
-        return actors;
+        return;
     }
     if state.pad_config_overlay_visible {
         actors.push(act!(quad:
@@ -12297,7 +12306,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             z(1451)
         ));
         actors.extend(pad_config::build_content(&state.pad_config_overlay, true));
-        return actors;
+        return;
     }
     if state.test_input_overlay_visible {
         let play_style = profile::get_session_play_style();
@@ -12322,13 +12331,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             show_p2,
             pad_spacing,
         ));
-        return actors;
+        return;
     }
     if let Some(lobby_overlay) =
         lobby_overlay::build_overlay(&state.lobby_overlay, state.active_color_index)
     {
         actors.extend(lobby_overlay);
-        return actors;
+        return;
     }
 
     let lobby_snapshot = crate::game::online::lobbies::snapshot();
@@ -12498,7 +12507,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             1502,
         );
     }
+}
 
+pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(256);
+    push_actors(&mut actors, state, asset_manager, stage_number);
     actors
 }
 

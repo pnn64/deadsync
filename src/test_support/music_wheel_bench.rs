@@ -21,31 +21,40 @@ pub struct MusicWheelBenchFixture {
 }
 
 impl MusicWheelBenchFixture {
+    pub fn push(&self, actors: &mut Vec<Actor>) {
+        music_wheel::push(
+            actors,
+            MusicWheelParams {
+                entries: &self.entries,
+                selected_index: self.selected_index,
+                position_offset_from_selection: self.position_offset_from_selection,
+                selection_animation_timer: self.selection_animation_timer,
+                selection_animation_beat: self.selection_animation_beat,
+                color_pack_headers: true,
+                selected_charts: [None, None],
+                preferred_difficulty_index: [self.preferred_difficulty_index; 2],
+                song_box_color: None,
+                song_text_color: Some([0.95, 0.96, 1.0, 1.0]),
+                song_text_color_overrides: Some(&self.song_text_color_overrides),
+                song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
+                show_music_wheel_grades: false,
+                show_music_wheel_lamps: false,
+                itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
+                itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+                song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+                expanded_pack_name: None,
+                allow_online_fetch: false,
+                new_pack_names: None,
+                pack_sync_prefs: None,
+                default_sync_offset: crate::config::DefaultSyncOffset::Null,
+            },
+        );
+    }
+
     pub fn build(&self) -> Vec<Actor> {
-        music_wheel::build(MusicWheelParams {
-            entries: &self.entries,
-            selected_index: self.selected_index,
-            position_offset_from_selection: self.position_offset_from_selection,
-            selection_animation_timer: self.selection_animation_timer,
-            selection_animation_beat: self.selection_animation_beat,
-            color_pack_headers: true,
-            selected_charts: [None, None],
-            preferred_difficulty_index: [self.preferred_difficulty_index; 2],
-            song_box_color: None,
-            song_text_color: Some([0.95, 0.96, 1.0, 1.0]),
-            song_text_color_overrides: Some(&self.song_text_color_overrides),
-            song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
-            show_music_wheel_grades: false,
-            show_music_wheel_lamps: false,
-            itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
-            itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
-            song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
-            expanded_pack_name: None,
-            allow_online_fetch: false,
-            new_pack_names: None,
-            pack_sync_prefs: None,
-            default_sync_offset: crate::config::DefaultSyncOffset::Null,
-        })
+        let mut actors = Vec::new();
+        self.push(&mut actors);
+        actors
     }
 }
 

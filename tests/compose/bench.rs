@@ -266,6 +266,7 @@ fn update_peak(slot: &AtomicU64, value: u64) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    deadsync::assets::i18n::init("en");
     let args = parse_args()?;
     if args.case_path.is_none()
         && args.scenario == "all"
@@ -314,7 +315,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
         Phase::Actors => match name {
             music_wheel_bench::SCENARIO_NAME => {
                 let fixture = music_wheel_bench::fixture();
-                benchmark_actor_builder(
+                benchmark_actor_pusher(
                     scenario.name,
                     scenario.clear_color,
                     &scenario.metrics,
@@ -323,7 +324,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(),
+                    |actors| fixture.push(actors),
                 )
             }
             density_graph_bench::SCENARIO_NAME => {
@@ -454,7 +455,8 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
             }
             menu_bench::SCENARIO_NAME => {
                 let fixture = menu_bench::fixture();
-                benchmark_actor_builder(
+                let retained = args.cache_mode.retains_actor_data();
+                benchmark_actor_pusher(
                     scenario.name,
                     scenario.clear_color,
                     &scenario.metrics,
@@ -463,7 +465,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(args.cache_mode.retains_actor_data()),
+                    |actors| fixture.push(actors, retained),
                 )
             }
             notefield_bench::SCENARIO_NAME => {
@@ -810,6 +812,126 @@ where
     }
 
     let final_actors = build_actors();
+    let actual_actor_hash =
+        compose_case::actor_snapshot_hash(&compose_case::actor_list_snapshot(&final_actors))?;
+    if actual_actor_hash != actor_hash {
+        return Err(format!(
+            "actor hash mismatch after benchmark: expected {} got {}",
+            actor_hash, actual_actor_hash
+        )
+        .into());
+    }
+    let mut verify_cache = compose::TextLayoutCache::default();
+    let mut verify_scratch = compose::ComposeScratch::default();
+    let final_render = build_screen_for_mode(
+        cache_mode,
+        &mut verify_cache,
+        &mut verify_scratch,
+        &final_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let actual_render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&final_render))?;
+    if actual_render_hash != render_hash {
+        return Err(format!(
+            "actor compose hash mismatch: expected {} got {}",
+            render_hash, actual_render_hash
+        )
+        .into());
+    }
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        phase: Phase::Actors,
+        cache_mode,
+        actors,
+        objects,
+        cameras,
+        iters,
+        elapsed_s: started.elapsed().as_secs_f64(),
+        alloc: ALLOC.snapshot().diff(start_alloc),
+        checksum,
+        verifications: vec![
+            VerificationResult {
+                kind: "actors",
+                expected_hash: actor_hash,
+                actual_hash: actual_actor_hash,
+            },
+            VerificationResult {
+                kind: "compose",
+                expected_hash: render_hash,
+                actual_hash: actual_render_hash,
+            },
+        ],
+        notes: Vec::new(),
+    })
+}
+
+fn benchmark_actor_pusher<F>(
+    name: &str,
+    clear_color: [f32; 4],
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
+    total_elapsed: f32,
+    iters: u64,
+    warmup: u64,
+    cache_mode: CacheMode,
+    mut push_actors: F,
+) -> Result<BenchmarkResult, Box<dyn Error>>
+where
+    F: FnMut(&mut Vec<Actor>),
+{
+    let mut sample_actors = Vec::new();
+    push_actors(&mut sample_actors);
+    let _assets = compose_case::asset_manager_for_scene(name, &sample_actors, fonts)?;
+    let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
+    let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
+    let mut text_cache = compose::TextLayoutCache::default();
+    let mut scratch = compose::ComposeScratch::default();
+    let sample_render = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        &mut scratch,
+        &sample_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&sample_render))?;
+    let actors = actor_count(&sample_actors);
+    let objects = sample_render.objects.len();
+    let cameras = sample_render.cameras.len();
+    black_box(actors ^ objects ^ cameras);
+    drop(sample_render);
+    drop(sample_actors);
+
+    let mut actor_scratch = Vec::new();
+    for _ in 0..warmup {
+        actor_scratch.clear();
+        push_actors(&mut actor_scratch);
+        black_box(actor_count(&actor_scratch));
+    }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..iters {
+        actor_scratch.clear();
+        push_actors(black_box(&mut actor_scratch));
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(actor_count(&actor_scratch) as u64)
+            .wrapping_add(actor_scratch.len() as u64);
+        black_box(checksum);
+    }
+
+    let mut final_actors = Vec::new();
+    push_actors(&mut final_actors);
     let actual_actor_hash =
         compose_case::actor_snapshot_hash(&compose_case::actor_list_snapshot(&final_actors))?;
     if actual_actor_hash != actor_hash {

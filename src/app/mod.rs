@@ -3845,7 +3845,7 @@ pub struct App {
     gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
     ui_compose_scratch: crate::engine::present::compose::ComposeScratch,
     gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch,
-    gameplay_actor_scratch: Vec<Actor>,
+    actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
@@ -4974,10 +4974,8 @@ impl App {
             draw_us,
             draw_stats,
         );
-        if self.state.screens.current_screen == CurrentScreen::Gameplay {
-            actors.clear();
-            self.gameplay_actor_scratch = actors;
-        }
+        actors.clear();
+        self.actor_scratch = actors;
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
@@ -5028,7 +5026,7 @@ impl App {
             ),
             ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
-            gameplay_actor_scratch: Vec::with_capacity(256),
+            actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
             gfx_debug_enabled,
@@ -6735,10 +6733,17 @@ impl App {
 
         let mut actors = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
+                let mut actors = std::mem::take(&mut self.actor_scratch);
+                actors.clear();
+                menu::push_actors(
+                    &mut actors,
+                    &self.state.screens.menu_state,
+                    screen_alpha_multiplier,
+                );
+                actors
             }
             CurrentScreen::Gameplay => {
-                let mut actors = std::mem::take(&mut self.gameplay_actor_scratch);
+                let mut actors = std::mem::take(&mut self.actor_scratch);
                 actors.clear();
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
@@ -6753,10 +6758,13 @@ impl App {
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
+                    let mut actors = std::mem::take(&mut self.actor_scratch);
+                    actors.clear();
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
-                    practice::get_actors(ps, &self.asset_manager)
+                    practice::push_actors(&mut actors, ps, &self.asset_manager);
+                    actors
                 } else {
                     vec![]
                 }
@@ -6829,11 +6837,17 @@ impl App {
             CurrentScreen::ProfileLoad => {
                 profile_load::get_actors(&self.state.screens.profile_load_state)
             }
-            CurrentScreen::SelectMusic => select_music::get_actors(
-                &self.state.screens.select_music_state,
-                &self.asset_manager,
-                self.state.session.played_stages.len() + 1,
-            ),
+            CurrentScreen::SelectMusic => {
+                let mut actors = std::mem::take(&mut self.actor_scratch);
+                actors.clear();
+                select_music::push_actors(
+                    &mut actors,
+                    &self.state.screens.select_music_state,
+                    &self.asset_manager,
+                    self.state.session.played_stages.len() + 1,
+                );
+                actors
+            }
             CurrentScreen::SelectCourse => select_course::get_actors(
                 &self.state.screens.select_course_state,
                 &self.asset_manager,
