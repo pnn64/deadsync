@@ -25,6 +25,9 @@ const SONG_SEARCH_PANE_H: f32 = 319.0;
 const SONG_SEARCH_PANE_BORDER: f32 = 2.0;
 const SONG_SEARCH_TEXT_H: f32 = 15.0;
 const SONG_SEARCH_ROW_SPACING: f32 = 30.0;
+const SONG_SEARCH_RESULT_TITLE_W: f32 = 155.0;
+const SONG_SEARCH_DETAIL_LABEL_W: f32 = 145.0;
+const SONG_SEARCH_DETAIL_VALUE_W: f32 = 115.0;
 const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 
@@ -364,7 +367,7 @@ pub fn build_song_search_overlay(
                     settext(text):
                     align(0.5, 0.5):
                     xy(list_x, y):
-                    maxwidth(155.0):
+                    maxwidth(SONG_SEARCH_RESULT_TITLE_W):
                     zoom(1.0):
                     diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
                     z(1454):
@@ -391,6 +394,7 @@ pub fn build_song_search_overlay(
                 ];
                 for (i, (label, value)) in details.iter().enumerate() {
                     let zoom = 0.8;
+                    // Matches Simply Love's visible cap from `zoom(0.8):maxwidth(width / zoom)`.
                     let row_i = i as f32;
                     let label_row = row_i * 2.0 + 1.0;
                     let value_row = row_i * 2.0 + 2.0;
@@ -405,8 +409,8 @@ pub fn build_song_search_overlay(
                         settext(format!("{label}:")):
                         align(0.0, 0.5):
                         xy(pane_cx + 10.0, label_y):
+                        maxwidth(SONG_SEARCH_DETAIL_LABEL_W / zoom):
                         zoom(zoom):
-                        maxwidth(145.0 / zoom):
                         diffuse(0.67, 0.67, 1.0, 1.0):
                         z(1454):
                         horizalign(left)
@@ -416,8 +420,8 @@ pub fn build_song_search_overlay(
                         settext(value.clone()):
                         align(0.0, 0.5):
                         xy(pane_cx + 40.0, value_y):
+                        maxwidth(SONG_SEARCH_DETAIL_VALUE_W / zoom):
                         zoom(zoom):
-                        maxwidth(115.0 / zoom):
                         diffuse(1.0, 1.0, 1.0, 1.0):
                         z(1454):
                         horizalign(left)
@@ -578,4 +582,101 @@ fn build_song_search_candidates(
     out.sort_by_cached_key(|c| c.song.display_full_title(false).to_ascii_lowercase());
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from("test.sm"),
+            title: title.to_string(),
+            subtitle: subtitle.to_string(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: "128".to_string(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 128.0,
+            max_bpm: 128.0,
+            normalized_bpms: "128".to_string(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        })
+    }
+
+    fn assert_close(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < 1e-6,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn detail_text_uses_itgmania_visible_widths_after_zoom() {
+        let pack = "Pack Name Long Enough To Need Horizontal Compression";
+        let title = "Song Title Long Enough To Need Horizontal Compression";
+        let subtitle = "Subtitle Long Enough To Need Horizontal Compression";
+        let state = SongSearchState::Results(SongSearchResultsState {
+            search_text: "long".to_string(),
+            candidates: vec![SongSearchCandidate {
+                pack_name: pack.to_string(),
+                song: test_song(title, subtitle),
+            }],
+            selected_index: 0,
+            prev_selected_index: 0,
+            last_move_dir: 0,
+            focus_anim_elapsed: SONG_SEARCH_FOCUS_TWEEN_SECONDS,
+            input_lock: 0.0,
+        });
+
+        let actors = build_song_search_overlay(&state, 0).expect("song search should render");
+        let detail_x = screen_center_x() + 40.0;
+        let mut found = 0;
+
+        for actor in &actors {
+            let Actor::Text {
+                content,
+                offset,
+                scale,
+                max_width,
+                max_w_pre_zoom,
+                ..
+            } = actor
+            else {
+                continue;
+            };
+            if ![pack, title, subtitle].contains(&content.as_str())
+                || (offset[0] - detail_x).abs() > 1e-6
+            {
+                continue;
+            }
+
+            found += 1;
+            assert_close(scale[0], 0.8);
+            assert_close(
+                max_width.expect("detail value should cap width"),
+                115.0 / 0.8,
+            );
+            assert!(*max_w_pre_zoom);
+        }
+
+        assert_eq!(found, 3);
+    }
 }
