@@ -15,6 +15,7 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
@@ -24,6 +25,7 @@ const BEATS_PER_MEASURE: f32 = 4.0;
 const MIN_CURSOR_BEAT: f32 = 0.0;
 const BEAT_EPSILON: f32 = 0.000_1;
 const MARKER_Z: f32 = 2985.0;
+const EDIT_TIMING_LABEL_Z: f32 = MARKER_Z;
 const EDIT_FIELD_CURSOR_TEX: &str = "practice/snap_display_icon_9x1 (doubleres).png";
 const EDIT_FIELD_CURSOR_Z: f32 = MARKER_Z + 1.0;
 const EDIT_MENU_ROW_HEIGHT: f32 = 32.0;
@@ -54,6 +56,56 @@ const MUSIC_RATE_REPEAT_INTERVAL_SECONDS: f32 = 0.05;
 const MAX_MUSIC_RATE_REPEATS_PER_FRAME: usize = 64;
 const FLASH_DURATION_SECS: f32 = 0.75;
 
+#[derive(Clone, Copy)]
+struct TimingLabelStyle {
+    color: [f32; 4],
+    left_side: bool,
+    offset_x: f32,
+}
+
+// PARITY[ITGmania NoteField]: Simply Love inherits these timing label
+// colors, sides, and offsets from `_fallback/metrics.ini` `[NoteField]`.
+const BPM_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [1.0, 0.0, 0.0, 1.0],
+    left_side: true,
+    offset_x: 60.0,
+};
+const STOP_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [0.8, 0.8, 0.0, 1.0],
+    left_side: true,
+    offset_x: 50.0,
+};
+const DELAY_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [0.0, 0.8, 0.8, 1.0],
+    left_side: true,
+    offset_x: 120.0,
+};
+const WARP_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [1.0, 0.0, 0.5, 1.0],
+    left_side: false,
+    offset_x: 90.0,
+};
+const TIME_SIG_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [1.0, 0.55, 0.0, 1.0],
+    left_side: true,
+    offset_x: 30.0,
+};
+const SPEED_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [0.5, 1.0, 1.0, 1.0],
+    left_side: false,
+    offset_x: 30.0,
+};
+const SCROLL_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [0.3, 0.8, 1.0, 1.0],
+    left_side: true,
+    offset_x: 100.0,
+};
+const FAKE_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
+    color: [1.0, 1.0, 0.5, 1.0],
+    left_side: true,
+    offset_x: 90.0,
+};
+
 #[derive(Clone, Copy, Debug)]
 enum Mode {
     Editing,
@@ -64,6 +116,16 @@ enum Mode {
 enum MarkerPlacement {
     P1,
     P2,
+}
+
+#[derive(Clone, Copy)]
+struct PracticeFieldGeom {
+    player_idx: usize,
+    col_start: usize,
+    center_x: f32,
+    offset_y: f32,
+    width: f32,
+    zoom: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1612,9 +1674,18 @@ fn append_player_markers(
     let field_zoom = practice_edit_field_zoom();
     let width = (num_cols as f32 * ScrollSpeedSetting::ARROW_SPACING * spacing_mult * field_zoom)
         .max(ScrollSpeedSetting::ARROW_SPACING);
+    let geom = PracticeFieldGeom {
+        player_idx,
+        col_start,
+        center_x,
+        offset_y,
+        width,
+        zoom: field_zoom,
+    };
     let marker_phase = (state.gameplay.total_elapsed_in_screen * std::f32::consts::PI).sin();
     let marker_shade = 0.75 + marker_phase * 0.25;
     let cursor_y = marker_y_for_beat(state, player_idx, col_start, offset_y, state.cursor_beat);
+    append_timing_segment_labels(state, actors, geom);
     append_field_cursor(
         actors,
         center_x,
@@ -1640,6 +1711,172 @@ fn append_player_markers(
         }
         (None, None) => {}
     }
+}
+
+fn append_timing_segment_labels(state: &State, actors: &mut Vec<Actor>, geom: PracticeFieldGeom) {
+    let timing = &state.gameplay.gameplay_charts[geom.player_idx].timing_segments;
+    let glow_alpha = timing_label_glow_alpha(state.gameplay.total_elapsed_in_screen);
+    append_timing_labels_from_segments(state, actors, geom, timing, glow_alpha);
+}
+
+fn append_timing_labels_from_segments(
+    state: &State,
+    actors: &mut Vec<Actor>,
+    geom: PracticeFieldGeom,
+    timing: &TimingSegments,
+    glow_alpha: f32,
+) {
+    // PARITY[ITGmania NoteField::DrawPrimitives]: segment text draw order.
+    for seg in &timing.scrolls {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            SCROLL_LABEL_STYLE,
+            fmt_itg_float(seg.ratio),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for &(beat, bpm) in &timing.bpms {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            BPM_LABEL_STYLE,
+            fmt_itg_float(bpm),
+            beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.stops {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            STOP_LABEL_STYLE,
+            fmt_itg_float(seg.duration),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.delays {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            DELAY_LABEL_STYLE,
+            fmt_itg_float(seg.duration),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.warps {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            WARP_LABEL_STYLE,
+            fmt_itg_float(seg.length),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.time_signatures {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            TIME_SIG_LABEL_STYLE,
+            format!("{}\n--\n{}", seg.numerator, seg.denominator),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.speeds {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            SPEED_LABEL_STYLE,
+            timing_speed_label(*seg),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+    for seg in &timing.fakes {
+        append_timing_segment_label(
+            state,
+            actors,
+            geom,
+            FAKE_LABEL_STYLE,
+            fmt_itg_float(seg.length),
+            seg.beat,
+            glow_alpha,
+        );
+    }
+}
+
+fn append_timing_segment_label(
+    state: &State,
+    actors: &mut Vec<Actor>,
+    geom: PracticeFieldGeom,
+    style: TimingLabelStyle,
+    text: String,
+    beat: f32,
+    glow_alpha: f32,
+) {
+    let y = marker_y_for_beat(state, geom.player_idx, geom.col_start, geom.offset_y, beat);
+    if !timing_label_y_is_visible(y) {
+        return;
+    }
+    let x = timing_label_x(geom.center_x, geom.width, geom.zoom, style);
+    let align_x = if style.left_side { 1.0 } else { 0.0 };
+    let color = style.color;
+    actors.push(act!(text:
+        font("miso"):
+        settext(text):
+        align(align_x, 0.5):
+        xy(x, y):
+        zoom(geom.zoom):
+        wrapwidthpixels(300.0):
+        diffuse(color[0], color[1], color[2], color[3]):
+        glow(1.0, 1.0, 1.0, glow_alpha):
+        shadowlength(2.0):
+        z(EDIT_TIMING_LABEL_Z)
+    ));
+}
+
+fn timing_label_y_is_visible(y: f32) -> bool {
+    let margin = practice_marker_bar_height();
+    y.is_finite() && y >= -margin && y <= screen_height() + margin
+}
+
+fn timing_label_x(center_x: f32, width: f32, zoom: f32, style: TimingLabelStyle) -> f32 {
+    let side = if style.left_side { -1.0 } else { 1.0 };
+    center_x + side * (width * 0.5 + style.offset_x * zoom)
+}
+
+fn timing_label_glow_alpha(elapsed: f32) -> f32 {
+    let phase = elapsed * std::f32::consts::TAU / 6.0;
+    (phase.cos() * 0.5 + 0.5).clamp(0.0, 1.0)
+}
+
+fn timing_speed_label(seg: SpeedSegment) -> String {
+    let unit = match seg.unit {
+        SpeedUnit::Seconds => "S",
+        SpeedUnit::Beats => "B",
+    };
+    format!(
+        "{}\n{}\n{}",
+        fmt_itg_float(seg.ratio),
+        unit,
+        fmt_itg_float(seg.delay)
+    )
+}
+
+fn fmt_itg_float(value: f32) -> String {
+    format!("{value:.6}")
 }
 
 fn marker_y_for_beat(
@@ -2059,15 +2296,18 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
-        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir, PracticeNavMode,
-        TAB_FAST_MULTIPLIER, clamp_selection, edit_cursor_hold_dir_for_action_in_mode,
-        edit_scroll_hold_rate, edit_snap_delta_for_action_in_mode, fmt_music_rate,
+        BPM_LABEL_STYLE, CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
+        MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
+        PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER, clamp_selection,
+        edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
+        edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
         page_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
+        timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
     use crate::assets::i18n;
     use deadsync_input::VirtualAction;
+    use deadsync_rules::timing::{SpeedSegment, SpeedUnit};
     use winit::keyboard::KeyCode;
 
     /// Every i18n key the practice screen looks up at runtime, outside of the
@@ -2270,6 +2510,41 @@ mod tests {
         assert_eq!(fmt_music_rate(0.85), "0.85");
         assert_eq!(fmt_music_rate(2.05), "2.05");
         assert_eq!(fmt_music_rate(0.5), "0.5");
+    }
+
+    #[test]
+    fn timing_label_numbers_match_itg_to_string_shape() {
+        assert_eq!(fmt_itg_float(120.0), "120.000000");
+        assert_eq!(fmt_itg_float(0.5), "0.500000");
+    }
+
+    #[test]
+    fn timing_speed_label_matches_itg_multiline_value() {
+        let beats = SpeedSegment {
+            beat: 16.0,
+            ratio: 2.0,
+            delay: 0.5,
+            unit: SpeedUnit::Beats,
+        };
+        let seconds = SpeedSegment {
+            unit: SpeedUnit::Seconds,
+            ..beats
+        };
+        assert_eq!(timing_speed_label(beats), "2.000000\nB\n0.500000");
+        assert_eq!(timing_speed_label(seconds), "2.000000\nS\n0.500000");
+    }
+
+    #[test]
+    fn timing_label_x_uses_inherited_side_offsets() {
+        assert_eq!(timing_label_x(400.0, 160.0, 0.5, BPM_LABEL_STYLE), 290.0);
+        assert_eq!(timing_label_x(400.0, 160.0, 0.5, SPEED_LABEL_STYLE), 495.0);
+    }
+
+    #[test]
+    fn timing_label_glow_uses_six_second_cycle() {
+        assert_eq!(timing_label_glow_alpha(0.0), 1.0);
+        assert!((timing_label_glow_alpha(3.0) - 0.0).abs() < 0.000_001);
+        assert!((timing_label_glow_alpha(6.0) - 1.0).abs() < 0.000_001);
     }
 
     #[test]
