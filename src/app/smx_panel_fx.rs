@@ -22,6 +22,10 @@ const HOLD_RGB: Rgb = [120, 120, 120];
 const HOLD_OK_RGB: Rgb = [40, 200, 40];
 /// Flash shown when a freeze or roll is dropped.
 const HOLD_DROP_RGB: Rgb = [200, 40, 40];
+/// Flash shown when a mine is hit.
+const MINE_RGB: Rgb = [255, 80, 0];
+/// Duration of the mine-hit flash.
+const MINE_FLASH_SECONDS: f32 = 0.25;
 
 /// Owns the panel-lighting worker handle plus the per-column "last seen" trackers used to
 /// detect new judgements and hold transitions by diffing gameplay `State` each frame.
@@ -32,6 +36,7 @@ pub struct SmxPanelDriver {
     prev_flash: [f32; MAX_COLS],
     prev_engaged: [bool; MAX_COLS],
     prev_hold_judged: [f32; MAX_COLS],
+    prev_mine: [bool; MAX_COLS],
 }
 
 impl Default for SmxPanelDriver {
@@ -43,13 +48,14 @@ impl Default for SmxPanelDriver {
             prev_flash: [NO_EVENT; MAX_COLS],
             prev_engaged: [false; MAX_COLS],
             prev_hold_judged: [NO_EVENT; MAX_COLS],
+            prev_mine: [false; MAX_COLS],
         }
     }
 }
 
 impl SmxPanelDriver {
     /// Called each frame while on a gameplay screen with the feature enabled. Diffs the
-    /// per-column flash, active-hold, and hold-judgement state and emits panel events.
+    /// per-column flash, active-hold, hold-judgement, and mine state and emits panel events.
     pub fn update(&mut self, state: &State) {
         // Re-arm on entering gameplay or when the chart's note buffer changes (a restart or
         // a new song), so stale `started_at_screen_s` values do not swallow the first event.
@@ -65,6 +71,7 @@ impl SmxPanelDriver {
             self.tap(state, cpp, np, col);
             self.hold(state, cpp, np, col);
             self.hold_outcome(state, cpp, np, col);
+            self.mine(state, cpp, np, col);
         }
     }
 
@@ -83,6 +90,7 @@ impl SmxPanelDriver {
         self.prev_flash = [NO_EVENT; MAX_COLS];
         self.prev_engaged = [false; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
+        self.prev_mine = [false; MAX_COLS];
         self.lights.set_active(true);
     }
 
@@ -138,5 +146,17 @@ impl SmxPanelDriver {
             None => self.prev_hold_judged[col] = NO_EVENT,
             _ => {}
         }
+    }
+
+    fn mine(&mut self, state: &State, cpp: usize, np: usize, col: usize) {
+        // `mine_explosions[col]` is set (ungated) when a mine is hit and clears when the
+        // explosion finishes, so a None->Some transition is a fresh hit.
+        let hit = state.mine_explosions[col].is_some();
+        if hit && !self.prev_mine[col] {
+            if let Some((pad, panel)) = smx_panel_for_col(cpp, np, col) {
+                self.lights.flash(pad, panel, MINE_RGB, MINE_FLASH_SECONDS);
+            }
+        }
+        self.prev_mine[col] = hit;
     }
 }
