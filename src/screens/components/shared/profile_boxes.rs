@@ -45,6 +45,11 @@ pub const fn exit_anim_duration() -> f32 {
 /* ------------------------------ layout ------------------------------- */
 const ROW_H: f32 = 35.0;
 const ROWS_VISIBLE: i32 = 9;
+// Name scroller tween: offset (in rows) decays toward 0 with this exponential time
+// constant so a navigation slides quickly but smoothly instead of snapping.
+const SCROLL_TWEEN_TAU: f32 = 0.045;
+// Snap the scroll offset to rest once it is within this many rows of settled.
+const SCROLL_SNAP_EPS: f32 = 0.002;
 const FRAME_BASE_W: f32 = 200.0;
 const FRAME_W_SCROLLER: f32 = FRAME_BASE_W * 1.1;
 const FRAME_W_JOIN: f32 = FRAME_BASE_W * 0.9;
@@ -119,6 +124,10 @@ pub struct State {
     p2_join_pulse_t: f32,
     p1_shake_t: f32,
     p2_shake_t: f32,
+    // Animated vertical offset (in rows) of the name scroller, lagging behind the
+    // logical selected index and decaying to 0 to produce the scroll tween.
+    p1_scroll_anim: f32,
+    p2_scroll_anim: f32,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
 }
@@ -433,6 +442,8 @@ pub fn init() -> State {
         p2_join_pulse_t: JOIN_PULSE_DURATION,
         p1_shake_t: SHAKE_DUR,
         p2_shake_t: SHAKE_DUR,
+        p1_scroll_anim: 0.0,
+        p2_scroll_anim: 0.0,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
     };
@@ -515,6 +526,17 @@ pub fn update(state: &mut State, dt: f32) {
     state.p2_join_pulse_t = (state.p2_join_pulse_t + dt).min(JOIN_PULSE_DURATION);
     state.p1_shake_t = (state.p1_shake_t + dt).min(SHAKE_DUR);
     state.p2_shake_t = (state.p2_shake_t + dt).min(SHAKE_DUR);
+
+    // Decay the name-scroller offset toward 0 (frame-rate independent).
+    let scroll_decay = (-dt / SCROLL_TWEEN_TAU).exp();
+    state.p1_scroll_anim *= scroll_decay;
+    state.p2_scroll_anim *= scroll_decay;
+    if state.p1_scroll_anim.abs() < SCROLL_SNAP_EPS {
+        state.p1_scroll_anim = 0.0;
+    }
+    if state.p2_scroll_anim.abs() < SCROLL_SNAP_EPS {
+        state.p2_scroll_anim = 0.0;
+    }
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -636,10 +658,18 @@ fn shift_choice(
     if *selected_index == old_index {
         return false;
     }
+    let new_index = *selected_index;
     *preview_slot =
-        preview_noteskin_for_choice(&mut state.noteskin_cache, &state.choices, *selected_index);
+        preview_noteskin_for_choice(&mut state.noteskin_cache, &state.choices, new_index);
+    // Seed the scroller offset so the rows visually start at the old position and
+    // tween toward the new selection. Accumulates across rapid presses.
+    let delta = new_index as f32 - old_index as f32;
+    match side {
+        profile_data::PlayerSide::P1 => state.p1_scroll_anim += delta,
+        profile_data::PlayerSide::P2 => state.p2_scroll_anim += delta,
+    }
     if play_sound {
-        audio::play_sfx("assets/sounds/change.ogg");
+        audio::play_sfx("assets/sounds/expand.ogg");
     }
     true
 }
@@ -1248,6 +1278,7 @@ fn push_scroller_frame(
     _asset_manager: &AssetManager,
     choices: &[Choice],
     selected_index: usize,
+    scroll_anim: f32,
     preview_noteskin: Option<&Noteskin>,
     preview_time: f32,
     preview_beat: f32,
@@ -1340,13 +1371,15 @@ fn push_scroller_frame(
         frame_h,
     ];
     let rows_half = ROWS_VISIBLE / 2;
-    for d in -rows_half..=rows_half {
+    // Render one extra row on each side so a row sliding in during the scroll tween
+    // does not pop into existence at the clipped edge.
+    for d in -(rows_half + 1)..=(rows_half + 1) {
         let idx_i = selected_index as i32 + d;
         if idx_i < 0 || idx_i >= choices.len() as i32 {
             continue;
         }
         let choice = &choices[idx_i as usize];
-        let y = (d as f32).mul_add(ROW_H, frame_cy);
+        let y = (d as f32 + scroll_anim).mul_add(ROW_H, frame_cy);
 
         let mut row = act!(text:
             align(0.5, 0.5):
@@ -1679,6 +1712,7 @@ fn build_box_actors(
             asset_manager,
             &state.choices,
             state.p1_selected_index,
+            state.p1_scroll_anim,
             state.p1_preview_noteskin.as_deref(),
             state.preview_time,
             state.preview_beat,
@@ -1765,6 +1799,7 @@ fn build_box_actors(
             asset_manager,
             &state.choices,
             state.p2_selected_index,
+            state.p2_scroll_anim,
             state.p2_preview_noteskin.as_deref(),
             state.preview_time,
             state.preview_beat,
