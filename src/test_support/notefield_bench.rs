@@ -230,6 +230,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         early: true,
         offset_ms: 12.0,
         scaled: false,
+        scale_start_ms: 10.0,
     });
     state.players[0].last_judgment = None;
 }

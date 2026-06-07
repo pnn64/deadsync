@@ -268,6 +268,31 @@ pub(super) fn average_error_bar_interval_choices() -> Vec<String> {
 }
 
 #[inline(always)]
+pub(super) fn fmt_text_error_bar_threshold_ms(ms: u32) -> String {
+    format!("{ms}ms")
+}
+
+pub(super) fn text_error_bar_threshold_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity(
+        (TEXT_ERROR_BAR_THRESHOLD_MS_MAX - TEXT_ERROR_BAR_THRESHOLD_MS_MIN + 1) as usize,
+    );
+    for ms in TEXT_ERROR_BAR_THRESHOLD_MS_MIN..=TEXT_ERROR_BAR_THRESHOLD_MS_MAX {
+        out.push(fmt_text_error_bar_threshold_ms(ms));
+    }
+    out
+}
+
+pub(super) fn parse_text_error_bar_threshold_ms(choice: &str) -> Option<u32> {
+    choice
+        .trim()
+        .trim_end_matches("ms")
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .map(deadsync_profile::clamp_text_error_bar_threshold_ms)
+}
+
+#[inline(always)]
 pub(super) fn fmt_long_error_bar_intensity(value: f32) -> String {
     format!("{value:.2}x")
 }

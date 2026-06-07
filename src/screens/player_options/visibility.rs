@@ -9,6 +9,7 @@ pub(super) struct RowVisibility {
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
     pub(super) show_text_error_bar_children: bool,
+    pub(super) show_text_error_bar_threshold: bool,
     pub(super) show_average_error_bar_children: bool,
     pub(super) show_long_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
@@ -53,8 +54,13 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     {
         return visibility.show_error_bar_children;
     }
-    if id == RowId::TextErrorBar10ms {
+    if id == RowId::TextErrorBarMode {
         return visibility.show_error_bar_children && visibility.show_text_error_bar_children;
+    }
+    if id == RowId::TextErrorBarThreshold {
+        return visibility.show_error_bar_children
+            && visibility.show_text_error_bar_children
+            && visibility.show_text_error_bar_threshold;
     }
     if id == RowId::LongErrorBarIntensity
         || id == RowId::LongErrorBarThreshold
@@ -147,7 +153,8 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOptions
         || id == RowId::ErrorBarOffsetX
         || id == RowId::ErrorBarOffsetY
-        || id == RowId::TextErrorBar10ms
+        || id == RowId::TextErrorBarMode
+        || id == RowId::TextErrorBarThreshold
         || id == RowId::ShortAverageErrorBar
         || id == RowId::CenterTick
         || id == RowId::LongErrorBar
@@ -337,6 +344,25 @@ pub(super) fn text_error_bar_children_visible(
             .error_bar
             .contains(ErrorBarMask::TEXT)
         {
+            return true;
+        }
+    }
+    !any_active
+}
+
+pub(super) fn text_error_bar_threshold_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    let Some(row) = row_map.get(RowId::TextErrorBarMode) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx != 0 {
             return true;
         }
     }
@@ -609,6 +635,7 @@ pub(super) fn row_visibility(
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_text_error_bar_children: text_error_bar_children_visible(active, option_masks),
+        show_text_error_bar_threshold: text_error_bar_threshold_visible(row_map, active),
         show_average_error_bar_children: average_error_bar_children_visible(active, option_masks),
         show_long_error_bar_children: long_error_bar_children_visible(row_map, active),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),

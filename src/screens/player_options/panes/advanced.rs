@@ -345,14 +345,14 @@ const CENTER_TICK: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         from_profile: |p| if p.center_tick { 1 } else { 0 },
     }),
 };
-const TEXT_ERROR_BAR_10MS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+const TEXT_ERROR_BAR_MODE: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
-        p.text_error_bar_10ms = v;
-        Outcome::persisted()
+        p.text_error_bar_scalable = v;
+        Outcome::persisted_with_visibility()
     },
-    persist_for_side: gp::update_text_error_bar_10ms_for_side,
+    persist_for_side: gp::update_text_error_bar_scalable_for_side,
     init: Some(CycleInit {
-        from_profile: |p| if p.text_error_bar_10ms { 1 } else { 0 },
+        from_profile: |p| if p.text_error_bar_scalable { 1 } else { 0 },
     }),
 };
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
@@ -1046,6 +1046,33 @@ const AVERAGE_ERROR_BAR_INTERVAL: CustomBinding = CustomBinding {
     },
 };
 
+const TEXT_ERROR_BAR_THRESHOLD: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let Some(value) = parse_text_error_bar_threshold_ms(&choice) else {
+            return Outcome::persisted();
+        };
+        state.player_profiles[player_idx].text_error_bar_threshold_ms = value;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_text_error_bar_threshold_ms_for_side(side, value);
+        }
+        Outcome::persisted()
+    },
+};
+
 const LONG_ERROR_BAR_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
@@ -1629,14 +1656,21 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         ],
     ));
     b.push(Row::cycle(
-        RowId::TextErrorBar10ms,
-        lookup_key("PlayerOptions", "TextErrorBar10ms"),
-        lookup_key("PlayerOptionsHelp", "TextErrorBar10msHelp"),
-        CycleBinding::Bool(TEXT_ERROR_BAR_10MS),
+        RowId::TextErrorBarMode,
+        lookup_key("PlayerOptions", "TextErrorBarMode"),
+        lookup_key("PlayerOptionsHelp", "TextErrorBarModeHelp"),
+        CycleBinding::Bool(TEXT_ERROR_BAR_MODE),
         vec![
-            tr("PlayerOptions", "TextErrorBar10msOff").to_string(),
-            tr("PlayerOptions", "TextErrorBar10msOn").to_string(),
+            tr("PlayerOptions", "TextErrorBarModeWindow").to_string(),
+            tr("PlayerOptions", "TextErrorBarModeScalable").to_string(),
         ],
+    ));
+    b.push(Row::custom(
+        RowId::TextErrorBarThreshold,
+        lookup_key("PlayerOptions", "TextErrorBarThreshold"),
+        lookup_key("PlayerOptionsHelp", "TextErrorBarThresholdHelp"),
+        TEXT_ERROR_BAR_THRESHOLD,
+        text_error_bar_threshold_choices(),
     ));
     b.push(Row::cycle(
         RowId::ShortAverageErrorBar,

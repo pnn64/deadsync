@@ -575,10 +575,14 @@ pub fn update_center_tick_for_side(side: PlayerSide, enabled: bool) {
     });
 }
 
-pub fn update_text_error_bar_10ms_for_side(side: PlayerSide, enabled: bool) {
+pub fn update_text_error_bar_scalable_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.text_error_bar_10ms, enabled)
+        set_if_changed(&mut profile.text_error_bar_scalable, enabled)
     });
+}
+
+pub fn update_text_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
+    update_profile_ini(side, |profile| profile.set_text_error_bar_threshold_ms(ms));
 }
 
 pub fn update_average_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {

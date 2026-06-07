@@ -47,6 +47,12 @@ pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_MAX: u32 =
 pub(super) const AVERAGE_ERROR_BAR_INTERVAL_MS_STEP: u32 =
     deadsync_profile::AVERAGE_ERROR_BAR_INTERVAL_MS_STEP;
 
+pub(super) const TEXT_ERROR_BAR_THRESHOLD_MS_MIN: u32 =
+    deadsync_profile::TEXT_ERROR_BAR_THRESHOLD_MS_MIN;
+
+pub(super) const TEXT_ERROR_BAR_THRESHOLD_MS_MAX: u32 =
+    deadsync_profile::TEXT_ERROR_BAR_THRESHOLD_MS_MAX;
+
 pub(super) const LONG_ERROR_BAR_THRESHOLD_MS_MIN: u32 =
     deadsync_profile::LONG_ERROR_BAR_THRESHOLD_MS_MIN;
 

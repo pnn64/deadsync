@@ -271,6 +271,18 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::TextErrorBarThreshold) {
+        let ms = deadsync_profile::clamp_text_error_bar_threshold_ms(
+            profile.text_error_bar_threshold_ms,
+        );
+        let needle = fmt_text_error_bar_threshold_ms(ms);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::LongErrorBarThreshold) {
         let ms = deadsync_profile::clamp_long_error_bar_threshold_ms(
             profile.long_error_bar_threshold_ms,

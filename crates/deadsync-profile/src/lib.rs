@@ -53,6 +53,9 @@ pub const LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT: u32 = 16;
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
+pub const TEXT_ERROR_BAR_THRESHOLD_MS_MIN: u32 = 1;
+pub const TEXT_ERROR_BAR_THRESHOLD_MS_MAX: u32 = 50;
+pub const TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 10;
 pub const TAP_EXPLOSION_MASK_VERSION: u8 = 2;
 pub const DEFAULT_COLUMN_FLASH_MASK: ColumnFlashMask = ColumnFlashMask::MISS;
 
@@ -199,6 +202,17 @@ pub const fn clamp_long_error_bar_threshold_ms(ms: u32) -> u32 {
         LONG_ERROR_BAR_THRESHOLD_MS_MIN
     } else if ms > LONG_ERROR_BAR_THRESHOLD_MS_MAX {
         LONG_ERROR_BAR_THRESHOLD_MS_MAX
+    } else {
+        ms
+    }
+}
+
+#[inline]
+pub const fn clamp_text_error_bar_threshold_ms(ms: u32) -> u32 {
+    if ms < TEXT_ERROR_BAR_THRESHOLD_MS_MIN {
+        TEXT_ERROR_BAR_THRESHOLD_MS_MIN
+    } else if ms > TEXT_ERROR_BAR_THRESHOLD_MS_MAX {
+        TEXT_ERROR_BAR_THRESHOLD_MS_MAX
     } else {
         ms
     }
@@ -2903,7 +2917,8 @@ pub struct PlayerOptionsData {
     pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
-    pub text_error_bar_10ms: bool,
+    pub text_error_bar_scalable: bool,
+    pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
@@ -3025,7 +3040,8 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
-        text_error_bar_10ms: false,
+        text_error_bar_scalable: false,
+        text_error_bar_threshold_ms: TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
@@ -3284,9 +3300,14 @@ where
     options.error_bar_text = get("ErrorBarText")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.error_bar_text, |v| v != 0);
-    options.text_error_bar_10ms = get("TextErrorBar10ms")
+    options.text_error_bar_scalable = get("TextErrorBarScalable")
         .and_then(|s| parse_profile_bool(&s))
-        .unwrap_or(options.text_error_bar_10ms);
+        .or_else(|| get("TextErrorBar10ms").and_then(|s| parse_profile_bool(&s)))
+        .unwrap_or(options.text_error_bar_scalable);
+    options.text_error_bar_threshold_ms = get("TextErrorBarThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_text_error_bar_threshold_ms)
+        .unwrap_or(options.text_error_bar_threshold_ms);
     let mask_from_key = get("ErrorBarMask")
         .and_then(|s| s.parse::<u8>().ok())
         .map(ErrorBarMask::from_bits_truncate);
@@ -3608,8 +3629,16 @@ pub fn append_player_options_section(
         i32::from(options.error_bar_text)
     ));
     content.push_str(&format!(
+        "TextErrorBarScalable={}\n",
+        i32::from(options.text_error_bar_scalable)
+    ));
+    content.push_str(&format!(
         "TextErrorBar10ms={}\n",
-        i32::from(options.text_error_bar_10ms)
+        i32::from(options.text_error_bar_scalable)
+    ));
+    content.push_str(&format!(
+        "TextErrorBarThresholdMs={}\n",
+        clamp_text_error_bar_threshold_ms(options.text_error_bar_threshold_ms)
     ));
     content.push_str(&format!(
         "ErrorBarMask={}\n",
@@ -3882,9 +3911,10 @@ pub struct Profile {
     pub error_bar: ErrorBarStyle,
     // Backward-compatible text flag written to profile.ini.
     pub error_bar_text: bool,
-    // Optional Text error bar mode that surfaces >10ms hits independently
-    // of the active judgment windows.
-    pub text_error_bar_10ms: bool,
+    // Optional Text error bar mode that surfaces hits beyond a configured
+    // threshold independently of the active judgment windows.
+    pub text_error_bar_scalable: bool,
+    pub text_error_bar_threshold_ms: u32,
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
@@ -4050,7 +4080,8 @@ impl Default for Profile {
             error_bar: player_options.error_bar,
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
-            text_error_bar_10ms: player_options.text_error_bar_10ms,
+            text_error_bar_scalable: player_options.text_error_bar_scalable,
+            text_error_bar_threshold_ms: player_options.text_error_bar_threshold_ms,
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
@@ -4435,6 +4466,13 @@ impl Profile {
         )
     }
 
+    pub fn set_text_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
+        set_u32_if_changed(
+            &mut self.text_error_bar_threshold_ms,
+            clamp_text_error_bar_threshold_ms(ms),
+        )
+    }
+
     pub fn set_long_error_bar_intensity(&mut self, intensity: f32) -> bool {
         set_f32_if_changed(
             &mut self.long_error_bar_intensity,
@@ -4596,7 +4634,8 @@ impl Profile {
             error_bar_active_mask: self.error_bar_active_mask,
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
-            text_error_bar_10ms: self.text_error_bar_10ms,
+            text_error_bar_scalable: self.text_error_bar_scalable,
+            text_error_bar_threshold_ms: self.text_error_bar_threshold_ms,
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
@@ -4720,7 +4759,8 @@ impl Profile {
         self.error_bar_active_mask = options.error_bar_active_mask;
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
-        self.text_error_bar_10ms = options.text_error_bar_10ms;
+        self.text_error_bar_scalable = options.text_error_bar_scalable;
+        self.text_error_bar_threshold_ms = options.text_error_bar_threshold_ms;
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
@@ -4884,6 +4924,14 @@ mod tests {
             ),
             (1, 22, 10)
         );
+        assert_eq!(
+            (
+                TEXT_ERROR_BAR_THRESHOLD_MS_MIN,
+                TEXT_ERROR_BAR_THRESHOLD_MS_MAX,
+                TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT
+            ),
+            (1, 50, 10)
+        );
         assert_eq!(PlayStyle::default(), PlayStyle::Single);
         assert_eq!(PlayMode::default(), PlayMode::Regular);
         assert_eq!(PlayerSide::default(), PlayerSide::P1);
@@ -4896,6 +4944,11 @@ mod tests {
         assert!(options.display_scorebox);
         assert!(options.short_average_error_bar_enabled);
         assert!(options.long_error_bar_enabled);
+        assert!(!options.text_error_bar_scalable);
+        assert_eq!(
+            options.text_error_bar_threshold_ms,
+            TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT
+        );
         assert!(options.step_statistics.is_empty());
         assert_eq!(options.score_position, ScorePosition::Normal);
         assert_eq!(options.score_display_mode, ScoreDisplayMode::Normal);
@@ -5221,6 +5274,12 @@ mod tests {
         assert!(profile.set_average_error_bar_interval_ms(149));
         assert_eq!(profile.average_error_bar_interval_ms, 100);
 
+        assert!(profile.set_text_error_bar_threshold_ms(999));
+        assert_eq!(
+            profile.text_error_bar_threshold_ms,
+            TEXT_ERROR_BAR_THRESHOLD_MS_MAX
+        );
+
         assert!(profile.set_long_error_bar_intensity(1.13));
         assert!((profile.long_error_bar_intensity - 1.25).abs() < 1e-6);
 
@@ -5247,6 +5306,8 @@ mod tests {
             ("LongAvgTickOnly", "1"),
             ("HighlightZoom", "1.13x"),
             ("HighlightAverageMs", "149ms"),
+            ("TextErrorBar10ms", "1"),
+            ("TextErrorBarThresholdMs", "999ms"),
             ("LongErrorBar", "0"),
             ("LongErrorBarIntensity", "1.95x"),
             ("LongErrorBarThresholdMs", "9999ms"),
@@ -5271,6 +5332,11 @@ mod tests {
         assert!(!options.short_average_error_bar_enabled);
         assert!((options.average_error_bar_intensity - 1.25).abs() < 1e-6);
         assert_eq!(options.average_error_bar_interval_ms, 100);
+        assert!(options.text_error_bar_scalable);
+        assert_eq!(
+            options.text_error_bar_threshold_ms,
+            TEXT_ERROR_BAR_THRESHOLD_MS_MAX
+        );
         assert!(!options.long_error_bar_enabled);
         assert!((options.long_error_bar_intensity - 2.0).abs() < 1e-6);
         assert_eq!(
@@ -5884,6 +5950,8 @@ mod tests {
             center_tick: true,
             average_error_bar_intensity: 1.13,
             long_error_bar_intensity: 1.95,
+            text_error_bar_scalable: true,
+            text_error_bar_threshold_ms: 17,
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
             score_display_mode: ScoreDisplayMode::Predictive,
@@ -5903,6 +5971,9 @@ mod tests {
         assert!(content.contains("CenterTick=1\n"));
         assert!(content.contains("Colorful=1\n"));
         assert!(content.contains("Text=1\n"));
+        assert!(content.contains("TextErrorBarScalable=1\n"));
+        assert!(content.contains("TextErrorBar10ms=1\n"));
+        assert!(content.contains("TextErrorBarThresholdMs=17\n"));
         assert!(content.contains("AverageErrorBarIntensity=1.25\n"));
         assert!(content.contains("LongErrorBarIntensity=2.00\n"));
         assert!(content.contains("TapExplosionMask=65\n"));

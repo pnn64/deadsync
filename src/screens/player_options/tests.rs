@@ -445,9 +445,9 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn text_error_bar_10ms_child_shows_only_for_text_error_bar() {
+    fn text_error_bar_children_show_only_for_relevant_text_mode() {
         ensure_i18n();
-        let row_map = test_row_map(vec![
+        let window_row_map = test_row_map(vec![
             test_row(
                 RowId::ErrorBar,
                 lookup_key("PlayerOptions", "ErrorBar"),
@@ -455,14 +455,20 @@ pub(super) mod tests {
                 [0, 0],
             ),
             test_row(
-                RowId::TextErrorBar10ms,
-                lookup_key("PlayerOptions", "TextErrorBar10ms"),
-                &["Window", "10ms+"],
+                RowId::TextErrorBarMode,
+                lookup_key("PlayerOptions", "TextErrorBarMode"),
+                &["Window", "Scalable"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::TextErrorBarThreshold,
+                lookup_key("PlayerOptions", "TextErrorBarThreshold"),
+                &["10ms", "11ms"],
                 [0, 0],
             ),
         ]);
         let visibility = row_visibility(
-            &row_map,
+            &window_row_map,
             [true, false],
             [
                 PlayerOptionMasks {
@@ -473,10 +479,11 @@ pub(super) mod tests {
             ],
             false,
         );
-        assert!(!is_row_visible(&row_map, 1, visibility));
+        assert!(!is_row_visible(&window_row_map, 1, visibility));
+        assert!(!is_row_visible(&window_row_map, 2, visibility));
 
         let visibility = row_visibility(
-            &row_map,
+            &window_row_map,
             [true, false],
             [
                 PlayerOptionMasks {
@@ -487,7 +494,43 @@ pub(super) mod tests {
             ],
             false,
         );
-        assert!(is_row_visible(&row_map, 1, visibility));
+        assert!(is_row_visible(&window_row_map, 1, visibility));
+        assert!(!is_row_visible(&window_row_map, 2, visibility));
+
+        let scalable_row_map = test_row_map(vec![
+            test_row(
+                RowId::ErrorBar,
+                lookup_key("PlayerOptions", "ErrorBar"),
+                &["Colorful", "Text"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::TextErrorBarMode,
+                lookup_key("PlayerOptions", "TextErrorBarMode"),
+                &["Window", "Scalable"],
+                [1, 0],
+            ),
+            test_row(
+                RowId::TextErrorBarThreshold,
+                lookup_key("PlayerOptions", "TextErrorBarThreshold"),
+                &["10ms", "11ms"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &scalable_row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    error_bar: ErrorBarMask::TEXT,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&scalable_row_map, 1, visibility));
+        assert!(is_row_visible(&scalable_row_map, 2, visibility));
     }
 
     #[test]
@@ -2805,7 +2848,8 @@ pub(super) mod tests {
         p.custom_fantastic_window = true;
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
-        p.text_error_bar_10ms = true;
+        p.text_error_bar_scalable = true;
+        p.text_error_bar_threshold_ms = 17;
         p.center_tick = true;
         p.short_average_error_bar_enabled = false;
         p.average_error_bar_intensity = 1.5;
@@ -2951,7 +2995,7 @@ pub(super) mod tests {
             RowId::JudgmentTilt,
             RowId::JudgmentBehindArrows,
             RowId::OffsetIndicator,
-            RowId::TextErrorBar10ms,
+            RowId::TextErrorBarMode,
             RowId::CenterTick,
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
@@ -2967,7 +3011,8 @@ pub(super) mod tests {
 
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
-        assert_choice_at_cursor(&row_map, RowId::TextErrorBar10ms, "10ms+");
+        assert_choice_at_cursor(&row_map, RowId::TextErrorBarMode, "Scalable");
+        assert_choice_at_cursor(&row_map, RowId::TextErrorBarThreshold, "17ms");
         assert_choice_at_cursor(&row_map, RowId::CenterTick, "On");
         assert_choice_at_cursor(&row_map, RowId::ShortAverageErrorBar, "Off");
         assert_choice_at_cursor(&row_map, RowId::AverageErrorBarIntensity, "1.50x");

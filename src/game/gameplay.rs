@@ -3152,6 +3152,7 @@ pub struct ErrorBarText {
     pub early: bool,
     pub offset_ms: f32,
     pub scaled: bool,
+    pub scale_start_ms: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -7088,7 +7089,6 @@ const fn error_bar_window_ix(window: TimingWindow) -> usize {
 // Long-term (blue) Average error bar constants.
 pub(crate) const ERROR_BAR_LONG_AVG_SAMPLE_FILTER_S: f32 = 0.060;
 pub(crate) const ERROR_BAR_LONG_AVG_PRUNE_PER_TAP: usize = 4;
-const ERROR_BAR_TEXT_10MS_THRESHOLD_MS: f32 = 10.0;
 
 #[inline(always)]
 fn error_bar_long_term_offset_s(
@@ -7211,7 +7211,9 @@ fn error_bar_register_tap(
     let show_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
     let show_highlight = error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT);
     let show_average = error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE);
-    let show_text_10ms = prof.text_error_bar_10ms;
+    let show_text_scalable = prof.text_error_bar_scalable;
+    let text_error_bar_threshold_ms =
+        profile_data::clamp_text_error_bar_threshold_ms(prof.text_error_bar_threshold_ms);
     let show_fa_plus_window = prof.show_fa_plus_window;
     let blue_fantastic_window_s = player_blue_window_ms(state, player) / 1000.0;
     let error_bar_trim = prof.error_bar_trim;
@@ -7243,8 +7245,8 @@ fn error_bar_register_tap(
     }
 
     if show_text {
-        let threshold_s = if show_text_10ms {
-            ERROR_BAR_TEXT_10MS_THRESHOLD_MS / 1000.0
+        let threshold_s = if show_text_scalable {
+            text_error_bar_threshold_ms as f32 / 1000.0
         } else if show_fa_plus_window {
             blue_fantastic_window_s
         } else {
@@ -7255,7 +7257,8 @@ fn error_bar_register_tap(
                 started_at: now,
                 early: offset_s < 0.0,
                 offset_ms: judgment.time_error_ms.abs(),
-                scaled: show_text_10ms,
+                scaled: show_text_scalable,
+                scale_start_ms: text_error_bar_threshold_ms as f32,
             });
         } else {
             p.error_bar_text = None;
@@ -10841,11 +10844,11 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn text_error_bar_10ms_mode_surfaces_default_window_fantastics() {
+    fn text_error_bar_scalable_mode_surfaces_default_window_fantastics() {
         let p1 = profile_data::Profile {
             show_fa_plus_window: false,
             error_bar_text: true,
-            text_error_bar_10ms: true,
+            text_error_bar_scalable: true,
             error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
             ..profile_data::Profile::default()
         };
@@ -10890,6 +10893,60 @@ return Def.ActorFrame{}
         assert!(text.early);
         assert_eq!(text.offset_ms, 10.1);
         assert!(text.scaled);
+        assert_eq!(text.scale_start_ms, 10.0);
+    }
+
+    #[test]
+    fn text_error_bar_scalable_mode_uses_custom_threshold() {
+        let p1 = profile_data::Profile {
+            show_fa_plus_window: false,
+            error_bar_text: true,
+            text_error_bar_scalable: true,
+            text_error_bar_threshold_ms: 17,
+            error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
+            ..profile_data::Profile::default()
+        };
+
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 16.9,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(16.9, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            1.0,
+        );
+        assert!(
+            state.players[0].error_bar_text.is_none(),
+            "custom threshold should hide hits at or below the selected ms value"
+        );
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 17.1,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(17.1, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            1.1,
+        );
+
+        let text = state.players[0]
+            .error_bar_text
+            .expect("> custom threshold should show inside the default Fantastic window");
+        assert!(!text.early);
+        assert_eq!(text.offset_ms, 17.1);
+        assert!(text.scaled);
+        assert_eq!(text.scale_start_ms, 17.0);
     }
 
     #[test]
@@ -10897,7 +10954,7 @@ return Def.ActorFrame{}
         let p1 = profile_data::Profile {
             show_fa_plus_window: false,
             error_bar_text: true,
-            text_error_bar_10ms: false,
+            text_error_bar_scalable: false,
             error_bar_active_mask: profile_data::ErrorBarMask::TEXT,
             ..profile_data::Profile::default()
         };

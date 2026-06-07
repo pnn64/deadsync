@@ -719,18 +719,27 @@ fn cached_error_bar_text_label(early: bool, scaled: bool) -> Arc<str> {
 }
 
 #[inline(always)]
-fn error_bar_text_10ms_zoom(abs_ms: f32, w2_ms: f32) -> f32 {
+fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_ms: f32) -> f32 {
     let ms = if abs_ms.is_finite() {
         abs_ms
     } else {
         timing::FA_PLUS_W010_MS
     };
-    let smaller_white_ms = timing::FA_PLUS_W010_MS;
-    let w1_ms = timing::FA_PLUS_W0_MS;
+    let scale_start_ms = if scale_start_ms.is_finite() && scale_start_ms > 0.0 {
+        scale_start_ms
+    } else {
+        timing::FA_PLUS_W010_MS
+    };
+    let w1_ms = scale_start_ms + (timing::FA_PLUS_W0_MS - timing::FA_PLUS_W010_MS).max(0.001);
+    let w2_ms = if w2_ms.is_finite() && w2_ms > w1_ms {
+        w2_ms
+    } else {
+        w1_ms
+    };
     let mut scale1 = 1.0;
     let mut scale2 = 1.0;
-    if smaller_white_ms < ms && ms <= w1_ms && w1_ms > smaller_white_ms {
-        scale1 = (ms - smaller_white_ms) / (w1_ms - smaller_white_ms);
+    if scale_start_ms < ms && ms <= w1_ms {
+        scale1 = (ms - scale_start_ms) / (w1_ms - scale_start_ms);
     } else if w1_ms < ms && ms <= w2_ms && w2_ms > w1_ms {
         scale2 = (ms - w1_ms) / (w2_ms - w1_ms);
     }
@@ -8912,8 +8921,9 @@ pub fn build_bundles(
                 let x = if text.early { -40.0 } else { 40.0 };
                 let label = cached_error_bar_text_label(text.early, text.scaled);
                 let zoom = if text.scaled {
-                    error_bar_text_10ms_zoom(
+                    error_bar_text_scalable_zoom(
                         text.offset_ms.abs(),
+                        text.scale_start_ms,
                         state.timing_profile.windows_s[0] * 1000.0,
                     )
                 } else {
@@ -9381,7 +9391,7 @@ mod tests {
         append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
         clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
         disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
-        error_bar_text_10ms_zoom, hold_alpha_needs_rows, hold_body_needs_z_buffer,
+        error_bar_text_scalable_zoom, hold_alpha_needs_rows, hold_body_needs_z_buffer,
         hold_body_segment_budget, hold_draw_span, hold_explosion_active, hold_explosion_enabled,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_x,
         hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
@@ -9813,7 +9823,7 @@ mod tests {
     }
 
     #[test]
-    fn text_error_bar_10ms_zoom_matches_sl_fork_curve() {
+    fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
         fn assert_close(actual: f32, expected: f32) {
             assert!(
                 (actual - expected).abs() <= 0.0001,
@@ -9827,9 +9837,15 @@ mod tests {
         let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
         let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
 
-        assert_close(error_bar_text_10ms_zoom(inner_mid_ms, w2_ms), 0.35);
-        assert_close(error_bar_text_10ms_zoom(fantastic_mid_ms, w2_ms), 0.4);
-        assert_close(error_bar_text_10ms_zoom(w2_ms + 1.0, w2_ms), 0.45);
+        assert_close(
+            error_bar_text_scalable_zoom(inner_mid_ms, 10.0, w2_ms),
+            0.35,
+        );
+        assert_close(
+            error_bar_text_scalable_zoom(fantastic_mid_ms, 10.0, w2_ms),
+            0.4,
+        );
+        assert_close(error_bar_text_scalable_zoom(w2_ms + 1.0, 10.0, w2_ms), 0.45);
     }
 
     #[test]
