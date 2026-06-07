@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 
 use deadsync_rules::judgment::{JudgeGrade, judge_grade_ix};
 
-use crate::engine::present::color::{JUDGMENT_FA_PLUS_WHITE_RGBA, JUDGMENT_RGBA};
 use crate::engine::smx;
 
 /// Pads addressed by the SMX SDK (slot 0 and slot 1).
@@ -34,6 +33,20 @@ const BLACK: Rgb = [0, 0, 0];
 /// Tap flash durations, matching the on-screen column flash (`gameplay.rs:650`).
 pub const FLASH_SECONDS_MISS: f32 = 0.16;
 pub const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
+
+/// Per-grade panel colours, indexed by `judge_grade_ix`. Tuned for the SMX LED diffuser
+/// (saturated, well-separated hues) rather than reusing the on-screen palette, which washes
+/// out on the pad. The SDK scales output by ~0.67 on send.
+const PAD_GRADE_RGB: [Rgb; 6] = [
+    [0, 90, 255],  // Fantastic (blue; white for the FA+ inner window)
+    [255, 140, 0], // Excellent (orange)
+    [0, 220, 0],   // Great (green)
+    [170, 0, 255], // Decent (purple)
+    [255, 230, 0], // Way Off (yellow)
+    [255, 0, 0],   // Miss (red)
+];
+/// Fantastic colour for the bright FA+ inner window.
+const PAD_FANTASTIC_WHITE: Rgb = [255, 255, 255];
 
 /// L, D, U, R direction columns mapped to 3x3 grid panel indices
 /// (panel names: UL,U,UR,L,C,R,DL,D,DR).
@@ -74,26 +87,18 @@ pub fn flash_duration(grade: JudgeGrade) -> f32 {
     }
 }
 
-/// Colour for a tap judgement flash, mirroring the on-screen column flash.
+/// Colour for a tap judgement flash.
 ///
 /// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash` (`gameplay.rs:6772`):
-/// it is `true` for the blue (outer) Fantastic and `false` for the bright FA+ inner window,
-/// which shows white. All other grades use their palette colour.
+/// `true` for the blue (outer) Fantastic, `false` for the bright FA+ inner window (white). All
+/// other grades use the pad palette. The pad uses its own saturated palette rather than the
+/// on-screen colours, which wash out on the LED diffuser.
 pub fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
     if grade == JudgeGrade::Fantastic && !blue_fantastic {
-        rgba_to_rgb(JUDGMENT_FA_PLUS_WHITE_RGBA)
+        PAD_FANTASTIC_WHITE
     } else {
-        rgba_to_rgb(JUDGMENT_RGBA[judge_grade_ix(grade)])
+        PAD_GRADE_RGB[judge_grade_ix(grade)]
     }
-}
-
-/// Convert a normalized f32 RGBA (0..=1) to raw u8 RGB, dropping alpha.
-fn rgba_to_rgb(c: [f32; 4]) -> Rgb {
-    [chan(c[0]), chan(c[1]), chan(c[2])]
-}
-
-fn chan(v: f32) -> u8 {
-    (v.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
 /// One panel's effect state: an optional sustained colour plus a decaying flash.
@@ -460,22 +465,25 @@ mod tests {
     }
 
     #[test]
-    fn flash_color_matches_screen_rules() {
-        // Normal (blue) Fantastic uses the blue palette colour, not white.
-        let blue = flash_color(JudgeGrade::Fantastic, true);
-        assert_eq!(
-            blue,
-            rgba_to_rgb(JUDGMENT_RGBA[judge_grade_ix(JudgeGrade::Fantastic)])
-        );
+    fn flash_color_uses_pad_palette() {
+        // Normal (blue) Fantastic uses the blue pad colour, not white.
+        assert_eq!(flash_color(JudgeGrade::Fantastic, true), PAD_GRADE_RGB[0]);
         // Bright (inner FA+) Fantastic is white.
-        let white = flash_color(JudgeGrade::Fantastic, false);
-        assert_eq!(white, rgba_to_rgb(JUDGMENT_FA_PLUS_WHITE_RGBA));
-        // Other grades use their palette colour regardless of the flag.
-        let miss = flash_color(JudgeGrade::Miss, false);
         assert_eq!(
-            miss,
-            rgba_to_rgb(JUDGMENT_RGBA[judge_grade_ix(JudgeGrade::Miss)])
+            flash_color(JudgeGrade::Fantastic, false),
+            PAD_FANTASTIC_WHITE
         );
+        // Other grades use their pad palette colour.
+        assert_eq!(
+            flash_color(JudgeGrade::Miss, false),
+            PAD_GRADE_RGB[judge_grade_ix(JudgeGrade::Miss)]
+        );
+        // Every grade colour is distinct.
+        for i in 0..PAD_GRADE_RGB.len() {
+            for j in (i + 1)..PAD_GRADE_RGB.len() {
+                assert_ne!(PAD_GRADE_RGB[i], PAD_GRADE_RGB[j]);
+            }
+        }
     }
 
     #[test]

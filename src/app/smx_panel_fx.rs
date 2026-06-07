@@ -16,14 +16,14 @@ const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
 /// Sentinel `started_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
 
-/// Sustained colour shown while a freeze or roll is held.
-const HOLD_RGB: Rgb = [120, 120, 120];
+/// Sustained colour shown while a freeze or roll is held (steady teal).
+const HOLD_RGB: Rgb = [0, 160, 160];
 /// Flash shown when a freeze or roll is completed.
-const HOLD_OK_RGB: Rgb = [40, 200, 40];
+const HOLD_OK_RGB: Rgb = [0, 220, 0];
 /// Flash shown when a freeze or roll is dropped.
-const HOLD_DROP_RGB: Rgb = [200, 40, 40];
-/// Flash shown when a mine is hit.
-const MINE_RGB: Rgb = [255, 80, 0];
+const HOLD_DROP_RGB: Rgb = [255, 0, 0];
+/// Flash shown when a mine is hit (magenta, distinct from the warm grade colours).
+const MINE_RGB: Rgb = [255, 0, 180];
 /// Duration of the mine-hit flash.
 const MINE_FLASH_SECONDS: f32 = 0.25;
 
