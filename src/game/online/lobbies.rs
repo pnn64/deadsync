@@ -71,6 +71,11 @@ pub fn snapshot() -> Snapshot {
     SNAPSHOT.lock().unwrap().clone()
 }
 
+pub fn can_update_machine_state() -> bool {
+    let snapshot = SNAPSHOT.lock().unwrap();
+    matches!(snapshot.connection, ConnectionState::Connected) && snapshot.joined_lobby.is_some()
+}
+
 pub fn search_lobbies() {
     let _ = send_command(Command::Search);
 }

@@ -602,6 +602,21 @@ fn gameplay_lobby_player_stats(
     })
 }
 
+fn update_lobby_machine_state(state: &State) {
+    if !crate::game::online::lobbies::can_update_machine_state() {
+        return;
+    }
+
+    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
+    crate::game::online::lobbies::update_machine_state_sides_with_stats(
+        "ScreenGameplay",
+        p1_ready,
+        p2_ready,
+        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
+        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
+    );
+}
+
 fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
     (
         local_lobby_side_is_active(profile_data::PlayerSide::P1) && state.lobby_ready_p1,
@@ -794,14 +809,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             crate::game::online::lobbies::disconnect();
         }
 
-        let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-        crate::game::online::lobbies::update_machine_state_sides_with_stats(
-            "ScreenGameplay",
-            p1_ready,
-            p2_ready,
-            gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
-            gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
-        );
+        update_lobby_machine_state(state);
 
         if gameplay_lobby_wait_text(state).is_some() {
             return ScreenAction::None;
@@ -812,14 +820,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         crate::game::gameplay::start_stage_music(state);
         state.lobby_music_started = true;
     }
-    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    crate::game::online::lobbies::update_machine_state_sides_with_stats(
-        "ScreenGameplay",
-        p1_ready,
-        p2_ready,
-        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
-        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
-    );
+    update_lobby_machine_state(state);
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time);
     play_song_lua_sound_events(
