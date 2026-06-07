@@ -2880,9 +2880,9 @@ fn score_info_is_nice(si: &ScoreInfo) -> bool {
 /// The sound is sourced from the `assets/sounds/evaluation_nice` folder
 /// (one is chosen at random, files starting with `_` are ignored). It ships
 /// with Simply Love's `nice.ogg` bundled; drop additional `.ogg` files in to
-/// randomize, or disable the whole feature via `CustomSoundsEnabled`.
+/// randomize, or disable the clip via `MachineNiceSound`.
 fn sync_nice_sfx(state: &mut State) {
-    if state.nice_sfx_played {
+    if state.nice_sfx_played || !crate::config::get().machine_nice_sound {
         return;
     }
     let is_nice = state.score_info.iter().flatten().any(score_info_is_nice);

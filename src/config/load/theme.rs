@@ -46,6 +46,10 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachineShowEvalSummary")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.machine_show_eval_summary);
+    cfg.machine_nice_sound = conf
+        .get("Theme", "MachineNiceSound")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.machine_nice_sound);
     cfg.machine_show_name_entry = conf
         .get("Theme", "MachineShowNameEntry")
         .and_then(|v| parse_loose_bool_str(&v))

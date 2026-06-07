@@ -333,6 +333,17 @@ pub fn update_machine_show_eval_summary(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_machine_nice_sound(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_nice_sound == enabled {
+            return;
+        }
+        cfg.machine_nice_sound = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_machine_show_name_entry(enabled: bool) {
     {
         let mut cfg = lock_config();

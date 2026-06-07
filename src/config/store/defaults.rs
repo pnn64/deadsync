@@ -392,6 +392,7 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachineShowEvalSummary",
         default.machine_show_eval_summary,
     );
+    push_bool(content, "MachineNiceSound", default.machine_nice_sound);
     push_bool(
         content,
         "MachineShowGameOver",

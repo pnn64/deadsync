@@ -408,6 +408,7 @@ pub(super) fn apply_submenu_choice_delta(
                 config::update_machine_bar_color(MachineBarColor::from_choice(new_index))
             }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
+            SubRowId::NiceSound => config::update_machine_nice_sound(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
             SubRowId::MenuMusic => config::update_menu_music(enabled),

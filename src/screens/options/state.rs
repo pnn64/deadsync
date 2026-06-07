@@ -613,6 +613,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::NiceSound,
+        usize::from(cfg.machine_nice_sound),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::NameEntry,
         usize::from(cfg.machine_show_name_entry),
     );

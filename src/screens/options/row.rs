@@ -80,6 +80,7 @@ pub enum SubRowId {
     Font,
     BarColor,
     EvalSummary,
+    NiceSound,
     NameEntry,
     GameoverScreen,
     WriteCurrentScreen,

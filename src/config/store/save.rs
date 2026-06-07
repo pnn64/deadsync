@@ -452,6 +452,7 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         "MachineShowEvalSummary",
         cfg.machine_show_eval_summary,
     );
+    push_bool(content, "MachineNiceSound", cfg.machine_nice_sound);
     push_bool(content, "MachineShowGameOver", cfg.machine_show_gameover);
     push_bool(content, "MachineShowNameEntry", cfg.machine_show_name_entry);
     push_bool(

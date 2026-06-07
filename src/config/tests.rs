@@ -47,6 +47,11 @@ fn config_default_enables_custom_sounds() {
 }
 
 #[test]
+fn config_default_enables_machine_nice_sound() {
+    assert!(Config::default().machine_nice_sound);
+}
+
+#[test]
 fn config_default_hides_mouse_cursor() {
     assert!(Config::default().hide_mouse_cursor);
 }

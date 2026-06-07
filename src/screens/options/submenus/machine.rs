@@ -97,6 +97,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::NiceSound,
+        label: lookup_key("OptionsMachine", "NiceSound"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::NameEntry,
         label: lookup_key("OptionsMachine", "NameEntry"),
         choices: &[
@@ -302,6 +311,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "EvalSummaryHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchNiceSound,
+        name: lookup_key("OptionsMachine", "NiceSound"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "NiceSoundHelp",
         ))],
     },
     Item {

@@ -301,6 +301,8 @@ pub struct Config {
     pub machine_default_sync_offset: DefaultSyncOffset,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
+    /// Evaluation easter egg: play the "nice" clip when a score contains 69.
+    pub machine_nice_sound: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
     pub machine_show_name_entry: bool,
     /// Post-session flow from Select Music/Course: show GameOver.
@@ -496,6 +498,7 @@ impl Default for Config {
             machine_pack_ini_offsets: false,
             machine_default_sync_offset: DefaultSyncOffset::Null,
             machine_show_eval_summary: true,
+            machine_nice_sound: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
             zmod_rating_box_text: false,
