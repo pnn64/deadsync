@@ -175,10 +175,11 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
-    // Gameplay background color drawn behind the playfield. The song background
-    // image (if any) is alpha-blended over it by `bg_brightness`. Parsed from a
-    // `#RRGGBB` hex string in `deadsync.ini` (key `GameplayBgColor`). Default is
-    // black so behavior is unchanged unless explicitly overridden.
+    // Gameplay backdrop color matching the Simply Love ScreenGameplay underlay
+    // quad. Non-black values draw over song art and below notefield/HUD actors.
+    // Parsed from a `#RRGGBB` hex string in `deadsync.ini` (key
+    // `GameplayBgColor`). Default black preserves the standard song-background
+    // brightness behavior.
     pub gameplay_bg_color: Color,
     // ITGmania/Simply Love parity: center the active single-player notefield in gameplay.
     pub center_1player_notefield: bool,

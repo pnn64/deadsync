@@ -1300,7 +1300,7 @@ fn push_background(
 
     // Solid base fill behind everything. This is what shows when the song has no
     // background image, and what the song background is dimmed toward as
-    // BGBrightness drops. Defaults to black, preserving the original look.
+    // BGBrightness drops on the default path.
     let mut base =
         shared_banner::cover_sprite(Arc::<str>::from("__white"), cx, cy, sw, sh, 1.0, -101);
     if let Actor::Sprite { tint, .. } = &mut base {
@@ -1325,6 +1325,34 @@ fn push_background(
             *tint = [1.0, 1.0, 1.0, bg_brightness];
         }
         actors.push(img);
+    }
+    // A non-default GameplayBgColor mirrors Chris's Simply Love underlay quad:
+    // it covers song art but stays behind the notefield, filters, and HUD.
+    push_custom_gameplay_backdrop(actors, base_color);
+}
+
+fn custom_gameplay_backdrop_enabled(color: crate::config::Color) -> bool {
+    color != crate::config::Color::BLACK
+}
+
+fn push_custom_gameplay_backdrop(actors: &mut Vec<Actor>, color: crate::config::Color) {
+    if !custom_gameplay_backdrop_enabled(color) {
+        return;
+    }
+    let rgba = color.to_rgba();
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        setsize(screen_width(), screen_height()):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(-99)
+    ));
+}
+
+fn gameplay_header_rgba(color: crate::config::Color) -> [f32; 4] {
+    if custom_gameplay_backdrop_enabled(color) {
+        color.to_rgba()
+    } else {
+        [0.0, 0.0, 0.0, 0.85]
     }
 }
 
@@ -7829,13 +7857,14 @@ pub fn push_actors(
     song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
-    // This translucent top strip sits underneath the UpperNPSGraph and other HUD actors.
+    // This top strip sits underneath the UpperNPSGraph and other HUD actors.
     if !hide_gameplay_hud {
         let underlay_start = actors.len();
+        let header_rgba = gameplay_header_rgba(cfg.gameplay_bg_color);
         actors.push(act!(quad:
             align(0.5, 0.0): xy(screen_center_x(), 0.0):
-            zoomto(screen_width(), 80.0):
-            diffuse(0.0, 0.0, 0.0, 0.85):
+            setsize(screen_width(), 80.0):
+            diffuse(header_rgba[0], header_rgba[1], header_rgba[2], header_rgba[3]):
             z(83)
         ));
         song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
@@ -8873,6 +8902,61 @@ mod tests {
 
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
+    }
+
+    #[test]
+    fn custom_gameplay_backdrop_covers_full_screen_under_song_ui() {
+        let mut actors = Vec::new();
+        let color = crate::config::Color::from_hex("#0c0c0c").unwrap();
+
+        push_custom_gameplay_backdrop(&mut actors, color);
+
+        let [
+            Actor::Sprite {
+                align,
+                offset,
+                size,
+                source,
+                tint,
+                z,
+                ..
+            },
+        ] = actors.as_slice()
+        else {
+            panic!("expected one custom backdrop actor");
+        };
+        assert_eq!(*align, [0.0, 0.0]);
+        assert_eq!(*offset, [0.0, 0.0]);
+        assert!(matches!(source, SpriteSource::Solid));
+        assert_eq!(*tint, color.to_rgba());
+        assert_eq!(*z, -99);
+        match size {
+            [SizeSpec::Px(w), SizeSpec::Px(h)] => {
+                assert_eq!(*w, screen_width());
+                assert_eq!(*h, screen_height());
+            }
+            other => panic!("expected fixed screen size, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn black_gameplay_backdrop_preserves_legacy_header() {
+        let mut actors = Vec::new();
+
+        push_custom_gameplay_backdrop(&mut actors, crate::config::Color::BLACK);
+
+        assert!(actors.is_empty());
+        assert_eq!(
+            gameplay_header_rgba(crate::config::Color::BLACK),
+            [0.0, 0.0, 0.0, 0.85]
+        );
+    }
+
+    #[test]
+    fn custom_gameplay_backdrop_tints_header() {
+        let color = crate::config::Color::from_hex("#0c0c0c").unwrap();
+
+        assert_eq!(gameplay_header_rgba(color), color.to_rgba());
     }
 
     #[test]
