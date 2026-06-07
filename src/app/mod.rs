@@ -4197,7 +4197,7 @@ impl App {
             return;
         }
         if !(config::get().smx_input && crate::engine::smx::conflict_warning_active()) {
-            // No unresolved conflict — re-arm for the next episode.
+            // No unresolved conflict, so re-arm for the next episode.
             self.state.screens.smx_autoprompt_latched = false;
             return;
         }
@@ -4210,7 +4210,7 @@ impl App {
     }
 
     /// While the StepManiaX options page is open, light the pads blue (P1) / red
-    /// (P2) — white when ambiguous — so the user can see the assignment, and so a
+    /// (P2), white when ambiguous, so the user can see the assignment, and so a
     /// live Swap is reflected on the pads immediately. Restores auto-lighting when
     /// leaving the page. (Driven from the app loop so the lifecycle is in one place.)
     fn drive_smx_options_lights(&mut self, dt: f32) {
@@ -4236,7 +4236,11 @@ impl App {
             self.state.screens.smx_options_lights_active = false;
             self.state.screens.smx_options_light_timer = 0.0;
             self.state.screens.smx_options_last_lights = [None, None];
-            crate::engine::smx::reenable_auto_lights();
+            // The assignment screen drives the pad lights itself, so don't restore
+            // auto-lighting when handing off to it (avoids a one-frame flicker).
+            if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
+                crate::engine::smx::reenable_auto_lights();
+            }
         }
     }
 

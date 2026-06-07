@@ -71,19 +71,19 @@ assignment serials `SmxP1Serial` / `SmxP2Serial`).
 
 ## 2a. Which pad is P1 vs P2?
 
-By default each pad's **player side is decided by its hardware P1/P2 jumper** —
-the SDK orders the pads so the P1‑jumpered pad is Player 1 and the P2‑jumpered
-pad is Player 2. DeadSync keys both **input routing** and **pad‑config profiles**
+By default each pad's **player side is decided by its hardware P1/P2 jumper**:
+the SDK orders the pads so the P1-jumpered pad is Player 1 and the P2-jumpered
+pad is Player 2. DeadSync keys both **input routing** and **pad-config profiles**
 off this slot order, so in the normal case there's nothing to do, and once two
-correctly‑jumpered pads are seen the mapping is saved automatically.
+correctly-jumpered pads are seen the mapping is saved automatically.
 
 Two situations need a manual assignment:
 
 - **Both pads share a jumper** (e.g. both set to P1). The SDK can't tell them
-  apart, so the main Menu shows an amber *"both pads share a jumper — assign
-  pads"* warning and the assignment screen auto‑opens.
+  apart, so the main Menu shows an amber *"both pads share a jumper, assign
+  pads"* warning and the assignment screen auto-opens.
 - **Pads installed on the wrong sides** (jumpers are correct, but the pads are
-  physically swapped). Moving a 100‑lb pad is hard — swap them in software.
+  physically swapped). Moving a 100-lb pad is hard, so swap them in software.
 
 **Assign Pads to Players** walks you through it: step on a panel of the pad you
 want as **Player 1** (it lights **blue**), then the pad you want as **Player 2**
@@ -268,7 +268,7 @@ assignment when one is set (`SmxManager::set_player_assignment`, pushed at init
 and on change from `engine::smx`). Input routing and config→profile mapping both
 key off the slot, so they never diverge even when two pads share a jumper. The
 assignment screen lives in `screens::smx_assign`; the App auto-saves a clean
-jumper‑derived map and auto‑prompts on an unresolved conflict
+jumper-derived map and auto-prompts on an unresolved conflict
 (`App::reconcile_smx_assignment` / `maybe_autoprompt_smx_assign`).
 
 The `SmxManager` event callback fires while the SDK holds its internal lock, so
@@ -331,4 +331,4 @@ exact device behavior offline.
 | Configure Pads edits don't stick | **DeadSync Manages Pad Config** is on — they're re-applied on launch. Save as a profile from Song Select instead. |
 | Pad detected as wrong type | Capture with `SMX_CAPTURE_DIR` and share the `.smxhid`; the resolve log shows the detected `type=`. |
 | Can't save a profile | Only available in Song Select with a **joined local profile** (not Guest, not the Options screen). |
-| Pads act as the wrong player (P1/P2 swapped), or a "share a jumper" warning | Use **Assign Pads to Players** (or **Swap P1/P2 Pads**) on the StepManiaX page — see [§2a](#2a-which-pad-is-p1-vs-p2). |
+| Pads act as the wrong player (P1/P2 swapped), or a "share a jumper" warning | Use **Assign Pads to Players** (or **Swap P1/P2 Pads**) on the StepManiaX page; see [§2a](#2a-which-pad-is-p1-vs-p2). |

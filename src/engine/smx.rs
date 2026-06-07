@@ -470,7 +470,7 @@ pub fn set_player_assignment(p1: Option<String>, p2: Option<String>) {
     }
 }
 
-/// The serial connected at each slot — index 0 = P1, 1 = P2 — or `None` if that
+/// The serial connected at each slot (index 0 = P1, 1 = P2), or `None` if that
 /// slot has no connected pad (or its serial isn't known yet). This reflects the
 /// SDK's *current* ordering, i.e. what is actually assigned right now.
 pub fn connected_serials() -> [Option<String>; 2] {
@@ -533,7 +533,7 @@ pub fn conflict_warning_active() -> bool {
 }
 
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
-/// P2 slot; `None` turns that pad off). One-shot — re-send to hold the colour.
+/// P2 slot; `None` turns that pad off). One-shot, so re-send to hold the colour.
 pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
     let Some(s) = SHARED.get() else { return };
     // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED

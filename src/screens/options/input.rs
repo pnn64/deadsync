@@ -1260,9 +1260,13 @@ pub(super) fn activate_current_selection(
                         }
                         SubRowId::SmxSwapPads => {
                             // Immediate action: swap P1/P2 and stay on the page so
-                            // the user can watch the pad colours swap.
-                            config::swap_smx_pad_assignment();
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            // the user can watch the pad colours swap. Needs both
+                            // pads; otherwise it is a no-op, so signal that.
+                            if config::swap_smx_pad_assignment() {
+                                audio::play_sfx("assets/sounds/start.ogg");
+                            } else {
+                                audio::play_sfx("assets/sounds/common_invalid.ogg");
+                            }
                             return ScreenAction::None;
                         }
                         _ => {}

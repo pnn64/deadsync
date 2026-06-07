@@ -155,12 +155,16 @@ pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<St
 
 /// Swap which physical pad is P1 vs P2. Uses the serials currently connected at
 /// slot 0 and slot 1 and pins them reversed, so the swap is immediate and works
-/// whether or not an assignment was already saved. No-op unless both pads are
-/// connected (a swap is undefined with fewer than two pads).
-pub fn swap_smx_pad_assignment() {
+/// whether or not an assignment was already saved. Returns whether it swapped:
+/// `false` (no-op) unless both pads are connected, since a swap is undefined with
+/// fewer than two pads.
+pub fn swap_smx_pad_assignment() -> bool {
     let [s0, s1] = crate::engine::smx::connected_serials();
     if let (Some(a), Some(b)) = (s0, s1) {
         update_smx_pad_assignment(Some(b), Some(a));
+        true
+    } else {
+        false
     }
 }
 

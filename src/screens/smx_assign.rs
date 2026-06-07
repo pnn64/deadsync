@@ -3,7 +3,7 @@
 //! Walks the user through a press-a-panel flow: press a panel on the pad you
 //! want as P1, then the pad you want as P2. The pressed pad's serial is pinned to
 //! that player slot (see [`crate::engine::smx::set_player_assignment`]), which
-//! decouples the assignment from the hardware P1/P2 jumper — the only way to fix
+//! decouples the assignment from the hardware P1/P2 jumper, the only way to fix
 //! two pads that share a jumper or are physically installed swapped. The pads are
 //! lit blue (P1) / red (P2) throughout so the user can see which is which.
 
@@ -39,7 +39,7 @@ const LIGHT_RESEND_INTERVAL: f32 = 0.25;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
-    /// Fewer than two pads connected — assignment needs both.
+    /// Fewer than two pads connected; assignment needs both.
     NeedTwoPads,
     /// Waiting for a panel press to pick the P1 pad.
     AwaitP1,
@@ -157,9 +157,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
-/// Leave the screen, restoring the pads' automatic lighting first.
+/// Leave the screen. The options StepManiaX page re-drives the pad lights itself,
+/// so only restore auto-lighting when returning somewhere that won't (e.g. the
+/// Menu), to avoid a one-frame flicker on the handoff.
 fn exit(state: &State) -> ScreenAction {
-    smx::reenable_auto_lights();
+    if state.return_screen != Screen::Options {
+        smx::reenable_auto_lights();
+    }
     ScreenAction::Navigate(state.return_screen)
 }
 
@@ -209,7 +213,7 @@ fn apply_lights(state: &State) {
     match state.phase {
         Phase::NeedTwoPads => {}
         Phase::AwaitP1 => {
-            // Every connected pad glows blue — press the one you want as P1.
+            // Every connected pad glows blue; press the one you want as P1.
             for (s, c) in colors.iter_mut().enumerate() {
                 if smx::get_info(s).connected {
                     *c = Some(smx::PLAYER1_LIGHT);
@@ -328,10 +332,10 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
         line(&tr("ScreenSmxAssignPads", "Player2"), &state.p2_serial, red),
     ];
     let base_y = screen_h * 0.56;
-    for (i, (text, rgb)) in rows.iter().enumerate() {
+    for (i, (text, rgb)) in rows.into_iter().enumerate() {
         actors.push(act!(text:
             font("miso"):
-            settext(text.clone()):
+            settext(text):
             align(0.5, 0.5):
             xy(screen_center_x(), base_y + i as f32 * 40.0):
             zoom(0.9):
