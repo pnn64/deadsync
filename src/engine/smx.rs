@@ -757,7 +757,7 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PLAYER1_LIGHT, PLAYER2_LIGHT, PLAYER_UNCONFIGURED_LIGHT, PadConfigData, PanelThresholds,
+        PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
         conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
         preset_thresholds,
     };
@@ -904,7 +904,10 @@ mod tests {
             None
         );
         // Missing serial: not safe to pin.
-        assert_eq!(jumper_derived_pair(&slot0, &info(true, true, false, "")), None);
+        assert_eq!(
+            jumper_derived_pair(&slot0, &info(true, true, false, "")),
+            None
+        );
         // Only one pad connected: no pair.
         assert_eq!(
             jumper_derived_pair(&slot0, &info(false, false, false, "")),
@@ -920,7 +923,13 @@ mod tests {
         assert_eq!(indicator_color(true, false, 0), Some(PLAYER1_LIGHT));
         assert_eq!(indicator_color(true, false, 1), Some(PLAYER2_LIGHT));
         // Ambiguous: white regardless of slot.
-        assert_eq!(indicator_color(true, true, 0), Some(PLAYER_UNCONFIGURED_LIGHT));
-        assert_eq!(indicator_color(true, true, 1), Some(PLAYER_UNCONFIGURED_LIGHT));
+        assert_eq!(
+            indicator_color(true, true, 0),
+            Some(PLAYER_UNCONFIGURED_LIGHT)
+        );
+        assert_eq!(
+            indicator_color(true, true, 1),
+            Some(PLAYER_UNCONFIGURED_LIGHT)
+        );
     }
 }

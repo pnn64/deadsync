@@ -23,6 +23,7 @@ mod actor {
         pub texture_expr: String,
         pub frame0: usize,
         pub frame_count: usize,
+        pub frame_indices: Option<Vec<usize>>,
         pub frame_delays: Option<Vec<f32>>,
         pub commands: HashMap<String, String>,
     }
@@ -500,8 +501,9 @@ mod actor {
         let mut texture_expr = None;
         let mut frame0 = 0usize;
         let mut frame_count = 1usize;
-        let mut frame_max = 0usize;
+        let mut frame_state_max = 0usize;
         let mut frame_seen = false;
+        let mut frame_indices = HashMap::<usize, usize>::new();
         let mut frame_delays = HashMap::<usize, f32>::new();
         let mut commands = HashMap::new();
         for raw in block.lines() {
@@ -536,12 +538,15 @@ mod actor {
             if key_lower.starts_with("frame")
                 && key_lower[5..].chars().all(|ch| ch.is_ascii_digit())
             {
-                if let Ok(parsed) = value.parse::<usize>() {
+                if let Ok(idx) = key_lower[5..].parse::<usize>()
+                    && let Ok(parsed) = value.parse::<usize>()
+                {
                     frame_seen = true;
-                    frame_max = frame_max.max(parsed);
-                    if key_lower == "frame0000" {
+                    frame_state_max = frame_state_max.max(idx);
+                    if idx == 0 {
                         frame0 = parsed;
                     }
+                    frame_indices.insert(idx, parsed);
                 }
                 continue;
             }
@@ -565,8 +570,21 @@ mod actor {
             commands.insert(k, v);
         }
         if frame_seen {
-            frame_count = frame_max.saturating_add(1).max(1);
+            frame_count = frame_state_max.saturating_add(1).max(1);
         }
+        let frame_indices = if frame_indices.is_empty() {
+            None
+        } else {
+            let mut indices = vec![0usize; frame_count];
+            let mut last_frame = 0usize;
+            for (idx, out) in indices.iter_mut().enumerate() {
+                if let Some(frame) = frame_indices.get(&idx).copied() {
+                    last_frame = frame;
+                }
+                *out = last_frame;
+            }
+            Some(indices)
+        };
         let frame_delays = if frame_delays.is_empty() {
             None
         } else {
@@ -582,6 +600,7 @@ mod actor {
             texture_expr: texture_expr?,
             frame0,
             frame_count,
+            frame_indices,
             frame_delays,
             commands,
         })
@@ -1259,7 +1278,7 @@ mod compiled {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    pub const CACHE_SCHEMA_VERSION: u32 = 2;
+    pub const CACHE_SCHEMA_VERSION: u32 = 3;
     static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[derive(Debug, Clone, Encode, Decode, Default, PartialEq, Eq)]
@@ -1423,7 +1442,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 7;
+const COMPILER_VERSION: u32 = 8;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
@@ -2128,6 +2147,44 @@ return Def.Sprite {
             sprite.commands.get("initcommand").map(String::as_str),
             Some("diffusealpha,1")
         );
+    }
+
+    #[test]
+    fn actor_decl_preserves_repeated_sprite_frame_states() {
+        let decl = noteskin_actor::parse_actor_decl(
+            r#"
+return Def.Sprite {
+    Texture=NOTESKIN:GetPath('_Down', 'roll body active');
+    Frame0000=0;
+    Delay0000=0.44;
+    Frame0001=1;
+    Delay0001=0.03;
+    Frame0002=2;
+    Delay0002=0.03;
+    Frame0003=3;
+    Delay0003=0.44;
+    Frame0004=2;
+    Delay0004=0.03;
+    Frame0005=1;
+    Delay0005=0.03;
+};
+"#,
+            &noteskin_itg::IniData::default(),
+        );
+
+        let sprite = decl.sprites.first().expect("sprite should parse");
+        assert_eq!(sprite.frame0, 0);
+        assert_eq!(sprite.frame_count, 6);
+        assert_eq!(
+            sprite.frame_indices.as_deref(),
+            Some([0, 1, 2, 3, 2, 1].as_slice())
+        );
+        let delays = sprite
+            .frame_delays
+            .as_deref()
+            .expect("sprite frame delays should parse");
+        assert_eq!(delays, [0.44, 0.03, 0.03, 0.44, 0.03, 0.03]);
+        assert!((delays.iter().sum::<f32>() - 1.0).abs() <= 1e-6);
     }
 
     #[test]

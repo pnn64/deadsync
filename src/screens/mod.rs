@@ -15,7 +15,6 @@ pub mod mappings;
 pub mod menu;
 pub mod options;
 pub mod overscan_adjustment;
-pub mod smx_assign;
 pub(crate) mod pack_sync;
 pub mod pad_config;
 pub mod player_options;
@@ -28,6 +27,7 @@ pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
+pub mod smx_assign;
 pub mod test_lights;
 use std::path::PathBuf;
 

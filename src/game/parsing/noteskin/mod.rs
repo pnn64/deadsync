@@ -75,6 +75,7 @@ pub enum SpriteSource {
         frame_size: [i32; 2],
         grid: (usize, usize),
         frame_count: usize,
+        frame_indices: Option<Arc<[usize]>>,
         rate: AnimationRate,
         frame_durations: Option<Arc<[f32]>>,
         cached_handle: AtomicU64,
@@ -608,15 +609,27 @@ impl SpriteSlot {
                 frame_size,
                 grid,
                 frame_count,
+                frame_indices,
                 ..
             } => {
                 let frames = (*frame_count).max(1);
                 let idx = if frames > 0 { frame_index % frames } else { 0 };
                 let cols = grid.0.max(1);
-                let row = idx / cols;
-                let col = idx % cols;
-                let src_x = self.def.src[0] + (col as i32 * frame_size[0]);
-                let src_y = self.def.src[1] + (row as i32 * frame_size[1]);
+                let available = cols.saturating_mul(grid.1.max(1)).max(1);
+                let source_idx = frame_indices
+                    .as_ref()
+                    .and_then(|indices| indices.get(idx).copied())
+                    .map_or(idx, |idx| idx % available);
+                let row = source_idx / cols;
+                let col = source_idx % cols;
+                let (src_x, src_y) = if frame_indices.is_some() {
+                    (col as i32 * frame_size[0], row as i32 * frame_size[1])
+                } else {
+                    (
+                        self.def.src[0] + (col as i32 * frame_size[0]),
+                        self.def.src[1] + (row as i32 * frame_size[1]),
+                    )
+                };
                 let tw = tex_dims.0.max(1) as f32;
                 let th = tex_dims.1.max(1) as f32;
 
@@ -1918,6 +1931,7 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         frame_size: [frame_size, frame_size],
         grid: (frame_count, 1),
         frame_count,
+        frame_indices: None,
         rate: AnimationRate::FramesPerBeat(1.0),
         frame_durations: None,
         cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
@@ -4899,6 +4913,7 @@ struct ItgLuaSpriteDecl {
     texture_expr: String,
     frame0: usize,
     frame_count: usize,
+    frame_indices: Option<Vec<usize>>,
     frame_delays: Option<Vec<f32>>,
     commands: HashMap<String, String>,
 }
@@ -4959,6 +4974,7 @@ impl From<noteskin_actor::ItgLuaSpriteDecl> for ItgLuaSpriteDecl {
             texture_expr: value.texture_expr,
             frame0: value.frame0,
             frame_count: value.frame_count,
+            frame_indices: value.frame_indices,
             frame_delays: value.frame_delays,
             commands: value.commands,
         }
@@ -5276,6 +5292,7 @@ fn itg_apply_slot_state_properties(
         frame_size: [frame_w, frame_h],
         grid: (cols, rows),
         frame_count: anim_frames,
+        frame_indices: None,
         rate,
         frame_durations: Some(Arc::<[f32]>::from(durations)),
         cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
@@ -5716,6 +5733,7 @@ fn itg_resolve_actor_file_compiled(
                 &texture_path,
                 sprite.frame0,
                 sprite.frame_count,
+                sprite.frame_indices.as_deref(),
                 sprite.frame_delays.as_deref(),
                 anim_is_beat,
             )
@@ -6676,6 +6694,7 @@ fn itg_slot_from_path_animated(
     path: &Path,
     frame0: usize,
     frame_count: usize,
+    frame_indices: Option<&[usize]>,
     frame_delays: Option<&[f32]>,
     beat_based: bool,
 ) -> Option<SpriteSlot> {
@@ -6688,7 +6707,11 @@ fn itg_slot_from_path_animated(
     if available <= 1 || frame_count <= 1 {
         return itg_slot_from_path_with_frame(path, frame0);
     }
-    let anim_frames = frame_count.min(available).max(1);
+    let anim_frames = if frame_indices.is_some() {
+        frame_count.max(1)
+    } else {
+        frame_count.min(available).max(1)
+    };
     let start = frame0 % available;
     let col = start % cols;
     let row = start / cols;
@@ -6714,12 +6737,23 @@ fn itg_slot_from_path_animated(
             Arc::<[f32]>::from(normalized)
         })
         .filter(|durations| !durations.is_empty());
+    let frame_indices = frame_indices
+        .map(|indices| {
+            let mut normalized = Vec::with_capacity(anim_frames);
+            let fallback = indices.first().copied().unwrap_or(start);
+            for idx in 0..anim_frames {
+                normalized.push(indices.get(idx).copied().unwrap_or(fallback));
+            }
+            Arc::<[usize]>::from(normalized)
+        })
+        .filter(|indices| !indices.is_empty());
     let source = Arc::new(SpriteSource::Animated {
         texture_key: key.into(),
         tex_dims: dims,
         frame_size: [frame_w as i32, frame_h as i32],
         grid: (cols, rows),
         frame_count: anim_frames,
+        frame_indices,
         rate,
         frame_durations,
         cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
@@ -6773,6 +6807,7 @@ fn itg_slot_from_actor_path_first_sprite_compiled(
                 &texture_path,
                 sprite.frame0,
                 sprite.frame_count,
+                sprite.frame_indices.as_deref(),
                 sprite.frame_delays.as_deref(),
                 anim_is_beat,
             )
@@ -6803,7 +6838,7 @@ fn itg_slot_from_path_all_frames(
         let d = delay.max(1e-6);
         vec![d; frame_count]
     });
-    itg_slot_from_path_animated(path, 0, frame_count, delays.as_deref(), beat_based)
+    itg_slot_from_path_animated(path, 0, frame_count, None, delays.as_deref(), beat_based)
         .or_else(|| itg_slot_from_path(path))
 }
 
@@ -7731,6 +7766,59 @@ Materials: 1
         assert!(w3.interrupts);
         assert!((w1.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
         assert!((w3.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
+
+        clear_itg_runtime_caches();
+    }
+
+    fn assert_devcel_roll_active_sequence(slot: &SpriteSlot, label: &str) {
+        let SpriteSource::Animated {
+            frame_count,
+            frame_indices,
+            frame_durations,
+            ..
+        } = slot.source.as_ref()
+        else {
+            panic!("{label} should be animated");
+        };
+
+        assert_eq!(*frame_count, 6, "{label} should keep every ITG state");
+        assert_eq!(
+            frame_indices.as_deref(),
+            Some([0, 1, 2, 3, 2, 1].as_slice()),
+            "{label} should preserve repeated texture frames"
+        );
+        let delays = frame_durations
+            .as_deref()
+            .unwrap_or_else(|| panic!("{label} should preserve state delays"));
+        assert_eq!(delays, [0.44, 0.03, 0.03, 0.44, 0.03, 0.03]);
+        assert!((delays.iter().sum::<f32>() - 1.0).abs() <= 1e-6);
+        assert_eq!(slot.frame_index_from_phase(0.955), 4);
+        assert_eq!(slot.uv_for_frame_at(2, 0.0), slot.uv_for_frame_at(4, 0.0));
+        assert_eq!(slot.uv_for_frame_at(1, 0.0), slot.uv_for_frame_at(5, 0.0));
+    }
+
+    #[test]
+    fn devcel_roll_active_preserves_repeated_frame_states() {
+        clear_itg_runtime_caches();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "devcel-2024")
+            .expect("dance/devcel-2024 should load from assets/noteskins");
+        let body = ns
+            .roll
+            .body_active
+            .as_ref()
+            .expect("devcel roll body active should resolve");
+        let bottom = ns
+            .roll
+            .bottomcap_active
+            .as_ref()
+            .expect("devcel roll bottomcap active should resolve");
+
+        assert_devcel_roll_active_sequence(body, "devcel roll body active");
+        assert_devcel_roll_active_sequence(bottom, "devcel roll bottomcap active");
 
         clear_itg_runtime_caches();
     }

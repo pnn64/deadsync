@@ -4339,13 +4339,11 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // In play? Doubles/Versus drive both pads; Singles only the joined side.
         let in_play = match style {
             profile_data::PlayStyle::Double | profile_data::PlayStyle::Versus => true,
-            profile_data::PlayStyle::Single => {
-                profile::is_session_side_joined(if is_p2 {
-                    profile_data::PlayerSide::P2
-                } else {
-                    profile_data::PlayerSide::P1
-                })
-            }
+            profile_data::PlayStyle::Single => profile::is_session_side_joined(if is_p2 {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            }),
         };
         if !in_play {
             continue;

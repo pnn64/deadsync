@@ -315,9 +315,10 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
     let blue = smx::PLAYER1_LIGHT;
     let red = smx::PLAYER2_LIGHT;
     let line = |label: &str, serial: &Option<String>, rgb: [u8; 3]| -> (String, [f32; 3]) {
-        let val = serial
-            .as_deref()
-            .map_or_else(|| "(none)".to_owned(), |s| format!("SMX[{}]", smx::serial_prefix(s)));
+        let val = serial.as_deref().map_or_else(
+            || "(none)".to_owned(),
+            |s| format!("SMX[{}]", smx::serial_prefix(s)),
+        );
         (
             format!("{label}: {val}"),
             [
@@ -328,7 +329,11 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
         )
     };
     let rows = [
-        line(&tr("ScreenSmxAssignPads", "Player1"), &state.p1_serial, blue),
+        line(
+            &tr("ScreenSmxAssignPads", "Player1"),
+            &state.p1_serial,
+            blue,
+        ),
         line(&tr("ScreenSmxAssignPads", "Player2"), &state.p2_serial, red),
     ];
     let base_y = screen_h * 0.56;
