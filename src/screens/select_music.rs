@@ -4019,11 +4019,15 @@ fn clear_stale_preview(
 }
 
 #[inline(always)]
-fn preview_mute_allowed(state: &State) -> bool {
+fn preview_hotkey_allowed(state: &State) -> bool {
     state.out_prompt == OutPromptState::None
         && state.exit_prompt == ExitPromptState::None
         && !delayed_selection_updates_blocked(state)
-        && select_music_lobby_lock_text(state).is_none()
+}
+
+#[inline(always)]
+fn preview_mute_allowed(state: &State) -> bool {
+    preview_hotkey_allowed(state) && select_music_lobby_lock_text(state).is_none()
 }
 
 #[inline(always)]
@@ -9447,6 +9451,20 @@ fn configurable_shortcut_action(
     None
 }
 
+fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Option<ScreenAction> {
+    let key = key?;
+    if key.pressed
+        && key.code == KeyCode::KeyM
+        && !key.repeat
+        && !key_bound_to_player_input(key)
+        && preview_hotkey_allowed(state)
+    {
+        toggle_preview_mute(state);
+        return Some(ScreenAction::ConsumeInput);
+    }
+    None
+}
+
 #[inline(always)]
 fn key_bound_to_player_input(key: &RawKeyboardEvent) -> bool {
     with_keymap(|km| keymap_has_player_input(km, key))
@@ -9585,6 +9603,10 @@ pub fn handle_raw_key_event(
         return handle_lobby_overlay_raw_key(state, key, text);
     }
 
+    if let Some(action) = handle_mute_hotkey(state, key) {
+        return action;
+    }
+
     if select_music_lobby_lock_text(state).is_some() {
         return ScreenAction::None;
     }
@@ -9654,15 +9676,6 @@ pub fn handle_raw_key_event(
 
     if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
-    }
-    if let Some(key) = key
-        && key.code == KeyCode::KeyM
-        && !key.repeat
-        && !key_bound_to_player_input(key)
-        && preview_mute_allowed(state)
-    {
-        toggle_preview_mute(state);
-        return ScreenAction::ConsumeInput;
     }
     if let Some(action) = configurable_shortcut_action(state, key) {
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
@@ -12633,7 +12646,8 @@ mod tests {
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
         init_placeholder, keymap_has_player_input, reset_preview_after_gameplay,
-        select_music_lobby_lock_text_for, steps_index_for_side, sync_low_confidence_warning,
+        select_music_lobby_lock_text, select_music_lobby_lock_text_for, steps_index_for_side,
+        sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
@@ -13227,6 +13241,44 @@ mod tests {
         assert!(matches!(action, ScreenAction::ConsumeInput));
         assert!(!state.preview_music_muted);
         assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn preview_mute_hotkey_toggles_lobby_locked_wheel() {
+        let mut state = init_placeholder();
+        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_start_sec = Some(1.0);
+        state.currently_playing_preview_length_sec = Some(10.0);
+
+        let joined = test_joined_lobby(
+            vec![
+                test_lobby_player("ScreenSelectMusic"),
+                test_lobby_player("ScreenEvaluationStage"),
+            ],
+            Some(test_lobby_song_info("Songs/Pack/Song")),
+        );
+        let snapshot = lobby_data::Snapshot {
+            connection: lobby_data::ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(joined),
+            last_status: None,
+        };
+
+        crate::game::online::lobbies::with_snapshot_for_test(snapshot, || {
+            assert_eq!(
+                select_music_lobby_lock_text(&state).as_deref(),
+                Some("Waiting for players to finish evaluation...")
+            );
+
+            let action =
+                handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+
+            assert!(matches!(action, ScreenAction::ConsumeInput));
+            assert!(state.preview_music_muted);
+            assert_eq!(state.currently_playing_preview_path, None);
+            assert_eq!(state.currently_playing_preview_start_sec, None);
+            assert_eq!(state.currently_playing_preview_length_sec, None);
+        });
     }
 
     #[test]

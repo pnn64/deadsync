@@ -50,6 +50,8 @@ static COMMAND_TX: LazyLock<Mutex<Option<Sender<Command>>>> = LazyLock::new(|| M
 static LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
     LazyLock::new(|| Mutex::new(ReconnectState::default()));
+#[cfg(test)]
+static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 #[derive(Debug, Clone)]
 struct ReconnectTarget {
@@ -69,6 +71,15 @@ pub fn init() {}
 
 pub fn snapshot() -> Snapshot {
     SNAPSHOT.lock().unwrap().clone()
+}
+
+#[cfg(test)]
+pub(crate) fn with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() -> R) -> R {
+    let _guard = TEST_MUTEX.lock().unwrap();
+    let prev = std::mem::replace(&mut *SNAPSHOT.lock().unwrap(), snapshot);
+    let result = f();
+    *SNAPSHOT.lock().unwrap() = prev;
+    result
 }
 
 pub fn can_update_machine_state() -> bool {
@@ -594,12 +605,9 @@ fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
 mod tests {
     use super::{
         COMMAND_TX, ConnectionState, LAST_MACHINE_STATE_SIG, RECONNECT_STATE, ReconnectState,
-        SNAPSHOT, Snapshot, handle_text_message,
+        SNAPSHOT, Snapshot, TEST_MUTEX, handle_text_message,
     };
     use deadsync_online::lobbies::{JoinedLobby, LobbyPlayer};
-    use std::sync::{LazyLock, Mutex};
-
-    static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     fn reset_test_state() {
         *SNAPSHOT.lock().unwrap() = Snapshot::default();
