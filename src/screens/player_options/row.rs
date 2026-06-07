@@ -69,6 +69,7 @@ pub enum RowId {
     ErrorBar,
     TextErrorBar10ms,
     ShortAverageErrorBar,
+    CenterTick,
     AverageErrorBarIntensity,
     AverageErrorBarInterval,
     ErrorBarTrim,

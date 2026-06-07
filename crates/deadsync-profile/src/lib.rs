@@ -2907,6 +2907,7 @@ pub struct PlayerOptionsData {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub center_tick: bool,
     pub short_average_error_bar_enabled: bool,
     pub average_error_bar_intensity: f32,
     pub average_error_bar_interval_ms: u32,
@@ -3028,6 +3029,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_up: false,
         error_bar_multi_tick: false,
         error_bar_trim: ErrorBarTrim::default(),
+        center_tick: false,
         short_average_error_bar_enabled: true,
         average_error_bar_intensity: AVERAGE_ERROR_BAR_INTENSITY_DEFAULT,
         average_error_bar_interval_ms: AVERAGE_ERROR_BAR_INTERVAL_MS_DEFAULT,
@@ -3343,6 +3345,9 @@ where
     options.error_bar_trim = get("ErrorBarTrim")
         .and_then(|s| ErrorBarTrim::from_str(&s).ok())
         .unwrap_or(options.error_bar_trim);
+    options.center_tick = get("CenterTick")
+        .and_then(|s| parse_profile_bool(&s))
+        .unwrap_or(options.center_tick);
     options.short_average_error_bar_enabled = get("ShortAverageErrorBar")
         .and_then(|s| parse_profile_bool(&s))
         .or_else(|| {
@@ -3652,6 +3657,7 @@ pub fn append_player_options_section(
         i32::from(options.error_bar_multi_tick)
     ));
     content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
+    content.push_str(&format!("CenterTick={}\n", i32::from(options.center_tick)));
     content.push_str(&format!(
         "ShortAverageErrorBar={}\n",
         i32::from(options.short_average_error_bar_enabled)
@@ -3882,6 +3888,7 @@ pub struct Profile {
     pub error_bar_up: bool,
     pub error_bar_multi_tick: bool,
     pub error_bar_trim: ErrorBarTrim,
+    pub center_tick: bool,
     pub short_average_error_bar_enabled: bool,
     pub average_error_bar_intensity: f32,
     pub average_error_bar_interval_ms: u32,
@@ -4047,6 +4054,7 @@ impl Default for Profile {
             error_bar_up: player_options.error_bar_up,
             error_bar_multi_tick: player_options.error_bar_multi_tick,
             error_bar_trim: player_options.error_bar_trim,
+            center_tick: player_options.center_tick,
             short_average_error_bar_enabled: player_options.short_average_error_bar_enabled,
             average_error_bar_intensity: player_options.average_error_bar_intensity,
             average_error_bar_interval_ms: player_options.average_error_bar_interval_ms,
@@ -4592,6 +4600,7 @@ impl Profile {
             error_bar_up: self.error_bar_up,
             error_bar_multi_tick: self.error_bar_multi_tick,
             error_bar_trim: self.error_bar_trim,
+            center_tick: self.center_tick,
             short_average_error_bar_enabled: self.short_average_error_bar_enabled,
             average_error_bar_intensity: self.average_error_bar_intensity,
             average_error_bar_interval_ms: self.average_error_bar_interval_ms,
@@ -4715,6 +4724,7 @@ impl Profile {
         self.error_bar_up = options.error_bar_up;
         self.error_bar_multi_tick = options.error_bar_multi_tick;
         self.error_bar_trim = options.error_bar_trim;
+        self.center_tick = options.center_tick;
         self.short_average_error_bar_enabled = options.short_average_error_bar_enabled;
         self.average_error_bar_intensity = options.average_error_bar_intensity;
         self.average_error_bar_interval_ms = options.average_error_bar_interval_ms;
@@ -5233,6 +5243,7 @@ mod tests {
         let values = [
             ("Colorful", "1"),
             ("Text", "1"),
+            ("CenterTick", "1"),
             ("LongAvgTickOnly", "1"),
             ("HighlightZoom", "1.13x"),
             ("HighlightAverageMs", "149ms"),
@@ -5256,6 +5267,7 @@ mod tests {
         assert!(options.error_bar_active_mask.contains(ErrorBarMask::TEXT));
         assert_eq!(options.error_bar, ErrorBarStyle::Colorful);
         assert!(options.error_bar_text);
+        assert!(options.center_tick);
         assert!(!options.short_average_error_bar_enabled);
         assert!((options.average_error_bar_intensity - 1.25).abs() < 1e-6);
         assert_eq!(options.average_error_bar_interval_ms, 100);
@@ -5869,6 +5881,7 @@ mod tests {
     fn player_options_section_serializes_persisted_options() {
         let options = PlayerOptionsData {
             error_bar_active_mask: ErrorBarMask::COLORFUL | ErrorBarMask::TEXT,
+            center_tick: true,
             average_error_bar_intensity: 1.13,
             long_error_bar_intensity: 1.95,
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
@@ -5887,6 +5900,7 @@ mod tests {
 
         assert!(content.starts_with("[PlayerOptionsSingles]\n"));
         assert!(content.contains("ErrorBarMask=5\n"));
+        assert!(content.contains("CenterTick=1\n"));
         assert!(content.contains("Colorful=1\n"));
         assert!(content.contains("Text=1\n"));
         assert!(content.contains("AverageErrorBarIntensity=1.25\n"));

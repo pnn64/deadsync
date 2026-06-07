@@ -375,6 +375,12 @@ pub(super) mod tests {
                 [0, 0],
             ),
             test_row(
+                RowId::CenterTick,
+                lookup_key("PlayerOptions", "CenterTick"),
+                &["Off", "On"],
+                [0, 0],
+            ),
+            test_row(
                 RowId::AverageErrorBarIntensity,
                 lookup_key("PlayerOptions", "AverageErrorBarIntensity"),
                 &["1.00x", "1.25x"],
@@ -416,6 +422,7 @@ pub(super) mod tests {
         assert!(!is_row_visible(&row_map, 3, visibility));
         assert!(!is_row_visible(&row_map, 4, visibility));
         assert!(!is_row_visible(&row_map, 5, visibility));
+        assert!(!is_row_visible(&row_map, 6, visibility));
 
         let visibility = row_visibility(
             &row_map,
@@ -434,6 +441,7 @@ pub(super) mod tests {
         assert!(is_row_visible(&row_map, 3, visibility));
         assert!(is_row_visible(&row_map, 4, visibility));
         assert!(is_row_visible(&row_map, 5, visibility));
+        assert!(is_row_visible(&row_map, 6, visibility));
     }
 
     #[test]
@@ -2197,6 +2205,7 @@ pub(super) mod tests {
         }
 
         for id in [
+            RowId::CenterTick,
             RowId::AverageErrorBarIntensity,
             RowId::AverageErrorBarInterval,
         ] {
@@ -2797,6 +2806,7 @@ pub(super) mod tests {
         p.error_bar_offset_x = -25;
         p.error_bar_offset_y = 30;
         p.text_error_bar_10ms = true;
+        p.center_tick = true;
         p.short_average_error_bar_enabled = false;
         p.average_error_bar_intensity = 1.5;
         p.average_error_bar_interval_ms = 700;
@@ -2942,6 +2952,7 @@ pub(super) mod tests {
             RowId::JudgmentBehindArrows,
             RowId::OffsetIndicator,
             RowId::TextErrorBar10ms,
+            RowId::CenterTick,
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
         ] {
@@ -2957,6 +2968,7 @@ pub(super) mod tests {
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
         assert_choice_at_cursor(&row_map, RowId::TextErrorBar10ms, "10ms+");
+        assert_choice_at_cursor(&row_map, RowId::CenterTick, "On");
         assert_choice_at_cursor(&row_map, RowId::ShortAverageErrorBar, "Off");
         assert_choice_at_cursor(&row_map, RowId::AverageErrorBarIntensity, "1.50x");
         assert_choice_at_cursor(&row_map, RowId::AverageErrorBarInterval, "700ms");

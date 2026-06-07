@@ -100,7 +100,7 @@ const ERROR_BAR_LINES_FADE_START_S: f32 = 2.5;
 const ERROR_BAR_LINES_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
-const ERROR_BAR_CENTERLINE_WIDTH: f32 = 2.0;
+const ERROR_BAR_CENTER_TICK_WIDTH: f32 = 1.0;
 const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
 const DISPLAY_MODS_ZOOM: f32 = 0.8;
 const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
@@ -117,7 +117,7 @@ const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
 const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
 const ERROR_BAR_TEXT_10MS_FAST_RGBA: [f32; 4] = color::rgba_hex("#0051db");
 const ERROR_BAR_TEXT_10MS_SLOW_RGBA: [f32; 4] = color::rgba_hex("#ff1605");
-const ERROR_BAR_CENTERLINE_RGBA: [f32; 4] = color::rgba_hex("#403e3f");
+const ERROR_BAR_CENTER_TICK_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.3];
 const ERROR_BAR_TEXT_ZOOM: f32 = 0.25;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
@@ -8807,12 +8807,14 @@ pub fn build_bundles(
                         let tick_h =
                             ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
 
-                        hud_actors.push(act!(quad:
-                        align(0.5, 0.5): xy(error_bar_x, average_bar_y):
-                        zoomto(ERROR_BAR_CENTERLINE_WIDTH, tick_h):
-                        diffuse(ERROR_BAR_CENTERLINE_RGBA[0], ERROR_BAR_CENTERLINE_RGBA[1], ERROR_BAR_CENTERLINE_RGBA[2], ERROR_BAR_CENTERLINE_RGBA[3]):
-                        z(Z_ERROR_BAR_AVERAGE)
-                        ));
+                        if profile.center_tick {
+                            hud_actors.push(act!(quad:
+                            align(0.5, 0.5): xy(error_bar_x, average_bar_y):
+                            zoomto(ERROR_BAR_CENTER_TICK_WIDTH, tick_h):
+                            diffuse(ERROR_BAR_CENTER_TICK_RGBA[0], ERROR_BAR_CENTER_TICK_RGBA[1], ERROR_BAR_CENTER_TICK_RGBA[2], ERROR_BAR_CENTER_TICK_RGBA[3]):
+                            z(Z_ERROR_BAR_AVERAGE)
+                            ));
+                        }
 
                         let multi_tick = profile.error_bar_multi_tick;
                         let intensity = profile_data::clamp_average_error_bar_intensity(

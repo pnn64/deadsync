@@ -65,6 +65,7 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
             && visibility.show_long_error_bar_children;
     }
     if id == RowId::ShortAverageErrorBar
+        || id == RowId::CenterTick
         || id == RowId::LongErrorBar
         || id == RowId::AverageErrorBarIntensity
         || id == RowId::AverageErrorBarInterval
@@ -148,6 +149,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::ErrorBarOffsetY
         || id == RowId::TextErrorBar10ms
         || id == RowId::ShortAverageErrorBar
+        || id == RowId::CenterTick
         || id == RowId::LongErrorBar
         || id == RowId::AverageErrorBarIntensity
         || id == RowId::AverageErrorBarInterval

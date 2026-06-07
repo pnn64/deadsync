@@ -335,6 +335,16 @@ const SHORT_AVERAGE_ERROR_BAR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const CENTER_TICK: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.center_tick = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_center_tick_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.center_tick { 1 } else { 0 },
+    }),
+};
 const TEXT_ERROR_BAR_10MS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.text_error_bar_10ms = v;
@@ -1636,6 +1646,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         vec![
             tr("PlayerOptions", "ShortAverageErrorBarOff").to_string(),
             tr("PlayerOptions", "ShortAverageErrorBarOn").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::CenterTick,
+        lookup_key("PlayerOptions", "CenterTick"),
+        lookup_key("PlayerOptionsHelp", "CenterTickHelp"),
+        CycleBinding::Bool(CENTER_TICK),
+        vec![
+            tr("PlayerOptions", "CenterTickOff").to_string(),
+            tr("PlayerOptions", "CenterTickOn").to_string(),
         ],
     ));
     b.push(Row::custom(
