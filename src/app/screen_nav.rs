@@ -154,6 +154,9 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
+        if prev != target && target == CurrentScreen::Menu {
+            crate::game::online::lobbies::leave_lobby();
+        }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
         write_current_screen_file(target);

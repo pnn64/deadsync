@@ -135,14 +135,19 @@ pub fn join_lobby_with_password(code: &str, password: &str) {
 
 pub fn leave_lobby() {
     clear_reconnect_target();
-    if !matches!(snapshot().connection, ConnectionState::Connected) {
-        *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    let should_send_leave = {
         let mut snapshot = SNAPSHOT.lock().unwrap();
-        snapshot.joined_lobby = None;
-        snapshot.last_status = None;
-        return;
+        let connected = matches!(snapshot.connection, ConnectionState::Connected);
+        let was_joined = snapshot.joined_lobby.take().is_some();
+        if !connected {
+            snapshot.last_status = None;
+        }
+        connected && was_joined
+    };
+    if should_send_leave {
+        let _ = send_command(Command::Leave);
     }
-    let _ = send_command(Command::Leave);
 }
 
 pub fn update_machine_state(screen_name: &str, ready: bool) {
@@ -604,8 +609,9 @@ fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMMAND_TX, ConnectionState, LAST_MACHINE_STATE_SIG, RECONNECT_STATE, ReconnectState,
-        SNAPSHOT, Snapshot, TEST_MUTEX, handle_text_message,
+        COMMAND_TX, Command, ConnectionState, LAST_MACHINE_STATE_SIG, RECONNECT_STATE,
+        ReconnectState, ReconnectTarget, SNAPSHOT, Snapshot, TEST_MUTEX, handle_text_message,
+        leave_lobby,
     };
     use deadsync_online::lobbies::{JoinedLobby, LobbyPlayer};
 
@@ -665,6 +671,56 @@ mod tests {
             })
         );
 
+        reset_test_state();
+    }
+
+    #[test]
+    fn leave_lobby_clears_local_joined_state_before_server_reply() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_test_state();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        *COMMAND_TX.lock().unwrap() = Some(tx);
+        *LAST_MACHINE_STATE_SIG.lock().unwrap() = Some("ABCD|{}".to_string());
+        *RECONNECT_STATE.lock().unwrap() = ReconnectState {
+            target: Some(ReconnectTarget {
+                code: "ABCD".to_string(),
+                password: "PASS".to_string(),
+            }),
+            pending_create_password: None,
+            retry_attempts: 2,
+            next_retry_at: Some(std::time::Instant::now()),
+        };
+        {
+            let mut snapshot = SNAPSHOT.lock().unwrap();
+            snapshot.connection = ConnectionState::Connected;
+            snapshot.joined_lobby = Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![LobbyPlayer {
+                    label: "Local".to_string(),
+                    ready: true,
+                    screen_name: "ScreenSelectMusic".to_string(),
+                    judgments: None,
+                    score: None,
+                    ex_score: None,
+                }],
+                song_info: None,
+            });
+        }
+
+        leave_lobby();
+
+        let snapshot = SNAPSHOT.lock().unwrap().clone();
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(LAST_MACHINE_STATE_SIG.lock().unwrap().is_none());
+        let reconnect = RECONNECT_STATE.lock().unwrap();
+        assert!(reconnect.target.is_none());
+        assert!(reconnect.pending_create_password.is_none());
+        assert_eq!(reconnect.retry_attempts, 0);
+        assert!(reconnect.next_retry_at.is_none());
+        assert!(matches!(rx.try_recv(), Ok(Command::Leave)));
+
+        drop(reconnect);
         reset_test_state();
     }
 }
