@@ -1,13 +1,10 @@
 //! StepManiaX pad panel lighting effects.
 //!
-//! Pure effect engine for the SMX 3x3 panels: per-panel flash and sustained-hold state,
-//! plus the helpers that map a gameplay column to a pad/panel and a judgement to a colour.
-//! Building the RGB frame here (and, in a later phase, on a 30Hz worker thread) keeps the
-//! colour math and timers off the gameplay and render paths.
-//!
-//! The 30Hz worker thread and the app-side diff that feed this engine are added in later
-//! phases; for now this is a self-contained, unit-tested module.
-#![allow(dead_code)] // Items are wired into the worker + app in later phases; remove then.
+//! Pure effect engine for the SMX 3x3 panels (`PanelFx`), the helpers that map a gameplay
+//! column to a pad/panel and a judgement to a colour, and the 30Hz worker thread
+//! (`SmxPanelLights`) that owns the effect state and hands frames to the SDK. Building the
+//! RGB frame off the render thread keeps the colour math and timers out of the gameplay
+//! per-frame path. The app-side diff that feeds the worker lives in `app::smx_panel_fx`.
 
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
