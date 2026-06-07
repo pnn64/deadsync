@@ -39,7 +39,7 @@ use crate::screens::{
     input as screen_input,
 };
 use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
-use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
+use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
@@ -8946,6 +8946,9 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         state.song_search,
         select_music_menu::SongSearchState::TextEntry(_)
     ) {
+        if ev.source == InputSource::Keyboard {
+            return ScreenAction::None;
+        }
         if !ev.pressed {
             return ScreenAction::None;
         }
@@ -9593,7 +9596,7 @@ pub fn handle_raw_key_event(
         ) && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
-            return ScreenAction::None;
+            return ScreenAction::ConsumeInput;
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
@@ -9607,7 +9610,7 @@ pub fn handle_raw_key_event(
                 match code {
                     KeyCode::Backspace => {
                         select_music_menu::song_search_backspace(entry);
-                        return ScreenAction::None;
+                        return ScreenAction::ConsumeInput;
                     }
                     KeyCode::Escape => {
                         prompt_close = true;
@@ -9629,11 +9632,11 @@ pub fn handle_raw_key_event(
 
             if let Some(search_text) = prompt_start {
                 start_song_search_results(state, search_text);
-                return ScreenAction::None;
+                return ScreenAction::ConsumeInput;
             }
             if prompt_close {
                 cancel_song_search(state);
-                return ScreenAction::None;
+                return ScreenAction::ConsumeInput;
             }
             return ScreenAction::None;
         }
@@ -12636,7 +12639,7 @@ mod tests {
     use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
-    use deadsync_input::{PadDir, VirtualAction};
+    use deadsync_input::{InputEvent, InputSource, PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use deadsync_score as score_data;
@@ -12659,6 +12662,29 @@ mod tests {
         match &state.song_search {
             super::select_music_menu::SongSearchState::TextEntry(entry) => Some(&entry.query),
             _ => None,
+        }
+    }
+
+    fn song_search_results_text(state: &super::State) -> Option<&str> {
+        match &state.song_search {
+            super::select_music_menu::SongSearchState::Results(results) => {
+                Some(&results.search_text)
+            }
+            _ => None,
+        }
+    }
+
+    fn input_event(action: VirtualAction, source: InputSource, pressed: bool) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed,
+            source,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
         }
     }
 
@@ -13259,6 +13285,129 @@ mod tests {
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
         assert!(matches!(action, ScreenAction::None));
         assert_eq!(song_search_query(&state), Some("abc"));
+    }
+
+    #[test]
+    fn song_search_text_entry_ignores_keyboard_start_action() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+
+        let action = handle_raw_key_event(&mut state, None, Some("n"));
+        assert!(matches!(action, ScreenAction::None));
+        assert_eq!(song_search_query(&state), Some("n"));
+
+        let action = super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
+            false,
+        );
+        assert!(matches!(action, ScreenAction::None));
+        assert_eq!(song_search_query(&state), Some("n"));
+    }
+
+    #[test]
+    fn song_search_text_entry_ignores_keyboard_back_select_actions() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+
+        let action = handle_raw_key_event(&mut state, None, Some("abc"));
+        assert!(matches!(action, ScreenAction::None));
+
+        for action in [VirtualAction::p1_back, VirtualAction::p2_select] {
+            let screen_action = super::handle_input(
+                &mut state,
+                &input_event(action, InputSource::Keyboard, true),
+                false,
+            );
+            assert!(matches!(screen_action, ScreenAction::None));
+            assert_eq!(song_search_query(&state), Some("abc"));
+        }
+    }
+
+    #[test]
+    fn song_search_text_entry_keeps_gamepad_prompt_actions() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+
+        let action = handle_raw_key_event(&mut state, None, Some("song"));
+        assert!(matches!(action, ScreenAction::None));
+        let action = super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
+            false,
+        );
+        assert!(matches!(action, ScreenAction::None));
+        assert_eq!(song_search_results_text(&state), Some("song"));
+
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        let action = handle_raw_key_event(&mut state, None, Some("song"));
+        assert!(matches!(action, ScreenAction::None));
+        let action = super::handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_back, InputSource::Gamepad, true),
+            false,
+        );
+        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+    }
+
+    #[test]
+    fn song_search_raw_prompt_keys_consume_keyboard_input() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        let action = handle_raw_key_event(&mut state, None, Some("song"));
+        assert!(matches!(action, ScreenAction::None));
+        let action = handle_raw_key_event(
+            &mut state,
+            Some(&raw_key(KeyCode::Enter, true, false)),
+            None,
+        );
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert_eq!(song_search_results_text(&state), Some("song"));
+
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        let action = handle_raw_key_event(&mut state, None, Some("song"));
+        assert!(matches!(action, ScreenAction::None));
+        let action = handle_raw_key_event(
+            &mut state,
+            Some(&raw_key(KeyCode::Escape, true, false)),
+            None,
+        );
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_results(&[], "song".into());
+        let action = handle_raw_key_event(
+            &mut state,
+            Some(&raw_key(KeyCode::Escape, true, false)),
+            None,
+        );
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(
+            state.song_search,
+            super::select_music_menu::SongSearchState::Hidden
+        ));
+
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        let action = handle_raw_key_event(&mut state, None, Some("ab"));
+        assert!(matches!(action, ScreenAction::None));
+        let action = handle_raw_key_event(
+            &mut state,
+            Some(&raw_key(KeyCode::Backspace, true, false)),
+            None,
+        );
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert_eq!(song_search_query(&state), Some("a"));
     }
 
     #[test]
