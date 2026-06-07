@@ -6762,6 +6762,7 @@ impl App {
         if cfg.show_version_overlay {
             actors.extend(crate::screens::components::shared::version_overlay::build(
                 cfg.version_overlay_side,
+                cfg.log_level,
             ));
         }
 
