@@ -87,15 +87,15 @@ impl SmxPanelDriver {
     }
 
     fn tap(&mut self, state: &State, cpp: usize, np: usize, col: usize) {
-        match state.column_flashes[col] {
-            Some(flash) if flash.started_at_screen_s != self.prev_flash[col] => {
-                self.prev_flash[col] = flash.started_at_screen_s;
+        match state.last_tap_judgments[col] {
+            Some(judged) if judged.at_screen_s != self.prev_flash[col] => {
+                self.prev_flash[col] = judged.at_screen_s;
                 if let Some((pad, panel)) = smx_panel_for_col(cpp, np, col) {
                     self.lights.flash(
                         pad,
                         panel,
-                        flash_color(flash.grade, flash.blue_fantastic),
-                        flash_duration(flash.grade),
+                        flash_color(judged.grade, judged.blue_fantastic),
+                        flash_duration(judged.grade),
                     );
                 }
             }

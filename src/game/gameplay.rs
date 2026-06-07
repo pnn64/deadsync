@@ -2890,6 +2890,16 @@ pub struct ActiveColumnFlash {
     pub started_at_screen_s: f32,
 }
 
+/// Most recent tap judgement on a column, recorded unconditionally (independent of the
+/// column-flash and tap-explosion visual masks) for feedback consumers such as SMX panel
+/// lighting. Set in `trigger_column_flash`, which every tap grade (hits and misses) reaches.
+#[derive(Copy, Clone, Debug)]
+pub struct ColumnTapJudgment {
+    pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
+    pub at_screen_s: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ActiveMineExplosion {
     pub elapsed: f32,
@@ -3859,6 +3869,8 @@ pub struct State {
     pub receptor_bop_behaviors: [noteskin::ReceptorStepBehavior; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
+    /// Ungated per-column tap judgement (see `ColumnTapJudgment`), for pad/panel lighting.
+    pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
     pub active_holds: [Option<ActiveHold>; MAX_COLS],
 
@@ -6501,6 +6513,7 @@ pub fn init(
         receptor_bop_behaviors: [noteskin::ReceptorStepBehavior::identity(); MAX_COLS],
         tap_explosions: Default::default(),
         column_flashes: Default::default(),
+        last_tap_judgments: Default::default(),
         mine_explosions: Default::default(),
         active_holds: Default::default(),
         holds_total,
@@ -6738,6 +6751,13 @@ fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blu
     if column >= state.column_flashes.len() {
         return;
     }
+    // Record the judgement unconditionally for feedback consumers (SMX panel lighting),
+    // before the on-screen column-flash mask gate below.
+    state.last_tap_judgments[column] = Some(ColumnTapJudgment {
+        grade,
+        blue_fantastic,
+        at_screen_s: state.total_elapsed_in_screen,
+    });
     let player = player_for_col(state, column);
     let Some(profile) = state.player_profiles.get(player) else {
         return;
