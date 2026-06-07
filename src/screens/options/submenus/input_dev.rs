@@ -270,6 +270,15 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SmxPanelLights,
+        label: lookup_key("OptionsInput", "SmxPanelLights"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxManagesPadConfig,
         label: lookup_key("OptionsInput", "SmxManagesPadConfig"),
         choices: &[
@@ -328,6 +337,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxInputHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxPanelLights,
+        name: lookup_key("OptionsInput", "SmxPanelLights"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxPanelLightsHelp",
         ))],
     },
     Item {

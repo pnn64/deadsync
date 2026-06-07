@@ -363,6 +363,9 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxInput {
             config::update_smx_input(yes_no_from_choice(new_index));
         }
+        if row.id == SubRowId::SmxPanelLights {
+            config::update_smx_panel_lights(yes_no_from_choice(new_index));
+        }
         if row.id == SubRowId::SmxManagesPadConfig {
             config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
         }

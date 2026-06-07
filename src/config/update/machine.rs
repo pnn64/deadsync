@@ -108,6 +108,19 @@ pub fn update_smx_manages_pad_config(enabled: bool) {
     save_without_keymaps();
 }
 
+/// Persist whether SMX pad panels light up with gameplay judgement colours. The app reads
+/// this live each frame, so a change takes effect immediately.
+pub fn update_smx_panel_lights(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_panel_lights == enabled {
+            return;
+        }
+        cfg.smx_panel_lights = enabled;
+    }
+    save_without_keymaps();
+}
+
 /// Persist the built-in default pad preset (Low/Medium/High). Used as the
 /// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {

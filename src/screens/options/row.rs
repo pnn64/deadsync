@@ -56,6 +56,7 @@ pub enum SubRowId {
     // StepManiaX config sub-page
     SmxConfig,
     SmxManagesPadConfig,
+    SmxPanelLights,
     SmxUsbPolling,
     SmxDefaultPadConfig,
     SmxAssignPads,

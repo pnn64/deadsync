@@ -65,6 +65,7 @@ pub enum ItemId {
     // StepManiaX config sub-page
     InpSmxConfig,
     InpSmxManagesPadConfig,
+    InpSmxPanelLights,
     InpSmxUsbPolling,
     InpSmxDefaultPadConfig,
     InpSmxAssignPads,
