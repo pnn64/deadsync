@@ -1890,36 +1890,29 @@ fn marker_y_for_beat(
     let dir = if dir.abs() <= f32::EPSILON { 1.0 } else { dir };
     let receptor_y = practice_edit_cursor_y() + offset_y;
     let field_zoom = practice_edit_field_zoom();
-    let timing = &state.gameplay.timing_players[player_idx];
-    let current_time_ns = state.gameplay.current_music_time_visible_ns[player_idx];
     let scroll_speed = practice_edit_scroll_speed(state);
-    let travel = match scroll_speed {
-        ScrollSpeedSetting::CMod(c_bpm) => {
-            let rate = if state.gameplay.music_rate.is_finite() && state.gameplay.music_rate > 0.0 {
-                state.gameplay.music_rate
-            } else {
-                1.0
-            };
-            let pps = (c_bpm / 60.0) * ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-            let beat_time = timing.get_time_for_beat(beat);
-            let current_time = state.gameplay.current_music_time_visible[player_idx];
-            (beat_time - current_time) / rate * pps
-        }
-        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-            let current_beat = state.gameplay.current_beat_visible[player_idx];
-            let speed_multiplier = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
-            let player_multiplier = scroll_speed.beat_multiplier(
-                state.gameplay.scroll_reference_bpm,
-                state.gameplay.music_rate,
-            );
-            (timing.get_displayed_beat(beat) - timing.get_displayed_beat(current_beat))
-                * ScrollSpeedSetting::ARROW_SPACING
-                * field_zoom
-                * speed_multiplier
-                * player_multiplier
-        }
-    };
+    let current_beat = state.gameplay.current_beat_visible[player_idx];
+    let travel = practice_edit_beat_travel(
+        beat,
+        current_beat,
+        field_zoom,
+        scroll_speed,
+        state.gameplay.scroll_reference_bpm,
+        state.gameplay.music_rate,
+    );
     receptor_y + dir * travel
+}
+
+fn practice_edit_beat_travel(
+    beat: f32,
+    current_beat: f32,
+    field_zoom: f32,
+    scroll_speed: ScrollSpeedSetting,
+    reference_bpm: f32,
+    music_rate: f32,
+) -> f32 {
+    let player_multiplier = scroll_speed.beat_multiplier(reference_bpm, music_rate);
+    (beat - current_beat) * ScrollSpeedSetting::ARROW_SPACING * field_zoom * player_multiplier
 }
 
 fn append_marker_area(actors: &mut Vec<Actor>, center_x: f32, y1: f32, y2: f32, width: f32) {
@@ -2302,11 +2295,12 @@ mod tests {
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
-        page_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
-        timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        page_hold_dir_for_key, practice_edit_beat_travel, practice_nav_mode_from_config,
+        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
     use crate::assets::i18n;
     use deadsync_input::VirtualAction;
+    use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{SpeedSegment, SpeedUnit};
     use winit::keyboard::KeyCode;
 
@@ -2545,6 +2539,14 @@ mod tests {
         assert_eq!(timing_label_glow_alpha(0.0), 1.0);
         assert!((timing_label_glow_alpha(3.0) - 0.0).abs() < 0.000_001);
         assert!((timing_label_glow_alpha(6.0) - 1.0).abs() < 0.000_001);
+    }
+
+    #[test]
+    fn practice_edit_travel_uses_step_editor_beat_spacing() {
+        let travel =
+            practice_edit_beat_travel(44.0, 40.0, 0.5, ScrollSpeedSetting::XMod(1.5), 180.0, 1.0);
+
+        assert!((travel - 4.0 * 64.0 * 0.5 * 1.5).abs() <= 0.001);
     }
 
     #[test]

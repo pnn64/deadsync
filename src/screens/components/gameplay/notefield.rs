@@ -518,6 +518,11 @@ fn beat_scroll_travel(
         * displayed_speed_percent
 }
 
+#[inline(always)]
+fn edit_beat_scroll_travel(note_beat: f32, current_beat: f32) -> f32 {
+    (note_beat - current_beat) * ScrollSpeedSetting::ARROW_SPACING
+}
+
 fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
     ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
 }
@@ -4672,8 +4677,22 @@ pub fn build_bundles(
         // Precompute per-frame values used for converting beat/time to Y positions
         let display_speed_percent =
             timing.get_speed_multiplier_ns(state.current_beat_visible[player_idx], current_time_ns);
+        // PARITY[ITGmania ArrowEffects::GetYOffset]: ScreenEdit's editing
+        // state uses raw beat spacing instead of displayed beat/speed timing.
+        let edit_beat_spacing = view.edit_beat_bars;
         let (rate, cmod_bps_opt, curr_disp_beat, beatmod_multiplier, post_accel_scale) =
             match scroll_speed {
+                _ if edit_beat_spacing => {
+                    let player_multiplier =
+                        scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                    (
+                        1.0,
+                        None,
+                        state.current_beat_visible[player_idx],
+                        1.0,
+                        field_zoom * player_multiplier,
+                    )
+                }
                 ScrollSpeedSetting::CMod(c_bpm) => {
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
                         state.music_rate
@@ -4702,13 +4721,17 @@ pub fn build_bundles(
             time_diff_real * bps_chart * ScrollSpeedSetting::ARROW_SPACING
         };
         let raw_travel_offset_for_beat = |beat: f32| -> f32 {
-            match scroll_speed {
-                ScrollSpeedSetting::CMod(_) => {
-                    travel_offset_for_time_ns(timing.get_time_for_beat_ns(beat))
-                }
-                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                    let note_disp_beat = timing.get_displayed_beat(beat);
-                    beat_scroll_travel(note_disp_beat, curr_disp_beat, beatmod_multiplier)
+            if edit_beat_spacing {
+                edit_beat_scroll_travel(beat, curr_disp_beat)
+            } else {
+                match scroll_speed {
+                    ScrollSpeedSetting::CMod(_) => {
+                        travel_offset_for_time_ns(timing.get_time_for_beat_ns(beat))
+                    }
+                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        let note_disp_beat = timing.get_displayed_beat(beat);
+                        beat_scroll_travel(note_disp_beat, curr_disp_beat, beatmod_multiplier)
+                    }
                 }
             }
         };
@@ -9550,6 +9573,19 @@ mod tests {
         assert!(
             (note_y - old_measure_y).abs() > 100.0,
             "double-applying field zoom would drift measure lines away from notes"
+        );
+    }
+
+    #[test]
+    fn edit_beat_travel_uses_step_editor_spacing() {
+        let edit_raw = super::edit_beat_scroll_travel(44.0, 40.0);
+        let displayed_raw = super::beat_scroll_travel(42.0, 40.0, 0.5);
+
+        assert!((edit_raw - 4.0 * ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
+        assert!((displayed_raw - ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
+        assert!(
+            (edit_raw - displayed_raw).abs() > 100.0,
+            "ITG's step editor ignores displayed beat and speed segments"
         );
     }
 
