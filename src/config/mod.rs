@@ -27,8 +27,8 @@ pub(crate) use self::keybinds::{
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::runtime::{
-    additional_song_folders, audio_mix_levels, flush_pending_saves, get, machine_default_noteskin,
-    smx_pad_assignment,
+    additional_song_folder_roots, audio_mix_levels, flush_pending_saves, get,
+    machine_default_noteskin, smx_pad_assignment, song_path_is_writable,
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
@@ -66,6 +66,12 @@ use std::str::FromStr;
 use winit::keyboard::KeyCode;
 
 const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdditionalSongFolder {
+    pub path: String,
+    pub writable: bool,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FullscreenType {

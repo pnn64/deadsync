@@ -85,7 +85,7 @@ fn publish_keymap(conf: &SimpleIni) {
 
 fn load_defaults_after_error() {
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
-    *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
+    ADDITIONAL_SONG_FOLDERS.lock().unwrap().clear();
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
 }
@@ -146,22 +146,19 @@ pub(super) fn parse_loose_bool_str(raw: &str) -> Option<bool> {
     parse_bool_str(raw).or_else(|| raw.parse::<u8>().ok().map(|n| n != 0))
 }
 
-fn normalize_additional_song_folders(raw: &str) -> String {
-    let mut out = String::new();
-    for path in raw
-        .split(',')
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-    {
-        if !out.is_empty() {
-            out.push(',');
-        }
-        out.push_str(path);
-    }
-    out
+fn push_additional_song_folders(raw: &str, writable: bool, out: &mut Vec<AdditionalSongFolder>) {
+    out.extend(
+        raw.split(',')
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| AdditionalSongFolder {
+                path: path.to_string(),
+                writable,
+            }),
+    );
 }
 
-fn load_additional_song_folders(conf: &SimpleIni) -> String {
+fn load_additional_song_folders(conf: &SimpleIni) -> Vec<AdditionalSongFolder> {
     let read_only = conf
         .get("Options", "AdditionalSongFoldersReadOnly")
         .unwrap_or_default();
@@ -177,16 +174,77 @@ fn load_additional_song_folders(conf: &SimpleIni) -> String {
         writable_raw
     };
 
-    if read_only.trim().is_empty() {
-        return normalize_additional_song_folders(&writable);
-    }
-    if writable.trim().is_empty() {
-        return normalize_additional_song_folders(&read_only);
+    let mut folders = Vec::new();
+    push_additional_song_folders(&read_only, false, &mut folders);
+    push_additional_song_folders(&writable, true, &mut folders);
+    folders
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ini(content: &str) -> SimpleIni {
+        let mut conf = SimpleIni::new();
+        conf.load_str(content);
+        conf
     }
 
-    let mut combined = String::with_capacity(read_only.len() + writable.len() + 1);
-    combined.push_str(&read_only);
-    combined.push(',');
-    combined.push_str(&writable);
-    normalize_additional_song_folders(&combined)
+    fn folder(path: &str, writable: bool) -> AdditionalSongFolder {
+        AdditionalSongFolder {
+            path: path.to_string(),
+            writable,
+        }
+    }
+
+    #[test]
+    fn additional_song_folders_keeps_read_only_when_deprecated_key_empty() {
+        let conf = ini("[Options]\n\
+AdditionalSongFolders=\n\
+AdditionalSongFoldersReadOnly=G:\\itgmania\\songs\n");
+
+        assert_eq!(
+            load_additional_song_folders(&conf),
+            vec![folder("G:\\itgmania\\songs", false)]
+        );
+    }
+
+    #[test]
+    fn additional_song_folders_migrates_deprecated_key_to_writable() {
+        let conf = ini("[Options]\nAdditionalSongFolders=D:\\songs\n");
+
+        assert_eq!(
+            load_additional_song_folders(&conf),
+            vec![folder("D:\\songs", true)]
+        );
+    }
+
+    #[test]
+    fn additional_song_folders_prefers_writable_key_over_deprecated_key() {
+        let conf = ini("[Options]\n\
+AdditionalSongFolders=D:\\old\n\
+AdditionalSongFoldersWritable=D:\\new\n\
+AdditionalSongFoldersReadOnly=G:\\readonly\n");
+
+        assert_eq!(
+            load_additional_song_folders(&conf),
+            vec![folder("G:\\readonly", false), folder("D:\\new", true),]
+        );
+    }
+
+    #[test]
+    fn additional_song_folders_trims_empty_entries() {
+        let conf = ini("[Options]\n\
+AdditionalSongFoldersWritable= D:\\a ,, D:\\b \n\
+AdditionalSongFoldersReadOnly= , G:\\ro , \n");
+
+        assert_eq!(
+            load_additional_song_folders(&conf),
+            vec![
+                folder("G:\\ro", false),
+                folder("D:\\a", true),
+                folder("D:\\b", true),
+            ]
+        );
+    }
 }

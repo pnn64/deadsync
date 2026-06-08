@@ -5517,6 +5517,17 @@ impl App {
         Self::gameplay_global_offset_changed(gs) || Self::gameplay_song_offset_changed(gs)
     }
 
+    #[inline(always)]
+    fn gameplay_song_offset_saveable(gs: &gameplay::State) -> bool {
+        Self::gameplay_song_offset_changed(gs)
+            && config::song_path_is_writable(gs.song.simfile_path.as_path())
+    }
+
+    #[inline(always)]
+    fn gameplay_saveable_offset_changed(gs: &gameplay::State) -> bool {
+        Self::gameplay_global_offset_changed(gs) || Self::gameplay_song_offset_saveable(gs)
+    }
+
     fn gameplay_sync_prompt_text(gs: &gameplay::State) -> String {
         let mut text = String::with_capacity(320);
 
@@ -5534,11 +5545,17 @@ impl App {
             gs.initial_song_offset_seconds,
             gs.song_offset_seconds,
         ) {
-            text.push_str("You have changed the timing of\n");
-            text.push_str(&gs.song.display_full_title(false));
-            text.push_str(":\n\n");
-            text.push_str(&line);
-            text.push_str("\n\n");
+            if config::song_path_is_writable(gs.song.simfile_path.as_path()) {
+                text.push_str("You have changed the timing of\n");
+                text.push_str(&gs.song.display_full_title(false));
+                text.push_str(":\n\n");
+                text.push_str(&line);
+                text.push_str("\n\n");
+            } else {
+                text.push_str("Song offset changes for\n");
+                text.push_str(&gs.song.display_full_title(false));
+                text.push_str("\nwill be discarded because the song folder is read-only.\n\n");
+            }
         }
 
         text.push_str("Would you like to save these changes?\n");
@@ -5548,11 +5565,20 @@ impl App {
 
     fn save_song_offset_changes(&mut self, changes: &[SongOffsetSyncChange]) -> Result<(), String> {
         let mut saved_files = 0usize;
+        let mut skipped_read_only = 0usize;
         let mut changed_tags_total = 0usize;
         let mut first_saved_path: Option<&Path> = None;
+        let mut first_skipped_path: Option<&Path> = None;
 
         for change in changes {
             if change.delta_seconds.abs() < 0.000_001_f32 {
+                continue;
+            }
+            if !config::song_path_is_writable(change.simfile_path.as_path()) {
+                skipped_read_only = skipped_read_only.saturating_add(1);
+                if first_skipped_path.is_none() {
+                    first_skipped_path = Some(change.simfile_path.as_path());
+                }
                 continue;
             }
             changed_tags_total += save_song_offset_delta_to_simfile(
@@ -5570,10 +5596,25 @@ impl App {
         }
 
         if saved_files == 0 {
+            if let Some(path) = first_skipped_path {
+                return Err(format!(
+                    "Song offset sync changes target read-only AdditionalSongFoldersReadOnly path '{}'",
+                    path.display()
+                ));
+            }
             return Ok(());
         }
 
         select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+        if skipped_read_only > 0
+            && let Some(path) = first_skipped_path
+        {
+            warn!(
+                "Skipped {} song offset sync change(s) under read-only AdditionalSongFoldersReadOnly roots; first skipped '{}'.",
+                skipped_read_only,
+                path.display()
+            );
+        }
         if saved_files == 1 {
             if let Some(path) = first_saved_path {
                 info!(
@@ -5620,6 +5661,9 @@ impl App {
         if !Self::gameplay_offset_changed(gs) {
             return false;
         }
+        if !Self::gameplay_saveable_offset_changed(gs) {
+            return false;
+        }
         self.state.gameplay_offset_save_prompt = Some(GameplayOffsetSavePrompt {
             target,
             navigate_no_fade,
@@ -5648,7 +5692,8 @@ impl App {
                 if let Some(delta) = sync_offset_delta_seconds(
                     gs.initial_song_offset_seconds,
                     gs.song_offset_seconds,
-                ) {
+                ) && config::song_path_is_writable(gs.song.simfile_path.as_path())
+                {
                     song_offset_change = Some((gs.song.simfile_path.clone(), delta));
                 }
             }
@@ -6731,7 +6776,7 @@ impl App {
         let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
             return;
         };
-        if !Self::gameplay_offset_changed(gs) {
+        if !Self::gameplay_saveable_offset_changed(gs) {
             return;
         }
         let active_choice = self

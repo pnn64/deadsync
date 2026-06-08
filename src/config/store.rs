@@ -65,7 +65,7 @@ pub(super) fn current_save_content() -> String {
         &cfg,
         &keymap,
         &machine_default_noteskin,
-        &additional_song_folders,
+        additional_song_folders.as_slice(),
         &smx_p1_serial,
         &smx_p2_serial,
     )

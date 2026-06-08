@@ -15,6 +15,8 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "AudioOutputMode", "Auto");
     push_line(content, "AudioSampleRateHz", "Auto");
     push_line(content, "AdditionalSongFolders", "");
+    push_line(content, "AdditionalSongFoldersWritable", "");
+    push_line(content, "AdditionalSongFoldersReadOnly", "");
     push_bool(
         content,
         "AutoDownloadUnlocks",

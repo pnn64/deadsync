@@ -5,7 +5,7 @@ pub(super) fn build_content(
     cfg: &Config,
     keymap: &Keymap,
     machine_default_noteskin: &str,
-    additional_song_folders: &str,
+    additional_song_folders: &[AdditionalSongFolder],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
 ) -> String {
@@ -27,7 +27,7 @@ fn push_saved_options(
     content: &mut String,
     cfg: &Config,
     machine_default_noteskin: &str,
-    additional_song_folders: &str,
+    additional_song_folders: &[AdditionalSongFolder],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
 ) {
@@ -42,7 +42,17 @@ fn push_saved_options(
     push_line(content, "AudioOutputDevice", audio_output_device);
     push_line(content, "AudioOutputMode", cfg.audio_output_mode.as_str());
     push_line(content, "AudioSampleRateHz", audio_rate_str);
-    push_line(content, "AdditionalSongFolders", additional_song_folders);
+    push_line(content, "AdditionalSongFolders", "");
+    push_line(
+        content,
+        "AdditionalSongFoldersWritable",
+        additional_song_folder_paths(additional_song_folders, true),
+    );
+    push_line(
+        content,
+        "AdditionalSongFoldersReadOnly",
+        additional_song_folder_paths(additional_song_folders, false),
+    );
     push_bool(content, "AutoDownloadUnlocks", cfg.auto_download_unlocks);
     push_bool(
         content,
@@ -420,6 +430,47 @@ fn push_saved_options(
     push_bool(content, "Windowed", cfg.windowed);
     push_bool(content, "WriteCurrentScreen", cfg.write_current_screen);
     content.push('\n');
+}
+
+fn additional_song_folder_paths(folders: &[AdditionalSongFolder], writable: bool) -> String {
+    let mut out = String::new();
+    for folder in folders.iter().filter(|folder| folder.writable == writable) {
+        if !out.is_empty() {
+            out.push(',');
+        }
+        out.push_str(folder.path.as_str());
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(path: &str, writable: bool) -> AdditionalSongFolder {
+        AdditionalSongFolder {
+            path: path.to_string(),
+            writable,
+        }
+    }
+
+    #[test]
+    fn additional_song_folder_paths_split_writable_and_read_only() {
+        let folders = [
+            folder("G:\\readonly", false),
+            folder("D:\\writable-a", true),
+            folder("E:\\writable-b", true),
+        ];
+
+        assert_eq!(
+            additional_song_folder_paths(&folders, false),
+            "G:\\readonly"
+        );
+        assert_eq!(
+            additional_song_folder_paths(&folders, true),
+            "D:\\writable-a,E:\\writable-b"
+        );
+    }
 }
 
 fn push_saved_keymaps(content: &mut String, keymap: &Keymap) {

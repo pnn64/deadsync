@@ -70,19 +70,14 @@ pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
         push_unique_path(extra, &mut roots, &mut keys);
     }
 
-    let additional_folders = crate::config::additional_song_folders();
-    for raw in additional_folders.split(',') {
-        let path = raw.trim();
-        if path.is_empty() {
-            continue;
-        }
-        let extra_root = PathBuf::from(path);
+    for folder in crate::config::additional_song_folder_roots() {
+        let extra_root = PathBuf::from(folder.path.as_str());
         if extra_root.is_dir() {
             push_unique_path(extra_root, &mut roots, &mut keys);
         } else {
             warn!(
                 "AdditionalSongFolders entry '{}' is not a directory; skipping.",
-                path
+                folder.path
             );
         }
     }

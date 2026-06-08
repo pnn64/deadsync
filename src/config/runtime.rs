@@ -1,6 +1,7 @@
 use super::audio::{pack_audio_mix_levels, unpack_audio_mix_levels};
-use super::{AudioMixLevels, Config, DEFAULT_MACHINE_NOTESKIN};
+use super::{AdditionalSongFolder, AudioMixLevels, Config, DEFAULT_MACHINE_NOTESKIN};
 use log::{debug, warn};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::thread;
@@ -21,8 +22,8 @@ static AUDIO_MIX_LEVELS_PACKED: std::sync::LazyLock<AtomicU32> = std::sync::Lazy
 });
 pub(super) static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
-pub(super) static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<String>> =
-    std::sync::LazyLock::new(|| Mutex::new(String::new()));
+pub(super) static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<Vec<AdditionalSongFolder>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 /// SMX pad → player serial assignment (slot 0 = P1, slot 1 = P2). Stored outside
 /// the `Copy` `Config` because serials are owned strings. `None` = follow jumper.
 pub(super) static SMX_P1_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
@@ -230,6 +231,101 @@ pub fn smx_pad_assignment() -> (Option<String>, Option<String>) {
     )
 }
 
-pub fn additional_song_folders() -> String {
+pub fn additional_song_folder_roots() -> Vec<AdditionalSongFolder> {
     ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone()
+}
+
+pub fn song_path_is_writable(path: &Path) -> bool {
+    let roots = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
+    song_path_is_writable_for_roots(path, &roots)
+}
+
+fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolder]) -> bool {
+    let path = canonical_or_raw(path);
+    let mut best: Option<(usize, bool)> = None;
+    for root in roots {
+        let root_path = canonical_or_raw(Path::new(root.path.as_str()));
+        let Some(len) = root_prefix_len(path.as_path(), root_path.as_path()) else {
+            continue;
+        };
+        if best.is_none_or(|(best_len, _)| len >= best_len) {
+            best = Some((len, root.writable));
+        }
+    }
+    best.map_or(true, |(_, writable)| writable)
+}
+
+fn canonical_or_raw(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn root_prefix_len(path: &Path, root: &Path) -> Option<usize> {
+    let mut path_components = path.components();
+    let mut len = 0usize;
+    for root_component in root.components() {
+        let path_component = path_components.next()?;
+        if !path_components_equal(path_component.as_os_str(), root_component.as_os_str()) {
+            return None;
+        }
+        len += 1;
+    }
+    Some(len)
+}
+
+#[cfg(windows)]
+fn path_components_equal(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
+    a.to_string_lossy()
+        .eq_ignore_ascii_case(&b.to_string_lossy())
+}
+
+#[cfg(not(windows))]
+fn path_components_equal(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
+    a == b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(path: &str, writable: bool) -> AdditionalSongFolder {
+        AdditionalSongFolder {
+            path: path.to_string(),
+            writable,
+        }
+    }
+
+    #[test]
+    fn song_path_writable_defaults_to_true_outside_additional_roots() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("Songs/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
+    }
+
+    #[test]
+    fn song_path_writable_rejects_read_only_additional_root() {
+        assert!(!song_path_is_writable_for_roots(
+            Path::new("ExtraSongs/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
+    }
+
+    #[test]
+    fn song_path_writable_prefers_longest_matching_root() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("ExtraSongs/WritablePack/song.ssc"),
+            &[
+                folder("ExtraSongs", false),
+                folder("ExtraSongs/WritablePack", true),
+            ]
+        ));
+    }
+
+    #[test]
+    fn root_prefix_does_not_match_partial_directory_names() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("ExtraSongs2/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
+    }
 }
