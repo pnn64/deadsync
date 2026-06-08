@@ -188,7 +188,18 @@ pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
 /// (generic HID). Gated on `smx_input` (the same flag that starts the SDK), so
 /// with native SMX off the pad still works as a plain gamepad.
 pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>) -> bool {
-    is_smx_usb_device(vendor, product) && crate::config::get().smx_input
+    native_smx_owns_device_with_flag(vendor, product, crate::config::get().smx_input)
+}
+
+/// Pure form of [`native_smx_owns_device`] with the `smx_input` flag supplied,
+/// so the skip contract (only skip an SMX pad, and only while native input is
+/// on) is testable without the process-global config.
+fn native_smx_owns_device_with_flag(
+    vendor: Option<u16>,
+    product: Option<u16>,
+    smx_input: bool,
+) -> bool {
+    smx_input && is_smx_usb_device(vendor, product)
 }
 
 /// The sensor type of a connected pad (`None` if its config isn't available yet).
@@ -783,6 +794,35 @@ mod tests {
     };
     use crate::config::SmxPadPreset;
     use rustmaniax_sdk::SmxInfo;
+
+    #[test]
+    fn is_smx_usb_device_requires_both_vid_and_pid() {
+        use super::is_smx_usb_device;
+        use rustmaniax_sdk::{SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID};
+
+        let (vid, pid) = (SMX_USB_VENDOR_ID, SMX_USB_PRODUCT_ID);
+        assert!(is_smx_usb_device(Some(vid), Some(pid)));
+        // Arduino's vendor id (0x2341) is shared by many devices, so matching the
+        // vendor alone must never be treated as a StepManiaX pad.
+        assert!(!is_smx_usb_device(Some(vid), Some(pid ^ 0x1)));
+        assert!(!is_smx_usb_device(Some(vid ^ 0x1), Some(pid)));
+        assert!(!is_smx_usb_device(Some(vid), None));
+        assert!(!is_smx_usb_device(None, None));
+    }
+
+    #[test]
+    fn native_smx_owns_device_only_when_smx_input_on() {
+        use super::native_smx_owns_device_with_flag as owns;
+        use rustmaniax_sdk::{SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID};
+
+        let (vid, pid) = (Some(SMX_USB_VENDOR_ID), Some(SMX_USB_PRODUCT_ID));
+        // The pad is skipped only while native StepManiaX input is on; with it
+        // off the pad must stay available to the generic gamepad backends.
+        assert!(owns(vid, pid, true));
+        assert!(!owns(vid, pid, false));
+        // A non-SMX controller is never skipped, even with native input on.
+        assert!(!owns(Some(0x046D), Some(0xC216), true));
+    }
 
     #[test]
     fn pad_config_data_settings_round_trips() {
