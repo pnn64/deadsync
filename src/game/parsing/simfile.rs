@@ -31,7 +31,8 @@ mod scan;
 
 pub(crate) use scan::collect_song_scan_roots;
 pub use scan::{
-    reload_song_dirs_with_progress_counts, scan_and_load_songs, scan_and_load_songs_with_progress,
+    reload_all_songs_with_progress_counts, reload_song_dirs_with_progress_counts,
+    scan_and_load_songs, scan_and_load_songs_with_progress,
     scan_and_load_songs_with_progress_counts,
 };
 
@@ -1372,6 +1373,7 @@ fn process_song(
     simfile_path: PathBuf,
     fastload: bool,
     cachesongs: bool,
+    force_fresh: bool,
     global_offset_seconds: f32,
 ) -> Result<(SongData, bool), String> {
     let cache_path = if fastload || cachesongs {
@@ -1380,10 +1382,14 @@ fn process_song(
         None
     };
 
+    // Explicit reloads force freshness verification so on-disk changes (e.g. a music
+    // file that was missing at first scan and later added) are detected, even when the
+    // fastload startup shortcut would otherwise trust the cache without checking.
+    let verify_freshness = force_fresh || !fastload;
     let allow_cache_read = fastload || cachesongs;
     if allow_cache_read
         && let Some(cp) = cache_path.as_deref()
-        && let Some(song_data) = cache::load_song_from_cache(&simfile_path, cp, !fastload)
+        && let Some(song_data) = cache::load_song_from_cache(&simfile_path, cp, verify_freshness)
     {
         return Ok((song_data, true));
     }

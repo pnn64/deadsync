@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn scan_and_load_songs(root_path: &Path) {
-    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path, None);
+    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path, None, false);
 }
 
 pub fn scan_and_load_songs_with_progress<F>(root_path: &Path, progress: &mut F)
@@ -19,14 +19,26 @@ where
     F: FnMut(&str, &str),
 {
     let mut with_counts = |_: usize, _: usize, pack: &str, song: &str| progress(pack, song);
-    scan_and_load_songs_impl(root_path, Some(&mut with_counts));
+    scan_and_load_songs_impl(root_path, Some(&mut with_counts), false);
 }
 
 pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    scan_and_load_songs_impl(root_path, Some(progress));
+    scan_and_load_songs_impl(root_path, Some(progress), false);
+}
+
+/// Full rescan triggered by the user's explicit "Reload Songs/Courses" action.
+///
+/// Unlike [`scan_and_load_songs_with_progress_counts`] (used at startup, which honours the
+/// fastload shortcut), this forces cache freshness verification so on-disk changes such as a
+/// newly added or removed music file are detected without renaming folders or wiping the cache.
+pub fn reload_all_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    scan_and_load_songs_impl(root_path, Some(progress), true);
 }
 
 pub fn reload_song_dirs_with_progress_counts<F>(
@@ -36,7 +48,7 @@ pub fn reload_song_dirs_with_progress_counts<F>(
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
-    reload_song_dirs_impl(root_path, dirs, Some(progress));
+    reload_song_dirs_impl(root_path, dirs, Some(progress), true);
 }
 
 fn path_key(path: &Path) -> String {
@@ -467,6 +479,7 @@ fn reap_song_parse<F>(
 fn load_pack_scans<F>(
     packs: Vec<PackScan>,
     mut progress: Option<&mut F>,
+    force_fresh: bool,
 ) -> (Vec<SongPack>, SongLoadStats)
 where
     F: FnMut(usize, usize, &str, &str),
@@ -559,6 +572,7 @@ where
                         simfile_path.clone(),
                         fastload,
                         cachesongs,
+                        force_fresh,
                         global_offset_seconds,
                     ) {
                         Ok((song_data, is_hit)) => {
@@ -593,6 +607,7 @@ where
                             simfile_path_owned.clone(),
                             fastload,
                             cachesongs,
+                            force_fresh,
                             global_offset_seconds,
                         )
                         .map(|(data, is_hit)| (Arc::new(data), is_hit))
@@ -606,6 +621,7 @@ where
                     simfile_path.clone(),
                     fastload,
                     cachesongs,
+                    force_fresh,
                     global_offset_seconds,
                 ) {
                     Ok((song_data, is_hit)) => {
@@ -656,7 +672,7 @@ where
     (loaded_packs, stats)
 }
 
-fn scan_and_load_songs_impl<F>(root_path: &Path, progress: Option<&mut F>)
+fn scan_and_load_songs_impl<F>(root_path: &Path, progress: Option<&mut F>, force_fresh: bool)
 where
     F: FnMut(usize, usize, &str, &str),
 {
@@ -676,7 +692,7 @@ where
     }
 
     let packs = scan_song_roots(&song_roots);
-    let (loaded_packs, stats) = load_pack_scans(packs, progress);
+    let (loaded_packs, stats) = load_pack_scans(packs, progress, force_fresh);
     let songs_loaded = count_loaded_songs(&loaded_packs);
     info!(
         "Finished scan. Found {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}.",
@@ -690,8 +706,12 @@ where
     set_song_cache(loaded_packs);
 }
 
-fn reload_song_dirs_impl<F>(root_path: &Path, pack_dirs: &[PathBuf], progress: Option<&mut F>)
-where
+fn reload_song_dirs_impl<F>(
+    root_path: &Path,
+    pack_dirs: &[PathBuf],
+    progress: Option<&mut F>,
+    force_fresh: bool,
+) where
     F: FnMut(usize, usize, &str, &str),
 {
     ensure_song_cache_dir();
@@ -714,7 +734,7 @@ where
     );
     let started = std::time::Instant::now();
     let packs = scan_pack_dirs(&scan_dirs);
-    let (reloaded_packs, stats) = load_pack_scans(packs, progress);
+    let (reloaded_packs, stats) = load_pack_scans(packs, progress, force_fresh);
     let reloaded_pack_count = reloaded_packs.len();
     let reloaded_song_count = count_loaded_songs(&reloaded_packs);
 
