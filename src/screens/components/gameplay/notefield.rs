@@ -5184,26 +5184,27 @@ pub fn build_bundles(
                     })
                     .unwrap_or((&[], &[], &[], &[]));
 
-                // Thickness and alpha both key off the cue beat's position on
-                // the same 0.5-beat grid the gameplay measure lines use.
-                // Thickness mirrors the editor's measure-line gradation and alpha
-                // mirrors the white "Eighth" measure-line opacities, so cues fade
-                // by subdivision exactly like the white lines: measure-aligned
-                // beats are thickest/brightest, quarter-aligned a step down, and
-                // eighth/off-grid beats the thinnest/faintest.
+                // Thickness keys off the cue beat's position on the same 0.5-beat
+                // grid the gameplay measure lines use, mirroring the editor's
+                // measure-line gradation (measure thickest, quarter a step down,
+                // eighth/off-grid thinnest). Alpha is held constant and readable:
+                // cues mark discrete timing events, so unlike grid lines they
+                // should stay clearly visible wherever they land rather than
+                // fading out on finer subdivisions.
+                const CUE_ALPHA: f32 = 0.7;
                 let cue_style_for_beat = |beat: f32| -> (f32, f32) {
                     let units = beat / 0.5;
                     let rounded = units.round();
-                    let (scale, alpha) = if (units - rounded).abs() <= 1e-3 {
+                    let scale = if (units - rounded).abs() <= 1e-3 {
                         match (rounded as i64).rem_euclid(8) {
-                            0 => (3.0, 0.75),        // measure
-                            2 | 4 | 6 => (2.0, 0.5), // quarter
-                            _ => (1.0, 0.125),       // eighth
+                            0 => 3.0,         // measure
+                            2 | 4 | 6 => 2.0, // quarter
+                            _ => 1.0,         // eighth
                         }
                     } else {
-                        (1.0, 0.125) // off the eighth grid -> finest
+                        1.0 // off the eighth grid -> finest
                     };
-                    ((scale * field_zoom).max(1.0), alpha)
+                    ((scale * field_zoom).max(1.0), CUE_ALPHA)
                 };
 
                 let groups = [
