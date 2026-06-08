@@ -66,9 +66,9 @@ use crate::game::gameplay::{
     GameplayAction, GameplayExit, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_scroll_effects_for_player,
-    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
-    scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
+    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
+    handle_input as gameplay_handle_input, scroll_receptor_y, timing_tick_status_line,
+    toggle_flash_text, update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -463,6 +463,40 @@ fn ranges_overlap(a_center: f32, a_size: f32, b_center: f32, b_size: f32) -> boo
     a_center - a_half < b_center + b_half && b_center - b_half < a_center + a_half
 }
 
+fn saved_targets_hit_meter(
+    profile: &profile_data::Profile,
+    num_cols: usize,
+    meter_y: f32,
+) -> bool {
+    if num_cols == 0 || !meter_y.is_finite() {
+        return false;
+    }
+
+    let offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
+    let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + offset_y;
+    let receptor_y_reverse = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + offset_y;
+    let receptor_y_centered = screen_center_y() + offset_y;
+    // This HUD dodge follows the player's chosen layout only. Live song
+    // Lua/attack effects may move receptors, but should not move the rating box.
+    let scroll = gameplay_core::ScrollEffects::from_option(profile.scroll_option);
+
+    (0..num_cols).any(|col| {
+        let receptor_y = scroll_receptor_y(
+            scroll.reverse_percent_for_column(col, num_cols),
+            scroll.centered,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        );
+        ranges_overlap(
+            receptor_y,
+            TARGET_ARROW_PIXEL_SIZE,
+            meter_y,
+            DIFFICULTY_METER_SIZE,
+        )
+    })
+}
+
 fn difficulty_meter_hits_targets(
     state: &State,
     profile: &profile_data::Profile,
@@ -471,7 +505,6 @@ fn difficulty_meter_hits_targets(
     field_w: f32,
     meter_x: f32,
     meter_y: f32,
-    view: notefield::ViewOverride,
 ) -> bool {
     if player_idx >= state.num_players
         || !field_x.is_finite()
@@ -494,49 +527,7 @@ fn difficulty_meter_hits_targets(
         return false;
     }
 
-    let offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
-    let receptor_y_override = view.receptor_y.map(|y| y + offset_y);
-    let receptor_y_normal = receptor_y_override.unwrap_or_else(|| {
-        screen_center_y()
-            + if view.center_receptors_y {
-                0.0
-            } else {
-                RECEPTOR_Y_OFFSET_FROM_CENTER
-            }
-            + offset_y
-    });
-    let receptor_y_reverse = receptor_y_override.unwrap_or_else(|| {
-        screen_center_y()
-            + if view.center_receptors_y {
-                0.0
-            } else {
-                RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-            }
-            + offset_y
-    });
-    let receptor_y_centered = receptor_y_override.unwrap_or(screen_center_y() + offset_y);
-    let scroll = effective_scroll_effects_for_player(state, player_idx);
-    let centered_percent = if view.receptor_y.is_some() || view.center_receptors_y {
-        1.0
-    } else {
-        scroll.centered
-    };
-
-    (0..num_cols).any(|col| {
-        let receptor_y = scroll_receptor_y(
-            scroll.reverse_percent_for_column(col, num_cols),
-            centered_percent,
-            receptor_y_normal,
-            receptor_y_reverse,
-            receptor_y_centered,
-        );
-        ranges_overlap(
-            receptor_y,
-            TARGET_ARROW_PIXEL_SIZE,
-            meter_y,
-            DIFFICULTY_METER_SIZE,
-        )
-    })
+    saved_targets_hit_meter(profile, num_cols, meter_y)
 }
 
 #[inline(always)]
@@ -555,7 +546,6 @@ fn difficulty_meter_x(
     field_x: f32,
     field_w: f32,
     normal_x: f32,
-    view: notefield::ViewOverride,
 ) -> f32 {
     if difficulty_meter_hits_targets(
         state,
@@ -565,7 +555,6 @@ fn difficulty_meter_x(
         field_w,
         normal_x,
         DIFFICULTY_METER_Y,
-        view,
     ) {
         side_difficulty_meter_x(player_side)
     } else {
@@ -8259,7 +8248,6 @@ pub fn push_actors(
                 field_x,
                 notefield_width(player_idx),
                 diff_x,
-                notefield_view,
             );
             let chart = &state.charts[player_idx];
             let difficulty_color =
@@ -9240,6 +9228,44 @@ mod tests {
             TARGET_ARROW_PIXEL_SIZE,
             56.0,
             DIFFICULTY_METER_SIZE
+        ));
+    }
+
+    #[test]
+    fn difficulty_meter_overlap_uses_profile_target_offset() {
+        let mut profile = profile_data::Profile::default();
+
+        assert!(!saved_targets_hit_meter(
+            &profile,
+            4,
+            DIFFICULTY_METER_Y
+        ));
+
+        profile.note_field_offset_y = -50;
+        assert!(saved_targets_hit_meter(
+            &profile,
+            4,
+            DIFFICULTY_METER_Y
+        ));
+    }
+
+    #[test]
+    fn difficulty_meter_overlap_uses_profile_scroll_option() {
+        let mut profile = profile_data::Profile {
+            note_field_offset_y: -50,
+            ..profile_data::Profile::default()
+        };
+        assert!(saved_targets_hit_meter(
+            &profile,
+            4,
+            DIFFICULTY_METER_Y
+        ));
+
+        profile.scroll_option = profile_data::ScrollOption::Centered;
+        assert!(!saved_targets_hit_meter(
+            &profile,
+            4,
+            DIFFICULTY_METER_Y
         ));
     }
 

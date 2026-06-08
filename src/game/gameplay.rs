@@ -430,7 +430,7 @@ pub struct ScrollEffects {
 
 impl ScrollEffects {
     #[inline(always)]
-    fn from_option(scroll: profile_data::ScrollOption) -> Self {
+    pub(crate) fn from_option(scroll: profile_data::ScrollOption) -> Self {
         Self {
             reverse: f32::from(scroll.contains(profile_data::ScrollOption::Reverse)),
             split: f32::from(scroll.contains(profile_data::ScrollOption::Split)),
