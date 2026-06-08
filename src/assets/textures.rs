@@ -139,8 +139,10 @@ impl TextureHints {
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
-    matches!(key, "swoosh.png" | "graphics/menu_bg_technique/square.png")
-        || visual_styles::is_shared_background_texture(key)
+    matches!(
+        key,
+        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
+    ) || visual_styles::is_shared_background_texture(key)
 }
 
 fn absolute_or_self(path: &Path) -> PathBuf {
@@ -1150,38 +1152,6 @@ impl AssetManager {
                 "combo_explosion.png".to_string(),
             ),
             (
-                "combo_100milestone_splode.png".to_string(),
-                "combo_100milestone_splode.png".to_string(),
-            ),
-            (
-                "combo_100milestone_minisplode.png".to_string(),
-                "combo_100milestone_minisplode.png".to_string(),
-            ),
-            (
-                "gameplayin_splode.png".to_string(),
-                "gameplayin_splode.png".to_string(),
-            ),
-            (
-                "gameplayin_minisplode.png".to_string(),
-                "gameplayin_minisplode.png".to_string(),
-            ),
-            (
-                "combo_1000milestone_swoosh.png".to_string(),
-                "combo_1000milestone_swoosh.png".to_string(),
-            ),
-            (
-                "titlemenu_flycenter.png".to_string(),
-                "titlemenu_flycenter.png".to_string(),
-            ),
-            (
-                "titlemenu_flytop.png".to_string(),
-                "titlemenu_flytop.png".to_string(),
-            ),
-            (
-                "titlemenu_flybottom.png".to_string(),
-                "titlemenu_flybottom.png".to_string(),
-            ),
-            (
                 "banner1.png".to_string(),
                 "_fallback/banner1.png".to_string(),
             ),
@@ -1260,6 +1230,18 @@ impl AssetManager {
                 asset.shared_background.to_string(),
                 asset.shared_background.to_string(),
             ));
+            for effect in [
+                asset.effects.titlemenu_flycenter,
+                asset.effects.titlemenu_flytop,
+                asset.effects.titlemenu_flybottom,
+                asset.effects.gameplayin_splode,
+                asset.effects.gameplayin_minisplode,
+                asset.effects.combo_100milestone_splode,
+                asset.effects.combo_100milestone_minisplode,
+                asset.effects.combo_1000milestone_swoosh,
+            ] {
+                textures_to_load.push((effect.to_string(), effect.to_string()));
+            }
         }
 
         for p in [
@@ -1291,6 +1273,21 @@ impl AssetManager {
             "submit/Check_1x1.png",
             "submit/Refresh_1x1.png",
             "submit/Rejected_1x1.png",
+        ] {
+            textures_to_load.push((p.to_string(), p.to_string()));
+        }
+
+        for p in [
+            "step_stats_gifs/AmongUs 3x2.png",
+            "step_stats_gifs/brodyquest 7x12.gif",
+            "step_stats_gifs/catjam 11x14.png",
+            "step_stats_gifs/CrabPls 8x8.png",
+            "step_stats_gifs/Dancing Duck 8x14.png",
+            "step_stats_gifs/DonChan 2x2.png",
+            "step_stats_gifs/NyanCat 4x3.png",
+            "step_stats_gifs/Rin Cat 2x3.png",
+            "step_stats_gifs/snoop 8x8.png",
+            "step_stats_gifs/Sonic 4x2.png",
         ] {
             textures_to_load.push((p.to_string(), p.to_string()));
         }
@@ -1545,6 +1542,11 @@ mod tests {
 
         let _ = fs::remove_file(&path);
         let _ = fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn goldstar_uses_repeat_sampler() {
+        assert!(needs_repeat_sampler("grades/goldstar (stretch).png"));
     }
 
     #[test]

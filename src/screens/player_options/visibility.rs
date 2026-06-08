@@ -14,6 +14,7 @@ pub(super) struct RowVisibility {
     pub(super) show_long_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
     pub(super) show_density_graph_background: bool,
+    pub(super) show_step_stats_extra: bool,
     pub(super) show_target_score: bool,
     pub(super) show_early_dw_options: bool,
     pub(super) show_fa_plus_window_options: bool,
@@ -83,6 +84,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::DensityGraphBackground {
         return visibility.show_density_graph_background;
+    }
+    if id == RowId::StepStatsExtra {
+        return visibility.show_step_stats_extra;
     }
     if id == RowId::TargetScore {
         return visibility.show_target_score;
@@ -169,7 +173,7 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     if id == RowId::CustomBlueFantasticWindowMs {
         return Some(RowId::CustomBlueFantasticWindow);
     }
-    if id == RowId::DensityGraphBackground {
+    if id == RowId::DensityGraphBackground || id == RowId::StepStatsExtra {
         return Some(RowId::DataVisualizations);
     }
     if id == RowId::TargetScore {
@@ -403,6 +407,24 @@ pub(super) fn density_graph_background_visible(
             .step_statistics
             .contains(StepStatisticsMask::DENSITY_GRAPH)
         {
+            return true;
+        }
+    }
+    !any_active
+}
+
+pub(super) fn step_stats_extra_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    if row_map.get(RowId::DataVisualizations).is_none() {
+        return true;
+    };
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if !option_masks[player_idx].step_statistics.is_empty() {
             return true;
         }
     }
@@ -644,6 +666,7 @@ pub(super) fn row_visibility(
             active,
             option_masks,
         ),
+        show_step_stats_extra: step_stats_extra_visible(row_map, active, option_masks),
         show_target_score: target_score_visible(row_map, active),
         show_early_dw_options: early_dw_options_visible(row_map, active),
         show_fa_plus_window_options: fa_plus_window_options_visible(row_map, active, option_masks),

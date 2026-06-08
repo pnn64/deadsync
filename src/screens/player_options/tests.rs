@@ -2201,6 +2201,47 @@ pub(super) mod tests {
         .collect()
     }
 
+    fn advanced_step_statistics_choices(
+        state: &super::State,
+        return_screen: Screen,
+    ) -> Vec<String> {
+        let noteskin_names = super::discover_noteskin_names();
+        let row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Advanced,
+            &noteskin_names,
+            return_screen,
+            state.fixed_stepchart.as_ref(),
+        );
+        row_map
+            .get(RowId::DataVisualizations)
+            .expect("Step Statistics row present")
+            .choices
+            .clone()
+    }
+
+    #[test]
+    fn course_options_label_pack_info_as_course_banner() {
+        ensure_i18n();
+        let (state, _asset_manager) = setup_state();
+
+        let normal = advanced_step_statistics_choices(&state, Screen::SelectMusic);
+        let course = advanced_step_statistics_choices(&state, Screen::SelectCourse);
+
+        assert_eq!(
+            normal[4],
+            crate::assets::i18n::tr("PlayerOptions", "StepStatisticsPackInfo").as_ref()
+        );
+        assert_eq!(
+            course[4],
+            crate::assets::i18n::tr("PlayerOptions", "StepStatisticsCourseBanner").as_ref()
+        );
+    }
+
     #[test]
     fn display_pane_owns_display_rows_and_main_keeps_shared_rows() {
         ensure_i18n();

@@ -1674,6 +1674,87 @@ impl core::fmt::Display for StepStatisticsMask {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StepStatsExtra {
+    #[default]
+    None,
+    ErrorStats,
+    AmongUs,
+    BrodyQuest,
+    CatJAM,
+    CrabPls,
+    DancingDuck,
+    DonChan,
+    NyanCat,
+    Randomizer,
+    RinCat,
+    Snoop,
+    Sonic,
+}
+
+impl StepStatsExtra {
+    pub const RANDOMIZER_CHOICES: [Self; 10] = [
+        Self::AmongUs,
+        Self::BrodyQuest,
+        Self::CatJAM,
+        Self::CrabPls,
+        Self::DancingDuck,
+        Self::DonChan,
+        Self::NyanCat,
+        Self::RinCat,
+        Self::Snoop,
+        Self::Sonic,
+    ];
+
+    #[inline(always)]
+    pub const fn renderable(self) -> bool {
+        !matches!(self, Self::None | Self::ErrorStats | Self::Randomizer)
+    }
+}
+
+impl FromStr for StepStatsExtra {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match normalize_option_key(s).as_str() {
+            "" | "none" => Ok(Self::None),
+            "errorstats" | "error" => Ok(Self::ErrorStats),
+            "amongus" => Ok(Self::AmongUs),
+            "brodyquest" => Ok(Self::BrodyQuest),
+            "catjam" => Ok(Self::CatJAM),
+            "crabpls" => Ok(Self::CrabPls),
+            "dancingduck" => Ok(Self::DancingDuck),
+            "donchan" => Ok(Self::DonChan),
+            "nyancat" => Ok(Self::NyanCat),
+            "randomizer" | "random" => Ok(Self::Randomizer),
+            "rincat" => Ok(Self::RinCat),
+            "snoop" => Ok(Self::Snoop),
+            "sonic" => Ok(Self::Sonic),
+            other => Err(format!("'{other}' is not a valid StepStatsExtra setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for StepStatsExtra {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::ErrorStats => write!(f, "ErrorStats"),
+            Self::AmongUs => write!(f, "AmongUs"),
+            Self::BrodyQuest => write!(f, "BrodyQuest"),
+            Self::CatJAM => write!(f, "CatJAM"),
+            Self::CrabPls => write!(f, "CrabPls"),
+            Self::DancingDuck => write!(f, "Dancing Duck"),
+            Self::DonChan => write!(f, "DonChan"),
+            Self::NyanCat => write!(f, "Nyan Cat"),
+            Self::Randomizer => write!(f, "Randomizer"),
+            Self::RinCat => write!(f, "Rin Cat"),
+            Self::Snoop => write!(f, "Snoop"),
+            Self::Sonic => write!(f, "Sonic"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MeasureCounter {
     #[default]
     None,
@@ -2932,6 +3013,7 @@ pub struct PlayerOptionsData {
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
     pub step_statistics: StepStatisticsMask,
+    pub step_stats_extra: StepStatsExtra,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
@@ -3056,6 +3138,7 @@ fn default_player_options() -> PlayerOptionsData {
         long_error_bar_threshold_ms: LONG_ERROR_BAR_THRESHOLD_MS_DEFAULT,
         long_error_bar_min_samples: LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT,
         step_statistics: StepStatisticsMask::default(),
+        step_stats_extra: StepStatsExtra::default(),
         target_score: TargetScoreSetting::default(),
         lifemeter_type: LifeMeterType::default(),
         measure_counter: MeasureCounter::default(),
@@ -3723,6 +3806,7 @@ pub fn append_player_options_section(
         clamp_long_error_bar_min_samples(options.long_error_bar_min_samples)
     ));
     content.push_str(&format!("StepStatistics={}\n", options.step_statistics));
+    content.push_str(&format!("StepStatsExtra={}\n", options.step_stats_extra));
     content.push_str(&format!("TargetScore={}\n", options.target_score));
     content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
     content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
@@ -3935,6 +4019,7 @@ pub struct Profile {
     pub long_error_bar_threshold_ms: u32,
     pub long_error_bar_min_samples: u32,
     pub step_statistics: StepStatisticsMask,
+    pub step_stats_extra: StepStatsExtra,
     pub target_score: TargetScoreSetting,
     pub lifemeter_type: LifeMeterType,
     pub measure_counter: MeasureCounter,
@@ -4103,6 +4188,7 @@ impl Default for Profile {
             long_error_bar_threshold_ms: player_options.long_error_bar_threshold_ms,
             long_error_bar_min_samples: player_options.long_error_bar_min_samples,
             step_statistics: player_options.step_statistics,
+            step_stats_extra: player_options.step_stats_extra,
             target_score: player_options.target_score,
             lifemeter_type: player_options.lifemeter_type,
             measure_counter: player_options.measure_counter,
@@ -4658,6 +4744,7 @@ impl Profile {
             long_error_bar_threshold_ms: self.long_error_bar_threshold_ms,
             long_error_bar_min_samples: self.long_error_bar_min_samples,
             step_statistics: self.step_statistics,
+            step_stats_extra: self.step_stats_extra,
             target_score: self.target_score,
             lifemeter_type: self.lifemeter_type,
             measure_counter: self.measure_counter,
@@ -4784,6 +4871,7 @@ impl Profile {
         self.long_error_bar_threshold_ms = options.long_error_bar_threshold_ms;
         self.long_error_bar_min_samples = options.long_error_bar_min_samples;
         self.step_statistics = options.step_statistics;
+        self.step_stats_extra = options.step_stats_extra;
         self.target_score = options.target_score;
         self.lifemeter_type = options.lifemeter_type;
         self.measure_counter = options.measure_counter;
@@ -4961,6 +5049,7 @@ mod tests {
             TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT
         );
         assert!(options.step_statistics.is_empty());
+        assert_eq!(options.step_stats_extra, StepStatsExtra::None);
         assert_eq!(options.score_position, ScorePosition::Normal);
         assert_eq!(options.score_display_mode, ScoreDisplayMode::Normal);
         assert_eq!(options.measure_counter_lookahead, 2);
@@ -5968,6 +6057,7 @@ mod tests {
             tap_explosion_active_mask: TapExplosionMask::FANTASTIC | TapExplosionMask::MISS,
             score_position: ScorePosition::StepStatistics,
             score_display_mode: ScoreDisplayMode::Predictive,
+            step_stats_extra: StepStatsExtra::CatJAM,
             column_flash_brightness: ColumnFlashBrightness::Dimmed,
             column_flash_size: ColumnFlashSize::Compact,
             mini_percent: 42,
@@ -5992,6 +6082,7 @@ mod tests {
         assert!(content.contains("TapExplosionMask=65\n"));
         assert!(content.contains("ScorePosition=Step Statistics\n"));
         assert!(content.contains("ScoreDisplay=Predictive\n"));
+        assert!(content.contains("StepStatsExtra=CatJAM\n"));
         assert!(content.contains("NoCmodAlternative=XMod\n"));
         assert!(content.contains("MiniIndicatorSubtractiveDisplay=Percent\n"));
         assert!(content.contains("MiniIndicatorPosition=Default\n"));
@@ -6791,6 +6882,40 @@ mod tests {
             Ok(StepStatisticsMask::STEP_COUNTS)
         );
         assert!(StepStatisticsMask::from_str("lanes").is_err());
+    }
+
+    #[test]
+    fn step_stats_extra_round_trips_and_accepts_arrow_cloud_names() {
+        for setting in [
+            StepStatsExtra::None,
+            StepStatsExtra::ErrorStats,
+            StepStatsExtra::AmongUs,
+            StepStatsExtra::BrodyQuest,
+            StepStatsExtra::CatJAM,
+            StepStatsExtra::CrabPls,
+            StepStatsExtra::DancingDuck,
+            StepStatsExtra::DonChan,
+            StepStatsExtra::NyanCat,
+            StepStatsExtra::Randomizer,
+            StepStatsExtra::RinCat,
+            StepStatsExtra::Snoop,
+            StepStatsExtra::Sonic,
+        ] {
+            assert_eq!(setting.to_string().parse::<StepStatsExtra>(), Ok(setting));
+        }
+        assert_eq!(
+            StepStatsExtra::from_str("DancingDuck"),
+            Ok(StepStatsExtra::DancingDuck)
+        );
+        assert_eq!(
+            StepStatsExtra::from_str("NyanCat"),
+            Ok(StepStatsExtra::NyanCat)
+        );
+        assert_eq!(
+            StepStatsExtra::from_str("RinCat"),
+            Ok(StepStatsExtra::RinCat)
+        );
+        assert!(StepStatsExtra::from_str("lanes").is_err());
     }
 
     #[test]

@@ -3438,6 +3438,12 @@ pub struct CourseDisplayTiming {
     pub total_seconds: f32,
 }
 
+#[derive(Clone, Debug)]
+pub struct CourseDisplayInfo {
+    pub name: Arc<str>,
+    pub banner_path: Option<PathBuf>,
+}
+
 fn init_player_runtime() -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
@@ -3691,6 +3697,7 @@ pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
+    pub course_display_info: Option<CourseDisplayInfo>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
     pub song_banner_key: Option<Arc<str>>,
@@ -5371,6 +5378,7 @@ pub fn init(
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
+    course_display_info: Option<CourseDisplayInfo>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
@@ -5480,7 +5488,7 @@ pub fn init(
 
     let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
-    let pack_group: Arc<str> = Arc::from(
+    let mut pack_group: Arc<str> = Arc::from(
         song.simfile_path
             .parent()
             .and_then(|p| p.parent())
@@ -5489,15 +5497,20 @@ pub fn init(
             .unwrap_or("")
             .to_owned(),
     );
-    let (pack_banner_path, pack_sync_pref): (Option<PathBuf>, SyncPref) = if pack_group.is_empty() {
-        (None, SyncPref::Default)
-    } else {
-        crate::game::song::get_song_cache()
-            .iter()
-            .find(|p| p.group_name == pack_group.as_ref())
-            .map(|p| (p.banner_path.clone(), p.sync_pref))
-            .unwrap_or((None, SyncPref::Default))
-    };
+    let (mut pack_banner_path, pack_sync_pref): (Option<PathBuf>, SyncPref) =
+        if pack_group.is_empty() {
+            (None, SyncPref::Default)
+        } else {
+            crate::game::song::get_song_cache()
+                .iter()
+                .find(|p| p.group_name == pack_group.as_ref())
+                .map(|p| (p.banner_path.clone(), p.sync_pref))
+                .unwrap_or((None, SyncPref::Default))
+        };
+    if let Some(course_info) = course_display_info.as_ref() {
+        pack_group = course_info.name.clone();
+        pack_banner_path.clone_from(&course_info.banner_path);
+    }
     let song_banner_key = song.banner_path.as_deref().map(media_path_key);
     let pack_banner_key = pack_banner_path.as_deref().map(media_path_key);
     let foreground_texture_keys = song
@@ -6348,6 +6361,7 @@ pub fn init(
         song,
         song_full_title,
         stage_intro_text,
+        course_display_info,
         pack_group,
         pack_banner_path,
         song_banner_key,
@@ -9372,6 +9386,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             [0; MAX_PLAYERS],
         )
     }
@@ -9527,6 +9542,7 @@ return Def.ActorFrame{}
                                 None,
                                 None,
                                 Arc::from("TEST"),
+                                None,
                                 None,
                                 None,
                                 None,

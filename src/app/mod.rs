@@ -2421,7 +2421,9 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         summary_chart
             .difficulty
             .clone_from(&course.course_difficulty_name);
-        summary_chart.description.clone_from(&course.name);
+        summary_chart.step_artist.clear();
+        summary_chart.description.clear();
+        summary_chart.chart_name.clear();
         summary_chart.meter = course.course_meter.unwrap_or_else(|| {
             if meter_count > 0 {
                 (meter_sum as f32 / meter_count as f32).round() as u32
@@ -7092,8 +7094,8 @@ impl App {
                 actors.extend(out_actors);
             }
             TransitionState::ActorsFadeOut { target, .. } => {
-                // Special case: Menu → SelectColor / Menu → Options should keep the heart
-                // background bright and only fade UI, but still play the hearts splash.
+                // Special case: Menu -> SelectColor / Menu -> Options should keep the
+                // visual-style background bright and only fade UI, but still play the splash.
                 if self.state.screens.current_screen == CurrentScreen::Menu
                     && (*target == CurrentScreen::SelectProfile
                         || *target == CurrentScreen::SelectColor
@@ -8893,6 +8895,7 @@ impl App {
                     None,
                     None,
                     None,
+                    None,
                     [0; MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
@@ -9275,6 +9278,12 @@ impl App {
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })
                 });
+                let course_display_info = self.state.session.course_run.as_ref().map(|course| {
+                    crate::game::gameplay::CourseDisplayInfo {
+                        name: Arc::from(course.name.as_str()),
+                        banner_path: course.banner_path.clone(),
+                    }
+                });
                 let stage_intro_text: Arc<str> =
                     if let Some(course) = self.state.session.course_run.as_ref() {
                         let stage_num = course.next_stage_index.saturating_add(1);
@@ -9308,6 +9317,7 @@ impl App {
                     course_display_carry,
                     course_display_totals,
                     course_display_timing,
+                    course_display_info,
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
@@ -10823,7 +10833,11 @@ mod tests {
     fn course_summary_uses_trail_totals_and_keeps_timing_graphs() {
         let song_a = test_song_with_duration("Songs/Test/a.ssc", "a", 60.0);
         let song_b = test_song_with_duration("Songs/Test/b.ssc", "b", 90.0);
-        let chart = Arc::new(test_chart("stage-a"));
+        let mut chart = test_chart("stage-a");
+        chart.step_artist = "Stage Artist".to_string();
+        chart.description = "Stage Description".to_string();
+        chart.chart_name = "Stage Chart Name".to_string();
+        let chart = Arc::new(chart);
         let mut stage_players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
             std::array::from_fn(|_| None);
         stage_players[0] = Some(test_player_stage_summary(
@@ -10877,6 +10891,9 @@ mod tests {
         assert_eq!(player.rolls_total, 2);
         assert_eq!(player.mines_total, 6);
         assert_eq!(player.grade, score_data::Grade::Failed);
+        assert!(player.chart.step_artist.is_empty());
+        assert!(player.chart.description.is_empty());
+        assert!(player.chart.chart_name.is_empty());
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);

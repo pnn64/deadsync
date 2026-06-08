@@ -149,7 +149,7 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
 pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
     let mut actors: Vec<Actor> = Vec::new();
 
-    // Hearts splash, matching Simply Love's ScreenTitleMenu out.lua look.
+    // Visual-style splash, matching Simply Love's ScreenTitleMenu out.lua look.
     actors.extend(menu_splash::build(active_color_index));
 
     // Full-screen fade to black behind the hearts.

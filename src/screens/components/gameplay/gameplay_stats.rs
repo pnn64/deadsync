@@ -12,6 +12,7 @@ use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay;
 use crate::game::profile;
+use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::State;
 use deadsync_core::input::MAX_PLAYERS;
@@ -93,6 +94,12 @@ const STEP_INFO_LABELS: [LookupKey; 4] = [
     lookup_key("Gameplay", "SongInfoPack"),
     lookup_key("Gameplay", "SongInfoDesc"),
 ];
+const STEP_INFO_COURSE_LABELS: [LookupKey; 4] = [
+    lookup_key("Gameplay", "SongInfoSong"),
+    lookup_key("Gameplay", "SongInfoArtist"),
+    lookup_key("Gameplay", "SongInfoCourse"),
+    lookup_key("Gameplay", "SongInfoDesc"),
+];
 
 const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
     lookup_key("Gameplay", "HoldsLabel"),
@@ -100,8 +107,13 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
     lookup_key("Gameplay", "RollsLabel"),
 ];
 
-fn step_info_label(index: usize) -> Arc<str> {
-    STEP_INFO_LABELS
+fn step_info_label(index: usize, course: bool) -> Arc<str> {
+    let labels = if course {
+        &STEP_INFO_COURSE_LABELS
+    } else {
+        &STEP_INFO_LABELS
+    };
+    labels
         .get(index)
         .map(LookupKey::get)
         .unwrap_or_else(|| Arc::from(""))
@@ -692,8 +704,8 @@ fn digit_text(digit: u8) -> Arc<str> {
 }
 
 #[inline(always)]
-fn step_info_label_text(index: usize) -> Arc<str> {
-    step_info_label(index)
+fn step_info_label_text(index: usize, course: bool) -> Arc<str> {
+    step_info_label(index, course)
 }
 
 #[inline(always)]
@@ -824,7 +836,15 @@ pub fn prewarm_text_layout(
     }
     let zero_timing = cached_live_timing_pair(0.0, 0.0);
     cache.prewarm_text(fonts, "miso", zero_timing.as_ref(), None);
-    for label in (0..4).map(step_info_label).collect::<Vec<_>>().iter() {
+    for label in (0..4)
+        .map(|index| step_info_label(index, false))
+        .collect::<Vec<_>>()
+        .iter()
+    {
+        cache.prewarm_text(fonts, "miso", label.as_ref(), None);
+    }
+    if state.course_display_info.is_some() {
+        let label = step_info_label(2, true);
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for label in (0..3)
@@ -867,6 +887,16 @@ pub fn push_step_stats(
         build_pack_banner(actors, state, layout, wide, player_side);
     }
     build_steps_info(actors, state, layout, wide, player_side, show_pack_info);
+    step_stats_gifs::push_step_stats_extra(
+        actors,
+        state,
+        player_side,
+        step_stats_player_idx(state, player_side),
+        layout.sidepane_center_x,
+        layout.sidepane_center_y,
+        layout.banner_data_zoom,
+        layout.note_field_is_centered,
+    );
     build_side_pane(
         actors,
         state,
@@ -1375,6 +1405,17 @@ pub fn push_double_step_stats(
         ));
     }
 
+    step_stats_gifs::push_step_stats_extra(
+        actors,
+        state,
+        profile::get_session_player_side(),
+        0,
+        pane_cx,
+        pane_cy,
+        banner_data_zoom,
+        note_field_is_centered,
+    );
+
     // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)
     if mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER) {
         let origin_x = pane_cx + ((-notefield_width + 75.0) * banner_data_zoom);
@@ -1862,6 +1903,7 @@ fn build_steps_info(
         (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     };
+    let course_info = state.course_display_info.as_ref();
     let chart = &state.charts[player_idx];
     let desc = chart.description.trim();
     let cred = chart.step_artist.trim();
@@ -1920,7 +1962,7 @@ fn build_steps_info(
         for i in 0..4 {
             let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
             actors.push(act!(text:
-                font("miso"): settext(step_info_label_text(i)):
+                font("miso"): settext(step_info_label_text(i, course_info.is_some())):
                 align(0.0, 0.5): xy(origin_x, y):
                 zoom(group_zoom): z(z):
                 horizalign(left)

@@ -20,8 +20,8 @@ use deadsync_profile::{
     MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
     MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode,
     PlayStyle, PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError,
-    RemoveMask, ScrollOption, StepStatisticsMask, TargetScoreSetting, TimingTickMode,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
+    RemoveMask, ScrollOption, StepStatisticsMask, StepStatsExtra, TargetScoreSetting,
+    TimingTickMode, TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
     active_profile_local_id, add_known_pack_names, append_last_played_course_section,
     append_last_played_section, append_player_options_section, clamp_weight_pounds,
     cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
@@ -117,6 +117,10 @@ fn load_player_options(
     {
         options.step_statistics = step_statistics;
     }
+    options.step_stats_extra = profile_conf
+        .get(section, "StepStatsExtra")
+        .and_then(|s| StepStatsExtra::from_str(&s).ok())
+        .unwrap_or(options.step_stats_extra);
     options.target_score = profile_conf
         .get(section, "TargetScore")
         .and_then(|s| TargetScoreSetting::from_str(&s).ok())
