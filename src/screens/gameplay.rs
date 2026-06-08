@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, current_machine_font_key, visual_styles};
 use crate::engine::gfx::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use crate::engine::present::anim::EffectState;
@@ -1206,13 +1206,17 @@ pub fn in_transition(
             crate::config::get().center_1player_notefield,
         )
     });
-    let mut mirrored_splode = act!(sprite("gameplayin_splode.png"):
+    let splode_tex = visual_styles::gameplayin_splode_texture_key();
+    let minisplode_tex = visual_styles::gameplayin_minisplode_texture_key();
+    let splode_zoom_scale = visual_styles::effect_zoom_scale(splode_tex);
+    let minisplode_zoom_scale = visual_styles::effect_zoom_scale(minisplode_tex);
+    let mut mirrored_splode = act!(sprite(splode_tex):
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
         rotationz(-10.0): zoom(0.0):
         z(1101):
         sleep(0.4):
-        decelerate(0.6): rotationz(0.0): zoom(1.3): alpha(0.0)
+        decelerate(0.6): rotationz(0.0): zoom(1.3 * splode_zoom_scale): alpha(0.0)
     );
     if let Actor::Sprite { flip_x, .. } = &mut mirrored_splode {
         // Simply Love uses rotationy(180) here; in deadsync 2D parity this is horizontal mirroring.
@@ -1229,22 +1233,22 @@ pub fn in_transition(
             accelerate(0.6): alpha(0.0):
             linear(0.0): visible(false)
         ),
-        act!(sprite("gameplayin_splode.png"):
+        act!(sprite(splode_tex):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             diffuse(intro_color[0], intro_color[1], intro_color[2], 0.9):
             rotationz(10.0): zoom(0.0):
             z(1101):
             sleep(0.4):
-            linear(0.6): rotationz(0.0): zoom(1.1): alpha(0.0)
+            linear(0.6): rotationz(0.0): zoom(1.1 * splode_zoom_scale): alpha(0.0)
         ),
         mirrored_splode,
-        act!(sprite("gameplayin_minisplode.png"):
+        act!(sprite(minisplode_tex):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             diffuse(intro_color[0], intro_color[1], intro_color[2], 1.0):
             rotationz(10.0): zoom(0.0):
             z(1101):
             sleep(0.4):
-            decelerate(0.8): rotationz(0.0): zoom(0.9): alpha(0.0)
+            decelerate(0.8): rotationz(0.0): zoom(0.9 * minisplode_zoom_scale): alpha(0.0)
         ),
         act!(text:
             font(current_machine_font_key(FontRole::Header)): settext(text):

@@ -8305,6 +8305,14 @@ pub fn build_bundles(
     // Combo Milestone Explosions (100 / 1000 combo)
     let show_combo = !view.hide_combo && !blind_active && !profile.hide_combo;
     if show_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
+        let combo_splode_tex = assets::visual_styles::combo_100milestone_splode_texture_key();
+        let combo_minisplode_tex =
+            assets::visual_styles::combo_100milestone_minisplode_texture_key();
+        let combo_swoosh_tex = assets::visual_styles::combo_1000milestone_swoosh_texture_key();
+        let combo_splode_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_splode_tex);
+        let combo_minisplode_zoom_scale =
+            assets::visual_styles::effect_zoom_scale(combo_minisplode_tex);
+        let combo_swoosh_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_swoosh_tex);
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
         let player_color = color::decorative_rgba(state.player_color_index);
@@ -8337,10 +8345,12 @@ pub fn build_bundles(
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
-                        let zoom = (0.25 + (2.0 - 0.25) * eased) * combo_zoom_mod;
+                        let zoom = (0.25 + (2.0 - 0.25) * eased)
+                            * combo_zoom_mod
+                            * combo_splode_zoom_scale;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
+                        hud_actors.push(act!(sprite(combo_splode_tex):
                             align(0.5, 0.5):
                             xy(combo_center_x, combo_center_y):
                             zoom(zoom):
@@ -8352,10 +8362,12 @@ pub fn build_bundles(
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress) * combo_zoom_mod;
+                            let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress)
+                                * combo_zoom_mod
+                                * combo_minisplode_zoom_scale;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
+                            hud_actors.push(act!(sprite(combo_minisplode_tex):
                                 align(0.5, 0.5):
                                 xy(combo_center_x, combo_center_y):
                                 zoom(mini_zoom):
@@ -8372,12 +8384,14 @@ pub fn build_bundles(
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
                         let progress =
                             (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = (0.25 + (3.0 - 0.25) * progress) * combo_zoom_mod;
+                        let zoom = (0.25 + (3.0 - 0.25) * progress)
+                            * combo_zoom_mod
+                            * combo_swoosh_zoom_scale;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
                         let x_offset = 100.0 * progress * combo_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
-                            hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
+                            hud_actors.push(act!(sprite(combo_swoosh_tex):
                                 align(0.5, 0.5):
                                 xy(final_x, combo_center_y):
                                 zoom(zoom):

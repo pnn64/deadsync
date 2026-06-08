@@ -1150,38 +1150,6 @@ impl AssetManager {
                 "combo_explosion.png".to_string(),
             ),
             (
-                "combo_100milestone_splode.png".to_string(),
-                "combo_100milestone_splode.png".to_string(),
-            ),
-            (
-                "combo_100milestone_minisplode.png".to_string(),
-                "combo_100milestone_minisplode.png".to_string(),
-            ),
-            (
-                "gameplayin_splode.png".to_string(),
-                "gameplayin_splode.png".to_string(),
-            ),
-            (
-                "gameplayin_minisplode.png".to_string(),
-                "gameplayin_minisplode.png".to_string(),
-            ),
-            (
-                "combo_1000milestone_swoosh.png".to_string(),
-                "combo_1000milestone_swoosh.png".to_string(),
-            ),
-            (
-                "titlemenu_flycenter.png".to_string(),
-                "titlemenu_flycenter.png".to_string(),
-            ),
-            (
-                "titlemenu_flytop.png".to_string(),
-                "titlemenu_flytop.png".to_string(),
-            ),
-            (
-                "titlemenu_flybottom.png".to_string(),
-                "titlemenu_flybottom.png".to_string(),
-            ),
-            (
                 "banner1.png".to_string(),
                 "_fallback/banner1.png".to_string(),
             ),
@@ -1260,6 +1228,18 @@ impl AssetManager {
                 asset.shared_background.to_string(),
                 asset.shared_background.to_string(),
             ));
+            for effect in [
+                asset.effects.titlemenu_flycenter,
+                asset.effects.titlemenu_flytop,
+                asset.effects.titlemenu_flybottom,
+                asset.effects.gameplayin_splode,
+                asset.effects.gameplayin_minisplode,
+                asset.effects.combo_100milestone_splode,
+                asset.effects.combo_100milestone_minisplode,
+                asset.effects.combo_1000milestone_swoosh,
+            ] {
+                textures_to_load.push((effect.to_string(), effect.to_string()));
+            }
         }
 
         for p in [

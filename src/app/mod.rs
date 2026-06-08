@@ -7094,8 +7094,8 @@ impl App {
                 actors.extend(out_actors);
             }
             TransitionState::ActorsFadeOut { target, .. } => {
-                // Special case: Menu → SelectColor / Menu → Options should keep the heart
-                // background bright and only fade UI, but still play the hearts splash.
+                // Special case: Menu -> SelectColor / Menu -> Options should keep the
+                // visual-style background bright and only fade UI, but still play the splash.
                 if self.state.screens.current_screen == CurrentScreen::Menu
                     && (*target == CurrentScreen::SelectProfile
                         || *target == CurrentScreen::SelectColor
