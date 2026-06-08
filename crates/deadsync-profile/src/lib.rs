@@ -2903,6 +2903,7 @@ pub struct PlayerOptionsData {
     pub custom_fantastic_window_ms: u8,
     pub judgment_tilt: bool,
     pub column_cues: bool,
+    pub measure_cues: bool,
     pub judgment_back: bool,
     pub error_ms_display: bool,
     pub display_scorebox: bool,
@@ -3026,6 +3027,7 @@ fn default_player_options() -> PlayerOptionsData {
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         judgment_tilt: false,
         column_cues: false,
+        measure_cues: false,
         judgment_back: false,
         error_ms_display: false,
         display_scorebox: true,
@@ -3250,6 +3252,7 @@ where
         .unwrap_or(options.custom_fantastic_window_ms);
     options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
     options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
+    options.measure_cues = load_u8_bool(&mut get, "MeasureCues", options.measure_cues);
     options.judgment_back = load_u8_bool(&mut get, "JudgmentBack", options.judgment_back);
     options.error_ms_display = load_u8_bool(&mut get, "ErrorMSDisplay", options.error_ms_display);
     options.display_scorebox = load_u8_bool(&mut get, "DisplayScorebox", options.display_scorebox);
@@ -3586,6 +3589,10 @@ pub fn append_player_options_section(
     ));
     content.push_str(&format!("ColumnCues={}\n", i32::from(options.column_cues)));
     content.push_str(&format!(
+        "MeasureCues={}\n",
+        i32::from(options.measure_cues)
+    ));
+    content.push_str(&format!(
         "JudgmentBack={}\n",
         i32::from(options.judgment_back)
     ));
@@ -3891,6 +3898,7 @@ pub struct Profile {
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
+    pub measure_cues: bool,
     // zmod ExtraAesthetics: draw judgments/error timing HUD behind notes.
     pub judgment_back: bool,
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
@@ -4066,6 +4074,7 @@ impl Default for Profile {
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             judgment_tilt: player_options.judgment_tilt,
             column_cues: player_options.column_cues,
+            measure_cues: player_options.measure_cues,
             judgment_back: player_options.judgment_back,
             error_ms_display: player_options.error_ms_display,
             display_scorebox: player_options.display_scorebox,
@@ -4620,6 +4629,7 @@ impl Profile {
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             judgment_tilt: self.judgment_tilt,
             column_cues: self.column_cues,
+            measure_cues: self.measure_cues,
             judgment_back: self.judgment_back,
             error_ms_display: self.error_ms_display,
             display_scorebox: self.display_scorebox,
@@ -4745,6 +4755,7 @@ impl Profile {
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
+        self.measure_cues = options.measure_cues;
         self.judgment_back = options.judgment_back;
         self.error_ms_display = options.error_ms_display;
         self.display_scorebox = options.display_scorebox;
@@ -5441,6 +5452,7 @@ mod tests {
             ("CustomFantasticWindowMs", "23"),
             ("JudgmentTilt", "1"),
             ("ColumnCues", "1"),
+            ("MeasureCues", "1"),
             ("JudgmentBack", "1"),
             ("ErrorMSDisplay", "1"),
             ("DisplayScorebox", "1"),
@@ -5481,6 +5493,7 @@ mod tests {
         );
         assert!(options.judgment_tilt);
         assert!(options.column_cues);
+        assert!(options.measure_cues);
         assert!(options.judgment_back);
         assert!(options.error_ms_display);
         assert!(options.display_scorebox);

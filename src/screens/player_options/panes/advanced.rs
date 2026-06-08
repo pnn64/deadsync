@@ -580,6 +580,9 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             if p.column_cues {
                 bits.insert(GameplayExtrasMask::COLUMN_CUES);
             }
+            if p.measure_cues {
+                bits.insert(GameplayExtrasMask::MEASURE_CUES);
+            }
             if p.live_timing_stats {
                 bits.insert(GameplayExtrasMask::LIVE_TIMING_STATS);
             }
@@ -605,6 +608,7 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             p.column_flash_on_miss = mask.contains(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
             p.nps_graph_at_top = mask.contains(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
             p.column_cues = mask.contains(GameplayExtrasMask::COLUMN_CUES);
+            p.measure_cues = mask.contains(GameplayExtrasMask::MEASURE_CUES);
             p.live_timing_stats = mask.contains(GameplayExtrasMask::LIVE_TIMING_STATS);
             p.display_scorebox = mask.contains(GameplayExtrasMask::DISPLAY_SCOREBOX);
             let mut more = GameplayExtrasMoreMask::empty();
@@ -625,10 +629,11 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
                 p.nps_graph_at_top,
             );
             gp::update_column_cues_for_side(s, p.column_cues);
+            gp::update_measure_cues_for_side(s, p.measure_cues);
             gp::update_live_timing_stats_enabled_for_side(s, p.live_timing_stats);
             gp::update_display_scorebox_for_side(s, p.display_scorebox);
         },
-        bit_mapping: BitMapping::Sequential { width: 5 },
+        bit_mapping: BitMapping::Sequential { width: 6 },
         sync_visibility: true,
     },
 };
@@ -1279,6 +1284,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss").to_string(),
         tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop").to_string(),
         tr("PlayerOptions", "GameplayExtrasColumnCues").to_string(),
+        tr("PlayerOptions", "GameplayExtrasMeasureCues").to_string(),
         tr("PlayerOptions", "GameplayExtrasLiveTimingStats").to_string(),
     ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {

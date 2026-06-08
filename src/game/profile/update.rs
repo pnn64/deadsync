@@ -509,6 +509,12 @@ pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
     });
 }
 
+pub fn update_measure_cues_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.measure_cues, enabled)
+    });
+}
+
 pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.judgment_back, enabled)

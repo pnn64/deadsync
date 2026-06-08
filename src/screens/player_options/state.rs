@@ -118,8 +118,9 @@ bitflags! {
         const FLASH_COLUMN_FOR_MISS = 1 << 0;
         const DENSITY_GRAPH_AT_TOP  = 1 << 1;
         const COLUMN_CUES           = 1 << 2;
-        const LIVE_TIMING_STATS     = 1 << 3;
-        const DISPLAY_SCOREBOX      = 1 << 4;
+        const MEASURE_CUES          = 1 << 3;
+        const LIVE_TIMING_STATS     = 1 << 4;
+        const DISPLAY_SCOREBOX      = 1 << 5;
     }
 }
 
