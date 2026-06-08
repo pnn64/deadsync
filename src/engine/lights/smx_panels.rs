@@ -10,7 +10,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use deadsync_rules::judgment::{JudgeGrade, judge_grade_ix};
+use deadsync_rules::judgment::JudgeGrade;
 
 use crate::engine::smx;
 
@@ -34,19 +34,23 @@ const BLACK: Rgb = [0, 0, 0];
 pub const FLASH_SECONDS_MISS: f32 = 0.16;
 pub const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
 
-/// Per-grade panel colours, indexed by `judge_grade_ix`. Tuned for the SMX LED diffuser
-/// (saturated, well-separated hues) rather than reusing the on-screen palette, which washes
-/// out on the pad. The SDK scales output by ~0.67 on send.
-const PAD_GRADE_RGB: [Rgb; 6] = [
-    [0, 90, 255],  // Fantastic (blue; white for the FA+ inner window)
-    [255, 140, 0], // Excellent (orange)
-    [0, 220, 0],   // Great (green)
-    [170, 0, 255], // Decent (purple)
-    [255, 230, 0], // Way Off (yellow)
-    [255, 0, 0],   // Miss (red)
-];
 /// Fantastic colour for the bright FA+ inner window.
 const PAD_FANTASTIC_WHITE: Rgb = [255, 255, 255];
+
+/// Per-grade panel colour. Tuned for the SMX LED diffuser (saturated, well-separated hues)
+/// rather than reusing the on-screen palette, which washes out on the pad; the SDK scales
+/// output by ~0.67 on send. A `match` (not a table indexed by `judge_grade_ix`) so adding a
+/// `JudgeGrade` is a compile error here instead of a silent out-of-range panic.
+fn pad_grade_color(grade: JudgeGrade) -> Rgb {
+    match grade {
+        JudgeGrade::Fantastic => [0, 90, 255], // blue (white for the FA+ inner window)
+        JudgeGrade::Excellent => [255, 140, 0], // orange
+        JudgeGrade::Great => [0, 220, 0],      // green
+        JudgeGrade::Decent => [170, 0, 255],   // purple
+        JudgeGrade::WayOff => [255, 230, 0],   // yellow
+        JudgeGrade::Miss => [255, 0, 0],       // red
+    }
+}
 
 /// L, D, U, R direction columns mapped to 3x3 grid panel indices
 /// (panel names: UL,U,UR,L,C,R,DL,D,DR).
@@ -97,7 +101,7 @@ pub fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
     if grade == JudgeGrade::Fantastic && !blue_fantastic {
         PAD_FANTASTIC_WHITE
     } else {
-        PAD_GRADE_RGB[judge_grade_ix(grade)]
+        pad_grade_color(grade)
     }
 }
 
@@ -125,6 +129,9 @@ impl PanelState {
 /// builds the full both-pads RGB frame.
 pub struct PanelFx {
     panels: [[PanelState; PANELS]; PADS],
+    /// Reused output buffer. `tick` overwrites every byte each call, so it never needs
+    /// clearing and we avoid re-zeroing 1350 bytes per frame.
+    frame: [u8; FRAME_BYTES],
 }
 
 impl Default for PanelFx {
@@ -137,6 +144,7 @@ impl PanelFx {
     pub fn new() -> Self {
         Self {
             panels: [[PanelState::default(); PANELS]; PADS],
+            frame: [0u8; FRAME_BYTES],
         }
     }
 
@@ -167,18 +175,19 @@ impl PanelFx {
         self.panels = [[PanelState::default(); PANELS]; PADS];
     }
 
-    /// Advance flash timers by `dt_s` and build the both-pads RGB frame.
-    pub fn tick(&mut self, dt_s: f32) -> [u8; FRAME_BYTES] {
+    /// Advance flash timers by `dt_s`, rebuild the reused both-pads RGB frame, and return it.
+    /// Every panel is filled, so all 1350 bytes are overwritten and the buffer needs no clear.
+    pub fn tick(&mut self, dt_s: f32) -> &[u8; FRAME_BYTES] {
         let dt = dt_s.max(0.0);
-        let mut frame = [0u8; FRAME_BYTES];
         for pad in 0..PADS {
             for panel in 0..PANELS {
                 let p = &mut self.panels[pad][panel];
                 p.flash_remaining_s = (p.flash_remaining_s - dt).max(0.0);
-                put_panel(&mut frame, pad, panel, p.render());
+                let color = p.render();
+                put_panel(&mut self.frame, pad, panel, color);
             }
         }
-        frame
+        &self.frame
     }
 
     fn panel_mut(&mut self, pad: usize, panel: usize) -> Option<&mut PanelState> {
@@ -315,37 +324,52 @@ fn run_worker(rx: Receiver<Ev>) {
     let mut last_tick = Instant::now();
 
     'outer: loop {
-        // Block up to one frame for the next event, then drain any burst behind it.
-        match rx.recv_timeout(FRAME_INTERVAL) {
-            Ok(ev) => {
+        // Active: wake at most one frame out to decay flashes and keep the pad ours.
+        // Idle: nothing to tick, so block until the next event instead of spinning at 30Hz.
+        let next = if active {
+            match rx.recv_timeout(FRAME_INTERVAL) {
+                Ok(ev) => Some(ev),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => break 'outer,
+            }
+        } else {
+            match rx.recv() {
+                Ok(ev) => Some(ev),
+                Err(_) => break 'outer,
+            }
+        };
+
+        if let Some(ev) = next {
+            let was_active = active;
+            // Apply this event, then drain any burst queued behind it.
+            if handle(&mut fx, &mut active, ev) {
+                break 'outer;
+            }
+            while let Ok(ev) = rx.try_recv() {
                 if handle(&mut fx, &mut active, ev) {
                     break 'outer;
                 }
-                while let Ok(ev) = rx.try_recv() {
-                    if handle(&mut fx, &mut active, ev) {
-                        break 'outer;
-                    }
-                }
             }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break 'outer,
+            if active && !was_active {
+                // Just woke from the idle block; start the frame clock fresh so the first
+                // tick uses a normal dt instead of the whole idle gap.
+                last_tick = Instant::now();
+            }
         }
 
-        let now = Instant::now();
-        let dt = now.saturating_duration_since(last_tick);
-        if dt >= FRAME_INTERVAL {
-            last_tick = now;
-            if active {
-                let frame = fx.tick(dt.as_secs_f32());
-                send_lights(&frame);
+        if active {
+            let now = Instant::now();
+            let dt = now.saturating_duration_since(last_tick);
+            if dt >= FRAME_INTERVAL {
+                last_tick = now;
+                send_lights(fx.tick(dt.as_secs_f32()));
             }
         }
     }
 
     // On exit, leave the panels dark and restore the pad firmware idle lighting.
     fx.clear_all();
-    let frame = fx.tick(0.0);
-    send_lights(&frame);
+    send_lights(fx.tick(0.0));
     reenable_auto();
 }
 
@@ -365,8 +389,7 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
             fx.clear_all();
             if !a {
                 // Going idle: push one black frame and hand the pad back to firmware.
-                let frame = fx.tick(0.0);
-                send_lights(&frame);
+                send_lights(fx.tick(0.0));
                 reenable_auto();
             }
         }
@@ -466,22 +489,18 @@ mod tests {
 
     #[test]
     fn flash_color_uses_pad_palette() {
+        use JudgeGrade::*;
         // Normal (blue) Fantastic uses the blue pad colour, not white.
-        assert_eq!(flash_color(JudgeGrade::Fantastic, true), PAD_GRADE_RGB[0]);
+        assert_eq!(flash_color(Fantastic, true), pad_grade_color(Fantastic));
         // Bright (inner FA+) Fantastic is white.
-        assert_eq!(
-            flash_color(JudgeGrade::Fantastic, false),
-            PAD_FANTASTIC_WHITE
-        );
+        assert_eq!(flash_color(Fantastic, false), PAD_FANTASTIC_WHITE);
         // Other grades use their pad palette colour.
-        assert_eq!(
-            flash_color(JudgeGrade::Miss, false),
-            PAD_GRADE_RGB[judge_grade_ix(JudgeGrade::Miss)]
-        );
-        // Every grade colour is distinct.
-        for i in 0..PAD_GRADE_RGB.len() {
-            for j in (i + 1)..PAD_GRADE_RGB.len() {
-                assert_ne!(PAD_GRADE_RGB[i], PAD_GRADE_RGB[j]);
+        assert_eq!(flash_color(Miss, false), pad_grade_color(Miss));
+        // Every grade colour is distinct so judgements stay readable on the pad.
+        let all = [Fantastic, Excellent, Great, Decent, WayOff, Miss];
+        for i in 0..all.len() {
+            for j in (i + 1)..all.len() {
+                assert_ne!(pad_grade_color(all[i]), pad_grade_color(all[j]));
             }
         }
     }

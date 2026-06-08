@@ -2903,6 +2903,10 @@ pub struct ColumnTapJudgment {
 #[derive(Clone, Debug)]
 pub struct ActiveMineExplosion {
     pub elapsed: f32,
+    /// Screen time when the mine was hit. Lets ungated feedback consumers (SMX panel
+    /// lighting) tell consecutive hits on the same column apart, like the other
+    /// `*_at_screen_s` markers.
+    pub started_at_screen_s: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -6864,7 +6868,10 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
 }
 
 fn trigger_mine_explosion(state: &mut State, column: usize) {
-    state.mine_explosions[column] = Some(ActiveMineExplosion { elapsed: 0.0 });
+    state.mine_explosions[column] = Some(ActiveMineExplosion {
+        elapsed: 0.0,
+        started_at_screen_s: state.total_elapsed_in_screen,
+    });
     if state.play_mine_sounds {
         audio::play_preloaded_sfx("assets/sounds/boom.ogg");
     }
