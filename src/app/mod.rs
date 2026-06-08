@@ -6555,7 +6555,7 @@ impl App {
             return;
         }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let (desired_path, desired_key, gameplay_time_sec) = {
+        let (desired_path, desired_key, gameplay_time_sec, background_rate) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -6606,6 +6606,9 @@ impl App {
                 gs.current_background_path.clone(),
                 gs.current_background_key.clone(),
                 crate::game::gameplay::song_time_ns_to_seconds(gs.current_music_time_ns),
+                Self::active_gameplay_background_change(gs)
+                    .map(|change| change.rate)
+                    .unwrap_or(1.0),
             )
         };
 
@@ -6617,6 +6620,7 @@ impl App {
                 desired_key.as_deref(),
                 show_video_backgrounds,
                 gameplay_time_sec,
+                background_rate,
             )
         });
         if let Some(key) = next_key {

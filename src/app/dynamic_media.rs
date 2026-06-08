@@ -59,7 +59,52 @@ struct DynamicBackgroundState {
     key: String,
     path: PathBuf,
     video: Option<video::Player>,
-    video_started_at_sec: f32,
+    video_anchor_gameplay_sec: f32,
+    video_anchor_media_sec: f32,
+    video_rate: f32,
+}
+
+impl DynamicBackgroundState {
+    fn new(
+        key: String,
+        path: PathBuf,
+        video: Option<video::Player>,
+        gameplay_time_sec: f32,
+        video_rate: f32,
+    ) -> Self {
+        Self {
+            key,
+            path,
+            video,
+            video_anchor_gameplay_sec: gameplay_time_sec.max(0.0),
+            video_anchor_media_sec: 0.0,
+            video_rate: normalize_video_rate(video_rate),
+        }
+    }
+
+    fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
+        background_video_play_time(
+            gameplay_time_sec,
+            self.video_anchor_gameplay_sec,
+            self.video_anchor_media_sec,
+            self.video_rate,
+        )
+    }
+
+    fn set_video_rate(&mut self, video_rate: f32, gameplay_time_sec: f32) {
+        let media_time = self.video_play_time(gameplay_time_sec);
+        self.video_anchor_gameplay_sec = gameplay_time_sec.max(0.0);
+        self.video_anchor_media_sec = media_time;
+        self.video_rate = normalize_video_rate(video_rate);
+    }
+
+    fn restart_video(&mut self, player: video::Player, gameplay_time_sec: f32) {
+        if let Some(old) = self.video.replace(player) {
+            retire_video_player(old);
+        }
+        self.video_anchor_gameplay_sec = gameplay_time_sec.max(0.0);
+        self.video_anchor_media_sec = 0.0;
+    }
 }
 
 pub(crate) struct DynamicMedia {
@@ -501,12 +546,13 @@ impl DynamicMedia {
                 } else {
                     None
                 };
-                self.current_dynamic_background = Some(DynamicBackgroundState {
-                    key: key.clone(),
+                self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                    key.clone(),
                     path,
                     video,
-                    video_started_at_sec: video_started_at_sec.max(0.0),
-                });
+                    video_started_at_sec,
+                    1.0,
+                ));
                 return key;
             }
 
@@ -525,12 +571,14 @@ impl DynamicMedia {
                                     video.info.height,
                                 );
                                 register_texture_dims(&key, video.info.width, video.info.height);
-                                self.current_dynamic_background = Some(DynamicBackgroundState {
-                                    key: key.clone(),
-                                    path,
-                                    video: Some(video.player),
-                                    video_started_at_sec: video_started_at_sec.max(0.0),
-                                });
+                                self.current_dynamic_background =
+                                    Some(DynamicBackgroundState::new(
+                                        key.clone(),
+                                        path,
+                                        Some(video.player),
+                                        video_started_at_sec,
+                                        1.0,
+                                    ));
                                 return key;
                             }
                             Err(e) => {
@@ -560,12 +608,13 @@ impl DynamicMedia {
                                 rgba.height(),
                             );
                             register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_background = Some(DynamicBackgroundState {
-                                key: key.clone(),
+                            self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                                key.clone(),
                                 path,
-                                video: None,
-                                video_started_at_sec: video_started_at_sec.max(0.0),
-                            });
+                                None,
+                                video_started_at_sec,
+                                1.0,
+                            ));
                             return key;
                         }
                         Err(e) => {
@@ -604,12 +653,13 @@ impl DynamicMedia {
                         rgba.height(),
                     );
                     register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_background = Some(DynamicBackgroundState {
-                        key: key.clone(),
+                    self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                        key.clone(),
                         path,
-                        video: None,
-                        video_started_at_sec: video_started_at_sec.max(0.0),
-                    });
+                        None,
+                        video_started_at_sec,
+                        1.0,
+                    ));
                     key
                 }
                 Err(e) => {
@@ -633,6 +683,7 @@ impl DynamicMedia {
         desired_key: Option<&str>,
         animate_video: bool,
         gameplay_time_sec: f32,
+        video_rate: f32,
     ) -> Option<String> {
         const FALLBACK_KEY: &str = "__black";
 
@@ -651,9 +702,16 @@ impl DynamicMedia {
             self.failed_gameplay_background_key = None;
         }
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
+        let video_rate = normalize_video_rate(video_rate);
 
         if wants_video {
-            self.drain_gameplay_background_preps(assets, backend, desired_key, gameplay_time_sec);
+            self.drain_gameplay_background_preps(
+                assets,
+                backend,
+                desired_key,
+                gameplay_time_sec,
+                video_rate,
+            );
         } else {
             self.reset_pending_gameplay_background();
         }
@@ -678,6 +736,7 @@ impl DynamicMedia {
                 state.path == path
                     && state.key == desired_key
                     && (state.video.is_some() == wants_video)
+                    && (!wants_video || (state.video_rate - video_rate).abs() <= f32::EPSILON)
             });
         if current_matches {
             return None;
@@ -693,14 +752,33 @@ impl DynamicMedia {
             }
             return None;
         }
+        if current_path_matches && wants_video {
+            if let Some(state) = self.current_dynamic_background.as_mut()
+                && (state.video_rate - video_rate).abs() > f32::EPSILON
+            {
+                state.set_video_rate(video_rate, gameplay_time_sec);
+            }
+            let needs_video = self
+                .current_dynamic_background
+                .as_ref()
+                .is_some_and(|state| state.video.is_none());
+            if needs_video
+                && !self.pending_gameplay_background_preps.contains(desired_key)
+                && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
+            {
+                self.spawn_gameplay_background_prep(path);
+            }
+            return None;
+        }
         if !current_path_matches {
             self.destroy_current_dynamic_background(assets, backend);
-            self.current_dynamic_background = Some(DynamicBackgroundState {
-                key: desired_key.to_owned(),
-                path: path.to_path_buf(),
-                video: None,
-                video_started_at_sec: gameplay_time_sec.max(0.0),
-            });
+            self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                desired_key.to_owned(),
+                path.to_path_buf(),
+                None,
+                gameplay_time_sec,
+                video_rate,
+            ));
             if wants_video
                 && !self.pending_gameplay_background_preps.contains(desired_key)
                 && self.failed_gameplay_background_key.as_deref() != Some(desired_key)
@@ -886,12 +964,13 @@ impl DynamicMedia {
         }
 
         if let Some(state) = self.current_dynamic_background.as_mut()
-            && let Some(video) = state.video.as_mut()
             && !assets.has_pending_texture_upload(&state.key)
         {
             let play_time = gameplay_time_sec.unwrap_or(ui_time_sec).max(0.0);
-            let play_time = background_video_play_time(play_time, state.video_started_at_sec);
-            if let Some(frame) = video.take_due_frame(play_time) {
+            let play_time = state.video_play_time(play_time);
+            if let Some(video) = state.video.as_mut()
+                && let Some(frame) = video.take_due_frame(play_time)
+            {
                 assets.queue_texture_upload(state.key.clone(), frame);
             }
         }
@@ -1107,6 +1186,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         desired_key: &str,
         gameplay_time_sec: f32,
+        video_rate: f32,
     ) {
         while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
             match result {
@@ -1121,21 +1201,19 @@ impl DynamicMedia {
                         && state.key == prepared.key
                         && state.path == prepared.path
                     {
-                        if let Some(old) = state.video.replace(prepared.player) {
-                            retire_video_player(old);
-                        }
-                        state.video_started_at_sec = gameplay_time_sec.max(0.0);
+                        state.restart_video(prepared.player, gameplay_time_sec);
                     } else {
                         if let Some(state) = self.current_dynamic_background.take() {
                             let key = retire_dynamic_background_state(state);
                             self.release_texture_key(assets, backend, key);
                         }
-                        self.current_dynamic_background = Some(DynamicBackgroundState {
-                            key: prepared.key,
-                            path: prepared.path,
-                            video: Some(prepared.player),
-                            video_started_at_sec: gameplay_time_sec.max(0.0),
-                        });
+                        self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                            prepared.key,
+                            prepared.path,
+                            Some(prepared.player),
+                            gameplay_time_sec,
+                            video_rate,
+                        ));
                     }
                 }
                 GameplayBackgroundPrepResult::Failed { key, path, msg } => {
@@ -1237,8 +1315,19 @@ fn retire_dynamic_background_state(mut state: DynamicBackgroundState) -> String 
 }
 
 #[inline(always)]
-fn background_video_play_time(gameplay_time_sec: f32, started_at_sec: f32) -> f32 {
-    (gameplay_time_sec - started_at_sec).max(0.0)
+fn normalize_video_rate(rate: f32) -> f32 {
+    if rate.is_finite() { rate.max(0.0) } else { 1.0 }
+}
+
+#[inline(always)]
+fn background_video_play_time(
+    gameplay_time_sec: f32,
+    anchor_gameplay_sec: f32,
+    anchor_media_sec: f32,
+    rate: f32,
+) -> f32 {
+    let elapsed = (gameplay_time_sec.max(0.0) - anchor_gameplay_sec.max(0.0)).max(0.0);
+    (anchor_media_sec.max(0.0) + elapsed * normalize_video_rate(rate)).max(0.0)
 }
 
 impl Default for DynamicMedia {
@@ -1253,8 +1342,28 @@ mod tests {
 
     #[test]
     fn gameplay_background_video_uses_local_play_time() {
-        assert_eq!(background_video_play_time(12.5, 10.0), 2.5);
-        assert_eq!(background_video_play_time(9.0, 10.0), 0.0);
+        assert_eq!(background_video_play_time(12.5, 10.0, 0.0, 1.0), 2.5);
+        assert_eq!(background_video_play_time(9.0, 10.0, 0.0, 1.0), 0.0);
+        assert_eq!(background_video_play_time(12.5, 10.0, 4.0, 0.5), 5.25);
+        assert_eq!(background_video_play_time(20.0, 10.0, 3.0, 0.0), 3.0);
+    }
+
+    #[test]
+    fn gameplay_background_rate_change_preserves_media_time() {
+        let mut state = DynamicBackgroundState::new(
+            "movie.mpg".to_string(),
+            PathBuf::from("movie.mpg"),
+            None,
+            10.0,
+            1.0,
+        );
+        assert_eq!(state.video_play_time(12.0), 2.0);
+
+        state.set_video_rate(0.0, 12.0);
+        assert_eq!(state.video_play_time(20.0), 2.0);
+
+        state.set_video_rate(2.0, 20.0);
+        assert_eq!(state.video_play_time(21.5), 5.0);
     }
 
     #[test]
@@ -1269,12 +1378,13 @@ mod tests {
             key: key.clone(),
             path: path.clone(),
         });
-        media.current_dynamic_background = Some(DynamicBackgroundState {
-            key: key.clone(),
+        media.current_dynamic_background = Some(DynamicBackgroundState::new(
+            key.clone(),
             path,
-            video: None,
-            video_started_at_sec: 0.0,
-        });
+            None,
+            0.0,
+            1.0,
+        ));
 
         media.current_dynamic_banner = None;
         let removed = media.take_releasable_texture(&mut assets, &key);
