@@ -1061,9 +1061,9 @@ impl TimingData {
         if self.scroll_prefix.is_empty() {
             return beat;
         }
-        // If before first scroll segment, base ratio is 1.0 from 0.0
         if beat < self.scroll_prefix[0].beat {
-            return beat;
+            let p = self.scroll_prefix[0];
+            return (beat - p.beat).mul_add(p.ratio, p.cum_displayed);
         }
         let idx = self.scroll_prefix.partition_point(|p| p.beat <= beat);
         let i = idx.saturating_sub(1);
@@ -1081,6 +1081,10 @@ impl TimingData {
         }
         let segment_index = self.get_speed_segment_index_at_beat(beat);
         if segment_index < 0 {
+            let first = self.speeds[0];
+            if beat.is_finite() && first.delay <= 0.0 {
+                return first.ratio;
+            }
             return 1.0;
         }
         let i = segment_index as usize;
@@ -1965,6 +1969,41 @@ mod tests {
         }
     }
 
+    fn speed_segment(beat: f32, ratio: f32, delay: f32) -> SpeedSegment {
+        SpeedSegment {
+            beat,
+            ratio,
+            delay,
+            unit: SpeedUnit::Beats,
+        }
+    }
+
+    fn timing_with_speeds(speeds: Vec<SpeedSegment>) -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds,
+                ..TimingSegments::default()
+            },
+            &[],
+        )
+    }
+
+    fn timing_with_scrolls(scrolls: Vec<ScrollSegment>) -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                scrolls,
+                ..TimingSegments::default()
+            },
+            &[],
+        )
+    }
+
     #[test]
     fn timing_stats_aggregate_rows() {
         let notes = vec![
@@ -2234,6 +2273,72 @@ mod tests {
 
         // At 120 BPM beat 8 lands at 4.0 s of internal music time.
         assert!((timing_ns_to_seconds(no_offset_ns) - 4.0).abs() < 0.000_001);
+    }
+
+    #[test]
+    fn beat_zero_speed_applies_during_negative_lead_in() {
+        let timing = timing_with_speeds(vec![speed_segment(0.0, 0.1, 0.0)]);
+        let beat = -12.0;
+        let time_ns = timing.get_time_for_beat_ns(beat);
+
+        let speed = timing.get_speed_multiplier_ns(beat, time_ns);
+
+        assert!((speed - 0.1).abs() < 0.0001);
+    }
+
+    #[test]
+    fn delayed_starting_speed_keeps_default_before_beat_zero() {
+        let timing = timing_with_speeds(vec![speed_segment(0.0, 0.1, 4.0)]);
+        let beat = -12.0;
+        let time_ns = timing.get_time_for_beat_ns(beat);
+
+        let speed = timing.get_speed_multiplier_ns(beat, time_ns);
+
+        assert!((speed - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn future_zero_delay_first_speed_applies_before_segment() {
+        let timing = timing_with_speeds(vec![speed_segment(2.0, 0.1, 0.0)]);
+        let beat = -12.0;
+        let time_ns = timing.get_time_for_beat_ns(beat);
+
+        let lead_in_speed = timing.get_speed_multiplier_ns(beat, time_ns);
+        let segment_speed = timing.get_speed_multiplier_ns(2.0, timing.get_time_for_beat_ns(2.0));
+
+        assert!((lead_in_speed - 0.1).abs() < 0.0001);
+        assert!((segment_speed - 0.1).abs() < 0.0001);
+    }
+
+    #[test]
+    fn speed_transition_interpolation_stays_unchanged() {
+        let timing = timing_with_speeds(vec![
+            speed_segment(0.0, 0.5, 0.0),
+            speed_segment(4.0, 2.0, 4.0),
+        ]);
+
+        let speed = timing.get_speed_multiplier_ns(6.0, timing.get_time_for_beat_ns(6.0));
+
+        assert!((speed - 1.25).abs() < 0.0001);
+    }
+
+    #[test]
+    fn starting_zero_scroll_holds_negative_lead_in_displayed_beat() {
+        let timing = timing_with_scrolls(vec![
+            ScrollSegment {
+                beat: 0.0,
+                ratio: 0.0,
+            },
+            ScrollSegment {
+                beat: 4.0,
+                ratio: 1.0,
+            },
+        ]);
+
+        assert!((timing.get_displayed_beat(-12.0) - 0.0).abs() < 0.0001);
+        assert!((timing.get_displayed_beat(-1.0) - 0.0).abs() < 0.0001);
+        assert!((timing.get_displayed_beat(2.0) - 0.0).abs() < 0.0001);
+        assert!((timing.get_displayed_beat(5.0) - 1.0).abs() < 0.0001);
     }
 
     #[test]

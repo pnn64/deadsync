@@ -9603,6 +9603,63 @@ mod tests {
     }
 
     #[test]
+    fn zero_scroll_start_stagnates_negative_lead_in_window() {
+        let timing = timing::TimingData::from_segments(
+            0.0,
+            0.0,
+            &timing::TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![timing::SpeedSegment {
+                    beat: 0.0,
+                    ratio: 0.1,
+                    delay: 0.0,
+                    unit: timing::SpeedUnit::Beats,
+                }],
+                scrolls: vec![
+                    timing::ScrollSegment {
+                        beat: 0.0,
+                        ratio: 0.0,
+                    },
+                    timing::ScrollSegment {
+                        beat: 4.0,
+                        ratio: 1.0,
+                    },
+                ],
+                ..timing::TimingSegments::default()
+            },
+            &[],
+        );
+        let current_beat = -12.0;
+        let current_time_ns = timing.get_time_for_beat_ns(current_beat);
+        let speed = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
+        let curr_disp_beat = timing.get_displayed_beat(current_beat);
+        let later_disp_beat = timing.get_displayed_beat(-6.0);
+
+        let last = super::find_last_displayed_beat(current_beat, 120.0, speed, false, |beat| {
+            let note_disp_beat = timing.get_displayed_beat(beat);
+            (
+                super::beat_scroll_travel(note_disp_beat, curr_disp_beat, speed),
+                true,
+            )
+        })
+        .expect("finite lead-in visible range");
+        let beat_zero_travel =
+            super::beat_scroll_travel(timing.get_displayed_beat(0.0), curr_disp_beat, speed);
+
+        assert!((speed - 0.1).abs() <= 0.0001);
+        assert!((curr_disp_beat - 0.0).abs() <= 0.0001);
+        assert!((later_disp_beat - 0.0).abs() <= 0.0001);
+        assert!(
+            beat_zero_travel.abs() <= 0.001,
+            "beat zero should be stagnant at the receptor during lead-in, travel={beat_zero_travel}"
+        );
+        assert!(
+            last >= 3.99,
+            "slow lead-in should include the first four beats, last={last}"
+        );
+    }
+
+    #[test]
     fn brake_applies_before_scroll_multiplier_like_itg() {
         let accel = AccelEffects {
             brake: 1.0,
