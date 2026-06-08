@@ -528,6 +528,15 @@ fn add_dev_if_new(
     let Some(pending) = probe_dev(&path) else {
         return;
     };
+    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
+    // owns the pad (see `native_smx_owns_device`).
+    if crate::engine::smx::native_smx_owns_device(pending.vendor_id, pending.product_id) {
+        debug!(
+            "hidraw: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
+            pending.vendor_id, pending.product_id
+        );
+        return;
+    }
     let existing_id = id_by_uuid.get(&pending.uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {

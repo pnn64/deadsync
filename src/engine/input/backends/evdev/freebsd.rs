@@ -593,6 +593,15 @@ fn add_dev_if_new(
     if spec.class != DevClass::Pad {
         return;
     };
+    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
+    // owns the pad (see `native_smx_owns_device`).
+    if crate::engine::smx::native_smx_owns_device(spec.vendor_id, spec.product_id) {
+        log::debug!(
+            "freebsd evdev: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
+            spec.vendor_id, spec.product_id
+        );
+        return;
+    }
     let uuid = spec.uuid;
     let existing_id = id_by_uuid.get(&uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.

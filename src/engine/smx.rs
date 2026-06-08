@@ -171,6 +171,26 @@ pub fn is_fsr(config: &SmxConfig) -> bool {
         && ConfigFlags::from_bits_truncate(config.flags).contains(ConfigFlags::FSR)
 }
 
+/// Whether a USB vendor/product pair is a StepManiaX stage, by the SDK's
+/// `SMX_USB_VENDOR_ID` / `SMX_USB_PRODUCT_ID`.
+pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
+    vendor == Some(SMX_USB_VENDOR_ID) && product == Some(SMX_USB_PRODUCT_ID)
+}
+
+/// Whether the OS gamepad backends should skip a device because native
+/// StepManiaX input already owns it.
+///
+/// The stage also enumerates as a generic HID game controller on every OS (that
+/// is how it works as a plug-and-play pad without the SDK). While `smx_input` is
+/// on, the SDK opens the pad directly and emits its own labelled events, so a
+/// generic backend would otherwise deliver the same physical step a second time
+/// with a different label, e.g. "SMX P2 D" (native) versus "Pad 2 Btn 0x90008"
+/// (generic HID). Gated on `smx_input` (the same flag that starts the SDK), so
+/// with native SMX off the pad still works as a plain gamepad.
+pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>) -> bool {
+    is_smx_usb_device(vendor, product) && crate::config::get().smx_input
+}
+
 /// The sensor type of a connected pad (`None` if its config isn't available yet).
 pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
     get_config(pad).map(|c| {
