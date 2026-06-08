@@ -160,6 +160,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
     "Win32_System_Variant",
+    "Win32_Storage_FileSystem",
 ] }
 
 [target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
@@ -187,6 +188,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_LibraryLoader",
     "Win32_System_Variant",
     "Win32_System_WinRT",
+    "Win32_Storage_FileSystem",
 ] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]

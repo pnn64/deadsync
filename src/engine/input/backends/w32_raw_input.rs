@@ -329,6 +329,62 @@ fn wide_to_string(mut v: Vec<u16>) -> String {
     String::from_utf16_lossy(&v)
 }
 
+/// Reads the USB serial number string for a HID device interface path.
+///
+/// The path comes from `RIDI_DEVICENAME` and is itself openable. Opening with
+/// zero desired access lets us query even devices held open exclusively
+/// elsewhere. `HidD_GetSerialNumberString` walks to the USB iSerialNumber, so
+/// it recovers a serial even for composite devices whose interface path is
+/// topology-derived. Returns `None` on any failure or an empty/whitespace
+/// serial.
+fn read_device_serial(device_path: &str) -> Option<String> {
+    use windows::Win32::Devices::HumanInterfaceDevice::HidD_GetSerialNumberString;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    let mut wide: Vec<u16> = device_path.encode_utf16().collect();
+    wide.push(0);
+
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string that outlives the call,
+    // and all other arguments are plain values / None.
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES(0),
+            None,
+        )
+    }
+    .ok()?;
+
+    let mut buf = [0u16; 256];
+    // SAFETY: `handle` is an open HID device, and `buf` is writable storage; the
+    // length is passed in bytes as required by HidD_GetSerialNumberString.
+    let ok = unsafe {
+        HidD_GetSerialNumberString(
+            handle,
+            buf.as_mut_ptr().cast::<c_void>(),
+            (buf.len() * size_of::<u16>()) as u32,
+        )
+    };
+
+    // SAFETY: `handle` was opened above and is not used after being closed.
+    let _ = unsafe { CloseHandle(handle) };
+
+    if !ok {
+        return None;
+    }
+    let len = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+    let serial = String::from_utf16_lossy(&buf[..len]);
+    let serial = serial.trim();
+    (!serial.is_empty()).then(|| serial.to_owned())
+}
+
 fn get_device_name(h: HANDLE) -> Option<String> {
     // SAFETY: all pointers passed here reference local buffers that stay alive for
     // each Win32 call, and `h` is a device handle reported by Raw Input.
@@ -473,7 +529,19 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     }
 
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
-    let uuid = uuid_from_bytes(name.as_bytes());
+    // Prefer the USB serial so the pad keeps a stable PadId regardless of which
+    // port it is plugged into. Fall back to the (port-bound) interface path when
+    // the device exposes no serial.
+    let uuid = match read_device_serial(&name) {
+        Some(serial) => uuid_from_bytes(
+            format!(
+                "rawinput:serial:{:04x}:{:04x}:{serial}",
+                hid.dwVendorId as u16, hid.dwProductId as u16
+            )
+            .as_bytes(),
+        ),
+        None => uuid_from_bytes(name.as_bytes()),
+    };
 
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
