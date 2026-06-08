@@ -41,6 +41,7 @@ pub enum RowId {
     LifeMeterType,
     LifeBarOptions,
     DataVisualizations,
+    StepStatsExtra,
     ScoreDisplay,
     ScorePosition,
     DensityGraphBackground,

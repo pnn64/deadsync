@@ -12,6 +12,7 @@ use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay;
 use crate::game::profile;
+use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::State;
 use deadsync_core::input::MAX_PLAYERS;
@@ -886,6 +887,16 @@ pub fn push_step_stats(
         build_pack_banner(actors, state, layout, wide, player_side);
     }
     build_steps_info(actors, state, layout, wide, player_side, show_pack_info);
+    step_stats_gifs::push_step_stats_extra(
+        actors,
+        state,
+        player_side,
+        step_stats_player_idx(state, player_side),
+        layout.sidepane_center_x,
+        layout.sidepane_center_y,
+        layout.banner_data_zoom,
+        layout.note_field_is_centered,
+    );
     build_side_pane(
         actors,
         state,
@@ -1393,6 +1404,17 @@ pub fn push_double_step_stats(
             z(-49)
         ));
     }
+
+    step_stats_gifs::push_step_stats_extra(
+        actors,
+        state,
+        profile::get_session_player_side(),
+        0,
+        pane_cx,
+        pane_cy,
+        banner_data_zoom,
+        note_field_is_centered,
+    );
 
     // TapNoteJudgments.lua (double): x(-GetNotefieldWidth() + 75), y(40), zoom(0.8)
     if mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER) {

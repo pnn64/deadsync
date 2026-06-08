@@ -3,7 +3,7 @@ use super::super::constants::{
     COLUMN_FLASH_BRIGHTNESS_VARIANTS, COLUMN_FLASH_SIZE_VARIANTS, MINI_INDICATOR_COLOR_VARIANTS,
     MINI_INDICATOR_POSITION_VARIANTS, MINI_INDICATOR_SIZE_VARIANTS,
     MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS, MINI_INDICATOR_VARIANTS,
-    SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS,
+    SCORE_DISPLAY_MODE_VARIANTS, SCORE_POSITION_VARIANTS, STEP_STATS_EXTRA_VARIANTS,
 };
 use super::super::row::{
     BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
@@ -22,7 +22,7 @@ use deadsync_profile::{
     LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
     MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
     MiniIndicatorSubtractiveDisplay, PlayerSide, Profile, ScatterplotMaxWindow, ScoreDisplayMode,
-    ScorePosition, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    ScorePosition, StepStatsExtra, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
 // =============================== Bindings ===============================
@@ -98,6 +98,21 @@ const SCORE_DISPLAY_MODE: ChoiceBinding<usize> = index_binding!(
             SCORE_DISPLAY_MODE_VARIANTS
                 .iter()
                 .position(|&v| v == p.score_display_mode)
+                .unwrap_or(0)
+        }
+    })
+);
+const STEP_STATS_EXTRA: ChoiceBinding<usize> = index_binding!(
+    STEP_STATS_EXTRA_VARIANTS,
+    StepStatsExtra::None,
+    step_stats_extra,
+    gp::update_step_stats_extra_for_side,
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            STEP_STATS_EXTRA_VARIANTS
+                .iter()
+                .position(|&v| v == p.step_stats_extra)
                 .unwrap_or(0)
         }
     })
@@ -1274,6 +1289,25 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
     },
 };
 
+#[inline(always)]
+fn step_stats_extra_label_key(setting: StepStatsExtra) -> &'static str {
+    match setting {
+        StepStatsExtra::None => "StepStatsExtraNone",
+        StepStatsExtra::ErrorStats => "StepStatsExtraErrorStats",
+        StepStatsExtra::AmongUs => "StepStatsExtraAmongUs",
+        StepStatsExtra::BrodyQuest => "StepStatsExtraBrodyQuest",
+        StepStatsExtra::CatJAM => "StepStatsExtraCatJAM",
+        StepStatsExtra::CrabPls => "StepStatsExtraCrabPls",
+        StepStatsExtra::DancingDuck => "StepStatsExtraDancingDuck",
+        StepStatsExtra::DonChan => "StepStatsExtraDonChan",
+        StepStatsExtra::NyanCat => "StepStatsExtraNyanCat",
+        StepStatsExtra::Randomizer => "StepStatsExtraRandomizer",
+        StepStatsExtra::RinCat => "StepStatsExtraRinCat",
+        StepStatsExtra::Snoop => "StepStatsExtraSnoop",
+        StepStatsExtra::Sonic => "StepStatsExtraSonic",
+    }
+}
+
 pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
     let pack_info_label = if return_screen == Screen::SelectCourse {
         tr("PlayerOptions", "StepStatisticsCourseBanner")
@@ -1388,6 +1422,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "StepStatisticsStepCounts").to_string(),
             tr("PlayerOptions", "StepStatisticsPeakNps").to_string(),
         ],
+    ));
+    b.push(Row::cycle(
+        RowId::StepStatsExtra,
+        lookup_key("PlayerOptions", "StepStatsExtra"),
+        lookup_key("PlayerOptionsHelp", "StepStatsExtraHelp"),
+        CycleBinding::Index(STEP_STATS_EXTRA),
+        STEP_STATS_EXTRA_VARIANTS
+            .iter()
+            .map(|&setting| tr("PlayerOptions", step_stats_extra_label_key(setting)).to_string())
+            .collect(),
     ));
     b.push(Row::cycle(
         RowId::DensityGraphBackground,

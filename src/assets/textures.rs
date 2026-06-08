@@ -1277,6 +1277,21 @@ impl AssetManager {
             textures_to_load.push((p.to_string(), p.to_string()));
         }
 
+        for p in [
+            "step_stats_gifs/AmongUs 3x2.png",
+            "step_stats_gifs/brodyquest 7x12.gif",
+            "step_stats_gifs/catjam 11x14.png",
+            "step_stats_gifs/CrabPls 8x8.png",
+            "step_stats_gifs/Dancing Duck 8x14.png",
+            "step_stats_gifs/DonChan 2x2.png",
+            "step_stats_gifs/NyanCat 4x3.png",
+            "step_stats_gifs/Rin Cat 2x3.png",
+            "step_stats_gifs/snoop 8x8.png",
+            "step_stats_gifs/Sonic 4x2.png",
+        ] {
+            textures_to_load.push((p.to_string(), p.to_string()));
+        }
+
         append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
         append_graphic_textures(&mut textures_to_load, "judgements", true, true);
         append_graphic_textures(&mut textures_to_load, "hold_judgements", false, true);

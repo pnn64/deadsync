@@ -11,8 +11,8 @@ use deadsync_profile::{
     MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
     MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective,
     Profile, RemoveMask, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption,
-    StepStatisticsMask, TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption,
-    VisualEffectsMask,
+    StepStatisticsMask, StepStatsExtra, TapExplosionMask, TargetScoreSetting, TimingWindowsOption,
+    TurnOption, VisualEffectsMask,
 };
 use std::path::Path;
 
@@ -626,6 +626,12 @@ pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
 pub fn update_step_statistics_for_side(side: PlayerSide, mask: StepStatisticsMask) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.step_statistics, mask)
+    });
+}
+
+pub fn update_step_stats_extra_for_side(side: PlayerSide, setting: StepStatsExtra) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.step_stats_extra, setting)
     });
 }
 

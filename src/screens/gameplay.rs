@@ -23,7 +23,7 @@ use crate::game::parsing::song_lua::{
     SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
 use crate::game::profile;
-use crate::screens::components::gameplay::{gameplay_stats, notefield};
+use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
@@ -230,6 +230,7 @@ fn song_lua_overlay_order_cache_from(
 pub struct State {
     pub(crate) gameplay: gameplay_core::State,
     pub density_graph: DensityGraphRenderState,
+    pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -248,6 +249,8 @@ pub struct State {
 impl State {
     pub fn from_gameplay(gameplay: gameplay_core::State) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        let step_stats_extra_resolved =
+            step_stats_gifs::resolve_random_extras(&gameplay.player_profiles);
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &gameplay.song_lua_overlays,
             &gameplay.song_lua_overlay_eases,
@@ -265,6 +268,7 @@ impl State {
         Self {
             gameplay,
             density_graph,
+            step_stats_extra_resolved,
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
