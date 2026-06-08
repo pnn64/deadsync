@@ -895,6 +895,8 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
 
             if left < i
                 && i + 1 < right
+                && is_sprite_sheet_left_boundary(bytes, left)
+                && is_sprite_sheet_right_boundary(bytes, right)
                 && let (Some(w), Some(h)) = (
                     parse_ascii_digits(&bytes[left..i]),
                     parse_ascii_digits(&bytes[i + 1..right]),
@@ -913,6 +915,20 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     }
 
     dims.unwrap_or((1, 1))
+}
+
+#[inline(always)]
+fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
+    left > 0 && matches!(bytes[left - 1], b' ' | b'\t' | b'\r' | b'\n' | b'_')
+}
+
+#[inline(always)]
+fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
+    right == bytes.len()
+        || matches!(
+            bytes[right],
+            b'.' | b' ' | b'\t' | b'\r' | b'\n' | b'(' | b'_'
+        )
 }
 
 pub(crate) fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {

@@ -934,6 +934,39 @@ mod tests {
     }
 
     #[test]
+    fn parses_itg_style_sprite_sheet_dims() {
+        assert_eq!(parse_sprite_sheet_dims("grades/grades 1x19.png"), (1, 19));
+        assert_eq!(
+            parse_sprite_sheet_dims("_miso light 16x7 doubleres.png"),
+            (16, 7)
+        );
+    }
+
+    #[test]
+    fn preserves_local_underscore_sprite_sheet_dims() {
+        assert_eq!(
+            parse_sprite_sheet_dims("submit/LoadingSpinner_10x3.png"),
+            (10, 3)
+        );
+        assert_eq!(
+            parse_sprite_sheet_dims("practice/note_field_bars_1x4_wrap.png"),
+            (1, 4)
+        );
+    }
+
+    #[test]
+    fn ignores_resolution_labels_in_banner_names() {
+        assert_eq!(
+            parse_sprite_sheet_dims("1024x480-song-banner-background.png"),
+            (1, 1)
+        );
+        assert_eq!(
+            parse_sprite_sheet_dims("song-banner-1024x480-dimensions.png"),
+            (1, 1)
+        );
+    }
+
+    #[test]
     fn dedupe_dynamic_keys_preserves_first_owner_order() {
         assert_eq!(
             dedupe_dynamic_keys(vec![
