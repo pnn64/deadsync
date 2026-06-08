@@ -125,6 +125,7 @@ struct DevSpec {
     name: String,
     vendor_id: Option<u16>,
     product_id: Option<u16>,
+    uuid: [u8; 16],
 }
 
 #[derive(Default)]
@@ -226,6 +227,16 @@ const fn eviocgname(len: usize) -> libc::c_ulong {
 }
 
 #[inline(always)]
+const fn eviocgphys(len: usize) -> libc::c_ulong {
+    ioc(IOC_READ, b'E' as u32, 0x07, len as u32)
+}
+
+#[inline(always)]
+const fn eviocguniq(len: usize) -> libc::c_ulong {
+    ioc(IOC_READ, b'E' as u32, 0x08, len as u32)
+}
+
+#[inline(always)]
 const fn eviocgbit(ev: u8, len: usize) -> libc::c_ulong {
     ioc(IOC_READ, b'E' as u32, 0x20 + ev as u32, len as u32)
 }
@@ -280,6 +291,49 @@ fn raw_dev_name(file: &std::fs::File) -> Option<String> {
     }
     let len = buf.iter().position(|byte| *byte == 0).unwrap_or(buf.len());
     std::str::from_utf8(&buf[..len]).ok().map(str::to_owned)
+}
+
+/// Reads a NUL-terminated evdev string property (e.g. uniq or phys), returning
+/// `None` on ioctl failure or when the value is empty/whitespace.
+fn raw_dev_string(file: &std::fs::File, request: libc::c_ulong) -> Option<String> {
+    let mut buf = [0u8; 256];
+    // SAFETY: `file` is an open evdev device, `request` is an evdev string-read
+    // ioctl, and `buf` is writable stack storage for the kernel to fill with a
+    // NUL-terminated string.
+    let rc = unsafe { libc::ioctl(file.as_raw_fd(), request, buf.as_mut_ptr()) };
+    if rc < 0 {
+        return None;
+    }
+    let len = buf.iter().position(|byte| *byte == 0).unwrap_or(buf.len());
+    let value = std::str::from_utf8(&buf[..len]).ok()?.trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// Builds the stable identity key for a pad, preferring hardware identifiers
+/// (serial, then USB topology) over model/path so the same physical pad keeps
+/// its `PadId` across reboots and re-plugging into a different port.
+fn uuid_key_from_parts(
+    uniq: Option<&str>,
+    phys: Option<&str>,
+    name: &str,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+    path: &str,
+) -> String {
+    if let Some(uniq) = uniq {
+        return format!("freebsd-evdev:uniq:{uniq}");
+    }
+    if let Some(phys) = phys {
+        return format!("freebsd-evdev:phys:{phys}");
+    }
+    if !name.is_empty() || vendor_id.is_some() || product_id.is_some() {
+        return format!(
+            "freebsd-evdev:name:{name}|vid:{:04x}|pid:{:04x}",
+            vendor_id.unwrap_or(0),
+            product_id.unwrap_or(0),
+        );
+    }
+    format!("freebsd-evdev:path:{path}")
 }
 
 fn raw_dev_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
@@ -363,12 +417,26 @@ fn probe_path(path: &str, noisy: bool) -> ProbeResult {
     };
     let name = raw_dev_name(&file).unwrap_or_else(|| format!("evdev:{path}"));
     let (vendor_id, product_id) = raw_dev_info(&file);
+    let uniq = raw_dev_string(&file, eviocguniq(256));
+    let phys = raw_dev_string(&file, eviocgphys(256));
+    let uuid = uuid_from_bytes(
+        uuid_key_from_parts(
+            uniq.as_deref(),
+            phys.as_deref(),
+            &name,
+            vendor_id,
+            product_id,
+            path,
+        )
+        .as_bytes(),
+    );
     ProbeResult::Device(DevSpec {
         class,
         path: path.to_owned(),
         name,
         vendor_id,
         product_id,
+        uuid,
     })
 }
 
@@ -482,7 +550,7 @@ fn open_dev(
     });
     Some(Dev {
         id,
-        uuid: uuid_from_bytes(spec.path.as_bytes()),
+        uuid: spec.uuid,
         name: spec.name,
         path: spec.path,
         file,
@@ -525,7 +593,7 @@ fn add_dev_if_new(
     if spec.class != DevClass::Pad {
         return;
     };
-    let uuid = uuid_from_bytes(spec.path.as_bytes());
+    let uuid = spec.uuid;
     let existing_id = id_by_uuid.get(&uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {
@@ -606,7 +674,7 @@ fn run_inner(
         let path = spec.path.clone();
         match spec.class {
             DevClass::Pad => {
-                let uuid = uuid_from_bytes(spec.path.as_bytes());
+                let uuid = spec.uuid;
                 // Stable, persisted slot so this pad keeps the same PadId across launches.
                 let id = match id_by_uuid.get(&uuid).copied() {
                     Some(id) => id,
