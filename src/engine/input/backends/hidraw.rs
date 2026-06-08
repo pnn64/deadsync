@@ -704,13 +704,7 @@ pub fn run(
     let hidraw_paths = scan_hidraw_paths();
     let hidraw_count = hidraw_paths.len();
     for path in hidraw_paths {
-        add_dev_if_new(
-            path,
-            &mut devs,
-            &mut id_by_uuid,
-            true,
-            emit_sys,
-        );
+        add_dev_if_new(path, &mut devs, &mut id_by_uuid, true, emit_sys);
     }
     if devs.is_empty() {
         let _ = watch;
@@ -836,13 +830,9 @@ pub fn run(
         }
         for event in hotplug.drain(..) {
             match event {
-                DevdEvent::Create(path) => add_dev_if_new(
-                    path,
-                    &mut devs,
-                    &mut id_by_uuid,
-                    false,
-                    emit_sys,
-                ),
+                DevdEvent::Create(path) => {
+                    add_dev_if_new(path, &mut devs, &mut id_by_uuid, false, emit_sys)
+                }
                 DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }
         }

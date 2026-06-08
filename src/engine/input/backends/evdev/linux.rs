@@ -1047,13 +1047,9 @@ fn run_inner(
         Discovery::Udev(state) => {
             for spec in state.enumerate_specs() {
                 match spec.class {
-                    DevClass::Pad => add_dev_if_new(
-                        spec,
-                        &mut devs,
-                        &mut id_by_uuid,
-                        true,
-                        &mut emit_sys,
-                    ),
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys)
+                    }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
                     }
@@ -1065,13 +1061,9 @@ fn run_inner(
             scan_fallback(&mut fallback, &devs, &key_devs);
             for spec in fallback.specs.drain(..) {
                 match spec.class {
-                    DevClass::Pad => add_dev_if_new(
-                        spec,
-                        &mut devs,
-                        &mut id_by_uuid,
-                        true,
-                        &mut emit_sys,
-                    ),
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys)
+                    }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
                     }
@@ -1322,13 +1314,9 @@ fn run_inner(
         for event in hotplug.drain(..) {
             match event {
                 HotplugEvent::Add(spec) => match spec.class {
-                    DevClass::Pad => add_dev_if_new(
-                        spec,
-                        &mut devs,
-                        &mut id_by_uuid,
-                        false,
-                        &mut emit_sys,
-                    ),
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, false, &mut emit_sys)
+                    }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, None)
                     }
