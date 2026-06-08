@@ -278,9 +278,10 @@ fn append_beat_bar(
     }
 }
 
-/// Measure Cues: a solid colored line marking a timing event (BPM change /
-/// Stop / Delay). Drawn opaque at `Z_MEASURE_LINES`, so when emitted after the
-/// white measure-line pass it sits on top of any coinciding white line.
+/// Measure Cues: a colored line marking a timing event (BPM change / Stop /
+/// Delay / Scroll). Drawn at `Z_MEASURE_LINES`, so when emitted after the white
+/// measure-line pass it sits on top of any coinciding white line. `alpha`
+/// mirrors the white lines' per-subdivision opacity.
 fn append_cue_bar(
     actors: &mut Vec<Actor>,
     x_center: f32,
@@ -288,12 +289,13 @@ fn append_cue_bar(
     width: f32,
     thickness: f32,
     color: (f32, f32, f32),
+    alpha: f32,
 ) {
     let (r, g, b) = color;
     actors.push(act!(quad:
         align(0.5, 0.5): xy(x_center, y):
         zoomto(width, thickness):
-        diffuse(r, g, b, 1.0):
+        diffuse(r, g, b, alpha):
         z(Z_MEASURE_LINES)
     ));
 }
@@ -5182,24 +5184,26 @@ pub fn build_bundles(
                     })
                     .unwrap_or((&[], &[], &[], &[]));
 
-                // Thickness mirrors the editor's measure-line gradation, keyed
-                // off the cue beat's position on the same 0.5-beat grid the
-                // gameplay measure lines use: measure-aligned beats are thickest,
-                // quarter-aligned a bit thinner, and eighth/off-grid beats are
-                // the thinnest.
-                let cue_thickness_for_beat = |beat: f32| -> f32 {
+                // Thickness and alpha both key off the cue beat's position on
+                // the same 0.5-beat grid the gameplay measure lines use.
+                // Thickness mirrors the editor's measure-line gradation and alpha
+                // mirrors the white "Eighth" measure-line opacities, so cues fade
+                // by subdivision exactly like the white lines: measure-aligned
+                // beats are thickest/brightest, quarter-aligned a step down, and
+                // eighth/off-grid beats the thinnest/faintest.
+                let cue_style_for_beat = |beat: f32| -> (f32, f32) {
                     let units = beat / 0.5;
                     let rounded = units.round();
-                    let scale = if (units - rounded).abs() <= 1e-3 {
+                    let (scale, alpha) = if (units - rounded).abs() <= 1e-3 {
                         match (rounded as i64).rem_euclid(8) {
-                            0 => 3.0,         // measure
-                            2 | 4 | 6 => 2.0, // quarter
-                            _ => 1.0,         // eighth
+                            0 => (3.0, 0.75),        // measure
+                            2 | 4 | 6 => (2.0, 0.5), // quarter
+                            _ => (1.0, 0.125),       // eighth
                         }
                     } else {
-                        1.0 // off the eighth grid -> finest
+                        (1.0, 0.125) // off the eighth grid -> finest
                     };
-                    (scale * field_zoom).max(1.0)
+                    ((scale * field_zoom).max(1.0), alpha)
                 };
 
                 let groups = [
@@ -5220,8 +5224,16 @@ pub fn build_bundles(
                     let mut push_cue = |beat: f32, color: (f32, f32, f32)| {
                         let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                         if y.is_finite() && y >= y_min && y <= y_max {
-                            let line_thickness = cue_thickness_for_beat(beat);
-                            append_cue_bar(&mut actors, x_center, y, w, line_thickness, color);
+                            let (line_thickness, alpha) = cue_style_for_beat(beat);
+                            append_cue_bar(
+                                &mut actors,
+                                x_center,
+                                y,
+                                w,
+                                line_thickness,
+                                color,
+                                alpha,
+                            );
                         }
                     };
 
