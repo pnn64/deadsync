@@ -1275,6 +1275,11 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
 };
 
 pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
+    let pack_info_label = if return_screen == Screen::SelectCourse {
+        tr("PlayerOptions", "StepStatisticsCourseBanner")
+    } else {
+        tr("PlayerOptions", "StepStatisticsPackInfo")
+    };
     let mut gameplay_extras_choices = vec![
         tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss").to_string(),
         tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop").to_string(),
@@ -1379,7 +1384,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "StepStatisticsBanner").to_string(),
             tr("PlayerOptions", "StepStatisticsJudgements").to_string(),
             tr("PlayerOptions", "StepStatisticsDuration").to_string(),
-            tr("PlayerOptions", "StepStatisticsPackInfo").to_string(),
+            pack_info_label.to_string(),
             tr("PlayerOptions", "StepStatisticsStepCounts").to_string(),
             tr("PlayerOptions", "StepStatisticsPeakNps").to_string(),
         ],

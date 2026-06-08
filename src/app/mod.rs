@@ -8893,6 +8893,7 @@ impl App {
                     None,
                     None,
                     None,
+                    None,
                     [0; MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
@@ -9275,6 +9276,12 @@ impl App {
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })
                 });
+                let course_display_info = self.state.session.course_run.as_ref().map(|course| {
+                    crate::game::gameplay::CourseDisplayInfo {
+                        name: Arc::from(course.name.as_str()),
+                        banner_path: course.banner_path.clone(),
+                    }
+                });
                 let stage_intro_text: Arc<str> =
                     if let Some(course) = self.state.session.course_run.as_ref() {
                         let stage_num = course.next_stage_index.saturating_add(1);
@@ -9308,6 +9315,7 @@ impl App {
                     course_display_carry,
                     course_display_totals,
                     course_display_timing,
+                    course_display_info,
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;

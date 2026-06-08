@@ -62,8 +62,8 @@ pub struct ActorViewOverride {
 }
 
 use crate::game::gameplay::{
-    self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
-    GameplayAction, GameplayExit, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
+    CourseDisplayTotals, GameplayAction, GameplayExit, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
     TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
@@ -312,6 +312,7 @@ pub fn init(
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
+    course_display_info: Option<CourseDisplayInfo>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     State::from_gameplay(gameplay_core::init(
@@ -330,6 +331,7 @@ pub fn init(
         course_display_carry,
         course_display_totals,
         course_display_timing,
+        course_display_info,
         combo_carry,
     ))
 }
