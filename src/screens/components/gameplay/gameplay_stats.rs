@@ -29,6 +29,8 @@ const TIME_PREWARM_CAP_S: u32 = 600;
 const STEP_STATS_BANNER_W: f32 = 418.0;
 const STEP_STATS_BANNER_H: f32 = 164.0;
 const STEP_STATS_SONG_BANNER_ZOOM: f32 = 0.4;
+const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
+const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
 thread_local! {
@@ -926,6 +928,13 @@ struct StepStatsPaneLayout {
     banner_data_zoom: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct StepStatsGraphRect {
+    x: f32,
+    y: f32,
+    w: f32,
+}
+
 fn step_stats_pane_layout(
     state: &State,
     playfield_center_x: f32,
@@ -983,6 +992,87 @@ fn step_stats_pane_layout(
         note_field_is_centered,
         is_ultrawide,
         banner_data_zoom,
+    }
+}
+
+fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
+    let mut zoom = 0.75;
+    if layout.note_field_is_centered {
+        let ar = screen_width() / screen_height().max(1.0);
+        zoom = if ar > 1.7 { 0.9 } else { 0.95 };
+    }
+    zoom * layout.banner_data_zoom
+}
+
+fn step_stats_density_graph_w(state: &State, sidepane_width: f32, double: bool) -> f32 {
+    if state.density_graph_graph_w > 0.0 {
+        return state.density_graph_graph_w;
+    }
+    let width = if double {
+        sidepane_width * 0.95
+    } else {
+        sidepane_width.round()
+    };
+    width.max(1.0)
+}
+
+fn step_stats_density_graph_rect(state: &State, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
+    let graph_w = step_stats_density_graph_w(state, layout.sidepane_width, false);
+    StepStatsGraphRect {
+        x: layout.sidepane_center_x - graph_w * 0.5,
+        y: layout.sidepane_center_y + 55.0,
+        w: graph_w,
+    }
+}
+
+fn push_peak_nps_on_graph(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    player_idx: usize,
+    player_side: profile_data::PlayerSide,
+    graph: StepStatsGraphRect,
+    zoom: f32,
+) {
+    if player_idx >= state.num_players {
+        return;
+    }
+
+    let scaled_peak =
+        (state.charts[player_idx].max_nps as f32 * step_stats_music_rate(state)).max(0.0);
+    let peak_nps_text = cached_peak_nps_text(scaled_peak);
+    let align_left = player_side == profile_data::PlayerSide::P2;
+    let x = if align_left {
+        graph.x + PEAK_NPS_GRAPH_PAD
+    } else {
+        graph.x + graph.w - PEAK_NPS_GRAPH_PAD
+    };
+    let y = graph.y + PEAK_NPS_GRAPH_PAD;
+    let max_w = (graph.w - PEAK_NPS_GRAPH_PAD * 2.0).max(1.0);
+
+    if align_left {
+        actors.push(act!(text:
+            font("miso"):
+            settext(peak_nps_text):
+            align(0.0, 0.0):
+            xy(x, y):
+            zoom(zoom):
+            maxwidth(max_w):
+            diffuse(1.0, 1.0, 1.0, PEAK_NPS_ALPHA):
+            horizalign(left):
+            z(200)
+        ));
+    } else {
+        actors.push(act!(text:
+            font("miso"):
+            settext(peak_nps_text):
+            align(1.0, 0.0):
+            xy(x, y):
+            zoom(zoom):
+            maxwidth(max_w):
+            diffuse(1.0, 1.0, 1.0, PEAK_NPS_ALPHA):
+            horizalign(right):
+            z(200)
+        ));
     }
 }
 
@@ -1749,28 +1839,33 @@ pub fn push_double_step_stats(
 
     // DensityGraph.lua (double): graph ActorFrame xy(260, 40), with width
     // calculated as 95% of the side pane in gameplay init.
+    let double_sidepane_width = ((screen_width() - notefield_width) * 0.5).max(1.0);
+    let double_graph = StepStatsGraphRect {
+        x: pane_cx + 260.0,
+        y: pane_cy + 40.0,
+        w: step_stats_density_graph_w(state, double_sidepane_width, true),
+    };
     if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
-        push_density_graph_at(actors, state, 0, pane_cx + 260.0, pane_cy + 40.0);
+        push_density_graph_at(actors, state, 0, double_graph.x, double_graph.y);
     }
 
     // Peak NPS text (DensityGraph.lua drives this in SL).
     if mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
-        let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
-        let peak_nps_text = cached_peak_nps_text(scaled_peak);
-        // Simply Love computes this inside DensityGraph.lua with a funky halign() in double,
-        // but the visual intent is that the Peak NPS label lives in the right dark pane.
-        let x = pane_cx + nf_half_w + 96.0;
-        let y = screen_center_y() + 126.0;
-        actors.push(act!(text:
-            font("miso"):
-            settext(peak_nps_text):
-            align(1.0, 0.5):
-            xy(x, y):
-            zoom(0.9):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            horizalign(right):
-            z(200)
-        ));
+        push_peak_nps_on_graph(
+            actors,
+            state,
+            0,
+            profile::get_session_player_side(),
+            double_graph,
+            song_info_text_zoom(StepStatsPaneLayout {
+                sidepane_center_x: pane_cx,
+                sidepane_center_y: pane_cy,
+                sidepane_width: double_sidepane_width,
+                note_field_is_centered,
+                is_ultrawide,
+                banner_data_zoom,
+            }),
+        );
     }
 }
 
@@ -1935,7 +2030,6 @@ fn build_steps_info(
     let mut x = -190.0;
     let xoffset = if pnum == 1 { 285.0 } else { 0.0 };
     let mut yoffset = 0.0;
-    let mut zoom = 0.75;
     let mut xvalues = 45.0;
     let mut maxwidth = 320.0;
     if note_field_is_centered {
@@ -1944,17 +2038,15 @@ fn build_steps_info(
         if ar > 1.7 {
             x = if pnum == 1 { -220.0 } else { -150.0 };
             maxwidth = 240.0;
-            zoom = 0.9;
         } else {
             x = if pnum == 1 { -240.0 } else { -150.0 };
             maxwidth = 210.0;
-            zoom = 0.95;
         }
     }
 
     let origin_x = layout.sidepane_center_x + ((x + xoffset) * pos_sign * banner_data_zoom);
     let origin_y = layout.sidepane_center_y + ((-8.0 + yoffset) * banner_data_zoom);
-    let group_zoom = zoom * banner_data_zoom;
+    let group_zoom = song_info_text_zoom(layout);
 
     let row_h = 16.0;
     let z = 72i16;
@@ -2814,40 +2906,22 @@ fn build_side_pane(
     }
 
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
+    let graph = step_stats_density_graph_rect(state, layout);
     if wide && mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
-        let graph_h = state.density_graph_graph_h;
-        let graph_w = state.density_graph_graph_w;
-        if graph_w > 0.0_f32 && graph_h > 0.0_f32 {
-            let x0 = layout.sidepane_center_x - graph_w * 0.5;
-            let y0 = layout.sidepane_center_y + 55.0;
-            push_density_graph_at(actors, state, player_idx, x0, y0);
+        if state.density_graph_graph_w > 0.0_f32 && state.density_graph_graph_h > 0.0_f32 {
+            push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
         }
     }
 
-    // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
+    // Peak NPS sits on the graph corner and uses the same scale as song info text.
     if wide && mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
-        let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
-        let peak_nps_text = cached_peak_nps_text(scaled_peak);
-
-        // Positioned based on visual parity with Simply Love's Step Statistics pane
-        // for Player 1, which is on the right side of the screen.
-        let peak_nps_x = match player_side {
-            profile_data::PlayerSide::P1 => screen_width() - 59.0,
-            profile_data::PlayerSide::P2 => widescale(6.0, 130.0),
-        };
-        let peak_nps_y = screen_center_y() + 126.0;
-
-        actors.push(act!(text:
-            font("miso"):
-            settext(peak_nps_text):
-            // Pivot point is the text's right-center
-            align(1.0, 0.5):
-            xy(peak_nps_x, peak_nps_y):
-            zoom(0.9):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            // Align the text content itself to the right
-            horizalign(right):
-            z(200)
-        ));
+        push_peak_nps_on_graph(
+            actors,
+            state,
+            player_idx,
+            player_side,
+            graph,
+            song_info_text_zoom(layout),
+        );
     }
 }
