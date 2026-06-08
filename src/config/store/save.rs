@@ -186,6 +186,13 @@ fn push_saved_options(
     );
     push_line(content, "SmxP1Serial", smx_p1_serial);
     push_line(content, "SmxP2Serial", smx_p2_serial);
+    for backend in crate::config::pad_order::PadOrderBackend::ALL {
+        push_line(
+            content,
+            backend.ini_key(),
+            crate::config::pad_order::serialized(backend),
+        );
+    }
     push_bool(content, "GfxDebug", cfg.gfx_debug);
     push_bool(content, "HighDPI", cfg.high_dpi);
     push_bool(content, "HideMouseCursor", cfg.hide_mouse_cursor);

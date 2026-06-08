@@ -86,7 +86,6 @@ struct Ctx {
     devices: HashMap<isize, Dev>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     refs_by_uuid: HashMap<[u8; 16], u32>,
-    next_id: u32,
     buf: Vec<u8>,
     held: [bool; RAW_KEY_HELD_SLOTS],
     enable_pad: bool,
@@ -479,8 +478,11 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
-            let id = PadId(ctx.next_id);
-            ctx.next_id = ctx.next_id.saturating_add(1);
+            // Stable, persisted slot so this pad keeps the same PadId across launches.
+            let id = PadId(crate::config::pad_index_for_uuid(
+                crate::config::PadOrderBackend::RawInput,
+                uuid,
+            ));
             *entry.insert(id)
         }
     };
@@ -1049,7 +1051,6 @@ pub fn run(
         devices: HashMap::new(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
-        next_id: 0,
         buf: Vec::with_capacity(1024),
         held: [false; RAW_KEY_HELD_SLOTS],
         enable_pad: true,
@@ -1065,7 +1066,6 @@ pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static
         devices: HashMap::new(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
-        next_id: 0,
         buf: Vec::with_capacity(1024),
         held: [false; RAW_KEY_HELD_SLOTS],
         enable_pad: false,

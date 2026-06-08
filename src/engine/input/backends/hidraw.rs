@@ -460,7 +460,6 @@ fn open_dev(
 fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
-    next_id: &mut u32,
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
@@ -470,11 +469,16 @@ fn add_dev_if_new(
     }
     let uuid = uuid_from_bytes(path.as_bytes());
     let existing_id = id_by_uuid.get(&uuid).copied();
-    let id = existing_id.unwrap_or(PadId(*next_id));
+    // Stable, persisted slot so this pad keeps the same PadId across launches.
+    let id = existing_id.unwrap_or_else(|| {
+        PadId(crate::config::pad_index_for_uuid(
+            crate::config::PadOrderBackend::Hidraw,
+            uuid,
+        ))
+    });
     if let Some(dev) = open_dev(path, id, initial, emit_sys) {
         if existing_id.is_none() {
             id_by_uuid.insert(dev.uuid, id);
-            *next_id = next_id.saturating_add(1);
         }
         devs.push(dev);
     }
@@ -622,7 +626,6 @@ pub fn run(
 ) -> Result<(), String> {
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
-    let mut next_id = 0u32;
     let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
     let hidraw_paths = scan_hidraw_paths();
     let hidraw_count = hidraw_paths.len();
@@ -630,7 +633,6 @@ pub fn run(
         add_dev_if_new(
             path,
             &mut devs,
-            &mut next_id,
             &mut id_by_uuid,
             true,
             emit_sys,
@@ -763,7 +765,6 @@ pub fn run(
                 DevdEvent::Create(path) => add_dev_if_new(
                     path,
                     &mut devs,
-                    &mut next_id,
                     &mut id_by_uuid,
                     false,
                     emit_sys,

@@ -6,6 +6,7 @@ mod keybinds;
 mod load;
 #[path = "null_or_die.rs"]
 mod null_or_die_cfg;
+mod pad_order;
 mod runtime;
 mod store;
 #[cfg(test)]
@@ -26,6 +27,7 @@ pub(crate) use self::keybinds::{
 };
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
+pub use self::pad_order::{PadOrderBackend, pad_index_for_uuid};
 pub use self::runtime::{
     additional_song_folders, audio_mix_levels, flush_pending_saves, get, machine_default_noteskin,
     smx_pad_assignment,

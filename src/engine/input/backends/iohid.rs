@@ -168,7 +168,6 @@ struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
-    next_id: u32,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     pad_devs: HashMap<usize, PadDev>,
     key_devs: HashMap<usize, KeyDev>,
@@ -475,8 +474,11 @@ extern "C" fn on_match(
         let id = match ctx.id_by_uuid.entry(uuid) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
-                let id = PadId(ctx.next_id);
-                ctx.next_id += 1;
+                // Stable, persisted slot so this pad keeps the same PadId across launches.
+                let id = PadId(crate::config::pad_index_for_uuid(
+                    crate::config::PadOrderBackend::IoHid,
+                    uuid,
+                ));
                 *entry.insert(id)
             }
         };
@@ -655,7 +657,6 @@ pub fn run(
             emit_pad: Box::new(emit_pad),
             emit_sys: Box::new(emit_sys),
             emit_key: Box::new(emit_key),
-            next_id: 0,
             id_by_uuid: HashMap::new(),
             pad_devs: HashMap::new(),
             key_devs: HashMap::new(),

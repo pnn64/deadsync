@@ -88,6 +88,7 @@ fn load_defaults_after_error() {
     *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
+    pad_order::reset();
 }
 
 fn load_runtime_state(conf: &SimpleIni) {
@@ -105,6 +106,7 @@ fn load_runtime_state(conf: &SimpleIni) {
     };
     *SMX_P1_SERIAL.lock().unwrap() = serial("SmxP1Serial");
     *SMX_P2_SERIAL.lock().unwrap() = serial("SmxP2Serial");
+    pad_order::load_order_from_ini(conf);
 }
 
 fn apply_input_runtime_state() {

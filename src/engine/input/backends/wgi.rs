@@ -395,7 +395,6 @@ struct Ctx {
     devs: Vec<Dev>,
     idx_by_uuid: HashMap<[u8; 16], usize>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
-    next_id: u32,
     startup_grace_until: Instant,
 }
 
@@ -423,8 +422,11 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
-            let id = PadId(ctx.next_id);
-            ctx.next_id += 1;
+            // Stable, persisted slot so this pad keeps the same PadId across launches.
+            let id = PadId(crate::config::pad_index_for_uuid(
+                crate::config::PadOrderBackend::Wgi,
+                uuid,
+            ));
             *entry.insert(id)
         }
     };
@@ -818,7 +820,6 @@ pub fn run(
         devs: Vec::new(),
         idx_by_uuid: HashMap::new(),
         id_by_uuid: HashMap::new(),
-        next_id: 0,
         startup_grace_until: Instant::now() + STARTUP_GRACE,
     };
 
