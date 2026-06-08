@@ -764,6 +764,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         max_bpm: meta.max_bpm.unwrap_or(meta.min_bpm.unwrap_or(0.0)),
         normalized_bpms: String::new(),
         music_length_seconds: meta.total_length_seconds.max(0) as f32,
+        first_second: 0.0,
         total_length_seconds: meta.total_length_seconds.max(0),
         precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
         charts: Vec::new(),

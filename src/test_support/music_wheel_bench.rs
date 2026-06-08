@@ -137,6 +137,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         max_bpm: 160.0,
         normalized_bpms: String::from("0.000=160.000"),
         music_length_seconds: 92.0 + song_idx as f32,
+        first_second: 0.0,
         total_length_seconds: 92 + song_idx as i32,
         precise_last_second_seconds: 92.0 + song_idx as f32,
         charts: bench_charts(&base, has_edit),

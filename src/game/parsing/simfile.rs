@@ -36,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 11;
+const SONG_CACHE_VERSION: u8 = 12;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const RANDOM_BACKGROUND_FILE: &str = "-random-";
 const NO_SONG_BG_FILE: &str = "-nosongbg-";
@@ -751,6 +751,7 @@ struct SerializableSongData {
     max_bpm: f64,
     normalized_bpms: String,
     music_length_seconds: f32,
+    first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
     charts: Vec<SerializableChartData>,
@@ -821,6 +822,7 @@ struct CachedSongMeta {
     max_bpm: f64,
     normalized_bpms: String,
     music_length_seconds: f32,
+    first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
     charts: Vec<CachedChartMeta>,
@@ -1151,6 +1153,7 @@ fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> So
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms,
         music_length_seconds: song.music_length_seconds,
+        first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
         charts: song
@@ -1192,6 +1195,7 @@ fn build_cached_song_meta(
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms.clone(),
         music_length_seconds: song.music_length_seconds,
+        first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
         charts: song
@@ -1249,6 +1253,7 @@ fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms,
         music_length_seconds: song.music_length_seconds,
+        first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
         charts: song
@@ -1290,26 +1295,46 @@ fn step_type_lanes(step_type: &str) -> usize {
     if normalized == "dance-double" { 8 } else { 4 }
 }
 
-fn update_precise_last_second(song: &mut SerializableSongData, global_offset_seconds: f32) {
+fn song_length_chart_candidate(chart: &SerializableChartData, has_non_edit: bool) -> bool {
+    if has_non_edit && chart.difficulty.eq_ignore_ascii_case("edit") {
+        return false;
+    }
+    !chart.chart_type.eq_ignore_ascii_case("lights-cabinet")
+}
+
+fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset_seconds: f32) {
     let has_non_edit = song
         .charts
         .iter()
         .any(|c| !c.difficulty.eq_ignore_ascii_case("edit"));
+    let mut first = f32::INFINITY;
     let mut last = 0.0_f32;
     let song_offset = song.offset;
 
     for chart in &song.charts {
-        if has_non_edit && chart.difficulty.eq_ignore_ascii_case("edit") {
+        if !song_length_chart_candidate(chart, has_non_edit) {
             continue;
         }
 
+        let mut first_row: Option<usize> = None;
         let mut last_row: Option<usize> = None;
         for note in &chart.parsed_notes {
+            let head_row = note.row_index as usize;
             let row = note.tail_row_index.unwrap_or(note.row_index) as usize;
+            first_row = Some(first_row.map_or(head_row, |prev| prev.min(head_row)));
             last_row = Some(last_row.map_or(row, |prev| prev.max(row)));
         }
 
         let Some(row) = last_row else {
+            continue;
+        };
+        if row == 0 {
+            continue;
+        }
+        let Some(first_row) = first_row else {
+            continue;
+        };
+        let Some(first_beat) = chart.row_to_beat.get(first_row).copied() else {
             continue;
         };
         let Some(beat) = chart.row_to_beat.get(row).copied() else {
@@ -1322,12 +1347,21 @@ fn update_precise_last_second(song: &mut SerializableSongData, global_offset_sec
             &timing_segments,
             &chart.row_to_beat,
         );
+        let first_sec = timing.get_time_for_beat(first_beat);
+        if first_sec.is_finite() {
+            first = first.min(first_sec);
+        }
         let sec = timing.get_time_for_beat(beat);
         if sec.is_finite() {
             last = last.max(sec.max(0.0));
         }
     }
 
+    song.first_second = if first.is_finite() && first < last {
+        first
+    } else {
+        0.0
+    };
     let fallback = song.total_length_seconds.max(0) as f32;
     song.precise_last_second_seconds = last.max(fallback);
 }
@@ -1438,7 +1472,7 @@ fn load_gameplay_song_data(
     let parse_started = Instant::now();
     let mut song_data = parse_and_process_song_file(simfile_path)?;
     let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
-    update_precise_last_second(&mut song_data, global_offset_seconds);
+    update_precise_song_bounds(&mut song_data, global_offset_seconds);
     let write_started = Instant::now();
     if allow_cache_write && let Some(cp) = cache_path.as_deref() {
         cache::write_song_cache(cp, &song_data, global_offset_seconds);
@@ -1558,7 +1592,7 @@ fn parse_song_and_maybe_write_cache(
         );
     }
     let mut song_data = parse_and_process_song_file(path)?;
-    update_precise_last_second(&mut song_data, global_offset_seconds);
+    update_precise_song_bounds(&mut song_data, global_offset_seconds);
     if cachesongs && let Some(cp) = cache_path {
         cache::write_song_cache(cp, &song_data, global_offset_seconds);
     }
@@ -1571,7 +1605,7 @@ pub(crate) fn parse_song_for_test(
     global_offset_seconds: f32,
 ) -> Result<SongData, String> {
     let mut song_data = parse_and_process_song_file(path)?;
-    update_precise_last_second(&mut song_data, global_offset_seconds);
+    update_precise_song_bounds(&mut song_data, global_offset_seconds);
     Ok(build_song_meta(song_data, global_offset_seconds))
 }
 
@@ -3082,6 +3116,7 @@ fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, Stri
         normalized_bpms: summary.normalized_bpms,
         music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
         music_length_seconds,
+        first_second: 0.0,
         total_length_seconds: summary.total_length,
         precise_last_second_seconds: summary.total_length.max(0) as f32,
         charts,
@@ -3120,6 +3155,38 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn parse_song_records_itg_first_second_from_first_step() {
+        let root = test_dir("first-second");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        let simfile = song_dir.join("song.sm");
+        fs::write(
+            &simfile,
+            b"#TITLE:First Second;\n\
+              #BPMS:0.000=60.000;\n\
+              #OFFSET:0.000;\n\
+              #NOTES:\n\
+              dance-single:\n\
+              :\n\
+              Challenge:\n\
+              1:\n\
+              0.000,0.000,0.000,0.000,0.000:\n\
+              0000\n\
+              ,\n\
+              1000\n\
+              ,\n\
+              0001\n\
+              ;",
+        )
+        .unwrap();
+
+        let song = super::parse_song_for_test(&simfile, 0.0).unwrap();
+
+        assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
+        assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
     }
 
     #[test]

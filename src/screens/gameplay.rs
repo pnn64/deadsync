@@ -5082,6 +5082,18 @@ fn song_lua_song_meter_actor(
     Some(actor)
 }
 
+#[inline(always)]
+fn song_meter_progress(current_seconds: f32, first_second: f32, last_second: f32) -> f32 {
+    if !current_seconds.is_finite() || !first_second.is_finite() || !last_second.is_finite() {
+        return 0.0;
+    }
+    let duration = last_second - first_second;
+    if duration <= f32::EPSILON {
+        return 0.0;
+    }
+    ((current_seconds - first_second) / duration).clamp(0.0, 1.0)
+}
+
 fn song_lua_graph_display_actor(
     state: SongLuaOverlayState,
     body_values: &Arc<[f32]>,
@@ -8464,10 +8476,12 @@ pub fn push_actors(
                 align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w - 4.0, h - 4.0):
                 diffuse(0.0, 0.0, 0.0, 1.0): z(91)
             ));
-            if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
-                let progress = (state.current_music_time_display
-                    / state.song.total_length_seconds as f32)
-                    .clamp(0.0, 1.0);
+            let progress = song_meter_progress(
+                gameplay_core::song_time_ns_to_seconds(state.current_music_time_ns),
+                state.song.precise_first_second(),
+                state.song.precise_last_second(),
+            );
+            if progress > f32::EPSILON {
                 actors.push(act!(quad:
                     align(0.0, 0.5): xy(box_left + 2.0, box_cy): zoomto((w - 4.0) * progress, h - 4.0):
                     diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(92)
@@ -9119,6 +9133,14 @@ mod tests {
             texture_path: path,
             texture_key,
         }
+    }
+
+    #[test]
+    fn song_meter_progress_uses_itg_first_second_anchor() {
+        assert_eq!(song_meter_progress(-1.0, 2.0, 12.0), 0.0);
+        assert_eq!(song_meter_progress(2.0, 2.0, 12.0), 0.0);
+        assert!((song_meter_progress(7.0, 2.0, 12.0) - 0.5).abs() <= 1e-6);
+        assert_eq!(song_meter_progress(12.0, 2.0, 12.0), 1.0);
     }
 
     fn ensure_i18n() {

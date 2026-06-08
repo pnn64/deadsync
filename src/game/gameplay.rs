@@ -9309,6 +9309,7 @@ mod tests {
             max_bpm: 150.0,
             normalized_bpms: "0.000=150.000".to_string(),
             music_length_seconds: 60.0,
+            first_second: 0.0,
             total_length_seconds: 60,
             precise_last_second_seconds: 60.0,
             charts: vec![gameplay_regression_chart()],

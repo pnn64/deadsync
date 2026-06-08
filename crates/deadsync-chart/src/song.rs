@@ -99,6 +99,9 @@ pub struct SongData {
     /// Length of the music file in seconds (audio duration, including trailing silence).
     /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
+    /// First charted step second across the song, mirroring `ITGmania`'s
+    /// `Song::GetFirstSecond()` selection behavior.
+    pub first_second: f32,
     /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
     pub total_length_seconds: i32,
     /// Float-precision song end time used by graph scaling and preview helpers.
@@ -188,6 +191,15 @@ impl SongData {
     pub fn precise_last_second(&self) -> f32 {
         let fallback = self.total_length_seconds.max(0) as f32;
         self.precise_last_second_seconds.max(fallback)
+    }
+
+    #[inline(always)]
+    pub fn precise_first_second(&self) -> f32 {
+        if self.first_second.is_finite() {
+            self.first_second
+        } else {
+            0.0
+        }
     }
 
     pub fn display_title(&self, translit: bool) -> &str {
@@ -409,6 +421,7 @@ mod tests {
             max_bpm: 180.0,
             normalized_bpms: String::new(),
             music_length_seconds: 0.0,
+            first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),

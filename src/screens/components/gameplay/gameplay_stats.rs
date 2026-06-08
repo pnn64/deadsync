@@ -191,7 +191,7 @@ fn step_stats_music_rate(state: &State) -> f32 {
 fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDisplay {
     let rate = step_stats_music_rate(state);
     let (base_elapsed, total) = state.course_display_timing.map_or_else(
-        || (0.0, state.song.total_length_seconds.max(0) as f32),
+        || (0.0, state.song.precise_last_second().max(0.0)),
         |timing| {
             (
                 timing.elapsed_seconds.max(0.0),
@@ -199,11 +199,12 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
             )
         },
     );
+    let current_music_seconds = gameplay::song_time_ns_to_seconds(state.current_music_time_ns);
     let stage_elapsed = state
         .players
         .get(player_idx)
         .and_then(|player| player.fail_time)
-        .unwrap_or(state.current_music_time_display)
+        .unwrap_or(current_music_seconds)
         .max(0.0);
     let elapsed = (base_elapsed + stage_elapsed).clamp(0.0, total);
     StepStatsTimeDisplay {
