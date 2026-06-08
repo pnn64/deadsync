@@ -455,7 +455,7 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_usb_polling_us: 1000,
-            smx_panel_lights: true,
+            smx_panel_lights: false,
             smx_default_pad_config: SmxPadPreset::Low,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
