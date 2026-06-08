@@ -407,6 +407,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::BarColor => {
                 config::update_machine_bar_color(MachineBarColor::from_choice(new_index))
             }
+            SubRowId::EvaluationStyle => config::update_machine_evaluation_style(
+                MachineEvaluationStyle::from_choice(new_index),
+            ),
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NiceSound => config::update_machine_nice_sound(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),

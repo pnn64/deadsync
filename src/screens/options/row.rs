@@ -79,6 +79,7 @@ pub enum SubRowId {
     PreferredMode,
     Font,
     BarColor,
+    EvaluationStyle,
     EvalSummary,
     NiceSound,
     NameEntry,

@@ -463,11 +463,7 @@ fn ranges_overlap(a_center: f32, a_size: f32, b_center: f32, b_size: f32) -> boo
     a_center - a_half < b_center + b_half && b_center - b_half < a_center + a_half
 }
 
-fn saved_targets_hit_meter(
-    profile: &profile_data::Profile,
-    num_cols: usize,
-    meter_y: f32,
-) -> bool {
+fn saved_targets_hit_meter(profile: &profile_data::Profile, num_cols: usize, meter_y: f32) -> bool {
     if num_cols == 0 || !meter_y.is_finite() {
         return false;
     }
@@ -9235,18 +9231,10 @@ mod tests {
     fn difficulty_meter_overlap_uses_profile_target_offset() {
         let mut profile = profile_data::Profile::default();
 
-        assert!(!saved_targets_hit_meter(
-            &profile,
-            4,
-            DIFFICULTY_METER_Y
-        ));
+        assert!(!saved_targets_hit_meter(&profile, 4, DIFFICULTY_METER_Y));
 
         profile.note_field_offset_y = -50;
-        assert!(saved_targets_hit_meter(
-            &profile,
-            4,
-            DIFFICULTY_METER_Y
-        ));
+        assert!(saved_targets_hit_meter(&profile, 4, DIFFICULTY_METER_Y));
     }
 
     #[test]
@@ -9255,18 +9243,10 @@ mod tests {
             note_field_offset_y: -50,
             ..profile_data::Profile::default()
         };
-        assert!(saved_targets_hit_meter(
-            &profile,
-            4,
-            DIFFICULTY_METER_Y
-        ));
+        assert!(saved_targets_hit_meter(&profile, 4, DIFFICULTY_METER_Y));
 
         profile.scroll_option = profile_data::ScrollOption::Centered;
-        assert!(!saved_targets_hit_meter(
-            &profile,
-            4,
-            DIFFICULTY_METER_Y
-        ));
+        assert!(!saved_targets_hit_meter(&profile, 4, DIFFICULTY_METER_Y));
     }
 
     #[test]

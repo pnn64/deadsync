@@ -528,6 +528,11 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
     );
     push_line(content, "MachineFont", cfg.machine_font.as_str());
     push_line(content, "MachineBarColor", cfg.machine_bar_color.as_str());
+    push_line(
+        content,
+        "MachineEvaluationStyle",
+        cfg.machine_evaluation_style.as_str(),
+    );
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

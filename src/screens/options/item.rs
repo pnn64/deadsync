@@ -90,6 +90,7 @@ pub enum ItemId {
     MchPreferredMode,
     MchFont,
     MchBarColor,
+    MchEvaluationStyle,
     MchEvalSummary,
     MchNiceSound,
     MchNameEntry,

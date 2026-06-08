@@ -852,6 +852,51 @@ impl FromStr for MachineBarColor {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum MachineEvaluationStyle {
+    #[default]
+    Default,
+    Opaque,
+    Transparent,
+}
+
+impl MachineEvaluationStyle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Opaque => "Opaque",
+            Self::Transparent => "Transparent",
+        }
+    }
+
+    pub const fn resolve(self, visual_style: VisualStyle) -> Self {
+        match (self, visual_style) {
+            (Self::Default, VisualStyle::Technique) => Self::Transparent,
+            (Self::Default, _) => Self::Opaque,
+            _ => self,
+        }
+    }
+}
+
+impl FromStr for MachineEvaluationStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "default" | "auto" | "theme" | "themedriven" => Ok(Self::Default),
+            "opaque" | "solid" | "hearts" => Ok(Self::Opaque),
+            "transparent" | "transparant" | "clear" | "technique" => Ok(Self::Transparent),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
     Dance,
@@ -1124,6 +1169,61 @@ mod tests {
         assert_eq!(
             MachineBarColor::Transparent.resolve(VisualStyle::Srpg9),
             MachineBarColor::Transparent
+        );
+    }
+
+    #[test]
+    fn machine_evaluation_style_defaults_to_default() {
+        assert_eq!(
+            MachineEvaluationStyle::default(),
+            MachineEvaluationStyle::Default
+        );
+    }
+
+    #[test]
+    fn machine_evaluation_style_round_trips() {
+        for value in [
+            MachineEvaluationStyle::Default,
+            MachineEvaluationStyle::Opaque,
+            MachineEvaluationStyle::Transparent,
+        ] {
+            assert_eq!(MachineEvaluationStyle::from_str(value.as_str()), Ok(value));
+        }
+    }
+
+    #[test]
+    fn machine_evaluation_style_accepts_theme_style_aliases() {
+        assert_eq!(
+            MachineEvaluationStyle::from_str("Hearts"),
+            Ok(MachineEvaluationStyle::Opaque)
+        );
+        assert_eq!(
+            MachineEvaluationStyle::from_str("Technique"),
+            Ok(MachineEvaluationStyle::Transparent)
+        );
+        assert_eq!(
+            MachineEvaluationStyle::from_str("Transparant"),
+            Ok(MachineEvaluationStyle::Transparent)
+        );
+    }
+
+    #[test]
+    fn machine_evaluation_style_default_resolves_from_visual_style() {
+        assert_eq!(
+            MachineEvaluationStyle::Default.resolve(VisualStyle::Hearts),
+            MachineEvaluationStyle::Opaque
+        );
+        assert_eq!(
+            MachineEvaluationStyle::Default.resolve(VisualStyle::Technique),
+            MachineEvaluationStyle::Transparent
+        );
+        assert_eq!(
+            MachineEvaluationStyle::Transparent.resolve(VisualStyle::Hearts),
+            MachineEvaluationStyle::Transparent
+        );
+        assert_eq!(
+            MachineEvaluationStyle::Opaque.resolve(VisualStyle::Technique),
+            MachineEvaluationStyle::Opaque
         );
     }
 

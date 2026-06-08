@@ -484,6 +484,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachineBarColor",
         default.machine_bar_color.as_str(),
     );
+    push_line(
+        content,
+        "MachineEvaluationStyle",
+        default.machine_evaluation_style.as_str(),
+    );
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

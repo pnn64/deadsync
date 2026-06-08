@@ -1,4 +1,4 @@
-use crate::config::VisualStyle;
+use crate::config::{MachineEvaluationStyle, VisualStyle};
 use crate::engine::space::screen_center_x;
 use deadsync_profile as profile_data;
 
@@ -14,13 +14,16 @@ pub(crate) fn pane_origin_x(controller: profile_data::PlayerSide) -> f32 {
     }
 }
 
-pub(crate) fn eval_style_alpha(default_alpha: f32, technique_alpha: f32) -> f32 {
-    let style = std::panic::catch_unwind(|| crate::config::get().visual_style)
-        .unwrap_or(VisualStyle::Hearts);
-    if style == VisualStyle::Technique {
-        technique_alpha
-    } else {
-        default_alpha
+pub(crate) fn eval_style_alpha(opaque_alpha: f32, transparent_alpha: f32) -> f32 {
+    let (visual_style, eval_style) = std::panic::catch_unwind(|| {
+        let cfg = crate::config::get();
+        (cfg.visual_style, cfg.machine_evaluation_style)
+    })
+    .unwrap_or((VisualStyle::Hearts, MachineEvaluationStyle::Default));
+
+    match eval_style.resolve(visual_style) {
+        MachineEvaluationStyle::Transparent => transparent_alpha,
+        MachineEvaluationStyle::Opaque | MachineEvaluationStyle::Default => opaque_alpha,
     }
 }
 

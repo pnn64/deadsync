@@ -22,6 +22,17 @@ pub fn update_machine_bar_color(color: MachineBarColor) {
     save_without_keymaps();
 }
 
+pub fn update_machine_evaluation_style(style: MachineEvaluationStyle) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_evaluation_style == style {
+            return;
+        }
+        cfg.machine_evaluation_style = style;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
     {
         let mut cfg = lock_config();

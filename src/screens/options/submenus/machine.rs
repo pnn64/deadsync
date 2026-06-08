@@ -27,6 +27,16 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::EvaluationStyle,
+        label: lookup_key("OptionsMachine", "EvaluationStyle"),
+        choices: &[
+            localized_choice("OptionsMachine", "EvaluationStyleDefault"),
+            localized_choice("OptionsMachine", "EvaluationStyleOpaque"),
+            localized_choice("OptionsMachine", "EvaluationStyleTransparent"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectProfile,
         label: lookup_key("OptionsMachine", "SelectProfile"),
         choices: &[
@@ -250,6 +260,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchEvaluationStyle,
+        name: lookup_key("OptionsMachine", "EvaluationStyle"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "EvaluationStyleHelp",
+        ))],
+    },
+    Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -452,6 +470,11 @@ impl ChoiceEnum for MachineFont {
 
 impl ChoiceEnum for MachineBarColor {
     const ALL: &'static [Self] = &[Self::Default, Self::Colored, Self::Transparent];
+    const DEFAULT: Self = Self::Default;
+}
+
+impl ChoiceEnum for MachineEvaluationStyle {
+    const ALL: &'static [Self] = &[Self::Default, Self::Opaque, Self::Transparent];
     const DEFAULT: Self = Self::Default;
 }
 

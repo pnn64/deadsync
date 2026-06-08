@@ -128,4 +128,8 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachineBarColor")
         .and_then(|v| MachineBarColor::from_str(&v).ok())
         .unwrap_or(default.machine_bar_color);
+    cfg.machine_evaluation_style = conf
+        .get("Theme", "MachineEvaluationStyle")
+        .and_then(|v| MachineEvaluationStyle::from_str(&v).ok())
+        .unwrap_or(default.machine_evaluation_style);
 }

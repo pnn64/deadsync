@@ -34,12 +34,12 @@ pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
     DefaultSyncOffset, GameFlag, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
-    MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
-    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
-    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    MACHINE_FONT_VARIANTS, MachineBarColor, MachineEvaluationStyle, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -291,6 +291,9 @@ pub struct Config {
     /// Machine-wide screen bar color behavior.
     /// Default preserves each screen's current bar background choice.
     pub machine_bar_color: MachineBarColor,
+    /// Machine-wide evaluation quad opacity behavior.
+    /// Default follows the selected visual style.
+    pub machine_evaluation_style: MachineEvaluationStyle,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
@@ -492,6 +495,7 @@ impl Default for Config {
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_font: MachineFont::Wendy,
             machine_bar_color: MachineBarColor::Default,
+            machine_evaluation_style: MachineEvaluationStyle::Default,
             delayed_back: true,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
