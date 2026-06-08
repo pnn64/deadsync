@@ -12,6 +12,7 @@ pub enum SyncPref {
 #[derive(Clone, Debug)]
 pub enum SongBackgroundChangeTarget {
     File(PathBuf),
+    Animation(String),
     NoSongBg,
     Random,
 }
@@ -20,6 +21,35 @@ pub enum SongBackgroundChangeTarget {
 pub struct SongBackgroundChange {
     pub start_beat: f32,
     pub target: SongBackgroundChangeTarget,
+    pub rate: f32,
+    pub effect: String,
+    pub file2: Option<PathBuf>,
+    pub transition: String,
+    pub color1: Option<[f32; 4]>,
+    pub color2: Option<[f32; 4]>,
+}
+
+impl SongBackgroundChange {
+    pub fn new(start_beat: f32, target: SongBackgroundChangeTarget) -> Self {
+        Self {
+            start_beat,
+            target,
+            rate: 1.0,
+            effect: String::new(),
+            file2: None,
+            transition: String::new(),
+            color1: None,
+            color2: None,
+        }
+    }
+
+    pub fn effect_is(&self, name: &str) -> bool {
+        self.effect.eq_ignore_ascii_case(name)
+    }
+
+    pub fn transition_is(&self, name: &str) -> bool {
+        self.transition.eq_ignore_ascii_case(name)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +82,7 @@ pub struct SongData {
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
     pub background_changes: Vec<SongBackgroundChange>,
+    pub background_layer2_changes: Vec<SongBackgroundChange>,
     pub foreground_changes: Vec<SongForegroundChange>,
     pub background_lua_changes: Vec<SongBackgroundLuaChange>,
     pub foreground_lua_changes: Vec<SongForegroundLuaChange>,
@@ -291,6 +322,7 @@ impl SongData {
             .map(|change| &change.target)
         {
             Some(SongBackgroundChangeTarget::File(path)) => Some(path),
+            Some(SongBackgroundChangeTarget::Animation(_)) => None,
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
             Some(SongBackgroundChangeTarget::Random) => None,
             None => self.background_path.as_ref(),
@@ -336,6 +368,9 @@ impl SongData {
                         .or(exists.then_some(path))
                 }
             }
+            Some(SongBackgroundChangeTarget::Animation(_)) => {
+                self.fallback_background_path(allow_video)
+            }
             Some(SongBackgroundChangeTarget::Random) => self.fallback_background_path(allow_video),
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
             None => self.fallback_background_path(allow_video),
@@ -359,6 +394,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
             foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),
@@ -414,14 +450,11 @@ mod tests {
         let mut song = song_data();
         song.background_path = Some(PathBuf::from("base.png"));
         song.background_changes = vec![
-            SongBackgroundChange {
-                start_beat: 4.0,
-                target: SongBackgroundChangeTarget::NoSongBg,
-            },
-            SongBackgroundChange {
-                start_beat: 8.0,
-                target: SongBackgroundChangeTarget::File(PathBuf::from("later.png")),
-            },
+            SongBackgroundChange::new(4.0, SongBackgroundChangeTarget::NoSongBg),
+            SongBackgroundChange::new(
+                8.0,
+                SongBackgroundChangeTarget::File(PathBuf::from("later.png")),
+            ),
         ];
 
         assert_eq!(

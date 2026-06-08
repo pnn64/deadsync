@@ -29,7 +29,9 @@ use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
-use deadsync_chart::{ChartData, GameplayChartData, SongData};
+use deadsync_chart::{
+    ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
+};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
@@ -1308,27 +1310,262 @@ fn push_background(
     }
     actors.push(base);
 
-    // Song background image (when one exists), alpha-blended over the base so
-    // BGBrightness fades it toward the base color. With a black base this matches
-    // the previous RGB-dimming behavior exactly.
-    if &*state.background_texture_key != "__black" {
-        let mut img = shared_banner::cover_sprite(
-            state.background_texture_key.clone(),
-            cx,
-            cy,
-            sw,
-            sh,
-            1.0,
-            -100,
-        );
-        if let Actor::Sprite { tint, .. } = &mut img {
-            *tint = [1.0, 1.0, 1.0, bg_brightness];
-        }
-        actors.push(img);
-    }
+    push_current_bgchange_media(actors, state, bg_brightness, cx, cy, sw, sh);
+    push_bgchange_transition(actors, state, bg_brightness, cx, cy, sw, sh);
     // A non-default GameplayBgColor mirrors Chris's Simply Love underlay quad:
     // it covers song art but stays behind the notefield, filters, and HUD.
     push_custom_gameplay_backdrop(actors, base_color);
+    push_layer2_bganimations(actors, state);
+}
+
+fn active_background_change(state: &State) -> Option<&SongBackgroundChange> {
+    state
+        .next_background_change_ix
+        .checked_sub(1)
+        .and_then(|ix| state.background_changes.get(ix))
+}
+
+fn bgchange_tint(change: Option<&SongBackgroundChange>, brightness: f32) -> [f32; 4] {
+    let color = change.and_then(|change| change.color1).unwrap_or([1.0; 4]);
+    [color[0], color[1], color[2], color[3] * brightness]
+}
+
+fn bgchange_movie_viz_tint(change: Option<&SongBackgroundChange>, brightness: f32) -> [f32; 4] {
+    let color = change.and_then(|change| change.color2).unwrap_or([1.0; 4]);
+    [color[0], color[1], color[2], color[3] * brightness]
+}
+
+fn background_media_sprite(
+    key: Arc<str>,
+    tint: [f32; 4],
+    blend: BlendMode,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) -> Actor {
+    let mut actor = shared_banner::cover_sprite(key, x, y, w, h, 1.0, -100);
+    if let Actor::Sprite {
+        tint: actor_tint,
+        blend: actor_blend,
+        ..
+    } = &mut actor
+    {
+        *actor_tint = tint;
+        *actor_blend = blend;
+    }
+    actor
+}
+
+fn push_current_bgchange_media(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    bg_brightness: f32,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) {
+    if &*state.background_texture_key == "__black" {
+        return;
+    }
+    let change = active_background_change(state);
+    if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
+        if let Some(path) = state.song.background_path.as_ref() {
+            actors.push(background_media_sprite(
+                gameplay_core::media_path_key(path),
+                bgchange_tint(change, bg_brightness),
+                BlendMode::Alpha,
+                x,
+                y,
+                w,
+                h,
+            ));
+        }
+        actors.push(background_media_sprite(
+            state.background_texture_key.clone(),
+            bgchange_movie_viz_tint(change, bg_brightness),
+            BlendMode::Add,
+            x,
+            y,
+            w,
+            h,
+        ));
+    } else {
+        actors.push(background_media_sprite(
+            state.background_texture_key.clone(),
+            bgchange_tint(change, bg_brightness),
+            BlendMode::Alpha,
+            x,
+            y,
+            w,
+            h,
+        ));
+    }
+}
+
+fn push_bgchange_transition(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    bg_brightness: f32,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) {
+    let Some(key) = state.previous_background_texture_key.as_ref() else {
+        return;
+    };
+    if &**key == "__black" {
+        return;
+    }
+    let Some(duration) = bgchange_transition_duration(&state.background_transition) else {
+        return;
+    };
+    let elapsed = state.current_music_time_display - state.background_transition_start_time;
+    let progress = (elapsed / duration).clamp(0.0, 1.0);
+    if progress >= 1.0 {
+        return;
+    }
+    let mut actor = background_media_sprite(
+        key.clone(),
+        [1.0, 1.0, 1.0, bg_brightness],
+        BlendMode::Alpha,
+        x,
+        y,
+        w,
+        h,
+    );
+    apply_bgchange_transition(&mut actor, &state.background_transition, progress, w, h);
+    actors.push(actor);
+}
+
+fn bgchange_transition_duration(transition: &str) -> Option<f32> {
+    if transition.eq_ignore_ascii_case("CrossFade_Fastest") {
+        Some(0.5)
+    } else if transition.eq_ignore_ascii_case("CrossFade_Faster") {
+        Some(0.75)
+    } else if [
+        "CrossFade",
+        "FadeCenterHorizontal",
+        "FadeCenterVertical",
+        "FadeDown",
+        "FadeLeft",
+        "FadeRight",
+        "FadeUp",
+        "SlideDown",
+        "SlideLeft",
+        "SlideRight",
+        "SlideUp",
+    ]
+    .iter()
+    .any(|name| transition.eq_ignore_ascii_case(name))
+    {
+        Some(1.0)
+    } else {
+        None
+    }
+}
+
+fn apply_bgchange_transition(
+    actor: &mut Actor,
+    transition: &str,
+    progress: f32,
+    screen_w: f32,
+    screen_h: f32,
+) {
+    let Actor::Sprite {
+        offset,
+        tint,
+        cropleft,
+        cropright,
+        croptop,
+        cropbottom,
+        fadeleft,
+        faderight,
+        fadetop,
+        fadebottom,
+        ..
+    } = actor
+    else {
+        return;
+    };
+    if transition.eq_ignore_ascii_case("CrossFade")
+        || transition.eq_ignore_ascii_case("CrossFade_Faster")
+        || transition.eq_ignore_ascii_case("CrossFade_Fastest")
+    {
+        tint[3] *= 1.0 - progress;
+    } else if transition.eq_ignore_ascii_case("SlideLeft") {
+        offset[0] -= screen_w * progress;
+        tint[3] *= 1.0 - progress;
+    } else if transition.eq_ignore_ascii_case("SlideRight") {
+        offset[0] += screen_w * progress;
+        tint[3] *= 1.0 - progress;
+    } else if transition.eq_ignore_ascii_case("SlideUp") {
+        offset[1] -= screen_h * progress;
+        tint[3] *= 1.0 - progress;
+    } else if transition.eq_ignore_ascii_case("SlideDown") {
+        offset[1] += screen_h * progress;
+        tint[3] *= 1.0 - progress;
+    } else if transition.eq_ignore_ascii_case("FadeUp") {
+        *cropbottom = -0.3 + 1.6 * progress;
+        *fadebottom = 0.3;
+    } else if transition.eq_ignore_ascii_case("FadeDown") {
+        *croptop = -0.3 + 1.6 * progress;
+        *fadetop = 0.3;
+    } else if transition.eq_ignore_ascii_case("FadeRight") {
+        *cropleft = -0.3 + 1.6 * progress;
+        *fadeleft = 0.3;
+    } else if transition.eq_ignore_ascii_case("FadeLeft") {
+        *cropright = -0.3 + 1.6 * progress;
+        *faderight = 0.3;
+    } else if transition.eq_ignore_ascii_case("FadeCenterHorizontal") {
+        *croptop = -0.3 + 0.8 * progress;
+        *cropbottom = -0.3 + 0.8 * progress;
+        *fadetop = 0.3;
+        *fadebottom = 0.3;
+    } else if transition.eq_ignore_ascii_case("FadeCenterVertical") {
+        *cropleft = -0.3 + 0.8 * progress;
+        *cropright = -0.3 + 0.8 * progress;
+        *fadeleft = 0.3;
+        *faderight = 0.3;
+    }
+}
+
+fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
+    const FLASH_SECONDS: f32 = 0.6;
+    let Some((change, elapsed)) = state
+        .song
+        .background_layer2_changes
+        .iter()
+        .rev()
+        .filter_map(|change| {
+            let start = state.timing.get_time_for_beat(change.start_beat);
+            let elapsed = state.current_music_time_display - start;
+            (elapsed >= 0.0 && elapsed <= FLASH_SECONDS).then_some((change, elapsed))
+        })
+        .next()
+    else {
+        return;
+    };
+    let SongBackgroundChangeTarget::Animation(name) = &change.target else {
+        return;
+    };
+    let mut color = if name.eq_ignore_ascii_case("white flash") {
+        [1.0, 1.0, 1.0, 1.0]
+    } else if name.eq_ignore_ascii_case("yellow flash") {
+        [1.0, 1.0, 160.0 / 255.0, 1.0]
+    } else {
+        return;
+    };
+    let progress = (elapsed / FLASH_SECONDS).clamp(0.0, 1.0);
+    color[3] *= 1.0 - progress * progress;
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
+        setsize(screen_width() * 2.0, screen_height() * 2.0):
+        diffuse(color[0], color[1], color[2], color[3]):
+        z(-98)
+    ));
 }
 
 fn custom_gameplay_backdrop_enabled(color: crate::config::Color) -> bool {

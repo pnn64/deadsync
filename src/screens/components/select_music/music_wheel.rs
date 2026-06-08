@@ -1288,6 +1288,7 @@ mod tests {
             banner_path: banner_path.map(PathBuf::from),
             background_path: background_path.map(PathBuf::from),
             background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
             foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),

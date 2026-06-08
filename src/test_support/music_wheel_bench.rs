@@ -122,6 +122,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         banner_path: None,
         background_path: None,
         background_changes: Vec::new(),
+        background_layer2_changes: Vec::new(),
         foreground_changes: Vec::new(),
         background_lua_changes: Vec::new(),
         foreground_lua_changes: Vec::new(),

@@ -749,6 +749,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         banner_path: meta.banner_path.clone(),
         background_path: None,
         background_changes: Vec::new(),
+        background_layer2_changes: Vec::new(),
         foreground_changes: Vec::new(),
         background_lua_changes: Vec::new(),
         foreground_lua_changes: Vec::new(),

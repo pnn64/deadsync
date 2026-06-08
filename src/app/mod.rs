@@ -2840,19 +2840,32 @@ fn prewarm_gameplay_assets(
     }
 
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
+        fn push_bgchange_paths<'a>(
+            paths: &mut Vec<&'a PathBuf>,
+            change: &'a deadsync_chart::SongBackgroundChange,
+        ) {
+            if let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target {
+                paths.push(path);
+            }
+            if let Some(path) = change.file2.as_ref() {
+                paths.push(path);
+            }
+        }
+
         let mut paths = Vec::with_capacity(
             1usize
                 .saturating_add(state.background_changes.len())
+                .saturating_add(state.song.background_layer2_changes.len())
                 .saturating_add(state.song.foreground_changes.len()),
         );
         if let Some(path) = state.song.background_path.as_ref() {
             paths.push(path);
         }
         for change in &state.background_changes {
-            let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target else {
-                continue;
-            };
-            paths.push(path);
+            push_bgchange_paths(&mut paths, change);
+        }
+        for change in &state.song.background_layer2_changes {
+            push_bgchange_paths(&mut paths, change);
         }
         for change in &state.song.foreground_changes {
             paths.push(&change.path);
@@ -3144,19 +3157,29 @@ fn prewarm_gameplay_text_layout_cache(
 }
 
 fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
+    fn push_bgchange_keys(keys: &mut Vec<String>, change: &deadsync_chart::SongBackgroundChange) {
+        if let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target {
+            keys.push(path.to_string_lossy().into_owned());
+        }
+        if let Some(path) = change.file2.as_ref() {
+            keys.push(path.to_string_lossy().into_owned());
+        }
+    }
+
     let mut keys = Vec::with_capacity(
         1usize
             .saturating_add(state.background_changes.len())
+            .saturating_add(state.song.background_layer2_changes.len())
             .saturating_add(state.song.foreground_changes.len()),
     );
     if let Some(path) = state.song.background_path.as_ref() {
         keys.push(path.to_string_lossy().into_owned());
     }
     for change in &state.background_changes {
-        let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target else {
-            continue;
-        };
-        keys.push(path.to_string_lossy().into_owned());
+        push_bgchange_keys(&mut keys, change);
+    }
+    for change in &state.song.background_layer2_changes {
+        push_bgchange_keys(&mut keys, change);
     }
     for change in &state.song.foreground_changes {
         keys.push(change.path.to_string_lossy().into_owned());
@@ -6515,6 +6538,15 @@ impl App {
         path
     }
 
+    fn active_gameplay_background_change(
+        state: &crate::game::gameplay::State,
+    ) -> Option<&deadsync_chart::SongBackgroundChange> {
+        state
+            .next_background_change_ix
+            .checked_sub(1)
+            .and_then(|ix| state.background_changes.get(ix))
+    }
+
     fn sync_gameplay_background(&mut self) {
         if !matches!(
             self.state.screens.current_screen,
@@ -6537,6 +6569,9 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
+            let old_path_key = gs.current_background_key.clone();
+            let old_texture_key = gs.background_texture_key.clone();
+            let had_pending_background_change = gs.background_path_dirty;
             let mut background_changed = false;
             while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
                 if gs.current_beat < change.start_beat {
@@ -6550,6 +6585,22 @@ impl App {
             }
             if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
                 Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
+            }
+            if (background_changed || had_pending_background_change)
+                && old_path_key != gs.current_background_key
+            {
+                let transition = Self::active_gameplay_background_change(gs)
+                    .map(|change| change.transition.clone())
+                    .unwrap_or_default();
+                if transition.is_empty() || &*old_texture_key == "__black" {
+                    gs.previous_background_texture_key = None;
+                    gs.background_transition.clear();
+                } else {
+                    gs.previous_background_texture_key = Some(old_texture_key);
+                    gs.background_transition = transition;
+                    gs.background_transition_start_time =
+                        crate::game::gameplay::song_time_ns_to_seconds(gs.current_music_time_ns);
+                }
             }
             (
                 gs.current_background_path.clone(),
@@ -10245,6 +10296,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
             foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),

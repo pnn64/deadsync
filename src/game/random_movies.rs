@@ -57,7 +57,15 @@ pub fn build_background_changes(
 
     if song.background_changes.is_empty() {
         let mut out = Vec::new();
-        push_random_segment(&mut out, 0.0, last_beat, timing_segments, &mut cycle);
+        let template = SongBackgroundChange::new(0.0, SongBackgroundChangeTarget::Random);
+        push_random_segment(
+            &mut out,
+            0.0,
+            last_beat,
+            timing_segments,
+            &mut cycle,
+            &template,
+        );
         push_static_song_background(song, last_beat, &mut out);
         sort_background_changes(&mut out);
         return out;
@@ -79,6 +87,7 @@ pub fn build_background_changes(
                     end_beat,
                     timing_segments,
                     &mut cycle,
+                    change,
                 );
                 expanded_random = true;
             }
@@ -105,7 +114,7 @@ fn push_static_song_background(
         Some(path) => SongBackgroundChangeTarget::File(path.clone()),
         None => SongBackgroundChangeTarget::NoSongBg,
     };
-    out.push(SongBackgroundChange { start_beat, target });
+    out.push(SongBackgroundChange::new(start_beat, target));
 }
 
 fn push_random_segment(
@@ -114,6 +123,7 @@ fn push_random_segment(
     end_beat: f32,
     timing_segments: &TimingSegments,
     cycle: &mut MovieCycle,
+    template: &SongBackgroundChange,
 ) {
     let start_row = beat_to_note_row(start_beat);
     let end_row = beat_to_note_row(end_beat);
@@ -138,7 +148,7 @@ fn push_random_segment(
         }
         let mut row = first_row;
         while row < last_row {
-            push_random_change(out, row, cycle);
+            push_random_change(out, row, cycle, template);
             row += step_rows;
         }
     }
@@ -148,11 +158,16 @@ fn push_random_segment(
         if row < start_row || row >= end_row || !row_starts_measure(row, &time_sigs) {
             continue;
         }
-        push_random_change(out, row, cycle);
+        push_random_change(out, row, cycle, template);
     }
 }
 
-fn push_random_change(out: &mut Vec<SongBackgroundChange>, row: i32, cycle: &mut MovieCycle) {
+fn push_random_change(
+    out: &mut Vec<SongBackgroundChange>,
+    row: i32,
+    cycle: &mut MovieCycle,
+    template: &SongBackgroundChange,
+) {
     if out
         .iter()
         .any(|change| beat_to_note_row(change.start_beat) == row)
@@ -162,10 +177,10 @@ fn push_random_change(out: &mut Vec<SongBackgroundChange>, row: i32, cycle: &mut
     let Some(path) = cycle.next_path() else {
         return;
     };
-    out.push(SongBackgroundChange {
-        start_beat: note_row_to_beat(row),
-        target: SongBackgroundChangeTarget::File(path),
-    });
+    let mut change = template.clone();
+    change.start_beat = note_row_to_beat(row);
+    change.target = SongBackgroundChangeTarget::File(path);
+    out.push(change);
 }
 
 fn normalized_time_signatures(timing_segments: &TimingSegments) -> Vec<TimeSignatureSegment> {
@@ -429,11 +444,22 @@ mod tests {
         PathBuf::from(name)
     }
 
+    fn random_template() -> SongBackgroundChange {
+        SongBackgroundChange::new(0.0, SongBackgroundChangeTarget::Random)
+    }
+
     #[test]
     fn random_segments_change_every_four_measures_in_four_four() {
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(&mut out, 0.0, 64.0, &TimingSegments::default(), &mut cycle);
+        push_random_segment(
+            &mut out,
+            0.0,
+            64.0,
+            &TimingSegments::default(),
+            &mut cycle,
+            &random_template(),
+        );
         let beats = out
             .iter()
             .map(|change| change.start_beat)
@@ -451,7 +477,14 @@ mod tests {
         }];
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(&mut out, 0.0, 48.0, &segments, &mut cycle);
+        push_random_segment(
+            &mut out,
+            0.0,
+            48.0,
+            &segments,
+            &mut cycle,
+            &random_template(),
+        );
         let beats = out
             .iter()
             .map(|change| change.start_beat)
@@ -465,7 +498,14 @@ mod tests {
         segments.bpms = vec![(0.0, 120.0), (8.0, 140.0), (16.0, 160.0)];
         let mut out = Vec::new();
         let mut cycle = MovieCycle::new(vec![path("a.avi"), path("b.avi")], "song");
-        push_random_segment(&mut out, 0.0, 32.0, &segments, &mut cycle);
+        push_random_segment(
+            &mut out,
+            0.0,
+            32.0,
+            &segments,
+            &mut cycle,
+            &random_template(),
+        );
         sort_background_changes(&mut out);
         let beats = out
             .iter()

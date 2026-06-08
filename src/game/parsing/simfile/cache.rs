@@ -218,10 +218,17 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
     let bgchange_paths_ok = data
         .background_changes
         .iter()
-        .all(|change| match &change.target {
-            SerializableSongBackgroundChangeTarget::File(path) => cached_path_exists(Some(path)),
-            SerializableSongBackgroundChangeTarget::NoSongBg
-            | SerializableSongBackgroundChangeTarget::Random => true,
+        .chain(data.background_layer2_changes.iter())
+        .all(|change| {
+            let target_ok = match &change.target {
+                SerializableSongBackgroundChangeTarget::File(path) => {
+                    cached_path_exists(Some(path))
+                }
+                SerializableSongBackgroundChangeTarget::Animation(_) => true,
+                SerializableSongBackgroundChangeTarget::NoSongBg
+                | SerializableSongBackgroundChangeTarget::Random => true,
+            };
+            target_ok && cached_path_exists(change.file2.as_deref())
         });
     let foreground_paths_ok = data
         .foreground_changes
@@ -424,6 +431,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
             foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),
