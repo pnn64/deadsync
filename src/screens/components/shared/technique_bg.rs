@@ -41,24 +41,27 @@ impl State {
         Self
     }
 
-    pub(super) fn build_at_elapsed(
+    pub(super) fn push_at_elapsed(
         &self,
+        out: &mut Vec<Actor>,
         active_color_index: i32,
         backdrop_rgba: [f32; 4],
         alpha_mul: f32,
         elapsed_s: f32,
-    ) -> Option<Vec<Actor>> {
-        let assets = technique_assets()?;
+    ) -> bool {
+        let Some(assets) = technique_assets() else {
+            return false;
+        };
         let center = [screen_center_x(), screen_center_y()];
-        let mut actors = Vec::with_capacity(40);
-        actors.push(act!(quad:
+        out.reserve(40);
+        out.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
             diffuse(backdrop_rgba[0], backdrop_rgba[1], backdrop_rgba[2], backdrop_rgba[3]):
             z(-100)
         ));
-        actors.push(act!(quad:
+        out.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
@@ -68,7 +71,7 @@ impl State {
 
         for i in 0..GRID_VELOCITY.len() {
             let uv = wrapped_grid_uv_rect(GRID_VELOCITY[i], elapsed_s);
-            actors.push(act!(sprite(SQUARE_TEX):
+            out.push(act!(sprite(SQUARE_TEX):
                 align(0.5, 0.5):
                 xy(center[0], center[1]):
                 zoom(GRID_ZOOM):
@@ -153,12 +156,12 @@ impl State {
         // order, and ITGmania's default ActorFrame draw path preserves that order.
         // Do not depth-sort or z-buffer them here; that changes which ring family
         // sits on top and breaks parity with the theme.
-        actors.push(Actor::Camera {
+        out.push(Actor::Camera {
             view_proj: technique_view_proj(),
             children: model_actors,
         });
 
-        Some(actors)
+        true
     }
 }
 

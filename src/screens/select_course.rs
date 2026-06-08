@@ -1984,8 +1984,8 @@ fn sl_select_music_bg_flash() -> Actor {
     )
 }
 
-pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(256);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &AssetManager) {
+    actors.reserve(256);
     let side = profile::get_session_player_side();
     let play_style = profile::get_session_play_style();
     let is_p2_single =
@@ -2006,13 +2006,16 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         )
     });
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
     actors.push(sl_select_music_bg_flash());
-    screen_bars::push(&mut actors, &tr("ScreenTitles", "SelectCourse"));
+    screen_bars::push(actors, &tr("ScreenTitles", "SelectCourse"));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
@@ -2161,7 +2164,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         loading_text: None,
     };
     select_pane::push_base(
-        &mut actors,
+        actors,
         select_pane::StatsPaneParams {
             pane_cx,
             accent_color: pane_sel_col,
@@ -2428,7 +2431,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let step_artist_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
     step_artist_bar::push(
-        &mut actors,
+        actors,
         step_artist_bar::StepArtistBarParams {
             x0: step_artist_x0,
             center_y: step_artist_y,
@@ -2471,7 +2474,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     music_wheel::push(
-        &mut actors,
+        actors,
         music_wheel::MusicWheelParams {
             entries: &state.entries,
             selected_index: state.selected_index,
@@ -2603,7 +2606,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         let no_info = tr("SelectMusic", "KeepPlayingInfo");
         let yes_info = tr("SelectMusic", "FinishedInfo");
         push_exit_prompt_choice(
-            &mut actors,
+            actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
             no_label,
@@ -2615,7 +2618,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             1502,
         );
         push_exit_prompt_choice(
-            &mut actors,
+            actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
             yes_label,
@@ -2627,7 +2630,11 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             1502,
         );
     }
+}
 
+pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(256);
+    push_actors(&mut actors, state, asset_manager);
     actors
 }
 

@@ -598,7 +598,8 @@ fn add_dev_if_new(
     if crate::engine::smx::native_smx_owns_device(spec.vendor_id, spec.product_id) {
         log::debug!(
             "freebsd evdev: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
-            spec.vendor_id, spec.product_id
+            spec.vendor_id,
+            spec.product_id
         );
         return;
     }

@@ -323,15 +323,18 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
     anim::eval_ease_p_for_f_ease(x, f_ease)
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(256);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+    actors.reserve(256);
     let exit_t = exit_anim_t(state.exit_requested);
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     let select_mode = tr("ScreenTitles", "SelectMode");
     actors.push(screen_bar::build(ScreenBarParams {
@@ -663,6 +666,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             rotationz(rot):
         ));
     }
+}
 
+pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(256);
+    push_actors(&mut actors, state, asset_manager);
     actors
 }

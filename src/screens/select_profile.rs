@@ -48,6 +48,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 }
 
 #[inline(always)]
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) {
+    profile_boxes::push_actors(actors, state, asset_manager, alpha_multiplier);
+}
+
+#[inline(always)]
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,

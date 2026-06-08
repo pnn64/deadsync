@@ -335,19 +335,27 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
 /* ------------------------------- drawing ------------------------------- */
 
-pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(56);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    actors.reserve(56);
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     actors.extend(test_input::build_test_input_screen_content(
         &state.test_input,
         state.active_color_index,
     ));
+}
+
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(56);
+    push_actors(&mut actors, state);
     actors
 }
 

@@ -577,20 +577,24 @@ fn build_row(
     }
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
-) -> Vec<Actor> {
+) {
     let cfg = crate::config::get();
-    let mut actors: Vec<Actor> = Vec::with_capacity(32);
+    actors.reserve(32);
 
     // Background
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     // Top Bar
     let eval_title = tr("EvaluationSummary", "ScreenTitle");
@@ -618,7 +622,7 @@ pub fn get_actors(
             diffuse(1.0, 1.0, 1.0, 1.0):
             horizalign(center)
         ));
-        return actors;
+        return;
     }
 
     let pages = pages_for(stages.len());
@@ -728,7 +732,15 @@ pub fn get_actors(
             z(121)
         ));
     }
+}
 
+pub fn get_actors(
+    state: &State,
+    stages: &[stage_stats::StageSummary],
+    asset_manager: &AssetManager,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(32);
+    push_actors(&mut actors, state, stages, asset_manager);
     actors
 }
 

@@ -397,25 +397,29 @@ pub(super) fn build_yes_no_confirm_overlay(
     ]
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(320);
+) {
+    actors.reserve(320);
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index, // <-- CHANGED
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
-        // local submenu fades are handled via content_alpha on UI actors only.
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index, // <-- CHANGED
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
+            // local submenu fades are handled via content_alpha on UI actors only.
+            alpha_mul: 1.0,
+        },
+    );
 
     if alpha_multiplier <= 0.0 {
-        return actors;
+        return;
     }
 
     if let Some(reload) = &state.reload_ui {
@@ -424,7 +428,7 @@ pub fn get_actors(
             actor.mul_alpha(alpha_multiplier);
         }
         actors.extend(ui_actors);
-        return actors;
+        return;
     }
     if let Some(score_import) = &state.score_import_ui {
         let mut ui_actors =
@@ -433,7 +437,7 @@ pub fn get_actors(
             actor.mul_alpha(alpha_multiplier);
         }
         actors.extend(ui_actors);
-        return actors;
+        return;
     }
     if let Some(mut ui_actors) =
         shared_pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
@@ -442,10 +446,10 @@ pub fn get_actors(
             actor.mul_alpha(alpha_multiplier);
         }
         actors.extend(ui_actors);
-        return actors;
+        return;
     }
 
-    let mut ui_actors = Vec::new();
+    let ui_start = actors.len();
 
     /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
@@ -453,7 +457,7 @@ pub fn get_actors(
         OptionsView::Main => "OPTIONS",
         OptionsView::Submenu(kind) => submenu_title(kind),
     };
-    ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: title_text,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -495,7 +499,7 @@ pub fn get_actors(
     let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
-    ui_actors.push(act!(quad:
+    actors.push(act!(quad:
         align(0.0, 0.0):
         xy(list_x + list_w, list_y):
         zoomto(sep_w, desc_h):
@@ -504,7 +508,7 @@ pub fn get_actors(
 
     // Description box (RIGHT of separator), aligned to the first row top
     let desc_x = list_x + list_w + sep_w;
-    ui_actors.push(act!(quad:
+    actors.push(act!(quad:
         align(0.0, 0.0):
         xy(desc_x, list_y):
         zoomto(desc_w, desc_h):
@@ -560,7 +564,7 @@ pub fn get_actors(
                     col_inactive_bg
                 };
 
-                ui_actors.push(act!(quad:
+                actors.push(act!(quad:
                     align(0.0, 0.0):
                     xy(list_x, row_y):
                     zoomto(row_w, row_h):
@@ -576,7 +580,7 @@ pub fn get_actors(
                         col_white
                     };
                     heart_tint[3] *= row_alpha;
-                    ui_actors.push(act!(sprite(select_color_texture):
+                    actors.push(act!(sprite(select_color_texture):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
                         zoom(select_color_zoom):
@@ -594,7 +598,7 @@ pub fn get_actors(
                     col_white
                 };
                 color_t[3] *= row_alpha;
-                ui_actors.push(act!(text:
+                actors.push(act!(text:
                     align(0.0, 0.5):
                     xy(text_x, row_mid_y):
                     zoom(ITEM_TEXT_ZOOM):
@@ -644,7 +648,7 @@ pub fn get_actors(
                         col_inactive_bg
                     };
 
-                    ui_actors.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.0):
                         xy(list_x, row_y):
                         zoomto(row_w, row_h):
@@ -660,7 +664,7 @@ pub fn get_actors(
                             col_white
                         };
                         heart_tint[3] *= row_alpha;
-                        ui_actors.push(act!(sprite(select_color_texture):
+                        actors.push(act!(sprite(select_color_texture):
                             align(0.0, 0.5):
                             xy(heart_x, row_mid_y):
                             zoom(select_color_zoom):
@@ -682,7 +686,7 @@ pub fn get_actors(
                         col_white
                     };
                     text_color[3] *= row_alpha;
-                    ui_actors.push(act!(text:
+                    actors.push(act!(text:
                         align(0.0, 0.5):
                         xy(text_x, row_mid_y):
                         zoom(ITEM_TEXT_ZOOM):
@@ -709,7 +713,7 @@ pub fn get_actors(
                                 };
                                 value_color[3] *= row_alpha;
                                 let value_x = list_w.mul_add(1.0, list_x - TEXT_LEFT_PAD * s);
-                                ui_actors.push(act!(text:
+                                actors.push(act!(text:
                                     align(1.0, 0.5):
                                     xy(value_x, row_mid_y):
                                     zoom(ITEM_TEXT_ZOOM):
@@ -819,7 +823,7 @@ pub fn get_actors(
                         col_inactive_bg
                     };
 
-                    ui_actors.push(act!(quad:
+                    actors.push(act!(quad:
                         align(0.0, 0.0):
                         xy(list_x, row_y):
                         zoomto(row_w, row_h):
@@ -832,7 +836,7 @@ pub fn get_actors(
                             continue;
                         };
                         // Left label background column (matches player options style).
-                        ui_actors.push(act!(quad:
+                        actors.push(act!(quad:
                             align(0.0, 0.0):
                             xy(list_x, row_y):
                             zoomto(label_bg_w, row_h):
@@ -864,7 +868,7 @@ pub fn get_actors(
                         let mut title_color = title_color;
                         title_color[3] *= row_alpha;
 
-                        ui_actors.push(act!(text:
+                        actors.push(act!(text:
                             align(0.0, 0.5):
                             xy(label_text_x, row_mid_y):
                             zoom(ITEM_TEXT_ZOOM):
@@ -960,14 +964,14 @@ pub fn get_actors(
                                             );
                                         let mut tint = color::decorative_rgba(idx as i32);
                                         tint[3] *= row_alpha;
-                                        ui_actors.push(act!(sprite(select_color_texture):
+                                        actors.push(act!(sprite(select_color_texture):
                                             align(0.5, 0.5):
                                             xy(x + icon_w * 0.5, row_mid_y):
                                             setsize(icon_w, COLOR_CHOICE_ICON_H):
                                             diffuse(tint[0], tint[1], tint[2], tint[3])
                                         ));
                                     } else {
-                                        ui_actors.push(act!(text:
+                                        actors.push(act!(text:
                                             align(0.0, 0.5):
                                             xy(x, row_mid_y):
                                             zoom(value_zoom):
@@ -988,7 +992,7 @@ pub fn get_actors(
                                 if is_color_choice_row {
                                     let mut tint = color::decorative_rgba(selected_choice as i32);
                                     tint[3] *= row_alpha;
-                                    ui_actors.push(act!(sprite(select_color_texture):
+                                    actors.push(act!(sprite(select_color_texture):
                                         align(0.5, 0.5):
                                         xy(choice_center_x, row_mid_y):
                                         setsize(draw_w, COLOR_CHOICE_ICON_H):
@@ -1000,7 +1004,7 @@ pub fn get_actors(
                                         .get(selected_choice)
                                         .cloned()
                                         .unwrap_or_else(|| Arc::<str>::from("??"));
-                                    ui_actors.push(act!(text:
+                                    actors.push(act!(text:
                                         align(0.5, 0.5):
                                         xy(choice_center_x, row_mid_y):
                                         zoom(value_zoom):
@@ -1039,7 +1043,7 @@ pub fn get_actors(
                                         + layout.x_positions.get(idx).copied().unwrap_or_default();
                                     let underline_w =
                                         layout.widths.get(idx).copied().unwrap_or(40.0).ceil();
-                                    ui_actors.push(act!(quad:
+                                    actors.push(act!(quad:
                                         align(0.0, 0.5):
                                         xy(underline_left_x, underline_y):
                                         zoomto(underline_w, line_thickness):
@@ -1060,7 +1064,7 @@ pub fn get_actors(
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
-                                ui_actors.push(act!(quad:
+                                actors.push(act!(quad:
                                     align(0.0, 0.5):
                                     xy(sel_left_x, underline_y):
                                     zoomto(underline_w, line_thickness):
@@ -1083,28 +1087,28 @@ pub fn get_actors(
                                 let mut ring_color =
                                     color::decorative_rgba(state.active_color_index);
                                 ring_color[3] *= row_alpha;
-                                ui_actors.push(act!(quad:
+                                actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(center_x, top + border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                                ui_actors.push(act!(quad:
+                                actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(center_x, bottom - border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                                ui_actors.push(act!(quad:
+                                actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(left + border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                                ui_actors.push(act!(quad:
+                                actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(right - border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
@@ -1123,7 +1127,7 @@ pub fn get_actors(
                         let center_x = calc_row_center_x(row_idx);
                         let center_y = row_mid_y;
 
-                        ui_actors.push(act!(text:
+                        actors.push(act!(text:
                         align(0.5, 0.5):
                         xy(center_x, center_y):
                         zoom(value_zoom):
@@ -1147,28 +1151,28 @@ pub fn get_actors(
                             let mut ring_color = color::decorative_rgba(state.active_color_index);
                             ring_color[3] *= row_alpha;
 
-                            ui_actors.push(act!(quad:
+                            actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy((left + right) * 0.5, top + border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                            actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy((left + right) * 0.5, bottom - border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                            actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(left + border_w * 0.5, (top + bottom) * 0.5):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                                 z(101)
                             ));
-                            ui_actors.push(act!(quad:
+                            actors.push(act!(quad:
                                 align(0.5, 0.5):
                                 xy(right - border_w * 0.5, (top + bottom) * 0.5):
                                 zoomto(border_w, ring_h):
@@ -1209,7 +1213,7 @@ pub fn get_actors(
         for block in &desc_layout.blocks {
             match block {
                 RenderedHelpBlock::Paragraph { text, line_count } => {
-                    ui_actors.push(act!(text:
+                    actors.push(act!(text:
                         align(0.0, 0.0):
                         xy(desc_x + title_side_pad, cursor_y):
                         zoom(DESC_TITLE_ZOOM):
@@ -1221,7 +1225,7 @@ pub fn get_actors(
                 }
                 RenderedHelpBlock::Bullet { text, line_count } => {
                     let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-                    ui_actors.push(act!(text:
+                    actors.push(act!(text:
                         align(0.0, 0.0):
                         xy(bullet_x, cursor_y):
                         zoom(DESC_BODY_ZOOM):
@@ -1235,7 +1239,7 @@ pub fn get_actors(
         }
     }
     if state.score_import_pack_picker.is_some() {
-        ui_actors.extend(build_score_import_pack_picker_actors(
+        actors.extend(build_score_import_pack_picker_actors(
             state,
             state.active_color_index,
         ));
@@ -1271,7 +1275,7 @@ pub fn get_actors(
             only_missing,
             pace_lines,
         );
-        ui_actors.extend(build_yes_no_confirm_overlay(
+        actors.extend(build_yes_no_confirm_overlay(
             prompt_text,
             confirm.active_choice,
             state.active_color_index,
@@ -1286,7 +1290,7 @@ pub fn get_actors(
                 confirm.selection.pack_label.as_str()
             }
         );
-        ui_actors.extend(build_yes_no_confirm_overlay(
+        actors.extend(build_yes_no_confirm_overlay(
             prompt_text,
             confirm.active_choice,
             state.active_color_index,
@@ -1294,15 +1298,22 @@ pub fn get_actors(
     }
 
     let combined_alpha = alpha_multiplier * state.content_alpha;
-    for actor in &mut ui_actors {
+    for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
     }
-    actors.extend(ui_actors);
 
     actors.extend(crate::screens::components::shared::update_overlay::build(
         &crate::engine::updater::action::current(),
         state.active_color_index,
     ));
+}
 
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(320);
+    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
 }

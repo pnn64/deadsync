@@ -78,7 +78,7 @@ use render::*;
 // Public API re-exports
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
-pub use render::{clear_description_layout_cache, clear_render_cache, get_actors};
+pub use render::{clear_description_layout_cache, clear_render_cache, get_actors, push_actors};
 pub use state::{State, init};
 pub use submenus::update_monitor_specs;
 pub use transitions::{in_transition, out_transition};

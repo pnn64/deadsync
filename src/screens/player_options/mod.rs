@@ -73,7 +73,7 @@ use visibility::*;
 // --- External API ---
 pub use input::{handle_input, update};
 pub use profile::{SpeedMod, SpeedModType, apply_no_cmod_alternative};
-pub use render::get_actors;
+pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
 

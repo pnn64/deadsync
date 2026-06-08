@@ -552,20 +552,28 @@ pub fn selected_device(state: &State) -> Option<PadDeviceId> {
     state.pads.get(pad_idx).map(|p| p.device_id)
 }
 
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
+    push_content(actors, state, false);
+}
+
 pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    });
-    actors.extend(build_content(state, false));
+    let mut actors = Vec::new();
+    push_actors(&mut actors, state);
     actors
 }
 
 /// Render the title, pads/messages, and instructions without a background.
 /// `as_overlay` adjusts z-order and the footer hints for the Song Select overlay.
-pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(160);
+pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
+    actors.reserve(160);
     let theme = theme(state.active_color_index);
     // As an overlay we draw above Song Select; as a screen we start near 0.
     let zb = if as_overlay { 1450.0 } else { 0.0 };
@@ -609,7 +617,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             z(20.0 + zb)
         ));
         push_footer(
-            &mut actors,
+            actors,
             Footer::Simple {
                 as_overlay,
                 advanced_available: false,
@@ -617,7 +625,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             },
             zb,
         );
-        return actors;
+        return;
     }
 
     if state.pads.is_empty() {
@@ -632,7 +640,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             z(20.0 + zb)
         ));
         push_footer(
-            &mut actors,
+            actors,
             Footer::Simple {
                 as_overlay,
                 advanced_available: false,
@@ -640,7 +648,7 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
             },
             zb,
         );
-        return actors;
+        return;
     }
 
     // While DeadSync manages pad config, direct edits on the standalone screen are
@@ -673,15 +681,20 @@ pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
     }
 
     if state.profiles_mode {
-        build_profiles(&mut actors, state, &theme, zb);
+        build_profiles(actors, state, &theme, zb);
     } else if let Some(pad_idx) = advanced_pad {
-        build_advanced(&mut actors, state, pad_idx, &theme, zb);
+        build_advanced(actors, state, pad_idx, &theme, zb);
     } else {
-        build_simple(&mut actors, state, &theme, as_overlay, zb);
+        build_simple(actors, state, &theme, as_overlay, zb);
     }
     if let Some(draft) = &state.saving {
-        push_save_box(&mut actors, state, draft, zb);
+        push_save_box(actors, state, draft, zb);
     }
+}
+
+pub fn build_content(state: &State, as_overlay: bool) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(160);
+    push_content(&mut actors, state, as_overlay);
     actors
 }
 

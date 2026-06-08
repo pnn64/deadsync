@@ -244,16 +244,19 @@ fn apply_lights(state: &State) {
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
-pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(16);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
+    actors.reserve(16);
     let screen_w = screen_width();
     let screen_h = screen_height();
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul,
+        },
+    );
 
     // Title.
     let title = tr("ScreenSmxAssignPads", "HeaderText");
@@ -369,7 +372,11 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
         diffuse(1.0, 1.0, 1.0, 0.74 * alpha_mul):
         z(90)
     ));
+}
 
+pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(16);
+    push_actors(&mut actors, state, alpha_mul);
     actors
 }
 

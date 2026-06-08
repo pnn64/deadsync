@@ -1054,30 +1054,34 @@ fn editable_slot_indices_for_action(
     crate::config::editable_key_binding_slot_indices(keymap, action)
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(256);
+) {
+    actors.reserve(256);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        // Keep hearts always visible for actor-only fades; UI rows fade separately.
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            // Keep hearts always visible for actor-only fades; UI rows fade separately.
+            alpha_mul: 1.0,
+        },
+    );
 
     if alpha_multiplier <= 0.0 {
-        return actors;
+        return;
     }
 
-    let mut ui_actors = Vec::new();
+    let ui_start = actors.len();
 
     /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-    ui_actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: "KEYBOARD/PAD MAPPINGS",
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -1173,7 +1177,7 @@ pub fn get_actors(
     let desc_h = desc_rows_h_base * s;
 
     // Description box (center) – height matched to visible mapping rows only.
-    ui_actors.push(act!(quad:
+    actors.push(act!(quad:
         align(0.0, 0.0):
         xy(desc_x, first_row_y):
         zoomto(desc_w, desc_h):
@@ -1190,7 +1194,7 @@ pub fn get_actors(
             }
             let row_center_y =
                 ((i_vis as f32) * (ROW_H + ROW_GAP)).mul_add(s, first_row_y) + 0.5 * ROW_H * s;
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(labels_center_x, row_center_y):
                 zoom(DESC_BODY_ZOOM):
@@ -1240,7 +1244,7 @@ pub fn get_actors(
     };
 
     // Top line: Player labels (Wendy, white).
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p1_center_x, header_main_y):
         zoom(header_main_zoom):
@@ -1248,7 +1252,7 @@ pub fn get_actors(
         font(current_machine_font_key(FontRole::Header)): settext("Player 1"):
         horizalign(center)
     ));
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p2_center_x, header_main_y):
         zoom(header_main_zoom):
@@ -1262,7 +1266,7 @@ pub fn get_actors(
     header_dec[3] = 1.0;
 
     // P1 headers
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
@@ -1270,7 +1274,7 @@ pub fn get_actors(
         font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
@@ -1278,7 +1282,7 @@ pub fn get_actors(
         font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
@@ -1288,7 +1292,7 @@ pub fn get_actors(
     ));
 
     // P2 headers
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
@@ -1296,7 +1300,7 @@ pub fn get_actors(
         font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
@@ -1304,7 +1308,7 @@ pub fn get_actors(
         font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
-    ui_actors.push(act!(text:
+    actors.push(act!(text:
         align(0.5, 0.5):
         xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
@@ -1337,13 +1341,13 @@ pub fn get_actors(
             };
 
             // Row backgrounds for P1 and P2 sides.
-            ui_actors.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.0):
                 xy(p1_side_x, row_y):
                 zoomto(side_w, ROW_H * s):
                 diffuse(bg[0], bg[1], bg[2], bg[3])
             ));
-            ui_actors.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.0):
                 xy(p2_side_x, row_y):
                 zoomto(side_w, ROW_H * s):
@@ -1352,13 +1356,13 @@ pub fn get_actors(
 
             // Label-style default columns (third column on each side).
             let default_bg_color = [0.0, 0.0, 0.0, 0.25];
-            ui_actors.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.0):
                 xy(2.0f32.mul_add(col_w, p1_side_x), row_y):
                 zoomto(col_w, ROW_H * s):
                 diffuse(default_bg_color[0], default_bg_color[1], default_bg_color[2], default_bg_color[3])
             ));
-            ui_actors.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.0):
                 xy(2.0f32.mul_add(col_w, p2_side_x), row_y):
                 zoomto(col_w, ROW_H * s):
@@ -1455,7 +1459,7 @@ pub fn get_actors(
 
             // P1 columns: Primary, Secondary, Default.
             // P1 primary / secondary (editable).
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p1_primary_x, row_mid_y):
                 zoom(p1_primary_zoom):
@@ -1465,7 +1469,7 @@ pub fn get_actors(
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p1_secondary_x, row_mid_y):
                 zoom(p1_secondary_zoom):
@@ -1477,7 +1481,7 @@ pub fn get_actors(
             ));
 
             // P1 default (non-selectable).
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p1_default_x, row_mid_y):
                 zoom(value_zoom):
@@ -1489,7 +1493,7 @@ pub fn get_actors(
             ));
 
             // P2 primary / secondary (editable).
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p2_primary_x, row_mid_y):
                 zoom(p2_primary_zoom):
@@ -1499,7 +1503,7 @@ pub fn get_actors(
                 maxwidth(col_w * 0.8):
                 horizalign(center)
             ));
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p2_secondary_x, row_mid_y):
                 zoom(p2_secondary_zoom):
@@ -1511,7 +1515,7 @@ pub fn get_actors(
             ));
 
             // P2 default (non-selectable).
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(p2_default_x, row_mid_y):
                 zoom(value_zoom):
@@ -1606,28 +1610,28 @@ pub fn get_actors(
                 let mut ring_color = color::decorative_rgba(state.active_color_index);
                 ring_color[3] = 1.0;
 
-                ui_actors.push(act!(quad:
+                actors.push(act!(quad:
                     align(0.5, 0.5):
                     xy(center_x, top + border_w * 0.5):
                     zoomto(ring_w, border_w):
                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                     z(101)
                 ));
-                ui_actors.push(act!(quad:
+                actors.push(act!(quad:
                     align(0.5, 0.5):
                     xy(center_x, bottom - border_w * 0.5):
                     zoomto(ring_w, border_w):
                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                     z(101)
                 ));
-                ui_actors.push(act!(quad:
+                actors.push(act!(quad:
                     align(0.5, 0.5):
                     xy(left + border_w * 0.5, center_y):
                     zoomto(border_w, ring_h):
                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                     z(101)
                 ));
-                ui_actors.push(act!(quad:
+                actors.push(act!(quad:
                     align(0.5, 0.5):
                     xy(right - border_w * 0.5, center_y):
                     zoomto(border_w, ring_h):
@@ -1651,14 +1655,14 @@ pub fn get_actors(
             } else {
                 col_inactive_bg
             };
-            ui_actors.push(act!(quad:
+            actors.push(act!(quad:
                 align(0.0, 0.0):
                 xy(exit_row_left, row_y):
                 zoomto(exit_row_width, ROW_H * s):
                 diffuse(exit_bg[0], exit_bg[1], exit_bg[2], exit_bg[3])
             ));
 
-            ui_actors.push(act!(text:
+            actors.push(act!(text:
                 align(0.5, 0.5):
                 xy(exit_center_x, exit_y):
                 zoom(0.835):
@@ -1730,28 +1734,28 @@ pub fn get_actors(
                         let mut ring_color = color::decorative_rgba(state.active_color_index);
                         ring_color[3] = 1.0;
 
-                        ui_actors.push(act!(quad:
+                        actors.push(act!(quad:
                             align(0.5, 0.5):
                             xy(center_x, top + border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
-                        ui_actors.push(act!(quad:
+                        actors.push(act!(quad:
                             align(0.5, 0.5):
                             xy(center_x, bottom - border_w * 0.5):
                             zoomto(ring_w, border_w):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
-                        ui_actors.push(act!(quad:
+                        actors.push(act!(quad:
                             align(0.5, 0.5):
                             xy(left + border_w * 0.5, center_y):
                             zoomto(border_w, ring_h):
                             diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
                             z(101)
                         ));
-                        ui_actors.push(act!(quad:
+                        actors.push(act!(quad:
                             align(0.5, 0.5):
                             xy(right - border_w * 0.5, center_y):
                             zoomto(border_w, ring_h):
@@ -1765,11 +1769,18 @@ pub fn get_actors(
     }
 
     let combined_alpha = alpha_multiplier;
-    for actor in &mut ui_actors {
+    for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
     }
-    actors.extend(ui_actors);
+}
 
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(256);
+    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
 }
 

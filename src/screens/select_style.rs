@@ -252,8 +252,8 @@ fn push_pad_tiles(
     }
 }
 
-pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(128);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    actors.reserve(128);
     let exit_t = exit_anim_t(state.exit_chosen_anim);
     let (chosen_p, other_alpha) = if state.exit_chosen_anim {
         (
@@ -264,11 +264,14 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         (0.0, 1.0)
     };
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     let select_style = tr("ScreenTitles", "SelectStyle");
     actors.push(screen_bar::build(ScreenBarParams {
@@ -365,28 +368,20 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         match choice {
             Choice::Single => {
                 let used = color::decorative_rgba(state.active_color_index);
-                push_pad_tiles(&mut actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
             }
             Choice::Versus => {
                 let left = color::decorative_rgba(state.active_color_index - 1);
                 let right = color::decorative_rgba(state.active_color_index + 2);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(&mut actors, x - off, cy, zoom, alpha, left, PAD_UNUSED_RGBA);
-                push_pad_tiles(
-                    &mut actors,
-                    x + off,
-                    cy,
-                    zoom,
-                    alpha,
-                    right,
-                    PAD_UNUSED_RGBA,
-                );
+                push_pad_tiles(actors, x - off, cy, zoom, alpha, left, PAD_UNUSED_RGBA);
+                push_pad_tiles(actors, x + off, cy, zoom, alpha, right, PAD_UNUSED_RGBA);
             }
             Choice::Double => {
                 let used = color::decorative_rgba(state.active_color_index + 1);
                 let off = dual_pad_off * zoom;
-                push_pad_tiles(&mut actors, x - off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
-                push_pad_tiles(&mut actors, x + off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(actors, x - off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
+                push_pad_tiles(actors, x + off, cy, zoom, alpha, used, PAD_UNUSED_RGBA);
             }
         }
 
@@ -401,6 +396,10 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             font(current_machine_font_key(FontRole::Header)): settext(choice_label(choice)): horizalign(center)
         ));
     }
+}
 
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(128);
+    push_actors(&mut actors, state);
     actors
 }

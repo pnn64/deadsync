@@ -6881,20 +6881,18 @@ impl App {
             }
         }
 
-        let mut actors = match self.state.screens.current_screen {
+        let mut actors = std::mem::take(&mut self.actor_scratch);
+        actors.clear();
+
+        match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                let mut actors = std::mem::take(&mut self.actor_scratch);
-                actors.clear();
                 menu::push_actors(
                     &mut actors,
                     &self.state.screens.menu_state,
                     screen_alpha_multiplier,
                 );
-                actors
             }
             CurrentScreen::Gameplay => {
-                let mut actors = std::mem::take(&mut self.actor_scratch);
-                actors.clear();
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     gameplay::push_actors(
@@ -6904,126 +6902,143 @@ impl App {
                         gameplay::ActorViewOverride::default(),
                     );
                 }
-                actors
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
-                    let mut actors = std::mem::take(&mut self.actor_scratch);
-                    actors.clear();
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
                     practice::push_actors(&mut actors, ps, &self.asset_manager);
-                    actors
-                } else {
-                    vec![]
                 }
             }
-            CurrentScreen::Options => options::get_actors(
+            CurrentScreen::Options => options::push_actors(
+                &mut actors,
                 &self.state.screens.options_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::Credits => credits::get_actors(&self.state.screens.credits_state),
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::get_actors(
+            CurrentScreen::Credits => {
+                credits::push_actors(&mut actors, &self.state.screens.credits_state)
+            }
+            CurrentScreen::ManageLocalProfiles => manage_local_profiles::push_actors(
+                &mut actors,
                 &self.state.screens.manage_local_profiles_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::Mappings => mappings::get_actors(
+            CurrentScreen::Mappings => mappings::push_actors(
+                &mut actors,
                 &self.state.screens.mappings_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
-            CurrentScreen::ConfigurePads => {
-                crate::screens::pad_config::get_actors(&self.state.screens.pad_config_state)
+            CurrentScreen::Input => {
+                input_screen::push_actors(&mut actors, &self.state.screens.input_state)
             }
-            CurrentScreen::TestLights => test_lights::get_actors(
+            CurrentScreen::ConfigurePads => {
+                crate::screens::pad_config::push_actors(
+                    &mut actors,
+                    &self.state.screens.pad_config_state,
+                );
+            }
+            CurrentScreen::TestLights => test_lights::push_actors(
+                &mut actors,
                 &self.state.screens.test_lights_state,
                 self.lights.state_snapshot(),
                 self.lights.mode(),
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::OverscanAdjustment => overscan_adjustment::get_actors(
+            CurrentScreen::OverscanAdjustment => overscan_adjustment::push_actors(
+                &mut actors,
                 &self.state.screens.overscan_adjustment_state,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::get_actors(
+            CurrentScreen::SmxAssignPads => crate::screens::smx_assign::push_actors(
+                &mut actors,
                 &self.state.screens.smx_assign_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
-                    player_options::get_actors(pos, &self.asset_manager)
-                } else {
-                    vec![]
+                    player_options::push_actors(&mut actors, pos, &self.asset_manager);
                 }
             }
-            CurrentScreen::SelectProfile => select_profile::get_actors(
+            CurrentScreen::SelectProfile => select_profile::push_actors(
+                &mut actors,
                 &self.state.screens.select_profile_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::SelectColor => select_color::get_actors(
+            CurrentScreen::SelectColor => select_color::push_actors(
+                &mut actors,
                 &self.state.screens.select_color_state,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::get_actors(
+            CurrentScreen::ArrowCloudLogin => crate::screens::arrowcloud_login::push_actors(
+                &mut actors,
                 &self.state.screens.arrowcloud_login_state,
                 screen_alpha_multiplier,
             ),
-            CurrentScreen::GrooveStatsLogin => crate::screens::groovestats_login::get_actors(
+            CurrentScreen::GrooveStatsLogin => crate::screens::groovestats_login::push_actors(
+                &mut actors,
                 &self.state.screens.groovestats_login_state,
                 screen_alpha_multiplier,
             ),
             CurrentScreen::SelectStyle => {
-                select_style::get_actors(&self.state.screens.select_style_state)
+                select_style::push_actors(&mut actors, &self.state.screens.select_style_state);
             }
-            CurrentScreen::SelectPlayMode => select_mode::get_actors(
+            CurrentScreen::SelectPlayMode => select_mode::push_actors(
+                &mut actors,
                 &self.state.screens.select_play_mode_state,
                 &self.asset_manager,
             ),
             CurrentScreen::ProfileLoad => {
-                profile_load::get_actors(&self.state.screens.profile_load_state)
+                profile_load::push_actors(&mut actors, &self.state.screens.profile_load_state);
             }
             CurrentScreen::SelectMusic => {
-                let mut actors = std::mem::take(&mut self.actor_scratch);
-                actors.clear();
                 select_music::push_actors(
                     &mut actors,
                     &self.state.screens.select_music_state,
                     &self.asset_manager,
                     self.state.session.played_stages.len() + 1,
                 );
-                actors
             }
-            CurrentScreen::SelectCourse => select_course::get_actors(
+            CurrentScreen::SelectCourse => select_course::push_actors(
+                &mut actors,
                 &self.state.screens.select_course_state,
                 &self.asset_manager,
             ),
-            CurrentScreen::Sandbox => sandbox::get_actors(&self.state.screens.sandbox_state),
-            CurrentScreen::Init => init::get_actors(&self.state.screens.init_state),
+            CurrentScreen::Sandbox => {
+                sandbox::push_actors(&mut actors, &self.state.screens.sandbox_state)
+            }
+            CurrentScreen::Init => init::push_actors(&mut actors, &self.state.screens.init_state),
             CurrentScreen::Evaluation => {
-                evaluation::get_actors(&self.state.screens.evaluation_state, &self.asset_manager)
+                evaluation::push_actors(
+                    &mut actors,
+                    &self.state.screens.evaluation_state,
+                    &self.asset_manager,
+                );
             }
             CurrentScreen::EvaluationSummary => {
                 let stages = self.post_select_display_stages();
-                evaluation_summary::get_actors(
+                evaluation_summary::push_actors(
+                    &mut actors,
                     &self.state.screens.evaluation_summary_state,
                     &stages,
                     &self.asset_manager,
-                )
+                );
             }
             CurrentScreen::Initials => {
                 let stages = self.post_select_display_stages();
-                initials::get_actors(
+                initials::push_actors(
+                    &mut actors,
                     &self.state.screens.initials_state,
                     &stages,
                     &self.asset_manager,
-                )
+                );
             }
-            CurrentScreen::GameOver => gameover::get_actors(
+            CurrentScreen::GameOver => gameover::push_actors(
+                &mut actors,
                 &self.state.screens.gameover_state,
                 &self.state.session.played_stages,
                 &self.asset_manager,

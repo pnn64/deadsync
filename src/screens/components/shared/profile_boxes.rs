@@ -1894,18 +1894,22 @@ pub fn get_box_actors_with_z(
     actors
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(160);
+) {
+    actors.reserve(160);
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     let fg = [1.0, 1.0, 1.0, 1.0];
     let title = tr("ScreenTitles", "SelectProfile");
@@ -1944,6 +1948,15 @@ pub fn get_actors(
         right_avatar: None,
     }));
     actors.extend(build_box_actors(state, asset_manager, alpha_multiplier));
+}
+
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(160);
+    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
 }
 

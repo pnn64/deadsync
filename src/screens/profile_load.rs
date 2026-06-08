@@ -134,48 +134,49 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 
-pub fn get_actors(_: &State) -> Vec<Actor> {
+pub fn push_actors(actors: &mut Vec<Actor>, _: &State) {
+    actors.reserve(4);
     let w = screen_width();
     let h = screen_height();
     let cx = screen_center_x();
     let cy = screen_center_y();
 
-    vec![
-        // Backdrop (ScreenWithMenuElements background is effectively black here).
-        act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(w, h):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(0.0)
-        ),
-        // FadeToBlack
-        act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(w, h):
-            diffuse(0.0, 0.0, 0.0, 0.0):
-            z(100.0):
-            sleep(TWEENTIME):
-            linear(TWEENTIME): alpha(1.0)
-        ),
-        // HorizontalWhiteSwoosh
-        act!(quad:
-            align(0.5, 0.5): xy(cx, cy):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            zoomto(w + SWOOSH_W_PAD, SWOOSH_H):
-            fadeleft(0.1): faderight(0.1):
-            cropright(1.0):
-            z(101.0):
-            linear(TWEENTIME): cropright(0.0):
-            sleep(TWEENTIME):
-            linear(TWEENTIME): cropleft(1.0)
-        ),
-        // "Common Bold" (Simply Love) -> Wendy small.
-        act!(text:
-            font(current_machine_font_key(FontRole::Header)): settext(tr("Common", "Loading")):
-            align(0.5, 0.5): xy(cx, cy):
-            zoom(0.6):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(102.0)
-        ),
-    ]
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(0.0)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 0.0):
+        z(100.0):
+        sleep(TWEENTIME):
+        linear(TWEENTIME): alpha(1.0)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        zoomto(w + SWOOSH_W_PAD, SWOOSH_H):
+        fadeleft(0.1): faderight(0.1):
+        cropright(1.0):
+        z(101.0):
+        linear(TWEENTIME): cropright(0.0):
+        sleep(TWEENTIME):
+        linear(TWEENTIME): cropleft(1.0)
+    ));
+    actors.push(act!(text:
+        font(current_machine_font_key(FontRole::Header)): settext(tr("Common", "Loading")):
+        align(0.5, 0.5): xy(cx, cy):
+        zoom(0.6):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(102.0)
+    ));
+}
+
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(4);
+    push_actors(&mut actors, state);
+    actors
 }

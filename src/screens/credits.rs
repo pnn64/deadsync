@@ -226,16 +226,19 @@ pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
-pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(CREDITS.len() * 2 + 12);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    actors.reserve(CREDITS.len() * 2 + 12);
     let screen_w = screen_width();
     let screen_h = screen_height();
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     let cinematic_t =
         ease_out_cubic((state.enter_elapsed / CINEMATIC_ANIM_SECONDS).clamp(0.0, 1.0));
@@ -321,7 +324,11 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         diffuse(1.0, 1.0, 1.0, 0.8):
         z(40)
     ));
+}
 
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(CREDITS.len() * 2 + 12);
+    push_actors(&mut actors, state);
     actors
 }
 

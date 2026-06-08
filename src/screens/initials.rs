@@ -1173,19 +1173,23 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     }
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(64);
+) {
+    actors.reserve(64);
 
     // Background
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     // Banner + title cycling (Simply Love behavior)
     actors.extend(build_banner_and_title(state, stages));
@@ -1205,7 +1209,15 @@ pub fn get_actors(
             actors.push(list);
         }
     }
+}
 
+pub fn get_actors(
+    state: &State,
+    stages: &[stage_stats::StageSummary],
+    asset_manager: &AssetManager,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(64);
+    push_actors(&mut actors, state, stages, asset_manager);
     actors
 }
 

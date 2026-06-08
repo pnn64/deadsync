@@ -110,33 +110,42 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(64);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
+    actors.reserve(64);
 
     // 1) Animated heart background with a short cross-fade between colors.
     let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
     if a >= 1.0 || state.bg_from_index == state.bg_to_index {
         // No active fade: draw a single layer + normal backdrop
-        actors.extend(state.bg.build(visual_style_bg::Params {
-            active_color_index: state.bg_to_index,
-            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-            alpha_mul: 1.0,
-        }));
+        state.bg.push(
+            actors,
+            visual_style_bg::Params {
+                active_color_index: state.bg_to_index,
+                backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+                alpha_mul: 1.0,
+            },
+        );
     } else {
         let alpha_from = 1.0 - a;
         let alpha_to = a;
         // Bottom: previous color + full backdrop
-        actors.extend(state.bg.build(visual_style_bg::Params {
-            active_color_index: state.bg_from_index,
-            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-            alpha_mul: alpha_from,
-        }));
+        state.bg.push(
+            actors,
+            visual_style_bg::Params {
+                active_color_index: state.bg_from_index,
+                backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+                alpha_mul: alpha_from,
+            },
+        );
         // Top: new color + NO backdrop (avoid double darkening)
-        actors.extend(state.bg.build(visual_style_bg::Params {
-            active_color_index: state.bg_to_index,
-            backdrop_rgba: [0.0, 0.0, 0.0, 0.0],
-            alpha_mul: alpha_to,
-        }));
+        state.bg.push(
+            actors,
+            visual_style_bg::Params {
+                active_color_index: state.bg_to_index,
+                backdrop_rgba: [0.0, 0.0, 0.0, 0.0],
+                alpha_mul: alpha_to,
+            },
+        );
     }
 
     // 2) Bars (top + bottom)
@@ -389,7 +398,11 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         actor.mul_alpha(alpha_multiplier);
     }
     actors.extend(wheel_actors);
+}
 
+pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(64);
+    push_actors(&mut actors, state, alpha_multiplier);
     actors
 }
 

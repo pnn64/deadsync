@@ -181,23 +181,27 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     lights: LightState,
     mode: LightMode,
     alpha_mul: f32,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(44);
+) {
+    actors.reserve(44);
     let screen_w = screen_width();
     let screen_h = screen_height();
     let root_x = screen_center_x();
     let root_y = screen_center_y() + ROOT_Y_OFFSET;
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul,
+        },
+    );
 
     actors.push(act!(sprite(CABINET_TEX):
         align(0.5, 0.5):
@@ -223,29 +227,9 @@ pub fn get_actors(
         ));
     }
 
-    push_pad(
-        &mut actors,
-        lights,
-        LightPlayer::P1,
-        root_x,
-        root_y,
-        alpha_mul,
-    );
-    push_pad(
-        &mut actors,
-        lights,
-        LightPlayer::P2,
-        root_x,
-        root_y,
-        alpha_mul,
-    );
-    push_labels(
-        &mut actors,
-        lights,
-        mode,
-        state.active_color_index,
-        alpha_mul,
-    );
+    push_pad(actors, lights, LightPlayer::P1, root_x, root_y, alpha_mul);
+    push_pad(actors, lights, LightPlayer::P2, root_x, root_y, alpha_mul);
+    push_labels(actors, lights, mode, state.active_color_index, alpha_mul);
 
     actors.push(act!(quad:
         align(0.0, 1.0):
@@ -265,7 +249,16 @@ pub fn get_actors(
         diffuse(1.0, 1.0, 1.0, 0.74 * alpha_mul):
         z(90)
     ));
+}
 
+pub fn get_actors(
+    state: &State,
+    lights: LightState,
+    mode: LightMode,
+    alpha_mul: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(44);
+    push_actors(&mut actors, state, lights, mode, alpha_mul);
     actors
 }
 

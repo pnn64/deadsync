@@ -3790,18 +3790,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     let cfg = crate::config::get();
     let sl_header_alpha = eval_panes::eval_style_alpha(1.0, 0.5);
     let sl_panel_alpha = eval_panes::eval_style_alpha(1.0, 0.75);
-    let mut actors = Vec::with_capacity(20);
+    actors.reserve(20);
 
     // 1. Background
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     // 2. Top Bar
     actors.push(screen_bar::build(ScreenBarParams {
@@ -3840,7 +3843,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             zoom(0.8): horizalign(center):
             z(100)
         ));
-        return actors;
+        return;
     };
 
     // --- Lower Stats Pane Background ---
@@ -5412,6 +5415,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             panels.as_slice(),
         ));
     }
+}
 
+pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(20);
+    push_actors(&mut actors, state, asset_manager);
     actors
 }

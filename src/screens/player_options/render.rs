@@ -2,16 +2,19 @@ use super::*;
 use crate::assets::{FontRole, current_machine_font_key};
 use deadsync_profile::TapExplosionMask;
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(64);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+    actors.reserve(64);
     let active = session_active_players();
     let show_p2 = active[P1] && active[P2];
     let pane_alpha = state.pane_transition.alpha();
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
     let select_modifiers = tr("ScreenTitles", "SelectModifiers");
     actors.push(screen_bar::build(ScreenBarParams {
         title: &select_modifiers,
@@ -256,7 +259,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                draw_cursor_ring(&mut actors, state, active, item_idx, a);
+                draw_cursor_ring(actors, state, active, item_idx, a);
             }
         } else if show_all_choices_inline {
             let rc = RowCtx {
@@ -268,7 +271,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 is_active,
                 sl_gray,
             };
-            draw_inline_choices(&mut actors, &rc, show_arcade_next_row, choice_inner_left);
+            draw_inline_choices(actors, &rc, show_arcade_next_row, choice_inner_left);
         } else {
             let rc = RowCtx {
                 fc: &fc,
@@ -279,7 +282,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 is_active,
                 sl_gray,
             };
-            draw_single_value_with_preview(&mut actors, &rc);
+            draw_single_value_with_preview(actors, &rc);
         }
     }
     // ------------------- Description content (selected) -------------------
@@ -368,6 +371,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
+}
+
+pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(64);
+    push_actors(&mut actors, state, asset_manager);
     actors
 }
 

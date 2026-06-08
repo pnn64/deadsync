@@ -736,12 +736,13 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
 
 /* --------------------------- combined build --------------------------- */
 
-fn get_actors_with_elapsed_overrides(
+fn push_actors_with_elapsed_overrides(
+    actors: &mut Vec<Actor>,
     state: &State,
     loading_elapsed_override: Option<f32>,
     bg_elapsed_override: Option<f32>,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(32 + ARROW_COUNT);
+) {
+    actors.reserve(32 + ARROW_COUNT);
 
     /* 1) HEART BACKGROUND — visible immediately */
     let bg_params = visual_style_bg::Params {
@@ -749,11 +750,11 @@ fn get_actors_with_elapsed_overrides(
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     };
-    actors.extend(if let Some(bg_elapsed_s) = bg_elapsed_override {
-        state.bg.build_at_elapsed(bg_params, bg_elapsed_s)
+    if let Some(bg_elapsed_s) = bg_elapsed_override {
+        state.bg.push_at_elapsed(actors, bg_params, bg_elapsed_s);
     } else {
-        state.bg.build(bg_params)
-    });
+        state.bg.push(actors, bg_params);
+    }
 
     if state.phase == InitPhase::Loading {
         let loading_elapsed_s = loading_elapsed_override.unwrap_or_else(|| {
@@ -761,13 +762,13 @@ fn get_actors_with_elapsed_overrides(
                 loading.started_at.elapsed().as_secs_f32().max(0.0)
             })
         });
-        push_loading_overlay(state, &mut actors, loading_elapsed_s);
-        return actors;
+        push_loading_overlay(state, actors, loading_elapsed_s);
+        return;
     }
 
     /* If we’re still in pre-roll, stop here: no squish/backdrop/arrows yet. */
     if state.elapsed < PRE_ROLL {
-        return actors;
+        return;
     }
 
     /* 2) SQUISH BAR — drive by timeline that starts after PRE_ROLL */
@@ -819,7 +820,20 @@ fn get_actors_with_elapsed_overrides(
             linear(0.0): visible(false)
         ));
     }
+}
 
+fn get_actors_with_elapsed_overrides(
+    state: &State,
+    loading_elapsed_override: Option<f32>,
+    bg_elapsed_override: Option<f32>,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
+    push_actors_with_elapsed_overrides(
+        &mut actors,
+        state,
+        loading_elapsed_override,
+        bg_elapsed_override,
+    );
     actors
 }
 
@@ -827,6 +841,12 @@ pub(crate) fn get_actors_at_loading_elapsed(state: &State, loading_elapsed_s: f3
     get_actors_with_elapsed_overrides(state, Some(loading_elapsed_s), Some(loading_elapsed_s))
 }
 
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    push_actors_with_elapsed_overrides(actors, state, None, None);
+}
+
 pub fn get_actors(state: &State) -> Vec<Actor> {
-    get_actors_with_elapsed_overrides(state, None, None)
+    let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
+    push_actors(&mut actors, state);
+    actors
 }

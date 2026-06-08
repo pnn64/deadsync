@@ -1490,26 +1490,30 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
     }
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     _asset_manager: &AssetManager,
     alpha_multiplier: f32,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(220);
+) {
+    actors.reserve(220);
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     if alpha_multiplier <= 0.0 {
-        return actors;
+        return;
     }
 
-    let mut ui = Vec::new();
+    let ui_start = actors.len();
     let title = tr("ScreenTitles", "ManageProfiles");
-    ui.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -1527,9 +1531,9 @@ pub fn get_actors(
     let col_inactive_bg: [f32; 4] = [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
 
     let (s, list_x, list_y) = scaled_block_origin_with_margins();
-    push_list_chrome(&mut ui, col_active_bg, s, list_x, list_y);
+    push_list_chrome(actors, col_active_bg, s, list_x, list_y);
     push_rows(
-        &mut ui,
+        actors,
         state,
         s,
         list_x,
@@ -1541,15 +1545,23 @@ pub fn get_actors(
     let list_w = LIST_W * s;
     let sep_w = SEP_W * s;
     let desc_x = list_x + list_w + sep_w;
-    push_desc(&mut ui, state, s, desc_x, list_y);
-    push_profile_menu_overlay(&mut ui, state, s, list_x, list_y);
-    push_name_entry_overlay(&mut ui, state);
-    push_delete_confirm_overlay(&mut ui, state);
+    push_desc(actors, state, s, desc_x, list_y);
+    push_profile_menu_overlay(actors, state, s, list_x, list_y);
+    push_name_entry_overlay(actors, state);
+    push_delete_confirm_overlay(actors, state);
 
-    for actor in &mut ui {
+    for actor in &mut actors[ui_start..] {
         actor.mul_alpha(alpha_multiplier);
     }
-    actors.extend(ui);
+}
+
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(220);
+    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
 }
 

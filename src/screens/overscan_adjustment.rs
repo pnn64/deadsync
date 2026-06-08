@@ -195,20 +195,23 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(24);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
+    actors.reserve(24);
     let screen_w = screen_width();
     let screen_h = screen_height();
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul,
+        },
+    );
 
     // Edge guide lines (scale with the centering matrix). Red for the vertical
     // extent (top/bottom), blue for the horizontal extent (left/right).
-    push_guides(&mut actors, screen_w, screen_h, alpha_mul);
+    push_guides(actors, screen_w, screen_h, alpha_mul);
 
     // Title: machine Header font (Wendy) at the standard screen-title scale,
     // matching how every other screen renders its title.
@@ -268,7 +271,11 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
         diffuse(1.0, 1.0, 1.0, 0.74 * alpha_mul):
         z(90)
     ));
+}
 
+pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(24);
+    push_actors(&mut actors, state, alpha_mul);
     actors
 }
 

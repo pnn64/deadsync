@@ -394,11 +394,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
     } else {
         [0.0, 0.0, 0.0, 1.0]
     };
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: backdrop,
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: backdrop,
+            alpha_mul: 1.0,
+        },
+    );
 
     // If fully faded, don't create the other actors
     if alpha_multiplier <= 0.0 {

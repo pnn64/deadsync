@@ -68,11 +68,11 @@ impl TiledStyleState {
         Self
     }
 
-    fn build_at_elapsed(&self, params: &Params, elapsed_s: f32) -> Vec<Actor> {
-        let mut actors = Vec::with_capacity(11);
+    fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: &Params, elapsed_s: f32) {
+        out.reserve(11);
         let w = screen_width();
         let h = screen_height();
-        actors.push(act!(quad:
+        out.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
             zoomto(w, h):
@@ -85,10 +85,8 @@ impl TiledStyleState {
             rgba[3] = DIFFUSE_ALPHA[i] * params.alpha_mul;
             let uv = scrolled_uv_rect(UV_VEL[i], elapsed_s);
 
-            push_shared_bg(&mut actors, XY[i], XY[i], rgba, uv);
+            push_shared_bg(out, XY[i], XY[i], rgba, uv);
         }
-
-        actors
     }
 }
 
@@ -104,22 +102,34 @@ impl State {
         self.build_at_elapsed(params, global_elapsed_s())
     }
 
-    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
+    pub fn push(&self, out: &mut Vec<Actor>, params: Params) {
+        self.push_at_elapsed(out, params, global_elapsed_s());
+    }
+
+    pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f32) {
         let style = visual_style();
         if matches!(style, VisualStyle::Technique)
-            && let Some(actors) = self.technique.build_at_elapsed(
+            && self.technique.push_at_elapsed(
+                out,
                 params.active_color_index,
                 params.backdrop_rgba,
                 params.alpha_mul,
                 elapsed_s,
             )
         {
-            return actors;
+            return;
         }
         if matches!(style, VisualStyle::Srpg9) {
-            return build_srpg9(&params);
+            push_srpg9(out, &params);
+            return;
         }
-        self.tiled.build_at_elapsed(&params, elapsed_s)
+        self.tiled.push_at_elapsed(out, &params, elapsed_s);
+    }
+
+    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
+        let mut actors = Vec::new();
+        self.push_at_elapsed(&mut actors, params, elapsed_s);
+        actors
     }
 }
 
@@ -133,12 +143,12 @@ fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32
     ));
 }
 
-fn build_srpg9(params: &Params) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(3);
+fn push_srpg9(out: &mut Vec<Actor>, params: &Params) {
+    out.reserve(3);
     let w = screen_width();
     let h = screen_height();
     let background_key = srpg9_background_key();
-    actors.push(act!(quad:
+    out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
         zoomto(w, h):
@@ -151,21 +161,20 @@ fn build_srpg9(params: &Params) -> Vec<Actor> {
     tint[1] = (tint[1] * 3.0).min(1.0);
     tint[2] = (tint[2] * 3.0).min(1.0);
     tint[3] = params.alpha_mul;
-    actors.push(act!(sprite(background_key):
+    out.push(act!(sprite(background_key):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_center_y()):
         setsize((h * 16.0 / 9.0).max(w), h):
         diffuse(tint[0], tint[1], tint[2], tint[3]):
         z(-99)
     ));
-    actors.push(act!(quad:
+    out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
         zoomto(w, h):
         diffuse(0.0, 0.0, 0.0, 0.5 * params.alpha_mul):
         z(-98)
     ));
-    actors
 }
 
 pub fn set_srpg9_background_key(key: Option<String>) {
@@ -257,8 +266,12 @@ mod tests {
     fn build_reads_shared_elapsed_clock() {
         set_global_elapsed_for_test(2.5);
         let state = TiledStyleState::new();
-        let shared = first_bg_sprite(&state.build_at_elapsed(&params(), global_elapsed_s()));
-        let explicit = first_bg_sprite(&state.build_at_elapsed(&params(), 2.5));
+        let mut shared_actors = Vec::new();
+        state.push_at_elapsed(&mut shared_actors, &params(), global_elapsed_s());
+        let mut explicit_actors = Vec::new();
+        state.push_at_elapsed(&mut explicit_actors, &params(), 2.5);
+        let shared = first_bg_sprite(&shared_actors);
+        let explicit = first_bg_sprite(&explicit_actors);
         assert!(
             (shared.0[0] - explicit.0[0]).abs() < EPS
                 && (shared.0[1] - explicit.0[1]).abs() < EPS

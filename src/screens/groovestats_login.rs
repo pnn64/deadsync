@@ -159,14 +159,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(32);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
+    actors.reserve(32);
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     if let Some(ui) = state.ui.as_ref() {
         let mut ui_actors = build_qr_login_overlay_actors(ui, state.active_color_index);
@@ -175,5 +178,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         }
         actors.extend(ui_actors);
     }
+}
+
+pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(32);
+    push_actors(&mut actors, state, alpha_multiplier);
     actors
 }

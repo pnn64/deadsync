@@ -159,8 +159,8 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
     }
 }
 
-pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(10 + INPUT_LOG_MAX_ITEMS);
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
+    actors.reserve(10 + INPUT_LOG_MAX_ITEMS);
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 20.0):
@@ -189,7 +189,11 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             z(200)
         ));
     }
+}
 
+pub fn get_actors(state: &State) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(10 + INPUT_LOG_MAX_ITEMS);
+    push_actors(&mut actors, state);
     actors
 }
 

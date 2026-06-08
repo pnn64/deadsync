@@ -10966,11 +10966,14 @@ pub fn push_actors(
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
     actors.push(sl_select_music_bg_flash());
 
     let select_music_label = tr("ScreenTitles", "SelectMusic");
@@ -12305,7 +12308,7 @@ pub fn push_actors(
             diffuse(0.0, 0.0, 0.0, 0.7):
             z(1451)
         ));
-        actors.extend(pad_config::build_content(&state.pad_config_overlay, true));
+        pad_config::push_content(actors, &state.pad_config_overlay, true);
         return;
     }
     if state.test_input_overlay_visible {

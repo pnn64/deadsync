@@ -220,19 +220,23 @@ pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
 }
 
-pub fn get_actors(
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
     state: &State,
     stages: &[stage_stats::StageSummary],
     _asset_manager: &AssetManager,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::with_capacity(64);
+) {
+    actors.reserve(64);
 
     // Background (Simply Love: ScreenWithMenuElements background)
-    actors.extend(state.bg.build(visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-    }));
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        },
+    );
 
     // Side stat backdrops (Simply Love: two quads at x=80 and x=w-80)
     {
@@ -369,7 +373,15 @@ pub fn get_actors(
             ));
         }
     }
+}
 
+pub fn get_actors(
+    state: &State,
+    stages: &[stage_stats::StageSummary],
+    asset_manager: &AssetManager,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(64);
+    push_actors(&mut actors, state, stages, asset_manager);
     actors
 }
 
