@@ -8032,7 +8032,10 @@ impl App {
                 }
             }
         }
-        let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
+        let accepts_queued_input = input_routing::screen_accepts_queued_input(
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        );
 
         if raw_key.pressed && raw_key.code == KeyCode::F3 {
             let mode = self.state.shell.cycle_overlay_mode();
@@ -8057,7 +8060,7 @@ impl App {
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
-        if is_transitioning {
+        if !accepts_queued_input {
             input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
@@ -8175,8 +8178,10 @@ impl App {
 
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
-        let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
-        if is_transitioning {
+        if !input_routing::screen_accepts_queued_input(
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        ) {
             input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();

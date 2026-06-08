@@ -115,7 +115,8 @@ use self::clock::{
     frame_stable_display_music_time_ns, music_time_ns_from_song_clock,
 };
 pub use self::controls::{
-    RawKeyAction, autosync_mode_status_line, handle_queued_raw_key, timing_tick_status_line,
+    RawKeyAction, autosync_mode_status_line, handle_queued_raw_key, sync_queued_raw_modifiers,
+    timing_tick_status_line,
 };
 #[cfg(test)]
 use self::controls::{next_tick_mode, tick_mode_status_line};
@@ -8989,32 +8990,33 @@ mod tests {
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
         FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
         HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
-        INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry,
-        ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode,
-        TurnRng, active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
-        advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
-        apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
-        apply_time_based_mine_avoidance, apply_time_based_tap_misses,
-        assist_lookahead_music_horizon_seconds, autoplay_random_offset_music_ns_for_window,
-        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
-        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        crossed_mine_held_start_time, effective_appearance_effects_for_player,
-        effective_mini_percent_for_player, effective_player_global_offset_seconds,
-        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
-        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
-        error_bar_average_offset_s, error_bar_long_term_offset_s, error_bar_register_tap,
-        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time_ns, grade_to_window, handle_input, hit_mine,
-        input_queue_cap, integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
-        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
+        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
+        TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng, active_hold_counts_as_pressed,
+        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
+        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
+        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
+        apply_time_based_tap_misses, assist_lookahead_music_horizon_seconds,
+        autoplay_random_offset_music_ns_for_window, begin_outro_attack_clear,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
+        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
+        effective_appearance_effects_for_player, effective_mini_percent_for_player,
+        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
+        effective_visibility_effects_for_player, effective_visual_effects_for_player,
+        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
+        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
+        handle_input, handle_queued_raw_key, hit_mine, input_queue_cap,
+        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
+        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
         refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
@@ -9023,11 +9025,12 @@ mod tests {
         settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
         song_time_ns_to_seconds, stage_music_cut, start_active_hold,
         step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
-        tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
-        trigger_hold_explosion, trigger_mine_explosion, trigger_receptor_step_pulse,
-        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
+        trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
+        trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
+        turn_option_bits, update_active_holds, update_judged_rows, update_lane_input_slot,
+        visible_notefield_time_ns,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
@@ -9047,6 +9050,7 @@ mod tests {
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::{Duration, Instant};
     use std::{fs, path::PathBuf};
+    use winit::keyboard::KeyCode;
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -10009,6 +10013,27 @@ return Def.ActorFrame{}
         assert!((state.global_offset_seconds - (machine_before + 0.010)).abs() <= 1e-6);
         assert!((effective_after - (state.global_offset_seconds + shift)).abs() <= 1e-6);
         assert_eq!(note_before - note_after, song_time_ns_from_seconds(0.010));
+    }
+
+    #[test]
+    fn synced_raw_modifier_makes_first_offset_key_use_global_offset() {
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
+        let mut state = regression_state(profiles);
+
+        let song_before = state.song_offset_seconds;
+        let global_before = state.global_offset_seconds;
+
+        sync_queued_raw_modifiers(&mut state, true, false);
+        let _ = handle_queued_raw_key(&mut state, KeyCode::F12, true, Instant::now(), true);
+
+        assert!((state.song_offset_seconds - song_before).abs() <= 1e-6);
+        assert!(
+            (state.global_offset_seconds - (global_before + OFFSET_ADJUST_STEP_SECONDS)).abs()
+                <= 1e-6
+        );
     }
 
     #[test]

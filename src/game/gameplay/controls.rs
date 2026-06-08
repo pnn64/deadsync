@@ -124,6 +124,11 @@ fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
     }
 }
 
+pub fn sync_queued_raw_modifiers(state: &mut State, shift_held: bool, ctrl_held: bool) {
+    state.shift_held = shift_held;
+    state.ctrl_held = ctrl_held;
+}
+
 pub enum RawKeyAction {
     None,
     Restart,
