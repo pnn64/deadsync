@@ -557,6 +557,14 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
     let vendor = hid.dwVendorId as u16;
     let product = hid.dwProductId as u16;
+    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
+    // owns the pad (see `native_smx_owns_device`).
+    if crate::engine::smx::native_smx_owns_device(Some(vendor), Some(product)) {
+        log::debug!(
+            "RawInput: ignoring StepManiaX pad (vid={vendor:04x} pid={product:04x}); native SMX input owns it"
+        );
+        return;
+    }
     // Prefer the USB serial so the pad keeps a stable PadId regardless of which
     // port it is plugged into. Fall back to the (port-bound) interface path when
     // the device exposes no serial.

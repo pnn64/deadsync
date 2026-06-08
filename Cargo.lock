@@ -3917,9 +3917,9 @@ dependencies = [
 
 [[package]]
 name = "rustmaniax-sdk"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eccdeb20afd8d9373cc83a7359aeb3251a56e0fa546a9382fefc2ff8a386419"
+checksum = "280174855285cd9cafb9f4354014d48684520a81df07c39339c10e9e95a4c3f7"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",

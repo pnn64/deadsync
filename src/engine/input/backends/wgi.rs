@@ -419,6 +419,17 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         return;
     }
 
+    let vendor_id = controller.HardwareVendorId().ok();
+    let product_id = controller.HardwareProductId().ok();
+    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
+    // owns the pad (see `native_smx_owns_device`).
+    if crate::engine::smx::native_smx_owns_device(vendor_id, product_id) {
+        log::debug!(
+            "WGI: ignoring StepManiaX pad (vid={vendor_id:04x?} pid={product_id:04x?}); native SMX input owns it"
+        );
+        return;
+    }
+
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
@@ -435,8 +446,6 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         .DisplayName()
         .map(|s| s.to_string_lossy())
         .unwrap_or_else(|_| "WGI".to_string());
-    let vendor_id = controller.HardwareVendorId().ok();
-    let product_id = controller.HardwareProductId().ok();
 
     let kind = if let Ok(pad) = WgiGamepad::FromGameController(&controller) {
         let (last_time, buttons_prev, axes_prev, want) =
