@@ -139,8 +139,10 @@ impl TextureHints {
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
-    matches!(key, "swoosh.png" | "graphics/menu_bg_technique/square.png")
-        || visual_styles::is_shared_background_texture(key)
+    matches!(
+        key,
+        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
+    ) || visual_styles::is_shared_background_texture(key)
 }
 
 fn absolute_or_self(path: &Path) -> PathBuf {
@@ -1525,6 +1527,11 @@ mod tests {
 
         let _ = fs::remove_file(&path);
         let _ = fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn goldstar_uses_repeat_sampler() {
+        assert!(needs_repeat_sampler("grades/goldstar (stretch).png"));
     }
 
     #[test]
