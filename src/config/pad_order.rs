@@ -28,12 +28,20 @@ pub enum PadOrderBackend {
     Wgi,
     IoHid,
     Hidraw,
+    LinuxEvdev,
+    FreeBsdEvdev,
 }
 
 impl PadOrderBackend {
     /// All persisted backends, used when loading/saving the whole config.
-    pub(super) const ALL: [PadOrderBackend; 4] =
-        [Self::RawInput, Self::Wgi, Self::IoHid, Self::Hidraw];
+    pub(super) const ALL: [PadOrderBackend; 6] = [
+        Self::RawInput,
+        Self::Wgi,
+        Self::IoHid,
+        Self::Hidraw,
+        Self::LinuxEvdev,
+        Self::FreeBsdEvdev,
+    ];
 
     /// The `[Options]` ini key this backend's order is stored under.
     pub(super) const fn ini_key(self) -> &'static str {
@@ -42,6 +50,8 @@ impl PadOrderBackend {
             Self::Wgi => "PadOrderWGI",
             Self::IoHid => "PadOrderIoHid",
             Self::Hidraw => "PadOrderHidraw",
+            Self::LinuxEvdev => "PadOrderLinuxEvdev",
+            Self::FreeBsdEvdev => "PadOrderFreeBsdEvdev",
         }
     }
 }

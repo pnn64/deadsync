@@ -127,6 +127,8 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "PadOrderWGI", "");
     push_line(content, "PadOrderIoHid", "");
     push_line(content, "PadOrderHidraw", "");
+    push_line(content, "PadOrderLinuxEvdev", "");
+    push_line(content, "PadOrderFreeBsdEvdev", "");
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
     push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);

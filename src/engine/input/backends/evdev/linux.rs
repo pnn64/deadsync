@@ -929,7 +929,6 @@ fn open_key_dev(spec: DevSpec, mut stats: Option<&mut KeyboardStartupStats>) -> 
 fn add_dev_if_new(
     spec: DevSpec,
     devs: &mut Vec<Dev>,
-    next_id: &mut u32,
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
@@ -938,11 +937,16 @@ fn add_dev_if_new(
         return;
     }
     let existing_id = id_by_uuid.get(&spec.uuid).copied();
-    let id = existing_id.unwrap_or(PadId(*next_id));
+    // Stable, persisted slot so this pad keeps the same PadId across launches.
+    let id = existing_id.unwrap_or_else(|| {
+        PadId(crate::config::pad_index_for_uuid(
+            crate::config::PadOrderBackend::LinuxEvdev,
+            spec.uuid,
+        ))
+    });
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
         if existing_id.is_none() {
             id_by_uuid.insert(dev.uuid, id);
-            *next_id = next_id.saturating_add(1);
         }
         devs.push(dev);
     }
@@ -965,7 +969,6 @@ fn add_key_dev_if_new(
 fn refresh_fallback(
     devs: &mut Vec<Dev>,
     key_devs: &mut Vec<KeyDev>,
-    next_id: &mut u32,
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     scratch: &mut FallbackScratch,
     scan_keyboards: bool,
@@ -995,7 +998,7 @@ fn refresh_fallback(
     publish_keyboard_backend_state(key_devs);
     for spec in scratch.specs.drain(..) {
         match spec.class {
-            DevClass::Pad => add_dev_if_new(spec, devs, next_id, id_by_uuid, false, emit_sys),
+            DevClass::Pad => add_dev_if_new(spec, devs, id_by_uuid, false, emit_sys),
             DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs, None),
             DevClass::Keyboard => {}
         }
@@ -1038,7 +1041,6 @@ fn run_inner(
     let mut key_devs: Vec<KeyDev> = Vec::new();
     let mut fallback = FallbackScratch::default();
     let mut keyboard_startup = KeyboardStartupStats::default();
-    let mut next_id = 0u32;
     let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
 
     match &discovery {
@@ -1048,7 +1050,6 @@ fn run_inner(
                     DevClass::Pad => add_dev_if_new(
                         spec,
                         &mut devs,
-                        &mut next_id,
                         &mut id_by_uuid,
                         true,
                         &mut emit_sys,
@@ -1067,7 +1068,6 @@ fn run_inner(
                     DevClass::Pad => add_dev_if_new(
                         spec,
                         &mut devs,
-                        &mut next_id,
                         &mut id_by_uuid,
                         true,
                         &mut emit_sys,
@@ -1325,7 +1325,6 @@ fn run_inner(
                     DevClass::Pad => add_dev_if_new(
                         spec,
                         &mut devs,
-                        &mut next_id,
                         &mut id_by_uuid,
                         false,
                         &mut emit_sys,
@@ -1345,7 +1344,6 @@ fn run_inner(
             refresh_fallback(
                 &mut devs,
                 &mut key_devs,
-                &mut next_id,
                 &mut id_by_uuid,
                 &mut fallback,
                 scan_keyboards,

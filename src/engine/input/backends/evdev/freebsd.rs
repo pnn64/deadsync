@@ -512,7 +512,6 @@ fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
 fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
-    next_id: &mut u32,
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
@@ -528,11 +527,16 @@ fn add_dev_if_new(
     };
     let uuid = uuid_from_bytes(spec.path.as_bytes());
     let existing_id = id_by_uuid.get(&uuid).copied();
-    let id = existing_id.unwrap_or(PadId(*next_id));
+    // Stable, persisted slot so this pad keeps the same PadId across launches.
+    let id = existing_id.unwrap_or_else(|| {
+        PadId(crate::config::pad_index_for_uuid(
+            crate::config::PadOrderBackend::FreeBsdEvdev,
+            uuid,
+        ))
+    });
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
         if existing_id.is_none() {
             id_by_uuid.insert(dev.uuid, id);
-            *next_id = next_id.saturating_add(1);
         }
         devs.push(dev);
     }
@@ -596,7 +600,6 @@ fn run_inner(
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
     let mut key_devs = Vec::new();
-    let mut next_id = 0u32;
     let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
     let (startup_specs, startup_stats) = scan_event_specs();
     for spec in startup_specs {
@@ -604,10 +607,16 @@ fn run_inner(
         match spec.class {
             DevClass::Pad => {
                 let uuid = uuid_from_bytes(spec.path.as_bytes());
-                let id = PadId(next_id);
+                // Stable, persisted slot so this pad keeps the same PadId across launches.
+                let id = match id_by_uuid.get(&uuid).copied() {
+                    Some(id) => id,
+                    None => PadId(crate::config::pad_index_for_uuid(
+                        crate::config::PadOrderBackend::FreeBsdEvdev,
+                        uuid,
+                    )),
+                };
                 if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
                     id_by_uuid.insert(uuid, id);
-                    next_id = next_id.saturating_add(1);
                     devs.push(dev);
                 } else {
                     debug!("freebsd evdev skipped '{path}' during startup");
@@ -855,7 +864,6 @@ fn run_inner(
                     add_dev_if_new(
                         path.clone(),
                         &mut devs,
-                        &mut next_id,
                         &mut id_by_uuid,
                         false,
                         &mut emit_sys,
