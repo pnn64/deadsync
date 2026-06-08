@@ -200,6 +200,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxUsbPollingUs")
         .and_then(|v| v.parse::<u16>().ok())
         .map_or(default.smx_usb_polling_us, |v| v.clamp(500, 1000));
+    cfg.smx_panel_lights = conf
+        .get("Options", "SmxPanelLights")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.smx_panel_lights);
     cfg.smx_default_pad_config = conf
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())

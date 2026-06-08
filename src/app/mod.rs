@@ -8,6 +8,7 @@ pub(crate) mod media_cache;
 mod pad_config_sync;
 mod screen_nav;
 mod screenshot;
+mod smx_panel_fx;
 
 use self::commands::Command;
 use self::dynamic_media::DynamicMedia;
@@ -3898,6 +3899,7 @@ pub struct App {
     pad_config_sync: pad_config_sync::PadConfigSync,
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
+    smx_panels: smx_panel_fx::SmxPanelDriver,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
@@ -4408,7 +4410,7 @@ impl App {
             profile::is_session_side_joined(profile_data::PlayerSide::P2),
         ]);
         self.lights.set_hide_flags(self.current_light_hide_flags());
-        self.sync_gameplay_light_blinks(config.lights_simplify_bass);
+        self.sync_gameplay_light_blinks(config.lights_simplify_bass, config.smx_panel_lights);
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -4444,12 +4446,17 @@ impl App {
         })
     }
 
-    fn sync_gameplay_light_blinks(&mut self, simplify_bass: bool) {
+    fn sync_gameplay_light_blinks(&mut self, simplify_bass: bool, smx_enabled: bool) {
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
                     self.gameplay_lights
                         .queue_blinks(&mut self.lights, gs, simplify_bass);
+                    if smx_enabled {
+                        self.smx_panels.update(gs);
+                    } else {
+                        self.smx_panels.deactivate();
+                    }
                     return;
                 }
             }
@@ -4460,12 +4467,18 @@ impl App {
                         &ps.gameplay,
                         simplify_bass,
                     );
+                    if smx_enabled {
+                        self.smx_panels.update(&ps.gameplay);
+                    } else {
+                        self.smx_panels.deactivate();
+                    }
                     return;
                 }
             }
             _ => {}
         }
         self.gameplay_lights.clear();
+        self.smx_panels.deactivate();
     }
 
     #[inline(always)]
@@ -5073,6 +5086,7 @@ impl App {
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
+            smx_panels: smx_panel_fx::SmxPanelDriver::default(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting

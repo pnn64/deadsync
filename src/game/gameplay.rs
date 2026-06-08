@@ -2890,9 +2890,23 @@ pub struct ActiveColumnFlash {
     pub started_at_screen_s: f32,
 }
 
+/// Most recent tap judgement on a column, recorded unconditionally (independent of the
+/// column-flash and tap-explosion visual masks) for feedback consumers such as SMX panel
+/// lighting. Set in `trigger_column_flash`, which every tap grade (hits and misses) reaches.
+#[derive(Copy, Clone, Debug)]
+pub struct ColumnTapJudgment {
+    pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
+    pub at_screen_s: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ActiveMineExplosion {
     pub elapsed: f32,
+    /// Screen time when the mine was hit. Lets ungated feedback consumers (SMX panel
+    /// lighting) tell consecutive hits on the same column apart, like the other
+    /// `*_at_screen_s` markers.
+    pub started_at_screen_s: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3862,6 +3876,8 @@ pub struct State {
     pub receptor_bop_behaviors: [noteskin::ReceptorStepBehavior; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
+    /// Ungated per-column tap judgement (see `ColumnTapJudgment`), for pad/panel lighting.
+    pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
     pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
     pub active_holds: [Option<ActiveHold>; MAX_COLS],
 
@@ -6507,6 +6523,7 @@ pub fn init(
         receptor_bop_behaviors: [noteskin::ReceptorStepBehavior::identity(); MAX_COLS],
         tap_explosions: Default::default(),
         column_flashes: Default::default(),
+        last_tap_judgments: Default::default(),
         mine_explosions: Default::default(),
         active_holds: Default::default(),
         holds_total,
@@ -6744,6 +6761,13 @@ fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blu
     if column >= state.column_flashes.len() {
         return;
     }
+    // Record the judgement unconditionally for feedback consumers (SMX panel lighting),
+    // before the on-screen column-flash mask gate below.
+    state.last_tap_judgments[column] = Some(ColumnTapJudgment {
+        grade,
+        blue_fantastic,
+        at_screen_s: state.total_elapsed_in_screen,
+    });
     let player = player_for_col(state, column);
     let Some(profile) = state.player_profiles.get(player) else {
         return;
@@ -6850,7 +6874,10 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
 }
 
 fn trigger_mine_explosion(state: &mut State, column: usize) {
-    state.mine_explosions[column] = Some(ActiveMineExplosion { elapsed: 0.0 });
+    state.mine_explosions[column] = Some(ActiveMineExplosion {
+        elapsed: 0.0,
+        started_at_screen_s: state.total_elapsed_in_screen,
+    });
     if state.play_mine_sounds {
         audio::play_preloaded_sfx("assets/sounds/boom.ogg");
     }
@@ -8998,9 +9025,9 @@ mod tests {
         step_stats_density_graph_width, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
         tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
-        trigger_hold_explosion, trigger_receptor_step_pulse, trigger_tap_explosion,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        trigger_hold_explosion, trigger_mine_explosion, trigger_receptor_step_pulse,
+        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
@@ -11322,11 +11349,41 @@ return Def.ActorFrame{}
         let mut disabled = build_state(profile_data::ColumnFlashMask::EXCELLENT);
         trigger_completed_row_tap_explosions(&mut disabled, 0, row_index);
         assert!(disabled.column_flashes[column].is_none());
+        // The ungated SMX feedback record is written even when the on-screen column flash is
+        // masked off; the pad lighting relies on this decoupling.
+        let judged = disabled.last_tap_judgments[column]
+            .expect("masked column flash should still record the ungated tap judgment");
+        assert_eq!(judged.grade, JudgeGrade::Great);
 
         let mut enabled = build_state(profile_data::ColumnFlashMask::GREAT);
         trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
         let flash = enabled.column_flashes[column].expect("Great should trigger column flash");
         assert_eq!(flash.grade, JudgeGrade::Great);
+    }
+
+    #[test]
+    fn mine_hit_records_screen_time_and_refreshes_on_rehit() {
+        let column = 1usize;
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
+        state.play_mine_sounds = false;
+        // A hit records the current screen time on the explosion.
+        state.total_elapsed_in_screen = 1.0;
+        trigger_mine_explosion(&mut state, column);
+        let first = state.mine_explosions[column]
+            .as_ref()
+            .expect("mine hit should set an explosion");
+        assert_eq!(first.started_at_screen_s, 1.0);
+        // A later hit on the same column refreshes the timestamp even while the explosion is
+        // still present, which is what lets the SMX panel diff tell consecutive hits apart.
+        state.total_elapsed_in_screen = 1.5;
+        trigger_mine_explosion(&mut state, column);
+        let second = state.mine_explosions[column]
+            .as_ref()
+            .expect("re-hit should keep an explosion");
+        assert_eq!(second.started_at_screen_s, 1.5);
     }
 
     fn fantastic_row_state(

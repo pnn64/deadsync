@@ -108,6 +108,21 @@ pub fn update_smx_manages_pad_config(enabled: bool) {
     save_without_keymaps();
 }
 
+/// Persist whether SMX pad panels light up during gameplay. Saving the flag is all this
+/// needs to do: `App::sync_lights` reads it from config alongside the other lights settings
+/// and activates or releases the panel worker accordingly, so there is no separate driver or
+/// runtime state to update here.
+pub fn update_smx_panel_lights(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_panel_lights == enabled {
+            return;
+        }
+        cfg.smx_panel_lights = enabled;
+    }
+    save_without_keymaps();
+}
+
 /// Persist the built-in default pad preset (Low/Medium/High). Used as the
 /// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {

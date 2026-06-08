@@ -8,6 +8,9 @@ mod pac_drive;
 mod snek;
 mod stac2;
 
+/// StepManiaX pad panel RGB lighting (judgement flashes, freeze/roll effects).
+pub mod smx_panels;
+
 use log::warn;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver, Sender};

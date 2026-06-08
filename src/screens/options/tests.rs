@@ -118,6 +118,7 @@ fn input_backend_items_match_rows() {
 fn smx_config_items_match_rows() {
     let expected = [
         (SubRowId::SmxInput, ItemId::InpSmxInput),
+        (SubRowId::SmxPanelLights, ItemId::InpSmxPanelLights),
         (
             SubRowId::SmxManagesPadConfig,
             ItemId::InpSmxManagesPadConfig,

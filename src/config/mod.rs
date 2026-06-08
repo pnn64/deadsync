@@ -220,6 +220,9 @@ pub struct Config {
     pub smx_manages_pad_config: bool,
     /// USB polling interval for the SMX manager, in microseconds (500–1000).
     pub smx_usb_polling_us: u16,
+    /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
+    /// plus a sustained colour for held freezes and rolls.
+    pub smx_panel_lights: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
@@ -463,6 +466,7 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_usb_polling_us: 1000,
+            smx_panel_lights: false,
             smx_default_pad_config: SmxPadPreset::Low,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
