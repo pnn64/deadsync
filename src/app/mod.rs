@@ -432,18 +432,54 @@ fn offset_key_us(seconds: f32) -> i32 {
     }
 }
 
+fn song_pack_group(song: &deadsync_chart::SongData) -> Option<&str> {
+    song.simfile_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+}
+
+fn itl_event_intro_name(pack_group: &str) -> Option<String> {
+    let name = pack_group.trim();
+    let lower = name.to_ascii_lowercase();
+    let itl_pack = lower.contains("itl online ")
+        || (lower.starts_with("itl ") && lower.chars().any(|c| c.is_ascii_digit()));
+    if !itl_pack {
+        return None;
+    }
+
+    const UNLOCKS_SUFFIX: &str = " unlocks";
+    let name = if lower.ends_with(UNLOCKS_SUFFIX) {
+        &name[..name.len().saturating_sub(UNLOCKS_SUFFIX.len())]
+    } else {
+        name
+    };
+    Some(name.trim().to_string())
+}
+
+fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
+    let name = pack_group.trim();
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
+        return Some("Stamina RPG 9".to_string());
+    }
+    itl_event_intro_name(name)
+}
+
+fn gameplay_event_intro_text(song: &deadsync_chart::SongData) -> Arc<str> {
+    song_pack_group(song)
+        .and_then(event_intro_name_for_pack)
+        .map(Arc::from)
+        .unwrap_or_else(|| Arc::from("EVENT"))
+}
+
 fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
     let config = config::get();
     if !config.machine_pack_ini_offsets {
         return 0.0;
     }
-    let Some(pack_group) = song
-        .simfile_path
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.file_name())
-        .and_then(|s| s.to_str())
-    else {
+    let Some(pack_group) = song_pack_group(song) else {
         return 0.0;
     };
     let pack_sync_pref = crate::game::song::get_song_cache()
@@ -9173,7 +9209,7 @@ impl App {
                             self.state.session.gameplay_restart_count
                         ))
                     } else {
-                        Arc::from("EVENT")
+                        gameplay_event_intro_text(song_arc.as_ref())
                     };
                 let combo_carry = self.state.session.combo_carry;
                 let init_started = Instant::now();
@@ -10319,6 +10355,46 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
+    }
+
+    #[test]
+    fn gameplay_event_intro_uses_itl_pack_name() {
+        let song = test_song(
+            "Songs/ITL Online 2026/Example/song.ssc",
+            0.0,
+            ["hard", "medium"],
+        );
+
+        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+    }
+
+    #[test]
+    fn gameplay_event_intro_strips_itl_unlocks_suffix() {
+        let song = test_song(
+            "Songs/ITL Online 2026 Unlocks/Example/song.ssc",
+            0.0,
+            ["hard", "medium"],
+        );
+
+        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+    }
+
+    #[test]
+    fn gameplay_event_intro_uses_srpg_name() {
+        let song = test_song(
+            "Songs/Stamina RPG 9/Example/song.ssc",
+            0.0,
+            ["hard", "medium"],
+        );
+
+        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "Stamina RPG 9");
+    }
+
+    #[test]
+    fn gameplay_event_intro_keeps_default_for_normal_pack() {
+        let song = test_song("Songs/Test/Example/song.ssc", 0.0, ["hard", "medium"]);
+
+        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "EVENT");
     }
 
     #[test]
