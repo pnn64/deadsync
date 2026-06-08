@@ -1,3 +1,4 @@
+use crate::config::dirs;
 use crate::engine::audio::decode;
 use crate::game::song::get_song_cache;
 use deadsync_chart::notes::ParsedNote;
@@ -35,8 +36,12 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 10;
+const SONG_CACHE_VERSION: u8 = 11;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
+const RANDOM_BACKGROUND_FILE: &str = "-random-";
+const NO_SONG_BG_FILE: &str = "-nosongbg-";
+const RANDOM_MOVIES_DIR: &str = "RandomMovies";
+const SONG_MOVIES_DIR: &str = "SongMovies";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -1681,10 +1686,9 @@ fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<
 
 fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
     let direct = dir.join("default.lua");
-    if direct.is_file() {
-        return Some(direct);
-    }
-    resolve_song_dir_entry_ci(dir, "default.lua").filter(|path| path.is_file())
+    resolve_song_dir_entry_ci(dir, "default.lua")
+        .filter(|path| path.is_file())
+        .or_else(|| direct.is_file().then_some(direct))
 }
 
 #[derive(Default)]
@@ -2400,17 +2404,244 @@ fn extract_background_lua_changes(
     out
 }
 
-fn convert_background_change(
-    change: rssp::assets::ResolvedBackgroundChange,
-) -> SongBackgroundChange {
-    let target = match change.target {
-        rssp::assets::BackgroundChangeTarget::File(path) => SongBackgroundChangeTarget::File(path),
-        rssp::assets::BackgroundChangeTarget::NoSongBg => SongBackgroundChangeTarget::NoSongBg,
-        rssp::assets::BackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+fn resolve_background_changes_like_itg(
+    song_dir: &Path,
+    simfile_data: &[u8],
+) -> Vec<SongBackgroundChange> {
+    let song_movie_roots = bgchange_asset_roots(SONG_MOVIES_DIR);
+    let random_movie_roots = bgchange_asset_roots(RANDOM_MOVIES_DIR);
+    resolve_background_changes_from_roots(
+        song_dir,
+        simfile_data,
+        &song_movie_roots,
+        &random_movie_roots,
+    )
+}
+
+fn resolve_background_changes_from_roots(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    song_movie_roots: &[PathBuf],
+    random_movie_roots: &[PathBuf],
+) -> Vec<SongBackgroundChange> {
+    let entries = list_song_dir_rel_entries(song_dir);
+    let mut out: Vec<SongBackgroundChange> = Vec::new();
+    let mut saw_no_song_bg = false;
+    for raw in extract_bgchanges_values(simfile_data) {
+        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
+        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+            let Some(change) = parse_background_change_set(
+                song_dir,
+                &fields,
+                song_movie_roots,
+                random_movie_roots,
+            ) else {
+                continue;
+            };
+            if matches!(change.target, SongBackgroundChangeTarget::NoSongBg) {
+                saw_no_song_bg = true;
+                continue;
+            }
+            upsert_background_change(&mut out, change);
+        }
+    }
+
+    let has_explicit_movie = out.iter().any(|change| {
+        matches!(
+            change.target,
+            SongBackgroundChangeTarget::File(ref path) if is_bgchange_movie_path(path)
+        )
+    });
+    let beat_zero_still_ix = out
+        .iter()
+        .enumerate()
+        .filter(|(_, change)| {
+            change.start_beat <= 0.0
+                && matches!(
+                    change.target,
+                    SongBackgroundChangeTarget::File(ref path) if !is_bgchange_movie_path(path)
+                )
+        })
+        .map(|(ix, _)| ix)
+        .last();
+    let blocks_beat_zero = out.iter().any(|change| {
+        change.start_beat <= 0.0 && !matches!(change.target, SongBackgroundChangeTarget::File(_))
+    });
+    let has_any_file = out
+        .iter()
+        .any(|change| matches!(change.target, SongBackgroundChangeTarget::File(_)));
+    let movies = list_bgchange_song_movies(song_dir);
+    if movies.len() == 1 && !has_explicit_movie {
+        let movie = movies[0].clone();
+        if saw_no_song_bg {
+            if let Some(ix) = beat_zero_still_ix {
+                out[ix].target = SongBackgroundChangeTarget::File(movie);
+            } else if !blocks_beat_zero {
+                out.push(SongBackgroundChange {
+                    start_beat: 0.0,
+                    target: SongBackgroundChangeTarget::File(movie),
+                });
+            }
+        } else if !has_any_file && !blocks_beat_zero {
+            out.push(SongBackgroundChange {
+                start_beat: 0.0,
+                target: SongBackgroundChangeTarget::File(movie),
+            });
+        }
+    }
+    out.sort_by(|a, b| a.start_beat.total_cmp(&b.start_beat));
+    out
+}
+
+fn parse_background_change_set(
+    song_dir: &Path,
+    fields: &[String],
+    song_movie_roots: &[PathBuf],
+    random_movie_roots: &[PathBuf],
+) -> Option<SongBackgroundChange> {
+    let start_beat = fields.first()?.trim().parse::<f32>().unwrap_or(0.0);
+    let target = resolve_bgchange_target_like_itg(
+        song_dir,
+        fields.get(1)?,
+        song_movie_roots,
+        random_movie_roots,
+    )?;
+    Some(SongBackgroundChange { start_beat, target })
+}
+
+fn resolve_bgchange_target_like_itg(
+    song_dir: &Path,
+    file1: &str,
+    song_movie_roots: &[PathBuf],
+    random_movie_roots: &[PathBuf],
+) -> Option<SongBackgroundChangeTarget> {
+    let file1 = file1.trim();
+    if file1.is_empty() {
+        return None;
+    }
+    if file1.eq_ignore_ascii_case(NO_SONG_BG_FILE) {
+        return Some(SongBackgroundChangeTarget::NoSongBg);
+    }
+    if file1.eq_ignore_ascii_case(RANDOM_BACKGROUND_FILE) {
+        return Some(SongBackgroundChangeTarget::Random);
+    }
+
+    resolve_song_path_like_itg(song_dir, file1)
+        .filter(|path| path.exists())
+        .or_else(|| {
+            resolve_global_bgchange_movie_like_itg(
+                song_dir,
+                file1,
+                song_movie_roots,
+                random_movie_roots,
+            )
+        })
+        .map(SongBackgroundChangeTarget::File)
+}
+
+fn resolve_global_bgchange_movie_like_itg(
+    song_dir: &Path,
+    target: &str,
+    song_movie_roots: &[PathBuf],
+    random_movie_roots: &[PathBuf],
+) -> Option<PathBuf> {
+    if target.eq_ignore_ascii_case(NO_SONG_BG_FILE) {
+        return None;
+    }
+    if let Some(group) = song_group_name(song_dir) {
+        let grouped = format!("{group}/{target}");
+        if let Some(path) = resolve_first_root_file(song_movie_roots, &grouped) {
+            return Some(path);
+        }
+    }
+    resolve_first_root_file(song_movie_roots, target)
+        .or_else(|| resolve_first_root_file(random_movie_roots, target))
+}
+
+fn resolve_first_root_file(roots: &[PathBuf], target: &str) -> Option<PathBuf> {
+    roots
+        .iter()
+        .find_map(|root| resolve_song_path_like_itg(root, target).filter(|path| path.is_file()))
+}
+
+fn song_group_name(song_dir: &Path) -> Option<String> {
+    song_dir
+        .parent()?
+        .file_name()?
+        .to_str()
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+}
+
+fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
+    let dirs = dirs::app_dirs();
+    let mut roots = Vec::with_capacity(4);
+    push_existing_unique_dir(&mut roots, dirs.data_dir.join(dirname));
+    push_existing_unique_dir(&mut roots, dirs.exe_dir.join(dirname));
+    if let Ok(cwd) = std::env::current_dir() {
+        push_existing_unique_dir(&mut roots, cwd.join(dirname));
+        push_existing_unique_dir(&mut roots, cwd.join("deadsync").join(dirname));
+    }
+    roots
+}
+
+fn push_existing_unique_dir(out: &mut Vec<PathBuf>, path: PathBuf) {
+    if path.is_dir() && !out.iter().any(|existing| existing == &path) {
+        out.push(path);
+    }
+}
+
+#[inline(always)]
+fn is_bgchange_movie_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "avi"
+                    | "f4v"
+                    | "flv"
+                    | "m4v"
+                    | "mkv"
+                    | "mov"
+                    | "mp4"
+                    | "mpeg"
+                    | "mpg"
+                    | "ogv"
+                    | "webm"
+                    | "wmv"
+            )
+        })
+}
+
+fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(song_dir) else {
+        return Vec::new();
     };
-    SongBackgroundChange {
-        start_beat: change.start_beat,
-        target,
+    let mut files = read_dir
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
+        })
+        .collect::<Vec<_>>();
+    files.sort_by_cached_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+    files
+}
+
+#[inline(always)]
+fn upsert_background_change(out: &mut Vec<SongBackgroundChange>, change: SongBackgroundChange) {
+    if let Some(slot) = out
+        .iter_mut()
+        .find(|existing| existing.start_beat == change.start_beat)
+    {
+        *slot = change;
+    } else {
+        out.push(change);
     }
 }
 
@@ -2535,12 +2766,10 @@ fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, Stri
         extract_background_lua_changes(simfile_dir, &simfile_data, &summary.background_path);
     let foreground_changes = extract_foreground_changes(simfile_dir, &simfile_data);
     let foreground_lua_changes = extract_foreground_lua_changes(simfile_dir, &simfile_data);
-    let background_changes =
-        rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
-            .into_iter()
-            .map(convert_background_change)
-            .map(|change| SerializableSongBackgroundChange::from(&change))
-            .collect();
+    let background_changes = resolve_background_changes_like_itg(simfile_dir, &simfile_data)
+        .iter()
+        .map(SerializableSongBackgroundChange::from)
+        .collect();
 
     // Compute audio length (music file duration) in seconds, mirroring ITGmania's
     // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
@@ -2624,8 +2853,9 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 mod tests {
     use super::{
         extract_background_lua_changes, extract_foreground_changes, extract_foreground_lua_changes,
-        resolve_song_artwork_like_itg, simfile_uses_lua,
+        resolve_background_changes_from_roots, resolve_song_artwork_like_itg, simfile_uses_lua,
     };
+    use deadsync_chart::SongBackgroundChangeTarget;
     use std::fs;
     use std::path::PathBuf;
 
@@ -2688,6 +2918,78 @@ mod tests {
         assert_eq!(artwork.banner_path, None);
         assert_eq!(artwork.background_path, None);
         assert_eq!(artwork.cdtitle_path, Some(cdtitle_path));
+    }
+
+    #[test]
+    fn resolve_bgchanges_finds_root_random_movie_file() {
+        let root = test_dir("bgchange-root-random-movie");
+        let song_dir = root.join("songs").join("In The Groove").join("Anubis");
+        let random_root = root.join("RandomMovies");
+        fs::create_dir_all(&song_dir).unwrap();
+        fs::create_dir_all(&random_root).unwrap();
+        let movie = random_root.join("EV01439N.mpg");
+        fs::write(&movie, b"mpg").unwrap();
+
+        let changes = resolve_background_changes_from_roots(
+            &song_dir,
+            b"#BGCHANGES:8.000=EV01439N.mpg=1.000=0=0=1,;",
+            &[],
+            &[random_root],
+        );
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].start_beat, 8.0);
+        assert!(matches!(
+            &changes[0].target,
+            SongBackgroundChangeTarget::File(path) if path == &movie
+        ));
+    }
+
+    #[test]
+    fn resolve_bgchanges_keeps_named_random_movie_after_random_marker() {
+        let root = test_dir("bgchange-named-after-random");
+        let song_dir = root.join("songs").join("In The Groove 2").join("Bloodrush");
+        let random_root = root.join("RandomMovies");
+        let random_group = random_root.join("In The Groove 2");
+        fs::create_dir_all(&song_dir).unwrap();
+        fs::create_dir_all(&random_group).unwrap();
+        let still = song_dir.join("Bloodrush-bg.png");
+        let first_movie = random_group.join("628_JumpBack.mpg");
+        let later_movie = random_group.join("963_JumpBack.mpg");
+        fs::write(&still, b"png").unwrap();
+        fs::write(&first_movie, b"mpg").unwrap();
+        fs::write(&later_movie, b"mpg").unwrap();
+
+        let changes = resolve_background_changes_from_roots(
+            &song_dir,
+            b"#BGCHANGES:0.000=Bloodrush-bg.png=1.000=0=0=1=====,\
+              12.000=In The Groove 2/628_JumpBack.mpg=0.000=0=0=1===FadeRight==,\
+              29.000=-random-=1.000=0=0=1=====,\
+              61.000=In The Groove 2/963_JumpBack.mpg=1.000=0=0=1=====,;",
+            &[],
+            &[random_root],
+        );
+
+        assert_eq!(changes.len(), 4);
+        assert_eq!(
+            changes
+                .iter()
+                .map(|change| change.start_beat)
+                .collect::<Vec<_>>(),
+            vec![0.0, 12.0, 29.0, 61.0]
+        );
+        assert!(matches!(
+            &changes[1].target,
+            SongBackgroundChangeTarget::File(path) if path == &first_movie
+        ));
+        assert!(matches!(
+            &changes[2].target,
+            SongBackgroundChangeTarget::Random
+        ));
+        assert!(matches!(
+            &changes[3].target,
+            SongBackgroundChangeTarget::File(path) if path == &later_movie
+        ));
     }
 
     #[test]
