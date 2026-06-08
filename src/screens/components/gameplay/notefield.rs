@@ -7540,11 +7540,7 @@ pub fn build_bundles(
                         return;
                     }
                     let note_alpha = actor_alpha_for_travel(col_idx, raw_travel_offset);
-                    let note_glow = if matches!(note.note_type, NoteType::Mine) {
-                        0.0
-                    } else {
-                        glow_for_travel(col_idx, raw_travel_offset)
-                    };
+                    let note_glow = glow_for_travel(col_idx, raw_travel_offset);
                     if note_alpha <= f32::EPSILON && note_glow <= f32::EPSILON {
                         return;
                     }
@@ -7598,6 +7594,21 @@ pub fn build_bundles(
                                         ),
                                         note_world_z,
                                     ));
+                                    let glow_alpha = itg_actor_glow_alpha(note_glow);
+                                    if glow_alpha > f32::EPSILON {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(gradient_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(column_center_x, y_pos):
+                                                setsize(width, height):
+                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                                diffuse(1.0, 1.0, 1.0, 0.0):
+                                                glow(1.0, 1.0, 1.0, glow_alpha):
+                                                z(Z_TAP_NOTE - 2)
+                                            ),
+                                            note_world_z,
+                                        ));
+                                    }
                                 }
                             } else {
                                 let draw = song_lua_note_model_draw(
@@ -7650,6 +7661,26 @@ pub fn build_bundles(
                                             note_world_z,
                                         ));
                                     }
+                                    push_note_glow_actor(
+                                        &mut actors,
+                                        NoteGlowDraw {
+                                            slot,
+                                            draw,
+                                            model_center: center,
+                                            sprite_center: center,
+                                            size: [width, height],
+                                            uv,
+                                            rotation_y: note_rotation_y,
+                                            model_rotation_z: base_rotation + note_rot,
+                                            sprite_rotation_z: sprite_rotation,
+                                            alpha: note_glow,
+                                            blend: BlendMode::Alpha,
+                                            z: (Z_TAP_NOTE - 1) as i16,
+                                            world_z: note_world_z,
+                                            prefer_sprite: prefer_sprite_note_path,
+                                        },
+                                        &mut model_cache,
+                                    );
                                 }
                             }
                         }
@@ -7704,6 +7735,26 @@ pub fn build_bundles(
                                     note_world_z,
                                 ));
                             }
+                            push_note_glow_actor(
+                                &mut actors,
+                                NoteGlowDraw {
+                                    slot,
+                                    draw,
+                                    model_center: center,
+                                    sprite_center: center,
+                                    size,
+                                    uv,
+                                    rotation_y: note_rotation_y,
+                                    model_rotation_z: base_rotation + note_rot,
+                                    sprite_rotation_z: sprite_rotation,
+                                    alpha: note_glow,
+                                    blend: BlendMode::Alpha,
+                                    z: Z_TAP_NOTE as i16,
+                                    world_z: note_world_z,
+                                    prefer_sprite: prefer_sprite_note_path,
+                                },
+                                &mut model_cache,
+                            );
                         }
                         return;
                     }
