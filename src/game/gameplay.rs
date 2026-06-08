@@ -9019,9 +9019,9 @@ mod tests {
         step_stats_density_graph_width, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion,
         tick_mode_status_line, tick_visual_effects, trigger_completed_row_tap_explosions,
-        trigger_hold_explosion, trigger_receptor_step_pulse, trigger_tap_explosion,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
+        trigger_hold_explosion, trigger_mine_explosion, trigger_receptor_step_pulse,
+        trigger_tap_explosion, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
@@ -11342,11 +11342,41 @@ return Def.ActorFrame{}
         let mut disabled = build_state(profile_data::ColumnFlashMask::EXCELLENT);
         trigger_completed_row_tap_explosions(&mut disabled, 0, row_index);
         assert!(disabled.column_flashes[column].is_none());
+        // The ungated SMX feedback record is written even when the on-screen column flash is
+        // masked off; the pad lighting relies on this decoupling.
+        let judged = disabled.last_tap_judgments[column]
+            .expect("masked column flash should still record the ungated tap judgment");
+        assert_eq!(judged.grade, JudgeGrade::Great);
 
         let mut enabled = build_state(profile_data::ColumnFlashMask::GREAT);
         trigger_completed_row_tap_explosions(&mut enabled, 0, row_index);
         let flash = enabled.column_flashes[column].expect("Great should trigger column flash");
         assert_eq!(flash.grade, JudgeGrade::Great);
+    }
+
+    #[test]
+    fn mine_hit_records_screen_time_and_refreshes_on_rehit() {
+        let column = 1usize;
+        let mut state = regression_state([
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ]);
+        state.play_mine_sounds = false;
+        // A hit records the current screen time on the explosion.
+        state.total_elapsed_in_screen = 1.0;
+        trigger_mine_explosion(&mut state, column);
+        let first = state.mine_explosions[column]
+            .as_ref()
+            .expect("mine hit should set an explosion");
+        assert_eq!(first.started_at_screen_s, 1.0);
+        // A later hit on the same column refreshes the timestamp even while the explosion is
+        // still present, which is what lets the SMX panel diff tell consecutive hits apart.
+        state.total_elapsed_in_screen = 1.5;
+        trigger_mine_explosion(&mut state, column);
+        let second = state.mine_explosions[column]
+            .as_ref()
+            .expect("re-hit should keep an explosion");
+        assert_eq!(second.started_at_screen_s, 1.5);
     }
 
     fn fantastic_row_state(
