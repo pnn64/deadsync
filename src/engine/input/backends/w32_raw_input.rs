@@ -86,7 +86,6 @@ struct Ctx {
     devices: HashMap<isize, Dev>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     refs_by_uuid: HashMap<[u8; 16], u32>,
-    next_id: u32,
     buf: Vec<u8>,
     held: [bool; RAW_KEY_HELD_SLOTS],
     enable_pad: bool,
@@ -330,6 +329,88 @@ fn wide_to_string(mut v: Vec<u16>) -> String {
     String::from_utf16_lossy(&v)
 }
 
+/// Reads the USB serial number string for a HID device interface path.
+///
+/// The path comes from `RIDI_DEVICENAME` and is itself openable. Opening with
+/// zero desired access lets us query even devices held open exclusively
+/// elsewhere. `HidD_GetSerialNumberString` walks to the USB iSerialNumber, so
+/// it recovers a serial even for composite devices whose interface path is
+/// topology-derived. Returns `None` on any failure or an empty/whitespace
+/// serial.
+fn read_device_serial(device_path: &str) -> Option<String> {
+    use windows::Win32::Devices::HumanInterfaceDevice::HidD_GetSerialNumberString;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    let mut wide: Vec<u16> = device_path.encode_utf16().collect();
+    wide.push(0);
+
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string that outlives the call,
+    // and all other arguments are plain values / None.
+    let handle = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES(0),
+            None,
+        )
+    }
+    .ok()?;
+
+    let mut buf = [0u16; 256];
+    // SAFETY: `handle` is an open HID device, and `buf` is writable storage; the
+    // length is passed in bytes as required by HidD_GetSerialNumberString.
+    let ok = unsafe {
+        HidD_GetSerialNumberString(
+            handle,
+            buf.as_mut_ptr().cast::<c_void>(),
+            (buf.len() * size_of::<u16>()) as u32,
+        )
+    };
+
+    // SAFETY: `handle` was opened above and is not used after being closed.
+    let _ = unsafe { CloseHandle(handle) };
+
+    if !ok {
+        return None;
+    }
+    let len = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+    let serial = String::from_utf16_lossy(&buf[..len]);
+    let serial = serial.trim();
+    (!serial.is_empty()).then(|| serial.to_owned())
+}
+
+/// Derives the persisted identity uuid for a Raw Input pad.
+///
+/// When the device exposes a USB serial the uuid is derived from
+/// vendor/product/serial so the pad keeps the same `PadId` regardless of which
+/// USB port it is plugged into. Serial-less devices fall back to a hash of the
+/// (port-bound) interface path, which only stays stable across relaunches on
+/// the same port. Kept as a free function so the port-independence rule is unit
+/// testable without any HID hardware.
+fn rawinput_uuid(vendor: u16, product: u16, serial: Option<&str>, name: &str) -> [u8; 16] {
+    match serial {
+        Some(serial) => uuid_from_bytes(
+            format!("rawinput:serial:{vendor:04x}:{product:04x}:{serial}").as_bytes(),
+        ),
+        None => uuid_from_bytes(name.as_bytes()),
+    }
+}
+
+/// Lower-case hex of a 16-byte uuid, for diagnostic logging only.
+fn uuid_hex(uuid: &[u8; 16]) -> String {
+    let mut out = String::with_capacity(32);
+    for b in uuid {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
+}
+
 fn get_device_name(h: HANDLE) -> Option<String> {
     // SAFETY: all pointers passed here reference local buffers that stay alive for
     // each Win32 call, and `h` is a device handle reported by Raw Input.
@@ -474,16 +555,33 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     }
 
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
-    let uuid = uuid_from_bytes(name.as_bytes());
+    let vendor = hid.dwVendorId as u16;
+    let product = hid.dwProductId as u16;
+    // Prefer the USB serial so the pad keeps a stable PadId regardless of which
+    // port it is plugged into. Fall back to the (port-bound) interface path when
+    // the device exposes no serial.
+    let serial = read_device_serial(&name);
+    let uuid = rawinput_uuid(vendor, product, serial.as_deref(), &name);
 
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
-            let id = PadId(ctx.next_id);
-            ctx.next_id = ctx.next_id.saturating_add(1);
+            // Stable, persisted slot so this pad keeps the same PadId across launches.
+            let id = PadId(crate::config::pad_index_for_uuid(
+                crate::config::PadOrderBackend::RawInput,
+                uuid,
+            ));
             *entry.insert(id)
         }
     };
+
+    log::debug!(
+        "RawInput pad connect: name={name:?} vid={vendor:04x} pid={product:04x} serial={} \
+         uuid={} PadId={}",
+        serial.as_deref().unwrap_or("<none:port-bound-fallback>"),
+        uuid_hex(&uuid),
+        id.0,
+    );
 
     let refs = match ctx.refs_by_uuid.entry(uuid) {
         Entry::Occupied(mut entry) => {
@@ -1049,7 +1147,6 @@ pub fn run(
         devices: HashMap::new(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
-        next_id: 0,
         buf: Vec::with_capacity(1024),
         held: [false; RAW_KEY_HELD_SLOTS],
         enable_pad: true,
@@ -1065,9 +1162,70 @@ pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static
         devices: HashMap::new(),
         id_by_uuid: HashMap::new(),
         refs_by_uuid: HashMap::new(),
-        next_id: 0,
         buf: Vec::with_capacity(1024),
         held: [false; RAW_KEY_HELD_SLOTS],
         enable_pad: false,
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rawinput_uuid;
+
+    // A pad that reports a serial keeps the same uuid no matter which port
+    // (interface path / RIDI_DEVICENAME) it comes back on. This is the whole
+    // point of reading the serial: PadId stays stable across re-plugging.
+    #[test]
+    fn serial_uuid_is_port_independent() {
+        let a = rawinput_uuid(
+            0x1234,
+            0x5678,
+            Some("ABC123"),
+            r"\\?\HID#VID_1234&PID_5678&MI_00#7&port_a#{guid}",
+        );
+        let b = rawinput_uuid(
+            0x1234,
+            0x5678,
+            Some("ABC123"),
+            r"\\?\HID#VID_1234&PID_5678&MI_00#9&port_b#{guid}",
+        );
+        assert_eq!(
+            a, b,
+            "same serial must yield the same uuid regardless of port path"
+        );
+    }
+
+    // Distinct serials on the same model are distinct pads.
+    #[test]
+    fn distinct_serials_are_distinct() {
+        let a = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), "name");
+        let b = rawinput_uuid(0x1234, 0x5678, Some("ZZZ999"), "name");
+        assert_ne!(a, b);
+    }
+
+    // Same serial string but different vendor/product is a different device.
+    #[test]
+    fn vid_pid_participate_in_serial_uuid() {
+        let a = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), "name");
+        let b = rawinput_uuid(0x1111, 0x5678, Some("ABC123"), "name");
+        let c = rawinput_uuid(0x1234, 0x9999, Some("ABC123"), "name");
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+    }
+
+    // Serial-less devices fall back to the interface path, so the uuid follows
+    // the port (stable across relaunch on the same port, not across re-plug).
+    #[test]
+    fn serial_less_falls_back_to_name() {
+        let path = r"\\?\HID#VID_1234&PID_5678&MI_00#7&port_a#{guid}";
+        let fallback = rawinput_uuid(0x1234, 0x5678, None, path);
+        // Deterministic for the same path...
+        assert_eq!(fallback, rawinput_uuid(0x1234, 0x5678, None, path));
+        // ...and differs from the serial-derived identity for the same device.
+        let with_serial = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), path);
+        assert_ne!(fallback, with_serial);
+        // A different port path yields a different fallback uuid (the old bug).
+        let other_port = r"\\?\HID#VID_1234&PID_5678&MI_00#9&port_b#{guid}";
+        assert_ne!(fallback, rawinput_uuid(0x1234, 0x5678, None, other_port));
+    }
 }

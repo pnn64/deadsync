@@ -38,6 +38,14 @@ unsafe extern "C" {
     fn CFSetGetCount(the_set: CFTypeRef) -> CFIndex;
     fn CFSetGetValues(the_set: CFTypeRef, values: *mut CFTypeRef);
     fn CFNumberGetValue(number: CFTypeRef, the_type: i32, value_ptr: *mut c_void) -> bool;
+    fn CFStringGetCString(
+        the_string: CFStringRef,
+        buffer: *mut c_char,
+        buffer_size: CFIndex,
+        encoding: u32,
+    ) -> bool;
+    fn CFGetTypeID(cf: CFTypeRef) -> usize;
+    fn CFStringGetTypeID() -> usize;
 
     static kCFRunLoopDefaultMode: CFStringRef;
 }
@@ -99,6 +107,41 @@ fn cfnum_i32(v: CFTypeRef) -> Option<i32> {
     // storage for the requested CoreFoundation number conversion.
     let ok = unsafe { CFNumberGetValue(v, 9, ptr::addr_of_mut!(out).cast::<c_void>()) };
     ok.then_some(out)
+}
+
+/// Reads a CoreFoundation string property value into an owned `String`,
+/// returning `None` when the value is null, not a `CFString`, unreadable, or
+/// empty/whitespace. The value follows the CoreFoundation "Get" rule, so it is
+/// borrowed and must not be released here.
+fn cfstring_value(v: CFTypeRef) -> Option<String> {
+    if v.is_null() {
+        return None;
+    }
+    // SAFETY: `v` is a non-null CoreFoundation object reference; CFGetTypeID
+    // only reads its type tag.
+    if unsafe { CFGetTypeID(v) } != unsafe { CFStringGetTypeID() } {
+        return None;
+    }
+    let mut buf = [0 as c_char; 256];
+    // SAFETY: `v` is confirmed to be a CFString, and `buf` is writable storage
+    // that CFStringGetCString fills with a NUL-terminated UTF-8 string.
+    let ok = unsafe {
+        CFStringGetCString(
+            v,
+            buf.as_mut_ptr(),
+            buf.len() as CFIndex,
+            KCFSTRING_ENCODING_UTF8,
+        )
+    };
+    if !ok {
+        return None;
+    }
+    // SAFETY: on success `buf` holds a NUL-terminated C string within bounds.
+    let s = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) }
+        .to_string_lossy()
+        .trim()
+        .to_owned();
+    (!s.is_empty()).then_some(s)
 }
 
 #[derive(Clone, Copy)]
@@ -168,7 +211,6 @@ struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
-    next_id: u32,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     pad_devs: HashMap<usize, PadDev>,
     key_devs: HashMap<usize, KeyDev>,
@@ -181,6 +223,7 @@ struct Ctx {
     key_vendor_id: CFStringRef,
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
+    key_serial_number: CFStringRef,
 }
 
 #[inline(always)]
@@ -471,12 +514,40 @@ extern "C" fn on_match(
             product_id.unwrap_or(0),
             location_id.unwrap_or(-1),
         );
-        let uuid = uuid_from_bytes(name.as_bytes());
+        // Prefer the USB serial so the pad keeps a stable PadId regardless of
+        // which port it is plugged into. Fall back to the (port-bound) LocationID
+        // name when the device exposes no serial.
+        let serial = cfstring_value(IOHIDDeviceGetProperty(device, ctx.key_serial_number));
+        let uuid = match &serial {
+            Some(serial) => {
+                let serial_uuid = uuid_from_bytes(
+                    format!(
+                        "iohid:serial:{:04X}:{:04X}:{serial}",
+                        vendor_id.unwrap_or(0),
+                        product_id.unwrap_or(0),
+                    )
+                    .as_bytes(),
+                );
+                // Some cheap controllers report a constant, non-unique serial. If
+                // another currently-connected pad already resolved to this serial
+                // uuid, fall back to the port-bound identity so the two pads stay
+                // distinct instead of merging onto a single PadId.
+                if ctx.pad_devs.values().any(|dev| dev.uuid == serial_uuid) {
+                    uuid_from_bytes(name.as_bytes())
+                } else {
+                    serial_uuid
+                }
+            }
+            None => uuid_from_bytes(name.as_bytes()),
+        };
         let id = match ctx.id_by_uuid.entry(uuid) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
-                let id = PadId(ctx.next_id);
-                ctx.next_id += 1;
+                // Stable, persisted slot so this pad keeps the same PadId across launches.
+                let id = PadId(crate::config::pad_index_for_uuid(
+                    crate::config::PadOrderBackend::IoHid,
+                    uuid,
+                ));
                 *entry.insert(id)
             }
         };
@@ -655,7 +726,6 @@ pub fn run(
             emit_pad: Box::new(emit_pad),
             emit_sys: Box::new(emit_sys),
             emit_key: Box::new(emit_key),
-            next_id: 0,
             id_by_uuid: HashMap::new(),
             pad_devs: HashMap::new(),
             key_devs: HashMap::new(),
@@ -666,6 +736,7 @@ pub fn run(
             key_vendor_id: cfstr("VendorID"),
             key_product_id: cfstr("ProductID"),
             key_location_id: cfstr("LocationID"),
+            key_serial_number: cfstr("SerialNumber"),
         });
 
         let ctx_ptr = ptr::addr_of_mut!(*ctx).cast::<c_void>();

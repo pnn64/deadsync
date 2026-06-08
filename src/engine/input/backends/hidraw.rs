@@ -96,11 +96,29 @@ const fn hidiocgrawname(len: usize) -> libc::c_ulong {
     ior(b'H', 0x04, len)
 }
 
+#[inline(always)]
+const fn hidiocgrawuniq(len: usize) -> libc::c_ulong {
+    ior(b'H', 0x08, len)
+}
+
 struct Dev {
     id: PadId,
     uuid: [u8; 16],
     name: String,
     path: String,
+    file: std::fs::File,
+    max_report_len: usize,
+    reports: Vec<ReportSpec>,
+}
+
+/// A validated controller node that has been opened and identified but not yet
+/// assigned a `PadId`. Building this first lets `add_dev_if_new` allocate a
+/// persisted pad slot only after confirming the node is a usable controller.
+struct PendingDev {
+    uuid: [u8; 16],
+    name: String,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
     file: std::fs::File,
     max_report_len: usize,
     reports: Vec<ReportSpec>,
@@ -301,6 +319,55 @@ fn raw_device_name(file: &std::fs::File) -> Option<String> {
     std::str::from_utf8(&buf[..len]).ok().map(str::to_owned)
 }
 
+/// Reads the hidraw serial string (HIDIOCGRAWUNIQ), returning `None` on ioctl
+/// failure or when the value is empty/whitespace.
+fn raw_device_uniq(file: &std::fs::File) -> Option<String> {
+    let mut buf = [0u8; 256];
+    // SAFETY: `file` is an open hidraw device, and `buf` is writable stack
+    // storage for the kernel to fill with the NUL-terminated serial string.
+    let rc = unsafe {
+        libc::ioctl(
+            file.as_raw_fd(),
+            hidiocgrawuniq(buf.len()),
+            buf.as_mut_ptr(),
+        )
+    };
+    if rc < 0 {
+        return None;
+    }
+    let len = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+    let value = std::str::from_utf8(&buf[..len]).ok()?.trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// Derives a stable pad identity, preferring the hardware serial so the pad
+/// keeps its `PadId` across reboots and re-plugging into a different USB port.
+/// Falls back to model identity, then the device-node path as a last resort.
+///
+/// NOTE: FreeBSD's HIDIOCGRAWPHYS often reports the device-node name
+/// (e.g. "hidraw0") rather than a USB topology string, so it is deliberately
+/// not used here — it would be no more stable than the path.
+fn stable_uuid(
+    file: &std::fs::File,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+    raw_name: &str,
+    path: &str,
+) -> [u8; 16] {
+    let key = if let Some(uniq) = raw_device_uniq(file) {
+        format!("freebsd-hidraw:uniq:{uniq}")
+    } else if vendor_id.is_some() || product_id.is_some() || !raw_name.is_empty() {
+        format!(
+            "freebsd-hidraw:name:{raw_name}|vid:{:04x}|pid:{:04x}",
+            vendor_id.unwrap_or(0),
+            product_id.unwrap_or(0),
+        )
+    } else {
+        format!("freebsd-hidraw:path:{path}")
+    };
+    uuid_from_bytes(key.as_bytes())
+}
+
 fn raw_device_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
     let mut info = HidrawDevInfo::default();
     // SAFETY: `file` is an open hidraw device, and `info` is writable stack
@@ -390,13 +457,8 @@ fn startup_error(hidraw_count: usize) -> String {
     "no /dev/hidraw* nodes found".to_owned()
 }
 
-fn open_dev(
-    path: String,
-    id: PadId,
-    initial: bool,
-    emit_sys: &mut impl FnMut(GpSystemEvent),
-) -> Option<Dev> {
-    let file = match std::fs::File::open(&path) {
+fn probe_dev(path: &str) -> Option<PendingDev> {
+    let file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(err) => {
             warn!("freebsd hidraw could not open '{path}': {err}");
@@ -436,21 +498,14 @@ fn open_dev(
         return None;
     }
     let (vendor_id, product_id) = raw_device_info(&file);
-    let raw_name = raw_device_name(&file).unwrap_or_else(|| path.clone());
+    let raw_name = raw_device_name(&file).unwrap_or_else(|| path.to_owned());
+    let uuid = stable_uuid(&file, vendor_id, product_id, &raw_name, path);
     let name = format!("hidraw:{raw_name}");
-    emit_sys(GpSystemEvent::Connected {
-        name: name.clone(),
-        id,
+    Some(PendingDev {
+        uuid,
+        name,
         vendor_id,
         product_id,
-        backend: PadBackend::FreeBsdHidraw,
-        initial,
-    });
-    Some(Dev {
-        id,
-        uuid: uuid_from_bytes(path.as_bytes()),
-        name,
-        path,
         file,
         max_report_len,
         reports,
@@ -460,7 +515,6 @@ fn open_dev(
 fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
-    next_id: &mut u32,
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
@@ -468,16 +522,40 @@ fn add_dev_if_new(
     if !is_hidraw_path(&path) || devs.iter().any(|dev| dev.path == path) {
         return;
     }
-    let uuid = uuid_from_bytes(path.as_bytes());
-    let existing_id = id_by_uuid.get(&uuid).copied();
-    let id = existing_id.unwrap_or(PadId(*next_id));
-    if let Some(dev) = open_dev(path, id, initial, emit_sys) {
-        if existing_id.is_none() {
-            id_by_uuid.insert(dev.uuid, id);
-            *next_id = next_id.saturating_add(1);
-        }
-        devs.push(dev);
+    // Validate the node is a usable controller BEFORE allocating a persisted
+    // pad slot, so non-pad hidraw nodes (keyboards, mice, ...) never consume a
+    // PadId in the saved order.
+    let Some(pending) = probe_dev(&path) else {
+        return;
+    };
+    let existing_id = id_by_uuid.get(&pending.uuid).copied();
+    // Stable, persisted slot so this pad keeps the same PadId across launches.
+    let id = existing_id.unwrap_or_else(|| {
+        PadId(crate::config::pad_index_for_uuid(
+            crate::config::PadOrderBackend::Hidraw,
+            pending.uuid,
+        ))
+    });
+    emit_sys(GpSystemEvent::Connected {
+        name: pending.name.clone(),
+        id,
+        vendor_id: pending.vendor_id,
+        product_id: pending.product_id,
+        backend: PadBackend::FreeBsdHidraw,
+        initial,
+    });
+    if existing_id.is_none() {
+        id_by_uuid.insert(pending.uuid, id);
     }
+    devs.push(Dev {
+        id,
+        uuid: pending.uuid,
+        name: pending.name,
+        path,
+        file: pending.file,
+        max_report_len: pending.max_report_len,
+        reports: pending.reports,
+    });
 }
 
 fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
@@ -622,19 +700,11 @@ pub fn run(
 ) -> Result<(), String> {
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
-    let mut next_id = 0u32;
     let mut id_by_uuid: HashMap<[u8; 16], PadId> = HashMap::new();
     let hidraw_paths = scan_hidraw_paths();
     let hidraw_count = hidraw_paths.len();
     for path in hidraw_paths {
-        add_dev_if_new(
-            path,
-            &mut devs,
-            &mut next_id,
-            &mut id_by_uuid,
-            true,
-            emit_sys,
-        );
+        add_dev_if_new(path, &mut devs, &mut id_by_uuid, true, emit_sys);
     }
     if devs.is_empty() {
         let _ = watch;
@@ -760,14 +830,9 @@ pub fn run(
         }
         for event in hotplug.drain(..) {
             match event {
-                DevdEvent::Create(path) => add_dev_if_new(
-                    path,
-                    &mut devs,
-                    &mut next_id,
-                    &mut id_by_uuid,
-                    false,
-                    emit_sys,
-                ),
+                DevdEvent::Create(path) => {
+                    add_dev_if_new(path, &mut devs, &mut id_by_uuid, false, emit_sys)
+                }
                 DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }
         }

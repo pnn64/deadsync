@@ -124,6 +124,13 @@ fn push_default_options(content: &mut String, default: &Config) {
     // No pad→player assignment by default (slots follow the hardware jumper).
     push_line(content, "SmxP1Serial", "");
     push_line(content, "SmxP2Serial", "");
+    // Persisted pad ordering is empty until pads are seen; seeded at runtime.
+    push_line(content, "PadOrderRawInput", "");
+    push_line(content, "PadOrderWGI", "");
+    push_line(content, "PadOrderIoHid", "");
+    push_line(content, "PadOrderHidraw", "");
+    push_line(content, "PadOrderLinuxEvdev", "");
+    push_line(content, "PadOrderFreeBsdEvdev", "");
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
     push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);
