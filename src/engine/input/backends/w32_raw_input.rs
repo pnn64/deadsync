@@ -385,6 +385,32 @@ fn read_device_serial(device_path: &str) -> Option<String> {
     (!serial.is_empty()).then(|| serial.to_owned())
 }
 
+/// Derives the persisted identity uuid for a Raw Input pad.
+///
+/// When the device exposes a USB serial the uuid is derived from
+/// vendor/product/serial so the pad keeps the same `PadId` regardless of which
+/// USB port it is plugged into. Serial-less devices fall back to a hash of the
+/// (port-bound) interface path, which only stays stable across relaunches on
+/// the same port. Kept as a free function so the port-independence rule is unit
+/// testable without any HID hardware.
+fn rawinput_uuid(vendor: u16, product: u16, serial: Option<&str>, name: &str) -> [u8; 16] {
+    match serial {
+        Some(serial) => uuid_from_bytes(
+            format!("rawinput:serial:{vendor:04x}:{product:04x}:{serial}").as_bytes(),
+        ),
+        None => uuid_from_bytes(name.as_bytes()),
+    }
+}
+
+/// Lower-case hex of a 16-byte uuid, for diagnostic logging only.
+fn uuid_hex(uuid: &[u8; 16]) -> String {
+    let mut out = String::with_capacity(32);
+    for b in uuid {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
+}
+
 fn get_device_name(h: HANDLE) -> Option<String> {
     // SAFETY: all pointers passed here reference local buffers that stay alive for
     // each Win32 call, and `h` is a device handle reported by Raw Input.
@@ -529,19 +555,13 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     }
 
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
+    let vendor = hid.dwVendorId as u16;
+    let product = hid.dwProductId as u16;
     // Prefer the USB serial so the pad keeps a stable PadId regardless of which
     // port it is plugged into. Fall back to the (port-bound) interface path when
     // the device exposes no serial.
-    let uuid = match read_device_serial(&name) {
-        Some(serial) => uuid_from_bytes(
-            format!(
-                "rawinput:serial:{:04x}:{:04x}:{serial}",
-                hid.dwVendorId as u16, hid.dwProductId as u16
-            )
-            .as_bytes(),
-        ),
-        None => uuid_from_bytes(name.as_bytes()),
-    };
+    let serial = read_device_serial(&name);
+    let uuid = rawinput_uuid(vendor, product, serial.as_deref(), &name);
 
     let id = match ctx.id_by_uuid.entry(uuid) {
         Entry::Occupied(entry) => *entry.get(),
@@ -554,6 +574,14 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
             *entry.insert(id)
         }
     };
+
+    log::debug!(
+        "RawInput pad connect: name={name:?} vid={vendor:04x} pid={product:04x} serial={} \
+         uuid={} PadId={}",
+        serial.as_deref().unwrap_or("<none:port-bound-fallback>"),
+        uuid_hex(&uuid),
+        id.0,
+    );
 
     let refs = match ctx.refs_by_uuid.entry(uuid) {
         Entry::Occupied(mut entry) => {
@@ -1138,4 +1166,66 @@ pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static
         held: [false; RAW_KEY_HELD_SLOTS],
         enable_pad: false,
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rawinput_uuid;
+
+    // A pad that reports a serial keeps the same uuid no matter which port
+    // (interface path / RIDI_DEVICENAME) it comes back on. This is the whole
+    // point of reading the serial: PadId stays stable across re-plugging.
+    #[test]
+    fn serial_uuid_is_port_independent() {
+        let a = rawinput_uuid(
+            0x1234,
+            0x5678,
+            Some("ABC123"),
+            r"\\?\HID#VID_1234&PID_5678&MI_00#7&port_a#{guid}",
+        );
+        let b = rawinput_uuid(
+            0x1234,
+            0x5678,
+            Some("ABC123"),
+            r"\\?\HID#VID_1234&PID_5678&MI_00#9&port_b#{guid}",
+        );
+        assert_eq!(
+            a, b,
+            "same serial must yield the same uuid regardless of port path"
+        );
+    }
+
+    // Distinct serials on the same model are distinct pads.
+    #[test]
+    fn distinct_serials_are_distinct() {
+        let a = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), "name");
+        let b = rawinput_uuid(0x1234, 0x5678, Some("ZZZ999"), "name");
+        assert_ne!(a, b);
+    }
+
+    // Same serial string but different vendor/product is a different device.
+    #[test]
+    fn vid_pid_participate_in_serial_uuid() {
+        let a = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), "name");
+        let b = rawinput_uuid(0x1111, 0x5678, Some("ABC123"), "name");
+        let c = rawinput_uuid(0x1234, 0x9999, Some("ABC123"), "name");
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+    }
+
+    // Serial-less devices fall back to the interface path, so the uuid follows
+    // the port (stable across relaunch on the same port, not across re-plug).
+    #[test]
+    fn serial_less_falls_back_to_name() {
+        let path = r"\\?\HID#VID_1234&PID_5678&MI_00#7&port_a#{guid}";
+        let fallback = rawinput_uuid(0x1234, 0x5678, None, path);
+        // Deterministic for the same path...
+        assert_eq!(fallback, rawinput_uuid(0x1234, 0x5678, None, path));
+        // ...and differs from the serial-derived identity for the same device.
+        let with_serial = rawinput_uuid(0x1234, 0x5678, Some("ABC123"), path);
+        assert_ne!(fallback, with_serial);
+        // A different port path yields a different fallback uuid (the old bug).
+        let other_port = r"\\?\HID#VID_1234&PID_5678&MI_00#9&port_b#{guid}";
+        assert_ne!(fallback, rawinput_uuid(0x1234, 0x5678, None, other_port));
+    }
 }
