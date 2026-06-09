@@ -251,6 +251,43 @@ fn emit_build_info() {
     .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=DEADSYNC_BUILD_HASH={hash}");
     println!("cargo:rustc-env=DEADSYNC_BUILD_STAMP={stamp}");
+
+    // Full rustc identity (version + commit + host triple), folded into the
+    // hot-reload `BUILD_HASH` so a toolchain swap is rejected across the boundary
+    // (`extern "Rust"` is not stable across rustc versions). See `src/hot`.
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let rustc_version = std::process::Command::new(&rustc)
+        .args(["--version", "--verbose"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.replace(['\n', '\r'], "|"))
+        .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=DEADSYNC_RUSTC_VERSION={rustc_version}");
+
+    // Shared-allocator tag for the hot-reload boundary: set when the build is
+    // compiled with `-C prefer-dynamic` (host and cdylib then share one `std`/
+    // allocator). Folded into `BUILD_HASH` (see `src/hot`) so a cdylib built with
+    // a static `std` disagrees and is rejected at load before any heap crosses
+    // the boundary.
+    //
+    // `CARGO_ENCODED_RUSTFLAGS` (NUL-separated) is the authoritative source cargo
+    // passes to rustc; fall back to the space-separated `RUSTFLAGS` env var.
+    let rustflags = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .map(|s| s.replace('\u{1f}', " "))
+        .or_else(|_| std::env::var("RUSTFLAGS"))
+        .unwrap_or_default();
+    let shared_alloc = if rustflags.contains("prefer-dynamic") {
+        "1"
+    } else {
+        "0"
+    };
+    println!("cargo:rustc-env=DEADSYNC_SHARED_ALLOC={shared_alloc}");
+    // The tag depends on the rustflags, so the build script (and the dependent
+    // crate it feeds env into) must re-run when they change.
+    println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
+    println!("cargo:rerun-if-env-changed=RUSTFLAGS");
 }
 
 fn git_output(cwd: &Path, args: &[&str]) -> Option<String> {
