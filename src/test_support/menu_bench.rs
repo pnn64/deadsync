@@ -12,7 +12,8 @@ impl MenuBenchFixture {
         if !retained {
             menu::clear_render_cache(&self.state);
         }
-        menu::push_actors(actors, &self.state, 1.0);
+        let ctx = menu::build_host_context(&self.state);
+        actors.extend(menu::get_actors(&self.state, &ctx, 1.0));
         actors.retain(|actor| actor_z(actor) >= 0);
     }
 

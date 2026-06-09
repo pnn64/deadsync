@@ -223,6 +223,19 @@ fn global_elapsed_s() -> f32 {
     f32::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
 }
 
+/// Public snapshot of the shared UI elapsed clock.
+///
+/// The host reads this and passes it across the hot-reload boundary via
+/// `HostContext` so the render path animates off the host's ticked clock. A
+/// statically-linked hot cdylib has its **own** copy of `GLOBAL_ELAPSED_BITS`
+/// that the host never ticks, so a hot render path calling [`State::build`]
+/// (which reads its local copy) would freeze; it must use
+/// [`State::build_at_elapsed`] with this host-resolved value instead.
+#[inline]
+pub fn elapsed_seconds() -> f32 {
+    global_elapsed_s()
+}
+
 #[cfg(test)]
 fn set_global_elapsed_for_test(elapsed_s: f32) {
     GLOBAL_ELAPSED_BITS.store(elapsed_s.max(0.0).to_bits(), Ordering::Relaxed);
