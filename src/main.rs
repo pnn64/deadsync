@@ -3,66 +3,6 @@ use deadsync_platform::logging::{self, StartupBuildInfo};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
-#[cfg(windows)]
-struct WindowsTimingGuard {
-    timer_period_ms: u32,
-    _thread_policy: deadsync_platform::windows_rt::ThreadPolicyGuard,
-}
-
-#[cfg(windows)]
-impl Drop for WindowsTimingGuard {
-    fn drop(&mut self) {
-        use windows::Win32::Media::timeEndPeriod;
-
-        // SAFETY: `timeEndPeriod` takes only the timer-resolution value. We pass
-        // the same value we requested at startup and ignore any OS-level failure
-        // because this is best-effort cleanup during shutdown.
-        unsafe {
-            let _ = timeEndPeriod(self.timer_period_ms);
-        }
-    }
-}
-
-#[cfg(windows)]
-fn boost_windows_runtime_timing() -> WindowsTimingGuard {
-    use windows::Win32::Media::timeBeginPeriod;
-
-    let timer_period_ms = 1u32;
-    // SAFETY: `timeBeginPeriod` takes only the requested resolution and does not
-    // retain pointers into Rust memory. We handle the return code explicitly.
-    unsafe {
-        let timer_result = timeBeginPeriod(timer_period_ms);
-        if timer_result == 0 {
-            log::debug!("Requested Windows timer resolution: {}ms", timer_period_ms);
-        } else {
-            log::warn!(
-                "Failed to request Windows timer resolution {}ms: MMRESULT={}",
-                timer_period_ms,
-                timer_result
-            );
-        }
-    }
-
-    WindowsTimingGuard {
-        timer_period_ms,
-        _thread_policy: deadsync_platform::windows_rt::boost_current_thread(
-            deadsync_platform::windows_rt::ThreadRole::Main,
-        ),
-    }
-}
-
-fn set_runtime_dir() -> Result<(), Box<dyn std::error::Error>> {
-    let exe_path = std::env::current_exe()?;
-    let exe_dir = exe_path.parent().ok_or_else(|| {
-        std::io::Error::other(format!(
-            "Cannot resolve executable directory from '{}'",
-            exe_path.display()
-        ))
-    })?;
-    std::env::set_current_dir(exe_dir)?;
-    Ok(())
-}
-
 fn startup_lines(cfg: &config::Config) -> Vec<String> {
     let dirs = config::dirs::app_dirs();
     vec![
@@ -181,7 +121,7 @@ fn install_panic_hook() {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = engine::updater::cli::UpdaterCli::from_env();
-    set_runtime_dir()?;
+    deadsync_platform::runtime_dir::set_current_dir_to_exe_dir()?;
     deadsync_platform::host_time::init();
 
     // Resolve and create platform-native data/cache directories.
@@ -252,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assets::i18n::init(&locale);
 
     #[cfg(windows)]
-    let _windows_timing = boost_windows_runtime_timing();
+    let _windows_timing = deadsync_platform::windows_rt::boost_main_thread_timing();
     game::profile::load();
     if let Err(e) = engine::audio::init(engine::audio::InitConfig {
         output_device_index: cfg.audio_output_device_index,

@@ -1,6 +1,7 @@
 use log::{debug, warn};
 use std::ffi::c_void;
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Media::{timeBeginPeriod, timeEndPeriod};
 use windows::Win32::System::Performance;
 use windows::Win32::System::Threading::{
     self, AVRT_PRIORITY, AVRT_PRIORITY_CRITICAL, AVRT_PRIORITY_HIGH, AVRT_PRIORITY_NORMAL,
@@ -71,6 +72,11 @@ pub struct ThreadPolicyGuard {
     mmcss_handle: Option<HANDLE>,
 }
 
+pub struct MainThreadTimingGuard {
+    timer_period_ms: u32,
+    _thread_policy: ThreadPolicyGuard,
+}
+
 impl Drop for ThreadPolicyGuard {
     fn drop(&mut self) {
         let Some(handle) = self.mmcss_handle.take() else {
@@ -83,6 +89,17 @@ impl Drop for ThreadPolicyGuard {
             if let Err(e) = Threading::AvRevertMmThreadCharacteristics(handle) {
                 warn!("Failed to leave MMCSS thread class: {e}");
             }
+        }
+    }
+}
+
+impl Drop for MainThreadTimingGuard {
+    fn drop(&mut self) {
+        // SAFETY: `timeEndPeriod` takes only the timer-resolution value. We pass
+        // the same value requested by `boost_main_thread_timing` and ignore any
+        // OS-level failure because this is best-effort shutdown cleanup.
+        unsafe {
+            let _ = timeEndPeriod(self.timer_period_ms);
         }
     }
 }
@@ -130,6 +147,28 @@ fn apply_fallback_priority(profile: ThreadProfile) {
                 profile.label, profile.fallback_label
             );
         }
+    }
+}
+
+pub fn boost_main_thread_timing() -> MainThreadTimingGuard {
+    let timer_period_ms = 1u32;
+    // SAFETY: `timeBeginPeriod` takes only the requested resolution and does not
+    // retain pointers into Rust memory. We handle the return code explicitly.
+    unsafe {
+        let timer_result = timeBeginPeriod(timer_period_ms);
+        if timer_result == 0 {
+            debug!("Requested Windows timer resolution: {}ms", timer_period_ms);
+        } else {
+            warn!(
+                "Failed to request Windows timer resolution {}ms: MMRESULT={}",
+                timer_period_ms, timer_result
+            );
+        }
+    }
+
+    MainThreadTimingGuard {
+        timer_period_ms,
+        _thread_policy: boost_current_thread(ThreadRole::Main),
     }
 }
 
