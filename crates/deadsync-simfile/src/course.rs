@@ -49,6 +49,25 @@ pub fn collect_merged_course_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
     out
 }
 
+pub fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'a str) {
+    let fallback = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("courses");
+    let group = path
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback);
+    let course = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_default();
+    (group, course)
+}
+
 pub fn autogen_nonstop_group_courses(
     courses_root: &Path,
     packs: &[SongPack],
@@ -502,6 +521,27 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert!(paths.contains(&base.join("Pack").join("course.crs")));
         assert!(paths.contains(&extra.join("Pack").join("other.crs")));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn course_progress_names_use_group_and_file_fallbacks() {
+        let root = test_dir("course-progress");
+        let course = root.join("Group").join("course.crs");
+
+        assert_eq!(
+            course_progress_names(&course, &root),
+            ("Group", "course.crs")
+        );
+        assert_eq!(
+            course_progress_names(Path::new("course.crs"), &root),
+            (root.file_name().unwrap().to_str().unwrap(), "course.crs")
+        );
+        assert_eq!(
+            course_progress_names(Path::new("course.crs"), Path::new("")),
+            ("courses", "course.crs")
+        );
 
         let _ = fs::remove_dir_all(root);
     }

@@ -1,14 +1,6 @@
 use super::*;
 use deadsync_profile as profile_data;
 
-#[inline(always)]
-pub(super) fn noteskin_cols_per_player(play_style: profile_data::PlayStyle) -> usize {
-    match play_style {
-        profile_data::PlayStyle::Double => 8,
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => 4,
-    }
-}
-
 pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
     let style = noteskin::Style {
         num_cols: cols_per_player,
@@ -162,7 +154,7 @@ pub(super) fn sync_noteskin_previews_for_player(
     profile: &profile_data::Profile,
     player_idx: usize,
 ) {
-    let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+    let cols_per_player = crate::game::profile::get_session_play_style().cols_per_player();
     let noteskin_setting = profile.noteskin.clone();
     let mine_noteskin_setting = profile.mine_noteskin.clone();
     let receptor_noteskin_setting = profile.receptor_noteskin.clone();

@@ -573,23 +573,12 @@ fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::
     (p1, p2)
 }
 
-const fn play_style_for_joined(
-    style: profile_data::PlayStyle,
-    p1_joined: bool,
-    p2_joined: bool,
-) -> profile_data::PlayStyle {
-    if p1_joined && p2_joined {
-        profile_data::PlayStyle::Versus
-    } else {
-        match style {
-            profile_data::PlayStyle::Versus => profile_data::PlayStyle::Single,
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => style,
-        }
-    }
-}
-
 fn sync_play_style_for_joined(p1_joined: bool, p2_joined: bool) {
-    let style = play_style_for_joined(profile::get_session_play_style(), p1_joined, p2_joined);
+    let style = profile_data::play_style_for_joined(
+        profile::get_session_play_style(),
+        p1_joined,
+        p2_joined,
+    );
     profile::set_session_play_style(style);
 }
 
@@ -1950,29 +1939,4 @@ pub fn get_actors(
     let mut actors = Vec::with_capacity(160);
     push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn play_style_follows_profile_box_join_count() {
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Single, true, true),
-            profile_data::PlayStyle::Versus
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Double, true, true),
-            profile_data::PlayStyle::Versus
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Double, true, false),
-            profile_data::PlayStyle::Double
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Versus, false, true),
-            profile_data::PlayStyle::Single
-        );
-    }
 }

@@ -13,7 +13,9 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
-use deadsync_chart::{ChartData, SongData, SyncPref};
+use deadsync_chart::{
+    ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
+};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;
@@ -380,13 +382,13 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     chart_type: &str,
     preferred_index: usize,
 ) -> Option<&'a ChartData> {
-    let num_standard = color::FILE_DIFFICULTY_NAMES.len();
+    let num_standard = STANDARD_DIFFICULTY_COUNT;
     if num_standard == 0 {
         return None;
     }
 
     let preferred = preferred_index.min(num_standard - 1);
-    let preferred_name = color::FILE_DIFFICULTY_NAMES[preferred];
+    let preferred_name = STANDARD_DIFFICULTY_NAMES[preferred];
     if let Some(chart) = song.charts.iter().find(|chart| {
         chart.chart_type.eq_ignore_ascii_case(chart_type)
             && chart.difficulty.eq_ignore_ascii_case(preferred_name)
@@ -400,7 +402,7 @@ fn chart_for_preferred_or_nearest_standard<'a>(
         if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
-        let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES
+        let Some(diff_ix) = STANDARD_DIFFICULTY_NAMES
             .iter()
             .position(|diff| chart.difficulty.eq_ignore_ascii_case(diff))
         else {
@@ -413,17 +415,6 @@ fn chart_for_preferred_or_nearest_standard<'a>(
         }
     }
     best_chart
-}
-
-#[inline(always)]
-const fn steps_slot_for_side(
-    play_style: profile_data::PlayStyle,
-    side: profile_data::PlayerSide,
-) -> usize {
-    match (play_style, side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
-        _ => 0,
-    }
 }
 
 pub struct MusicWheelParams<'a> {
@@ -533,7 +524,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
             return None;
         };
-        let ix = steps_slot_for_side(play_style, side);
+        let ix = profile_data::runtime_player_index(play_style, side);
         p.selected_charts[ix].map(|chart| chart.short_hash.as_str())
     };
     if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
@@ -697,7 +688,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         })
                     };
                     let wheel_chart_for_side = |side: profile_data::PlayerSide| {
-                        let ix = steps_slot_for_side(play_style, side);
+                        let ix = profile_data::runtime_player_index(play_style, side);
                         if is_selected_slot {
                             p.selected_charts[ix]
                         } else {
@@ -1264,8 +1255,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 mod tests {
     use super::{
         choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
-        should_fetch_online_itl_score, song_select_bg_path, steps_slot_for_side,
-        visible_song_select_bg_paths,
+        should_fetch_online_itl_score, song_select_bg_path, visible_song_select_bg_paths,
     };
     use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
     use crate::engine::present::color;
@@ -1371,21 +1361,21 @@ mod tests {
     #[test]
     fn single_p2_uses_primary_steps_slot() {
         assert_eq!(
-            steps_slot_for_side(
+            profile_data::runtime_player_index(
                 profile_data::PlayStyle::Single,
                 profile_data::PlayerSide::P2
             ),
             0
         );
         assert_eq!(
-            steps_slot_for_side(
+            profile_data::runtime_player_index(
                 profile_data::PlayStyle::Double,
                 profile_data::PlayerSide::P2
             ),
             0
         );
         assert_eq!(
-            steps_slot_for_side(
+            profile_data::runtime_player_index(
                 profile_data::PlayStyle::Versus,
                 profile_data::PlayerSide::P2
             ),

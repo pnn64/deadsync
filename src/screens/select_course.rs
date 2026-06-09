@@ -22,7 +22,7 @@ use crate::screens::components::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
-use deadsync_chart::{ChartData, SongData};
+use deadsync_chart::{ChartData, SongData, standard_difficulty_index};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
@@ -484,10 +484,7 @@ fn course_difficulty_from_meters(course: &CourseFile) -> Option<(&'static str, u
 
 #[inline(always)]
 fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
-    let idx = color::FILE_DIFFICULTY_NAMES
-        .iter()
-        .position(|name| name.eq_ignore_ascii_case(difficulty_name))
-        .unwrap_or(2);
+    let idx = standard_difficulty_index(difficulty_name).unwrap_or(2);
     let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
     if let Some(meter) = meter {
         format!("{display} {meter}")

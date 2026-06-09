@@ -2,6 +2,7 @@ use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
+use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_profile::{
     BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
     MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
@@ -554,7 +555,7 @@ const STEPCHART: CustomBinding = CustomBinding {
             idx
         };
         state.chart_steps_index[player_idx] = difficulty_idx;
-        if difficulty_idx < crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() {
+        if difficulty_idx < STANDARD_DIFFICULTY_COUNT {
             state.chart_difficulty_index[player_idx] = difficulty_idx;
         }
         Outcome::persisted()
@@ -847,12 +848,10 @@ pub(super) fn build_main_rows(
             // Build Stepchart choices from the song's charts for the current play style, ordered
             // Beginner..Challenge, then Edit charts.
             let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
-            let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
-            let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
-            for (i, file_name) in crate::engine::present::color::FILE_DIFFICULTY_NAMES
-                .iter()
-                .enumerate()
-            {
+            let mut stepchart_choices: Vec<String> = Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);
+            let mut stepchart_choice_indices: Vec<usize> =
+                Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);
+            for (i, file_name) in STANDARD_DIFFICULTY_NAMES.iter().enumerate() {
                 if let Some(chart) = song.charts.iter().find(|c| {
                     c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(file_name)
@@ -862,10 +861,10 @@ pub(super) fn build_main_rows(
                     stepchart_choice_indices.push(i);
                 }
             }
-            for (i, chart) in
-                crate::screens::select_music::edit_charts_sorted(song, target_chart_type)
-                    .into_iter()
-                    .enumerate()
+            for (i, chart) in song
+                .edit_charts_sorted(target_chart_type)
+                .into_iter()
+                .enumerate()
             {
                 let desc = chart.description.trim();
                 if desc.is_empty() {
@@ -887,27 +886,20 @@ pub(super) fn build_main_rows(
                         .to_string(),
                     );
                 }
-                stepchart_choice_indices
-                    .push(crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() + i);
+                stepchart_choice_indices.push(STANDARD_DIFFICULTY_COUNT + i);
             }
             // Fallback if none found (defensive; SelectMusic filters songs by play style).
             if stepchart_choices.is_empty() {
                 stepchart_choices.push(tr("PlayerOptions", "CurrentStepchartLabel").to_string());
-                let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
-                    crate::engine::present::color::FILE_DIFFICULTY_NAMES
-                        .len()
-                        .saturating_sub(1),
-                );
+                let base_pref = preferred_difficulty_index[session_persisted_player_idx()]
+                    .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
                 stepchart_choice_indices.push(base_pref);
             }
             let initial_stepchart_choice_index: [usize; PLAYER_SLOTS] =
                 std::array::from_fn(|player_idx| {
                     let steps_idx = chart_steps_index[player_idx];
-                    let pref_idx = preferred_difficulty_index[player_idx].min(
-                        crate::engine::present::color::FILE_DIFFICULTY_NAMES
-                            .len()
-                            .saturating_sub(1),
-                    );
+                    let pref_idx = preferred_difficulty_index[player_idx]
+                        .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
                     stepchart_choice_indices
                         .iter()
                         .position(|&idx| idx == steps_idx)

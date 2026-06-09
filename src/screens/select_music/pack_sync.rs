@@ -89,7 +89,7 @@ fn pack_sync_targets_for_group(
                     continue;
                 }
                 let Some(steps_index) =
-                    best_steps_index(song.as_ref(), target_chart_type, preferred_difficulty_index)
+                    song.best_steps_index(target_chart_type, preferred_difficulty_index)
                 else {
                     continue;
                 };

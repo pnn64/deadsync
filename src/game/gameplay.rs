@@ -5250,20 +5250,6 @@ fn get_reference_bpm_from_display_tag(
     s.parse::<f32>().ok()
 }
 
-fn song_lua_display_bpm_pair(song: &SongData, chart: Option<&ChartData>) -> [f32; 2] {
-    song.chart_display_bpm_range(chart)
-        .map(|(lo, hi)| {
-            let lo = lo as f32;
-            let hi = hi as f32;
-            if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-                [lo, hi]
-            } else {
-                [60.0, 60.0]
-            }
-        })
-        .unwrap_or([60.0, 60.0])
-}
-
 fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
     if cols_per_player == 0 {
         return None;
@@ -5353,11 +5339,9 @@ pub fn init(
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     let p2_runtime_player = profile_data::runtime_player_is_p2(play_style, player_side);
-    let (cols_per_player, num_players, num_cols) = match play_style {
-        profile_data::PlayStyle::Single => (4, 1, 4),
-        profile_data::PlayStyle::Double => (8, 1, 8),
-        profile_data::PlayStyle::Versus => (4, 2, 8),
-    };
+    let cols_per_player = play_style.cols_per_player();
+    let num_players = play_style.player_count();
+    let num_cols = play_style.total_cols();
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
     let mut gameplay_charts = gameplay_charts;

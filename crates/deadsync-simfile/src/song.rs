@@ -1,7 +1,7 @@
 use crate::artwork::resolve_song_artwork_like_itg;
 use crate::cache::{
     CachedParsedNote, SerializableChartData, SerializableSongBackgroundChange,
-    SerializableSongData, parse_chart_display_bpm,
+    SerializableSongData, build_song_meta, parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
     extract_background_lua_changes, extract_foreground_changes, extract_foreground_lua_changes,
@@ -12,6 +12,7 @@ use crate::media::resolve_song_asset_path_like_itg;
 use crate::notes::{parse_chart_notes, step_type_lanes};
 use crate::stats::build_stamina_counts;
 use crate::timing::{parse_time_signatures, timing_segments_from_rssp};
+use deadsync_chart::SongData;
 use rssp::{AnalysisOptions, SimfileSummary, analyze};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,27 @@ pub fn parse_song_file(
         music_length_seconds,
         options,
     ))
+}
+
+pub fn parse_song_meta_file(
+    path: &Path,
+    options: &ParseSongOptions,
+    global_offset_seconds: f32,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SongData, String> {
+    let song = parse_song_data_file(path, options, global_offset_seconds, music_len)?;
+    Ok(build_song_meta(song, global_offset_seconds))
+}
+
+pub fn parse_song_data_file(
+    path: &Path,
+    options: &ParseSongOptions,
+    global_offset_seconds: f32,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let mut song = parse_song_file(path, options, music_len)?;
+    update_precise_song_bounds(&mut song, global_offset_seconds);
+    Ok(song)
 }
 
 fn build_song_data(
@@ -298,6 +320,39 @@ mod tests {
         assert_eq!(song.music_length_seconds, 12.5);
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].meter, 1);
+    }
+
+    #[test]
+    fn parsed_song_meta_records_first_and_last_step_seconds() {
+        let root = test_dir("first-second");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        let simfile = song_dir.join("song.sm");
+        fs::write(
+            &simfile,
+            b"#TITLE:First Second;\n\
+              #BPMS:0.000=60.000;\n\
+              #OFFSET:0.000;\n\
+              #NOTES:\n\
+              dance-single:\n\
+              :\n\
+              Challenge:\n\
+              1:\n\
+              0.000,0.000,0.000,0.000,0.000:\n\
+              0000\n\
+              ,\n\
+              1000\n\
+              ,\n\
+              0001\n\
+              ;",
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let song = parse_song_meta_file(&simfile, &options, 0.0, |_| 0.0).unwrap();
+
+        assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
+        assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
     }
 
     fn test_dir(name: &str) -> PathBuf {

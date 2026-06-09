@@ -439,10 +439,6 @@ fn song_search_bpm_tier(bpm: f64) -> i32 {
     (((bpm + 0.5) / 10.0).floor() as i32) * 10
 }
 
-fn song_search_display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
-    song.display_bpm_range()
-}
-
 fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
     const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
     let mut out = String::new();
@@ -555,7 +551,7 @@ fn build_song_search_candidates(
                 }
 
                 if let Some(want_tier) = filter.bpm_tier {
-                    let Some((bpm_lo, bpm_hi)) = song_search_display_bpm_range(song) else {
+                    let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
                         continue;
                     };
                     let mut lo = song_search_bpm_tier(bpm_lo);
@@ -587,6 +583,7 @@ fn build_song_search_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use std::path::PathBuf;
 
     fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
@@ -623,11 +620,85 @@ mod tests {
         })
     }
 
+    fn test_chart(chart_type: &str) -> ChartData {
+        ChartData {
+            chart_type: chart_type.to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 12,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: format!("{chart_type}-hash"),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 128.0,
+            max_bpm: 128.0,
+        }
+    }
+
+    fn test_song_with_bpm(
+        title: &str,
+        display_bpm: &str,
+        min_bpm: f64,
+        max_bpm: f64,
+    ) -> Arc<SongData> {
+        let mut song = (*test_song(title, "")).clone();
+        song.display_bpm = display_bpm.to_string();
+        song.min_bpm = min_bpm;
+        song.max_bpm = max_bpm;
+        song.charts = vec![test_chart("dance-single"), test_chart("dance-double")];
+        Arc::new(song)
+    }
+
     fn assert_close(actual: f32, expected: f32) {
         assert!(
             (actual - expected).abs() < 1e-6,
             "expected {expected}, got {actual}"
         );
+    }
+
+    #[test]
+    fn song_search_bpm_filter_uses_display_bpm_range() {
+        let slow = test_song_with_bpm("Slow", "128", 128.0, 128.0);
+        let range = test_song_with_bpm("Range", "120:180", 120.0, 180.0);
+        let entries = vec![
+            MusicWheelEntry::PackHeader {
+                name: "Pack".to_string(),
+                original_index: 0,
+                banner_path: None,
+                song_count: 2,
+            },
+            MusicWheelEntry::Song(slow),
+            MusicWheelEntry::Song(range),
+        ];
+
+        let candidates = build_song_search_candidates(&entries, "[180]");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].song.title, "Range");
     }
 
     #[test]

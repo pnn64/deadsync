@@ -5,6 +5,7 @@ use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -409,6 +410,30 @@ pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> St
     out
 }
 
+pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return None;
+    };
+    let mut avatar = None;
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if name.eq_ignore_ascii_case("profile.png") {
+            return Some(path);
+        }
+        if avatar.is_none() && name.eq_ignore_ascii_case("avatar.png") {
+            avatar = Some(path);
+        }
+    }
+    avatar
+}
+
 fn next_local_profile_number(mut nums: Vec<u32>, max: u32) -> Option<u32> {
     nums.retain(|&n| n <= max);
     nums.sort_unstable();
@@ -472,6 +497,27 @@ impl PlayStyle {
             Self::Single | Self::Versus => "dance-single",
             Self::Double => "dance-double",
         }
+    }
+
+    #[inline(always)]
+    pub const fn cols_per_player(self) -> usize {
+        match self {
+            Self::Single | Self::Versus => 4,
+            Self::Double => 8,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn player_count(self) -> usize {
+        match self {
+            Self::Single | Self::Double => 1,
+            Self::Versus => 2,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn total_cols(self) -> usize {
+        self.cols_per_player() * self.player_count()
     }
 }
 
@@ -537,6 +583,22 @@ pub const fn joined_player_mask(p1: bool, p2: bool) -> u8 {
 }
 
 #[inline(always)]
+pub const fn play_style_for_joined(
+    style: PlayStyle,
+    p1_joined: bool,
+    p2_joined: bool,
+) -> PlayStyle {
+    if p1_joined && p2_joined {
+        PlayStyle::Versus
+    } else {
+        match style {
+            PlayStyle::Versus => PlayStyle::Single,
+            PlayStyle::Single | PlayStyle::Double => style,
+        }
+    }
+}
+
+#[inline(always)]
 pub const fn player_side_is_joined(joined_mask: u8, side: PlayerSide) -> bool {
     joined_mask & player_side_joined_mask(side) != 0
 }
@@ -552,6 +614,15 @@ pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bo
 #[inline(always)]
 pub const fn is_single_p2_side(play_style: PlayStyle, side: PlayerSide) -> bool {
     matches!((play_style, side), (PlayStyle::Single, PlayerSide::P2))
+}
+
+#[inline(always)]
+pub const fn runtime_player_index(play_style: PlayStyle, side: PlayerSide) -> usize {
+    if matches!(play_style, PlayStyle::Versus) {
+        player_side_index(side)
+    } else {
+        0
+    }
 }
 
 #[inline(always)]
@@ -5026,6 +5097,15 @@ mod tests {
         assert_eq!(PlayStyle::Single.chart_type(), "dance-single");
         assert_eq!(PlayStyle::Versus.chart_type(), "dance-single");
         assert_eq!(PlayStyle::Double.chart_type(), "dance-double");
+        assert_eq!(PlayStyle::Single.cols_per_player(), 4);
+        assert_eq!(PlayStyle::Versus.cols_per_player(), 4);
+        assert_eq!(PlayStyle::Double.cols_per_player(), 8);
+        assert_eq!(PlayStyle::Single.player_count(), 1);
+        assert_eq!(PlayStyle::Versus.player_count(), 2);
+        assert_eq!(PlayStyle::Double.player_count(), 1);
+        assert_eq!(PlayStyle::Single.total_cols(), 4);
+        assert_eq!(PlayStyle::Versus.total_cols(), 8);
+        assert_eq!(PlayStyle::Double.total_cols(), 8);
     }
 
     #[test]
@@ -5692,6 +5772,26 @@ mod tests {
     }
 
     #[test]
+    fn play_style_follows_join_count() {
+        assert_eq!(
+            play_style_for_joined(PlayStyle::Single, true, true),
+            PlayStyle::Versus
+        );
+        assert_eq!(
+            play_style_for_joined(PlayStyle::Double, true, true),
+            PlayStyle::Versus
+        );
+        assert_eq!(
+            play_style_for_joined(PlayStyle::Double, true, false),
+            PlayStyle::Double
+        );
+        assert_eq!(
+            play_style_for_joined(PlayStyle::Versus, false, true),
+            PlayStyle::Single
+        );
+    }
+
+    #[test]
     fn runtime_player_p2_includes_single_player_styles() {
         assert!(!runtime_player_is_p2(PlayStyle::Single, PlayerSide::P1));
         assert!(runtime_player_is_p2(PlayStyle::Single, PlayerSide::P2));
@@ -5702,6 +5802,10 @@ mod tests {
         assert!(is_single_p2_side(PlayStyle::Single, PlayerSide::P2));
         assert!(!is_single_p2_side(PlayStyle::Double, PlayerSide::P2));
         assert!(!is_single_p2_side(PlayStyle::Versus, PlayerSide::P2));
+        assert_eq!(runtime_player_index(PlayStyle::Single, PlayerSide::P2), 0);
+        assert_eq!(runtime_player_index(PlayStyle::Double, PlayerSide::P2), 0);
+        assert_eq!(runtime_player_index(PlayStyle::Versus, PlayerSide::P1), 0);
+        assert_eq!(runtime_player_index(PlayStyle::Versus, PlayerSide::P2), 1);
 
         assert_eq!(
             runtime_player_side(PlayStyle::Single, PlayerSide::P2, 0),
@@ -5899,6 +6003,24 @@ mod tests {
 
         let out = rewrite_profile_display_name_content("", "New Name");
         assert_eq!(out, "[userprofile]\nDisplayName=New Name\n");
+    }
+
+    #[test]
+    fn profile_avatar_path_prefers_profile_png() {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-profile-avatar-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let avatar = dir.join("avatar.png");
+        let profile = dir.join("profile.png");
+        fs::write(&avatar, b"avatar").unwrap();
+
+        assert_eq!(find_profile_avatar_path(&dir), Some(avatar.clone()));
+
+        fs::write(&profile, b"profile").unwrap();
+        assert_eq!(find_profile_avatar_path(&dir), Some(profile));
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

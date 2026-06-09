@@ -162,6 +162,28 @@ pub fn count_loaded_songs(packs: &[SongPack]) -> usize {
     packs.iter().map(|pack| pack.songs.len()).sum()
 }
 
+#[inline(always)]
+pub fn song_pack_progress_name(pack: &SongPack) -> &str {
+    pack.directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(pack.group_name.as_str())
+}
+
+#[inline(always)]
+pub fn song_progress_name(path: &Path) -> &str {
+    path.parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        })
+}
+
 pub fn finalize_loaded_packs(loaded_packs: &mut Vec<SongPack>) {
     loaded_packs.retain(|pack| !pack.songs.is_empty());
     for pack in loaded_packs.iter_mut() {
@@ -573,6 +595,26 @@ mod tests {
         assert_eq!(group_names, vec!["Beta", "Alpha", "Pack"]);
         assert_eq!(cache.len(), 3);
         assert_eq!(cache[2].directory, after_root.join("Pack"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn progress_names_prefer_display_dirs_with_fallbacks() {
+        let root = test_dir("progress-names");
+        let mut pack_without_dir = song_pack("Fallback Group", "Title", &root);
+        pack_without_dir.directory = PathBuf::new();
+        assert_eq!(song_pack_progress_name(&pack_without_dir), "Fallback Group");
+
+        let mut pack_with_dir = song_pack("Fallback Group", "Title", &root);
+        pack_with_dir.directory = root.join("Pack Dir");
+        assert_eq!(song_pack_progress_name(&pack_with_dir), "Pack Dir");
+
+        assert_eq!(
+            song_progress_name(&root.join("Pack").join("Song").join("song.sm")),
+            "Song"
+        );
+        assert_eq!(song_progress_name(Path::new("song.sm")), "song.sm");
 
         let _ = fs::remove_dir_all(root);
     }

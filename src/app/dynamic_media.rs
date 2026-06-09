@@ -212,7 +212,7 @@ impl DynamicMedia {
         self.failed_gameplay_background_key = None;
         self.clear_gameplay_background_results();
         for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            let ix = Self::side_ix(side);
+            let ix = profile_data::player_side_index(side);
             if let Some((key, _)) = self.current_profile_avatars[ix].take() {
                 keys.push(key);
             }
@@ -923,7 +923,7 @@ impl DynamicMedia {
         side: profile_data::PlayerSide,
         path_opt: Option<PathBuf>,
     ) {
-        let ix = Self::side_ix(side);
+        let ix = profile_data::player_side_index(side);
 
         if let Some(path) = path_opt {
             if let Some((key, current_path)) = self.current_profile_avatars[ix].as_ref()
@@ -983,14 +983,6 @@ impl DynamicMedia {
             if let Some(frame) = player.take_due_frame(song_lua_play_time) {
                 assets.queue_texture_upload(key.clone(), frame);
             }
-        }
-    }
-
-    #[inline(always)]
-    fn side_ix(side: profile_data::PlayerSide) -> usize {
-        match side {
-            profile_data::PlayerSide::P1 => 0,
-            profile_data::PlayerSide::P2 => 1,
         }
     }
 
@@ -1244,7 +1236,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         side: profile_data::PlayerSide,
     ) {
-        let ix = Self::side_ix(side);
+        let ix = profile_data::player_side_index(side);
         let key = self.current_profile_avatars[ix].take().map(|(key, _)| key);
         profile::set_avatar_texture_key_for_side(side, None);
         if let Some(key) = key {

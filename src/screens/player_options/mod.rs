@@ -16,8 +16,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
-use deadsync_chart::ChartData;
-use deadsync_chart::SongData;
+use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::collections::HashMap;
@@ -102,12 +101,9 @@ pub fn init(
     let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
-        let mut diff_idx = preferred_difficulty_index[player_idx].min(
-            crate::engine::present::color::FILE_DIFFICULTY_NAMES
-                .len()
-                .saturating_sub(1),
-        );
-        if steps_idx < crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() {
+        let mut diff_idx =
+            preferred_difficulty_index[player_idx].min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
+        if steps_idx < STANDARD_DIFFICULTY_COUNT {
             diff_idx = steps_idx;
         }
         diff_idx
@@ -205,7 +201,7 @@ pub fn init(
         &mut p2_masks,
     );
 
-    let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+    let cols_per_player = crate::game::profile::get_session_play_style().cols_per_player();
     let mut initial_noteskin_names = vec![profile_data::NoteSkin::DEFAULT_NAME.to_string()];
     for profile in &player_profiles {
         push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);

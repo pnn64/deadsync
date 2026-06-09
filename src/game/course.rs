@@ -1,10 +1,10 @@
 use crate::config::dirs;
 use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
 use deadsync_simfile::course::{
-    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths, parse_course_file,
-    validate_course_refs,
+    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths, course_progress_names,
+    parse_course_file, validate_course_refs,
 };
-use deadsync_simfile::scan::fmt_scan_time;
+use deadsync_simfile::scan::{fmt_scan_time, push_unique_path};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -39,49 +39,17 @@ fn report_load_progress<F>(
     }
 }
 
-#[inline(always)]
-fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'a str) {
-    let fallback = root
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("courses");
-    let group = path
-        .parent()
-        .and_then(|dir| dir.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or(fallback);
-    let course = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or_default();
-    (group, course)
-}
-
 fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
-    fn push_unique_root(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
-        let mut key = path.to_string_lossy().into_owned();
-        if cfg!(windows) {
-            key.make_ascii_lowercase();
-        }
-        if keys.iter().any(|existing| existing == &key) {
-            return;
-        }
-        keys.push(key);
-        roots.push(path);
-    }
-
     let mut roots = Vec::with_capacity(2);
     let mut keys = Vec::with_capacity(2);
     if root_path.is_dir() {
-        push_unique_root(root_path.to_path_buf(), &mut roots, &mut keys);
+        push_unique_path(root_path.to_path_buf(), &mut roots, &mut keys);
     } else {
         warn!("Courses directory '{}' not found.", root_path.display());
     }
 
     for extra in dirs::app_dirs().extra_course_roots() {
-        push_unique_root(extra, &mut roots, &mut keys);
+        push_unique_path(extra, &mut roots, &mut keys);
     }
 
     roots

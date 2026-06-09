@@ -5,7 +5,7 @@ use deadsync_chart::{SongData, SongPack};
 use deadsync_simfile::scan::{
     PackScan, ScanFailure, collect_reload_pack_dirs, count_loaded_songs, empty_song_pack_from_scan,
     finalize_loaded_packs, fmt_scan_time, push_unique_path, replace_song_packs, scan_pack_dirs,
-    scan_song_roots,
+    scan_song_roots, song_pack_progress_name, song_progress_name,
 };
 use log::{debug, info, warn};
 use std::fs;
@@ -111,28 +111,6 @@ fn report_load_progress<F>(
     if let Some(cb) = progress.as_mut() {
         cb(done, total, group, item);
     }
-}
-
-#[inline(always)]
-fn song_pack_progress_name(pack: &SongPack) -> &str {
-    pack.directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or(pack.group_name.as_str())
-}
-
-#[inline(always)]
-fn song_progress_name(path: &Path) -> &str {
-    path.parent()
-        .and_then(|dir| dir.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-        })
 }
 
 type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);

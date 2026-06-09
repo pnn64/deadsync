@@ -25,12 +25,13 @@ use deadsync_profile::{
     active_profile_local_id, add_known_pack_names, append_last_played_course_section,
     append_last_played_section, append_player_options_section, clamp_weight_pounds,
     cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
-    encode_profile_stats, initials_from_name, is_local_profile_id, joined_player_mask,
-    load_error_bar_options, load_last_played_course_section, load_last_played_section,
-    load_timing_feedback_options, load_visual_player_options, next_local_profile_id,
-    parse_favorites_content, parse_groovestats_is_pad_player, player_options_section,
-    player_side_index as side_ix, player_side_is_joined, render_favorites_content,
-    rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
+    encode_profile_stats, find_profile_avatar_path, initials_from_name, is_local_profile_id,
+    joined_player_mask, load_error_bar_options, load_last_played_course_section,
+    load_last_played_section, load_timing_feedback_options, load_visual_player_options,
+    next_local_profile_id, parse_favorites_content, parse_groovestats_is_pad_player,
+    player_options_section, player_side_index as side_ix, player_side_is_joined,
+    render_favorites_content, rewrite_profile_display_name_content, sanitize_player_initials,
+    unknown_pack_names,
 };
 pub use update::*;
 
@@ -57,31 +58,6 @@ fn groovestats_ini_path(id: &str) -> PathBuf {
 #[inline(always)]
 fn arrowcloud_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("arrowcloud.ini")
-}
-
-#[inline(always)]
-fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
-    let Ok(read_dir) = fs::read_dir(dir) else {
-        return None;
-    };
-    let mut avatar = None;
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else {
-            continue;
-        };
-        if name.eq_ignore_ascii_case("profile.png") {
-            return Some(path);
-        }
-        if avatar.is_none() && name.eq_ignore_ascii_case("avatar.png") {
-            avatar = Some(path);
-        }
-    }
-    avatar
 }
 
 #[inline(always)]

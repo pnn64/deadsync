@@ -2966,19 +2966,16 @@ pub fn update(state: &mut State, dt: f32) {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
             continue;
         }
-        let player_idx = if play_style == profile_data::PlayStyle::Versus {
-            controller_idx
-        } else {
-            0
-        };
+        let controller = profile_data::player_side_for_index(controller_idx);
+        let player_idx = profile_data::runtime_player_index(play_style, controller);
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             continue;
         };
-        let gs_side = if play_style == profile_data::PlayStyle::Versus {
-            [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2][controller_idx]
-        } else {
-            profile::get_session_player_side()
-        };
+        let gs_side = profile_data::runtime_player_side(
+            play_style,
+            profile::get_session_player_side(),
+            controller_idx,
+        );
         if matches!(
             scores::get_groovestats_submit_ui_status_for_side(
                 si.chart.short_hash.as_str(),
@@ -3176,18 +3173,12 @@ fn eval_grade_for_result(
 
 pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     let play_style = profile::get_session_play_style();
-    let side_to_idx = |side: profile_data::PlayerSide| match (play_style, side) {
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P1) => 0,
-        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P2) => 1,
-        _ => 0,
-    };
-
     let mut found_player = false;
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         if !profile::is_session_side_joined(side) {
             continue;
         }
-        let idx = side_to_idx(side);
+        let idx = profile_data::runtime_player_index(play_style, side);
         let Some(score) = state.score_info.get(idx).and_then(|s| s.as_ref()) else {
             continue;
         };
@@ -3546,11 +3537,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.itl_overlay_visible {
         let play_style = profile::get_session_play_style();
         let mut shift_itl_page = |controller: profile_data::PlayerSide, dir: i32| {
-            let player_idx = if play_style == profile_data::PlayStyle::Versus {
-                profile_data::player_side_index(controller)
-            } else {
-                0
-            };
+            let player_idx = profile_data::runtime_player_index(play_style, controller);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 return false;
             };
@@ -4429,24 +4416,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
         for controller in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            let controller_idx = if controller == profile_data::PlayerSide::P1 {
-                0
-            } else {
-                1
-            };
-            let player_idx = if play_style == profile_data::PlayStyle::Versus {
-                controller_idx
-            } else {
-                0
-            };
+            let controller_idx = profile_data::player_side_index(controller);
+            let player_idx = profile_data::runtime_player_index(play_style, controller);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let gs_side = if play_style == profile_data::PlayStyle::Versus {
-                controller
-            } else {
-                player_side
-            };
+            let gs_side =
+                profile_data::runtime_player_side(play_style, player_side, controller_idx);
             let pane = if ENABLE_GS_QR_PANE {
                 state.active_pane[controller_idx]
             } else if state.active_pane[controller_idx] == EvalPane::QrCode {
@@ -5078,15 +5054,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             if !profile::is_session_side_joined(side) {
                 continue;
             }
-            let player_idx = if play_style == profile_data::PlayStyle::Versus {
-                if side == profile_data::PlayerSide::P1 {
-                    0
-                } else {
-                    1
-                }
-            } else {
-                0
-            };
+            let player_idx = profile_data::runtime_player_index(play_style, side);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };

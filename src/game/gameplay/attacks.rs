@@ -33,7 +33,7 @@ use super::{
     REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
     ScrollOverrides, State, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
     VisualOverrides, apply_hyper_shuffle, apply_super_shuffle_taps, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, song_lua_display_bpm_pair, sort_player_notes,
+    apply_uncommon_masks_with_masks, sort_player_notes,
 };
 
 #[derive(Clone, Debug)]
@@ -2746,7 +2746,7 @@ fn build_song_lua_compile_context(
         song.title.clone(),
     );
     context.song_display_bpms =
-        song_lua_display_bpm_pair(song, charts.first().map(|chart| chart.as_ref()));
+        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
     context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -2773,7 +2773,7 @@ fn build_song_lua_compile_context(
             SongLuaDifficulty::default_enabled()
         },
         display_bpms: if player < num_players {
-            song_lua_display_bpm_pair(song, Some(charts[player].as_ref()))
+            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
         } else {
             [60.0, 60.0]
         },

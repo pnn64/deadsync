@@ -4,12 +4,11 @@ use crate::game::song::get_song_cache;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_simfile::cache::{
     SerializableSongData, build_requested_gameplay_charts, build_song_meta,
-    update_precise_song_bounds,
 };
 use deadsync_simfile::media::{
     BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR, collect_media_roots,
 };
-use deadsync_simfile::song::{ParseSongOptions, parse_song_file};
+use deadsync_simfile::song::{ParseSongOptions, parse_song_data_file};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -106,9 +105,8 @@ fn load_gameplay_song_data(
         .then(|| cache::compute_song_cache_path(simfile_path))
         .flatten();
     let parse_started = Instant::now();
-    let mut song_data = parse_and_process_song_file(simfile_path)?;
+    let song_data = parse_song_cache_data(simfile_path, global_offset_seconds)?;
     let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
-    update_precise_song_bounds(&mut song_data, global_offset_seconds);
     let write_started = Instant::now();
     if allow_cache_write && let Some(cp) = cache_path.as_deref() {
         cache::write_song_cache(cp, &song_data, global_offset_seconds);
@@ -227,8 +225,7 @@ fn parse_song_and_maybe_write_cache(
             path.file_name().unwrap_or_default()
         );
     }
-    let mut song_data = parse_and_process_song_file(path)?;
-    update_precise_song_bounds(&mut song_data, global_offset_seconds);
+    let song_data = parse_song_cache_data(path, global_offset_seconds)?;
     if cachesongs && let Some(cp) = cache_path {
         cache::write_song_cache(cp, &song_data, global_offset_seconds);
     }
@@ -240,9 +237,12 @@ pub(crate) fn parse_song_for_test(
     path: &Path,
     global_offset_seconds: f32,
 ) -> Result<SongData, String> {
-    let mut song_data = parse_and_process_song_file(path)?;
-    update_precise_song_bounds(&mut song_data, global_offset_seconds);
-    Ok(build_song_meta(song_data, global_offset_seconds))
+    deadsync_simfile::song::parse_song_meta_file(
+        path,
+        &parse_song_options(),
+        global_offset_seconds,
+        compute_music_length_seconds,
+    )
 }
 
 fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
@@ -260,8 +260,16 @@ fn parse_song_options() -> ParseSongOptions {
 }
 
 /// Parse and normalize a simfile on a cache miss.
-fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, String> {
-    parse_song_file(path, &parse_song_options(), compute_music_length_seconds)
+fn parse_song_cache_data(
+    path: &Path,
+    global_offset_seconds: f32,
+) -> Result<SerializableSongData, String> {
+    parse_song_data_file(
+        path,
+        &parse_song_options(),
+        global_offset_seconds,
+        compute_music_length_seconds,
+    )
 }
 
 /// Computes the length of the music file in seconds when the decode layer supports it.
@@ -276,51 +284,5 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
             warn!("Failed to compute audio length for {path:?}: {e}");
             0.0
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-
-    fn test_dir(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("deadsync-simfile-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    #[test]
-    fn parse_song_records_itg_first_second_from_first_step() {
-        let root = test_dir("first-second");
-        let song_dir = root.join("Song");
-        fs::create_dir_all(&song_dir).unwrap();
-        let simfile = song_dir.join("song.sm");
-        fs::write(
-            &simfile,
-            b"#TITLE:First Second;\n\
-              #BPMS:0.000=60.000;\n\
-              #OFFSET:0.000;\n\
-              #NOTES:\n\
-              dance-single:\n\
-              :\n\
-              Challenge:\n\
-              1:\n\
-              0.000,0.000,0.000,0.000,0.000:\n\
-              0000\n\
-              ,\n\
-              1000\n\
-              ,\n\
-              0001\n\
-              ;",
-        )
-        .unwrap();
-
-        let song = super::parse_song_for_test(&simfile, 0.0).unwrap();
-
-        assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
-        assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
     }
 }

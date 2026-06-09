@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
 
 #[derive(Clone, Debug)]
 pub(super) struct SyncPackSelection {
@@ -34,7 +35,7 @@ pub(super) fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
 pub(super) fn sync_pack_preferred_difficulty_index() -> usize {
     let profile_data = profile::get();
     let play_style = profile::get_session_play_style();
-    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
     if max_diff_index == 0 {
         0
     } else {
@@ -66,11 +67,9 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
             continue;
         }
         for song in &pack.songs {
-            let Some(steps_index) = select_music::best_steps_index(
-                song.as_ref(),
-                target_chart_type,
-                preferred_difficulty_index,
-            ) else {
+            let Some(steps_index) =
+                song.best_steps_index(target_chart_type, preferred_difficulty_index)
+            else {
                 continue;
             };
             let Some(chart_ix) = select_music::selected_chart_ix_for_sync(
