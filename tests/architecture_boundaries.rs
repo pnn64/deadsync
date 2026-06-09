@@ -71,6 +71,16 @@ const LOGICAL_INPUT_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/assets",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const GAME_RULE_FACADE_MODULES: &[&str] = &["judgment", "note", "scroll", "timing"];
 
 const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
@@ -743,6 +753,46 @@ fn logical_input_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn video_imports_do_not_use_engine_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let facade_path = root.join("src/engine/video");
+    let mut failures = Vec::new();
+
+    if facade_path.exists() {
+        failures.push(format!(
+            "{} still exists; import deadsync_video directly",
+            rel_path(&root, &facade_path)
+        ));
+    }
+
+    for dir in ENGINE_VIDEO_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let count = count_engine_video_facade_refs(&text);
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references engine::video facade {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "video should be imported from deadsync_video:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn rule_imports_do_not_use_game_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -1369,6 +1419,13 @@ fn count_engine_input_symbol_refs(text: &str, symbol: &str) -> usize {
     direct
         + count_grouped_engine_input_uses(text, "use crate::engine::input::{", symbol)
         + count_grouped_engine_input_uses(text, "use deadsync::engine::input::{", symbol)
+}
+
+fn count_engine_video_facade_refs(text: &str) -> usize {
+    count_token_refs(text, "crate::engine::video")
+        + count_token_refs(text, "deadsync::engine::video")
+        + count_grouped_game_rule_uses(text, "use crate::engine::{", "video")
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "video")
 }
 
 fn count_grouped_engine_input_uses(text: &str, marker: &str, symbol: &str) -> usize {

@@ -2,7 +2,7 @@
 //!
 //! Run with: `cargo run --bin replaygain_bench -- <audio-file>...`
 
-use deadsync::engine::audio::replaygain::compute_loudness_public;
+use deadsync_audio_analysis::compute_loudness;
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
@@ -17,7 +17,7 @@ fn main() -> ExitCode {
     let mut failed = false;
     for path in paths {
         let start = Instant::now();
-        match compute_loudness_public(Path::new(&path)) {
+        match compute_loudness(Path::new(&path)) {
             Ok(info) => println!(
                 "{path}\tlufs={:.3}\ttrue_peak={:.6}\telapsed_ms={:.3}",
                 info.lufs,

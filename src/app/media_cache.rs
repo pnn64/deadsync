@@ -1,6 +1,7 @@
 use crate::assets::{AssetManager, dynamic, open_image_fallback};
 use crate::config::dirs;
-use crate::engine::{gfx::Backend, video};
+use crate::engine::gfx::Backend;
+use deadsync_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{

@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.639"
+version = "0.4.640"
 dependencies = [
  "alsa",
  "ash",
@@ -993,6 +993,7 @@ dependencies = [
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
+ "deadsync-video",
  "directories",
  "env_logger",
  "flate2",
@@ -1167,6 +1168,16 @@ dependencies = [
  "rssp",
  "serde",
  "twox-hash",
+]
+
+[[package]]
+name = "deadsync-video"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

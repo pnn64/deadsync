@@ -12,6 +12,5 @@ pub mod smx;
 pub mod space;
 pub mod updater;
 pub mod version;
-pub mod video;
 #[cfg(windows)]
 pub mod windows_rt;

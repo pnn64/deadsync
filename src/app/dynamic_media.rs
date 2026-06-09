@@ -1,11 +1,9 @@
 use super::media_cache;
 use crate::assets::{AssetManager, dynamic, open_image_fallback, register_texture_dims};
-use crate::engine::{
-    gfx::{Backend, SamplerDesc, Texture as GfxTexture, TextureHandle},
-    video,
-};
+use crate::engine::gfx::{Backend, SamplerDesc, Texture as GfxTexture, TextureHandle};
 use crate::game::profile;
 use deadsync_profile as profile_data;
+use deadsync_video as video;
 use image::RgbaImage;
 use log::warn;
 use std::{

@@ -1,4 +1,4 @@
-use crate::engine::video;
+use deadsync_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{
