@@ -83,7 +83,7 @@ Follow these steps to get the game running:
         ./target/release/deadsync
         ```
      *  **On macOS:**
-        Before the first run, grant Input Monitoring permissions to `Terminal.app` in `System Settings > Privacy & Security > Input Monitoring`. Without this, deadsync will not receive any keystrokes. Then, run: 
+        Before the first run, grant Input Monitoring permissions to `Terminal.app` in `System Settings > Privacy & Security > Input Monitoring`. Without this, deadsync will not receive any keystrokes. Then, run:
         ```sh
         ./target/release/deadsync
         ```
@@ -191,7 +191,8 @@ DeadSync can communicate directly with dance pad hardware over USB, bypassing th
 
 | Pad | Status | Docs |
 |-----|--------|------|
-| **StepManiaX** | ✅ Supported | [docs/stepmaniax.md](docs/stepmaniax.md) |
+| **StepManiaX** | ✅ Supported | [Documentation](docs/stepmaniax.md) |
+| **FSRio** | ✅ Supported | |
 
 ## Data Directories
 
