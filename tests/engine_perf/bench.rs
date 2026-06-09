@@ -1,6 +1,6 @@
 use deadsync::assets;
-use deadsync::engine::gfx::{
-    self, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
+use deadsync_render::{
+    self as gfx, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
     TexturedMeshInstanceRaw as GfxTexturedMeshInstanceRaw,
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
@@ -2533,7 +2533,7 @@ fn checksum_bytes(bytes: &[u8]) -> u64 {
         ^ (u64::from(bytes[bytes.len() - 1]) << 16)
 }
 
-fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
+fn checksum_gfx_render(render: &deadsync_render::RenderList) -> u64 {
     let mut out = render.objects.len() as u64 ^ ((render.cameras.len() as u64) << 32);
     for obj in &render.objects {
         out = out
@@ -2543,7 +2543,7 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
             .wrapping_add((obj.order as u64) << 16)
             .wrapping_add((obj.camera as u64) << 48);
         match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite(index) => {
+            deadsync_render::ObjectType::Sprite(index) => {
                 let sprite = render.sprite_instances[*index as usize];
                 out = out
                     .wrapping_add(sprite.center[0].to_bits() as u64)
@@ -2551,12 +2551,12 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
                     .wrapping_add(sprite.size[0].to_bits() as u64)
                     .wrapping_add((sprite.tint[3].to_bits() as u64) << 1);
             }
-            deadsync::engine::gfx::ObjectType::Mesh { tint, vertices, .. } => {
+            deadsync_render::ObjectType::Mesh { tint, vertices, .. } => {
                 out = out
                     .wrapping_add(vertices.len() as u64)
                     .wrapping_add(tint[3].to_bits() as u64);
             }
-            deadsync::engine::gfx::ObjectType::TexturedMesh {
+            deadsync_render::ObjectType::TexturedMesh {
                 instance, vertices, ..
             } => {
                 out = out

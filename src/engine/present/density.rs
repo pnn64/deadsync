@@ -1,4 +1,4 @@
-use crate::engine::gfx::MeshVertex;
+use deadsync_render::MeshVertex;
 use std::sync::Arc;
 
 #[inline(always)]

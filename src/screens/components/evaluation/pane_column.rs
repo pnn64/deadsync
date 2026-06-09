@@ -1,6 +1,5 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
-use crate::engine::gfx::{BlendMode, SamplerDesc};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -10,6 +9,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
+use deadsync_render::{BlendMode, SamplerDesc};
 use image::{Rgba, RgbaImage};
 use std::hash::Hasher;
 use std::path::Path;

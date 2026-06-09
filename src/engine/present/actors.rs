@@ -1,5 +1,5 @@
-use crate::engine::gfx::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
 use crate::engine::present::anim;
+use deadsync_render::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;
 
@@ -365,7 +365,7 @@ impl From<&Arc<str>> for TextContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::gfx::BlendMode;
+    use deadsync_render::BlendMode;
 
     fn approx_eq(lhs: f32, rhs: f32) {
         assert!((lhs - rhs).abs() < 1e-6, "expected {rhs}, got {lhs}");

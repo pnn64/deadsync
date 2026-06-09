@@ -1,10 +1,11 @@
-use crate::engine::gfx::{
+use crate::engine::gfx::Texture as RendererTexture;
+use crate::engine::space::ortho_for_window;
+use deadsync_render::{
     BlendMode, DrawStats, FastU64Map, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
-    TexturedMeshInstanceRaw, TexturedMeshVertex,
+    SpriteInstanceRaw, TMeshCacheKey, TextureHandleMap, TexturedMeshInstanceRaw,
+    TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
-use crate::engine::space::ortho_for_window;
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
@@ -470,7 +471,7 @@ pub fn init(
 
         if path == GlPath::Modern {
             // a_pos (location 0), a_color (location 1)
-            let stride = std::mem::size_of::<crate::engine::gfx::MeshVertex>() as i32;
+            let stride = std::mem::size_of::<deadsync_render::MeshVertex>() as i32;
             gl.enable_vertex_attrib_array(0);
             gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
             gl.enable_vertex_attrib_array(1);
@@ -840,7 +841,7 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
-    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+    vertices: &[deadsync_render::TexturedMeshVertex],
 ) -> bool {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return entry.vertex_count == vertices.len() as u32;
@@ -1564,8 +1565,7 @@ pub fn draw(
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
-                            let stride =
-                                std::mem::size_of::<crate::engine::gfx::MeshVertex>() as i32;
+                            let stride = std::mem::size_of::<deadsync_render::MeshVertex>() as i32;
                             gl.enable_vertex_attrib_array(0);
                             gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
                             gl.enable_vertex_attrib_array(1);

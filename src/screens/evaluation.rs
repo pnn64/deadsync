@@ -1,5 +1,4 @@
 use crate::act;
-use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -16,6 +15,7 @@ use crate::screens::components::{
         visual_style_bg,
     },
 };
+use deadsync_render::{BlendMode, MeshVertex};
 use deadsync_score as score_data;
 
 use crate::assets::AssetManager;

@@ -1,8 +1,4 @@
 use crate::assets;
-use crate::engine::gfx::{
-    BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
-    TexturedMeshInstanceRaw, TexturedMeshVertex,
-};
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
@@ -10,6 +6,10 @@ use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
 use crate::engine::present::compose;
 use crate::engine::present::font::{self, Font, Glyph};
 use crate::engine::space::Metrics;
+use deadsync_render::{
+    BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+    TexturedMeshInstanceRaw, TexturedMeshVertex,
+};
 use glam::Mat4 as Matrix4;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -297,14 +297,14 @@ pub struct TextureResolveSnapshot {
 pub struct TextureResolveObjectSnapshot {
     #[serde(default)]
     pub texture_id: Option<String>,
-    pub texture_handle: crate::engine::gfx::TextureHandle,
+    pub texture_handle: deadsync_render::TextureHandle,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderObjectSnapshot {
     pub object_type: RenderObjectTypeSnapshot,
     #[serde(default)]
-    pub texture_handle: crate::engine::gfx::TextureHandle,
+    pub texture_handle: deadsync_render::TextureHandle,
     pub transform: [[f32; 4]; 4],
     pub blend: BlendModeSnapshot,
     pub z: i16,
@@ -1274,7 +1274,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             tint: *tint,
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vertices.clone()),
-            geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+            geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
@@ -1425,7 +1425,7 @@ fn render_object_runtime(
     sprite_instances: &mut Vec<SpriteInstanceRaw>,
 ) -> RenderObject {
     let snapshot_transform = matrix_runtime(render.transform);
-    let texture_handle = if render.texture_handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE {
+    let texture_handle = if render.texture_handle != deadsync_render::INVALID_TEXTURE_HANDLE {
         render.texture_handle
     } else {
         match &render.object_type {
@@ -1433,8 +1433,8 @@ fn render_object_runtime(
             | RenderObjectTypeSnapshot::TexturedMesh { texture_id, .. } => texture_id
                 .as_deref()
                 .map(crate::assets::texture_handle)
-                .unwrap_or(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
-            RenderObjectTypeSnapshot::Mesh { .. } => crate::engine::gfx::INVALID_TEXTURE_HANDLE,
+                .unwrap_or(deadsync_render::INVALID_TEXTURE_HANDLE),
+            RenderObjectTypeSnapshot::Mesh { .. } => deadsync_render::INVALID_TEXTURE_HANDLE,
         }
     };
     RenderObject {
@@ -1486,10 +1486,10 @@ fn render_object_runtime(
                     *uv_tex_shift,
                     false,
                 ),
-                vertices: crate::engine::gfx::TexturedMeshVertices::Shared(Arc::from(
+                vertices: deadsync_render::TexturedMeshVertices::Shared(Arc::from(
                     vertices.clone(),
                 )),
-                geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+                geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
                 depth_test: *depth_test,
             },
         },

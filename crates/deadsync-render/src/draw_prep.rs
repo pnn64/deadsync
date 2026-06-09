@@ -1,4 +1,4 @@
-use crate::engine::gfx::{
+use crate::{
     BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType,
     RenderList, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
     TexturedMeshVertices,
@@ -408,7 +408,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{DrawScratch, prepare};
-    use crate::engine::gfx::{
+    use crate::{
         BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     };
     use glam::Mat4 as Matrix4;

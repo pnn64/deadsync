@@ -1,7 +1,6 @@
 use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
-use crate::engine::gfx::TextureHandleMap;
 use crate::engine::present::actors::Actor;
 use crate::engine::space;
 use crate::game::profile;
@@ -9,6 +8,7 @@ use crate::screens::evaluation;
 use chrono::{Datelike, Local};
 use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
+use deadsync_render::TextureHandleMap;
 use deadsync_score as score_data;
 use log::{info, warn};
 use std::error::Error;
@@ -264,7 +264,7 @@ impl App {
             backend.retire_textures(&mut old_map);
         }
 
-        let texture = backend.create_texture(image, crate::engine::gfx::SamplerDesc::default())?;
+        let texture = backend.create_texture(image, deadsync_render::SamplerDesc::default())?;
         self.asset_manager.insert_texture(
             SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(),
             texture,

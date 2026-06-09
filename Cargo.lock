@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.646"
+version = "0.4.647"
 dependencies = [
  "alsa",
  "ash",
@@ -991,6 +991,7 @@ dependencies = [
  "deadsync-online",
  "deadsync-platform",
  "deadsync-profile",
+ "deadsync-render",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
@@ -1153,6 +1154,16 @@ dependencies = [
  "chrono",
  "deadsync-rules",
  "deadsync-score",
+]
+
+[[package]]
+name = "deadsync-render"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "serde",
+ "twox-hash",
 ]
 
 [[package]]

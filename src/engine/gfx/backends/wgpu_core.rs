@@ -1,10 +1,11 @@
-use crate::engine::gfx::{
+use crate::engine::gfx::Texture as RendererTexture;
+use crate::engine::space::ortho_for_window;
+use deadsync_render::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
     PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
+    TextureHandleMap, TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
-use crate::engine::space::ortho_for_window;
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, info, warn};
@@ -476,7 +477,7 @@ fn init(
     let mesh_vertex_capacity = 1024usize;
     let mesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("wgpu mesh vertex buffer"),
-        size: (mesh_vertex_capacity * mem::size_of::<crate::engine::gfx::MeshVertex>()) as u64,
+        size: (mesh_vertex_capacity * mem::size_of::<deadsync_render::MeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -905,7 +906,7 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
-    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+    vertices: &[deadsync_render::TexturedMeshVertex],
 ) -> bool {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return entry.vertex_count == vertices.len() as u32;
@@ -1523,7 +1524,7 @@ fn ensure_mesh_vertex_capacity(state: &mut State, needed: usize) {
     let new_cap = needed.next_power_of_two().max(1024);
     state.mesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("wgpu mesh vertex buffer"),
-        size: (new_cap * mem::size_of::<crate::engine::gfx::MeshVertex>()) as u64,
+        size: (new_cap * mem::size_of::<deadsync_render::MeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -2195,7 +2196,7 @@ const fn instance_layout() -> wgpu::VertexBufferLayout<'static> {
 
 const fn mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<crate::engine::gfx::MeshVertex>() as u64,
+        array_stride: mem::size_of::<deadsync_render::MeshVertex>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &MESH_ATTRS,
     }

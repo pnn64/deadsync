@@ -7,7 +7,6 @@ use crate::config::{
     SyncGraphMode,
 };
 use crate::engine::audio;
-use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -49,6 +48,7 @@ use deadsync_online::lobbies as lobby_data;
 use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
+use deadsync_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use image::{Rgba, RgbaImage};

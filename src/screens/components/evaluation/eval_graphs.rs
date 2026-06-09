@@ -1,5 +1,5 @@
-use crate::engine::gfx::MeshVertex;
 use crate::engine::present::color;
+use deadsync_render::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

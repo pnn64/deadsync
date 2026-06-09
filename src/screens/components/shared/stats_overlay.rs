@@ -1,9 +1,10 @@
 use crate::act;
 use crate::engine::audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
-use crate::engine::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
+use crate::engine::gfx::BackendType;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::space::{screen_height, screen_width};
+use deadsync_render::{ClockDomainTrace, PresentModeTrace};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

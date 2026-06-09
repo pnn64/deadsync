@@ -1,9 +1,9 @@
 use crate::assets;
-use crate::engine::gfx as renderer;
-use crate::engine::gfx::{BlendMode, RenderList, RenderObject};
 use crate::engine::present::actors::{self, SizeSpec};
 use crate::engine::present::{anim, font};
 use crate::engine::space::Metrics;
+use deadsync_render as renderer;
+use deadsync_render::{BlendMode, RenderList, RenderObject};
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::OnceCell;
@@ -4366,15 +4366,15 @@ mod tests {
         sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::assets;
-    use crate::engine::gfx::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
-        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
-    };
     use crate::engine::present::actors::{
         Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
     };
     use crate::engine::present::font::{Font, Glyph};
     use crate::engine::space::Metrics;
+    use deadsync_render::{
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
+        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    };
     use glam::Mat4 as Matrix4;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -5069,7 +5069,7 @@ mod tests {
     #[test]
     fn recycle_render_list_recovers_transient_textured_mesh_vertices() {
         let mut scratch = ComposeScratch::default();
-        let mut render = crate::engine::gfx::RenderList {
+        let mut render = deadsync_render::RenderList {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: Vec::new(),
             sprite_instances: Vec::new(),
@@ -5083,7 +5083,7 @@ mod tests {
                         [0.0, 0.0],
                         false,
                     ),
-                    vertices: crate::engine::gfx::TexturedMeshVertices::Transient(vec![
+                    vertices: deadsync_render::TexturedMeshVertices::Transient(vec![
                         TexturedMeshVertex::default();
                         6
                     ]),
@@ -5190,12 +5190,12 @@ mod tests {
 
         match (&shadow.object_type, &original.object_type) {
             (
-                crate::engine::gfx::ObjectType::TexturedMesh {
+                deadsync_render::ObjectType::TexturedMesh {
                     instance: shadow_instance,
                     geom_cache_key: shadow_key,
                     ..
                 },
-                crate::engine::gfx::ObjectType::TexturedMesh {
+                deadsync_render::ObjectType::TexturedMesh {
                     instance: original_instance,
                     geom_cache_key: original_key,
                     ..

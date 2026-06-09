@@ -1,6 +1,5 @@
 use crate::act;
 use crate::assets;
-use crate::engine::gfx::{BlendMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -37,6 +36,7 @@ use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use deadsync_profile as profile_data;
+use deadsync_render::{BlendMode, TexturedMeshVertex};
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1999,7 +1999,7 @@ fn hold_strip_actor(
         tint: [1.0; 4],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
-        geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -2027,7 +2027,7 @@ fn hold_strip_glow_actor(
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices,
-        geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -9470,7 +9470,6 @@ mod tests {
         zmod_mini_indicator_zoom, zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
-    use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
     use crate::engine::present::color;
     use crate::game::gameplay::{
@@ -9484,6 +9483,7 @@ mod tests {
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_profile as profile_data;
+    use deadsync_render::BlendMode;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;

@@ -1,9 +1,9 @@
 use crate::assets::AssetManager;
-use crate::engine::gfx::{
-    Backend, FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap,
-    TextureHandle,
-};
+use crate::engine::gfx::Backend;
 use deadsync_platform::dirs;
+use deadsync_render::{
+    FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
+};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
@@ -1560,14 +1560,14 @@ mod tests {
         remove_texture_handle("Graphics/Banner.png");
         assert_eq!(
             texture_handle("graphics/banner.png"),
-            crate::engine::gfx::INVALID_TEXTURE_HANDLE
+            deadsync_render::INVALID_TEXTURE_HANDLE
         );
 
         register_texture_handle("Other.png", 23);
         clear_texture_handles();
         assert_eq!(
             texture_handle("other.png"),
-            crate::engine::gfx::INVALID_TEXTURE_HANDLE
+            deadsync_render::INVALID_TEXTURE_HANDLE
         );
     }
 

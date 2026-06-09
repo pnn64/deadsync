@@ -5,3 +5,5 @@ pub mod engine;
 pub mod game;
 pub mod screens;
 pub mod test_support;
+
+pub use deadsync_render as render;

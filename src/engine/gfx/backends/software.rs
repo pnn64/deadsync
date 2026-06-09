@@ -1,8 +1,9 @@
-use crate::engine::gfx::{
-    BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw, Texture as RendererTexture, TextureHandleMap,
-};
+use crate::engine::gfx::Texture as RendererTexture;
 use crate::engine::space::ortho_for_window;
+use deadsync_render::{
+    BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
+    SamplerWrap, SpriteInstanceRaw, TextureHandleMap,
+};
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
 use log::info;
@@ -469,7 +470,7 @@ fn rasterize_mesh_triangles(
     proj: &Matrix4,
     transform: &Matrix4,
     tint: [f32; 4],
-    vertices: &[crate::engine::gfx::MeshVertex],
+    vertices: &[deadsync_render::MeshVertex],
     blend: BlendMode,
     width: usize,
     height: usize,
@@ -536,7 +537,7 @@ fn rasterize_mesh_triangles(
 fn rasterize_textured_mesh_triangles(
     proj: &Matrix4,
     transform: &Matrix4,
-    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+    vertices: &[deadsync_render::TexturedMeshVertex],
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],

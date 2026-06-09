@@ -1,7 +1,7 @@
-use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::density;
 use crate::engine::space::screen_center_x;
+use deadsync_render::BlendMode;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ pub struct DensityGraphLifeBenchFixture {
     thickness: f32,
     color: [f32; 4],
     offset_xy: [f32; 2],
-    mesh: RefCell<Option<Arc<[crate::engine::gfx::MeshVertex]>>>,
+    mesh: RefCell<Option<Arc<[deadsync_render::MeshVertex]>>>,
 }
 
 impl DensityGraphLifeBenchFixture {

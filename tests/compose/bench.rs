@@ -1,5 +1,4 @@
 use deadsync::assets::AssetManager;
-use deadsync::engine::gfx::RenderList;
 use deadsync::engine::present::{actors::Actor, compose};
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
@@ -7,6 +6,7 @@ use deadsync::test_support::{
     gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
     pane_stats_bench, player_options_bench, visual_style_bg_bench,
 };
+use deadsync_render::RenderList;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::error::Error;

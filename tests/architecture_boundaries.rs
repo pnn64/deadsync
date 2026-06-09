@@ -81,6 +81,44 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const ENGINE_GFX_RENDER_SYMBOLS: &[&str] = &[
+    "BlendMode",
+    "ClockDomainTrace",
+    "DrawStats",
+    "FastU64Map",
+    "INVALID_TEXTURE_HANDLE",
+    "INVALID_TMESH_CACHE_KEY",
+    "MeshVertex",
+    "ObjectType",
+    "PresentModePolicy",
+    "PresentModeTrace",
+    "PresentStats",
+    "RenderList",
+    "RenderObject",
+    "SamplerDesc",
+    "SamplerFilter",
+    "SamplerWrap",
+    "SpriteInstanceRaw",
+    "TMeshCacheKey",
+    "TextureHandle",
+    "TextureHandleMap",
+    "TexturedMeshInstanceRaw",
+    "TexturedMeshVertex",
+    "TexturedMeshVertices",
+    "draw_prep",
+];
+
+const ENGINE_GFX_RENDER_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/assets",
+    "src/config",
+    "src/engine/present",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "display",
     "host_time",
@@ -815,6 +853,48 @@ fn video_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn render_contract_imports_do_not_use_engine_gfx_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let draw_prep_path = root.join("src/engine/gfx/draw_prep.rs");
+    let mut failures = Vec::new();
+
+    if draw_prep_path.exists() {
+        failures.push(format!(
+            "{} still exists; import deadsync_render::draw_prep directly",
+            rel_path(&root, &draw_prep_path)
+        ));
+    }
+
+    for dir in ENGINE_GFX_RENDER_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for symbol in ENGINE_GFX_RENDER_SYMBOLS {
+                let count = count_engine_gfx_render_symbol_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::gfx::{symbol} facade {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "render contract should be imported from deadsync_render:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn platform_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -1523,6 +1603,13 @@ fn count_engine_video_facade_refs(text: &str) -> usize {
         + count_token_refs(text, "deadsync::engine::video")
         + count_grouped_game_rule_uses(text, "use crate::engine::{", "video")
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "video")
+}
+
+fn count_engine_gfx_render_symbol_refs(text: &str, symbol: &str) -> usize {
+    count_token_refs(text, &format!("crate::engine::gfx::{symbol}"))
+        + count_token_refs(text, &format!("deadsync::engine::gfx::{symbol}"))
+        + count_grouped_game_rule_uses(text, "use crate::engine::gfx::{", symbol)
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::gfx::{", symbol)
 }
 
 fn count_engine_platform_facade_refs(text: &str, module: &str) -> usize {

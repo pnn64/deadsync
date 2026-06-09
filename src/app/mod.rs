@@ -19,9 +19,7 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::gfx::{
-    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap,
-};
+use crate::engine::gfx::{self as gfx_backend, BackendType};
 use crate::engine::input;
 use crate::engine::lights::{
     self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
@@ -41,6 +39,8 @@ use deadsync_platform::dirs;
 use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
+use deadsync_render as renderer;
+use deadsync_render::{PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -2811,7 +2811,7 @@ fn model_texture_sampler(key: &str) -> SamplerDesc {
 
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
-    backend: &mut renderer::Backend,
+    backend: &mut gfx_backend::Backend,
     state: &gameplay::State,
 ) {
     fn song_lua_overlay_sampler(
@@ -2907,7 +2907,7 @@ fn prewarm_gameplay_assets(
 
     fn prewarm_model_texture_key(
         assets: &mut AssetManager,
-        backend: &mut renderer::Backend,
+        backend: &mut gfx_backend::Backend,
         seen: &mut HashSet<String>,
         seen_model_textures: &mut HashSet<String>,
         key: &str,
@@ -2922,7 +2922,7 @@ fn prewarm_gameplay_assets(
 
     fn prewarm_noteskin_textures(
         assets: &mut AssetManager,
-        backend: &mut renderer::Backend,
+        backend: &mut gfx_backend::Backend,
         seen: &mut HashSet<String>,
         seen_model_textures: &mut HashSet<String>,
         noteskin: &crate::game::parsing::noteskin::Noteskin,
@@ -3879,7 +3879,7 @@ impl AppState {
 
 pub struct App {
     window: Option<Arc<Window>>,
-    backend: Option<renderer::Backend>,
+    backend: Option<gfx_backend::Backend>,
     backend_type: BackendType,
     _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor,
     fsr_monitor: input::fsr::Monitor,

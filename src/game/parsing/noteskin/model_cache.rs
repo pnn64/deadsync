@@ -1,5 +1,5 @@
 use super::SpriteSlot;
-use crate::engine::gfx::{TMeshCacheKey, TexturedMeshVertex};
+use deadsync_render::{TMeshCacheKey, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::sync::Arc;
@@ -164,7 +164,7 @@ mod tests {
                 texture_key: Arc::from("test"),
                 tex_dims: (64, 64),
                 cached_handle: std::sync::atomic::AtomicU64::new(
-                    crate::engine::gfx::INVALID_TEXTURE_HANDLE,
+                    deadsync_render::INVALID_TEXTURE_HANDLE,
                 ),
                 cached_generation: std::sync::atomic::AtomicU64::new(u64::MAX),
             }),

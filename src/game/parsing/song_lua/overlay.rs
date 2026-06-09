@@ -1,7 +1,7 @@
-use crate::engine::gfx::TexturedMeshVertex;
 use crate::engine::present::actors::{TextAlign, TextAttribute};
 use crate::engine::present::anim::{EffectClock, EffectMode};
 use crate::game::parsing::noteskin::SpriteSlot;
+use deadsync_render::TexturedMeshVertex;
 use std::path::PathBuf;
 use std::sync::Arc;
 

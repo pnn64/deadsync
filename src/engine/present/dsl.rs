@@ -1,7 +1,7 @@
 use crate::assets;
-use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::engine::present::{anim, font, runtime};
+use deadsync_render::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ pub trait IntoTextureKey {
 
 pub struct TextureKeyHandle {
     pub key: Arc<str>,
-    pub handle: crate::engine::gfx::TextureHandle,
+    pub handle: deadsync_render::TextureHandle,
     pub generation: u64,
 }
 
@@ -291,7 +291,7 @@ impl SpriteBuilder {
     ) -> Self {
         let generation = assets::texture_registry_generation();
         let handle = cached_handle.load(Ordering::Relaxed);
-        if handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE
+        if handle != deadsync_render::INVALID_TEXTURE_HANDLE
             && cached_generation.load(Ordering::Relaxed) == generation
         {
             return Self::with_source(SpriteSource::TextureStaticHandle {
@@ -1318,7 +1318,7 @@ macro_rules! __ui_valign_from_ident {
 macro_rules! act {
     (sprite($tex:literal): $($tail:tt)+) => {{
         static __TEXTURE_HANDLE: ::std::sync::atomic::AtomicU64 =
-            ::std::sync::atomic::AtomicU64::new($crate::engine::gfx::INVALID_TEXTURE_HANDLE);
+            ::std::sync::atomic::AtomicU64::new($crate::render::INVALID_TEXTURE_HANDLE);
         static __TEXTURE_GENERATION: ::std::sync::atomic::AtomicU64 =
             ::std::sync::atomic::AtomicU64::new(::core::u64::MAX);
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
@@ -1784,16 +1784,16 @@ macro_rules! __dsl_apply_one {
 
     // blends: normal, add, multiply, subtract
     (blend (normal) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.blend($crate::engine::gfx::BlendMode::Alpha);
+        $mods.blend($crate::render::BlendMode::Alpha);
     }};
     (blend (add) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.blend($crate::engine::gfx::BlendMode::Add);
+        $mods.blend($crate::render::BlendMode::Add);
     }};
     (blend (multiply) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.blend($crate::engine::gfx::BlendMode::Multiply);
+        $mods.blend($crate::render::BlendMode::Multiply);
     }};
     (blend (subtract) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.blend($crate::engine::gfx::BlendMode::Subtract);
+        $mods.blend($crate::render::BlendMode::Subtract);
     }};
     (MaskSource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.mask_source();

@@ -1,5 +1,4 @@
 use crate::assets;
-use crate::engine::gfx::{BlendMode, MeshVertex, TexturedMeshVertex};
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
@@ -21,6 +20,7 @@ use crate::test_support::options_bench;
 use crate::test_support::pane_stats_bench;
 use crate::test_support::player_options_bench;
 use crate::test_support::visual_style_bg_bench;
+use deadsync_render::{BlendMode, MeshVertex, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
@@ -1103,7 +1103,7 @@ fn textured_mesh() -> Actor {
         tint: [1.0; 4],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: verts,
-        geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],

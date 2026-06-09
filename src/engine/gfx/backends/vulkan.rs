@@ -1,16 +1,17 @@
-use crate::engine::gfx::{
-    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw as InstanceData, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
-    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
-};
+use crate::engine::gfx::Texture as RendererTexture;
 use crate::engine::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
     google::display_timing,
     khr::{calibrated_timestamps, surface, swapchain},
     vk,
+};
+use deadsync_render::{
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandleMap,
+    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -2864,7 +2865,7 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
-    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+    vertices: &[deadsync_render::TexturedMeshVertex],
 ) -> Result<bool, Box<dyn Error>> {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return Ok(entry.vertex_count == vertices.len() as u32);

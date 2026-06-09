@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::engine::audio;
-use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{self, Actor};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y};
@@ -19,6 +18,7 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
+use deadsync_render::BlendMode;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -967,9 +967,9 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<deadsync_render::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(crate::engine::gfx::MeshVertex {
+                out.push(deadsync_render::MeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     color: v.color,
                 });
@@ -989,10 +989,10 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
+            let mut out: Vec<deadsync_render::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(crate::engine::gfx::TexturedMeshVertex {
+                out.push(deadsync_render::TexturedMeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom, v.pos[2] * zoom],
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,

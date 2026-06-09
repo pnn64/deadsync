@@ -229,7 +229,7 @@ fn push_layers(
             uv,
             0.0,
             color,
-            crate::engine::gfx::BlendMode::Alpha,
+            deadsync_render::BlendMode::Alpha,
             MODEL_Z,
         ) {
             if let Actor::TexturedMesh { depth_test, .. } = &mut actor {
