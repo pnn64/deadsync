@@ -714,7 +714,7 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
             );
 
             let timestamp = Instant::now();
-            let host_nanos = crate::engine::host_time::now_nanos();
+            let host_nanos = deadsync_platform::host_time::now_nanos();
             let id = pad_device_id(pad);
             let uuid = *shared.uuid[pad].lock().unwrap();
 

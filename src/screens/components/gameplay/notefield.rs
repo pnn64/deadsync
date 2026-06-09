@@ -1533,7 +1533,7 @@ fn signed_effect_active(value: f32) -> bool {
 
 #[inline(always)]
 fn arrow_effect_game_time_seconds() -> f32 {
-    crate::engine::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
+    deadsync_platform::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
 }
 
 #[inline(always)]

@@ -2,7 +2,7 @@ use super::super::{
     OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
     internal, publish_output_timing, publish_output_timing_quality,
 };
-use crate::engine::host_time::now_nanos;
+use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
 use pipewire as pw;
 use pw::{properties::properties, spa};

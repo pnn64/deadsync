@@ -3,7 +3,6 @@ use super::super::{
     note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
 };
 use crate::engine::audio::internal;
-use crate::engine::host_time::now_nanos;
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
 use coreaudio::audio_unit::macos_helpers::{
     audio_unit_from_device_id, get_audio_device_ids_for_scope, get_available_sample_rates,
@@ -11,6 +10,7 @@ use coreaudio::audio_unit::macos_helpers::{
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
+use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{

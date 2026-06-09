@@ -89,7 +89,7 @@ impl Drop for ThreadPolicyGuard {
 
 impl ThreadPolicyGuard {
     #[inline(always)]
-    pub(crate) fn into_mmcss_token(mut self) -> usize {
+    pub fn into_mmcss_token(mut self) -> usize {
         self.mmcss_handle
             .take()
             .map(|handle| handle.0 as usize)
@@ -98,7 +98,7 @@ impl ThreadPolicyGuard {
 }
 
 #[inline(always)]
-pub(crate) fn restore_thread_policy_token(token: usize) {
+pub fn restore_thread_policy_token(token: usize) {
     if token == 0 {
         return;
     }
@@ -185,7 +185,7 @@ fn qpc_freq_hz() -> Option<u64> {
 }
 
 #[inline(always)]
-pub(crate) fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+pub fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
     let hz = (*QPC_FREQ_HZ)?;
     ((u128::from(ticks) * 1_000_000_000u128) / u128::from(hz))
         .try_into()
@@ -193,7 +193,7 @@ pub(crate) fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
 }
 
 #[inline(always)]
-pub(crate) fn current_qpc_nanos() -> Option<u64> {
+pub fn current_qpc_nanos() -> Option<u64> {
     // SAFETY: `QueryPerformanceCounter` writes into a valid stack local and does
     // not retain the pointer after the call returns.
     unsafe {
@@ -204,6 +204,6 @@ pub(crate) fn current_qpc_nanos() -> Option<u64> {
 }
 
 #[inline(always)]
-pub(crate) fn current_host_nanos() -> u64 {
+pub fn current_host_nanos() -> u64 {
     current_qpc_nanos().unwrap_or(0)
 }

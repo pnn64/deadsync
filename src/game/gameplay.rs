@@ -8579,7 +8579,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     let display_diag_host_nanos = if song_clock.valid_at_host_nanos != 0 {
         song_clock.valid_at_host_nanos
     } else {
-        crate::engine::host_time::instant_nanos(Instant::now())
+        deadsync_platform::host_time::instant_nanos(Instant::now())
     };
     let display_music_time_ns = frame_stable_display_music_time_ns(
         &mut state.display_clock,

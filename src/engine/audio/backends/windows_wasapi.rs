@@ -2,7 +2,7 @@ use super::super::{
     OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
     internal, publish_output_timing,
 };
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread};
+use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::ffi::c_void;
 use std::mem::size_of;

@@ -4,10 +4,10 @@ pub mod replaygain;
 mod resample;
 
 use crate::config::dirs;
-use crate::engine::host_time::{instant_nanos, now_nanos};
-#[cfg(windows)]
-use crate::engine::windows_rt::current_qpc_nanos;
 use deadsync_audio_decode as decode;
+use deadsync_platform::host_time::{instant_nanos, now_nanos};
+#[cfg(windows)]
+use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};

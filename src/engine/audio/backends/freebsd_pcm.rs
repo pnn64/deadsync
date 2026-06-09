@@ -3,7 +3,7 @@ use super::super::{
     internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
     publish_output_timing_quality,
 };
-use crate::engine::host_time::now_nanos;
+use deadsync_platform::host_time::now_nanos;
 use libc::{c_int, c_ulong};
 use log::info;
 use std::fs::{self, File, OpenOptions};

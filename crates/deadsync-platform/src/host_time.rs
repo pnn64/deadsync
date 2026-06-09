@@ -9,21 +9,21 @@ pub fn init() {
 }
 
 #[inline(always)]
-pub(crate) fn instant_nanos(at: Instant) -> u64 {
+pub fn instant_nanos(at: Instant) -> u64 {
     at.checked_duration_since(*HOST_EPOCH)
         .map(|delta| delta.as_nanos().min((u64::MAX - 1) as u128) as u64)
         .unwrap_or(0)
 }
 
 #[inline(always)]
-pub(crate) fn now_nanos() -> u64 {
+pub fn now_nanos() -> u64 {
     platform_now_nanos()
 }
 
 #[cfg(windows)]
 #[inline(always)]
 fn platform_now_nanos() -> u64 {
-    crate::engine::windows_rt::current_host_nanos()
+    crate::windows_rt::current_host_nanos()
 }
 
 #[cfg(unix)]

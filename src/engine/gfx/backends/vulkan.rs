@@ -3183,13 +3183,13 @@ fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
 #[cfg(target_os = "windows")]
 #[inline(always)]
 fn current_host_nanos() -> u64 {
-    crate::engine::windows_rt::current_host_nanos()
+    deadsync_platform::windows_rt::current_host_nanos()
 }
 
 #[cfg(not(target_os = "windows"))]
 #[inline(always)]
 fn current_host_nanos() -> u64 {
-    crate::engine::host_time::now_nanos()
+    deadsync_platform::host_time::now_nanos()
 }
 
 #[inline(always)]

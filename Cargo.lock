@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.642"
+version = "0.4.643"
 dependencies = [
  "alsa",
  "ash",
@@ -1133,6 +1133,7 @@ dependencies = [
  "chrono",
  "env_logger",
  "log",
+ "windows",
  "xcb",
 ]
 

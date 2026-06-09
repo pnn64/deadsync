@@ -559,7 +559,7 @@ fn init(
 #[cfg(target_os = "windows")]
 #[inline(always)]
 fn current_host_nanos() -> u64 {
-    crate::engine::windows_rt::current_host_nanos()
+    deadsync_platform::windows_rt::current_host_nanos()
 }
 
 #[cfg(not(target_os = "windows"))]

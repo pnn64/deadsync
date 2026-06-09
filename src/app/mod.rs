@@ -23,8 +23,6 @@ use crate::engine::display;
 use crate::engine::gfx::{
     self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap,
 };
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-use crate::engine::host_time;
 use crate::engine::input;
 use crate::engine::lights::{
     self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
@@ -40,6 +38,8 @@ use crate::screens::{
     overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
     select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+use deadsync_platform::host_time;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -4985,7 +4985,7 @@ impl App {
         let total_elapsed_end = frame_finished
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        let frame_host_nanos = crate::engine::host_time::now_nanos();
+        let frame_host_nanos = deadsync_platform::host_time::now_nanos();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
         self.record_stutter_diag_frame(
             frame_host_nanos,

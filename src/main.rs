@@ -6,7 +6,7 @@ use std::panic::PanicHookInfo;
 #[cfg(windows)]
 struct WindowsTimingGuard {
     timer_period_ms: u32,
-    _thread_policy: engine::windows_rt::ThreadPolicyGuard,
+    _thread_policy: deadsync_platform::windows_rt::ThreadPolicyGuard,
 }
 
 #[cfg(windows)]
@@ -45,8 +45,8 @@ fn boost_windows_runtime_timing() -> WindowsTimingGuard {
 
     WindowsTimingGuard {
         timer_period_ms,
-        _thread_policy: engine::windows_rt::boost_current_thread(
-            engine::windows_rt::ThreadRole::Main,
+        _thread_policy: deadsync_platform::windows_rt::boost_current_thread(
+            deadsync_platform::windows_rt::ThreadRole::Main,
         ),
     }
 }
@@ -182,7 +182,7 @@ fn install_panic_hook() {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = engine::updater::cli::UpdaterCli::from_env();
     set_runtime_dir()?;
-    engine::host_time::init();
+    deadsync_platform::host_time::init();
 
     // Resolve and create platform-native data/cache directories.
     config::dirs::ensure_dirs_exist();

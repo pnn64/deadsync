@@ -1,7 +1,7 @@
 use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
-#[cfg(windows)]
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio_decode as decode;
+#[cfg(windows)]
+use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{debug, error, warn};
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,

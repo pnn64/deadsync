@@ -2,7 +2,7 @@ use super::super::{
     OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
     internal, note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
 };
-use crate::engine::host_time::now_nanos;
+use deadsync_platform::host_time::now_nanos;
 use libloading::Library;
 use log::{info, warn};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
