@@ -1,0 +1,23 @@
+# The reloadable hot-reload unit. A `cdylib` that exports only the hot entry
+# symbol, so it stays well under the per-DLL export-count limit. It
+# `#[path]`-includes the real render source so editing that file recompiles only
+# this small crate; everything else is statically linked from the engine.
+[package]
+name = "deadsync-screens"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The `hot` feature excludes the reloadable render source from the engine build,
+# so editing it recompiles ONLY this cdylib, not the whole engine. The host runs
+# with the same feature, so both reuse the identical cached engine build.
+deadsync = { path = "../..", features = ["hot"] }
+# Provides types referenced by the reloadable render source.
+deadsync-online = { path = "../deadsync-online" }
+# The `act!` macro expands to an absolute `::smallvec::SmallVec` path, so this
+# crate must depend on smallvec directly; keep the version aligned with the engine.
+smallvec = "1.15.1"
