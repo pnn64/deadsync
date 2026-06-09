@@ -20,15 +20,28 @@
 //! it carries are allocated in this cdylib and dropped in the host, so both
 //! artifacts MUST be built `-C prefer-dynamic` against one shared `std`/global
 //! allocator — otherwise the host frees cdylib heap with a different allocator
-//! (UB). The included `render.rs` still mints some `&'static str` font/texture
-//! keys that point into *this cdylib's* rodata; such a key only exists within a
-//! single render call and must not outlive the loaded generation.
+//! (UB). The included `render.rs` may mint `&'static str` font/texture keys that
+//! point into *this cdylib's* rodata, but the host neutralizes them at the
+//! boundary: right after dispatch it runs `deadsync::engine::present::actors::
+//! normalize_hot_actors`, re-homing every such key into host-owned memory. The
+//! returned actors therefore reference nothing in this image — the generic,
+//! all-surfaces contract that keeps produced values valid independent of this
+//! generation's lifetime.
 //!
-//! SAFETY INVARIANT (no unload while live): a returned `Vec<Actor>` and its
-//! `Arc<str>` destructors are this module's code/allocator. The runtime must
-//! therefore **never unload a hot generation** while any value it produced is
-//! still alive (today it keeps every loaded library mapped for the reloader's
-//! lifetime) — running this module's drop glue after unload would be UB.
+//! SAFETY INVARIANT (bounded unload — now ENABLED): the boundary normalizer makes
+//! a returned `Vec<Actor>`'s *keys* host-owned, so once it has run the values no
+//! longer point into this library's rodata. Drop glue and the per-frame `Vec`
+//! itself are resolved under the shared allocator (host-monomorphized), and the
+//! host flushes its pointer/hash-keyed caches on every generation swap. Given
+//! those guarantees the host now opts into keep-last-N unloading
+//! (`Reloader::keep_generations(2)`): it keeps the current generation plus one
+//! prior (grace for in-flight GPU frames) and unmaps older cdylibs. The unload
+//! ordering is safe because pruning happens on the dispatch thread *after* the
+//! new generation is current, and a reload cannot recur within the stability
+//! window (~500 ms ≫ frames-in-flight), so no in-flight `Vec<Actor>` from a
+//! pruned generation can be dropped after it is unmapped. This holds only while
+//! the hot surface stays a pure dispatch target (returns plain host-owned data,
+//! retains nothing across calls, registers no callbacks/threads/hooks).
 
 // The real render path, compiled into THIS crate so edits don't touch the rlib.
 // Relative to `crates/deadsync-screens/src/`, the repo root is three levels up.

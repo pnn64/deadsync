@@ -288,6 +288,155 @@ impl Actor {
     }
 }
 
+/// Host-side normalization of the hot-reload actor boundary.
+///
+/// When a hot-reloaded cdylib produces a `Vec<Actor>`, any `&'static str`/static
+/// key it bakes in (font keys, `TextureStatic*` keys, `Background::Texture`,
+/// `TextContent::Static`) points into the *cdylib image*. Those references dangle
+/// the moment the generation is unloaded. This pass walks the returned tree once,
+/// while the cdylib is still mapped, and re-homes every such key into host-owned
+/// memory (host-interned `&'static` or heap `Arc<str>`), so the resulting actors
+/// own nothing that lives in the unloadable library.
+///
+/// This is the generic, screen-agnostic boundary contract: it runs at the single
+/// hot dispatch site and covers every present and future hot surface. It is
+/// compiled only under the `hot` feature; non-hot builds render in-process with
+/// keys already owned by the executable image and never call this.
+#[cfg(feature = "hot")]
+mod host_intern {
+    use std::collections::HashSet;
+    use std::sync::{Arc, LazyLock, Mutex};
+
+    static STATIC_KEYS: LazyLock<Mutex<HashSet<&'static str>>> =
+        LazyLock::new(|| Mutex::new(HashSet::new()));
+    static ARC_KEYS: LazyLock<Mutex<HashSet<Arc<str>>>> =
+        LazyLock::new(|| Mutex::new(HashSet::new()));
+
+    /// Return a host-owned `&'static str` equal to `key`. The first time a given
+    /// string is seen it is leaked once (`Box::leak`) into a host-owned table; the
+    /// distinct set is bounded (font + texture keys — a few dozen), so the leak is
+    /// effectively a one-time intern, never per-frame growth.
+    pub fn intern_static(key: &str) -> &'static str {
+        let mut table = STATIC_KEYS.lock().unwrap();
+        if let Some(existing) = table.get(key) {
+            return existing;
+        }
+        let leaked: &'static str = Box::leak(key.to_owned().into_boxed_str());
+        table.insert(leaked);
+        leaked
+    }
+
+    /// Return a host-owned `Arc<str>` equal to `key`, de-duplicated so repeated
+    /// keys across frames share one allocation instead of re-allocating each frame.
+    pub fn intern_arc(key: &str) -> Arc<str> {
+        let mut table = ARC_KEYS.lock().unwrap();
+        if let Some(existing) = table.get(key) {
+            return Arc::clone(existing);
+        }
+        let arc: Arc<str> = Arc::from(key);
+        table.insert(Arc::clone(&arc));
+        arc
+    }
+}
+
+/// Re-home every cdylib-owned static key in a hot-produced actor slice into
+/// host-owned memory. Call this at the hot dispatch boundary, immediately after
+/// the cdylib returns its actors and before the host composes or caches anything.
+#[cfg(feature = "hot")]
+pub fn normalize_hot_actors(actors: &mut [Actor]) {
+    for actor in actors {
+        actor.rehome_to_host_owned();
+    }
+}
+
+#[cfg(feature = "hot")]
+impl Actor {
+    /// Replace any `&'static`/static key that points into the loaded cdylib image
+    /// with a host-owned equivalent, recursing through all child-bearing variants.
+    ///
+    /// The match is intentionally exhaustive (no `_` arm), mirroring `mul_alpha`,
+    /// so that any future `Actor` variant or new key-bearing field fails to compile
+    /// until it is explicitly normalized here — the boundary can never silently
+    /// regress to leaking a cdylib reference.
+    fn rehome_to_host_owned(&mut self) {
+        match self {
+            Self::Sprite { source, .. } => source.rehome_to_host_owned(),
+            Self::Text { font, content, .. } => {
+                *font = host_intern::intern_static(font);
+                if let TextContent::Static(s) = content {
+                    *content = TextContent::Shared(host_intern::intern_arc(s));
+                }
+            }
+            Self::Mesh { .. } | Self::TexturedMesh { .. } => {}
+            Self::Frame {
+                background,
+                children,
+                ..
+            } => {
+                Background::rehome_opt(background);
+                for child in children {
+                    child.rehome_to_host_owned();
+                }
+            }
+            Self::SharedFrame {
+                background,
+                children,
+                ..
+            } => {
+                Background::rehome_opt(background);
+                // `children` is an immutable `Arc<[Self]>`; rebuild it so each child
+                // is normalized, then re-share. At the hot boundary these actors are
+                // freshly produced each frame, so there is no aliasing to preserve.
+                let mut rebuilt: Vec<Self> = children.iter().cloned().collect();
+                for child in &mut rebuilt {
+                    child.rehome_to_host_owned();
+                }
+                *children = Arc::from(rebuilt);
+            }
+            Self::Camera { children, .. } => {
+                for child in children {
+                    child.rehome_to_host_owned();
+                }
+            }
+            Self::CameraPush { .. } | Self::CameraPop => {}
+            Self::Shadow { child, .. } => child.rehome_to_host_owned(),
+        }
+    }
+}
+
+#[cfg(feature = "hot")]
+impl SpriteSource {
+    fn rehome_to_host_owned(&mut self) {
+        match self {
+            // Static keys live in the cdylib image -> move to a host-owned `Arc<str>`.
+            // For the `*Handle` variants we deliberately drop the cdylib-resolved
+            // `handle`/`generation`: they were resolved against the cdylib's *own*
+            // duplicated texture registry, so forcing host re-resolution from the key
+            // is both safe (no dangling reference, no stale handle) and more correct.
+            Self::TextureStatic(key) => {
+                *self = SpriteSource::Texture(host_intern::intern_arc(key));
+            }
+            Self::TextureStaticHandle { key, .. } => {
+                *self = SpriteSource::Texture(host_intern::intern_arc(key));
+            }
+            Self::TextureHandle { key, .. } => {
+                *self = SpriteSource::Texture(host_intern::intern_arc(key));
+            }
+            // `Texture(Arc<str>)` is already a host-heap key the host re-resolves.
+            Self::Texture(_) | Self::Solid => {}
+        }
+    }
+}
+
+#[cfg(feature = "hot")]
+impl Background {
+    fn rehome_opt(background: &mut Option<Background>) {
+        if let Some(Background::Texture(key)) = background {
+            *key = host_intern::intern_static(key);
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextAttribute {
     pub start: usize,
@@ -467,5 +616,275 @@ mod tests {
         };
         assert!(!Arc::ptr_eq(&vertices, &original));
         approx_eq(vertices[0].color[3], 0.2);
+    }
+}
+
+#[cfg(all(test, feature = "hot"))]
+mod hot_tests {
+    use super::*;
+    use crate::engine::gfx::BlendMode;
+
+    fn text(font: &'static str, content: TextContent) -> Actor {
+        Actor::Text {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            local_transform: Matrix4::IDENTITY,
+            color: [1.0, 1.0, 1.0, 1.0],
+            stroke_color: None,
+            glow: [0.0, 0.0, 0.0, 0.0],
+            font,
+            content,
+            attributes: Vec::new(),
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            line_spacing: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
+            clip: None,
+            mask_dest: false,
+            blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
+            effect: anim::EffectState::default(),
+        }
+    }
+
+    fn sprite(source: SpriteSource) -> Actor {
+        Actor::Sprite {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            source,
+            tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [0.0, 0.0, 0.0, 0.0],
+            z: 0,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.0],
+            effect: anim::EffectState::default(),
+        }
+    }
+
+    fn dummy_handle() -> crate::engine::gfx::TextureHandle {
+        0
+    }
+
+    /// Assert no actor in the tree carries a cdylib-owned static key after
+    /// normalization: no `TextureStatic`/`TextureStaticHandle` sprite sources and
+    /// no `TextContent::Static` text content remain anywhere.
+    fn assert_no_cdylib_static_keys(actor: &Actor) {
+        match actor {
+            Actor::Sprite { source, .. } => {
+                assert!(
+                    !matches!(
+                        source,
+                        SpriteSource::TextureStatic(_)
+                            | SpriteSource::TextureStaticHandle { .. }
+                            | SpriteSource::TextureHandle { .. }
+                    ),
+                    "sprite still holds a cdylib-resolved texture source: {source:?}"
+                );
+            }
+            Actor::Text { content, .. } => {
+                assert!(
+                    !matches!(content, TextContent::Static(_)),
+                    "text still holds static content: {content:?}"
+                );
+            }
+            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+                for child in children {
+                    assert_no_cdylib_static_keys(child);
+                }
+            }
+            Actor::SharedFrame { children, .. } => {
+                for child in children.iter() {
+                    assert_no_cdylib_static_keys(child);
+                }
+            }
+            Actor::Shadow { child, .. } => assert_no_cdylib_static_keys(child),
+            Actor::Mesh { .. }
+            | Actor::TexturedMesh { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => {}
+        }
+    }
+
+    #[test]
+    fn sprite_static_keys_become_host_arcs() {
+        let mut a = sprite(SpriteSource::TextureStatic("dance.png"));
+        a.rehome_to_host_owned();
+        let Actor::Sprite { source, .. } = &a else {
+            panic!("expected sprite");
+        };
+        match source {
+            SpriteSource::Texture(key) => assert_eq!(key.as_ref(), "dance.png"),
+            other => panic!("expected Texture(Arc), got {other:?}"),
+        }
+
+        let mut b = sprite(SpriteSource::TextureStaticHandle {
+            key: "logo.png",
+            handle: dummy_handle(),
+            generation: 7,
+        });
+        b.rehome_to_host_owned();
+        let Actor::Sprite { source, .. } = &b else {
+            panic!("expected sprite");
+        };
+        match source {
+            // handle/generation dropped -> host re-resolves from the key.
+            SpriteSource::Texture(key) => assert_eq!(key.as_ref(), "logo.png"),
+            other => panic!("expected Texture(Arc), got {other:?}"),
+        }
+
+        // A cdylib-resolved `TextureHandle { key: Arc<str>, .. }` is also downgraded
+        // to a key-only `Texture`, so no cdylib-resolved handle escapes the boundary.
+        let mut c = sprite(SpriteSource::TextureHandle {
+            key: Arc::from("hud.png"),
+            handle: dummy_handle(),
+            generation: 3,
+        });
+        c.rehome_to_host_owned();
+        let Actor::Sprite { source, .. } = &c else {
+            panic!("expected sprite");
+        };
+        match source {
+            SpriteSource::Texture(key) => assert_eq!(key.as_ref(), "hud.png"),
+            other => panic!("expected Texture(Arc), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_font_interned_and_static_content_shared() {
+        let mut a = text("miso", TextContent::Static("Hello"));
+        a.rehome_to_host_owned();
+        let Actor::Text { font, content, .. } = &a else {
+            panic!("expected text");
+        };
+        assert_eq!(*font, "miso");
+        // Font pointer is now host-owned and pointer-stable across interning.
+        assert!(std::ptr::eq(*font, host_intern::intern_static("miso")));
+        match content {
+            TextContent::Shared(s) => assert_eq!(s.as_ref(), "Hello"),
+            other => panic!("expected Shared(Arc), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn background_texture_interned_in_place() {
+        let mut bg = Some(Background::Texture("bg.png"));
+        Background::rehome_opt(&mut bg);
+        let Some(Background::Texture(key)) = bg else {
+            panic!("expected texture background");
+        };
+        assert_eq!(key, "bg.png");
+        assert!(std::ptr::eq(key, host_intern::intern_static("bg.png")));
+    }
+
+    #[test]
+    fn normalize_recurses_through_every_container() {
+        let shared_child = sprite(SpriteSource::TextureStatic("shared.png"));
+        let mut actors = vec![Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            background: Some(Background::Texture("frame_bg.png")),
+            z: 0,
+            children: vec![
+                Actor::Camera {
+                    view_proj: Matrix4::IDENTITY,
+                    children: vec![Actor::Shadow {
+                        len: [0.0, 0.0],
+                        color: [0.0, 0.0, 0.0, 1.0],
+                        child: Box::new(text("camfont", TextContent::Static("deep"))),
+                    }],
+                },
+                Actor::SharedFrame {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                    children: Arc::from(vec![shared_child]),
+                    background: Some(Background::Texture("shared_bg.png")),
+                    z: 0,
+                    tint: [1.0, 1.0, 1.0, 1.0],
+                    blend: None,
+                },
+            ],
+        }];
+
+        normalize_hot_actors(&mut actors);
+
+        for actor in &actors {
+            assert_no_cdylib_static_keys(actor);
+        }
+
+        // The deep Text under Camera>Shadow was reached.
+        let Actor::Frame { children, .. } = &actors[0] else {
+            panic!("expected frame");
+        };
+        let Actor::Camera { children: cam, .. } = &children[0] else {
+            panic!("expected camera");
+        };
+        let Actor::Shadow { child, .. } = &cam[0] else {
+            panic!("expected shadow");
+        };
+        assert!(matches!(
+            child.as_ref(),
+            Actor::Text {
+                content: TextContent::Shared(_),
+                ..
+            }
+        ));
+
+        // SharedFrame's Arc children were rebuilt and normalized.
+        let Actor::SharedFrame {
+            children,
+            background: Some(Background::Texture(bg)),
+            ..
+        } = &children[1]
+        else {
+            panic!("expected shared frame with texture background");
+        };
+        assert_eq!(*bg, "shared_bg.png");
+        assert!(matches!(
+            &children[0],
+            Actor::Sprite {
+                source: SpriteSource::Texture(_),
+                ..
+            }
+        ));
     }
 }

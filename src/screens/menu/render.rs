@@ -1,22 +1,14 @@
 //! Pure render path for the title menu — the hot-reload target.
 //!
-//! Every value this code needs is **pre-resolved host-side** and handed in
-//! through `HostContext` (see `super::build_host_context`). This module performs
-//! **no** engine-global read of its own and keeps no persistent state. Because
-//! the hot boundary runs under one shared allocator (`-C prefer-dynamic`), the
-//! render path freely **clones** the host's `Arc<str>` text into the actors it
-//! emits — the resulting `Vec<Actor>` is allocated here and dropped host-side,
-//! which is sound only under that shared allocator.
+//! Every value this code needs is pre-resolved host-side and passed in through
+//! `HostContext` (see `super::build_host_context`); this module reads no engine
+//! globals and keeps no persistent state. It returns a `Vec<Actor>` built from
+//! that context.
 //!
-//! KNOWN IMPURITY (intentionally deferred): the component builders called below
-//! (`visual_style_bg`, `logo`, `menu_list`, `screen_bar`) and the `act!` text
-//! actors still resolve textures/fonts through engine globals
-//! (`assets::texture_registry_generation()`) and bake `&'static str`
-//! texture/font keys. In-process this is identical to today. Before the runtime
-//! can ever *unload* an old cdylib it must be addressed — favored approach:
-//! render emits actors carrying texture *keys* only and the host re-resolves
-//! handles after return (keeps asset lifetime, registry generation and
-//! `&'static` keys host-owned).
+//! The component builders and `act!` text actors here may mint `&'static`/static
+//! texture/font keys that point into this image; the host re-homes them into
+//! host-owned memory after this render returns (`normalize_hot_actors`), so the
+//! render code need not thread host-owned keys by hand.
 
 use deadsync::act;
 use deadsync::engine::present::actors::{Actor, TextAlign};
@@ -51,8 +43,8 @@ fn status_text_actor(
     alpha: f32,
     align_text: TextAlign,
 ) -> Actor {
-    // TODO: `font("miso")` bakes a hot-owned `&'static str`; route through a
-    // lib-owned font-key value on `HostContext` before old cdylibs are unloaded.
+    // TODO: `font("miso")` bakes a `&'static str`; threading a host-owned font
+    // key would avoid relying on the boundary normalizer to re-home it.
     let mut actor = act!(text:
         font("miso"):
         settext(text):

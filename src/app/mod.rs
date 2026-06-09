@@ -3914,6 +3914,8 @@ pub struct App {
     gfx_debug_enabled: bool,
     #[cfg(feature = "hot")]
     hot_reloader: Option<deadsync_hot::Reloader>,
+    #[cfg(feature = "hot")]
+    last_hot_generation: u64,
 }
 
 impl App {
@@ -5109,6 +5111,8 @@ impl App {
             gfx_debug_enabled,
             #[cfg(feature = "hot")]
             hot_reloader: Self::build_hot_reloader(),
+            #[cfg(feature = "hot")]
+            last_hot_generation: 0,
         }
     }
 
@@ -5145,6 +5149,9 @@ impl App {
         match deadsync_hot::Reloader::builder()
             .library_path(lib_path)
             .expected(expected)
+            // Keep the current generation + one prior (grace for in-flight GPU
+            // frames), then unmap older cdylibs.
+            .keep_generations(2)
             .on_event(|event| log::info!("hot(screens): {event:?}"))
             .build()
         {
@@ -6961,7 +6968,13 @@ impl App {
         };
 
         match rendered {
-            Some(actors) => actors,
+            Some(mut actors) => {
+                // Re-home cdylib-owned keys into host memory while the generation
+                // is still mapped, so nothing the host keeps references the
+                // unloadable library.
+                crate::engine::present::actors::normalize_hot_actors(&mut actors);
+                actors
+            }
             None => {
                 if let Some(r) = reloader.as_mut() {
                     log::error!(
@@ -7171,6 +7184,25 @@ impl App {
                 &self.asset_manager,
             ),
         };
+
+        // A hot screen above may have polled the reloader and swapped in a new
+        // cdylib generation. The pointer/hash-keyed host caches (text-layout caches
+        // and the compose-scratch texture lookup caches) persist across frames and
+        // are keyed by key-string addresses; a retiring generation's addresses can
+        // be reused by the next one. Flush them here — after the hot dispatch's
+        // poll, before compose consumes them this frame — so no stale entry can
+        // alias a key minted by the new generation. Cheap (rebuilt on demand) and
+        // only when the generation actually advances, which is the dev-only reload.
+        #[cfg(feature = "hot")]
+        if let Some(generation) = self.hot_reloader.as_ref().map(|r| r.generation()) {
+            if generation != self.last_hot_generation {
+                self.last_hot_generation = generation;
+                self.ui_text_layout_cache.clear();
+                self.gameplay_text_layout_cache.clear();
+                self.ui_compose_scratch.invalidate_pointer_caches();
+                self.gameplay_compose_scratch.invalidate_pointer_caches();
+            }
+        }
 
         if self.state.shell.overlay_mode.shows_fps() {
             let overlay = crate::screens::components::shared::stats_overlay::build(

@@ -4,10 +4,9 @@
 //! deadsync (or any game): it loads a reloadable `cdylib`, validates a small
 //! versioned, `#[repr(C)]` header exported by that library, and hands the caller
 //! back an **opaque vtable pointer** that the caller casts to its own dispatch
-//! table. The set of generic, hard problems solved here — debounced change
-//! detection, wait-until-writable, unique-filename shadow copy, header handshake,
-//! library lifetime, panic quarantine — is exactly what makes a reload loop sound
-//! and reusable.
+//! table. It handles debounced change detection, wait-until-writable,
+//! unique-filename shadow copying, the header handshake, library lifetime, and
+//! panic quarantine.
 //!
 //! ## What the consumer provides
 //! * a path to the reloadable library (e.g. `target/debug/deadsync_screens.dll`),
@@ -26,16 +25,17 @@
 //!   frame on the thread that dispatches through the vtable. The returned pointer
 //!   is valid until the next `poll` on the same `Reloader`; never cache it past a
 //!   `poll`, and never share it across threads.
-//! * **Nothing the library allocates-and-keeps may escape as a borrow/closure/
-//!   `&'static` into long-lived host state.** This crate keeps every loaded
-//!   library mapped for the lifetime of the `Reloader` (see "Library lifetime"),
-//!   which is belt-and-suspenders, not a license to leak hot-owned borrows.
+//! * **Nothing the library produces may escape into long-lived host state** as a
+//!   borrow, closure, or `&'static`. By default every loaded library stays mapped
+//!   for the `Reloader`'s lifetime; under bounded unloading
+//!   ([`ReloaderBuilder::keep_generations`]) a pruned generation's escaped values
+//!   would dangle.
 //!
 //! ## Library lifetime
-//! For maximum soundness in a developer tool, a loaded library is **never
-//! unloaded** while the `Reloader` lives — each successful reload appends to an
-//! internal keep-alive list. A bounded "keep last N" ring is a future
-//! optimization once a consumer has proven nothing escapes; correctness first.
+//! By default a loaded library is **never unloaded** while the `Reloader` lives —
+//! each successful reload appends to an internal keep-alive list. A consumer that
+//! has proven nothing escapes can opt into bounded unloading via
+//! [`ReloaderBuilder::keep_generations`].
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -230,6 +230,9 @@ pub enum ReloadEvent<'a> {
     /// The caller quarantined the current generation after a panic; the runtime
     /// will fall back until a newer build validates.
     Quarantined { generation: u64 },
+    /// An older generation was pruned — its library unmapped and shadow file
+    /// removed under the keep-last-N policy ([`ReloaderBuilder::keep_generations`]).
+    Unloaded { generation: u64, shadow: &'a Path },
 }
 
 type EventSink = Box<dyn FnMut(ReloadEvent<'_>)>;
@@ -242,6 +245,7 @@ pub struct ReloaderBuilder {
     stability_window: Duration,
     shadow_dir: Option<PathBuf>,
     on_event: Option<EventSink>,
+    keep_generations: Option<usize>,
 }
 
 impl ReloaderBuilder {
@@ -285,6 +289,25 @@ impl ReloaderBuilder {
         self
     }
 
+    /// Opt in to bounded unloading: keep at most `n` libraries mapped (the
+    /// current one plus `n - 1` prior generations); after each successful load,
+    /// older generations are unmapped and their shadow files deleted, emitting
+    /// [`ReloadEvent::Unloaded`]. Default (unset) keeps every generation mapped.
+    /// `n` is clamped to a minimum of 1 so the library backing `current` is
+    /// never dropped.
+    ///
+    /// # Safety
+    ///
+    /// Only sound if, by the time `n` newer generations have loaded, nothing a
+    /// pruned generation produced is still reachable — no returned values into
+    /// its `rodata`, no caches holding its data, no retained function pointers,
+    /// closures, trait objects, TLS, threads, or callbacks. The hot library must
+    /// be a pure dispatch target, reached only through [`Reloader::current`].
+    pub fn keep_generations(mut self, n: usize) -> Self {
+        self.keep_generations = Some(n.max(1));
+        self
+    }
+
     /// Finalize the configuration. Creates (and cleans) the shadow directory.
     pub fn build(self) -> Result<Reloader, ReloadError> {
         let library_path = self
@@ -313,6 +336,7 @@ impl ReloaderBuilder {
             stability_window: self.stability_window,
             shadow_dir,
             on_event: self.on_event,
+            keep_generations: self.keep_generations,
             libraries: Vec::new(),
             current: None,
             loaded_sig: None,
@@ -323,6 +347,15 @@ impl ReloaderBuilder {
             dispatch_thread: None,
         })
     }
+}
+
+/// One successfully loaded generation: its mapped library paired with the
+/// generation counter and the shadow file backing it, so a pruned generation
+/// can be unmapped *and* its shadow file deleted.
+struct LoadedLib {
+    library: Library,
+    generation: u64,
+    shadow: PathBuf,
 }
 
 /// A poll-driven hot-reload loop over a single reloadable library.
@@ -337,8 +370,15 @@ pub struct Reloader {
     shadow_dir: PathBuf,
     on_event: Option<EventSink>,
 
-    /// Every successfully loaded library, kept mapped for the `Reloader`'s life.
-    libraries: Vec<Library>,
+    /// Keep-last-N policy: `Some(n)` unmaps generations older than the most
+    /// recent `n` after each successful load; `None` keeps every generation
+    /// mapped for the `Reloader`'s life. See [`ReloaderBuilder::keep_generations`].
+    keep_generations: Option<usize>,
+
+    /// Every successfully loaded library still mapped, oldest first. The last
+    /// entry always backs `current`. Push-only unless `keep_generations` prunes
+    /// the front.
+    libraries: Vec<LoadedLib>,
     /// The current opaque vtable pointer (into the last library in `libraries`).
     current: Option<NonNull<()>>,
     /// `(mtime, size)` of the source file backing the currently loaded library
@@ -369,6 +409,7 @@ impl Reloader {
             stability_window: Duration::from_millis(500),
             shadow_dir: None,
             on_event: None,
+            keep_generations: None,
         }
     }
 
@@ -386,6 +427,14 @@ impl Reloader {
     /// Number of libraries successfully loaded and kept mapped so far.
     pub fn loaded_count(&self) -> usize {
         self.libraries.len()
+    }
+
+    /// The current generation counter: 0 before any library has loaded, then
+    /// incremented on every successful hot swap. Consumers compare it across
+    /// frames to detect a generation change — when pointer/identity-keyed host
+    /// caches must be invalidated.
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Mark the active generation as broken (e.g. it panicked when dispatched).
@@ -473,6 +522,9 @@ impl Reloader {
                         });
                     }
                 }
+                // Under keep-last-N, unmap generations older than the window now
+                // that the new one is current (emits `Unloaded` per pruned gen).
+                self.prune_old_generations();
                 self.current()
             }
             Err(LoadFailure::Rejected(reason)) => {
@@ -530,10 +582,51 @@ impl Reloader {
         };
 
         // Commit: keep the library mapped (so `vptr` stays valid) and advance.
-        self.libraries.push(library);
+        self.libraries.push(LoadedLib {
+            library,
+            generation,
+            shadow: shadow.clone(),
+        });
         self.last_shadow = Some(shadow);
         self.generation = generation;
         Ok(vptr)
+    }
+
+    /// Under keep-last-N, unmap every generation older than the most recent
+    /// `keep` and delete its shadow files. No-op when `keep_generations` is unset.
+    ///
+    /// SAFETY: `keep` is clamped to >= 1 and `current` is always the last entry,
+    /// so this never drops the live generation. Runs on the dispatch thread in
+    /// `poll`, so no dispatch is in flight; soundness of unmapping an older
+    /// generation rests on the [`ReloaderBuilder::keep_generations`] contract.
+    fn prune_old_generations(&mut self) {
+        let Some(keep) = self.keep_generations else {
+            return;
+        };
+        while self.libraries.len() > keep {
+            // Front is the oldest; never the `current`-backing (last) entry,
+            // since keep >= 1 guarantees at least one entry remains.
+            let LoadedLib {
+                library,
+                generation,
+                shadow,
+            } = self.libraries.remove(0);
+            debug_assert!(
+                generation < self.generation,
+                "pruned generation must be older than the current one",
+            );
+            // Drop the library FIRST so Windows releases the file lock, then the
+            // shadow .dll (and sidecar .pdb) can be deleted in the same call.
+            drop(library);
+            let _ = std::fs::remove_file(&shadow);
+            let _ = std::fs::remove_file(shadow.with_extension("pdb"));
+            if let Some(sink) = self.on_event.as_mut() {
+                sink(ReloadEvent::Unloaded {
+                    generation,
+                    shadow: &shadow,
+                });
+            }
+        }
     }
 
     fn shadow_path(&self, generation: u64) -> PathBuf {
@@ -571,9 +664,6 @@ impl Reloader {
         }
     }
 }
-
-// `last_shadow` is populated in `attempt_load` and read when emitting the
-// `Loaded` event.
 
 enum LoadFailure {
     Rejected(HeaderRejection),
