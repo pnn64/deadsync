@@ -1,10 +1,10 @@
 use super::App;
 use crate::config::dirs;
 use crate::config::{self, DisplayMode};
-use crate::engine::display;
 use crate::engine::gfx::{BackendType, create_backend};
 use crate::engine::space;
 use crate::screens::{DensityGraphSlot, options, select_music};
+use deadsync_platform::display;
 use log::{error, info};
 use std::error::Error;
 use std::sync::Arc;

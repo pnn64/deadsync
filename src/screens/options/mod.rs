@@ -11,7 +11,6 @@ use crate::config::{
     VersionOverlaySide, VisualStyle, dirs,
 };
 use crate::engine::audio;
-use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode as LightsGameplayPadMode,
@@ -26,6 +25,7 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
+use deadsync_platform::display::{self, MonitorSpec};
 use deadsync_score as score_data;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};

@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.643"
+version = "0.4.644"
 dependencies = [
  "alsa",
  "ash",
@@ -1133,7 +1133,14 @@ dependencies = [
  "chrono",
  "env_logger",
  "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-foundation 0.3.2",
+ "smithay-client-toolkit 0.20.0",
  "windows",
+ "winit",
  "xcb",
 ]
 

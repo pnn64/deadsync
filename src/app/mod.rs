@@ -19,7 +19,6 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode, dirs};
-use crate::engine::display;
 use crate::engine::gfx::{
     self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap,
 };
@@ -38,6 +37,7 @@ use crate::screens::{
     overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
     select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
+use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
 use winit::{

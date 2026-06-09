@@ -44,6 +44,7 @@ pub use self::theme::{
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
+pub use deadsync_platform::display::FullscreenType;
 
 use self::keybinds::{
     ALL_VIRTUAL_ACTIONS, action_to_ini_key, binding_to_token, load_keymap_from_ini_local,
@@ -74,33 +75,6 @@ const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 pub struct AdditionalSongFolder {
     pub path: String,
     pub writable: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FullscreenType {
-    Exclusive,
-    Borderless,
-}
-
-impl FullscreenType {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Exclusive => "Exclusive",
-            Self::Borderless => "Borderless",
-        }
-    }
-}
-
-impl FromStr for FullscreenType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "exclusive" => Ok(Self::Exclusive),
-            "borderless" => Ok(Self::Borderless),
-            _ => Err(()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

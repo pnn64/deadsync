@@ -82,6 +82,7 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
 ];
 
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
+    "display",
     "host_time",
     "idle_inhibit",
     "logging",
