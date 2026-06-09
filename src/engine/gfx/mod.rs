@@ -2,12 +2,12 @@ mod backends;
 
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use crate::engine::gfx::backends::vulkan;
-use crate::engine::gfx::backends::{opengl, wgpu_core};
+use crate::engine::gfx::backends::wgpu_core;
 use deadsync_render::{
     DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle, TextureHandleMap,
 };
+use deadsync_render_backend_gl as opengl;
 use deadsync_render_backend_software as software;
-use glow::HasContext;
 use image::RgbaImage;
 use std::{error::Error, str::FromStr, sync::Arc};
 use winit::window::Window;
@@ -45,6 +45,17 @@ pub enum Texture {
 }
 
 struct SoftwareTextureLookup<'a>(&'a TextureHandleMap<Texture>);
+
+struct OpenGlTextureLookup<'a>(&'a TextureHandleMap<Texture>);
+
+impl opengl::TextureLookup for OpenGlTextureLookup<'_> {
+    fn opengl_texture(&self, handle: TextureHandle) -> Option<&opengl::Texture> {
+        match self.0.get(&handle)? {
+            Texture::OpenGL(texture) => Some(texture),
+            _ => None,
+        }
+    }
+}
 
 impl software::TextureLookup for SoftwareTextureLookup<'_> {
     fn software_texture(&self, handle: TextureHandle) -> Option<&software::Texture> {
@@ -94,9 +105,12 @@ impl Backend {
             BackendImpl::Metal(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
-            BackendImpl::OpenGL(state) => {
-                opengl::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::OpenGL(state) => opengl::draw(
+                state,
+                render_list,
+                &OpenGlTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
             BackendImpl::OpenGLWgpu(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
@@ -162,7 +176,10 @@ impl Backend {
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => wgpu_core::resize(state, width, height),
-            BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
+            BackendImpl::OpenGL(state) => {
+                crate::engine::space::set_current_window_px(width, height);
+                opengl::resize(state, width, height);
+            }
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::Software(state) => {
                 crate::engine::space::set_current_window_px(width, height);
@@ -211,7 +228,7 @@ impl Backend {
                 Ok(Texture::Metal(tex))
             }
             BackendImpl::OpenGL(state) => {
-                let tex = opengl::create_texture(&state.gl, image, sampler)?;
+                let tex = opengl::create_texture(state, image, sampler)?;
                 Ok(Texture::OpenGL(tex))
             }
             BackendImpl::OpenGLWgpu(state) => {
@@ -249,7 +266,7 @@ impl Backend {
                 wgpu_core::update_texture(state, texture, image)
             }
             (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
-                opengl::update_texture(&state.gl, texture, image)?;
+                opengl::update_texture(state, texture, image)?;
                 Ok(())
             }
             (BackendImpl::OpenGLWgpu(state), Texture::OpenGLWgpu(texture)) => {
@@ -289,14 +306,9 @@ impl Backend {
                 drop(old_textures);
             }
             BackendImpl::OpenGL(state) => {
-                // SAFETY: Each texture handle came from this backend and runtime
-                // retirement only drops the GL object name; the driver defers
-                // actual destruction until it is no longer in use.
-                unsafe {
-                    for tex in old_textures.values() {
-                        if let Texture::OpenGL(opengl::Texture(handle)) = tex {
-                            state.gl.delete_texture(*handle);
-                        }
+                for tex in old_textures.values() {
+                    if let Texture::OpenGL(texture) = tex {
+                        opengl::delete_texture(state, texture);
                     }
                 }
             }
@@ -332,14 +344,9 @@ impl Backend {
                 drop(old_textures);
             }
             BackendImpl::OpenGL(state) => {
-                // SAFETY: `wait_for_idle()` above guarantees no in-flight GPU work
-                // still references these texture handles, and each handle came from
-                // this OpenGL backend.
-                unsafe {
-                    for tex in old_textures.values() {
-                        if let Texture::OpenGL(opengl::Texture(handle)) = tex {
-                            state.gl.delete_texture(*handle);
-                        }
+                for tex in old_textures.values() {
+                    if let Texture::OpenGL(texture) = tex {
+                        opengl::delete_texture(state, texture);
                     }
                 }
             }
@@ -440,12 +447,14 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(
-            window,
-            vsync_enabled,
-            gfx_debug_enabled,
-            high_dpi_enabled,
-        )?),
+        BackendType::OpenGL => BackendImpl::OpenGL(
+            opengl::init(window, vsync_enabled, gfx_debug_enabled, high_dpi_enabled).inspect(
+                |state| {
+                    let (width, height) = opengl::render_size(state);
+                    crate::engine::space::set_current_window_px(width, height);
+                },
+            )?,
+        ),
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,

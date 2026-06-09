@@ -22,6 +22,7 @@ members = [
     "crates/deadsync-platform",
     "crates/deadsync-profile",
     "crates/deadsync-render",
+    "crates/deadsync-render-backend-gl",
     "crates/deadsync-render-backend-software",
     "crates/deadsync-rules",
     "crates/deadsync-score",
@@ -74,12 +75,14 @@ deadsync-online = { path = "crates/deadsync-online" }
 deadsync-platform = { path = "crates/deadsync-platform" }
 deadsync-profile = { path = "crates/deadsync-profile" }
 deadsync-render = { path = "crates/deadsync-render" }
+deadsync-render-backend-gl = { path = "crates/deadsync-render-backend-gl" }
 deadsync-render-backend-software = { path = "crates/deadsync-render-backend-software" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-video = { path = "crates/deadsync-video" }
 winit = "0.30.13"
+raw-window-handle = "0.6.2"
 log = "0.4.32"
 image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -102,10 +105,6 @@ rustmaniax-sdk = "1.1.3"
 glam = "0.33.1"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 
-# OpenGL Dependencies
-glow = "0.17.0"
-glutin = "0.32.3"
-raw-window-handle = "0.6.2"
 pollster = "0.4.0"
 
 # Audio

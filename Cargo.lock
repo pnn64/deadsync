@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.647"
+version = "0.4.648"
 dependencies = [
  "alsa",
  "ash",
@@ -992,6 +992,8 @@ dependencies = [
  "deadsync-platform",
  "deadsync-profile",
  "deadsync-render",
+ "deadsync-render-backend-gl",
+ "deadsync-render-backend-software",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
@@ -1000,8 +1002,6 @@ dependencies = [
  "fs_extra",
  "glam",
  "glob",
- "glow",
- "glutin",
  "gpu-allocator",
  "hidapi",
  "hidparser",
@@ -1035,7 +1035,6 @@ dependencies = [
  "shaderc",
  "smallvec",
  "smithay-client-toolkit 0.20.0",
- "softbuffer",
  "sys-locale",
  "tar",
  "tokio",
@@ -1164,6 +1163,35 @@ dependencies = [
  "glam",
  "serde",
  "twox-hash",
+]
+
+[[package]]
+name = "deadsync-render-backend-gl"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "deadsync-render",
+ "glam",
+ "glow",
+ "glutin",
+ "image",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "raw-window-handle",
+ "winit",
+]
+
+[[package]]
+name = "deadsync-render-backend-software"
+version = "0.1.0"
+dependencies = [
+ "deadsync-render",
+ "glam",
+ "image",
+ "log",
+ "softbuffer",
+ "winit",
 ]
 
 [[package]]

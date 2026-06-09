@@ -856,6 +856,7 @@ fn video_imports_do_not_use_engine_facade() {
 fn render_contract_imports_do_not_use_engine_gfx_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let draw_prep_path = root.join("src/engine/gfx/draw_prep.rs");
+    let opengl_backend_path = root.join("src/engine/gfx/backends/opengl.rs");
     let software_backend_path = root.join("src/engine/gfx/backends/software.rs");
     let mut failures = Vec::new();
 
@@ -863,6 +864,12 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
         failures.push(format!(
             "{} still exists; import deadsync_render::draw_prep directly",
             rel_path(&root, &draw_prep_path)
+        ));
+    }
+    if opengl_backend_path.exists() {
+        failures.push(format!(
+            "{} still exists; use deadsync-render-backend-gl",
+            rel_path(&root, &opengl_backend_path)
         ));
     }
     if software_backend_path.exists() {

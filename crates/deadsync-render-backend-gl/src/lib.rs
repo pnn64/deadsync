@@ -1,9 +1,6 @@
-use crate::engine::gfx::Texture as RendererTexture;
-use crate::engine::space::ortho_for_window;
 use deadsync_render::{
     BlendMode, DrawStats, FastU64Map, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw, TMeshCacheKey, TextureHandleMap, TexturedMeshInstanceRaw,
-    TexturedMeshVertex,
+    SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
@@ -76,6 +73,8 @@ fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const LOGICAL_HEIGHT: f32 = 480.0;
+const DESIGN_WIDTH_16_9: f32 = 854.0;
 const MODERN_DESKTOP_GL: GlVersion = GlVersion { major: 3, minor: 3 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -118,29 +117,29 @@ impl GlApi {
     const fn shaders(self, path: GlPath) -> ShaderSet {
         match (self, path) {
             (_, GlPath::Legacy) => ShaderSet {
-                sprite_vert: include_str!("../shaders/opengl_shader_legacy.vert"),
-                sprite_frag: include_str!("../shaders/opengl_shader_legacy.frag"),
-                mesh_vert: include_str!("../shaders/opengl_mesh_legacy.vert"),
-                mesh_frag: include_str!("../shaders/opengl_mesh_legacy.frag"),
-                tmesh_vert: include_str!("../shaders/opengl_tmesh_legacy.vert"),
-                tmesh_frag: include_str!("../shaders/opengl_tmesh_legacy.frag"),
+                sprite_vert: include_str!("shaders/opengl_shader_legacy.vert"),
+                sprite_frag: include_str!("shaders/opengl_shader_legacy.frag"),
+                mesh_vert: include_str!("shaders/opengl_mesh_legacy.vert"),
+                mesh_frag: include_str!("shaders/opengl_mesh_legacy.frag"),
+                tmesh_vert: include_str!("shaders/opengl_tmesh_legacy.vert"),
+                tmesh_frag: include_str!("shaders/opengl_tmesh_legacy.frag"),
             },
             (Self::Desktop, GlPath::Modern) => ShaderSet {
-                sprite_vert: include_str!("../shaders/opengl_shader.vert"),
-                sprite_frag: include_str!("../shaders/opengl_shader.frag"),
-                mesh_vert: include_str!("../shaders/opengl_mesh.vert"),
-                mesh_frag: include_str!("../shaders/opengl_mesh.frag"),
-                tmesh_vert: include_str!("../shaders/opengl_tmesh.vert"),
-                tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
+                sprite_vert: include_str!("shaders/opengl_shader.vert"),
+                sprite_frag: include_str!("shaders/opengl_shader.frag"),
+                mesh_vert: include_str!("shaders/opengl_mesh.vert"),
+                mesh_frag: include_str!("shaders/opengl_mesh.frag"),
+                tmesh_vert: include_str!("shaders/opengl_tmesh.vert"),
+                tmesh_frag: include_str!("shaders/opengl_tmesh.frag"),
             },
             #[cfg(all(unix, not(target_os = "macos")))]
             (Self::Gles, GlPath::Modern) => ShaderSet {
-                sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
-                sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
-                mesh_vert: include_str!("../shaders/opengl_mesh_gles.vert"),
-                mesh_frag: include_str!("../shaders/opengl_mesh_gles.frag"),
-                tmesh_vert: include_str!("../shaders/opengl_tmesh_gles.vert"),
-                tmesh_frag: include_str!("../shaders/opengl_tmesh_gles.frag"),
+                sprite_vert: include_str!("shaders/opengl_shader_gles.vert"),
+                sprite_frag: include_str!("shaders/opengl_shader_gles.frag"),
+                mesh_vert: include_str!("shaders/opengl_mesh_gles.vert"),
+                mesh_frag: include_str!("shaders/opengl_mesh_gles.frag"),
+                tmesh_vert: include_str!("shaders/opengl_tmesh_gles.vert"),
+                tmesh_frag: include_str!("shaders/opengl_tmesh_gles.frag"),
             },
         }
     }
@@ -193,6 +192,10 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
 
+pub trait TextureLookup {
+    fn opengl_texture(&self, handle: TextureHandle) -> Option<&Texture>;
+}
+
 struct CachedTMeshGeom {
     vbo: glow::Buffer,
     vertex_count: u32,
@@ -223,7 +226,7 @@ struct LegacyTMeshUniforms {
 }
 
 pub struct State {
-    pub gl: glow::Context,
+    gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
     path: GlPath,
@@ -742,10 +745,11 @@ fn parse_gl_version(version: &str) -> Option<GlVersion> {
 }
 
 pub fn create_texture(
-    gl: &glow::Context,
+    state: &State,
     image: &RgbaImage,
     sampler: SamplerDesc,
 ) -> Result<Texture, String> {
+    let gl = &state.gl;
     let wrap_mode = match sampler.wrap {
         SamplerWrap::Clamp => glow::CLAMP_TO_EDGE,
         SamplerWrap::Repeat => glow::REPEAT,
@@ -803,11 +807,8 @@ pub fn create_texture(
     }
 }
 
-pub fn update_texture(
-    gl: &glow::Context,
-    texture: &Texture,
-    image: &RgbaImage,
-) -> Result<(), String> {
+pub fn update_texture(state: &State, texture: &Texture, image: &RgbaImage) -> Result<(), String> {
+    let gl = &state.gl;
     let w = i32::try_from(image.width()).map_err(|_| "texture width overflow".to_string())?;
     let h = i32::try_from(image.height()).map_err(|_| "texture height overflow".to_string())?;
     let raw = image.as_raw();
@@ -834,6 +835,14 @@ pub fn update_texture(
         gl.bind_texture(glow::TEXTURE_2D, None);
     }
     Ok(())
+}
+
+pub fn delete_texture(state: &State, texture: &Texture) {
+    // SAFETY: `texture.0` was created by this OpenGL backend, and the caller
+    // only asks the live owning backend state to delete it.
+    unsafe {
+        state.gl.delete_texture(texture.0);
+    }
 }
 
 fn ensure_cached_tmesh(
@@ -889,7 +898,7 @@ pub fn request_screenshot(state: &mut State) {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
-    textures: &TextureHandleMap<RendererTexture>,
+    textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -1180,13 +1189,10 @@ pub fn draw(
                             bytemuck::cast_slice(&mvp_array),
                         );
 
-                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                            if let RendererTexture::OpenGL(texture) = texture {
-                                Some(texture.0)
-                            } else {
-                                None
-                            }
-                        }) else {
+                        let Some(texture) = textures
+                            .opengl_texture(run.texture_handle)
+                            .map(|texture| texture.0)
+                        else {
                             continue;
                         };
 
@@ -1384,13 +1390,10 @@ pub fn draw(
                             bytemuck::cast_slice(&mvp_array),
                         );
 
-                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                            if let RendererTexture::OpenGL(texture) = texture {
-                                Some(texture.0)
-                            } else {
-                                None
-                            }
-                        }) else {
+                        let Some(texture) = textures
+                            .opengl_texture(run.texture_handle)
+                            .map(|texture| texture.0)
+                        else {
                             continue;
                         };
 
@@ -1463,13 +1466,10 @@ pub fn draw(
                             bytemuck::cast_slice(&mvp_array),
                         );
 
-                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                            if let RendererTexture::OpenGL(texture) = texture {
-                                Some(texture.0)
-                            } else {
-                                None
-                            }
-                        }) else {
+                        let Some(texture) = textures
+                            .opengl_texture(run.texture_handle)
+                            .map(|texture| texture.0)
+                        else {
                             continue;
                         };
 
@@ -1663,13 +1663,10 @@ pub fn draw(
                             bytemuck::cast_slice(&mvp_array),
                         );
 
-                        let Some(texture) = textures.get(&run.texture_handle).and_then(|texture| {
-                            if let RendererTexture::OpenGL(texture) = texture {
-                                Some(texture.0)
-                            } else {
-                                None
-                            }
-                        }) else {
+                        let Some(texture) = textures
+                            .opengl_texture(run.texture_handle)
+                            .map(|texture| texture.0)
+                        else {
                             continue;
                         };
 
@@ -1816,6 +1813,11 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 }
 
 #[inline(always)]
+pub const fn render_size(state: &State) -> (u32, u32) {
+    state.window_size
+}
+
+#[inline(always)]
 fn flip_rows_rgba_in_place(width: usize, height: usize, pixels: &mut [u8]) {
     let row_bytes = width.saturating_mul(4);
     if row_bytes == 0 || height <= 1 {
@@ -1880,6 +1882,24 @@ pub fn cleanup(state: &mut State) {
         }
     }
     info!("OpenGL resources cleaned up.");
+}
+
+#[inline(always)]
+fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
+    let aspect = if height == 0 {
+        1.0
+    } else {
+        width as f32 / height as f32
+    };
+    let h = LOGICAL_HEIGHT;
+    let w = if aspect >= 16.0 / 9.0 {
+        DESIGN_WIDTH_16_9
+    } else {
+        (h * aspect).min(DESIGN_WIDTH_16_9)
+    };
+    let half_w = 0.5 * w;
+    let half_h = 0.5 * h;
+    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 fn create_opengl_context(
