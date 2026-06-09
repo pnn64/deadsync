@@ -12,9 +12,9 @@
 //!
 //! Behavior summary:
 //! - A pool of [`WORKER_THREADS`] threads pulls jobs off two queues
-//!   (foreground previews ahead of background prewarm) and feeds samples
-//!   to `ebur128::EbuR128` to compute integrated loudness (LUFS) and
-//!   true peak.
+//!   (foreground previews ahead of background prewarm) and uses
+//!   `deadsync-audio-analysis` to compute integrated loudness (LUFS)
+//!   and true peak.
 //! - Computed values are persisted in a single file at
 //!   `cache_dir/replaygain.bin` (an in-memory `HashMap` keyed by
 //!   xxhash64(canonical_path) is the source of truth; a dedicated flush
@@ -23,7 +23,7 @@
 //!   files are automatically re-analyzed.
 //! - Linear gain is derived as `10^((TARGET_LUFS - lufs) / 20)`, clamped so
 //!   that `gain * true_peak <= 1.0` (prevent clipping) and never exceeds
-//!   [`MAX_GAIN_LINEAR`] (= +12 dB).
+//!   +12 dB.
 //!
 //! When a song that triggered a queued analysis completes computation, the
 //! worker calls back into the audio engine via
@@ -32,8 +32,9 @@
 
 use crate::config::dirs;
 use bincode::{Decode, Encode};
-use deadsync_audio_decode as decode;
-use ebur128::{EbuR128, Mode};
+use deadsync_audio_analysis::{
+    ReplayGainInfo, UNITY_GAIN, compute_loudness, gain_linear_from_info,
+};
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -56,13 +57,6 @@ const PREWARM_TRACK_ID: u64 = 0;
 /// already in flight without saturating user-visible cores.
 const WORKER_THREADS: usize = 2;
 
-/// EBU R 128 / ReplayGain 2.0 reference loudness.
-const TARGET_LUFS: f64 = -18.0;
-/// Hard ceiling on the linear gain factor we will apply (≈ +12 dB).
-const MAX_GAIN_LINEAR: f32 = 4.0;
-/// Linear gain returned for silence / un-analyzable tracks.
-const UNITY_GAIN: f32 = 1.0;
-
 const CACHE_MAGIC: u64 = 0x44535952_47414946; // "DSYRGAIF" — F for File-cache
 const CACHE_VERSION: u32 = 1;
 
@@ -70,16 +64,6 @@ const CACHE_VERSION: u32 = 1;
 /// writing the consolidated file to disk. 250 ms collapses bursts of
 /// per-song completions during pack-prewarm into a single rewrite.
 const FLUSH_DEBOUNCE: Duration = Duration::from_millis(250);
-
-/// Maximum frames fed to the analyzer per call. Decoders emit short packets,
-/// but we still cap so a buggy decoder cannot blow the stack of `add_frames`.
-const ANALYZE_CHUNK_FRAMES: usize = 4096;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ReplayGainInfo {
-    pub lufs: f32,
-    pub true_peak_linear: f32,
-}
 
 #[derive(Clone, Copy)]
 enum SlotState {
@@ -250,24 +234,6 @@ where
     }
 }
 
-/// Convert LUFS + true peak into a linear playback gain, applying a peak
-/// limit so we never amplify into clipping and clamping to a sensible
-/// ceiling.
-#[inline]
-pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
-    if !info.lufs.is_finite() || info.lufs <= -69.5 {
-        return UNITY_GAIN;
-    }
-    let gain_db = TARGET_LUFS - f64::from(info.lufs);
-    let raw_linear = 10f64.powf(gain_db / 20.0) as f32;
-    let peak_limited = if info.true_peak_linear > f32::EPSILON {
-        (1.0 / info.true_peak_linear).max(0.0)
-    } else {
-        MAX_GAIN_LINEAR
-    };
-    raw_linear.min(peak_limited).clamp(0.0, MAX_GAIN_LINEAR)
-}
-
 /// Drops the in-memory map, clears the on-disk cache file, and removes
 /// any leftover legacy per-song cache directory.
 pub fn clear_cache() {
@@ -389,77 +355,6 @@ fn analyze_one(job: Job) {
         .unwrap()
         .insert(canonical, SlotState::Ready(info));
     crate::engine::audio::set_music_replaygain_if_matches(track_id, gain_linear_from_info(info));
-}
-
-fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
-    compute_loudness_public(path)
-}
-
-/// Same as `compute_loudness` but reachable from outside the crate (used by
-/// the `replaygain_bench` helper binary). Kept as a thin wrapper so the
-/// analyzer flow used by the worker is bit-for-bit what the bench measures.
-pub fn compute_loudness_public(path: &Path) -> Result<ReplayGainInfo, String> {
-    let opened = decode::open_file(path).map_err(|e| e.to_string())?;
-    let channels = opened.channels.max(1);
-    let sample_rate = opened.sample_rate_hz.max(1);
-    if channels > 8 {
-        return Err(format!(
-            "ReplayGain: refusing to analyze {} channels",
-            channels
-        ));
-    }
-
-    let mut analyzer = EbuR128::new(channels as u32, sample_rate, Mode::I | Mode::TRUE_PEAK)
-        .map_err(|e| format!("ebur128 init failed: {e:?}"))?;
-
-    let mut reader = opened.reader;
-    let mut buf: Vec<i16> = Vec::with_capacity(ANALYZE_CHUNK_FRAMES * channels);
-    let mut had_samples = false;
-
-    loop {
-        buf.clear();
-        match reader.read_dec_packet_into(&mut buf) {
-            Ok(false) => break,
-            Ok(true) => {}
-            Err(e) => return Err(e.to_string()),
-        }
-        if buf.is_empty() {
-            continue;
-        }
-        // Truncate to a whole number of frames in case the decoder produced
-        // a partial frame.
-        let frames_in_buf = buf.len() / channels;
-        if frames_in_buf == 0 {
-            continue;
-        }
-        had_samples = true;
-        let usable = frames_in_buf * channels;
-        analyzer
-            .add_frames_i16(&buf[..usable])
-            .map_err(|e| format!("ebur128 add_frames failed: {e:?}"))?;
-    }
-
-    if !had_samples {
-        return Err("decoder produced no samples".to_string());
-    }
-
-    let lufs = analyzer
-        .loudness_global()
-        .map_err(|e| format!("ebur128 loudness_global failed: {e:?}"))? as f32;
-
-    let mut true_peak = 0.0_f64;
-    for ch in 0..channels {
-        if let Ok(peak) = analyzer.true_peak(ch as u32)
-            && peak > true_peak
-        {
-            true_peak = peak;
-        }
-    }
-
-    Ok(ReplayGainInfo {
-        lufs,
-        true_peak_linear: true_peak as f32,
-    })
 }
 
 /* ---------------------------- Disk cache I/O ---------------------------- */
@@ -754,53 +649,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::SystemTime;
-
-    #[test]
-    fn gain_unity_for_target_loudness() {
-        let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: TARGET_LUFS as f32,
-            true_peak_linear: 0.5,
-        });
-        assert!((g - 1.0).abs() < 1e-4, "expected ~1.0, got {g}");
-    }
-
-    #[test]
-    fn gain_boost_for_quiet_track() {
-        // -30 LUFS → +12 dB ideal, but peak 0.5 → ceiling +6 dB (= 2.0).
-        let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: -30.0,
-            true_peak_linear: 0.5,
-        });
-        assert!(g <= 2.0 + 1e-4 && g > 1.0, "got {g}");
-    }
-
-    #[test]
-    fn gain_cut_for_loud_track() {
-        // -10 LUFS → -8 dB → ≈0.398.
-        let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: -10.0,
-            true_peak_linear: 0.99,
-        });
-        assert!((g - 0.398).abs() < 0.01, "got {g}");
-    }
-
-    #[test]
-    fn gain_unity_for_silence() {
-        let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: f32::NEG_INFINITY,
-            true_peak_linear: 0.0,
-        });
-        assert_eq!(g, UNITY_GAIN);
-    }
-
-    #[test]
-    fn gain_capped_at_max() {
-        let g = gain_linear_from_info(ReplayGainInfo {
-            lufs: -100.0,
-            true_peak_linear: 0.0,
-        });
-        assert!(g <= MAX_GAIN_LINEAR + 1e-4);
-    }
 
     fn sample_entries() -> Vec<PersistedEntry> {
         vec![
