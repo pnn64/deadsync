@@ -31,8 +31,8 @@
 //! be applied retroactively to the currently playing stream.
 
 use crate::config::dirs;
-use crate::engine::audio::decode;
 use bincode::{Decode, Encode};
+use deadsync_audio_decode as decode;
 use ebur128::{EbuR128, Mode};
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};

@@ -18,7 +18,7 @@ pub(crate) struct OpenFile {
     pub sample_rate_hz: u32,
 }
 
-pub(crate) struct Reader {
+pub struct Reader {
     reader: PacketReader<BufReader<File>>,
     decoder: OpusDecoder,
     stream_serial: u32,

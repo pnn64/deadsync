@@ -1,0 +1,15 @@
+[package]
+name = "deadsync-audio-decode"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+ogg = "0.9.2"
+opusic-c = "1.6.1"
+symphonia = { version = "0.6.0", default-features = false, features = ["ogg", "vorbis", "mp3", "flac"] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

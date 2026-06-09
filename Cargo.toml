@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.637"
+version = "0.4.638"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -11,6 +11,7 @@ keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan
 [workspace]
 members = [
     ".",
+    "crates/deadsync-audio-decode",
     "crates/deadsync-chart",
     "crates/deadsync-core",
     "crates/deadsync-input",
@@ -57,6 +58,7 @@ path = "scripts/replaygain_bench.rs"
 pipewire-audio = ["dep:pipewire"]
 
 [dependencies]
+deadsync-audio-decode = { path = "crates/deadsync-audio-decode" }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-input = { path = "crates/deadsync-input" }
@@ -101,9 +103,6 @@ raw-window-handle = "0.6.2"
 pollster = "0.4.0"
 
 # Audio
-symphonia = { version = "0.6.0", default-features = false, features = ["ogg", "vorbis", "mp3", "flac"] }
-ogg = "0.9.2"
-opusic-c = "1.6.1"
 rubato = "0.16.2"
 ebur128 = "0.1.10"
 

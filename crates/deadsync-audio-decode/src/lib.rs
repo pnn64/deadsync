@@ -1,18 +1,18 @@
-pub(crate) mod flac;
-pub(crate) mod mp3;
-pub(crate) mod ogg_vorbis;
-pub(crate) mod opus;
-pub(crate) mod wav;
+pub mod flac;
+pub mod mp3;
+pub mod ogg_vorbis;
+pub mod opus;
+pub mod wav;
 
 use std::path::Path;
 
-pub(crate) struct OpenFile {
+pub struct OpenFile {
     pub reader: Reader,
     pub channels: usize,
     pub sample_rate_hz: u32,
 }
 
-pub(crate) enum Reader {
+pub enum Reader {
     Flac(flac::Reader),
     Mp3(mp3::Reader),
     Ogg(ogg_vorbis::Reader),
@@ -21,7 +21,7 @@ pub(crate) enum Reader {
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_into(
+    pub fn read_dec_packet_into(
         &mut self,
         out: &mut Vec<i16>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -34,7 +34,7 @@ impl Reader {
         }
     }
 
-    pub(crate) fn seek_frame(
+    pub fn seek_frame(
         &mut self,
         frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -47,7 +47,7 @@ impl Reader {
         }
     }
 
-    pub(crate) fn current_frame(&self) -> u64 {
+    pub fn current_frame(&self) -> u64 {
         match self {
             Self::Flac(reader) => reader.current_frame(),
             Self::Mp3(reader) => reader.current_frame(),
@@ -59,7 +59,7 @@ impl Reader {
 }
 
 #[inline(always)]
-pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     if flac::path_is_flac(path) {
         let opened = flac::open_file(path)?;
         return Ok(OpenFile {
@@ -111,7 +111,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
 }
 
 #[inline(always)]
-pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
+pub fn file_length_seconds(path: &Path) -> Result<f32, String> {
     if flac::path_is_flac(path) {
         return flac::file_length_seconds(path);
     }
@@ -134,10 +134,7 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
 }
 
 #[inline(always)]
-pub(crate) fn snap_start_forward_to_packet(
-    path: &Path,
-    start_sec: f64,
-) -> Result<Option<f64>, String> {
+pub fn snap_start_forward_to_packet(path: &Path, start_sec: f64) -> Result<Option<f64>, String> {
     if ogg_vorbis::path_is_ogg_vorbis(path) {
         return ogg_vorbis::snap_start_forward_to_packet(path, start_sec);
     }

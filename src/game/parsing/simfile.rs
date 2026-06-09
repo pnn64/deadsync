@@ -1,6 +1,6 @@
 use crate::config::{self, dirs};
-use crate::engine::audio::decode;
 use crate::game::song::get_song_cache;
+use deadsync_audio_decode as decode;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_simfile::cache::{
     SerializableSongData, build_requested_gameplay_charts, build_song_meta,

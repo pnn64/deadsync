@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.637"
+version = "0.4.638"
 dependencies = [
  "alsa",
  "ash",
@@ -981,6 +981,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "coreaudio-rs",
+ "deadsync-audio-decode",
  "deadsync-chart",
  "deadsync-core",
  "deadsync-input",
@@ -1016,8 +1017,6 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
- "ogg 0.9.2",
- "opusic-c",
  "pipewire",
  "pollster",
  "qrcodegen",
@@ -1036,7 +1035,6 @@ dependencies = [
  "smallvec",
  "smithay-client-toolkit 0.20.0",
  "softbuffer",
- "symphonia",
  "sys-locale",
  "tar",
  "tokio",
@@ -1052,6 +1050,15 @@ dependencies = [
  "winres",
  "xcb",
  "zip",
+]
+
+[[package]]
+name = "deadsync-audio-decode"
+version = "0.1.0"
+dependencies = [
+ "ogg 0.9.2",
+ "opusic-c",
+ "symphonia",
 ]
 
 [[package]]
