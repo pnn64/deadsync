@@ -3912,6 +3912,8 @@ pub struct App {
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
+    #[cfg(feature = "hot")]
+    hot_reloader: Option<deadsync_hot::Reloader>,
 }
 
 impl App {
@@ -5105,6 +5107,55 @@ impl App {
             state,
             software_renderer_threads,
             gfx_debug_enabled,
+            #[cfg(feature = "hot")]
+            hot_reloader: Self::build_hot_reloader(),
+        }
+    }
+
+    #[cfg(feature = "hot")]
+    fn build_hot_reloader() -> Option<deadsync_hot::Reloader> {
+        if !crate::hot::SHARED_ALLOC {
+            log::error!(
+                "hot(screens): disabled — host built without `-C prefer-dynamic`; \
+                 set RUSTFLAGS=\"-C prefer-dynamic\" for both the host and the \
+                 deadsync-screens cdylib to enable hot reload safely"
+            );
+            return None;
+        }
+
+        let lib_name = format!(
+            "{}deadsync_screens{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        );
+        let lib_path = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join(&lib_name)))
+            .unwrap_or_else(|| std::path::PathBuf::from(&lib_name));
+
+        let expected = deadsync_hot::Expected {
+            magic: crate::hot::MAGIC,
+            abi_version: crate::hot::ABI_VERSION,
+            size: size_of::<crate::hot::HotHeader>() as u32,
+            layout_hash: crate::hot::LAYOUT_HASH,
+            build_hash: crate::hot::BUILD_HASH,
+            panic_strategy: crate::hot::PANIC_STRATEGY,
+        };
+
+        match deadsync_hot::Reloader::builder()
+            .library_path(lib_path)
+            .expected(expected)
+            .on_event(|event| log::info!("hot(screens): {event:?}"))
+            .build()
+        {
+            Ok(reloader) => {
+                log::info!("hot(screens): reloader active; watching for deadsync_screens cdylib");
+                Some(reloader)
+            }
+            Err(err) => {
+                log::error!("hot(screens): disabled — {err}");
+                None
+            }
         }
     }
 
@@ -6863,6 +6914,67 @@ impl App {
         ));
     }
 
+    /// Render a hot surface through the reloaded cdylib when its slot is
+    /// published, otherwise via the surface's in-lib fallback. The cdylib returns
+    /// a `Vec<Actor>` by value, allocated in the cdylib and dropped here under the
+    /// shared allocator. On a render panic or an unpublished slot the generation
+    /// is quarantined and `S::render` is used.
+    ///
+    /// Takes `reloader` and `state` as separate borrows so the caller can pass a
+    /// disjoint mutable borrow of the reloader field alongside the state.
+    #[cfg(feature = "hot")]
+    fn hot_actors<S: crate::hot::HotSurface>(
+        reloader: &mut Option<deadsync_hot::Reloader>,
+        state: &S::State,
+        alpha: f32,
+    ) -> Vec<Actor> {
+        // Build the render snapshot host-side (shared by the hot path and the
+        // fallback).
+        let ctx = S::build_context(state);
+
+        // Poll for a fresh generation and resolve this surface's entry.
+        let entry = reloader.as_mut().and_then(|r| r.poll()).and_then(|ptr| {
+            // SAFETY: `ptr` came from a header that passed `verify` against our
+            // `EXPECTED`, so it points at a `ScreenVTable` of the agreed layout,
+            // and the owning library is kept mapped by the reloader. We only read
+            // it to copy out an `Option<HotEntry>`; nothing borrowed escapes.
+            let vt = unsafe { crate::hot::screen_vtable(ptr) };
+            vt.entries.get(S::SLOT).copied().flatten()
+        });
+        let Some(entry) = entry else {
+            return S::render(state, &ctx, alpha);
+        };
+
+        // A returned `Vec<Actor>` is allocated by the cdylib and freed here under
+        // the shared allocator; the thunk catches its own panics and returns
+        // `None`, so this call cannot unwind into the host.
+        //
+        // SAFETY: `entry` is a published `HotEntry` from the validated vtable;
+        // we pass live `&S::State` / `&S::Context` of the layout the load-time
+        // handshake agreed on, valid for the duration of the call.
+        let rendered = unsafe {
+            entry(
+                state as *const S::State as *const (),
+                &ctx as *const S::Context as *const (),
+                alpha,
+            )
+        };
+
+        match rendered {
+            Some(actors) => actors,
+            None => {
+                if let Some(r) = reloader.as_mut() {
+                    log::error!(
+                        "hot({}): render panicked; quarantining generation and falling back",
+                        S::LABEL
+                    );
+                    r.quarantine_current();
+                }
+                S::render(state, &ctx, alpha)
+            }
+        }
+    }
+
     fn get_current_actors(&mut self) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
@@ -6888,11 +7000,24 @@ impl App {
 
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
-                menu::push_actors(
-                    &mut actors,
-                    &self.state.screens.menu_state,
-                    screen_alpha_multiplier,
-                );
+                #[cfg(feature = "hot")]
+                {
+                    let menu_actors = Self::hot_actors::<crate::hot::MenuSurface>(
+                        &mut self.hot_reloader,
+                        &self.state.screens.menu_state,
+                        screen_alpha_multiplier,
+                    );
+                    actors.extend(menu_actors);
+                }
+                #[cfg(not(feature = "hot"))]
+                {
+                    let ctx = menu::build_host_context(&self.state.screens.menu_state);
+                    actors.extend(menu::get_actors(
+                        &self.state.screens.menu_state,
+                        &ctx,
+                        screen_alpha_multiplier,
+                    ));
+                }
             }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {

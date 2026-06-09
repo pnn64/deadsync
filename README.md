@@ -250,6 +250,8 @@ We welcome contributions of all sizes. These notes are directional, not law—op
 - Reduce duplication by reusing and composing functions rather than repeating logic or adding one-off helpers.
 - Bias toward efficient, low-overhead code: favor `Vec` and iterators, borrow instead of clone, and keep dependencies lean.
 
+For live UI iteration without restarting the game, see [docs/hot-reload.md](docs/hot-reload.md).
+
 ## Collecting Logs
 
 When reporting a bug, attaching a log file helps the team diagnose the problem quickly.
