@@ -185,6 +185,14 @@ files. If the folder is empty the bundled per-style track plays.
 The whole feature is gated by `CustomSoundsEnabled` in `deadsync.ini`
 (default `1`). Set it to `0` to disable all folder-based sound triggers.
 
+## Direct Pad Support
+
+DeadSync can communicate directly with dance pad hardware over USB, bypassing the OS gamepad layer. This gives you named panel inputs, stable per-pad player assignment, and the ability to read and write pad sensor configuration from within the game.
+
+| Pad | Status | Docs |
+|-----|--------|------|
+| **StepManiaX** | ✅ Supported | [docs/stepmaniax.md](docs/stepmaniax.md) |
+
 ## Data Directories
 
 By default, DeadSync stores user data outside the install directory so that upgrading the game doesn't risk overwriting your config, saves, or scores. Each platform uses native, XDG-compliant locations.
