@@ -2,8 +2,11 @@ mod backends;
 
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use crate::engine::gfx::backends::vulkan;
-use crate::engine::gfx::backends::{opengl, software, wgpu_core};
-use deadsync_render::{DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandleMap};
+use crate::engine::gfx::backends::{opengl, wgpu_core};
+use deadsync_render::{
+    DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle, TextureHandleMap,
+};
+use deadsync_render_backend_software as software;
 use glow::HasContext;
 use image::RgbaImage;
 use std::{error::Error, str::FromStr, sync::Arc};
@@ -39,6 +42,17 @@ pub enum Texture {
     Software(software::Texture),
     #[cfg(target_os = "windows")]
     DirectX(wgpu_core::Texture),
+}
+
+struct SoftwareTextureLookup<'a>(&'a TextureHandleMap<Texture>);
+
+impl software::TextureLookup for SoftwareTextureLookup<'_> {
+    fn software_texture(&self, handle: TextureHandle) -> Option<&software::Texture> {
+        match self.0.get(&handle)? {
+            Texture::Software(texture) => Some(texture),
+            _ => None,
+        }
+    }
 }
 
 // An internal enum to hold the state for the active rendering backend.
@@ -86,9 +100,12 @@ impl Backend {
             BackendImpl::OpenGLWgpu(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
-            BackendImpl::Software(state) => {
-                software::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::Software(state) => software::draw(
+                state,
+                render_list,
+                &SoftwareTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
@@ -147,7 +164,10 @@ impl Backend {
             BackendImpl::Metal(state) => wgpu_core::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
-            BackendImpl::Software(state) => software::resize(state, width, height),
+            BackendImpl::Software(state) => {
+                crate::engine::space::set_current_window_px(width, height);
+                software::resize(state, width, height);
+            }
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_core::resize(state, width, height),
         }
@@ -432,7 +452,11 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
+        BackendType::Software => {
+            let size = window.inner_size();
+            crate::engine::space::set_current_window_px(size.width, size.height);
+            BackendImpl::Software(software::init(window, vsync_enabled)?)
+        }
         #[cfg(target_os = "windows")]
         BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
             window,

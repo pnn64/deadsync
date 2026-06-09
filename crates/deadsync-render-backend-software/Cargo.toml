@@ -1,0 +1,18 @@
+[package]
+name = "deadsync-render-backend-software"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-render = { path = "../deadsync-render" }
+glam = "0.33.1"
+image = "0.25.10"
+log = "0.4.32"
+softbuffer = "0.4.8"
+winit = "0.30.13"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

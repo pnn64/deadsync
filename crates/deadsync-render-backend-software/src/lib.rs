@@ -1,8 +1,6 @@
-use crate::engine::gfx::Texture as RendererTexture;
-use crate::engine::space::ortho_for_window;
 use deadsync_render::{
     BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw, TextureHandleMap,
+    SamplerWrap, SpriteInstanceRaw, TextureHandle,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -21,10 +19,16 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 const SOFTWARE_ROW_CHUNK: usize = 32;
 const U8_TO_F32: f32 = 1.0 / 255.0;
+const LOGICAL_HEIGHT: f32 = 480.0;
+const DESIGN_WIDTH_16_9: f32 = 854.0;
 
 pub struct Texture {
     pub image: RgbaImage,
     sampler: SamplerDesc,
+}
+
+pub trait TextureLookup {
+    fn software_texture(&self, handle: TextureHandle) -> Option<&Texture>;
 }
 
 pub struct State {
@@ -75,7 +79,7 @@ pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Bo
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
-    textures: &TextureHandleMap<RendererTexture>,
+    textures: &(impl TextureLookup + Sync),
     _apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -212,7 +216,7 @@ fn draw_rows(
     sprite_instances: &[SpriteInstanceRaw],
     cameras: &[Matrix4],
     default_proj: Matrix4,
-    textures: &TextureHandleMap<RendererTexture>,
+    textures: &(impl TextureLookup + Sync),
     width: usize,
     height: usize,
     stripe_y_start: usize,
@@ -231,7 +235,7 @@ fn draw_rows(
                 let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
                     continue;
                 };
-                let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
+                let Some(tex) = textures.software_texture(obj.texture_handle) else {
                     continue;
                 };
                 rasterize_sprite(
@@ -274,7 +278,7 @@ fn draw_rows(
             ObjectType::TexturedMesh {
                 instance, vertices, ..
             } => {
-                let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
+                let Some(tex) = textures.software_texture(obj.texture_handle) else {
                     continue;
                 };
                 let transform = instance.transform();
@@ -314,6 +318,24 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(_state: &mut State) {
     info!("Software renderer backend cleanup.");
+}
+
+#[inline(always)]
+fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
+    let aspect = if height == 0 {
+        1.0
+    } else {
+        width as f32 / height as f32
+    };
+    let h = LOGICAL_HEIGHT;
+    let w = if aspect >= 16.0 / 9.0 {
+        DESIGN_WIDTH_16_9
+    } else {
+        (h * aspect).min(DESIGN_WIDTH_16_9)
+    };
+    let half_w = 0.5 * w;
+    let half_h = 0.5 * h;
+    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 #[inline(always)]
