@@ -1,8 +1,53 @@
 use deadsync_rules::timing::{
-    DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingSegments,
-    WarpSegment, default_time_signatures,
+    DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+    TimeSignatureSegment, TimingSegments, WarpSegment, beat_to_note_row, default_time_signatures,
 };
 use rssp::timing as rssp_timing;
+
+pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return default_time_signatures();
+    };
+
+    let mut out = Vec::new();
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(numerator), Some(denominator)) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let (Ok(beat), Ok(numerator), Ok(denominator)) = (
+            beat.trim().parse::<f32>(),
+            numerator.trim().parse::<i32>(),
+            denominator.trim().parse::<i32>(),
+        ) else {
+            continue;
+        };
+        if beat.is_finite() && numerator > 0 && denominator > 0 {
+            out.push(TimeSignatureSegment {
+                beat,
+                numerator,
+                denominator,
+            });
+        }
+    }
+
+    if out.is_empty() {
+        return default_time_signatures();
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(a.beat)
+            .cmp(&beat_to_note_row(b.beat))
+            .then_with(|| a.beat.total_cmp(&b.beat))
+    });
+    out.dedup_by(|a, b| beat_to_note_row(a.beat) == beat_to_note_row(b.beat));
+    if out.first().is_none_or(|seg| beat_to_note_row(seg.beat) > 0) {
+        out.insert(0, default_time_signatures()[0]);
+    }
+    out
+}
 
 pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> TimingSegments {
     let speeds = segments
@@ -69,9 +114,23 @@ pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> Timi
 
 #[cfg(test)]
 mod tests {
-    use super::timing_segments_from_rssp;
+    use super::{parse_time_signatures, timing_segments_from_rssp};
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
+
+    #[test]
+    fn parse_time_signatures_filters_sorts_and_adds_default() {
+        let signatures =
+            parse_time_signatures(Some("8.000=3=4, bad, 4.000=7=8, 4.000=6=8, 12.000=0=4"));
+
+        assert_eq!(signatures.len(), 3);
+        assert_eq!(signatures[0].beat, 0.0);
+        assert_eq!(signatures[0].numerator, 4);
+        assert_eq!(signatures[1].beat, 4.0);
+        assert_eq!(signatures[1].numerator, 7);
+        assert_eq!(signatures[2].beat, 8.0);
+        assert_eq!(signatures[2].numerator, 3);
+    }
 
     #[test]
     fn converts_rssp_timing_segments() {

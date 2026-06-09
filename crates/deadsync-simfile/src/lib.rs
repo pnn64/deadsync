@@ -1,2 +1,10 @@
+pub mod artwork;
+pub mod bgchanges;
+pub mod cache;
+pub mod changes;
+pub mod media;
 pub mod notes;
+pub mod song;
+pub mod stats;
+pub mod tags;
 pub mod timing;

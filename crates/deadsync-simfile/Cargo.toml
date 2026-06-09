@@ -5,10 +5,14 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bincode = "2.0.1"
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
+image = "0.25.10"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
+serde = { version = "1.0.228", features = ["derive"] }
+twox-hash = "2.1.2"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
