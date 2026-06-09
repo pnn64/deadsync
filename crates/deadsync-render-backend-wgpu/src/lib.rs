@@ -1,9 +1,7 @@
-use crate::engine::gfx::Texture as RendererTexture;
-use crate::engine::space::ortho_for_window;
 use deadsync_render::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
     PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    TextureHandleMap, TexturedMeshVertex,
+    TextureHandle, TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
@@ -26,6 +24,8 @@ use winit::window::Window;
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const LOGICAL_HEIGHT: f32 = 480.0;
+const DESIGN_WIDTH_16_9: f32 = 854.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
@@ -162,6 +162,10 @@ pub struct Texture {
     bind_group_repeat: Arc<wgpu::BindGroup>,
 }
 
+pub trait TextureLookup {
+    fn wgpu_texture(&self, handle: TextureHandle) -> Option<&Texture>;
+}
+
 struct CachedTMeshGeom {
     buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
@@ -199,7 +203,7 @@ pub struct State {
     _instance: wgpu::Instance,
     surface: wgpu::Surface<'static>,
     adapter: wgpu::Adapter,
-    pub device: wgpu::Device,
+    device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     projection: Matrix4,
@@ -887,20 +891,6 @@ pub fn update_texture(
     Ok(())
 }
 
-#[inline(always)]
-fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
-    match (api, tex) {
-        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
-        #[cfg(target_os = "macos")]
-        (Api::Metal, RendererTexture::Metal(t)) => Some(t),
-        (Api::OpenGL, RendererTexture::OpenGLWgpu(t)) => Some(t),
-        #[cfg(target_os = "windows")]
-        (Api::DirectX, RendererTexture::DirectX(t)) => Some(t),
-        _ => None,
-    }
-}
-
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
@@ -952,7 +942,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
-    textures: &TextureHandleMap<RendererTexture>,
+    textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -971,7 +961,6 @@ pub fn draw(
         return Ok(stats);
     }
 
-    let api = state.api;
     {
         let prep = &mut state.prep;
         let device = &state.device;
@@ -1098,10 +1087,7 @@ pub fn draw(
         for op in &state.prep.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    let Some(tex) = textures
-                        .get(&run.texture_handle)
-                        .and_then(|texture| pick_tex(api, texture))
-                    else {
+                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
                         continue;
                     };
                     if last_kind != Some(0) {
@@ -1181,10 +1167,7 @@ pub fn draw(
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
                         continue;
                     }
-                    let Some(tex) = textures
-                        .get(&run.texture_handle)
-                        .and_then(|texture| pick_tex(api, texture))
-                    else {
+                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
                         continue;
                     };
                     if last_kind != Some(2) {
@@ -1501,6 +1484,13 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(state: &mut State) {
     info!("{} (wgpu) backend cleanup complete.", state.api.name());
+}
+
+pub fn wait_for_idle(state: &mut State) {
+    let _ = state.device.poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: None,
+    });
 }
 
 fn ensure_instance_capacity(state: &mut State, needed: usize) {
@@ -2316,9 +2306,27 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
     sampler
 }
 
-const SHADER_IMM: &str = include_str!("../shaders/wgpu_sprite.wgsl");
-const MESH_SHADER_IMM: &str = include_str!("../shaders/wgpu_mesh.wgsl");
-const TMESH_SHADER_IMM: &str = include_str!("../shaders/wgpu_tmesh.wgsl");
-const SHADER_UBO: &str = include_str!("../shaders/wgpu_sprite_ubo.wgsl");
-const MESH_SHADER_UBO: &str = include_str!("../shaders/wgpu_mesh_ubo.wgsl");
-const TMESH_SHADER_UBO: &str = include_str!("../shaders/wgpu_tmesh_ubo.wgsl");
+#[inline(always)]
+fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
+    let aspect = if height == 0 {
+        1.0
+    } else {
+        width as f32 / height as f32
+    };
+    let h = LOGICAL_HEIGHT;
+    let w = if aspect >= 16.0 / 9.0 {
+        DESIGN_WIDTH_16_9
+    } else {
+        (h * aspect).min(DESIGN_WIDTH_16_9)
+    };
+    let half_w = 0.5 * w;
+    let half_h = 0.5 * h;
+    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+}
+
+const SHADER_IMM: &str = include_str!("shaders/wgpu_sprite.wgsl");
+const MESH_SHADER_IMM: &str = include_str!("shaders/wgpu_mesh.wgsl");
+const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
+const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
+const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
+const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");

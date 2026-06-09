@@ -2,12 +2,12 @@ mod backends;
 
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use crate::engine::gfx::backends::vulkan;
-use crate::engine::gfx::backends::wgpu_core;
 use deadsync_render::{
     DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle, TextureHandleMap,
 };
 use deadsync_render_backend_gl as opengl;
 use deadsync_render_backend_software as software;
+use deadsync_render_backend_wgpu as wgpu_core;
 use image::RgbaImage;
 use std::{error::Error, str::FromStr, sync::Arc};
 use winit::window::Window;
@@ -48,10 +48,41 @@ struct SoftwareTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
 struct OpenGlTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
+#[derive(Clone, Copy)]
+enum WgpuTextureKind {
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+    Vulkan,
+    #[cfg(target_os = "macos")]
+    Metal,
+    OpenGL,
+    #[cfg(target_os = "windows")]
+    DirectX,
+}
+
+struct WgpuTextureLookup<'a> {
+    textures: &'a TextureHandleMap<Texture>,
+    kind: WgpuTextureKind,
+}
+
 impl opengl::TextureLookup for OpenGlTextureLookup<'_> {
     fn opengl_texture(&self, handle: TextureHandle) -> Option<&opengl::Texture> {
         match self.0.get(&handle)? {
             Texture::OpenGL(texture) => Some(texture),
+            _ => None,
+        }
+    }
+}
+
+impl wgpu_core::TextureLookup for WgpuTextureLookup<'_> {
+    fn wgpu_texture(&self, handle: TextureHandle) -> Option<&wgpu_core::Texture> {
+        match (self.kind, self.textures.get(&handle)?) {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            (WgpuTextureKind::Vulkan, Texture::VulkanWgpu(texture)) => Some(texture),
+            #[cfg(target_os = "macos")]
+            (WgpuTextureKind::Metal, Texture::Metal(texture)) => Some(texture),
+            (WgpuTextureKind::OpenGL, Texture::OpenGLWgpu(texture)) => Some(texture),
+            #[cfg(target_os = "windows")]
+            (WgpuTextureKind::DirectX, Texture::DirectX(texture)) => Some(texture),
             _ => None,
         }
     }
@@ -98,22 +129,40 @@ impl Backend {
                 vulkan::draw(state, render_list, textures, apply_present_back_pressure)
             }
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::VulkanWgpu(state) => {
-                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::VulkanWgpu(state) => wgpu_core::draw(
+                state,
+                render_list,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::Vulkan,
+                },
+                apply_present_back_pressure,
+            ),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => {
-                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::Metal(state) => wgpu_core::draw(
+                state,
+                render_list,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::Metal,
+                },
+                apply_present_back_pressure,
+            ),
             BackendImpl::OpenGL(state) => opengl::draw(
                 state,
                 render_list,
                 &OpenGlTextureLookup(textures),
                 apply_present_back_pressure,
             ),
-            BackendImpl::OpenGLWgpu(state) => {
-                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::draw(
+                state,
+                render_list,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::OpenGL,
+                },
+                apply_present_back_pressure,
+            ),
             BackendImpl::Software(state) => software::draw(
                 state,
                 render_list,
@@ -121,9 +170,15 @@ impl Backend {
                 apply_present_back_pressure,
             ),
             #[cfg(target_os = "windows")]
-            BackendImpl::DirectX(state) => {
-                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::DirectX(state) => wgpu_core::draw(
+                state,
+                render_list,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::DirectX,
+                },
+                apply_present_back_pressure,
+            ),
         }
     }
 
@@ -380,38 +435,18 @@ impl Backend {
                 vulkan::retire_all_textures(state);
             }
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::VulkanWgpu(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait {
-                    submission_index: None,
-                    timeout: None,
-                });
-            }
+            BackendImpl::VulkanWgpu(state) => wgpu_core::wait_for_idle(state),
             #[cfg(target_os = "macos")]
-            BackendImpl::Metal(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait {
-                    submission_index: None,
-                    timeout: None,
-                });
-            }
+            BackendImpl::Metal(state) => wgpu_core::wait_for_idle(state),
             BackendImpl::OpenGL(_) => {
                 // This is a no-op for OpenGL.
             }
-            BackendImpl::OpenGLWgpu(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait {
-                    submission_index: None,
-                    timeout: None,
-                });
-            }
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::wait_for_idle(state),
             BackendImpl::Software(_) => {
                 // CPU renderer is synchronous; nothing to wait for.
             }
             #[cfg(target_os = "windows")]
-            BackendImpl::DirectX(state) => {
-                let _ = state.device.poll(wgpu::PollType::Wait {
-                    submission_index: None,
-                    timeout: None,
-                });
-            }
+            BackendImpl::DirectX(state) => wgpu_core::wait_for_idle(state),
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.648"
+version = "0.4.649"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -24,6 +24,7 @@ members = [
     "crates/deadsync-render",
     "crates/deadsync-render-backend-gl",
     "crates/deadsync-render-backend-software",
+    "crates/deadsync-render-backend-wgpu",
     "crates/deadsync-rules",
     "crates/deadsync-score",
     "crates/deadsync-simfile",
@@ -77,12 +78,12 @@ deadsync-profile = { path = "crates/deadsync-profile" }
 deadsync-render = { path = "crates/deadsync-render" }
 deadsync-render-backend-gl = { path = "crates/deadsync-render-backend-gl" }
 deadsync-render-backend-software = { path = "crates/deadsync-render-backend-software" }
+deadsync-render-backend-wgpu = { path = "crates/deadsync-render-backend-wgpu" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-video = { path = "crates/deadsync-video" }
 winit = "0.30.13"
-raw-window-handle = "0.6.2"
 log = "0.4.32"
 image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -196,24 +197,6 @@ windows = { version = "0.62.2", features = [
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]
 ash = { version = "0.38.0", features = ["linked"] }
 ash-window = "0.13.0"
-
-[target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows", target_vendor = "win7"))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
-
-[target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows", not(target_vendor = "win7")))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "vulkan", "gles"] }
-
-[target.'cfg(all(not(target_pointer_width = "32"), target_os = "macos"))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "gles"] }
-
-[target.'cfg(all(not(target_pointer_width = "32"), not(any(target_os = "windows", target_os = "macos"))))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "gles"] }
-
-[target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
-
-[target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
-wgpu = { version = "29.0.3", default-features = false, features = ["std", "parking_lot", "wgsl", "gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.186"
