@@ -1,0 +1,16 @@
+[package]
+name = "deadsync-platform"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+log = "0.4.32"
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+xcb = { version = "1.7.0", features = ["dpms", "screensaver"] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

@@ -1,8 +1,8 @@
 //! Platform idle-display inhibition.
 //!
-//! This is engine-level process/window policy: while DeadSync owns the display,
-//! the desktop should not blank or power it down just because input is arriving
-//! through a raw device path.
+//! This is process/window policy: while DeadSync owns the display, the desktop
+//! should not blank or power it down just because input is arriving through a
+//! raw device path.
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod unix;

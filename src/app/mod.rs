@@ -3880,7 +3880,7 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
-    _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor,
+    _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor,
     fsr_monitor: input::fsr::Monitor,
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
@@ -5067,7 +5067,7 @@ impl App {
             window: None,
             backend: None,
             backend_type,
-            _idle_inhibitor: crate::engine::idle_inhibit::IdleInhibitor::acquire(),
+            _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: input::fsr::Monitor::new(),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),

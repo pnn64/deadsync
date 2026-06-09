@@ -81,6 +81,18 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &["idle_inhibit", "open_path"];
+
+const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/assets",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const GAME_RULE_FACADE_MODULES: &[&str] = &["judgment", "note", "scroll", "timing"];
 
 const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
@@ -793,6 +805,57 @@ fn video_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn platform_imports_do_not_use_engine_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for module in ENGINE_PLATFORM_FACADE_MODULES {
+        let file_path = root.join("src").join("engine").join(format!("{module}.rs"));
+        let dir_path = root.join("src").join("engine").join(module);
+        if file_path.exists() {
+            failures.push(format!(
+                "{} still exists; import deadsync_platform::{module} directly",
+                rel_path(&root, &file_path)
+            ));
+        }
+        if dir_path.exists() {
+            failures.push(format!(
+                "{} still exists; import deadsync_platform::{module} directly",
+                rel_path(&root, &dir_path)
+            ));
+        }
+    }
+
+    for dir in ENGINE_PLATFORM_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for module in ENGINE_PLATFORM_FACADE_MODULES {
+                let count = count_engine_platform_facade_refs(&text, module);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::{module} facade {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "platform helpers should be imported from deadsync_platform:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn rule_imports_do_not_use_game_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -1426,6 +1489,13 @@ fn count_engine_video_facade_refs(text: &str) -> usize {
         + count_token_refs(text, "deadsync::engine::video")
         + count_grouped_game_rule_uses(text, "use crate::engine::{", "video")
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "video")
+}
+
+fn count_engine_platform_facade_refs(text: &str, module: &str) -> usize {
+    count_token_refs(text, &format!("crate::engine::{module}"))
+        + count_token_refs(text, &format!("deadsync::engine::{module}"))
+        + count_grouped_game_rule_uses(text, "use crate::engine::{", module)
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::{", module)
 }
 
 fn count_grouped_engine_input_uses(text: &str, marker: &str, symbol: &str) -> usize {

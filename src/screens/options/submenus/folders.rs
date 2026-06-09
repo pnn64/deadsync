@@ -1,6 +1,6 @@
 use super::super::*;
 use crate::config::dirs::app_dirs;
-use crate::engine::open_path;
+use deadsync_platform::open_path;
 use std::borrow::Cow;
 use std::path::PathBuf;
 
