@@ -1,8 +1,7 @@
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, RawKeyboardEvent, emit_dir_edges,
-    uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use crate::{PadCode, PadEvent, PadId};
+use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;

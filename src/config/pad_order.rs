@@ -13,7 +13,7 @@
 //! how SMX pads pin a serial → player slot, but leaves SMX untouched.
 
 use super::*;
-use deadsync_input::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
+use deadsync_input_native::{PAD_ORDER_BACKENDS, PadOrderBackend};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::{LazyLock, Mutex};

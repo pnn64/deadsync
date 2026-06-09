@@ -76,8 +76,9 @@ use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
 use deadsync_input as logical_input;
-use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input_native::GpSystemEvent;
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -4030,7 +4031,7 @@ impl App {
             // so the later `smx_applied` read doesn't alias the `target` borrow.
             let cursor_dev = if on_overlay {
                 pad_config::selected_device(target)
-                    .filter(|dev| dev.backend == input::fsr::BackendKind::Smx)
+                    .filter(|dev| dev.backend == deadsync_input::fsr::BackendKind::Smx)
             } else {
                 None
             };
@@ -4153,7 +4154,7 @@ impl App {
                     let _ = self.fsr_monitor.set_debounce_micros(device, micros);
                 }
             }
-            if device.backend == input::fsr::BackendKind::Smx {
+            if device.backend == deadsync_input::fsr::BackendKind::Smx {
                 self.pad_config_sync.mark_diverged(device.index);
             }
         }

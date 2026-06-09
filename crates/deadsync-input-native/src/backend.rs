@@ -1,8 +1,6 @@
 use std::time::Instant;
 
-use winit::keyboard::KeyCode;
-
-use crate::{PadDir, PadEvent, PadId};
+use deadsync_input::{PadDir, PadEvent, PadId};
 
 #[cfg(target_os = "freebsd")]
 pub mod devd;
@@ -226,16 +224,6 @@ pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
 
 #[inline(always)]
 const fn noop_input_thread_policy(_token: usize) {}
-
-#[cfg_attr(not(windows), allow(dead_code))]
-#[derive(Clone, Copy, Debug)]
-pub struct RawKeyboardEvent {
-    pub code: KeyCode,
-    pub pressed: bool,
-    pub repeat: bool,
-    pub timestamp: Instant,
-    pub host_nanos: u64,
-}
 
 #[derive(Clone, Debug)]
 pub enum GpSystemEvent {

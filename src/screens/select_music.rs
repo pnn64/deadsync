@@ -43,7 +43,7 @@ use deadsync_chart::{
     SyncPref,
 };
 use deadsync_core::input::InputSource;
-use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
@@ -8215,7 +8215,7 @@ fn perform_pad_profile_save(state: &mut State) {
     let Some(device) = pad_config::selected_device(&state.pad_config_overlay) else {
         return;
     };
-    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+    if device.backend != deadsync_input::fsr::BackendKind::Smx {
         return;
     }
     let slot = device.index;
@@ -8302,7 +8302,7 @@ fn perform_pad_profile_save(state: &mut State) {
 /// with a local profile and the cursor is on a saved config (not "save new").
 fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> {
     let device = pad_config::selected_device(&state.pad_config_overlay)?;
-    if device.backend != crate::engine::input::fsr::BackendKind::Smx {
+    if device.backend != deadsync_input::fsr::BackendKind::Smx {
         return None;
     }
     let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
@@ -12396,7 +12396,7 @@ mod tests {
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
     use deadsync_core::input::InputSource;
-    use deadsync_input::backend::RawKeyboardEvent;
+    use deadsync_input::RawKeyboardEvent;
     use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;

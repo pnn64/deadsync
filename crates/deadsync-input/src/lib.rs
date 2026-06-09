@@ -2,9 +2,10 @@ use std::time::Instant;
 
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
+use winit::keyboard::KeyCode;
 
-pub mod backend;
 pub mod debounce;
+pub mod fsr;
 pub mod keymap;
 
 pub use keymap::{
@@ -18,6 +19,16 @@ pub use keymap::{
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;
 pub const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
+
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Copy, Debug)]
+pub struct RawKeyboardEvent {
+    pub code: KeyCode,
+    pub pressed: bool,
+    pub repeat: bool,
+    pub timestamp: Instant,
+    pub host_nanos: u64,
+}
 
 #[inline(always)]
 pub fn clamp_input_debounce_seconds(seconds: f32) -> f32 {

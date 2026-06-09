@@ -1,4 +1,4 @@
-use crate::config::dirs;
+use crate::config::{self, dirs};
 use crate::engine::audio::decode;
 use crate::game::song::get_song_cache;
 use deadsync_chart::{GameplayChartData, SongData};
@@ -88,7 +88,7 @@ fn load_gameplay_charts_from_cache(
 /// This is used after writing sync edits to disk so immediate replays use the
 /// updated timing without a full songs rescan.
 pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String> {
-    let config = crate::config::get();
+    let config = config::get();
     let global_offset_seconds = config.global_offset_seconds;
     let cachesongs = config.cachesongs;
     let cache_path = cachesongs
@@ -160,7 +160,7 @@ pub fn load_gameplay_charts(
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
     let started = Instant::now();
-    let config = crate::config::get();
+    let config = config::get();
     let allow_cache_read = config.fastload || config.cachesongs;
     let allow_cache_write = config.cachesongs;
     let verify_cache_freshness = !config.fastload;
@@ -219,7 +219,7 @@ pub fn load_sync_analysis_chart(
     song: &SongData,
     chart_ix: usize,
 ) -> Result<GameplayChartData, String> {
-    let config = crate::config::get();
+    let config = config::get();
     let allow_cache_read = config.fastload || config.cachesongs;
     let verify_cache_freshness = !config.fastload;
     if allow_cache_read

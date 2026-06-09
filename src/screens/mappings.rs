@@ -11,7 +11,7 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
-use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{
     GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
     any_player_has_dedicated_menu_buttons_for_mode, clamp_input_debounce_seconds, with_keymap,
@@ -1786,7 +1786,7 @@ mod tests {
         invalid_capture_key, keymap_raw_nav_action,
     };
     use deadsync_core::input::InputSource;
-    use deadsync_input::backend::RawKeyboardEvent;
+    use deadsync_input::RawKeyboardEvent;
     use deadsync_input::{
         InputBinding, InputEvent, Keymap, PadCode, PadEvent, PadId, VirtualAction,
     };

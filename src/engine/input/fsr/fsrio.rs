@@ -5,7 +5,7 @@
     target_os = "macos"
 ))]
 mod imp {
-    use crate::engine::input::fsr::{
+    use deadsync_input::fsr::{
         BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView,
         SensorView,
     };

@@ -3,7 +3,7 @@ use crate::config;
 use crate::engine::input;
 use deadsync_input as logical_input;
 use deadsync_input::InputEvent;
-use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use std::error::Error;
 use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;

@@ -4,8 +4,9 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space::screen_center_x;
 use crate::screens::components::shared::transitions;
 use crate::screens::{Screen, ScreenAction};
-use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input_native::GpSystemEvent;
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use std::collections::VecDeque;
 use std::time::Instant;

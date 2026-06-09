@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.636"
+version = "0.4.637"
 dependencies = [
  "alsa",
  "ash",
@@ -984,6 +984,7 @@ dependencies = [
  "deadsync-chart",
  "deadsync-core",
  "deadsync-input",
+ "deadsync-input-native",
  "deadsync-net",
  "deadsync-online",
  "deadsync-profile",
@@ -1070,6 +1071,15 @@ name = "deadsync-input"
 version = "0.1.0"
 dependencies = [
  "deadsync-core",
+ "log",
+ "winit",
+]
+
+[[package]]
+name = "deadsync-input-native"
+version = "0.1.0"
+dependencies = [
+ "deadsync-input",
  "hidparser",
  "libc",
  "log",

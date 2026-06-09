@@ -6,14 +6,13 @@ use std::time::{Duration, Instant};
 
 use winit::keyboard::KeyCode;
 
-use crate::backend::RawKeyboardEvent;
 use crate::debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
     emit_due_debounce_edges_from_mut,
 };
 use crate::{
-    GamepadCodeBinding, InputEvent, PadCode, PadDir, PadEvent, PadId, SYSTEM_ACTION_MASK,
-    VirtualAction, clamp_input_debounce_seconds, emit_normalized_actions,
+    GamepadCodeBinding, InputEvent, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent,
+    SYSTEM_ACTION_MASK, VirtualAction, clamp_input_debounce_seconds, emit_normalized_actions,
 };
 use deadsync_core::input::InputSource;
 

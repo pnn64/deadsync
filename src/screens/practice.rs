@@ -11,7 +11,7 @@ use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_
 use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
-use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;

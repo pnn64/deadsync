@@ -1,6 +1,6 @@
 use super::devd::{DevdEvent, DevdWatch};
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
-use crate::{PadCode, PadDir, PadEvent, PadId};
+use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
 use std::collections::HashMap;

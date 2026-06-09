@@ -2,7 +2,8 @@ mod backends;
 pub mod fsr;
 
 use deadsync_input::PadEvent;
-use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent, WindowsPadBackend};
+use deadsync_input::RawKeyboardEvent;
+use deadsync_input_native::{GpSystemEvent, WindowsPadBackend};
 
 /// Run the platform pad backend on the current thread.
 ///

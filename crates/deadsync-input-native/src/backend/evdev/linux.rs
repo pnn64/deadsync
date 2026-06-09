@@ -1,8 +1,8 @@
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, event_time,
-    receipt_time, uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend,
+    emit_dir_edges, event_time, receipt_time, uuid_from_bytes,
 };
-use crate::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char, c_void};
@@ -949,9 +949,8 @@ fn add_dev_if_new(
     }
     let existing_id = id_by_uuid.get(&spec.uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
-    let id = existing_id.unwrap_or_else(|| {
-        host.pad_id_for_uuid(crate::backend::PadOrderBackend::LinuxEvdev, spec.uuid)
-    });
+    let id =
+        existing_id.unwrap_or_else(|| host.pad_id_for_uuid(PadOrderBackend::LinuxEvdev, spec.uuid));
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
         if existing_id.is_none() {
             id_by_uuid.insert(dev.uuid, id);

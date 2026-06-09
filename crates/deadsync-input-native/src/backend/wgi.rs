@@ -1,7 +1,7 @@
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use crate::{PadCode, PadEvent, PadId};
+use deadsync_input::{PadCode, PadEvent, PadId};
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};

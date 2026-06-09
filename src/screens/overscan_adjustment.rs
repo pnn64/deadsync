@@ -8,7 +8,7 @@ use crate::engine::space;
 use crate::engine::space::{screen_center_x, screen_height, screen_width};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
-use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use winit::keyboard::KeyCode;
 

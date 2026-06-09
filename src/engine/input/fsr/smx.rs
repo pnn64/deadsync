@@ -1,9 +1,9 @@
 //! StepManiaX FSR sensor monitor using the shared SmxManager.
 
-use crate::engine::input::fsr::{
+use crate::engine::smx;
+use deadsync_input::fsr::{
     BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
 };
-use crate::engine::smx;
 use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;

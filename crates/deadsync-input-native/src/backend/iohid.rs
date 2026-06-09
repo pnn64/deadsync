@@ -1,8 +1,7 @@
-use super::RawKeyboardEvent;
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use crate::{PadCode, PadEvent, PadId};
+use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::{HashMap, hash_map::Entry};

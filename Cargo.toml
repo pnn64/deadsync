@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.636"
+version = "0.4.637"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -14,6 +14,7 @@ members = [
     "crates/deadsync-chart",
     "crates/deadsync-core",
     "crates/deadsync-input",
+    "crates/deadsync-input-native",
     "crates/deadsync-net",
     "crates/deadsync-online",
     "crates/deadsync-profile",
@@ -59,6 +60,7 @@ pipewire-audio = ["dep:pipewire"]
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-input = { path = "crates/deadsync-input" }
+deadsync-input-native = { path = "crates/deadsync-input-native" }
 deadsync-net = { path = "crates/deadsync-net" }
 deadsync-online = { path = "crates/deadsync-online" }
 deadsync-profile = { path = "crates/deadsync-profile" }

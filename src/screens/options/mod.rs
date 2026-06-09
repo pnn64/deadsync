@@ -23,9 +23,9 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
-#[cfg(target_os = "windows")]
-use deadsync_input::backend::WindowsPadBackend;
 use deadsync_input::{InputEvent, VirtualAction};
+#[cfg(target_os = "windows")]
+use deadsync_input_native::WindowsPadBackend;
 use deadsync_score as score_data;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};

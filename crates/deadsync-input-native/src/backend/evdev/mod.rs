@@ -2,7 +2,7 @@
 pub(super) use super::devd::{DevdEvent, DevdWatch};
 pub(super) use super::unix_time::{EventTimeSample, event_time};
 pub(super) use super::{BackendHost, GpSystemEvent, PadBackend, emit_dir_edges, uuid_from_bytes};
-pub(super) use crate::{PadCode, PadEvent, PadId};
+pub(super) use deadsync_input::{PadCode, PadEvent, PadId};
 
 #[inline(always)]
 pub(super) fn receipt_time(host: BackendHost) -> EventTimeSample {

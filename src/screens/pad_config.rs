@@ -14,13 +14,13 @@
 //!   pad-level controls (auto-recalibration, panel debounce).
 
 use crate::act;
-use crate::engine::input::fsr::{PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
+use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -1631,7 +1631,7 @@ fn total_bars(state: &State) -> usize {
 
 /// Min/max live threshold across a button's sensors (for the Simple-view
 /// range display). Empty buttons report `(0, 0)`.
-fn sensor_threshold_range(button: &crate::engine::input::fsr::ButtonView) -> (u16, u16) {
+fn sensor_threshold_range(button: &ButtonView) -> (u16, u16) {
     let mut mn = u16::MAX;
     let mut mx = 0u16;
     for s in &button.sensors {
@@ -2125,7 +2125,7 @@ fn push_bar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::input::fsr::{BackendKind, ButtonView};
+    use deadsync_input::fsr::BackendKind;
     use std::time::Instant;
 
     // ── Event + pad fixtures ──

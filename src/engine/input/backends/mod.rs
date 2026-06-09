@@ -1,4 +1,4 @@
-use deadsync_input::backend::{BackendHost, InputThreadPolicy};
+use deadsync_input_native::{BackendHost, InputThreadPolicy};
 
 #[inline(always)]
 pub(super) fn host() -> BackendHost {
@@ -47,12 +47,12 @@ const fn boost_input_thread() -> InputThreadPolicy {
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub(super) use deadsync_input::backend::evdev;
+pub(super) use deadsync_input_native::evdev;
 #[cfg(target_os = "freebsd")]
-pub(super) use deadsync_input::backend::hidraw;
+pub(super) use deadsync_input_native::hidraw;
 #[cfg(target_os = "macos")]
-pub(super) use deadsync_input::backend::iohid;
+pub(super) use deadsync_input_native::iohid;
 #[cfg(windows)]
-pub(super) use deadsync_input::backend::w32_raw_input;
+pub(super) use deadsync_input_native::w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
-pub(super) use deadsync_input::backend::wgi;
+pub(super) use deadsync_input_native::wgi;
