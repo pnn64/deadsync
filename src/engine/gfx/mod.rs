@@ -1,12 +1,10 @@
-mod backends;
-
-#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-use crate::engine::gfx::backends::vulkan;
 use deadsync_render::{
     DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle, TextureHandleMap,
 };
 use deadsync_render_backend_gl as opengl;
 use deadsync_render_backend_software as software;
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+use deadsync_render_backend_vulkan as vulkan;
 use deadsync_render_backend_wgpu as wgpu_core;
 use image::RgbaImage;
 use std::{error::Error, str::FromStr, sync::Arc};
@@ -48,6 +46,9 @@ struct SoftwareTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
 struct OpenGlTextureLookup<'a>(&'a TextureHandleMap<Texture>);
 
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+struct VulkanTextureLookup<'a>(&'a TextureHandleMap<Texture>);
+
 #[derive(Clone, Copy)]
 enum WgpuTextureKind {
     #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
@@ -62,6 +63,16 @@ enum WgpuTextureKind {
 struct WgpuTextureLookup<'a> {
     textures: &'a TextureHandleMap<Texture>,
     kind: WgpuTextureKind,
+}
+
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+impl vulkan::TextureLookup for VulkanTextureLookup<'_> {
+    fn vulkan_texture(&self, handle: TextureHandle) -> Option<&vulkan::Texture> {
+        match self.0.get(&handle)? {
+            Texture::Vulkan(texture) => Some(texture),
+            _ => None,
+        }
+    }
 }
 
 impl opengl::TextureLookup for OpenGlTextureLookup<'_> {
@@ -125,9 +136,12 @@ impl Backend {
     ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::Vulkan(state) => {
-                vulkan::draw(state, render_list, textures, apply_present_back_pressure)
-            }
+            BackendImpl::Vulkan(state) => vulkan::draw(
+                state,
+                render_list,
+                &VulkanTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::draw(
                 state,
@@ -421,19 +435,7 @@ impl Backend {
     pub fn wait_for_idle(&mut self) {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            BackendImpl::Vulkan(state) => {
-                let _ = vulkan::flush_pending_uploads(state);
-                if let Some(device) = &state.device {
-                    // SAFETY: `device` is the live Vulkan logical device for this
-                    // backend, and we only wait for idle before tearing down or
-                    // reclaiming resources.
-                    unsafe {
-                        let _ = device.device_wait_idle();
-                    }
-                }
-                vulkan::retire_submitted_uploads(state);
-                vulkan::retire_all_textures(state);
-            }
+            BackendImpl::Vulkan(state) => vulkan::wait_for_idle(state),
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::wait_for_idle(state),
             #[cfg(target_os = "macos")]

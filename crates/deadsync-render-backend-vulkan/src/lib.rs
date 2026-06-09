@@ -1,5 +1,3 @@
-use crate::engine::gfx::Texture as RendererTexture;
-use crate::engine::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
     google::display_timing,
@@ -9,7 +7,7 @@ use ash::{
 use deadsync_render::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandleMap,
+    SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
@@ -32,6 +30,8 @@ const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const LOGICAL_HEIGHT: f32 = 480.0;
+const DESIGN_WIDTH_16_9: f32 = 854.0;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
@@ -56,9 +56,13 @@ pub struct Texture {
     image: vk::Image,
     memory: vk::DeviceMemory,
     view: vk::ImageView,
-    pub descriptor_set: vk::DescriptorSet,
-    pub descriptor_set_repeat: vk::DescriptorSet,
+    descriptor_set: vk::DescriptorSet,
+    descriptor_set_repeat: vk::DescriptorSet,
     pool: vk::DescriptorPool,
+}
+
+pub trait TextureLookup {
+    fn vulkan_texture(&self, handle: TextureHandle) -> Option<&Texture>;
 }
 
 impl Drop for Texture {
@@ -171,10 +175,10 @@ pub struct State {
     debug_loader: Option<ash::ext::debug_utils::Instance>,
     surface: vk::SurfaceKHR,
     surface_loader: surface::Instance,
-    pub pdevice: vk::PhysicalDevice,
-    pub device: Option<Arc<Device>>,
-    pub queue: vk::Queue,
-    pub command_pool: vk::CommandPool,
+    pdevice: vk::PhysicalDevice,
+    device: Option<Arc<Device>>,
+    queue: vk::Queue,
+    command_pool: vk::CommandPool,
     swapchain_resources: SwapchainResources,
     render_pass: vk::RenderPass,
     sprite_pipeline_layout: vk::PipelineLayout,
@@ -185,7 +189,7 @@ pub struct State {
     textured_mesh_pipeline: vk::Pipeline,
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
-    pub descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_pools: Vec<vk::DescriptorPool>,
     sampler_cache: HashMap<SamplerDesc, vk::Sampler>,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -1237,6 +1241,19 @@ pub fn retire_all_textures(state: &mut State) {
     state.retired_textures.clear();
 }
 
+pub fn wait_for_idle(state: &mut State) {
+    let _ = flush_pending_uploads(state);
+    if let Some(device) = &state.device {
+        // SAFETY: `device` is the live Vulkan logical device for this backend,
+        // and this wait is only used before tearing down or reclaiming resources.
+        unsafe {
+            let _ = device.device_wait_idle();
+        }
+    }
+    retire_submitted_uploads(state);
+    retire_all_textures(state);
+}
+
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -1433,7 +1450,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
-    textures: &TextureHandleMap<RendererTexture>,
+    textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -1669,14 +1686,10 @@ pub fn draw(
         for op in &state.prep.ops {
             match op {
                 DrawOp::Sprite(run) => {
-                    let set_opt = textures.get(&run.texture_handle).and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set)
-                        } else {
-                            None
-                        }
-                    });
-                    let Some(set) = set_opt else {
+                    let Some(set) = textures
+                        .vulkan_texture(run.texture_handle)
+                        .map(|texture| texture.descriptor_set)
+                    else {
                         continue;
                     };
                     if !matches!(bound, Bound::Sprite) {
@@ -1769,14 +1782,10 @@ pub fn draw(
                     vertices_drawn = vertices_drawn.saturating_add(draw.vertex_count);
                 }
                 DrawOp::TexturedMesh(draw) => {
-                    let set_opt = textures.get(&draw.texture_handle).and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set_repeat)
-                        } else {
-                            None
-                        }
-                    });
-                    let Some(set) = set_opt else {
+                    let Some(set) = textures
+                        .vulkan_texture(draw.texture_handle)
+                        .map(|texture| texture.descriptor_set_repeat)
+                    else {
                         continue;
                     };
                     if !matches!(bound, Bound::TexturedMesh) {
@@ -4057,4 +4066,22 @@ pub fn set_present_config(
     {
         warn!("Failed to apply Vulkan present config update: {e}");
     }
+}
+
+#[inline(always)]
+fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
+    let aspect = if height == 0 {
+        1.0
+    } else {
+        width as f32 / height as f32
+    };
+    let h = LOGICAL_HEIGHT;
+    let w = if aspect >= 16.0 / 9.0 {
+        DESIGN_WIDTH_16_9
+    } else {
+        (h * aspect).min(DESIGN_WIDTH_16_9)
+    };
+    let half_w = 0.5 * w;
+    let half_h = 0.5 * h;
+    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }

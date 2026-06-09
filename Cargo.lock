@@ -971,11 +971,9 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.649"
+version = "0.4.650"
 dependencies = [
  "alsa",
- "ash",
- "ash-window",
  "bincode",
  "bitflags 2.13.0",
  "bytemuck",
@@ -994,6 +992,7 @@ dependencies = [
  "deadsync-render",
  "deadsync-render-backend-gl",
  "deadsync-render-backend-software",
+ "deadsync-render-backend-vulkan",
  "deadsync-render-backend-wgpu",
  "deadsync-rules",
  "deadsync-score",
@@ -1002,7 +1001,6 @@ dependencies = [
  "flate2",
  "fs_extra",
  "glam",
- "glob",
  "gpu-allocator",
  "hidapi",
  "hidparser",
@@ -1032,7 +1030,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shaderc",
  "smallvec",
  "smithay-client-toolkit 0.20.0",
  "sys-locale",
@@ -1190,6 +1187,23 @@ dependencies = [
  "image",
  "log",
  "softbuffer",
+ "winit",
+]
+
+[[package]]
+name = "deadsync-render-backend-vulkan"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "ash-window",
+ "bytemuck",
+ "deadsync-platform",
+ "deadsync-render",
+ "glam",
+ "image",
+ "log",
+ "shaderc",
+ "windows",
  "winit",
 ]
 
