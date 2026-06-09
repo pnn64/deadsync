@@ -1,7 +1,8 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
-use crate::engine::windows_rt::{
-    ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
+use super::{
+    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
+    uuid_from_bytes,
 };
+use crate::engine::windows_rt::{ThreadRole, boost_current_thread};
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -74,10 +75,10 @@ enum ReadingClockKind {
 
 impl ReadingClockKind {
     #[inline(always)]
-    fn to_nanos(self, raw: u64) -> Option<u64> {
+    fn to_nanos(self, raw: u64, host: BackendHost) -> Option<u64> {
         match self {
             Self::Unknown => None,
-            Self::QpcTicks => qpc_ticks_to_nanos(raw),
+            Self::QpcTicks => host.qpc_ticks_to_nanos(raw),
             Self::HundredNs => raw.checked_mul(100),
             Self::Microseconds => raw.checked_mul(1000),
             Self::Nanoseconds => Some(raw),
@@ -154,6 +155,7 @@ impl ReadingClock {
         raw: u64,
         prev_host_nanos: u64,
         poll_host_nanos: u64,
+        host: BackendHost,
     ) -> Option<u64> {
         if prev_raw == 0
             || raw <= prev_raw
@@ -162,8 +164,8 @@ impl ReadingClock {
         {
             return None;
         }
-        let prev_ns = kind.to_nanos(prev_raw)?;
-        let raw_ns = kind.to_nanos(raw)?;
+        let prev_ns = kind.to_nanos(prev_raw, host)?;
+        let raw_ns = kind.to_nanos(raw, host)?;
         if raw_ns <= prev_ns {
             return None;
         }
@@ -180,13 +182,14 @@ impl ReadingClock {
         raw: u64,
         prev_host_nanos: u64,
         poll_host_nanos: u64,
+        host: BackendHost,
     ) -> Option<ReadingClockKind> {
         let host_delta = poll_host_nanos.saturating_sub(prev_host_nanos);
         let mut best = None;
         let mut best_error = u64::MAX;
         for kind in READING_CLOCK_KINDS {
             let Some(error_ns) =
-                Self::delta_error(kind, prev_raw, raw, prev_host_nanos, poll_host_nanos)
+                Self::delta_error(kind, prev_raw, raw, prev_host_nanos, poll_host_nanos, host)
             else {
                 continue;
             };
@@ -204,12 +207,13 @@ impl ReadingClock {
     }
 
     #[inline(always)]
-    fn update_kind(&mut self, raw: u64, poll_host_nanos: u64) {
+    fn update_kind(&mut self, raw: u64, poll_host_nanos: u64, host: BackendHost) {
         let Some(best_kind) = Self::pick_kind(
             self.last_raw,
             raw,
             self.last_poll_host_nanos,
             poll_host_nanos,
+            host,
         ) else {
             return;
         };
@@ -224,6 +228,7 @@ impl ReadingClock {
             raw,
             self.last_poll_host_nanos,
             poll_host_nanos,
+            host,
         ) else {
             return;
         };
@@ -233,6 +238,7 @@ impl ReadingClock {
             raw,
             self.last_poll_host_nanos,
             poll_host_nanos,
+            host,
         ) else {
             self.kind = best_kind;
             self.offset_ns = 0;
@@ -245,14 +251,14 @@ impl ReadingClock {
     }
 
     #[inline(always)]
-    fn host_nanos(&mut self, raw: u64, poll_host_nanos: u64) -> Option<u64> {
+    fn host_nanos(&mut self, raw: u64, poll_host_nanos: u64, host: BackendHost) -> Option<u64> {
         if raw == 0 || poll_host_nanos == 0 {
             return None;
         }
         if raw != self.last_raw && self.last_raw != 0 && self.last_poll_host_nanos != 0 {
-            self.update_kind(raw, poll_host_nanos);
+            self.update_kind(raw, poll_host_nanos, host);
         }
-        let reading_ns = self.kind.to_nanos(raw)?;
+        let reading_ns = self.kind.to_nanos(raw, host)?;
         let offset_sample = offset_between(poll_host_nanos, reading_ns)?;
         self.offset_ns = if self.offset_ns == 0 {
             offset_sample
@@ -277,9 +283,10 @@ impl ReadingClock {
         raw: u64,
         polled_at: Instant,
         poll_host_nanos: u64,
+        host: BackendHost,
     ) -> (Instant, u64) {
         let host_nanos = self
-            .host_nanos(raw, poll_host_nanos)
+            .host_nanos(raw, poll_host_nanos, host)
             .unwrap_or(poll_host_nanos);
         self.last_raw = raw;
         self.last_poll_host_nanos = poll_host_nanos;
@@ -390,6 +397,7 @@ struct Dev {
 }
 
 struct Ctx {
+    host: BackendHost,
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     devs: Vec<Dev>,
@@ -423,7 +431,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
     let product_id = controller.HardwareProductId().ok();
     // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
     // owns the pad (see `native_smx_owns_device`).
-    if crate::engine::smx::native_smx_owns_device(vendor_id, product_id) {
+    if ctx.host.native_smx_owns_device(vendor_id, product_id) {
         log::debug!(
             "WGI: ignoring StepManiaX pad (vid={vendor_id:04x?} pid={product_id:04x?}); native SMX input owns it"
         );
@@ -434,10 +442,9 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
-            let id = PadId(crate::config::pad_index_for_uuid(
-                deadsync_input::backend::PadOrderBackend::Wgi,
-                uuid,
-            ));
+            let id = ctx
+                .host
+                .pad_id_for_uuid(deadsync_input::backend::PadOrderBackend::Wgi, uuid);
             *entry.insert(id)
         }
     };
@@ -482,7 +489,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
                 (0, GamepadButtons::None, [0i16; 6], [false; 4])
             };
         let mut clock = ReadingClock::default();
-        clock.seed(last_time, current_host_nanos());
+        clock.seed(last_time, ctx.host.now_nanos());
         Kind::Gamepad(GamepadState {
             pad,
             buttons_prev,
@@ -515,7 +522,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
             want[3] |= x > 0;
         }
         let mut clock = ReadingClock::default();
-        clock.seed(last_time, current_host_nanos());
+        clock.seed(last_time, ctx.host.now_nanos());
         Kind::Raw(RawState {
             buttons_prev,
             buttons_now,
@@ -570,18 +577,23 @@ fn remove_controller(ctx: &mut Ctx, controller: RawGameController) {
     }
 }
 
-fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState)
-where
+fn pump_gamepad<F>(
+    emit_pad: &mut F,
+    id: PadId,
+    uuid: [u8; 16],
+    st: &mut GamepadState,
+    host: BackendHost,
+) where
     F: FnMut(PadEvent),
 {
     let Ok(reading) = st.pad.GetCurrentReading() else {
         return;
     };
     let polled_at = Instant::now();
-    let poll_host_nanos = current_host_nanos();
+    let poll_host_nanos = host.now_nanos();
     let (timestamp, host_nanos) =
         st.clock
-            .sample_time(reading.Timestamp, polled_at, poll_host_nanos);
+            .sample_time(reading.Timestamp, polled_at, poll_host_nanos, host);
 
     let old_lt = st.axes_prev[0];
     let old_rt = st.axes_prev[1];
@@ -690,6 +702,7 @@ fn pump_raw<F>(
     uuid: [u8; 16],
     controller: &RawGameController,
     st: &mut RawState,
+    host: BackendHost,
 ) where
     F: FnMut(PadEvent),
 {
@@ -699,8 +712,8 @@ fn pump_raw<F>(
         return;
     };
     let polled_at = Instant::now();
-    let poll_host_nanos = current_host_nanos();
-    let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos);
+    let poll_host_nanos = host.now_nanos();
+    let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos, host);
 
     let n = st.buttons_now.len().min(st.buttons_prev.len());
     for i in 0..n {
@@ -787,6 +800,7 @@ fn register_hotplug_handler<T>(
 pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    host: BackendHost,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::Input);
     // SAFETY: this thread initializes WinRT exactly once for multithreaded use
@@ -824,6 +838,7 @@ pub fn run(
     const STARTUP_GRACE: Duration = Duration::from_millis(3000);
     const POLL_INTERVAL: Duration = Duration::from_millis(1);
     let mut ctx = Ctx {
+        host,
         emit_pad: Box::new(emit_pad),
         emit_sys: Box::new(emit_sys),
         devs: Vec::new(),
@@ -866,16 +881,17 @@ pub fn run(
             continue;
         }
 
+        let host = ctx.host;
         let emit_pad = &mut ctx.emit_pad;
         for dev in &mut ctx.devs {
             let id = dev.id;
             let uuid = dev.uuid;
             match &mut dev.kind {
                 Kind::Gamepad(st) => {
-                    pump_gamepad(emit_pad, id, uuid, st);
+                    pump_gamepad(emit_pad, id, uuid, st, host);
                 }
                 Kind::Raw(st) => {
-                    pump_raw(emit_pad, id, uuid, &dev.controller, st);
+                    pump_raw(emit_pad, id, uuid, &dev.controller, st, host);
                 }
             }
         }

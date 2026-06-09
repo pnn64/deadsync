@@ -38,26 +38,28 @@ pub fn run_pad_backend(
     #[cfg(windows)]
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            backends::w32_raw_input::run(emit_pad, emit_sys, |_| {})
+            backends::w32_raw_input::run(emit_pad, emit_sys, |_| {}, backends::host())
         }
         #[cfg(target_vendor = "win7")]
-        WindowsPadBackend::Wgi => backends::w32_raw_input::run(emit_pad, emit_sys, |_| {}),
+        WindowsPadBackend::Wgi => {
+            backends::w32_raw_input::run(emit_pad, emit_sys, |_| {}, backends::host())
+        }
         #[cfg(not(target_vendor = "win7"))]
-        WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys),
+        WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys, backends::host()),
     }
     #[cfg(target_os = "linux")]
-    return backends::evdev::run_pad_only(emit_pad, emit_sys);
+    return backends::evdev::run_pad_only(emit_pad, emit_sys, backends::host());
     #[cfg(target_os = "freebsd")]
     {
         let mut emit_pad = emit_pad;
         let mut emit_sys = emit_sys;
-        if let Err(err) = backends::hidraw::run(&mut emit_pad, &mut emit_sys) {
+        if let Err(err) = backends::hidraw::run(&mut emit_pad, &mut emit_sys, backends::host()) {
             log::warn!("freebsd hidraw unavailable or unusable ({err}); falling back to evdev");
         }
-        return backends::evdev::run_pad_only(emit_pad, emit_sys);
+        return backends::evdev::run_pad_only(emit_pad, emit_sys, backends::host());
     }
     #[cfg(target_os = "macos")]
-    return backends::iohid::run(emit_pad, emit_sys, |_| {});
+    return backends::iohid::run(emit_pad, emit_sys, |_| {}, backends::host());
 
     #[cfg(not(any(
         windows,
@@ -80,7 +82,7 @@ pub fn run_linux_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    backends::evdev::run(emit_pad, emit_sys, emit_key);
+    backends::evdev::run(emit_pad, emit_sys, emit_key, backends::host());
 }
 
 #[cfg(target_os = "freebsd")]
@@ -89,7 +91,7 @@ pub fn run_freebsd_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    backends::evdev::run(emit_pad, emit_sys, emit_key);
+    backends::evdev::run(emit_pad, emit_sys, emit_key, backends::host());
 }
 
 #[cfg(target_os = "macos")]
@@ -98,7 +100,7 @@ pub fn run_macos_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    backends::iohid::run(emit_pad, emit_sys, emit_key);
+    backends::iohid::run(emit_pad, emit_sys, emit_key, backends::host());
 }
 
 #[cfg(windows)]
@@ -110,17 +112,17 @@ pub fn run_windows_backend(
 ) {
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key);
+            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key, backends::host());
         }
         #[cfg(target_vendor = "win7")]
         WindowsPadBackend::Wgi => {
             log::warn!("WGI gamepad backend is unavailable in Windows 7 builds; using Raw Input");
-            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key);
+            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key, backends::host());
         }
         #[cfg(not(target_vendor = "win7"))]
         WindowsPadBackend::Wgi => {
-            std::thread::spawn(move || backends::wgi::run(emit_pad, emit_sys));
-            backends::w32_raw_input::run_keyboard_only(emit_key);
+            std::thread::spawn(move || backends::wgi::run(emit_pad, emit_sys, backends::host()));
+            backends::w32_raw_input::run_keyboard_only(emit_key, backends::host());
         }
     }
 }

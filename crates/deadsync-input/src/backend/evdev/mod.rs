@@ -1,13 +1,12 @@
-pub(super) use super::{
-    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes,
-};
 #[cfg(target_os = "freebsd")]
-pub(super) use deadsync_input::backend::devd::{DevdEvent, DevdWatch};
-pub(super) use deadsync_input::backend::unix_time::{EventTimeSample, event_time};
+pub(super) use super::devd::{DevdEvent, DevdWatch};
+pub(super) use super::unix_time::{EventTimeSample, event_time};
+pub(super) use super::{BackendHost, GpSystemEvent, PadBackend, emit_dir_edges, uuid_from_bytes};
+pub(super) use crate::{PadCode, PadEvent, PadId};
 
 #[inline(always)]
-pub(super) fn receipt_time() -> EventTimeSample {
-    deadsync_input::backend::unix_time::receipt_time(crate::engine::host_time::instant_nanos)
+pub(super) fn receipt_time(host: BackendHost) -> EventTimeSample {
+    super::unix_time::receipt_time(|instant| host.instant_nanos(instant))
 }
 
 #[cfg(target_os = "freebsd")]

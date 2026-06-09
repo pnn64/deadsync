@@ -1,12 +1,35 @@
 #[cfg(windows)]
 pub(super) use deadsync_input::backend::RawKeyboardEvent;
 pub(super) use deadsync_input::backend::{
-    GpSystemEvent, PadBackend, emit_dir_edges, uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, emit_dir_edges, uuid_from_bytes,
 };
 pub(super) use deadsync_input::{PadCode, PadEvent, PadId};
 
+#[inline(always)]
+pub(super) fn host() -> BackendHost {
+    BackendHost::new(
+        crate::config::pad_index_for_uuid,
+        crate::engine::smx::native_smx_owns_device,
+        crate::engine::host_time::now_nanos,
+        crate::engine::host_time::instant_nanos,
+        qpc_ticks_to_nanos,
+    )
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+    crate::engine::windows_rt::qpc_ticks_to_nanos(ticks)
+}
+
+#[cfg(not(windows))]
+#[inline(always)]
+const fn qpc_ticks_to_nanos(_ticks: u64) -> Option<u64> {
+    None
+}
+
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub(super) mod evdev;
+pub(super) use deadsync_input::backend::evdev;
 #[cfg(target_os = "freebsd")]
 pub(super) mod hidraw;
 #[cfg(target_os = "macos")]

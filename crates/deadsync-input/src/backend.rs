@@ -6,6 +6,8 @@ use crate::{PadDir, PadEvent, PadId};
 
 #[cfg(target_os = "freebsd")]
 pub mod devd;
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub mod evdev;
 #[cfg(unix)]
 pub mod unix_time;
 
@@ -97,6 +99,59 @@ pub const PAD_ORDER_BACKENDS: [PadOrderBackend; 6] = [
     PadOrderBackend::LinuxEvdev,
     PadOrderBackend::FreeBsdEvdev,
 ];
+
+#[derive(Clone, Copy)]
+pub struct BackendHost {
+    pad_index_for_uuid: fn(PadOrderBackend, [u8; 16]) -> u32,
+    native_smx_owns_device: fn(Option<u16>, Option<u16>) -> bool,
+    now_nanos: fn() -> u64,
+    instant_nanos: fn(Instant) -> u64,
+    qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
+}
+
+impl BackendHost {
+    #[inline(always)]
+    pub const fn new(
+        pad_index_for_uuid: fn(PadOrderBackend, [u8; 16]) -> u32,
+        native_smx_owns_device: fn(Option<u16>, Option<u16>) -> bool,
+        now_nanos: fn() -> u64,
+        instant_nanos: fn(Instant) -> u64,
+        qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
+    ) -> Self {
+        Self {
+            pad_index_for_uuid,
+            native_smx_owns_device,
+            now_nanos,
+            instant_nanos,
+            qpc_ticks_to_nanos,
+        }
+    }
+
+    #[inline(always)]
+    pub fn pad_id_for_uuid(self, backend: PadOrderBackend, uuid: [u8; 16]) -> PadId {
+        PadId((self.pad_index_for_uuid)(backend, uuid))
+    }
+
+    #[inline(always)]
+    pub fn native_smx_owns_device(self, vendor: Option<u16>, product: Option<u16>) -> bool {
+        (self.native_smx_owns_device)(vendor, product)
+    }
+
+    #[inline(always)]
+    pub fn now_nanos(self) -> u64 {
+        (self.now_nanos)()
+    }
+
+    #[inline(always)]
+    pub fn instant_nanos(self, at: Instant) -> u64 {
+        (self.instant_nanos)(at)
+    }
+
+    #[inline(always)]
+    pub fn qpc_ticks_to_nanos(self, ticks: u64) -> Option<u64> {
+        (self.qpc_ticks_to_nanos)(ticks)
+    }
+}
 
 #[inline(always)]
 pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
