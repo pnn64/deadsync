@@ -4,14 +4,6 @@ pub mod fsr;
 use deadsync_input::PadEvent;
 use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent, WindowsPadBackend};
 
-pub use deadsync_input::keymap::{
-    InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,
-    any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons,
-    clear_debounce_state, drain_debounced_input_events_with, get_keymap, map_keycode_event_with,
-    map_keycode_event_with_host, map_pad_event_with, map_raw_key_event_with,
-    set_input_debounce_seconds, set_keymap, set_only_dedicated_menu_buttons, with_keymap,
-};
-
 /// Run the platform pad backend on the current thread.
 ///
 /// This is intended to be called from a dedicated thread which forwards

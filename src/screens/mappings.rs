@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::{InputBinding, with_keymap};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -14,7 +13,8 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
 use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{
-    GamepadCodeBinding, InputEvent, PadEvent, VirtualAction, clamp_input_debounce_seconds,
+    GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
+    any_player_has_dedicated_menu_buttons_for_mode, clamp_input_debounce_seconds, with_keymap,
 };
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
@@ -413,7 +413,7 @@ fn clear_focused_binding(state: &State) -> bool {
     let cleared = crate::config::clear_keymap_binding(action, index);
     if cleared
         && crate::config::get().only_dedicated_menu_buttons
-        && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+        && !any_player_has_dedicated_menu_buttons_for_mode(
             crate::config::get().three_key_navigation,
         )
     {
@@ -444,10 +444,7 @@ const RAW_NAV_ACTION_PRIORITY: [VirtualAction; 18] = [
 ];
 
 #[inline(always)]
-fn keymap_raw_nav_action(
-    keymap: &crate::engine::input::Keymap,
-    key_event: &RawKeyboardEvent,
-) -> Option<VirtualAction> {
+fn keymap_raw_nav_action(keymap: &Keymap, key_event: &RawKeyboardEvent) -> Option<VirtualAction> {
     RAW_NAV_ACTION_PRIORITY
         .iter()
         .copied()
@@ -638,7 +635,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 audio::play_sfx("assets/sounds/change_value.ogg");
 
                 if crate::config::get().only_dedicated_menu_buttons
-                    && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+                    && !any_player_has_dedicated_menu_buttons_for_mode(
                         crate::config::get().three_key_navigation,
                     )
                 {
@@ -789,7 +786,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
             audio::play_sfx("assets/sounds/change_value.ogg");
 
             if crate::config::get().only_dedicated_menu_buttons
-                && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+                && !any_player_has_dedicated_menu_buttons_for_mode(
                     crate::config::get().three_key_navigation,
                 )
             {
@@ -1048,10 +1045,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
 }
 
 #[inline(always)]
-fn editable_slot_indices_for_action(
-    keymap: &crate::engine::input::Keymap,
-    action: VirtualAction,
-) -> (usize, usize) {
+fn editable_slot_indices_for_action(keymap: &Keymap, action: VirtualAction) -> (usize, usize) {
     crate::config::editable_key_binding_slot_indices(keymap, action)
 }
 
@@ -1791,10 +1785,11 @@ mod tests {
         ActiveSlot, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event, init,
         invalid_capture_key, keymap_raw_nav_action,
     };
-    use crate::engine::input::{InputBinding, Keymap};
     use deadsync_core::input::InputSource;
     use deadsync_input::backend::RawKeyboardEvent;
-    use deadsync_input::{InputEvent, PadCode, PadEvent, PadId, VirtualAction};
+    use deadsync_input::{
+        InputBinding, InputEvent, Keymap, PadCode, PadEvent, PadId, VirtualAction,
+    };
     use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
 

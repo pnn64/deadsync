@@ -1,6 +1,7 @@
 use super::{App, CurrentScreen, TransitionState};
 use crate::config;
 use crate::engine::input;
+use deadsync_input as logical_input;
 use deadsync_input::InputEvent;
 use deadsync_input::backend::RawKeyboardEvent;
 use std::error::Error;
@@ -71,7 +72,7 @@ impl App {
             self.state.screens.current_screen,
             &self.state.shell.transition,
         ) {
-            input::clear_debounce_state();
+            logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             return Ok(false);
         }
@@ -80,7 +81,7 @@ impl App {
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         let start_screen = self.state.screens.current_screen;
         let mut discard_gameplay_batch = false;
-        input::drain_debounced_input_events_with(|ev| {
+        logical_input::drain_debounced_input_events_with(|ev| {
             flushed = true;
             if gameplay_screen {
                 if discard_gameplay_batch || err.is_some() {

@@ -6,7 +6,7 @@ use super::*;
 pub(super) fn is_submenu_row_disabled(kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
         (SubmenuKind::InputBackend, SubRowId::MenuButtons) => {
-            !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+            !deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(
                 config::get().three_key_navigation,
             )
         }

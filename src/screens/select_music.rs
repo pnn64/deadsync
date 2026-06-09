@@ -8,7 +8,6 @@ use crate::config::{
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::engine::input::with_keymap;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -45,7 +44,7 @@ use deadsync_chart::{
 };
 use deadsync_core::input::InputSource;
 use deadsync_input::backend::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
+use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
@@ -9203,7 +9202,7 @@ fn key_bound_to_player_input(key: &RawKeyboardEvent) -> bool {
 }
 
 #[inline(always)]
-fn keymap_has_player_input(km: &crate::engine::input::Keymap, key: &RawKeyboardEvent) -> bool {
+fn keymap_has_player_input(km: &Keymap, key: &RawKeyboardEvent) -> bool {
     km.raw_key_event_has_action(key, |action| !action.is_system())
 }
 
@@ -12394,12 +12393,11 @@ mod tests {
         sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::engine::input::{InputBinding, Keymap};
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
     use deadsync_core::input::InputSource;
     use deadsync_input::backend::RawKeyboardEvent;
-    use deadsync_input::{InputEvent, PadDir, VirtualAction};
+    use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use deadsync_score as score_data;

@@ -75,6 +75,7 @@ use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
+use deadsync_input as logical_input;
 use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_rules::judgment as judgment_rules;
@@ -3966,7 +3967,7 @@ impl App {
             self.state.shell.alt_held = false;
             self.state.shell.fast_forward_held = false;
             self.state.shell.slow_down_held = false;
-            input::clear_debounce_state();
+            logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
         } else if let Some(w) = window {
@@ -7873,14 +7874,14 @@ impl App {
             _ => {}
         }
 
-        if input::with_keymap(|km| {
+        if logical_input::with_keymap(|km| {
             km.raw_key_event_has_action(&raw_key, |action| {
                 action == VirtualAction::system_fast_forward
             })
         }) {
             self.state.shell.fast_forward_held = raw_key.pressed;
         }
-        if input::with_keymap(|km| {
+        if logical_input::with_keymap(|km| {
             km.raw_key_event_has_action(&raw_key, |action| {
                 action == VirtualAction::system_slow_down
             })
@@ -8067,7 +8068,7 @@ impl App {
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
         if !accepts_queued_input {
-            input::clear_debounce_state();
+            logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return true;
@@ -8079,7 +8080,7 @@ impl App {
         }
 
         let mut input_err: Option<Box<dyn Error>> = None;
-        input::map_raw_key_event_with(&raw_key, |ev| {
+        logical_input::map_raw_key_event_with(&raw_key, |ev| {
             if input_err.is_none()
                 && let Err(e) = self.route_input_event(event_loop, ev)
             {
@@ -8117,7 +8118,7 @@ impl App {
             let mut input_err: Option<Box<dyn Error>> = None;
             let start_screen = self.state.screens.current_screen;
             let mut discard_gameplay_batch = false;
-            input::map_raw_key_event_with(&raw_key, |ev| {
+            logical_input::map_raw_key_event_with(&raw_key, |ev| {
                 if discard_gameplay_batch || input_err.is_some() {
                     return;
                 }
@@ -8184,7 +8185,7 @@ impl App {
             self.state.screens.current_screen,
             &self.state.shell.transition,
         ) {
-            input::clear_debounce_state();
+            logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return;
@@ -8193,7 +8194,7 @@ impl App {
         let mut input_err: Option<Box<dyn Error>> = None;
         let start_screen = self.state.screens.current_screen;
         let mut discard_gameplay_batch = false;
-        input::map_pad_event_with(&ev, |iev| {
+        logical_input::map_pad_event_with(&ev, |iev| {
             if discard_gameplay_batch || input_err.is_some() {
                 return;
             }
