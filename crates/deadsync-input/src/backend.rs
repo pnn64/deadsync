@@ -8,8 +8,16 @@ use crate::{PadDir, PadEvent, PadId};
 pub mod devd;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub mod evdev;
+#[cfg(target_os = "freebsd")]
+pub mod hidraw;
+#[cfg(target_os = "macos")]
+pub mod iohid;
 #[cfg(unix)]
 pub mod unix_time;
+#[cfg(windows)]
+pub mod w32_raw_input;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+pub mod wgi;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {
@@ -107,6 +115,7 @@ pub struct BackendHost {
     now_nanos: fn() -> u64,
     instant_nanos: fn(Instant) -> u64,
     qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
+    boost_input_thread: fn() -> InputThreadPolicy,
 }
 
 impl BackendHost {
@@ -117,6 +126,7 @@ impl BackendHost {
         now_nanos: fn() -> u64,
         instant_nanos: fn(Instant) -> u64,
         qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
+        boost_input_thread: fn() -> InputThreadPolicy,
     ) -> Self {
         Self {
             pad_index_for_uuid,
@@ -124,6 +134,7 @@ impl BackendHost {
             now_nanos,
             instant_nanos,
             qpc_ticks_to_nanos,
+            boost_input_thread,
         }
     }
 
@@ -150,6 +161,40 @@ impl BackendHost {
     #[inline(always)]
     pub fn qpc_ticks_to_nanos(self, ticks: u64) -> Option<u64> {
         (self.qpc_ticks_to_nanos)(ticks)
+    }
+
+    #[inline(always)]
+    pub fn boost_input_thread(self) -> InputThreadPolicy {
+        (self.boost_input_thread)()
+    }
+}
+
+pub struct InputThreadPolicy {
+    token: usize,
+    restore: fn(usize),
+}
+
+impl InputThreadPolicy {
+    #[inline(always)]
+    pub const fn none() -> Self {
+        Self {
+            token: 0,
+            restore: noop_input_thread_policy,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn new(token: usize, restore: fn(usize)) -> Self {
+        Self { token, restore }
+    }
+}
+
+impl Drop for InputThreadPolicy {
+    #[inline(always)]
+    fn drop(&mut self) {
+        if self.token != 0 {
+            (self.restore)(self.token);
+        }
     }
 }
 
@@ -178,6 +223,9 @@ pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
     out[8..].copy_from_slice(&b.to_le_bytes());
     out
 }
+
+#[inline(always)]
+const fn noop_input_thread_policy(_token: usize) {}
 
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Copy, Debug)]

@@ -1,8 +1,8 @@
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent,
-    emit_dir_edges, uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, RawKeyboardEvent, emit_dir_edges,
+    uuid_from_bytes,
 };
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread};
+use crate::{PadCode, PadEvent, PadId};
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -576,9 +576,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
-            let id = ctx
-                .host
-                .pad_id_for_uuid(deadsync_input::backend::PadOrderBackend::RawInput, uuid);
+            let id = ctx.host.pad_id_for_uuid(PadOrderBackend::RawInput, uuid);
             *entry.insert(id)
         }
     };
@@ -1063,7 +1061,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 
 fn run_inner(mut ctx: Box<Ctx>) {
-    let _thread_policy = boost_current_thread(ThreadRole::Input);
+    let _thread_policy = ctx.host.boost_input_thread();
     // SAFETY: this thread owns the Win32 class registration, message-only window,
     // and message loop. The boxed `ctx` pointer is passed to `CreateWindowExW` and
     // intentionally leaked at shutdown so `GWLP_USERDATA` never dangles while the

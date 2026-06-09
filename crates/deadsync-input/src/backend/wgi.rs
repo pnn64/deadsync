@@ -1,8 +1,7 @@
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
-    uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread};
+use crate::{PadCode, PadEvent, PadId};
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -442,9 +441,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
-            let id = ctx
-                .host
-                .pad_id_for_uuid(deadsync_input::backend::PadOrderBackend::Wgi, uuid);
+            let id = ctx.host.pad_id_for_uuid(PadOrderBackend::Wgi, uuid);
             *entry.insert(id)
         }
     };
@@ -802,7 +799,7 @@ pub fn run(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     host: BackendHost,
 ) {
-    let _thread_policy = boost_current_thread(ThreadRole::Input);
+    let _thread_policy = host.boost_input_thread();
     // SAFETY: this thread initializes WinRT exactly once for multithreaded use
     // before touching WGI APIs. Duplicate initialization is tolerated by
     // `RoInitialize`, and shutdown is process-wide for this usage.

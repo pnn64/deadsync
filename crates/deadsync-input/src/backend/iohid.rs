@@ -1,8 +1,8 @@
+use super::RawKeyboardEvent;
 use super::{
-    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
-    uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use deadsync_input::backend::RawKeyboardEvent;
+use crate::{PadCode, PadEvent, PadId};
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::{HashMap, hash_map::Entry};
@@ -559,9 +559,7 @@ extern "C" fn on_match(
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
                 // Stable, persisted slot so this pad keeps the same PadId across launches.
-                let id = ctx
-                    .host
-                    .pad_id_for_uuid(deadsync_input::backend::PadOrderBackend::IoHid, uuid);
+                let id = ctx.host.pad_id_for_uuid(PadOrderBackend::IoHid, uuid);
                 *entry.insert(id)
             }
         };

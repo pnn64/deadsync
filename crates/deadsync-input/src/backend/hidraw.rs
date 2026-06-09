@@ -1,6 +1,6 @@
-use super::{BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, uuid_from_bytes};
-use deadsync_input::PadDir;
-use deadsync_input::backend::devd::{DevdEvent, DevdWatch};
+use super::devd::{DevdEvent, DevdWatch};
+use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
+use crate::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -540,12 +540,8 @@ fn add_dev_if_new(
     }
     let existing_id = id_by_uuid.get(&pending.uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
-    let id = existing_id.unwrap_or_else(|| {
-        host.pad_id_for_uuid(
-            deadsync_input::backend::PadOrderBackend::Hidraw,
-            pending.uuid,
-        )
-    });
+    let id =
+        existing_id.unwrap_or_else(|| host.pad_id_for_uuid(PadOrderBackend::Hidraw, pending.uuid));
     emit_sys(GpSystemEvent::Connected {
         name: pending.name.clone(),
         id,
