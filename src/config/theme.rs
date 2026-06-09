@@ -104,6 +104,20 @@ impl DefaultSyncOffset {
             Self::Itg => "ITG",
         }
     }
+
+    pub const fn sync_pref(self) -> deadsync_chart::SyncPref {
+        match self {
+            Self::Null => deadsync_chart::SyncPref::Null,
+            Self::Itg => deadsync_chart::SyncPref::Itg,
+        }
+    }
+
+    pub const fn from_sync_pref(pref: deadsync_chart::SyncPref) -> Self {
+        match pref {
+            deadsync_chart::SyncPref::Itg => Self::Itg,
+            deadsync_chart::SyncPref::Default | deadsync_chart::SyncPref::Null => Self::Null,
+        }
+    }
 }
 
 impl FromStr for DefaultSyncOffset {
@@ -1270,6 +1284,26 @@ mod tests {
         assert_eq!(
             DefaultSyncOffset::from_str(DefaultSyncOffset::Itg.as_str()),
             Ok(DefaultSyncOffset::Itg)
+        );
+    }
+
+    #[test]
+    fn default_sync_offset_maps_chart_sync_pref() {
+        assert_eq!(
+            DefaultSyncOffset::Null.sync_pref(),
+            deadsync_chart::SyncPref::Null
+        );
+        assert_eq!(
+            DefaultSyncOffset::Itg.sync_pref(),
+            deadsync_chart::SyncPref::Itg
+        );
+        assert_eq!(
+            DefaultSyncOffset::from_sync_pref(deadsync_chart::SyncPref::Default),
+            DefaultSyncOffset::Null
+        );
+        assert_eq!(
+            DefaultSyncOffset::from_sync_pref(deadsync_chart::SyncPref::Itg),
+            DefaultSyncOffset::Itg
         );
     }
 

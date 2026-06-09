@@ -38,13 +38,16 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
     input as screen_input,
 };
+use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
-    SyncPref, chart_ix_for_steps_index,
+    SyncPref,
 };
-use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, VirtualAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
+use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use image::{Rgba, RgbaImage};
@@ -1868,7 +1871,7 @@ fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> Arc<str> 
         &BPM_TEXT_CACHE,
         (lo.to_bits(), hi.to_bits(), rate_f32.to_bits()),
         TEXT_CACHE_LIMIT,
-        || deadsync_chart::format_display_bpm_range(Some((lo, hi)), rate_f32),
+        || format_display_bpm_range(Some((lo, hi)), rate_f32),
     )
 }
 
@@ -4129,7 +4132,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         let configs: Vec<_> = crate::game::pad_profiles::load(pid)
             .into_iter()
             .filter(|c| {
-                crate::game::pad_profiles::config_matches(
+                pad_profile_data::config_matches(
                     c,
                     crate::engine::smx::BACKEND_ID,
                     pad_type.as_deref(),
@@ -4139,7 +4142,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         for c in &configs {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if crate::game::pad_profiles::is_default_for(c, &serial) {
+            let default = if pad_profile_data::is_default_for(c, &serial) {
                 " (default)"
             } else {
                 ""
@@ -12393,7 +12396,8 @@ mod tests {
     use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
     use crate::screens::ScreenAction;
     use deadsync_chart::SongData;
-    use deadsync_input::{InputEvent, InputSource, PadDir, VirtualAction};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use deadsync_score as score_data;

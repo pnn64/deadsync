@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-pub use deadsync_core::input::{InputSource, Lane};
+use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
 
 pub mod debounce;

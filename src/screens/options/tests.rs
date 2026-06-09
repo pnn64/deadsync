@@ -1,6 +1,7 @@
 use super::*;
 use crate::assets::AssetManager;
-use deadsync_input::{InputEvent, InputSource, VirtualAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 

@@ -1,7 +1,7 @@
 use crate::config::SimpleIni;
 use crate::config::dirs;
 use crate::game::gameplay;
-use crate::game::online;
+use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
@@ -27,7 +27,7 @@ mod itl;
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    online::groovestats_active_service()
+    online_groovestats::active_service()
 }
 
 pub use arrowcloud::{

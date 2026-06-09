@@ -1,7 +1,7 @@
 use crate::song::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_rules::timing::{
-    ROWS_PER_BEAT, TimeSignatureSegment, TimingData, TimingSegments, beat_to_note_row,
-    default_time_signature, note_row_to_beat,
+    TimeSignatureSegment, TimingData, TimingSegments, default_time_signature,
 };
 use std::path::PathBuf;
 

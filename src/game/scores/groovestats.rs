@@ -4,7 +4,7 @@ use super::{
     invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
 };
 use crate::game::gameplay;
-use crate::game::online;
+use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    online::groovestats_active_service()
+    online_groovestats::active_service()
 }
 
 #[inline(always)]

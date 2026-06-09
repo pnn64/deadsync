@@ -7,12 +7,13 @@ use crate::game::parsing::song_lua::{
 };
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song;
+use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
-use deadsync_input::{InputEdge, InputSource};
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{
@@ -37,8 +38,7 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
-    beat_to_note_row,
+    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
 };
 use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
@@ -5464,7 +5464,10 @@ pub fn init(
         .map(|change| media_path_key(&change.path))
         .collect();
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
-        song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
+        sync_pref_offset(
+            pack_sync_pref,
+            config.machine_default_sync_offset.sync_pref(),
+        )
     } else {
         0.0
     };
@@ -8996,14 +8999,16 @@ mod tests {
     use deadsync_chart::SongData;
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
+    use deadsync_core::input::{InputSource, Lane};
     use deadsync_core::note::NoteType;
-    use deadsync_input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
+    use deadsync_core::timing::ROWS_PER_BEAT;
+    use deadsync_input::{InputEdge, InputEvent, VirtualAction};
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{
-        DelaySegment, FakeSegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile,
-        TimingProfileNs, TimingSegments,
+        DelaySegment, FakeSegment, StopSegment, TimingData, TimingProfile, TimingProfileNs,
+        TimingSegments,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, LazyLock, Mutex};

@@ -55,21 +55,6 @@ fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
     roots
 }
 
-pub fn scan_and_load_courses(courses_root: &Path, songs_root: &Path) {
-    scan_and_load_courses_impl::<fn(usize, usize, &str, &str)>(courses_root, songs_root, None);
-}
-
-pub fn scan_and_load_courses_with_progress<F>(
-    courses_root: &Path,
-    songs_root: &Path,
-    progress: &mut F,
-) where
-    F: FnMut(&str, &str),
-{
-    let mut with_counts = |_: usize, _: usize, group: &str, course: &str| progress(group, course);
-    scan_and_load_courses_impl(courses_root, songs_root, Some(&mut with_counts));
-}
-
 pub fn scan_and_load_courses_with_progress_counts<F>(
     courses_root: &Path,
     songs_root: &Path,

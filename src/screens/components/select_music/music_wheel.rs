@@ -13,6 +13,7 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
+use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
@@ -285,7 +286,10 @@ fn song_pack_sync_style(
         .and_then(|s| s.to_str())
         .and_then(|group| prefs.get(group).copied())
         .unwrap_or(SyncPref::Default);
-    Some(crate::game::song::pack_sync_pref_default(pref, default))
+    Some(DefaultSyncOffset::from_sync_pref(resolve_sync_pref(
+        pref,
+        default.sync_pref(),
+    )))
 }
 
 #[inline(always)]

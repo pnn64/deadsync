@@ -2,12 +2,12 @@ use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
 use crate::stream::StreamSegment;
 use deadsync_core::note::NoteType;
+use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use log::debug;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
 // --- ITGMania Parity Constants and Helpers ---
-pub use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 type TimingNs = i64;
 const INVALID_TIMING_NS: TimingNs = i64::MIN;
 

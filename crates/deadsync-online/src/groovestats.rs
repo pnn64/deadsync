@@ -9,14 +9,13 @@ use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
-    GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, LeaderboardEntry,
-    LeaderboardPane, PlayerLeaderboardData, RejectReason, ScoreImportEndpoint,
-    groovestats_submit_record_banner, leaderboard_nonzero_rank, leaderboard_pane,
-    leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
+    GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
+    LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult,
+    RejectReason, ScoreImportEndpoint, groovestats_submit_record_banner, leaderboard_nonzero_rank,
+    leaderboard_pane, leaderboard_score_10000, leaderboard_username_matches,
+    score_import_entry_matches_profile,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
-
-pub use deadsync_score::{ImportedPlayerScore, PlayerScoreImportResult};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";

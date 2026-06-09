@@ -872,7 +872,8 @@ pub fn build_select_music_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::{InputEvent, InputSource, PadCode, PadId};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, PadCode, PadId};
     use std::time::Duration;
 
     fn input_event_from(action: VirtualAction, source: InputSource) -> InputEvent {

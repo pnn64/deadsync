@@ -1,5 +1,6 @@
 use crate::config::{RandomBackgroundMode, dirs};
-use deadsync_chart::{SongBackgroundChange, SongData, expand_random_background_changes};
+use deadsync_chart::background::expand_random_background_changes;
+use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_rules::timing::{TimingData, TimingSegments};
 use deadsync_simfile::media::{
     RANDOM_MOVIES_DIR, collect_media_roots, random_movie_paths_for_song,

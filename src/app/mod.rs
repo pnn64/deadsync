@@ -1,4 +1,5 @@
 use deadsync_profile as profile_data;
+use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
 mod commands;
 mod dynamic_media;
@@ -72,14 +73,15 @@ compile_error!(
 use crate::engine::present::actors::Actor;
 /* -------------------- gamepad -------------------- */
 use crate::engine::input::GpSystemEvent;
+use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
-use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs};
+use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{self as timing_rules, ROWS_PER_BEAT};
+use deadsync_rules::timing as timing_rules;
 
 /* -------------------- user events -------------------- */
 #[derive(Debug, Clone)]
@@ -488,7 +490,10 @@ fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
         .find(|p| p.group_name == pack_group)
         .map(|p| p.sync_pref)
         .unwrap_or(deadsync_chart::SyncPref::Default);
-    crate::game::song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
+    sync_pref_offset(
+        pack_sync_pref,
+        config.machine_default_sync_offset.sync_pref(),
+    )
 }
 
 fn build_cabinet_light_events(
@@ -4067,7 +4072,7 @@ impl App {
                 let list = crate::game::pad_profiles::load(pid)
                     .into_iter()
                     .filter(|c| {
-                        crate::game::pad_profiles::config_matches(
+                        pad_profile_data::config_matches(
                             c,
                             crate::engine::smx::BACKEND_ID,
                             cursor_pad_type.as_deref(),
@@ -4093,7 +4098,7 @@ impl App {
                         is_active: active_name.as_deref() == Some(c.name.as_str()),
                         is_default: cursor_serial
                             .as_deref()
-                            .is_some_and(|s| crate::game::pad_profiles::is_default_for(c, s)),
+                            .is_some_and(|s| pad_profile_data::is_default_for(c, s)),
                         name: c.name.clone(),
                     })
                     .collect(),
@@ -4174,16 +4179,11 @@ impl App {
             return (crate::engine::smx::apply_preset(pad, preset), preset_label);
         };
         let configs = crate::game::pad_profiles::load(id);
-        match crate::game::pad_profiles::resolve(
-            &configs,
-            crate::engine::smx::BACKEND_ID,
-            pad_type,
-            serial,
-        )
-        .and_then(|c| {
-            crate::engine::smx::PadConfigData::from_settings(&c.settings)
-                .map(|d| (c.name.clone(), d))
-        }) {
+        match pad_profile_data::resolve(&configs, crate::engine::smx::BACKEND_ID, pad_type, serial)
+            .and_then(|c| {
+                crate::engine::smx::PadConfigData::from_settings(&c.settings)
+                    .map(|d| (c.name.clone(), d))
+            }) {
             Some((name, data)) => (
                 crate::engine::smx::apply_config_data(pad, &data),
                 AppliedPadConfig {

@@ -1,7 +1,8 @@
 use deadsync::engine::input::{self, InputBinding, Keymap, RawKeyboardEvent};
 use deadsync::game::gameplay::{self, GameplayAction, GameplayExit};
 use deadsync::test_support::notefield_bench;
-use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, PadId, VirtualAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::{InputEvent, PadDir, PadEvent, PadId, VirtualAction};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
 use std::hint::black_box;

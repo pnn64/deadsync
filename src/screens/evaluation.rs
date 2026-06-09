@@ -45,7 +45,7 @@ use std::time::Instant;
 use crate::engine::input::RawKeyboardEvent;
 use crate::game::profile;
 use crate::screens::ScreenAction;
-use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
 use deadsync_online::groovestats as groovestats_api;
 use deadsync_profile as profile_data;
 // Keyboard handling is centralized in app via virtual actions
@@ -227,7 +227,7 @@ fn submit_record_text(banner: score_data::GrooveStatsSubmitRecordBanner) -> Arc<
 
 #[inline(always)]
 fn submit_footer_gs_label() -> Arc<str> {
-    if online::is_boogiestats_active() {
+    if online::groovestats::is_boogiestats_active() {
         tr("SubmitStatus", "BSLabel")
     } else {
         tr("SubmitStatus", "GSLabel")
@@ -236,7 +236,7 @@ fn submit_footer_gs_label() -> Arc<str> {
 
 #[inline(always)]
 fn active_groovestats_service_name() -> &'static str {
-    groovestats_api::service_name(online::groovestats_active_service())
+    groovestats_api::service_name(online::groovestats::active_service())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3483,7 +3483,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     // Track favorite pad code on arrow presses (not menu buttons)
     if ev.pressed {
-        if let Some(dir) = crate::screens::favorite_code::pad_dir_from_action(ev.action) {
+        if let Some(dir) = pad_dir_from_action(ev.action) {
             if let Some(side) = state.favorite_code.check(dir, ev.timestamp) {
                 // Toggle favorite for the chart that was just played
                 for si in state.score_info.iter().flatten() {

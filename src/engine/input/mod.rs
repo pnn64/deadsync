@@ -9,12 +9,13 @@ use winit::keyboard::KeyCode;
 mod backends;
 pub mod fsr;
 
+use deadsync_core::input::InputSource;
 use deadsync_input::debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
     emit_due_debounce_edges_from_mut,
 };
 use deadsync_input::{
-    GamepadCodeBinding, InputEvent, InputSource, PadCode, PadDir, PadEvent, PadId, VirtualAction,
+    GamepadCodeBinding, InputEvent, PadCode, PadDir, PadEvent, PadId, VirtualAction,
     clamp_input_debounce_seconds, emit_normalized_actions,
 };
 

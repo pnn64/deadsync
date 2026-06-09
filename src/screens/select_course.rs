@@ -22,7 +22,8 @@ use crate::screens::components::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
-use deadsync_chart::{ChartData, SongData, standard_difficulty_index};
+use deadsync_chart::song::standard_difficulty_index;
+use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;

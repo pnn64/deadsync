@@ -1568,7 +1568,7 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::InputSource;
+    use deadsync_core::input::InputSource;
 
     fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
         let now = Instant::now();

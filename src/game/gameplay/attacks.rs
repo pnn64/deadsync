@@ -9,10 +9,11 @@ use crate::game::parsing::song_lua::{
 use crate::game::profile;
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_core::timing::ROWS_PER_BEAT;
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData};
+use deadsync_rules::timing::TimingData;
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
 use std::path::PathBuf;

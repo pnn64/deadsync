@@ -6,7 +6,7 @@ use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::game::course::get_course_cache;
-use crate::game::online as network;
+use crate::game::online::{arrowcloud as arrowcloud_online, groovestats as groovestats_online};
 use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
@@ -225,8 +225,8 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
 
 #[inline(always)]
 fn groove_status_key() -> GrooveStatusKey {
-    let boogie = network::is_boogiestats_active();
-    match network::get_status() {
+    let boogie = groovestats_online::is_boogiestats_active();
+    match groovestats_online::get_status() {
         ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
         ConnectionStatus::Error(kind) => GrooveStatusKey::Error { boogie, kind },
         ConnectionStatus::Connected(services) => GrooveStatusKey::Connected {
@@ -316,7 +316,7 @@ fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
 
 #[inline(always)]
 fn arrowcloud_status_key() -> ArrowCloudStatusKey {
-    match network::get_arrowcloud_status() {
+    match arrowcloud_online::get_status() {
         ArrowCloudConnectionStatus::Pending => ArrowCloudStatusKey::Pending,
         ArrowCloudConnectionStatus::Connected => ArrowCloudStatusKey::Connected,
         ArrowCloudConnectionStatus::Error(kind) => ArrowCloudStatusKey::Error(kind),

@@ -1,7 +1,7 @@
 use crate::judgment::Judgment;
-use crate::song_time::{SongTimeNs, song_time_ns_delta_seconds, song_time_ns_from_seconds};
 use crate::timing::{TIMING_WINDOW_ADD_S, TimingData};
 use deadsync_core::note::NoteType;
+use deadsync_core::song_time::{SongTimeNs, song_time_ns_delta_seconds, song_time_ns_from_seconds};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HoldResult {
@@ -239,7 +239,9 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::timing::{ROWS_PER_BEAT, TimingData, TimingSegments};
+    use crate::timing::{TimingData, TimingSegments};
+    use deadsync_core::song_time::song_time_ns_to_seconds;
+    use deadsync_core::timing::ROWS_PER_BEAT;
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
@@ -377,7 +379,7 @@ mod tests {
         let zero_elapsed = advanced
             .zero_elapsed_music_ns
             .expect("hold should cross zero");
-        assert!((crate::song_time::song_time_ns_to_seconds(zero_elapsed) - 0.080375).abs() <= 1e-6);
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.080375).abs() <= 1e-6);
     }
 
     #[test]

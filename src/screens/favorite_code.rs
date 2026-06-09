@@ -1,5 +1,4 @@
 use deadsync_input::PadDir;
-pub use deadsync_input::pad_dir_from_action;
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 

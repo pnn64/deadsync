@@ -1,6 +1,7 @@
+use deadsync_core::timing::beat_to_note_row;
 use deadsync_rules::timing::{
     DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
-    TimeSignatureSegment, TimingSegments, WarpSegment, beat_to_note_row, default_time_signatures,
+    TimeSignatureSegment, TimingSegments, WarpSegment, default_time_signatures,
 };
 use rssp::timing as rssp_timing;
 

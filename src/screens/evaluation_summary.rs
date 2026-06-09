@@ -171,7 +171,7 @@ fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate
     {
         return "???".to_string();
     }
-    deadsync_chart::format_display_bpm_range(song.chart_display_bpm_range(chart), music_rate)
+    deadsync_chart::song::format_display_bpm_range(song.chart_display_bpm_range(chart), music_rate)
 }
 
 fn steps_type_label(chart_type: &str) -> Arc<str> {

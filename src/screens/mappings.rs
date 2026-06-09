@@ -11,9 +11,9 @@ use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBa
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_core::input::InputSource;
 use deadsync_input::{
-    GamepadCodeBinding, InputEvent, InputSource, PadEvent, VirtualAction,
-    clamp_input_debounce_seconds,
+    GamepadCodeBinding, InputEvent, PadEvent, VirtualAction, clamp_input_debounce_seconds,
 };
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
@@ -1791,7 +1791,8 @@ mod tests {
         invalid_capture_key, keymap_raw_nav_action,
     };
     use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
-    use deadsync_input::{InputEvent, InputSource, PadCode, PadEvent, PadId, VirtualAction};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, PadCode, PadEvent, PadId, VirtualAction};
     use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
 

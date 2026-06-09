@@ -2,9 +2,8 @@ use crate::config;
 use crate::engine::audio;
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
-use deadsync_input::{
-    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
-};
+use deadsync_core::input::{InputSource, Lane};
+use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action};
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};

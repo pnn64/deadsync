@@ -1,4 +1,4 @@
-use super::process_song;
+use super::{compute_song_cache_path, load_song_from_cache, parse_song_and_maybe_write_cache};
 use crate::config::dirs;
 use crate::game::song::{get_song_cache, set_song_cache};
 use deadsync_chart::{SongData, SongPack};
@@ -12,18 +12,6 @@ use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-pub fn scan_and_load_songs(root_path: &Path) {
-    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path, None);
-}
-
-pub fn scan_and_load_songs_with_progress<F>(root_path: &Path, progress: &mut F)
-where
-    F: FnMut(&str, &str),
-{
-    let mut with_counts = |_: usize, _: usize, pack: &str, song: &str| progress(pack, song);
-    scan_and_load_songs_impl(root_path, Some(&mut with_counts));
-}
 
 pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
 where
@@ -114,6 +102,36 @@ fn report_load_progress<F>(
 }
 
 type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+
+fn process_song(
+    simfile_path: PathBuf,
+    fastload: bool,
+    cachesongs: bool,
+    global_offset_seconds: f32,
+) -> Result<(SongData, bool), String> {
+    let cache_path = if fastload || cachesongs {
+        compute_song_cache_path(&simfile_path)
+    } else {
+        None
+    };
+
+    let allow_cache_read = fastload || cachesongs;
+    if allow_cache_read
+        && let Some(cp) = cache_path.as_deref()
+        && let Some(song_data) = load_song_from_cache(&simfile_path, cp, !fastload)
+    {
+        return Ok((song_data, true));
+    }
+
+    let song_data = parse_song_and_maybe_write_cache(
+        &simfile_path,
+        fastload,
+        cachesongs,
+        cache_path.as_deref(),
+        global_offset_seconds,
+    )?;
+    Ok((song_data, false))
+}
 
 fn reap_song_parse<F>(
     rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,

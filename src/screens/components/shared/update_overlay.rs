@@ -924,7 +924,7 @@ mod tests {
     }
 
     fn make_event(action: VirtualAction, pressed: bool) -> InputEvent {
-        use deadsync_input::InputSource;
+        use deadsync_core::input::InputSource;
         use std::time::Instant;
         let now = Instant::now();
         InputEvent {

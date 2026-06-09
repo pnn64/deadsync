@@ -4,9 +4,9 @@
 //! crate owns the pad-config data model, parsing, resolution, and list rules.
 
 use crate::game::profile::local_profile_dir_for_id;
-pub use deadsync_profile::pad_config::{PadConfigProfile, config_matches, is_default_for, resolve};
 use deadsync_profile::pad_config::{
-    delete_config, parse, rename_config, serialize, set_default_config, upsert_config,
+    PadConfigProfile, delete_config, parse, rename_config, serialize, set_default_config,
+    upsert_config,
 };
 use log::warn;
 use std::path::PathBuf;
