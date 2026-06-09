@@ -60,9 +60,9 @@ use self::runtime::{
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
-use crate::engine::logging;
 pub use deadsync_input_native::PadOrderBackend;
 use deadsync_input_native::WindowsPadBackend;
+use deadsync_platform::logging;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;

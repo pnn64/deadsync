@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.641"
+version = "0.4.642"
 dependencies = [
  "alsa",
  "ash",
@@ -996,7 +996,6 @@ dependencies = [
  "deadsync-simfile",
  "deadsync-video",
  "directories",
- "env_logger",
  "flate2",
  "fs_extra",
  "glam",
@@ -1131,6 +1130,8 @@ dependencies = [
 name = "deadsync-platform"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "env_logger",
  "log",
  "xcb",
 ]

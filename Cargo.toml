@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.641"
+version = "0.4.642"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -77,7 +77,6 @@ deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-video = { path = "crates/deadsync-video" }
 winit = "0.30.13"
 log = "0.4.32"
-env_logger = "0.11.10"
 image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"

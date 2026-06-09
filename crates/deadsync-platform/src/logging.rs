@@ -1,9 +1,8 @@
-use crate::config::dirs;
 use chrono::Local;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -13,6 +12,15 @@ use std::ffi::OsStr;
 const LOG_FILE_PATH_FALLBACK: &str = "deadsync.log";
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
 static LOG_FILE: OnceLock<Mutex<Option<File>>> = OnceLock::new();
+static LOG_FILE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+#[derive(Debug, Clone, Copy)]
+pub struct StartupBuildInfo {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub build_hash: &'static str,
+    pub build_stamp: &'static str,
+}
 
 struct TeeWriter {
     stderr: io::Stderr,
@@ -72,11 +80,11 @@ fn reset_log_file() {
     }
 }
 
-fn log_file_path() -> std::path::PathBuf {
-    // Try to use the app_dirs path. During very early init (before AppDirs is
-    // resolved), fall back to the constant next to the exe.
-    std::panic::catch_unwind(|| dirs::app_dirs().log_path())
-        .unwrap_or_else(|_| std::path::PathBuf::from(LOG_FILE_PATH_FALLBACK))
+fn log_file_path() -> PathBuf {
+    LOG_FILE_PATH
+        .get()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(LOG_FILE_PATH_FALLBACK))
 }
 
 fn open_log_file() -> Option<File> {
@@ -236,12 +244,10 @@ fn path_volume(path: &Path) -> String {
     }
 }
 
-pub fn write_startup_report(lines: &[String]) {
+pub fn write_startup_report(build: StartupBuildInfo, lines: &[String]) {
     emit_info_line(&format!(
-        "deadsync {} (build {}, {})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("DEADSYNC_BUILD_HASH").unwrap_or("unknown"),
-        option_env!("DEADSYNC_BUILD_STAMP").unwrap_or("unknown")
+        "{} {} (build {}, {})",
+        build.name, build.version, build.build_hash, build.build_stamp
     ));
     emit_info_line("--------------------------------------");
     emit_info_line(&format!(
@@ -275,8 +281,9 @@ pub fn write_report_block(title: &str, lines: &[String]) {
     }
 }
 
-pub fn init(file_logging_enabled: bool) {
+pub fn init(file_logging_enabled: bool, log_file_path: PathBuf) {
     FILE_LOGGING_ENABLED.store(file_logging_enabled, Ordering::Relaxed);
+    let _ = LOG_FILE_PATH.set(log_file_path);
     reset_log_file();
     let mut builder = env_logger::builder();
     builder

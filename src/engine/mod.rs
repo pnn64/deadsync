@@ -4,7 +4,6 @@ pub mod gfx;
 pub mod host_time;
 pub mod input;
 pub mod lights;
-pub mod logging;
 pub mod present;
 pub mod smx;
 pub mod space;

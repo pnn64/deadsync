@@ -1,4 +1,5 @@
 use deadsync::{app, assets, config, engine, game};
+use deadsync_platform::logging::{self, StartupBuildInfo};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
@@ -187,7 +188,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config::dirs::ensure_dirs_exist();
 
     // Install logger immediately, then set runtime max level from config after loading it.
-    engine::logging::init(config::bootstrap_log_to_file());
+    logging::init(
+        config::bootstrap_log_to_file(),
+        config::dirs::app_dirs().log_path(),
+    );
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
@@ -201,7 +205,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config::load();
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());
-    engine::logging::write_startup_report(&startup_lines(&cfg));
+    logging::write_startup_report(
+        StartupBuildInfo {
+            name: "deadsync",
+            version: env!("CARGO_PKG_VERSION"),
+            build_hash: option_env!("DEADSYNC_BUILD_HASH").unwrap_or("unknown"),
+            build_stamp: option_env!("DEADSYNC_BUILD_STAMP").unwrap_or("unknown"),
+        },
+        &startup_lines(&cfg),
+    );
 
     if cli.restart {
         log::info!(
@@ -252,7 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The game can run without audio; log the error and continue.
         log::error!("Failed to initialize audio engine: {e}");
     } else {
-        engine::logging::write_report_block(
+        logging::write_report_block(
             "Startup audio devices",
             &audio_device_lines(&engine::audio::startup_output_devices()),
         );

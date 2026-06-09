@@ -81,7 +81,7 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
-const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &["idle_inhibit", "open_path"];
+const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &["idle_inhibit", "logging", "open_path"];
 
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/app",
