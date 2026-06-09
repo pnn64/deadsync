@@ -305,11 +305,27 @@ What you'll see:
 ### HID capture (`SMX_CAPTURE_DIR`)
 
 To capture the raw USB/HID traffic — invaluable for diagnosing a pad we can't
-test directly — launch DeadSync with the env var set to a writable directory:
+test directly — launch DeadSync with the env var set to a directory path:
 
 ```sh
+# Linux / macOS
 SMX_CAPTURE_DIR=/tmp/smx-capture ./deadsync
 ```
+
+```powershell
+# Windows (PowerShell)
+$env:SMX_CAPTURE_DIR = 'C:\tmp\smx-capture'
+.\deadsync.exe
+```
+
+```cmd
+# Windows (Command Prompt / cmd.exe)
+set SMX_CAPTURE_DIR=C:\tmp\smx-capture
+deadsync.exe
+```
+
+The directory is **created automatically** if it doesn't exist — no need to
+create it manually.
 
 The SDK wraps the HID enumerator with a recorder that writes a **`.smxhid`**
 file per opened device into that directory (overwriting previous captures),
@@ -332,3 +348,87 @@ exact device behavior offline.
 | Pad detected as wrong type | Capture with `SMX_CAPTURE_DIR` and share the `.smxhid`; the resolve log shows the detected `type=`. |
 | Can't save a profile | Only available in Song Select with a **joined local profile** (not Guest, not the Options screen). |
 | Pads act as the wrong player (P1/P2 swapped), or a "share a jumper" warning | Use **Assign Pads to Players** (or **Swap P1/P2 Pads**) on the StepManiaX page; see [§2a](#2a-which-pad-is-p1-vs-p2). |
+
+### Linux: pads not detected (USB permissions)
+
+On Linux, HID devices under `/dev/hidraw*` are typically only accessible by
+root. If DeadSync can't see your pads, you need a **udev rule** to grant
+permission.
+
+#### Identifying your SMX pads
+
+Find which hidraw devices are your SMX pads:
+
+```bash
+# List all hidraw devices with vendor/product info
+for dev in /sys/class/hidraw/hidraw*; do
+  echo "$(basename $dev): $(cat $dev/device/uevent 2>/dev/null | grep HID_NAME)"
+done
+
+# Or filter directly for the SMX vendor/product ID (2341:8037)
+lsusb | grep 2341:8037
+
+# Check a specific hidraw device's vendor/product
+udevadm info /dev/hidraw0 | grep -E "VENDOR_ID|PRODUCT_ID"
+```
+
+#### Adding the udev rule
+
+Create a rule that grants read/write access to SMX pads for all users:
+
+```bash
+# bash / zsh
+sudo tee /etc/udev/rules.d/99-stepmaniax.rules <<EOF
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="8037", MODE="0666"
+EOF
+```
+
+```fish
+# fish
+echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="8037", MODE="0666"' | sudo tee /etc/udev/rules.d/99-stepmaniax.rules
+```
+
+> **Alternative approaches:**
+>
+> The rule above uses `MODE="0666"` which grants access to all users on the
+> system — simplest and works on every distro. For a dance pad with no sensitive
+> data this is fine.
+>
+> If you prefer tighter permissions, you can use the systemd/logind `uaccess`
+> tag instead, which only grants access to the user physically logged in at the
+> machine:
+>
+> ```
+> SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="8037", TAG+="uaccess"
+> ```
+>
+> Add `TAG+="udev-acl"` as well for backward compatibility with older
+> ConsoleKit-based distros. The downside of `uaccess` is it can fail on
+> non-systemd distros, headless setups, or if DeadSync is launched from a
+> different session (e.g. SSH/tmux).
+>
+> You may also see `KERNEL=="hidraw*"` used instead of `SUBSYSTEM=="hidraw"` —
+> they're functionally equivalent for this purpose.
+
+Then reload the rules and trigger them:
+
+```sh
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+**Unplug and replug** your pads after applying the rule, then restart DeadSync.
+
+#### Verifying it worked
+
+```bash
+# Check permissions — should show crw-rw-rw- (world read/write)
+ls -l /dev/hidraw* | grep -i smx
+
+# Or just check all hidraw devices
+ls -l /dev/hidraw*
+
+# Confirm your user can read the device
+cat /dev/hidraw0 > /dev/null &
+# If no "Permission denied", it's working. Kill with: kill %1
+```
