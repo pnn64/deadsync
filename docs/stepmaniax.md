@@ -422,13 +422,15 @@ sudo udevadm trigger
 #### Verifying it worked
 
 ```bash
-# Check permissions — should show crw-rw-rw- (world read/write)
-ls -l /dev/hidraw* | grep -i smx
-
-# Or just check all hidraw devices
+# Check permissions on hidraw devices — should show crw-rw-rw- (world read/write)
 ls -l /dev/hidraw*
 
-# Confirm your user can read the device
-cat /dev/hidraw0 > /dev/null &
-# If no "Permission denied", it's working. Kill with: kill %1
+# Find which hidraw devices are SMX pads (vendor 2341, product 8037) and show permissions
+for dev in /sys/class/hidraw/hidraw*; do
+  name=$(basename $dev)
+  hid_id=$(cat "$dev/device/uevent" 2>/dev/null | grep HID_ID | cut -d= -f2)
+  if echo "$hid_id" | grep -qi "00002341:00008037"; then
+    echo "/dev/$name is an SMX pad: $(ls -l /dev/$name | awk '{print $1, $3, $4}')"
+  fi
+done
 ```
