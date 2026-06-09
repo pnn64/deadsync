@@ -83,7 +83,7 @@ Follow these steps to get the game running:
         ./target/release/deadsync
         ```
      *  **On macOS:**
-        Before the first run, grant Input Monitoring permissions to `Terminal.app` in `System Settings > Privacy & Security > Input Monitoring`. Without this, deadsync will not receive any keystrokes. Then, run: 
+        Before the first run, grant Input Monitoring permissions to `Terminal.app` in `System Settings > Privacy & Security > Input Monitoring`. Without this, deadsync will not receive any keystrokes. Then, run:
         ```sh
         ./target/release/deadsync
         ```
@@ -184,6 +184,15 @@ files. If the folder is empty the bundled per-style track plays.
 
 The whole feature is gated by `CustomSoundsEnabled` in `deadsync.ini`
 (default `1`). Set it to `0` to disable all folder-based sound triggers.
+
+## Direct Pad Support
+
+DeadSync can communicate directly with dance pad hardware over USB, bypassing the OS gamepad layer. This gives you named panel inputs, stable per-pad player assignment, and the ability to read and write pad sensor configuration from within the game.
+
+| Pad | Status | Docs |
+|-----|--------|------|
+| **StepManiaX** | ✅ Supported | [Documentation](docs/stepmaniax.md) |
+| **FSRio** | ✅ Supported | |
 
 ## Data Directories
 
