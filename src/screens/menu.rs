@@ -2,11 +2,10 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
-use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::game::course::get_course_cache;
-use crate::game::online as network;
+use crate::game::online::{arrowcloud as arrowcloud_online, groovestats as groovestats_online};
 use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
@@ -14,6 +13,7 @@ use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
@@ -225,8 +225,8 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
 
 #[inline(always)]
 fn groove_status_key() -> GrooveStatusKey {
-    let boogie = network::is_boogiestats_active();
-    match network::get_status() {
+    let boogie = groovestats_online::is_boogiestats_active();
+    match groovestats_online::get_status() {
         ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
         ConnectionStatus::Error(kind) => GrooveStatusKey::Error { boogie, kind },
         ConnectionStatus::Connected(services) => GrooveStatusKey::Connected {
@@ -316,7 +316,7 @@ fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
 
 #[inline(always)]
 fn arrowcloud_status_key() -> ArrowCloudStatusKey {
-    match network::get_arrowcloud_status() {
+    match arrowcloud_online::get_status() {
         ArrowCloudConnectionStatus::Pending => ArrowCloudStatusKey::Pending,
         ArrowCloudConnectionStatus::Connected => ArrowCloudStatusKey::Connected,
         ArrowCloudConnectionStatus::Error(kind) => ArrowCloudStatusKey::Error(kind),
@@ -612,10 +612,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if let Some(side) = screen_input::menu_lr_side(ev.action)
         && !ev.pressed
     {
-        state.menu_lr_undo[screen_input::player_side_ix(side)] = 0;
+        state.menu_lr_undo[deadsync_profile::player_side_index(side)] = 0;
     }
     if let Some((side, nav)) = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev) {
-        let side_ix = screen_input::player_side_ix(side);
+        let side_ix = deadsync_profile::player_side_index(side);
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
                 move_selection(state, -1);

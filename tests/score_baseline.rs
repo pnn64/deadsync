@@ -1,5 +1,5 @@
+use deadsync_core::input::InputSource;
 use deadsync_core::song_time::SongTimeNs;
-use deadsync_input::InputSource;
 use deadsync_score::{
     ArrowCloudPaneKind, Grade, LeaderboardEntry, LeaderboardPane, MachineReplayEntry, ReplayEdge,
     gameplay_run_failed, gameplay_run_passed, leaderboard_rank_for_score, lua_chart_submit_allowed,

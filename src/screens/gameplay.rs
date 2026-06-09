@@ -410,10 +410,7 @@ fn intro_text_target_x(
 
 fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide) -> Option<usize> {
     if state.num_players >= 2 {
-        return Some(match side {
-            profile_data::PlayerSide::P1 => 0,
-            profile_data::PlayerSide::P2 => 1,
-        });
+        return Some(profile_data::player_side_index(side));
     }
     if state.num_players == 0 || profile::get_session_player_side() != side {
         return None;
@@ -7500,8 +7497,7 @@ pub fn push_actors(
     actors.reserve(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
-    let is_p2_single = play_style == profile_data::PlayStyle::Single
-        && player_side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, player_side);
     let center_1player_notefield =
         cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single

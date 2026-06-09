@@ -1,8 +1,9 @@
 use std::time::Instant;
 
-pub use deadsync_core::input::{InputSource, Lane};
+use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
 
+pub mod backend;
 pub mod debounce;
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;

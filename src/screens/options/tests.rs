@@ -1,6 +1,7 @@
 use super::*;
 use crate::assets::AssetManager;
-use deadsync_input::{InputEvent, InputSource, VirtualAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 
@@ -31,7 +32,7 @@ fn dedicated_press(
 }
 
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = screen_input::player_side_ix(side);
+    let idx = profile_data::player_side_index(side);
     state.start_input[idx].held = true;
     state.start_input[idx].held_for = NAV_INITIAL_HOLD_DELAY;
     state.start_input[idx].next_repeat_at = NAV_INITIAL_HOLD_DELAY;

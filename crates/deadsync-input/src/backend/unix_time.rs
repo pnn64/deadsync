@@ -1,20 +1,13 @@
-use crate::engine::host_time::instant_nanos;
 use std::time::{Duration, Instant};
 
-#[cfg(target_os = "freebsd")]
-pub(super) use super::devd::{DevdEvent, DevdWatch};
-pub(super) use super::{
-    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes,
-};
-
-const EVDEV_EVENT_STALE_TOLERANCE_NS: u64 = 5_000_000_000;
-const EVDEV_EVENT_FUTURE_TOLERANCE_NS: u64 = 50_000_000;
+const EVENT_STALE_TOLERANCE_NS: u64 = 5_000_000_000;
+const EVENT_FUTURE_TOLERANCE_NS: u64 = 50_000_000;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct EventTimeSample {
-    pub(super) instant: Instant,
-    pub(super) host_nanos: u64,
-    clock_nanos: Option<u64>,
+pub struct EventTimeSample {
+    pub instant: Instant,
+    pub host_nanos: u64,
+    pub clock_nanos: Option<u64>,
 }
 
 #[inline(always)]
@@ -33,7 +26,7 @@ fn monotonic_nanos_now() -> Option<u64> {
 }
 
 #[inline(always)]
-pub(super) fn receipt_time() -> EventTimeSample {
+pub fn receipt_time(instant_nanos: impl FnOnce(Instant) -> u64) -> EventTimeSample {
     let instant = Instant::now();
     EventTimeSample {
         instant,
@@ -71,37 +64,21 @@ fn map_event_time(
 }
 
 #[inline(always)]
-pub(super) fn event_time(sample: EventTimeSample, sec: i64, usec: i64) -> (Instant, u64) {
+pub fn event_time(sample: EventTimeSample, sec: i64, usec: i64) -> (Instant, u64) {
     let Some(sample_clock_nanos) = sample.clock_nanos else {
         return (sample.instant, sample.host_nanos);
     };
     let Some(event_clock_nanos) = event_clock_nanos(sec, usec) else {
         return (sample.instant, sample.host_nanos);
     };
-    if event_clock_nanos > sample_clock_nanos.saturating_add(EVDEV_EVENT_FUTURE_TOLERANCE_NS)
-        || sample_clock_nanos.saturating_sub(event_clock_nanos) > EVDEV_EVENT_STALE_TOLERANCE_NS
+    if event_clock_nanos > sample_clock_nanos.saturating_add(EVENT_FUTURE_TOLERANCE_NS)
+        || sample_clock_nanos.saturating_sub(event_clock_nanos) > EVENT_STALE_TOLERANCE_NS
     {
         return (sample.instant, sample.host_nanos);
     }
     map_event_time(sample, event_clock_nanos, sample_clock_nanos)
         .unwrap_or((sample.instant, sample.host_nanos))
 }
-
-#[cfg(target_os = "freebsd")]
-mod freebsd;
-#[cfg(target_os = "linux")]
-mod linux;
-
-#[cfg(target_os = "freebsd")]
-pub use freebsd::{
-    keyboard_backend_active, run, run_pad_only, set_keyboard_capture_enabled,
-    set_keyboard_window_focused,
-};
-#[cfg(target_os = "linux")]
-pub use linux::{
-    keyboard_backend_active, run, run_pad_only, set_keyboard_capture_enabled,
-    set_keyboard_window_focused,
-};
 
 #[cfg(test)]
 mod tests {
@@ -138,11 +115,11 @@ mod tests {
         let base = Instant::now();
         let sample = EventTimeSample {
             instant: base,
-            host_nanos: 123,
-            clock_nanos: Some(10_000_000),
+            host_nanos: 100,
+            clock_nanos: Some(5_000_000_000),
         };
-        let (timestamp, host_nanos) = event_time(sample, 1_700_000_000, 0);
+        let (timestamp, host_nanos) = event_time(sample, 15, 0);
+        assert_eq!(host_nanos, 100);
         assert_eq!(timestamp, base);
-        assert_eq!(host_nanos, 123);
     }
 }

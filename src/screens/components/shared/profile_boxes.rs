@@ -573,23 +573,12 @@ fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::
     (p1, p2)
 }
 
-const fn play_style_for_joined(
-    style: profile_data::PlayStyle,
-    p1_joined: bool,
-    p2_joined: bool,
-) -> profile_data::PlayStyle {
-    if p1_joined && p2_joined {
-        profile_data::PlayStyle::Versus
-    } else {
-        match style {
-            profile_data::PlayStyle::Versus => profile_data::PlayStyle::Single,
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => style,
-        }
-    }
-}
-
 fn sync_play_style_for_joined(p1_joined: bool, p2_joined: bool) {
-    let style = play_style_for_joined(profile::get_session_play_style(), p1_joined, p2_joined);
+    let style = profile_data::play_style_for_joined(
+        profile::get_session_play_style(),
+        p1_joined,
+        p2_joined,
+    );
     profile::set_session_play_style(style);
 }
 
@@ -614,14 +603,6 @@ fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
         state.p2_join_pulse_t = JOIN_PULSE_DURATION;
     }
     audio::play_sfx("assets/sounds/boom.ogg");
-}
-
-#[inline(always)]
-const fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
 }
 
 fn shift_choice(
@@ -733,7 +714,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     };
     if !ev.pressed {
         if let Some(side) = screen_input::menu_lr_side(ev.action) {
-            state.menu_lr_undo[side_ix(side)] = 0;
+            state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         }
         return ScreenAction::None;
     }
@@ -741,8 +722,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     if let Some(side) = chord_side {
-        let undo = state.menu_lr_undo[side_ix(side)];
-        state.menu_lr_undo[side_ix(side)] = 0;
+        let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
+        state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         if undo != 0 {
             let _ = shift_choice(state, side, i32::from(undo), false);
         }
@@ -754,7 +735,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_up
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_left => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_choice(state, profile_data::PlayerSide::P1, -1, true) {
                     1
                 } else {
@@ -766,7 +747,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_down
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_choice(state, profile_data::PlayerSide::P1, 1, true) {
                     -1
                 } else {
@@ -824,7 +805,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
                 if shift_choice(state, profile_data::PlayerSide::P2, -1, true) {
                     1
                 } else {
@@ -836,7 +817,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
                 if shift_choice(state, profile_data::PlayerSide::P2, 1, true) {
                     -1
                 } else {
@@ -1958,29 +1939,4 @@ pub fn get_actors(
     let mut actors = Vec::with_capacity(160);
     push_actors(&mut actors, state, asset_manager, alpha_multiplier);
     actors
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn play_style_follows_profile_box_join_count() {
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Single, true, true),
-            profile_data::PlayStyle::Versus
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Double, true, true),
-            profile_data::PlayStyle::Versus
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Double, true, false),
-            profile_data::PlayStyle::Double
-        );
-        assert_eq!(
-            play_style_for_joined(profile_data::PlayStyle::Versus, false, true),
-            profile_data::PlayStyle::Single
-        );
-    }
 }

@@ -34,14 +34,6 @@ const STATS_TEXT_ZOOM: f32 = 0.95;
 const AVATAR_DIM: f32 = 110.0;
 const AVATAR_Y: f32 = 12.0;
 
-#[inline(always)]
-const fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
 fn player_color_rgba(side: profile_data::PlayerSide, active_color_index: i32) -> [f32; 4] {
     match side {
         profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
@@ -74,7 +66,11 @@ fn session_stats_for_side(
         if is_course_summary_stage(s) {
             continue;
         }
-        let Some(p) = s.players.get(side_ix(side)).and_then(|p| p.as_ref()) else {
+        let Some(p) = s
+            .players
+            .get(profile_data::player_side_index(side))
+            .and_then(|p| p.as_ref())
+        else {
             continue;
         };
         out.songs_played = out.songs_played.saturating_add(1);
@@ -340,8 +336,11 @@ pub fn push_actors(
             z(12)
         ));
 
-        let (profile_lines, general_lines) =
-            build_player_lines(side, stages, state.total_songs_played[side_ix(side)]);
+        let (profile_lines, general_lines) = build_player_lines(
+            side,
+            stages,
+            state.total_songs_played[profile_data::player_side_index(side)],
+        );
 
         for (i, line) in profile_lines.iter().enumerate() {
             let y = (LINE_HEIGHT * (i as f32)) + PROFILE_STATS_Y;

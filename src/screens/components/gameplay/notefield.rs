@@ -35,14 +35,13 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor_fro
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
+use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
-use deadsync_rules::timing::{
-    self, TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat,
-};
+use deadsync_rules::timing::{self, TimeSignatureSegment, default_time_signature};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::array::from_fn;
 use std::cell::RefCell;
@@ -9614,11 +9613,12 @@ mod tests {
     };
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use deadsync_core::note::NoteType;
+    use deadsync_core::timing::beat_to_note_row;
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_rules::timing::{self, TimeSignatureSegment, beat_to_note_row};
+    use deadsync_rules::timing::{self, TimeSignatureSegment};
     use std::sync::Arc;
 
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {

@@ -1,4 +1,5 @@
 use deadsync_profile as profile_data;
+use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
 mod commands;
 mod dynamic_media;
@@ -70,21 +71,22 @@ compile_error!(
 );
 
 use crate::engine::present::actors::Actor;
-/* -------------------- gamepad -------------------- */
-use crate::engine::input::GpSystemEvent;
+use deadsync_chart::song::sync_pref_offset;
+use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
-use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs};
+use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
+use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{self as timing_rules, ROWS_PER_BEAT};
+use deadsync_rules::timing as timing_rules;
 
 /* -------------------- user events -------------------- */
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     Pad(PadEvent),
-    Key(input::RawKeyboardEvent),
+    Key(RawKeyboardEvent),
     GamepadSystem(GpSystemEvent),
 }
 
@@ -358,15 +360,14 @@ fn closest_standard_chart_ix(
     chart_type: &str,
     preferred_difficulty_index: usize,
 ) -> Option<usize> {
-    let preferred =
-        preferred_difficulty_index.min(color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1));
+    let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
     let mut best = None;
     let mut best_distance = usize::MAX;
     for (chart_ix, chart) in song.charts.iter().enumerate() {
         if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
-        let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES
+        let Some(diff_ix) = STANDARD_DIFFICULTY_NAMES
             .iter()
             .position(|name| chart.difficulty.eq_ignore_ascii_case(name))
         else {
@@ -488,7 +489,10 @@ fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
         .find(|p| p.group_name == pack_group)
         .map(|p| p.sync_pref)
         .unwrap_or(deadsync_chart::SyncPref::Default);
-    crate::game::song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
+    sync_pref_offset(
+        pack_sync_pref,
+        config.machine_default_sync_offset.sync_pref(),
+    )
 }
 
 fn build_cabinet_light_events(
@@ -2063,14 +2067,6 @@ impl SessionState {
 }
 
 #[inline(always)]
-const fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 fn combo_carry_from_profiles() -> [u32; MAX_PLAYERS] {
     [
         profile::get_for_side(profile_data::PlayerSide::P1).current_combo,
@@ -2083,9 +2079,7 @@ fn preferred_difficulty_for_side(
     side: profile_data::PlayerSide,
     play_style: profile_data::PlayStyle,
 ) -> usize {
-    let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
-        .len()
-        .saturating_sub(1);
+    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
     profile::get_for_side(side)
         .last_played(play_style)
         .difficulty_index
@@ -2096,11 +2090,9 @@ fn course_stage_runtime_from_plan(
     plan: &select_course::CourseStagePlan,
     chart_type: &str,
 ) -> Option<CourseStageRuntime> {
-    let steps_idx = select_music::steps_index_for_chart_hash(
-        plan.song.as_ref(),
-        chart_type,
-        plan.chart_hash.as_str(),
-    )?;
+    let steps_idx = plan
+        .song
+        .steps_index_for_chart_hash(chart_type, plan.chart_hash.as_str())?;
     Some(CourseStageRuntime {
         song: plan.song.clone(),
         steps_index: [steps_idx; MAX_PLAYERS],
@@ -2125,11 +2117,10 @@ fn build_course_run_from_selection(
         [crate::game::gameplay::CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in &stages {
         for (player_idx, total) in course_display_totals.iter_mut().enumerate() {
-            let Some(chart) = select_music::chart_for_steps_index(
-                stage.song.as_ref(),
-                chart_type,
-                stage.steps_index[player_idx],
-            ) else {
+            let Some(chart) = stage
+                .song
+                .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
+            else {
                 continue;
             };
             let add = crate::game::gameplay::course_display_totals_for_chart(chart);
@@ -2166,11 +2157,10 @@ fn build_course_graph_stages(
     std::array::from_fn(|player_idx| {
         let mut out = Vec::with_capacity(course.stages.len());
         for stage in &course.stages {
-            let Some(chart) = select_music::chart_for_steps_index(
-                stage.song.as_ref(),
-                chart_type,
-                stage.steps_index[player_idx],
-            ) else {
+            let Some(chart) = stage
+                .song
+                .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
+            else {
                 continue;
             };
             out.push(evaluation::CourseGraphStage {
@@ -2267,7 +2257,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
     let mut players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        let idx = side_ix(side);
+        let idx = profile_data::player_side_index(side);
         let course_totals = course.course_display_totals[idx];
         let mut earned_grade_points = 0i32;
         let mut possible_grade_points = course_totals.possible_grade_points;
@@ -2497,7 +2487,7 @@ fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: profile_data::PlayerSide,
 ) -> Option<evaluation::ScoreInfo> {
-    let idx = side_ix(side);
+    let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
     let judgment_counts = [
         player
@@ -2720,7 +2710,7 @@ fn build_course_summary_eval_state(
     match profile::get_session_play_style() {
         profile_data::PlayStyle::Versus => {
             for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                let idx = side_ix(side);
+                let idx = profile_data::player_side_index(side);
                 score_info[idx] = score_info_from_stage(stage, side);
                 if let Some(si) = score_info[idx].as_mut() {
                     si.course_graph_stages.clone_from(&course_graph_stages[idx]);
@@ -2729,7 +2719,7 @@ fn build_course_summary_eval_state(
         }
         profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let side = profile::get_session_player_side();
-            let idx = side_ix(side);
+            let idx = profile_data::player_side_index(side);
             score_info[0] = score_info_from_stage(stage, side);
             if let Some(si) = score_info[0].as_mut() {
                 si.course_graph_stages.clone_from(&course_graph_stages[idx]);
@@ -3332,14 +3322,14 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
                 };
                 song_opt = Some(si.song.clone());
                 music_rate = si.music_rate;
-                players[side_ix(side)] = Some(to_player(si));
+                players[profile_data::player_side_index(side)] = Some(to_player(si));
             }
         }
         profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
             let si = eval.score_info.first().and_then(|s| s.as_ref())?;
             song_opt = Some(si.song.clone());
             music_rate = si.music_rate;
-            players[side_ix(player_side)] = Some(to_player(si));
+            players[profile_data::player_side_index(player_side)] = Some(to_player(si));
         }
     }
 
@@ -3431,7 +3421,7 @@ fn restart_payload_from_eval(
 
     for entry in score_info.iter().flatten() {
         song.get_or_insert_with(|| entry.song.clone());
-        let side = side_ix(entry.side);
+        let side = profile_data::player_side_index(entry.side);
         chart_hashes[side] = entry.chart.short_hash.clone();
         scroll_speed[side] = entry.speed_mod;
         if music_rate.is_none() && entry.music_rate.is_finite() && entry.music_rate > 0.0 {
@@ -3766,7 +3756,7 @@ impl ScreensState {
                     self.select_music_state.preferred_difficulty_index = preferred;
 
                     let play_style = profile::get_session_play_style();
-                    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+                    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
                     let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
                     let p2_pref = p2_profile
                         .last_played(play_style)
@@ -3861,9 +3851,7 @@ impl AppState {
         color_index: i32,
     ) -> Self {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
-            .len()
-            .saturating_sub(1);
+        let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
         let preferred = if max_diff_index == 0 {
             0
         } else {
@@ -4083,7 +4071,7 @@ impl App {
                 let list = crate::game::pad_profiles::load(pid)
                     .into_iter()
                     .filter(|c| {
-                        crate::game::pad_profiles::config_matches(
+                        pad_profile_data::config_matches(
                             c,
                             crate::engine::smx::BACKEND_ID,
                             cursor_pad_type.as_deref(),
@@ -4109,7 +4097,7 @@ impl App {
                         is_active: active_name.as_deref() == Some(c.name.as_str()),
                         is_default: cursor_serial
                             .as_deref()
-                            .is_some_and(|s| crate::game::pad_profiles::is_default_for(c, s)),
+                            .is_some_and(|s| pad_profile_data::is_default_for(c, s)),
                         name: c.name.clone(),
                     })
                     .collect(),
@@ -4190,16 +4178,11 @@ impl App {
             return (crate::engine::smx::apply_preset(pad, preset), preset_label);
         };
         let configs = crate::game::pad_profiles::load(id);
-        match crate::game::pad_profiles::resolve(
-            &configs,
-            crate::engine::smx::BACKEND_ID,
-            pad_type,
-            serial,
-        )
-        .and_then(|c| {
-            crate::engine::smx::PadConfigData::from_settings(&c.settings)
-                .map(|d| (c.name.clone(), d))
-        }) {
+        match pad_profile_data::resolve(&configs, crate::engine::smx::BACKEND_ID, pad_type, serial)
+            .and_then(|c| {
+                crate::engine::smx::PadConfigData::from_settings(&c.settings)
+                    .map(|d| (c.name.clone(), d))
+            }) {
             Some((name, data)) => (
                 crate::engine::smx::apply_config_data(pad, &data),
                 AppliedPadConfig {
@@ -5184,9 +5167,7 @@ impl App {
                     );
                 }
 
-                let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
-                    .len()
-                    .saturating_sub(1);
+                let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
                 let play_style = profile::get_session_play_style();
                 let preferred_p1 = if max_diff_index == 0 {
                     0
@@ -5824,7 +5805,8 @@ impl App {
                     return;
                 }
                 let combo = gs.players[0].combo;
-                self.state.session.combo_carry[side_ix(player_side)] = combo;
+                self.state.session.combo_carry[profile_data::player_side_index(player_side)] =
+                    combo;
                 profile::update_current_combo_for_side(player_side, combo);
             }
         }
@@ -5914,17 +5896,17 @@ impl App {
         let target_chart_type = play_style.chart_type();
         let fallback_steps = self.state.session.preferred_difficulty_index;
 
-        let p1_steps =
-            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[0])
-                .unwrap_or(fallback_steps);
-        let p2_steps =
-            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[1])
-                .unwrap_or(fallback_steps);
+        let p1_steps = song
+            .steps_index_for_chart_hash(target_chart_type, chart_hashes[0])
+            .unwrap_or(fallback_steps);
+        let p2_steps = song
+            .steps_index_for_chart_hash(target_chart_type, chart_hashes[1])
+            .unwrap_or(fallback_steps);
 
         let chart_steps_index = match play_style {
             profile_data::PlayStyle::Versus => [p1_steps, p2_steps],
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                let idx = side_ix(player_side);
+                let idx = profile_data::player_side_index(player_side);
                 let selected = [p1_steps, p2_steps][idx];
                 [selected; 2]
             }
@@ -6094,7 +6076,11 @@ impl App {
         let stage_summary = stage_summary_from_eval(eval_state);
         if let Some(stage) = stage_summary.as_ref() {
             for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
+                if let Some(p) = stage
+                    .players
+                    .get(profile_data::player_side_index(side))
+                    .and_then(|p| p.as_ref())
+                {
                     profile::add_stage_calories_for_side(side, p.calories_burned);
                 }
             }
@@ -6163,7 +6149,9 @@ impl App {
 
                 if let Some(course_stage) = course_summary {
                     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                        if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
+                        if let Some(player) =
+                            course_stage.players[profile_data::player_side_index(side)].as_ref()
+                        {
                             scores::save_local_summary_score_for_side(
                                 score_hash.as_str(),
                                 side,
@@ -6256,7 +6244,7 @@ impl App {
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+        let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
         let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
         let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
         let p1_pref = p1_profile
@@ -6286,7 +6274,7 @@ impl App {
             let best_playable = |preferred: usize| {
                 let mut best = None;
                 let mut min_diff = i32::MAX;
-                for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                for i in 0..STANDARD_DIFFICULTY_COUNT {
                     if select_music::is_difficulty_playable(&song, i) {
                         let diff = (i as i32 - preferred as i32).abs();
                         if diff < min_diff {
@@ -6369,7 +6357,8 @@ impl App {
         profile::set_session_play_style(profile_data::PlayStyle::Versus);
         let guest_profile =
             profile::set_active_profile_for_side(join_side, profile_data::ActiveProfile::Guest);
-        self.state.session.combo_carry[side_ix(join_side)] = guest_profile.current_combo;
+        self.state.session.combo_carry[profile_data::player_side_index(join_side)] =
+            guest_profile.current_combo;
 
         if screen == CurrentScreen::SelectStyle {
             self.state.screens.select_style_state.selected_index = 1;
@@ -7867,7 +7856,7 @@ impl App {
     fn handle_raw_key_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        raw_key: input::RawKeyboardEvent,
+        raw_key: RawKeyboardEvent,
     ) -> bool {
         use winit::keyboard::KeyCode;
 
@@ -8106,11 +8095,7 @@ impl App {
     }
 
     #[inline(always)]
-    fn handle_live_key_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        raw_key: input::RawKeyboardEvent,
-    ) {
+    fn handle_live_key_event(&mut self, event_loop: &ActiveEventLoop, raw_key: RawKeyboardEvent) {
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         let handled_started = Instant::now();
 
@@ -8181,7 +8166,7 @@ impl App {
         };
         self.handle_live_key_event(
             event_loop,
-            input::RawKeyboardEvent {
+            RawKeyboardEvent {
                 code,
                 pressed: key_event.state == ElementState::Pressed,
                 repeat: key_event.repeat,
@@ -8355,10 +8340,7 @@ impl App {
                         );
                     }
                     profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                        let persisted_idx = match player_side {
-                            profile_data::PlayerSide::P1 => 0,
-                            profile_data::PlayerSide::P2 => 1,
-                        };
+                        let persisted_idx = profile_data::player_side_index(player_side);
                         update_scroll_speed(
                             &mut commands,
                             player_side,
@@ -8373,10 +8355,7 @@ impl App {
                 let preferred_idx = match play_style {
                     profile_data::PlayStyle::Versus => po_state.chart_difficulty_index[0],
                     profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                        let persisted_idx = match player_side {
-                            profile_data::PlayerSide::P1 => 0,
-                            profile_data::PlayerSide::P2 => 1,
-                        };
+                        let persisted_idx = profile_data::player_side_index(player_side);
                         po_state.chart_difficulty_index[persisted_idx]
                     }
                 };
@@ -8731,22 +8710,17 @@ impl App {
                 let mut resolved_steps_index = po_state.chart_steps_index;
                 let mut resolve_chart = |slot: usize| {
                     let requested_idx = resolved_steps_index[slot];
-                    if let Some(chart_ref) = select_music::chart_for_steps_index(
-                        &song_arc,
-                        target_chart_type,
-                        requested_idx,
-                    ) {
+                    if let Some(chart_ref) =
+                        song_arc.chart_for_steps_index(target_chart_type, requested_idx)
+                    {
                         return chart_ref;
                     }
 
                     let preferred_idx = po_state.chart_difficulty_index[slot];
                     if let Some(fallback_idx) =
-                        select_music::best_steps_index(&song_arc, target_chart_type, preferred_idx)
-                        && let Some(chart_ref) = select_music::chart_for_steps_index(
-                            &song_arc,
-                            target_chart_type,
-                            fallback_idx,
-                        )
+                        song_arc.best_steps_index(target_chart_type, preferred_idx)
+                        && let Some(chart_ref) =
+                            song_arc.chart_for_steps_index(target_chart_type, fallback_idx)
                     {
                         warn!(
                             "Missing stepchart index {} for '{}'; using fallback index {}",
@@ -8792,10 +8766,7 @@ impl App {
                         )
                     }
                     profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                        let idx = match player_side {
-                            profile_data::PlayerSide::P1 => 0,
-                            profile_data::PlayerSide::P2 => 1,
-                        };
+                        let idx = profile_data::player_side_index(player_side);
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
                         let chart_ix = chart_ix_for_ref(chart_ref);
@@ -9020,22 +8991,17 @@ impl App {
                 let mut resolved_steps_index = po_state.chart_steps_index;
                 let mut resolve_chart = |slot: usize| {
                     let requested_idx = resolved_steps_index[slot];
-                    if let Some(chart_ref) = select_music::chart_for_steps_index(
-                        &song_arc,
-                        target_chart_type,
-                        requested_idx,
-                    ) {
+                    if let Some(chart_ref) =
+                        song_arc.chart_for_steps_index(target_chart_type, requested_idx)
+                    {
                         return chart_ref;
                     }
 
                     let preferred_idx = po_state.chart_difficulty_index[slot];
                     if let Some(fallback_idx) =
-                        select_music::best_steps_index(&song_arc, target_chart_type, preferred_idx)
-                        && let Some(chart_ref) = select_music::chart_for_steps_index(
-                            &song_arc,
-                            target_chart_type,
-                            fallback_idx,
-                        )
+                        song_arc.best_steps_index(target_chart_type, preferred_idx)
+                        && let Some(chart_ref) =
+                            song_arc.chart_for_steps_index(target_chart_type, fallback_idx)
                     {
                         warn!(
                             "Missing stepchart index {} for '{}'; using fallback index {}",
@@ -9082,10 +9048,7 @@ impl App {
                         )
                     }
                     profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                        let idx = match player_side {
-                            profile_data::PlayerSide::P1 => 0,
-                            profile_data::PlayerSide::P2 => 1,
-                        };
+                        let idx = profile_data::player_side_index(player_side);
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
                         let chart_ix = chart_ix_for_ref(chart_ref);
@@ -9561,10 +9524,7 @@ impl App {
                             }
                             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
                                 let side = profile::get_session_player_side();
-                                let idx = match side {
-                                    profile_data::PlayerSide::P1 => 0,
-                                    profile_data::PlayerSide::P2 => 1,
-                                };
+                                let idx = profile_data::player_side_index(side);
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[idx];
                                 self.state
@@ -9586,16 +9546,13 @@ impl App {
                         .get(self.state.screens.select_music_state.selected_index)
                     {
                         let chart_type = profile::get_session_play_style().chart_type();
-                        if select_music::chart_for_steps_index(
-                            song,
-                            chart_type,
-                            desired_steps_index,
-                        )
-                        .is_none()
+                        if song
+                            .chart_for_steps_index(chart_type, desired_steps_index)
+                            .is_none()
                         {
                             let mut best_match_index = None;
                             let mut min_diff = i32::MAX;
-                            for i in 0..color::FILE_DIFFICULTY_NAMES.len() {
+                            for i in 0..STANDARD_DIFFICULTY_COUNT {
                                 if select_music::is_difficulty_playable(song, i) {
                                     let diff = (i as i32 - preferred as i32).abs();
                                     if diff < min_diff {
@@ -9642,7 +9599,7 @@ impl App {
                         .preferred_difficulty_index = preferred;
 
                     let play_style = profile::get_session_play_style();
-                    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+                    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
                     let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
                     let p2_pref = p2_profile
                         .last_played(play_style)
@@ -9708,8 +9665,7 @@ impl App {
             {
                 Some(select_music::MusicWheelEntry::Song(song)) => {
                     let chart_type = profile::get_session_play_style().chart_type();
-                    select_music::chart_for_steps_index(
-                        song,
+                    song.chart_for_steps_index(
                         chart_type,
                         self.state.screens.select_music_state.selected_steps_index,
                     )
@@ -9738,8 +9694,7 @@ impl App {
                 {
                     Some(select_music::MusicWheelEntry::Song(song)) => {
                         let chart_type = profile::get_session_play_style().chart_type();
-                        select_music::chart_for_steps_index(
-                            song,
+                        song.chart_for_steps_index(
                             chart_type,
                             self.state
                                 .screens

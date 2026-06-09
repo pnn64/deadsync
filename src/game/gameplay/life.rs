@@ -46,34 +46,6 @@ pub fn course_stage_life_submit_eligible(state: &State, player_idx: usize) -> bo
 }
 
 #[inline(always)]
-fn record_life(p: &mut PlayerRuntime, t: f32, life: f32) {
-    const SHIFT: f32 = 0.003_906_25_f32; // 1/256, matches ITGmania's PlayerStageStats quirk
-
-    let life = life.clamp(0.0_f32, 1.0_f32);
-    let hist = &mut p.life_history;
-    let Some(&(last_t, last_life)) = hist.last() else {
-        hist.push((t, life));
-        return;
-    };
-
-    if t > last_t {
-        if (life - last_life).abs() > 0.000_001_f32 {
-            hist.push((t, life));
-        }
-        return;
-    }
-
-    if (t - last_t).abs() <= 0.000_001_f32 {
-        if (life - last_life).abs() <= 0.000_001_f32 {
-            return;
-        }
-        let last_ix = hist.len() - 1;
-        hist[last_ix].0 = t - SHIFT;
-        hist.push((t, life));
-    }
-}
-
-#[inline(always)]
 fn player_life_meter(p: &PlayerRuntime) -> LifeMeter {
     LifeMeter {
         life: p.life,
@@ -111,8 +83,8 @@ pub(super) fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, 
     }
 
     if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
-        record_life(p, current_music_time, result.old_life);
-        record_life(p, current_music_time, result.new_life);
+        life_rules::record_life_history(&mut p.life_history, current_music_time, result.old_life);
+        life_rules::record_life_history(&mut p.life_history, current_music_time, result.new_life);
     }
     if let Some(meter) = &mut p.course_submit_life {
         apply_course_submit_life_change(meter, current_music_time, delta);

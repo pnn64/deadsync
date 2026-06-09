@@ -2,10 +2,9 @@ use super::{
     cache_gs_score_for_profile, chart_stats_for_imported_score, gameplay_run_failed,
     gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
     invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
-    submit_side_ix,
 };
 use crate::game::gameplay;
-use crate::game::online;
+use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
@@ -31,7 +30,7 @@ use std::time::{Duration, Instant};
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    online::groovestats_active_service()
+    online_groovestats::active_service()
 }
 
 #[inline(always)]
@@ -140,7 +139,8 @@ fn groovestats_reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    state[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -150,7 +150,8 @@ fn groovestats_reset_submit_event_ui(side: profile_data::PlayerSide, chart_hash:
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    state[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -160,7 +161,8 @@ fn groovestats_reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &s
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    state[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -175,7 +177,7 @@ fn groovestats_set_submit_ui_status(
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let entries = &mut state[submit_side_ix(side)];
+    let entries = &mut state[profile_data::player_side_index(side)];
     if let Some(entry) = entries
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
@@ -203,7 +205,7 @@ fn groovestats_update_submit_ui_status_if_token(
         return false;
     }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let Some(entry) = state[submit_side_ix(side)]
+    let Some(entry) = state[profile_data::player_side_index(side)]
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
     else {
@@ -223,7 +225,7 @@ fn groovestats_arm_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let entries = &mut state[submit_side_ix(side)];
+    let entries = &mut state[profile_data::player_side_index(side)];
     if let Some(entry) = entries
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
@@ -254,7 +256,7 @@ fn groovestats_update_submit_event_ui_if_token(
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let Some(entry) = state[submit_side_ix(side)]
+    let Some(entry) = state[profile_data::player_side_index(side)]
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
     else {
@@ -280,7 +282,7 @@ fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
     }
     let side = entry.side;
     let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let entries = &mut state[submit_side_ix(side)];
+    let entries = &mut state[profile_data::player_side_index(side)];
     if let Some(stored) = entries
         .iter_mut()
         .find(|stored| stored.chart_hash.eq_ignore_ascii_case(hash))
@@ -300,7 +302,7 @@ pub fn get_groovestats_submit_ui_status_for_side(
     if hash.is_empty() {
         return None;
     }
-    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[submit_side_ix(side)]
+    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .map(|entry| entry.status)
@@ -314,7 +316,7 @@ pub fn get_groovestats_submit_itl_progress_for_side(
     if hash.is_empty() {
         return None;
     }
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[submit_side_ix(side)]
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.itl_progress.clone())
@@ -328,7 +330,7 @@ pub fn get_groovestats_submit_record_banner_for_side(
     if hash.is_empty() {
         return None;
     }
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[submit_side_ix(side)]
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.record_banner)
@@ -1007,7 +1009,7 @@ fn retry_groovestats_submit_inner(
     }
     let entry = {
         let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let Some(stored) = lock[submit_side_ix(side)]
+        let Some(stored) = lock[profile_data::player_side_index(side)]
             .iter_mut()
             .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         else {
@@ -1056,7 +1058,7 @@ fn groovestats_record_submit_failure(
     status: GrooveStatsSubmitUiStatus,
 ) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let Some(entry) = lock[submit_side_ix(side)]
+    let Some(entry) = lock[profile_data::player_side_index(side)]
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
     else {
@@ -1079,7 +1081,8 @@ fn groovestats_record_submit_failure(
 /// worker's success path when the status update was accepted.
 fn groovestats_record_submit_success(side: profile_data::PlayerSide, chart_hash: &str) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    lock[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(chart_hash));
+    lock[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(chart_hash));
 }
 
 /// Returns the seconds remaining until the next retry is allowed (manual
@@ -1095,7 +1098,7 @@ pub fn groovestats_next_retry_remaining_secs(
         return None;
     }
     let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let target = lock[submit_side_ix(side)]
+    let target = lock[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))?
         .next_retry_at?;
@@ -1115,7 +1118,7 @@ pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::Play
     }
     let attempt = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let Some(entry) = lock[submit_side_ix(side)]
+        let Some(entry) = lock[profile_data::player_side_index(side)]
             .iter()
             .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         else {

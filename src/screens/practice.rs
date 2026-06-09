@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{
@@ -12,6 +11,7 @@ use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_
 use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1608,8 +1608,7 @@ fn max_play_beat(state: &State) -> f32 {
 fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
     let hud = profile::gameplay_hud_snapshot();
     let play_style = hud.play_style;
-    let is_p2_single = play_style == profile_data::PlayStyle::Single
-        && hud.player_side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
     match play_style {
         profile_data::PlayStyle::Versus => {

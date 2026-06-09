@@ -52,6 +52,8 @@ pub struct LifeDeltaResult {
     pub failed_now: bool,
 }
 
+pub const LIFE_HISTORY_SAME_TIME_SHIFT: f32 = 0.003_906_25_f32;
+
 #[inline(always)]
 pub const fn judge_life_delta(grade: JudgeGrade) -> f32 {
     match grade {
@@ -61,6 +63,31 @@ pub const fn judge_life_delta(grade: JudgeGrade) -> f32 {
         JudgeGrade::Decent => LIFE_DECENT,
         JudgeGrade::WayOff => LIFE_WAY_OFF,
         JudgeGrade::Miss => LIFE_MISS,
+    }
+}
+
+#[inline(always)]
+pub fn record_life_history(history: &mut Vec<(f32, f32)>, t: f32, life: f32) {
+    let life = life.clamp(0.0_f32, 1.0_f32);
+    let Some(&(last_t, last_life)) = history.last() else {
+        history.push((t, life));
+        return;
+    };
+
+    if t > last_t {
+        if (life - last_life).abs() > 0.000_001_f32 {
+            history.push((t, life));
+        }
+        return;
+    }
+
+    if (t - last_t).abs() <= 0.000_001_f32 {
+        if (life - last_life).abs() <= 0.000_001_f32 {
+            return;
+        }
+        let last_ix = history.len() - 1;
+        history[last_ix].0 = t - LIFE_HISTORY_SAME_TIME_SHIFT;
+        history.push((t, life));
     }
 }
 
@@ -184,5 +211,39 @@ mod tests {
         assert_eq!(judge_life_delta(JudgeGrade::Decent), LIFE_DECENT);
         assert_eq!(judge_life_delta(JudgeGrade::WayOff), LIFE_WAY_OFF);
         assert_eq!(judge_life_delta(JudgeGrade::Miss), LIFE_MISS);
+    }
+
+    #[test]
+    fn life_history_records_changes_only() {
+        let mut history = Vec::new();
+
+        record_life_history(&mut history, 1.0, 0.8);
+        record_life_history(&mut history, 2.0, 0.8);
+        record_life_history(&mut history, 3.0, 0.7);
+
+        assert_eq!(history, vec![(1.0, 0.8), (3.0, 0.7)]);
+    }
+
+    #[test]
+    fn life_history_shifts_same_time_changes() {
+        let mut history = Vec::new();
+
+        record_life_history(&mut history, 4.0, 0.8);
+        record_life_history(&mut history, 4.0, 0.7);
+
+        assert_eq!(
+            history,
+            vec![(4.0 - LIFE_HISTORY_SAME_TIME_SHIFT, 0.8), (4.0, 0.7)]
+        );
+    }
+
+    #[test]
+    fn life_history_clamps_life_values() {
+        let mut history = Vec::new();
+
+        record_life_history(&mut history, 1.0, 2.0);
+        record_life_history(&mut history, 2.0, -1.0);
+
+        assert_eq!(history, vec![(1.0, 1.0), (2.0, 0.0)]);
     }
 }

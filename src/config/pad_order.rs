@@ -13,6 +13,7 @@
 //! how SMX pads pin a serial → player slot, but leaves SMX untouched.
 
 use super::*;
+use deadsync_input::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::{LazyLock, Mutex};
@@ -22,40 +23,6 @@ const PAD_ORDER_CAP: usize = 64;
 
 /// Input backends that persist a stable pad order. SMX is intentionally excluded
 /// — it has its own serial-based assignment.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PadOrderBackend {
-    RawInput,
-    Wgi,
-    IoHid,
-    Hidraw,
-    LinuxEvdev,
-    FreeBsdEvdev,
-}
-
-impl PadOrderBackend {
-    /// All persisted backends, used when loading/saving the whole config.
-    pub(super) const ALL: [PadOrderBackend; 6] = [
-        Self::RawInput,
-        Self::Wgi,
-        Self::IoHid,
-        Self::Hidraw,
-        Self::LinuxEvdev,
-        Self::FreeBsdEvdev,
-    ];
-
-    /// The `[Options]` ini key this backend's order is stored under.
-    pub(super) const fn ini_key(self) -> &'static str {
-        match self {
-            Self::RawInput => "PadOrderRawInput",
-            Self::Wgi => "PadOrderWGI",
-            Self::IoHid => "PadOrderIoHid",
-            Self::Hidraw => "PadOrderHidraw",
-            Self::LinuxEvdev => "PadOrderLinuxEvdev",
-            Self::FreeBsdEvdev => "PadOrderFreeBsdEvdev",
-        }
-    }
-}
-
 /// Append-only, per-backend order of pad device UUIDs. The index of a UUID in
 /// its backend's vec is the stable `PadId` that pad receives.
 static PAD_DEVICE_ORDER: LazyLock<Mutex<BTreeMap<PadOrderBackend, Vec<[u8; 16]>>>> =
@@ -91,8 +58,8 @@ pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> u32 {
 pub(super) fn load_order_from_ini(conf: &SimpleIni) {
     let mut order = PAD_DEVICE_ORDER.lock().unwrap();
     order.clear();
-    for backend in PadOrderBackend::ALL {
-        let Some(raw) = conf.get("Options", backend.ini_key()) else {
+    for backend in PAD_ORDER_BACKENDS {
+        let Some(raw) = conf.get("Options", ini_key(backend)) else {
             continue;
         };
         let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex).collect());
@@ -115,6 +82,21 @@ pub(super) fn serialized(backend: PadOrderBackend) -> String {
         .get(&backend)
         .map(|list| list.iter().map(uuid_to_hex).collect::<Vec<_>>().join(","))
         .unwrap_or_default()
+}
+
+pub(super) const fn all_backends() -> [PadOrderBackend; 6] {
+    PAD_ORDER_BACKENDS
+}
+
+pub(super) const fn ini_key(backend: PadOrderBackend) -> &'static str {
+    match backend {
+        PadOrderBackend::RawInput => "PadOrderRawInput",
+        PadOrderBackend::Wgi => "PadOrderWGI",
+        PadOrderBackend::IoHid => "PadOrderIoHid",
+        PadOrderBackend::Hidraw => "PadOrderHidraw",
+        PadOrderBackend::LinuxEvdev => "PadOrderLinuxEvdev",
+        PadOrderBackend::FreeBsdEvdev => "PadOrderFreeBsdEvdev",
+    }
 }
 
 /// Drop duplicates (keeping first occurrence) and cap the list length.

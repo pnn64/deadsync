@@ -2,9 +2,8 @@ use crate::config;
 use crate::engine::audio;
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
-use deadsync_input::{
-    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
-};
+use deadsync_core::input::{InputSource, Lane};
+use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action};
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -21,8 +20,7 @@ use super::{
     begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
     gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
     live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
-    refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
-    song_time_ns_to_seconds,
+    refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -543,7 +541,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         );
         return GameplayAction::None;
     }
-    let p2_runtime_player = single_runtime_player_is_p2(
+    let p2_runtime_player = profile_data::runtime_player_is_p2(
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     );

@@ -1,6 +1,11 @@
 use deadsync_chart::notes::ParsedNote;
 use deadsync_core::note::NoteType;
 
+pub fn step_type_lanes(step_type: &str) -> usize {
+    let normalized = step_type.trim().to_ascii_lowercase().replace('_', "-");
+    if normalized == "dance-double" { 8 } else { 4 }
+}
+
 fn invalidate_hold(
     invalid_heads: &mut Vec<usize>,
     hold_heads: &mut [Option<usize>],
@@ -117,8 +122,16 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
 
 #[cfg(test)]
 mod tests {
-    use super::{ParsedNote, parse_chart_notes};
+    use super::{ParsedNote, parse_chart_notes, step_type_lanes};
     use deadsync_core::note::NoteType;
+
+    #[test]
+    fn step_type_lanes_matches_dance_double_only() {
+        assert_eq!(step_type_lanes("dance-double"), 8);
+        assert_eq!(step_type_lanes("dance_double"), 8);
+        assert_eq!(step_type_lanes(" dance-single "), 4);
+        assert_eq!(step_type_lanes("pump-double"), 4);
+    }
 
     #[test]
     fn parse_chart_notes_recognizes_lifts() {

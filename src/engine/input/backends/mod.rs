@@ -1,100 +1,58 @@
-use std::time::Instant;
-
-#[cfg(windows)]
-pub(super) use super::RawKeyboardEvent;
-pub(super) use super::{
-    GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes,
-};
-
-const DIRS: [PadDir; 4] = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
+use deadsync_input::backend::{BackendHost, InputThreadPolicy};
 
 #[inline(always)]
-pub(super) fn emit_dir_edges(
-    emit_pad: &mut impl FnMut(PadEvent),
-    id: PadId,
-    dir_state: &mut [bool; 4],
-    timestamp: Instant,
-    host_nanos: u64,
-    want: [bool; 4],
-) {
-    for i in 0..DIRS.len() {
-        if dir_state[i] == want[i] {
-            continue;
-        }
-        dir_state[i] = want[i];
-        emit_pad(PadEvent::Dir {
-            id,
-            timestamp,
-            host_nanos,
-            dir: DIRS[i],
-            pressed: want[i],
-        });
-    }
+pub(super) fn host() -> BackendHost {
+    BackendHost::new(
+        crate::config::pad_index_for_uuid,
+        crate::engine::smx::native_smx_owns_device,
+        crate::engine::host_time::now_nanos,
+        crate::engine::host_time::instant_nanos,
+        qpc_ticks_to_nanos,
+        boost_input_thread,
+    )
 }
 
-#[cfg(target_os = "freebsd")]
-pub(super) mod devd;
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub(super) mod evdev;
-#[cfg(target_os = "freebsd")]
-pub(super) mod hidraw;
-#[cfg(target_os = "macos")]
-pub(super) mod iohid;
 #[cfg(windows)]
-pub(super) mod w32_raw_input;
-#[cfg(all(windows, not(target_vendor = "win7")))]
-pub(super) mod wgi;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn emit_dir_edges_updates_only_changed_dirs() {
-        let mut events = Vec::new();
-        let timestamp = Instant::now();
-        let mut dir_state = [false; 4];
-
-        emit_dir_edges(
-            &mut |event| events.push(event),
-            PadId(7),
-            &mut dir_state,
-            timestamp,
-            42,
-            [true, false, true, false],
-        );
-        assert_eq!(dir_state, [true, false, true, false]);
-        assert_eq!(events.len(), 2);
-        assert!(matches!(
-            events[0],
-            PadEvent::Dir {
-                id: PadId(7),
-                timestamp: ts,
-                host_nanos: 42,
-                dir: PadDir::Up,
-                pressed: true,
-            } if ts == timestamp
-        ));
-        assert!(matches!(
-            events[1],
-            PadEvent::Dir {
-                id: PadId(7),
-                timestamp: ts,
-                host_nanos: 42,
-                dir: PadDir::Left,
-                pressed: true,
-            } if ts == timestamp
-        ));
-
-        events.clear();
-        emit_dir_edges(
-            &mut |event| events.push(event),
-            PadId(7),
-            &mut dir_state,
-            timestamp,
-            42,
-            [true, false, true, false],
-        );
-        assert!(events.is_empty());
-    }
+#[inline(always)]
+fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+    crate::engine::windows_rt::qpc_ticks_to_nanos(ticks)
 }
+
+#[cfg(not(windows))]
+#[inline(always)]
+const fn qpc_ticks_to_nanos(_ticks: u64) -> Option<u64> {
+    None
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn boost_input_thread() -> InputThreadPolicy {
+    let token = crate::engine::windows_rt::boost_current_thread(
+        crate::engine::windows_rt::ThreadRole::Input,
+    )
+    .into_mmcss_token();
+    InputThreadPolicy::new(token, restore_input_thread)
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn restore_input_thread(token: usize) {
+    crate::engine::windows_rt::restore_thread_policy_token(token);
+}
+
+#[cfg(not(windows))]
+#[inline(always)]
+const fn boost_input_thread() -> InputThreadPolicy {
+    InputThreadPolicy::none()
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub(super) use deadsync_input::backend::evdev;
+#[cfg(target_os = "freebsd")]
+pub(super) use deadsync_input::backend::hidraw;
+#[cfg(target_os = "macos")]
+pub(super) use deadsync_input::backend::iohid;
+#[cfg(windows)]
+pub(super) use deadsync_input::backend::w32_raw_input;
+#[cfg(all(windows, not(target_vendor = "win7")))]
+pub(super) use deadsync_input::backend::wgi;

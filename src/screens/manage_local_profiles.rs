@@ -3,7 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
 use crate::engine::audio;
-use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
@@ -15,6 +14,7 @@ use crate::screens::components::shared::transitions;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::sync::Arc;
@@ -1568,7 +1568,7 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::InputSource;
+    use deadsync_core::input::InputSource;
 
     fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
         let now = Instant::now();

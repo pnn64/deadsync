@@ -1,9 +1,11 @@
-use crate::engine::input::{RawKeyboardEvent, with_keymap};
+use crate::engine::input::with_keymap;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
-use deadsync_input::{InputEvent, InputSource, PadEvent, VirtualAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::backend::RawKeyboardEvent;
+use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 /* ---------------------------- transitions ---------------------------- */
@@ -67,14 +69,6 @@ pub enum ThreeKeyMenuAction {
     Next,
     Confirm,
     Cancel,
-}
-
-#[inline(always)]
-pub const fn player_side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
 }
 
 #[inline(always)]
@@ -362,7 +356,8 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{MenuLrChordTracker, dedicated_blocks_arrow, menu_lr_side};
-    use deadsync_input::{InputEvent, InputSource, VirtualAction};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_profile::PlayerSide;
     use std::time::{Duration, Instant};
 

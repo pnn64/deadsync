@@ -1,5 +1,7 @@
 use crate::judgment::Judgment;
+use crate::timing::{TIMING_WINDOW_ADD_S, TimingData};
 use deadsync_core::note::NoteType;
+use deadsync_core::song_time::{SongTimeNs, song_time_ns_delta_seconds, song_time_ns_from_seconds};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HoldResult {
@@ -14,6 +16,11 @@ pub enum MineResult {
     Avoided,
 }
 
+pub const MAX_HOLD_LIFE: f32 = 1.0;
+// Player::GetWindowSeconds applies TimingWindowAdd to hold and roll windows too.
+pub const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32 + TIMING_WINDOW_ADD_S;
+pub const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35 + TIMING_WINDOW_ADD_S;
+
 #[derive(Clone, Debug)]
 pub struct HoldData {
     pub end_row_index: usize,
@@ -24,6 +31,97 @@ pub struct HoldData {
     pub let_go_starting_life: f32,
     pub last_held_row_index: usize,
     pub last_held_beat: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HoldLifeAdvance {
+    pub life_after: f32,
+    pub zero_elapsed_music_ns: Option<SongTimeNs>,
+}
+
+#[inline(always)]
+pub fn advance_hold_last_held(
+    hold: &mut HoldData,
+    timing: &TimingData,
+    current_beat: f32,
+    note_start_row: usize,
+    note_start_beat: f32,
+) {
+    let prev_row = hold.last_held_row_index;
+    let prev_beat = hold.last_held_beat.clamp(note_start_beat, hold.end_beat);
+    let current_beat = current_beat.clamp(note_start_beat, hold.end_beat);
+    let mut current_row = timing
+        .get_row_for_beat(current_beat)
+        .unwrap_or(note_start_row);
+    current_row = current_row.clamp(note_start_row, hold.end_row_index);
+    let final_row = prev_row.max(current_row);
+    if final_row == prev_row {
+        hold.last_held_beat = prev_beat.max(current_beat);
+        return;
+    }
+    hold.last_held_row_index = final_row;
+    hold.last_held_beat = prev_beat.max(current_beat);
+}
+
+#[inline(always)]
+pub const fn hold_window_seconds(note_type: NoteType) -> f32 {
+    match note_type {
+        NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
+        _ => TIMING_WINDOW_SECONDS_HOLD,
+    }
+}
+
+#[inline(always)]
+pub fn advance_hold_life_ns(
+    note_type: NoteType,
+    life: f32,
+    pressed: bool,
+    music_elapsed_ns: SongTimeNs,
+    music_rate: f32,
+) -> HoldLifeAdvance {
+    let life = life.clamp(0.0, MAX_HOLD_LIFE);
+    if music_elapsed_ns <= 0 {
+        return HoldLifeAdvance {
+            life_after: life,
+            zero_elapsed_music_ns: None,
+        };
+    }
+    if matches!(note_type, NoteType::Hold) && pressed {
+        return HoldLifeAdvance {
+            life_after: MAX_HOLD_LIFE,
+            zero_elapsed_music_ns: None,
+        };
+    }
+
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    let window = hold_window_seconds(note_type);
+    if !window.is_finite() || window <= 0.0 {
+        return HoldLifeAdvance {
+            life_after: 0.0,
+            zero_elapsed_music_ns: Some(0),
+        };
+    }
+
+    let music_elapsed_s = song_time_ns_delta_seconds(music_elapsed_ns, 0);
+    let real_elapsed_s = music_elapsed_s / rate;
+    let life_drop = real_elapsed_s / window;
+    if life_drop < life {
+        return HoldLifeAdvance {
+            life_after: (life - life_drop).max(0.0),
+            zero_elapsed_music_ns: None,
+        };
+    }
+
+    HoldLifeAdvance {
+        life_after: 0.0,
+        zero_elapsed_music_ns: Some(song_time_ns_from_seconds(
+            (life * window * rate).clamp(0.0, music_elapsed_s),
+        )),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -141,6 +239,9 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::timing::{TimingData, TimingSegments};
+    use deadsync_core::song_time::song_time_ns_to_seconds;
+    use deadsync_core::timing::ROWS_PER_BEAT;
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
@@ -177,6 +278,12 @@ mod tests {
             }),
             ..test_note(column, row_index, note_type)
         }
+    }
+
+    fn row_to_beat(rows: usize) -> Vec<f32> {
+        (0..=rows)
+            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
+            .collect()
     }
 
     #[test]
@@ -237,5 +344,86 @@ mod tests {
         let totals = recompute_player_totals(&notes, (0, notes.len()));
 
         assert_eq!(totals, PlayerTotals::default());
+    }
+
+    #[test]
+    fn hold_life_advance_keeps_pressed_holds_full() {
+        let advanced = advance_hold_life_ns(
+            NoteType::Hold,
+            0.25,
+            true,
+            song_time_ns_from_seconds(0.2),
+            1.0,
+        );
+
+        assert_eq!(
+            advanced,
+            HoldLifeAdvance {
+                life_after: MAX_HOLD_LIFE,
+                zero_elapsed_music_ns: None,
+            }
+        );
+    }
+
+    #[test]
+    fn hold_life_advance_reports_exact_zero_cross_time() {
+        let advanced = advance_hold_life_ns(
+            NoteType::Hold,
+            0.25,
+            false,
+            song_time_ns_from_seconds(0.2),
+            1.0,
+        );
+
+        assert_eq!(advanced.life_after, 0.0);
+        let zero_elapsed = advanced
+            .zero_elapsed_music_ns
+            .expect("hold should cross zero");
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.080375).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_life_advance_split_intervals_match_single_interval() {
+        let whole = advance_hold_life_ns(
+            NoteType::Hold,
+            1.0,
+            false,
+            song_time_ns_from_seconds(0.16),
+            1.0,
+        );
+        let first = advance_hold_life_ns(
+            NoteType::Hold,
+            1.0,
+            false,
+            song_time_ns_from_seconds(0.05),
+            1.0,
+        );
+        let split = advance_hold_life_ns(
+            NoteType::Hold,
+            first.life_after,
+            false,
+            song_time_ns_from_seconds(0.11),
+            1.0,
+        );
+
+        assert!((whole.life_after - split.life_after).abs() <= 1e-6);
+        assert_eq!(whole.zero_elapsed_music_ns, split.zero_elapsed_music_ns);
+    }
+
+    #[test]
+    fn advance_hold_last_held_keeps_exact_progress_beat() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96, NoteType::Hold)
+            .hold
+            .expect("test hold has hold data");
+        hold.end_beat = 96.0 / ROWS_PER_BEAT as f32;
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 0.99, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 0.99).abs() <= 1e-6);
     }
 }

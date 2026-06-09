@@ -7,12 +7,13 @@ use crate::game::parsing::song_lua::{
 };
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song;
+use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
-use deadsync_input::{InputEdge, InputSource};
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{
@@ -26,13 +27,18 @@ use deadsync_rules::life::{
     LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
 };
 use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
-use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
+use deadsync_rules::note::{
+    HoldData, HoldResult, MAX_HOLD_LIFE, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD,
+    TIMING_WINDOW_SECONDS_ROLL, recompute_player_totals,
+};
+#[cfg(test)]
+use deadsync_rules::note::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::stream::StreamSegment;
-use deadsync_rules::stream::{stream_sequences_threshold, zmod_stream_totals_full_measures};
+use deadsync_rules::stream::{
+    StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
+};
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
-    TimingProfileNs, beat_to_note_row,
+    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
 };
 use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
@@ -133,8 +139,6 @@ pub use self::display::{
     display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
-#[cfg(test)]
-use self::holds::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
 use self::holds::{begin_hold_life_decay, start_active_hold, update_active_holds};
 use self::holds::{
     handle_hold_let_go, handle_hold_success, integrate_active_hold_to_time,
@@ -678,11 +682,7 @@ const DANGER_EFFECT_PERIOD_S: f32 = 1.0;
 const DANGER_EC1_RGBA: [f32; 4] = [1.0, 0.0, 0.24, 0.1];
 const DANGER_EC2_RGBA: [f32; 4] = [1.0, 0.0, 0.0, 0.35];
 
-const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
-// Player::GetWindowSeconds applies TimingWindowAdd to hold and roll windows too.
-const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32 + TIMING_WINDOW_ADD_S;
-const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35 + TIMING_WINDOW_ADD_S;
 // ITG's MaxInputLatencySeconds preference defaults to 0.0.
 const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
 // ITGmania Player::Step searches a wide row range first, then scores the
@@ -3065,23 +3065,6 @@ fn compute_column_scroll_dirs(
     dirs
 }
 
-#[inline(always)]
-fn player_side_for_index(
-    play_style: profile_data::PlayStyle,
-    session_side: profile_data::PlayerSide,
-    player_idx: usize,
-) -> profile_data::PlayerSide {
-    if play_style == profile_data::PlayStyle::Versus {
-        if player_idx == 0 {
-            profile_data::PlayerSide::P1
-        } else {
-            profile_data::PlayerSide::P2
-        }
-    } else {
-        session_side
-    }
-}
-
 fn mini_indicator_personal_best_percent(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -3117,33 +3100,11 @@ fn mini_indicator_machine_best_percent(
 }
 
 #[inline(always)]
-const fn single_runtime_player_is_p2(
-    play_style: profile_data::PlayStyle,
-    session_side: profile_data::PlayerSide,
-) -> bool {
-    matches!(
-        (play_style, session_side),
-        (
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P2
-        )
-    )
-}
-
-#[inline(always)]
-const fn side_index(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 pub fn scorebox_snapshot_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> Option<&score_data::CachedPlayerLeaderboardData> {
-    state.scorebox_side_snapshot[side_index(side)].as_ref()
+    state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
 }
 
 #[inline(always)]
@@ -3151,7 +3112,7 @@ pub fn scorebox_profile_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> &score_data::GameplayScoreboxProfileSnapshot {
-    &state.scorebox_profile_snapshot[side_index(side)]
+    &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -5289,20 +5250,6 @@ fn get_reference_bpm_from_display_tag(
     s.parse::<f32>().ok()
 }
 
-fn song_lua_display_bpm_pair(song: &SongData, chart: Option<&ChartData>) -> [f32; 2] {
-    song.chart_display_bpm_range(chart)
-        .map(|(lo, hi)| {
-            let lo = lo as f32;
-            let hi = hi as f32;
-            if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
-                [lo, hi]
-            } else {
-                [60.0, 60.0]
-            }
-        })
-        .unwrap_or([60.0, 60.0])
-}
-
 fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
     if cols_per_player == 0 {
         return None;
@@ -5391,12 +5338,10 @@ pub fn init(
 
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
-    let p2_runtime_player = single_runtime_player_is_p2(play_style, player_side);
-    let (cols_per_player, num_players, num_cols) = match play_style {
-        profile_data::PlayStyle::Single => (4, 1, 4),
-        profile_data::PlayStyle::Double => (8, 1, 8),
-        profile_data::PlayStyle::Versus => (4, 2, 8),
-    };
+    let p2_runtime_player = profile_data::runtime_player_is_p2(play_style, player_side);
+    let cols_per_player = play_style.cols_per_player();
+    let num_players = play_style.player_count();
+    let num_cols = play_style.total_cols();
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
     let mut gameplay_charts = gameplay_charts;
@@ -5519,7 +5464,10 @@ pub fn init(
         .map(|change| media_path_key(&change.path))
         .collect();
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
-        song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
+        sync_pref_offset(
+            pack_sync_pref,
+            config.machine_default_sync_offset.sync_pref(),
+        )
     } else {
         0.0
     };
@@ -6140,7 +6088,7 @@ pub fn init(
         if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
         }
-        rssp::stats::measure_densities(&gameplay_charts[p].notes, cols_per_player)
+        measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
     let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
@@ -6169,7 +6117,7 @@ pub fn init(
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
-        let side = player_side_for_index(play_style, player_side, p);
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
         let chart_hash = charts[p].short_hash.as_str();
         let score_type = player_profiles[p].mini_indicator_score_type;
         let personal_best = mini_indicator_personal_best_percent(chart_hash, side, score_type);
@@ -6191,19 +6139,20 @@ pub fn init(
     let mut scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
         std::array::from_fn(|_| score_data::GameplayScoreboxProfileSnapshot::default());
     for p in 0..num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        scorebox_profile_snapshot[side_index(side)] = scores::scorebox_profile_snapshot(
-            &player_profiles[p],
-            profile::is_session_side_joined(side),
-            profile::active_local_profile_id_for_side(side),
-        );
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        scorebox_profile_snapshot[profile_data::player_side_index(side)] =
+            scores::scorebox_profile_snapshot(
+                &player_profiles[p],
+                profile::is_session_side_joined(side),
+                profile::active_local_profile_id_for_side(side),
+            );
     }
 
     let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for p in 0..num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        let profile_snapshot = &scorebox_profile_snapshot[side_index(side)];
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let profile_snapshot = &scorebox_profile_snapshot[profile_data::player_side_index(side)];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
         }
@@ -6211,7 +6160,7 @@ pub fn init(
         if chart_hash.is_empty() {
             continue;
         }
-        scorebox_side_snapshot[side_index(side)] =
+        scorebox_side_snapshot[profile_data::player_side_index(side)] =
             scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
                 profile_snapshot,
@@ -8912,8 +8861,8 @@ fn refresh_scorebox_snapshots(state: &mut State) {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     for p in 0..state.num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        let idx = side_index(side);
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let idx = profile_data::player_side_index(side);
         let profile_snapshot = &state.scorebox_profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
@@ -9036,10 +8985,9 @@ mod tests {
         refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
         replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
-        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
-        step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -9051,14 +8999,16 @@ mod tests {
     use deadsync_chart::SongData;
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
+    use deadsync_core::input::{InputSource, Lane};
     use deadsync_core::note::NoteType;
-    use deadsync_input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
+    use deadsync_core::timing::ROWS_PER_BEAT;
+    use deadsync_input::{InputEdge, InputEvent, VirtualAction};
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{
-        DelaySegment, FakeSegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile,
-        TimingProfileNs, TimingSegments,
+        DelaySegment, FakeSegment, StopSegment, TimingData, TimingProfile, TimingProfileNs,
+        TimingSegments,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, LazyLock, Mutex};
@@ -9696,30 +9646,6 @@ return Def.ActorFrame{}
             queued_at: now,
             event_music_time_ns,
         }
-    }
-
-    #[test]
-    fn single_runtime_p2_helper_includes_double() {
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P1
-        ));
-        assert!(single_runtime_player_is_p2(
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P2
-        ));
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P1
-        ));
-        assert!(single_runtime_player_is_p2(
-            profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P2
-        ));
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Versus,
-            profile_data::PlayerSide::P2
-        ));
     }
 
     #[test]

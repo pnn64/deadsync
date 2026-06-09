@@ -1,7 +1,7 @@
 use deadsync_chart::{ChartData, GameplayChartData};
 use deadsync_profile::{AttackMode, MeasureCounter, MiniIndicator, TargetScoreSetting};
 use deadsync_rules::judgment;
-use deadsync_rules::stream::{StreamSegment, zmod_stream_totals_full_measures};
+use deadsync_rules::stream::{StreamSegment, measure_densities, zmod_stream_totals_full_measures};
 use deadsync_rules::timing::WindowCounts;
 
 use super::{
@@ -42,8 +42,8 @@ fn chart_stream_segments(
     lanes: usize,
     constant_bpm: bool,
 ) -> (Vec<StreamSegment>, f32, f32) {
-    let measure_densities = rssp::stats::measure_densities(&gameplay_chart.notes, lanes);
-    zmod_stream_totals_full_measures(&measure_densities, constant_bpm)
+    let densities = measure_densities(&gameplay_chart.notes, lanes);
+    zmod_stream_totals_full_measures(&densities, constant_bpm)
 }
 
 pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSegment> {

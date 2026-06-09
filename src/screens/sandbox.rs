@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{GpSystemEvent, RawKeyboardEvent};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::screen_center_x;
 use crate::screens::components::shared::transitions;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use std::collections::VecDeque;

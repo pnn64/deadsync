@@ -1,8 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::input::{RawKeyboardEvent, with_keymap};
+use crate::engine::input::with_keymap;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
@@ -872,7 +873,8 @@ pub fn build_select_music_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::{InputEvent, InputSource, PadCode, PadId};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, PadCode, PadId};
     use std::time::Duration;
 
     fn input_event_from(action: VirtualAction, source: InputSource) -> InputEvent {

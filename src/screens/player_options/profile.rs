@@ -379,11 +379,7 @@ pub(super) fn resolve_p1_chart<'a>(
     chart_steps_index: &[usize; PLAYER_SLOTS],
 ) -> Option<&'a ChartData> {
     let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
-    crate::screens::select_music::chart_for_steps_index(
-        song,
-        target_chart_type,
-        chart_steps_index[0],
-    )
+    song.chart_for_steps_index(target_chart_type, chart_steps_index[0])
 }
 
 pub(super) fn reference_bpm_for_song(song: &SongData, chart: Option<&ChartData>) -> f32 {
@@ -440,13 +436,7 @@ pub(super) fn display_bpm_pair_for_options(
     } else {
         1.0
     };
-    let (mut lo, mut hi) = song
-        .chart_display_bpm_range(chart)
-        .map_or((120.0_f32, 120.0_f32), |(a, b)| (a as f32, b as f32));
-    if !lo.is_finite() || !hi.is_finite() || lo <= 0.0 || hi <= 0.0 {
-        lo = 120.0;
-        hi = 120.0;
-    }
+    let [lo, hi] = song.display_bpm_pair_or(chart, [120.0, 120.0]);
     Some((lo * rate, hi * rate))
 }
 

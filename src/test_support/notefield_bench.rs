@@ -9,10 +9,11 @@ use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
+use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
+use deadsync_rules::timing::{TimingData, TimingSegments};
 use std::path::PathBuf;
 use std::sync::Arc;
 

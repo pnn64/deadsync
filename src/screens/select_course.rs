@@ -22,10 +22,14 @@ use crate::screens::components::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_simfile::course::{
+    self, CourseEntry, CourseFile, CourseSong, Difficulty, SongSort, StepsSpec,
+};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
@@ -347,7 +351,7 @@ fn course_group_name(path: &Path) -> String {
 }
 
 #[inline(always)]
-fn course_name(path: &Path, course: &rssp::course::CourseFile) -> String {
+fn course_name(path: &Path, course: &CourseFile) -> String {
     if course.name.trim().is_empty() {
         path.file_stem()
             .and_then(|n| n.to_str())
@@ -367,13 +371,13 @@ pub fn course_score_hash(course_path: &Path) -> String {
 }
 
 #[inline(always)]
-fn course_steps_label(steps: &rssp::course::StepsSpec) -> String {
+fn course_steps_label(steps: &StepsSpec) -> String {
     match steps {
-        rssp::course::StepsSpec::Difficulty(diff) => rssp::course::difficulty_label(*diff)
+        StepsSpec::Difficulty(diff) => course::difficulty_label(*diff)
             .to_ascii_lowercase()
             .to_string(),
-        rssp::course::StepsSpec::MeterRange { low, high } => format!("{low}-{high}"),
-        rssp::course::StepsSpec::Unknown { raw } => {
+        StepsSpec::MeterRange { low, high } => format!("{low}-{high}"),
+        StepsSpec::Unknown { raw } => {
             if raw.trim().is_empty() {
                 "?".to_string()
             } else {
@@ -384,32 +388,32 @@ fn course_steps_label(steps: &rssp::course::StepsSpec) -> String {
 }
 
 #[inline(always)]
-fn course_entry_song_label(entry: &rssp::course::CourseEntry) -> String {
+fn course_entry_song_label(entry: &CourseEntry) -> String {
     match &entry.song {
-        rssp::course::CourseSong::Fixed { song, .. } => song.clone(),
-        rssp::course::CourseSong::RandomAny => tr("SelectCourse", "RandomLabel").to_string(),
-        rssp::course::CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
-        rssp::course::CourseSong::SortPick { sort, index } => {
+        CourseSong::Fixed { song, .. } => song.clone(),
+        CourseSong::RandomAny => tr("SelectCourse", "RandomLabel").to_string(),
+        CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
+        CourseSong::SortPick { sort, index } => {
             let rank = index.saturating_add(1).max(1);
             let prefix = match sort {
-                rssp::course::SongSort::MostPlays => tr("SelectCourse", "BestPrefix"),
-                rssp::course::SongSort::FewestPlays => tr("SelectCourse", "WorstPrefix"),
-                rssp::course::SongSort::TopGrades => tr("SelectCourse", "TopGradesPrefix"),
-                rssp::course::SongSort::LowestGrades => tr("SelectCourse", "LowestGradesPrefix"),
+                SongSort::MostPlays => tr("SelectCourse", "BestPrefix"),
+                SongSort::FewestPlays => tr("SelectCourse", "WorstPrefix"),
+                SongSort::TopGrades => tr("SelectCourse", "TopGradesPrefix"),
+                SongSort::LowestGrades => tr("SelectCourse", "LowestGradesPrefix"),
             };
             format!("{prefix}{rank}")
         }
-        rssp::course::CourseSong::Unknown { raw } => raw.clone(),
+        CourseSong::Unknown { raw } => raw.clone(),
     }
 }
 
-const COURSE_RATING_ORDER: [rssp::course::Difficulty; 6] = [
-    rssp::course::Difficulty::Beginner,
-    rssp::course::Difficulty::Easy,
-    rssp::course::Difficulty::Medium,
-    rssp::course::Difficulty::Hard,
-    rssp::course::Difficulty::Challenge,
-    rssp::course::Difficulty::Edit,
+const COURSE_RATING_ORDER: [Difficulty; 6] = [
+    Difficulty::Beginner,
+    Difficulty::Easy,
+    Difficulty::Medium,
+    Difficulty::Hard,
+    Difficulty::Challenge,
+    Difficulty::Edit,
 ];
 
 #[inline(always)]
@@ -437,39 +441,32 @@ fn nearest_filled_slot<T>(slots: &[Option<T>], preferred: usize) -> Option<usize
 }
 
 #[inline(always)]
-fn shifted_course_difficulty(
-    base: rssp::course::Difficulty,
-    course: rssp::course::Difficulty,
-) -> rssp::course::Difficulty {
+fn shifted_course_difficulty(base: Difficulty, course: Difficulty) -> Difficulty {
     let base = base as i32;
-    let delta = (course as i32) - (rssp::course::Difficulty::Medium as i32);
+    let delta = (course as i32) - (Difficulty::Medium as i32);
     let mut idx = base + delta;
     if idx < 0 {
         idx = 0;
     }
-    if idx > rssp::course::Difficulty::Challenge as i32 {
-        idx = rssp::course::Difficulty::Challenge as i32;
+    if idx > Difficulty::Challenge as i32 {
+        idx = Difficulty::Challenge as i32;
     }
     match idx {
-        0 => rssp::course::Difficulty::Beginner,
-        1 => rssp::course::Difficulty::Easy,
-        2 => rssp::course::Difficulty::Medium,
-        3 => rssp::course::Difficulty::Hard,
-        _ => rssp::course::Difficulty::Challenge,
+        0 => Difficulty::Beginner,
+        1 => Difficulty::Easy,
+        2 => Difficulty::Medium,
+        3 => Difficulty::Hard,
+        _ => Difficulty::Challenge,
     }
 }
 
 #[inline(always)]
-const fn course_meter(
-    course: &rssp::course::CourseFile,
-    diff: rssp::course::Difficulty,
-) -> Option<i32> {
+const fn course_meter(course: &CourseFile, diff: Difficulty) -> Option<i32> {
     course.meters[diff as usize]
 }
 
 #[inline(always)]
-fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&'static str, u32)> {
-    use rssp::course::Difficulty;
+fn course_difficulty_from_meters(course: &CourseFile) -> Option<(&'static str, u32)> {
     const ORDER: [(Difficulty, &str); 6] = [
         (Difficulty::Challenge, "Challenge"),
         (Difficulty::Hard, "Hard"),
@@ -488,10 +485,7 @@ fn course_difficulty_from_meters(course: &rssp::course::CourseFile) -> Option<(&
 
 #[inline(always)]
 fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
-    let idx = color::FILE_DIFFICULTY_NAMES
-        .iter()
-        .position(|name| name.eq_ignore_ascii_case(difficulty_name))
-        .unwrap_or(2);
+    let idx = standard_difficulty_index(difficulty_name).unwrap_or(2);
     let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
     if let Some(meter) = meter {
         format!("{display} {meter}")
@@ -513,22 +507,21 @@ fn chart_step_artist(chart: &ChartData) -> String {
 
 fn resolve_course_chart<'a>(
     song: &'a SongData,
-    entry: &rssp::course::CourseEntry,
+    entry: &CourseEntry,
     chart_type: &str,
-    course_difficulty: rssp::course::Difficulty,
+    course_difficulty: Difficulty,
 ) -> Option<&'a ChartData> {
     let mut first_chart = None;
     let mut first_playable = None;
     let mut meter_match = None;
     let target_diff = match &entry.steps {
-        rssp::course::StepsSpec::Difficulty(diff) => {
-            let selected =
-                if course_difficulty != rssp::course::Difficulty::Medium && !entry.no_difficult {
-                    shifted_course_difficulty(*diff, course_difficulty)
-                } else {
-                    *diff
-                };
-            Some(rssp::course::difficulty_label(selected))
+        StepsSpec::Difficulty(diff) => {
+            let selected = if course_difficulty != Difficulty::Medium && !entry.no_difficult {
+                shifted_course_difficulty(*diff, course_difficulty)
+            } else {
+                *diff
+            };
+            Some(course::difficulty_label(selected))
         }
         _ => None,
     };
@@ -551,7 +544,7 @@ fn resolve_course_chart<'a>(
         {
             return Some(chart);
         }
-        if let rssp::course::StepsSpec::MeterRange { low, high } = &entry.steps {
+        if let StepsSpec::MeterRange { low, high } = &entry.steps {
             let meter = chart.meter as i32;
             if meter >= *low && meter <= *high && meter_match.is_none() {
                 meter_match = Some(chart);
@@ -565,10 +558,10 @@ fn resolve_course_chart<'a>(
 fn resolve_sort_pick_song(
     all_songs: &[Arc<SongData>],
     song_play_counts: &HashMap<String, u32>,
-    entry: &rssp::course::CourseEntry,
+    entry: &CourseEntry,
     chart_type: &str,
-    course_difficulty: rssp::course::Difficulty,
-    sort: rssp::course::SongSort,
+    course_difficulty: Difficulty,
+    sort: SongSort,
     index: i32,
 ) -> Option<Arc<SongData>> {
     let mut ranked: Vec<(u32, Arc<SongData>)> = Vec::new();
@@ -585,9 +578,9 @@ fn resolve_sort_pick_song(
 
     let pick = index.max(0) as usize;
     match sort {
-        rssp::course::SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
-        rssp::course::SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
-        rssp::course::SongSort::TopGrades | rssp::course::SongSort::LowestGrades => {
+        SongSort::MostPlays => ranked.sort_by(|a, b| b.0.cmp(&a.0)),
+        SongSort::FewestPlays => ranked.sort_by(|a, b| a.0.cmp(&b.0)),
+        SongSort::TopGrades | SongSort::LowestGrades => {
             return None;
         }
     }
@@ -613,13 +606,13 @@ fn resolve_random_song(
     all_songs: &[Arc<SongData>],
     songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
     used_song_keys: &HashSet<String>,
-    entry: &rssp::course::CourseEntry,
+    entry: &CourseEntry,
     chart_type: &str,
-    course_difficulty: rssp::course::Difficulty,
+    course_difficulty: Difficulty,
 ) -> Option<Arc<SongData>> {
     let pool: &[Arc<SongData>] = match &entry.song {
-        rssp::course::CourseSong::RandomAny => all_songs,
-        rssp::course::CourseSong::RandomWithinGroup { group } => songs_by_group
+        CourseSong::RandomAny => all_songs,
+        CourseSong::RandomWithinGroup { group } => songs_by_group
             .get(group.trim().to_ascii_lowercase().as_str())
             .map_or(&[], Vec::as_slice),
         _ => return None,
@@ -658,7 +651,7 @@ fn resolve_entry_song(
     course_path: &Path,
     entry_index: usize,
     random_seed: u64,
-    entry: &rssp::course::CourseEntry,
+    entry: &CourseEntry,
     by_group_song: &HashMap<(String, String), Arc<SongData>>,
     by_song: &HashMap<String, Arc<SongData>>,
     all_songs: &[Arc<SongData>],
@@ -666,10 +659,10 @@ fn resolve_entry_song(
     song_play_counts: &HashMap<String, u32>,
     used_song_keys: &HashSet<String>,
     chart_type: &str,
-    course_difficulty: rssp::course::Difficulty,
+    course_difficulty: Difficulty,
 ) -> Option<Arc<SongData>> {
     match &entry.song {
-        rssp::course::CourseSong::Fixed { group, song } => {
+        CourseSong::Fixed { group, song } => {
             let song_key = song.trim().to_ascii_lowercase();
             if let Some(group) = group.as_deref().map(str::trim) {
                 let group_key = group.to_ascii_lowercase();
@@ -678,7 +671,7 @@ fn resolve_entry_song(
                 by_song.get(&song_key).cloned()
             }
         }
-        rssp::course::CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
+        CourseSong::SortPick { sort, index } => resolve_sort_pick_song(
             all_songs,
             song_play_counts,
             entry,
@@ -687,8 +680,7 @@ fn resolve_entry_song(
             *sort,
             *index,
         ),
-        rssp::course::CourseSong::RandomAny
-        | rssp::course::CourseSong::RandomWithinGroup { .. } => {
+        CourseSong::RandomAny | CourseSong::RandomWithinGroup { .. } => {
             let seeded = random_seed ^ ((course_difficulty as u64) << 32);
             resolve_random_song(
                 course_path,
@@ -702,7 +694,7 @@ fn resolve_entry_song(
                 course_difficulty,
             )
         }
-        rssp::course::CourseSong::Unknown { .. } => None,
+        CourseSong::Unknown { .. } => None,
     }
 }
 
@@ -794,15 +786,14 @@ fn build_init_data() -> InitData {
         for (entry_idx, entry) in course.entries.iter().enumerate() {
             if matches!(
                 &entry.song,
-                rssp::course::CourseSong::RandomAny
-                    | rssp::course::CourseSong::RandomWithinGroup { .. }
+                CourseSong::RandomAny | CourseSong::RandomWithinGroup { .. }
             ) {
                 has_random_entries = true;
             }
             if matches!(
                 &entry.song,
-                rssp::course::CourseSong::SortPick {
-                    sort: rssp::course::SongSort::MostPlays,
+                CourseSong::SortPick {
+                    sort: SongSort::MostPlays,
                     ..
                 }
             ) {
@@ -821,7 +812,7 @@ fn build_init_data() -> InitData {
                 &song_play_counts,
                 &used_song_keys,
                 target_chart_type,
-                rssp::course::Difficulty::Medium,
+                Difficulty::Medium,
             );
 
             if let Some(song_data) = resolved.as_ref() {
@@ -839,12 +830,12 @@ fn build_init_data() -> InitData {
         let preferred_default_idx = course_difficulty_from_meters(course)
             .and_then(|(difficulty_name, _)| {
                 COURSE_RATING_ORDER.iter().position(|diff| {
-                    rssp::course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
+                    course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
                 })
             })
-            .unwrap_or(rssp::course::Difficulty::Medium as usize);
+            .unwrap_or(Difficulty::Medium as usize);
         let preferred_default_diff = COURSE_RATING_ORDER[preferred_default_idx];
-        let mut available_course_diffs: Vec<rssp::course::Difficulty> = COURSE_RATING_ORDER
+        let mut available_course_diffs: Vec<Difficulty> = COURSE_RATING_ORDER
             .iter()
             .copied()
             .filter(|diff| course_meter(course, *diff).is_some_and(|meter| meter >= 0))
@@ -931,7 +922,7 @@ fn build_init_data() -> InitData {
                 .map(|v| v as u32);
             if rated_entry_count == 0
                 && explicit_meter.is_none()
-                && course_diff != rssp::course::Difficulty::Medium
+                && course_diff != Difficulty::Medium
             {
                 continue;
             }
@@ -943,7 +934,7 @@ fn build_init_data() -> InitData {
                     None
                 }
             });
-            let course_difficulty_name = rssp::course::difficulty_label(course_diff).to_string();
+            let course_difficulty_name = course::difficulty_label(course_diff).to_string();
             let course_stepchart_label =
                 course_stepchart_label(course_difficulty_name.as_str(), course_meter);
 
@@ -982,7 +973,7 @@ fn build_init_data() -> InitData {
             name: course_name(path, course),
             scripter: course.scripter.clone(),
             description: course.description.clone(),
-            banner_path: rssp::course::resolve_course_banner_path(path, &course.banner),
+            banner_path: course::resolve_course_banner_path(path, &course.banner),
             ratings,
             default_rating_index,
             min_bpm: meta_min_bpm,
@@ -1988,8 +1979,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
     actors.reserve(256);
     let side = profile::get_session_player_side();
     let play_style = profile::get_session_play_style();
-    let is_p2_single =
-        play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
     let selected_rating = selected_meta

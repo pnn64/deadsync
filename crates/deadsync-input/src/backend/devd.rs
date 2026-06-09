@@ -6,17 +6,17 @@ use std::os::fd::RawFd;
 const DEVD_SOCKET: &[u8] = b"/var/run/devd.seqpacket.pipe\0";
 const DEVD_BUF_LEN: usize = 4096;
 
-pub(super) enum DevdEvent {
+pub enum DevdEvent {
     Create(String),
     Destroy(String),
 }
 
-pub(super) struct DevdWatch {
+pub struct DevdWatch {
     fd: RawFd,
 }
 
 impl DevdWatch {
-    pub(super) fn new() -> Option<Self> {
+    pub fn new() -> Option<Self> {
         // SAFETY: this is a straightforward libc socket creation call with no
         // aliasing requirements; we check the returned fd before using it.
         let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET, 0) };
@@ -80,11 +80,11 @@ impl DevdWatch {
     }
 
     #[inline(always)]
-    pub(super) const fn fd(&self) -> RawFd {
+    pub const fn fd(&self) -> RawFd {
         self.fd
     }
 
-    pub(super) fn collect_events(&self, out: &mut Vec<DevdEvent>) {
+    pub fn collect_events(&self, out: &mut Vec<DevdEvent>) {
         let mut buf = [0u8; DEVD_BUF_LEN];
         loop {
             // SAFETY: `buf` is a valid writable byte array of length `buf.len()`,

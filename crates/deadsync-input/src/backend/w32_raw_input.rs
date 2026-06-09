@@ -1,8 +1,8 @@
 use super::{
-    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent, emit_dir_edges,
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, RawKeyboardEvent, emit_dir_edges,
     uuid_from_bytes,
 };
-use crate::engine::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
+use crate::{PadCode, PadEvent, PadId};
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -80,6 +80,7 @@ struct Dev {
 }
 
 struct Ctx {
+    host: BackendHost,
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
@@ -559,7 +560,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let product = hid.dwProductId as u16;
     // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
     // owns the pad (see `native_smx_owns_device`).
-    if crate::engine::smx::native_smx_owns_device(Some(vendor), Some(product)) {
+    if ctx.host.native_smx_owns_device(Some(vendor), Some(product)) {
         log::debug!(
             "RawInput: ignoring StepManiaX pad (vid={vendor:04x} pid={product:04x}); native SMX input owns it"
         );
@@ -575,10 +576,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         Entry::Occupied(entry) => *entry.get(),
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
-            let id = PadId(crate::config::pad_index_for_uuid(
-                crate::config::PadOrderBackend::RawInput,
-                uuid,
-            ));
+            let id = ctx.host.pad_id_for_uuid(PadOrderBackend::RawInput, uuid);
             *entry.insert(id)
         }
     };
@@ -977,7 +975,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
 
         let header: RAWINPUTHEADER = ptr::read_unaligned(ctx.buf.as_ptr().cast::<RAWINPUTHEADER>());
         let timestamp = Instant::now();
-        let host_nanos = current_host_nanos();
+        let host_nanos = ctx.host.now_nanos();
         if header.dwType == RIM_TYPEKEYBOARD_U32 {
             handle_keyboard_input(ctx, timestamp, host_nanos);
             return;
@@ -1063,7 +1061,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 
 fn run_inner(mut ctx: Box<Ctx>) {
-    let _thread_policy = boost_current_thread(ThreadRole::Input);
+    let _thread_policy = ctx.host.boost_input_thread();
     // SAFETY: this thread owns the Win32 class registration, message-only window,
     // and message loop. The boxed `ctx` pointer is passed to `CreateWindowExW` and
     // intentionally leaked at shutdown so `GWLP_USERDATA` never dangles while the
@@ -1147,8 +1145,10 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+    host: BackendHost,
 ) {
     run_inner(Box::new(Ctx {
+        host,
         emit_pad: Box::new(emit_pad),
         emit_sys: Box::new(emit_sys),
         emit_key: Box::new(emit_key),
@@ -1162,8 +1162,12 @@ pub fn run(
 }
 
 #[cfg(not(target_vendor = "win7"))]
-pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static) {
+pub fn run_keyboard_only(
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+    host: BackendHost,
+) {
     run_inner(Box::new(Ctx {
+        host,
         emit_pad: Box::new(|_| {}),
         emit_sys: Box::new(|_| {}),
         emit_key: Box::new(emit_key),

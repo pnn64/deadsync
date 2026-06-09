@@ -258,6 +258,23 @@ pub fn calculate_itg_score_percent_from_points(
     scaled.max(0.0)
 }
 
+pub fn current_possible_grade_points_from_counts(
+    scoring_counts: &JudgeCounts,
+    holds_resolved: u32,
+    rolls_resolved: u32,
+) -> i32 {
+    let tap_rows = scoring_counts
+        .iter()
+        .copied()
+        .fold(0u32, |sum, count| sum.saturating_add(count));
+    let resolved = tap_rows
+        .saturating_add(holds_resolved)
+        .saturating_add(rolls_resolved);
+    i32::try_from(resolved)
+        .unwrap_or(i32::MAX)
+        .saturating_mul(HOLD_SCORE_HELD)
+}
+
 #[inline(always)]
 pub fn predictive_itg_score_percents(
     current_possible_grade_points: i32,
@@ -1357,6 +1374,13 @@ mod tests {
         assert!((kept - 94.0).abs() <= 1e-9);
         assert!((lost - 6.0).abs() <= 1e-9);
         assert!((pace - 0.0).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn current_possible_grade_points_include_resolved_holds() {
+        let counts: JudgeCounts = [2, 3, 0, 0, 0, 1];
+
+        assert_eq!(current_possible_grade_points_from_counts(&counts, 4, 5), 75);
     }
 
     #[test]

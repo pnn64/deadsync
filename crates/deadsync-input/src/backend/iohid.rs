@@ -1,6 +1,8 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
-use crate::engine::host_time::now_nanos;
-use crate::engine::input::RawKeyboardEvent;
+use super::RawKeyboardEvent;
+use super::{
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
+};
+use crate::{PadCode, PadEvent, PadId};
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::{HashMap, hash_map::Entry};
@@ -174,7 +176,7 @@ struct HostClock {
 }
 
 impl HostClock {
-    fn calibrate() -> Option<Self> {
+    fn calibrate(host: BackendHost) -> Option<Self> {
         let mut info = mach_timebase_info_data_t { numer: 0, denom: 0 };
         // SAFETY: `mach_timebase_info` writes into the provided stack local and
         // does not retain the pointer after returning.
@@ -182,11 +184,11 @@ impl HostClock {
         if status != 0 || info.denom == 0 {
             return None;
         }
-        let host_before = now_nanos();
+        let host_before = host.now_nanos();
         // SAFETY: `mach_absolute_time` reads the current monotonic host clock and
         // takes no pointers or borrowed Rust data.
         let mach_now = unsafe { mach_absolute_time() };
-        let host_after = now_nanos();
+        let host_after = host.now_nanos();
         let host_mid =
             host_before / 2 + host_after / 2 + ((host_before & 1) + (host_after & 1)) / 2;
         let mach_nanos = scale_mach_time(mach_now, info.numer, info.denom);
@@ -208,6 +210,7 @@ impl HostClock {
 }
 
 struct Ctx {
+    host: BackendHost,
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
@@ -283,9 +286,13 @@ fn timestamp_from_host_sample(
 }
 
 #[inline(always)]
-fn event_time(host_clock: Option<HostClock>, value: IOHIDValueRef) -> (Instant, u64) {
+fn event_time(
+    host: BackendHost,
+    host_clock: Option<HostClock>,
+    value: IOHIDValueRef,
+) -> (Instant, u64) {
     let sample = Instant::now();
-    let sample_host_nanos = now_nanos();
+    let sample_host_nanos = host.now_nanos();
     let host_nanos = host_clock
         .and_then(|clock| {
             // SAFETY: `value` is the live IOHID value delivered by the callback for
@@ -508,7 +515,7 @@ extern "C" fn on_match(
             cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_product_id)).map(|x| x as u16);
         // Skip the StepManiaX stage's generic-HID duplicate while native SMX
         // input owns the pad (see `native_smx_owns_device`).
-        if crate::engine::smx::native_smx_owns_device(vendor_id, product_id) {
+        if ctx.host.native_smx_owns_device(vendor_id, product_id) {
             log::debug!(
                 "iohid: ignoring StepManiaX pad (vid={vendor_id:04x?} pid={product_id:04x?}); native SMX input owns it"
             );
@@ -552,10 +559,7 @@ extern "C" fn on_match(
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
                 // Stable, persisted slot so this pad keeps the same PadId across launches.
-                let id = PadId(crate::config::pad_index_for_uuid(
-                    crate::config::PadOrderBackend::IoHid,
-                    uuid,
-                ));
+                let id = ctx.host.pad_id_for_uuid(PadOrderBackend::IoHid, uuid);
                 *entry.insert(id)
             }
         };
@@ -621,7 +625,7 @@ extern "C" fn on_input(
     // element/device handles are only used during this callback.
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
-        let (timestamp, host_nanos) = event_time(ctx.host_clock, value);
+        let (timestamp, host_nanos) = event_time(ctx.host, ctx.host_clock, value);
         let elem = IOHIDValueGetElement(value);
         if elem.is_null() {
             return;
@@ -718,6 +722,7 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+    host: BackendHost,
 ) {
     // SAFETY: the manager, run loop, and callback registrations all stay within
     // this thread; `ctx` is intentionally leaked so the callback context pointer
@@ -731,13 +736,14 @@ pub fn run(
         }
 
         let mut ctx = Box::new(Ctx {
+            host,
             emit_pad: Box::new(emit_pad),
             emit_sys: Box::new(emit_sys),
             emit_key: Box::new(emit_key),
             id_by_uuid: HashMap::new(),
             pad_devs: HashMap::new(),
             key_devs: HashMap::new(),
-            host_clock: HostClock::calibrate(),
+            host_clock: HostClock::calibrate(host),
             startup_complete_sent: false,
             key_primary_usage_page: cfstr("PrimaryUsagePage"),
             key_primary_usage: cfstr("PrimaryUsage"),

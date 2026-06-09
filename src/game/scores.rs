@@ -1,7 +1,7 @@
 use crate::config::SimpleIni;
 use crate::config::dirs;
 use crate::game::gameplay;
-use crate::game::online;
+use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
@@ -27,7 +27,7 @@ mod itl;
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    online::groovestats_active_service()
+    online_groovestats::active_service()
 }
 
 pub use arrowcloud::{
@@ -1383,24 +1383,12 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 }
 
 #[inline(always)]
-pub(super) const fn submit_side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> profile_data::PlayerSide {
     if gs.num_players >= 2 {
-        if player_idx == 0 {
-            profile_data::PlayerSide::P1
-        } else {
-            profile_data::PlayerSide::P2
-        }
+        profile_data::player_side_for_index(player_idx)
     } else {
         profile::get_session_player_side()
     }

@@ -62,14 +62,6 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
-const fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 fn shift_page(state: &mut State, num_stages: usize, dir: i32) -> bool {
     let pages = pages_for(num_stages);
     let old_page = state.page;
@@ -91,13 +83,13 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
     };
     if !ev.pressed {
         if let Some(side) = screen_input::menu_lr_side(ev.action) {
-            state.menu_lr_undo[side_ix(side)] = 0;
+            state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         }
         return ScreenAction::None;
     }
     if let Some(side) = chord_side {
-        let undo = state.menu_lr_undo[side_ix(side)];
-        state.menu_lr_undo[side_ix(side)] = 0;
+        let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
+        state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         if undo != 0 {
             let _ = shift_page(state, num_stages, i32::from(undo));
         }
@@ -117,11 +109,12 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_up => {
             if let Some(side) = screen_input::menu_lr_side(ev.action) {
-                state.menu_lr_undo[side_ix(side)] = if shift_page(state, num_stages, -1) {
-                    1
-                } else {
-                    0
-                };
+                state.menu_lr_undo[profile_data::player_side_index(side)] =
+                    if shift_page(state, num_stages, -1) {
+                        1
+                    } else {
+                        0
+                    };
             } else {
                 let _ = shift_page(state, num_stages, -1);
             }
@@ -136,11 +129,12 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_down => {
             if let Some(side) = screen_input::menu_lr_side(ev.action) {
-                state.menu_lr_undo[side_ix(side)] = if shift_page(state, num_stages, 1) {
-                    -1
-                } else {
-                    0
-                };
+                state.menu_lr_undo[profile_data::player_side_index(side)] =
+                    if shift_page(state, num_stages, 1) {
+                        -1
+                    } else {
+                        0
+                    };
             } else {
                 let _ = shift_page(state, num_stages, 1);
             }
@@ -167,10 +161,6 @@ fn format_rate_x(rate: f32) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-fn display_bpm_range(song: &SongData, chart: Option<&ChartData>) -> Option<(f64, f64)> {
-    song.chart_display_bpm_range(chart)
-}
-
 fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate: f32) -> String {
     // Handle Random display BPM — show "???" on eval
     if let Some(chart) = chart
@@ -181,33 +171,7 @@ fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate
     {
         return "???".to_string();
     }
-    let Some((mut lo, mut hi)) = display_bpm_range(song, chart) else {
-        return String::new();
-    };
-
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate as f64
-    } else {
-        1.0
-    };
-    lo *= rate;
-    hi *= rate;
-
-    let use_decimals = (music_rate - 1.0).abs() > 0.001;
-    let fmt_one = |v: f64| {
-        if use_decimals {
-            let s = format!("{v:.1}");
-            s.trim_end_matches('0').trim_end_matches('.').to_string()
-        } else {
-            format!("{v:.0}")
-        }
-    };
-
-    if (lo - hi).abs() < 1.0e-6 {
-        fmt_one(lo)
-    } else {
-        format!("{} - {}", fmt_one(lo), fmt_one(hi))
-    }
+    deadsync_chart::song::format_display_bpm_range(song.chart_display_bpm_range(chart), music_rate)
 }
 
 fn steps_type_label(chart_type: &str) -> Arc<str> {

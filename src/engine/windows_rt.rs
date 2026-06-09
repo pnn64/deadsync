@@ -1,4 +1,5 @@
 use log::{debug, warn};
+use std::ffi::c_void;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::Performance;
 use windows::Win32::System::Threading::{
@@ -82,6 +83,32 @@ impl Drop for ThreadPolicyGuard {
             if let Err(e) = Threading::AvRevertMmThreadCharacteristics(handle) {
                 warn!("Failed to leave MMCSS thread class: {e}");
             }
+        }
+    }
+}
+
+impl ThreadPolicyGuard {
+    #[inline(always)]
+    pub(crate) fn into_mmcss_token(mut self) -> usize {
+        self.mmcss_handle
+            .take()
+            .map(|handle| handle.0 as usize)
+            .unwrap_or(0)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn restore_thread_policy_token(token: usize) {
+    if token == 0 {
+        return;
+    }
+    // SAFETY: `token` comes from a successful `AvSetMmThreadCharacteristicsW`
+    // handle captured by `ThreadPolicyGuard::into_mmcss_token`, and this call
+    // consumes that handle exactly once when the input crate's guard drops.
+    unsafe {
+        let handle = HANDLE(token as *mut c_void);
+        if let Err(e) = Threading::AvRevertMmThreadCharacteristics(handle) {
+            warn!("Failed to leave MMCSS thread class: {e}");
         }
     }
 }

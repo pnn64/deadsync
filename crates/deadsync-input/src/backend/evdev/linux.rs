@@ -1,8 +1,8 @@
 use super::{
-    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, event_time, receipt_time,
-    uuid_from_bytes,
+    BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, event_time,
+    receipt_time, uuid_from_bytes,
 };
-use crate::engine::input::RawKeyboardEvent;
+use crate::backend::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char, c_void};
@@ -932,13 +932,14 @@ fn add_dev_if_new(
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) {
     if devs.iter().any(|dev| dev.path == spec.path) {
         return;
     }
     // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
     // owns the pad (see `native_smx_owns_device`).
-    if crate::engine::smx::native_smx_owns_device(spec.vendor_id, spec.product_id) {
+    if host.native_smx_owns_device(spec.vendor_id, spec.product_id) {
         log::debug!(
             "linux evdev: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
             spec.vendor_id,
@@ -949,10 +950,7 @@ fn add_dev_if_new(
     let existing_id = id_by_uuid.get(&spec.uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {
-        PadId(crate::config::pad_index_for_uuid(
-            crate::config::PadOrderBackend::LinuxEvdev,
-            spec.uuid,
-        ))
+        host.pad_id_for_uuid(crate::backend::PadOrderBackend::LinuxEvdev, spec.uuid)
     });
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
         if existing_id.is_none() {
@@ -983,6 +981,7 @@ fn refresh_fallback(
     scratch: &mut FallbackScratch,
     scan_keyboards: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) {
     scan_fallback(scratch, devs, key_devs);
 
@@ -1008,7 +1007,7 @@ fn refresh_fallback(
     publish_keyboard_backend_state(key_devs);
     for spec in scratch.specs.drain(..) {
         match spec.class {
-            DevClass::Pad => add_dev_if_new(spec, devs, id_by_uuid, false, emit_sys),
+            DevClass::Pad => add_dev_if_new(spec, devs, id_by_uuid, false, emit_sys, host),
             DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs, None),
             DevClass::Keyboard => {}
         }
@@ -1032,12 +1031,17 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent),
     emit_sys: impl FnMut(GpSystemEvent),
     emit_key: impl FnMut(RawKeyboardEvent),
+    host: BackendHost,
 ) {
-    run_inner(true, emit_pad, emit_sys, emit_key);
+    run_inner(true, emit_pad, emit_sys, emit_key, host);
 }
 
-pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
-    run_inner(false, emit_pad, emit_sys, |_| {});
+pub fn run_pad_only(
+    emit_pad: impl FnMut(PadEvent),
+    emit_sys: impl FnMut(GpSystemEvent),
+    host: BackendHost,
+) {
+    run_inner(false, emit_pad, emit_sys, |_| {}, host);
 }
 
 fn run_inner(
@@ -1045,6 +1049,7 @@ fn run_inner(
     mut emit_pad: impl FnMut(PadEvent),
     mut emit_sys: impl FnMut(GpSystemEvent),
     mut emit_key: impl FnMut(RawKeyboardEvent),
+    host: BackendHost,
 ) {
     let discovery = init_discovery();
     let mut devs: Vec<Dev> = Vec::new();
@@ -1058,7 +1063,7 @@ fn run_inner(
             for spec in state.enumerate_specs() {
                 match spec.class {
                     DevClass::Pad => {
-                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys)
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys, host)
                     }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
@@ -1072,7 +1077,7 @@ fn run_inner(
             for spec in fallback.specs.drain(..) {
                 match spec.class {
                     DevClass::Pad => {
-                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys)
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, true, &mut emit_sys, host)
                     }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
@@ -1144,7 +1149,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
-        let receipt = receipt_time();
+        let receipt = receipt_time(host);
 
         let mut fallback_refresh = false;
         if dev_offset == 1 {
@@ -1325,7 +1330,7 @@ fn run_inner(
             match event {
                 HotplugEvent::Add(spec) => match spec.class {
                     DevClass::Pad => {
-                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, false, &mut emit_sys)
+                        add_dev_if_new(spec, &mut devs, &mut id_by_uuid, false, &mut emit_sys, host)
                     }
                     DevClass::Keyboard if scan_keyboards => {
                         add_key_dev_if_new(spec, &mut key_devs, None)
@@ -1346,6 +1351,7 @@ fn run_inner(
                 &mut fallback,
                 scan_keyboards,
                 &mut emit_sys,
+                host,
             );
         }
         publish_keyboard_backend_state(&key_devs);

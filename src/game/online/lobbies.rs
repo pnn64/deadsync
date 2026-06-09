@@ -67,8 +67,6 @@ struct ReconnectState {
     next_retry_at: Option<Instant>,
 }
 
-pub fn init() {}
-
 pub fn snapshot() -> Snapshot {
     SNAPSHOT.lock().unwrap().clone()
 }
@@ -89,14 +87,6 @@ pub fn can_update_machine_state() -> bool {
 
 pub fn search_lobbies() {
     let _ = send_command(Command::Search);
-}
-
-pub fn create_lobby() {
-    create_lobby_with_password("");
-}
-
-pub fn join_lobby(code: &str) {
-    join_lobby_with_password(code, "");
 }
 
 pub fn create_lobby_with_password(password: &str) {
@@ -151,11 +141,7 @@ pub fn leave_lobby() {
 }
 
 pub fn update_machine_state(screen_name: &str, ready: bool) {
-    update_machine_state_sides(screen_name, ready, ready);
-}
-
-pub fn update_machine_state_sides(screen_name: &str, p1_ready: bool, p2_ready: bool) {
-    update_machine_state_sides_with_stats(screen_name, p1_ready, p2_ready, None, None);
+    update_machine_state_sides_with_stats(screen_name, ready, ready, None, None);
 }
 
 pub fn update_machine_state_sides_with_stats(

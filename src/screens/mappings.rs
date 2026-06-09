@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::input::{InputBinding, RawKeyboardEvent, with_keymap};
+use crate::engine::input::{InputBinding, with_keymap};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -11,9 +11,10 @@ use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBa
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_core::input::InputSource;
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{
-    GamepadCodeBinding, InputEvent, InputSource, PadEvent, VirtualAction,
-    clamp_input_debounce_seconds,
+    GamepadCodeBinding, InputEvent, PadEvent, VirtualAction, clamp_input_debounce_seconds,
 };
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
@@ -1790,8 +1791,10 @@ mod tests {
         ActiveSlot, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event, init,
         invalid_capture_key, keymap_raw_nav_action,
     };
-    use crate::engine::input::{InputBinding, Keymap, RawKeyboardEvent};
-    use deadsync_input::{InputEvent, InputSource, PadCode, PadEvent, PadId, VirtualAction};
+    use crate::engine::input::{InputBinding, Keymap};
+    use deadsync_core::input::InputSource;
+    use deadsync_input::backend::RawKeyboardEvent;
+    use deadsync_input::{InputEvent, PadCode, PadEvent, PadId, VirtualAction};
     use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
 

@@ -9,10 +9,11 @@ use crate::game::parsing::song_lua::{
 use crate::game::profile;
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
+use deadsync_core::timing::ROWS_PER_BEAT;
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{ROWS_PER_BEAT, TimingData};
+use deadsync_rules::timing::TimingData;
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -33,7 +34,7 @@ use super::{
     REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
     ScrollOverrides, State, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
     VisualOverrides, apply_hyper_shuffle, apply_super_shuffle_taps, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, song_lua_display_bpm_pair, sort_player_notes,
+    apply_uncommon_masks_with_masks, sort_player_notes,
 };
 
 #[derive(Clone, Debug)]
@@ -2699,7 +2700,7 @@ fn song_lua_compile_player_screen_x(
         && center_1player_notefield;
     let centered_both_sides = num_players == 1 && play_style == profile_data::PlayStyle::Double;
     let p2_side = if num_players == 1 {
-        play_style == profile_data::PlayStyle::Single && player_side == profile_data::PlayerSide::P2
+        profile_data::is_single_p2_side(play_style, player_side)
     } else {
         player_index == 1
     };
@@ -2746,7 +2747,7 @@ fn build_song_lua_compile_context(
         song.title.clone(),
     );
     context.song_display_bpms =
-        song_lua_display_bpm_pair(song, charts.first().map(|chart| chart.as_ref()));
+        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
     context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -2773,7 +2774,7 @@ fn build_song_lua_compile_context(
             SongLuaDifficulty::default_enabled()
         },
         display_bpms: if player < num_players {
-            song_lua_display_bpm_pair(song, Some(charts[player].as_ref()))
+            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
         } else {
             [60.0, 60.0]
         },

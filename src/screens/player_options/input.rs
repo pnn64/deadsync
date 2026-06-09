@@ -418,15 +418,6 @@ pub(super) fn clear_nav_hold(state: &mut State, player_idx: usize) {
     state.nav_input[idx] = PlayerNavInput::default();
 }
 
-#[inline(always)]
-pub(super) fn player_side_for_idx(player_idx: usize) -> profile_data::PlayerSide {
-    if player_idx == P2 {
-        profile_data::PlayerSide::P2
-    } else {
-        profile_data::PlayerSide::P1
-    }
-}
-
 pub(super) fn handle_arcade_start_press(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -434,7 +425,10 @@ pub(super) fn handle_arcade_start_press(
     player_idx: usize,
     repeated: bool,
 ) -> Option<ScreenAction> {
-    if screen_input::menu_lr_both_held(&state.menu_lr_chord, player_side_for_idx(player_idx)) {
+    if screen_input::menu_lr_both_held(
+        &state.menu_lr_chord,
+        profile_data::player_side_for_index(player_idx),
+    ) {
         handle_arcade_prev_event(state, asset_manager, active, player_idx);
         return None;
     }
@@ -720,7 +714,7 @@ pub fn handle_input(
         .flatten();
     if state.pane_transition.is_active() {
         if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
-            let player_idx = screen_input::player_side_ix(side);
+            let player_idx = profile_data::player_side_index(side);
             if active[player_idx] {
                 return ScreenAction::Navigate(state.return_screen);
             }
@@ -736,7 +730,7 @@ pub fn handle_input(
         };
     }
     if let Some((side, nav)) = three_key_action {
-        let player_idx = screen_input::player_side_ix(side);
+        let player_idx = profile_data::player_side_index(side);
         if !active[player_idx] {
             return ScreenAction::None;
         }

@@ -12,8 +12,8 @@
 //! it queues `PadConfigIntent`s on the Song Select state that the app drains via
 //! [`PadConfigSync::apply_intent`].
 
-use crate::game::pad_profiles::PadConfigProfile;
 use crate::screens::select_music::{AppliedPadConfig, PadConfigIntent};
+use deadsync_profile::pad_config::PadConfigProfile;
 
 /// Inputs that determine which config resolves for an SMX pad. The resolver only
 /// reloads config files / rewrites the pad when this changes — now including the

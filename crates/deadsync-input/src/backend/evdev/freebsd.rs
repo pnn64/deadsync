@@ -1,8 +1,8 @@
 use super::{
-    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
-    event_time, receipt_time, uuid_from_bytes,
+    BackendHost, DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId,
+    emit_dir_edges, event_time, receipt_time, uuid_from_bytes,
 };
-use crate::engine::input::RawKeyboardEvent;
+use crate::backend::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -583,6 +583,7 @@ fn add_dev_if_new(
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) {
     if devs.iter().any(|dev| dev.path == path) {
         return;
@@ -595,7 +596,7 @@ fn add_dev_if_new(
     };
     // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
     // owns the pad (see `native_smx_owns_device`).
-    if crate::engine::smx::native_smx_owns_device(spec.vendor_id, spec.product_id) {
+    if host.native_smx_owns_device(spec.vendor_id, spec.product_id) {
         log::debug!(
             "freebsd evdev: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
             spec.vendor_id,
@@ -607,10 +608,7 @@ fn add_dev_if_new(
     let existing_id = id_by_uuid.get(&uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {
-        PadId(crate::config::pad_index_for_uuid(
-            crate::config::PadOrderBackend::FreeBsdEvdev,
-            uuid,
-        ))
+        host.pad_id_for_uuid(crate::backend::PadOrderBackend::FreeBsdEvdev, uuid)
     });
     if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
         if existing_id.is_none() {
@@ -661,12 +659,17 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent),
     emit_sys: impl FnMut(GpSystemEvent),
     emit_key: impl FnMut(RawKeyboardEvent),
+    host: BackendHost,
 ) {
-    run_inner(true, emit_pad, emit_sys, emit_key);
+    run_inner(true, emit_pad, emit_sys, emit_key, host);
 }
 
-pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
-    run_inner(false, emit_pad, emit_sys, |_| {});
+pub fn run_pad_only(
+    emit_pad: impl FnMut(PadEvent),
+    emit_sys: impl FnMut(GpSystemEvent),
+    host: BackendHost,
+) {
+    run_inner(false, emit_pad, emit_sys, |_| {}, host);
 }
 
 fn run_inner(
@@ -674,6 +677,7 @@ fn run_inner(
     mut emit_pad: impl FnMut(PadEvent),
     mut emit_sys: impl FnMut(GpSystemEvent),
     mut emit_key: impl FnMut(RawKeyboardEvent),
+    host: BackendHost,
 ) {
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
@@ -688,10 +692,9 @@ fn run_inner(
                 // Stable, persisted slot so this pad keeps the same PadId across launches.
                 let id = match id_by_uuid.get(&uuid).copied() {
                     Some(id) => id,
-                    None => PadId(crate::config::pad_index_for_uuid(
-                        crate::config::PadOrderBackend::FreeBsdEvdev,
-                        uuid,
-                    )),
+                    None => {
+                        host.pad_id_for_uuid(crate::backend::PadOrderBackend::FreeBsdEvdev, uuid)
+                    }
                 };
                 if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
                     id_by_uuid.insert(uuid, id);
@@ -773,7 +776,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
-        let receipt = receipt_time();
+        let receipt = receipt_time(host);
 
         if watch_offset == 1 {
             let revents = pollfds[0].revents;
@@ -881,7 +884,6 @@ fn run_inner(
             }
 
             let fd = pollfds[i + key_offset].fd;
-            let dev = &mut key_devs[i];
             // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
             // and the fd comes from the matching open evdev device.
             let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
@@ -945,6 +947,7 @@ fn run_inner(
                         &mut id_by_uuid,
                         false,
                         &mut emit_sys,
+                        host,
                     );
                     if scan_keyboards {
                         add_key_dev_if_new(path, &mut key_devs, false);

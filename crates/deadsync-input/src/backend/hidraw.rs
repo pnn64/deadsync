@@ -1,6 +1,6 @@
 use super::devd::{DevdEvent, DevdWatch};
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
-use crate::engine::host_time::now_nanos;
+use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
+use crate::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -518,6 +518,7 @@ fn add_dev_if_new(
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     initial: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) {
     if !is_hidraw_path(&path) || devs.iter().any(|dev| dev.path == path) {
         return;
@@ -530,7 +531,7 @@ fn add_dev_if_new(
     };
     // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
     // owns the pad (see `native_smx_owns_device`).
-    if crate::engine::smx::native_smx_owns_device(pending.vendor_id, pending.product_id) {
+    if host.native_smx_owns_device(pending.vendor_id, pending.product_id) {
         debug!(
             "hidraw: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
             pending.vendor_id, pending.product_id
@@ -539,12 +540,8 @@ fn add_dev_if_new(
     }
     let existing_id = id_by_uuid.get(&pending.uuid).copied();
     // Stable, persisted slot so this pad keeps the same PadId across launches.
-    let id = existing_id.unwrap_or_else(|| {
-        PadId(crate::config::pad_index_for_uuid(
-            crate::config::PadOrderBackend::Hidraw,
-            pending.uuid,
-        ))
-    });
+    let id =
+        existing_id.unwrap_or_else(|| host.pad_id_for_uuid(PadOrderBackend::Hidraw, pending.uuid));
     emit_sys(GpSystemEvent::Connected {
         name: pending.name.clone(),
         id,
@@ -706,6 +703,7 @@ fn process_report(
 pub fn run(
     emit_pad: &mut impl FnMut(PadEvent),
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) -> Result<(), String> {
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
@@ -713,7 +711,7 @@ pub fn run(
     let hidraw_paths = scan_hidraw_paths();
     let hidraw_count = hidraw_paths.len();
     for path in hidraw_paths {
-        add_dev_if_new(path, &mut devs, &mut id_by_uuid, true, emit_sys);
+        add_dev_if_new(path, &mut devs, &mut id_by_uuid, true, emit_sys, host);
     }
     if devs.is_empty() {
         let _ = watch;
@@ -797,7 +795,7 @@ pub fn run(
                 continue;
             }
             let timestamp = Instant::now();
-            let host_nanos = now_nanos();
+            let host_nanos = host.now_nanos();
             let len = n as usize;
             let mut handled = false;
             let id = dev.id;
@@ -840,7 +838,7 @@ pub fn run(
         for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
-                    add_dev_if_new(path, &mut devs, &mut id_by_uuid, false, emit_sys)
+                    add_dev_if_new(path, &mut devs, &mut id_by_uuid, false, emit_sys, host)
                 }
                 DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }

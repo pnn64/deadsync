@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.579"
+version = "0.4.634"
 dependencies = [
  "alsa",
  "ash",
@@ -1070,7 +1070,12 @@ name = "deadsync-input"
 version = "0.1.0"
 dependencies = [
  "deadsync-core",
+ "hidparser",
+ "libc",
  "log",
+ "mach2",
+ "windows",
+ "winit",
 ]
 
 [[package]]
@@ -1129,10 +1134,14 @@ dependencies = [
 name = "deadsync-simfile"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "deadsync-chart",
  "deadsync-core",
  "deadsync-rules",
+ "image",
  "rssp",
+ "serde",
+ "twox-hash",
 ]
 
 [[package]]
@@ -3917,9 +3926,9 @@ dependencies = [
 
 [[package]]
 name = "rustmaniax-sdk"
-version = "1.1.1"
+version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "280174855285cd9cafb9f4354014d48684520a81df07c39339c10e9e95a4c3f7"
+checksum = "43ecae32caf951cb8af8750e1b520af75ec6a600413b4444b467470811bdbbbf"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
