@@ -1146,6 +1146,29 @@ pub fn build_gameplay_chart(
     )
 }
 
+pub fn build_requested_gameplay_charts(
+    song: &SerializableSongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<GameplayChartData>, String> {
+    let song_offset = song.offset;
+    requested_chart_ixs
+        .iter()
+        .map(|&chart_ix| {
+            let chart = song
+                .charts
+                .get(chart_ix)
+                .cloned()
+                .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
+            Ok(build_gameplay_chart(
+                chart,
+                song_offset,
+                global_offset_seconds,
+            ))
+        })
+        .collect()
+}
+
 pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> SongData {
     let song_offset = song.offset;
     SongData {
@@ -1757,6 +1780,37 @@ mod tests {
         assert_eq!(chart.row_to_beat, vec![0.0]);
         assert_eq!(chart.timing_segments.bpms, vec![(0.0, 120.0)]);
         assert_eq!(chart.chart_attacks.as_deref(), Some("mod,0,1"));
+    }
+
+    #[test]
+    fn requested_gameplay_charts_preserve_requested_order() {
+        let mut song = cached_song(Path::new("song.sm"));
+        let mut first = test_serializable_chart("dance-single", "Challenge", 0, None);
+        first.notes = b"first".to_vec();
+        let mut second = test_serializable_chart("dance-single", "Hard", 1, None);
+        second.notes = b"second".to_vec();
+        song.charts = vec![first, second];
+
+        let charts = build_requested_gameplay_charts(&song, &[1, 0], 0.0).unwrap();
+
+        assert_eq!(charts[0].notes, b"second");
+        assert_eq!(charts[1].notes, b"first");
+    }
+
+    #[test]
+    fn requested_gameplay_charts_reject_out_of_range_index() {
+        let mut song = cached_song(Path::new("song.sm"));
+        song.charts = vec![test_serializable_chart(
+            "dance-single",
+            "Challenge",
+            0,
+            None,
+        )];
+
+        assert_eq!(
+            build_requested_gameplay_charts(&song, &[1], 0.0).unwrap_err(),
+            "Chart index 1 out of range"
+        );
     }
 
     #[test]

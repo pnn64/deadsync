@@ -1,9 +1,12 @@
 pub mod artwork;
 pub mod bgchanges;
+pub mod bpm;
 pub mod cache;
 pub mod changes;
+pub mod course;
 pub mod media;
 pub mod notes;
+pub mod scan;
 pub mod song;
 pub mod stats;
 pub mod tags;

@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+pub mod pad_config;
+
 pub const PLAYER_SLOTS: usize = 2;
 pub const DEFAULT_PROFILE_ID: &str = "00000000";
 pub const LOCAL_PROFILE_MAX_ID: u32 = 99_999_999;

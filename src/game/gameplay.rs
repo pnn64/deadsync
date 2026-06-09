@@ -26,13 +26,19 @@ use deadsync_rules::life::{
     LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
 };
 use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
-use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
+use deadsync_rules::note::{
+    HoldData, HoldResult, MAX_HOLD_LIFE, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD,
+    TIMING_WINDOW_SECONDS_ROLL, recompute_player_totals,
+};
+#[cfg(test)]
+use deadsync_rules::note::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::stream::StreamSegment;
-use deadsync_rules::stream::{stream_sequences_threshold, zmod_stream_totals_full_measures};
+use deadsync_rules::stream::{
+    StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
+};
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
-    TimingProfileNs, beat_to_note_row,
+    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
+    beat_to_note_row,
 };
 use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
@@ -133,8 +139,6 @@ pub use self::display::{
     display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
-#[cfg(test)]
-use self::holds::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
 use self::holds::{begin_hold_life_decay, start_active_hold, update_active_holds};
 use self::holds::{
     handle_hold_let_go, handle_hold_success, integrate_active_hold_to_time,
@@ -678,11 +682,7 @@ const DANGER_EFFECT_PERIOD_S: f32 = 1.0;
 const DANGER_EC1_RGBA: [f32; 4] = [1.0, 0.0, 0.24, 0.1];
 const DANGER_EC2_RGBA: [f32; 4] = [1.0, 0.0, 0.0, 0.35];
 
-const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
-// Player::GetWindowSeconds applies TimingWindowAdd to hold and roll windows too.
-const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32 + TIMING_WINDOW_ADD_S;
-const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35 + TIMING_WINDOW_ADD_S;
 // ITG's MaxInputLatencySeconds preference defaults to 0.0.
 const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
 // ITGmania Player::Step searches a wide row range first, then scores the
@@ -6140,7 +6140,7 @@ pub fn init(
         if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
         }
-        rssp::stats::measure_densities(&gameplay_charts[p].notes, cols_per_player)
+        measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
     let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {

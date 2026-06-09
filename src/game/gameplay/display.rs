@@ -262,23 +262,6 @@ fn display_itg_score_inputs(
     ))
 }
 
-fn current_possible_grade_points(
-    scoring_counts: &judgment::JudgeCounts,
-    holds_resolved: u32,
-    rolls_resolved: u32,
-) -> i32 {
-    let tap_rows = scoring_counts
-        .iter()
-        .copied()
-        .fold(0u32, |sum, count| sum.saturating_add(count));
-    let resolved = tap_rows
-        .saturating_add(holds_resolved)
-        .saturating_add(rolls_resolved);
-    i32::try_from(resolved)
-        .unwrap_or(i32::MAX)
-        .saturating_mul(judgment::HOLD_SCORE_HELD)
-}
-
 pub fn display_predictive_itg_score_percent(state: &State, player_idx: usize) -> f64 {
     let Some((
         scoring_counts,
@@ -298,8 +281,11 @@ pub fn display_predictive_itg_score_percent(state: &State, player_idx: usize) ->
         rolls_held,
         mines,
     );
-    let current_possible =
-        current_possible_grade_points(&scoring_counts, holds_resolved, rolls_resolved);
+    let current_possible = judgment::current_possible_grade_points_from_counts(
+        &scoring_counts,
+        holds_resolved,
+        rolls_resolved,
+    );
     let (kept, _, _) = judgment::predictive_itg_score_percents(current_possible, possible, actual);
     kept
 }

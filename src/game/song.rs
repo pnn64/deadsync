@@ -2,14 +2,27 @@ use deadsync_chart::{SongPack, SyncPref};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const ITG_SYNC_OFFSET_SECONDS: f32 = -0.009;
+pub use deadsync_chart::ITG_SYNC_OFFSET_SECONDS;
+
+#[inline(always)]
+const fn default_sync_pref(pref: crate::config::DefaultSyncOffset) -> SyncPref {
+    match pref {
+        crate::config::DefaultSyncOffset::Null => SyncPref::Null,
+        crate::config::DefaultSyncOffset::Itg => SyncPref::Itg,
+    }
+}
+
+#[inline(always)]
+const fn sync_pref_default(pref: SyncPref) -> crate::config::DefaultSyncOffset {
+    match pref {
+        SyncPref::Itg => crate::config::DefaultSyncOffset::Itg,
+        SyncPref::Default | SyncPref::Null => crate::config::DefaultSyncOffset::Null,
+    }
+}
 
 #[inline(always)]
 pub const fn default_sync_pref_offset(pref: crate::config::DefaultSyncOffset) -> f32 {
-    match pref {
-        crate::config::DefaultSyncOffset::Null => 0.0,
-        crate::config::DefaultSyncOffset::Itg => ITG_SYNC_OFFSET_SECONDS,
-    }
+    deadsync_chart::sync_pref_offset(default_sync_pref(pref), SyncPref::Null)
 }
 
 #[inline(always)]
@@ -17,11 +30,7 @@ pub const fn pack_sync_pref_offset(
     pref: SyncPref,
     default: crate::config::DefaultSyncOffset,
 ) -> f32 {
-    match pref {
-        SyncPref::Default => default_sync_pref_offset(default),
-        SyncPref::Null => 0.0,
-        SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
-    }
+    deadsync_chart::sync_pref_offset(pref, default_sync_pref(default))
 }
 
 #[inline(always)]
@@ -29,11 +38,10 @@ pub const fn pack_sync_pref_default(
     pref: SyncPref,
     default: crate::config::DefaultSyncOffset,
 ) -> crate::config::DefaultSyncOffset {
-    match pref {
-        SyncPref::Default => default,
-        SyncPref::Null => crate::config::DefaultSyncOffset::Null,
-        SyncPref::Itg => crate::config::DefaultSyncOffset::Itg,
-    }
+    sync_pref_default(deadsync_chart::resolve_sync_pref(
+        pref,
+        default_sync_pref(default),
+    ))
 }
 
 static SONG_CACHE: std::sync::LazyLock<Mutex<Vec<SongPack>>> =

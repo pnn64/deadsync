@@ -9,6 +9,25 @@ pub enum SyncPref {
     Itg,
 }
 
+pub const ITG_SYNC_OFFSET_SECONDS: f32 = -0.009;
+
+#[inline(always)]
+pub const fn resolve_sync_pref(pref: SyncPref, default: SyncPref) -> SyncPref {
+    match pref {
+        SyncPref::Default => default,
+        SyncPref::Null => SyncPref::Null,
+        SyncPref::Itg => SyncPref::Itg,
+    }
+}
+
+#[inline(always)]
+pub const fn sync_pref_offset(pref: SyncPref, default: SyncPref) -> f32 {
+    match resolve_sync_pref(pref, default) {
+        SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
+        SyncPref::Default | SyncPref::Null => 0.0,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum SongBackgroundChangeTarget {
     File(PathBuf),
@@ -478,6 +497,24 @@ mod tests {
         assert_eq!(
             song.active_background_path(9.0).map(PathBuf::as_path),
             Some(Path::new("later.png"))
+        );
+    }
+
+    #[test]
+    fn sync_pref_offset_uses_pack_pref_before_default() {
+        assert_eq!(sync_pref_offset(SyncPref::Null, SyncPref::Itg), 0.0);
+        assert_eq!(
+            sync_pref_offset(SyncPref::Itg, SyncPref::Null),
+            ITG_SYNC_OFFSET_SECONDS
+        );
+    }
+
+    #[test]
+    fn sync_pref_offset_uses_default_for_default_pack_pref() {
+        assert_eq!(sync_pref_offset(SyncPref::Default, SyncPref::Null), 0.0);
+        assert_eq!(
+            sync_pref_offset(SyncPref::Default, SyncPref::Itg),
+            ITG_SYNC_OFFSET_SECONDS
         );
     }
 }

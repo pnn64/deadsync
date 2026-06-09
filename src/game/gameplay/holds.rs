@@ -1,15 +1,15 @@
 use deadsync_core::note::NoteType;
-use deadsync_rules::note::{HoldData, HoldResult};
-use deadsync_rules::timing::TimingData;
+use deadsync_rules::note::{
+    HoldData, HoldResult, MAX_HOLD_LIFE, advance_hold_last_held, advance_hold_life_ns,
+};
 
 use super::{
     ActiveHold, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, HoldJudgmentRenderInfo, LIFE_HELD,
-    LIFE_LET_GO, MAX_COLS, MAX_HOLD_LIFE, SongTimeNs, State, apply_hold_success_combo_state,
-    apply_life_change, autoplay_blocks_scoring, break_combo_state, capture_failed_ex_score_inputs,
+    LIFE_LET_GO, MAX_COLS, SongTimeNs, State, apply_hold_success_combo_state, apply_life_change,
+    autoplay_blocks_scoring, break_combo_state, capture_failed_ex_score_inputs,
     clear_full_combo_state, current_music_time_s, is_state_dead, player_for_col,
-    song_time_ns_delta_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
-    song_time_ns_to_seconds, sync_active_hold_pressed_state, trigger_hold_explosion,
-    update_itg_grade_totals,
+    song_time_ns_invalid, song_time_ns_to_seconds, sync_active_hold_pressed_state,
+    trigger_hold_explosion, update_itg_grade_totals,
 };
 
 pub(super) fn handle_hold_let_go(
@@ -91,73 +91,6 @@ pub(super) fn begin_hold_life_decay(
     if note_index < hold_decay_active.len() && !hold_decay_active[note_index] {
         hold_decay_active[note_index] = true;
         decaying_hold_indices.push(note_index);
-    }
-}
-
-#[inline(always)]
-const fn hold_window_seconds(note_type: NoteType) -> f32 {
-    match note_type {
-        NoteType::Roll => super::TIMING_WINDOW_SECONDS_ROLL,
-        _ => super::TIMING_WINDOW_SECONDS_HOLD,
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(super) struct HoldLifeAdvance {
-    pub life_after: f32,
-    pub zero_elapsed_music_ns: Option<SongTimeNs>,
-}
-
-#[inline(always)]
-pub(super) fn advance_hold_life_ns(
-    note_type: NoteType,
-    life: f32,
-    pressed: bool,
-    music_elapsed_ns: SongTimeNs,
-    music_rate: f32,
-) -> HoldLifeAdvance {
-    let life = life.clamp(0.0, MAX_HOLD_LIFE);
-    if music_elapsed_ns <= 0 {
-        return HoldLifeAdvance {
-            life_after: life,
-            zero_elapsed_music_ns: None,
-        };
-    }
-    if matches!(note_type, NoteType::Hold) && pressed {
-        return HoldLifeAdvance {
-            life_after: MAX_HOLD_LIFE,
-            zero_elapsed_music_ns: None,
-        };
-    }
-
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    let window = hold_window_seconds(note_type);
-    if !window.is_finite() || window <= 0.0 {
-        return HoldLifeAdvance {
-            life_after: 0.0,
-            zero_elapsed_music_ns: Some(0),
-        };
-    }
-
-    let music_elapsed_s = song_time_ns_delta_seconds(music_elapsed_ns, 0);
-    let real_elapsed_s = music_elapsed_s / rate;
-    let life_drop = real_elapsed_s / window;
-    if life_drop < life {
-        return HoldLifeAdvance {
-            life_after: (life - life_drop).max(0.0),
-            zero_elapsed_music_ns: None,
-        };
-    }
-
-    HoldLifeAdvance {
-        life_after: 0.0,
-        zero_elapsed_music_ns: Some(song_time_ns_from_seconds(
-            (life * window * rate).clamp(0.0, music_elapsed_s),
-        )),
     }
 }
 
@@ -429,32 +362,6 @@ pub(super) fn refresh_roll_life_on_step(
     hold.life = MAX_HOLD_LIFE;
     hold.let_go_started_at = None;
     hold.let_go_starting_life = 0.0;
-}
-
-#[inline(always)]
-pub(super) fn advance_hold_last_held(
-    hold: &mut HoldData,
-    timing: &TimingData,
-    current_beat: f32,
-    note_start_row: usize,
-    note_start_beat: f32,
-) {
-    let prev_row = hold.last_held_row_index;
-    let prev_beat = hold.last_held_beat.clamp(note_start_beat, hold.end_beat);
-    let current_beat = current_beat.clamp(note_start_beat, hold.end_beat);
-    let mut current_row = timing
-        .get_row_for_beat(current_beat)
-        .unwrap_or(note_start_row);
-    current_row = current_row.clamp(note_start_row, hold.end_row_index);
-    let final_row = prev_row.max(current_row);
-    if final_row == prev_row {
-        hold.last_held_beat = prev_beat.max(current_beat);
-        return;
-    }
-    hold.last_held_row_index = final_row;
-    // Keep the row bookkeeping snapped like ITG, but preserve the exact beat for
-    // rendering so a let-go head doesn't visibly jump to a neighboring row.
-    hold.last_held_beat = prev_beat.max(current_beat);
 }
 
 pub(super) fn update_active_holds(

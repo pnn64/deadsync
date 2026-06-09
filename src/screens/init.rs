@@ -14,6 +14,7 @@ use crate::game::{
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_simfile::course as simfile_course;
 use log::info;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -229,7 +230,7 @@ fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
         let course_cache = crate::game::course::get_course_cache();
         for (course_path, course) in course_cache.iter() {
             if let Some(path) =
-                rssp::course::resolve_course_banner_path(course_path, &course.banner)
+                simfile_course::resolve_course_banner_path(course_path, &course.banner)
             {
                 banner.push(path);
             }

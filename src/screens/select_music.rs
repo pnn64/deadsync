@@ -43,13 +43,13 @@ use deadsync_input::{InputEvent, InputSource, PadDir, PadEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
     BiasEstimateWithPlot, BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation,
     KernelTarget,
 };
-use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -475,85 +475,6 @@ fn chord_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> bool 
 }
 
 // --- Preview helpers ---
-fn sec_at_beat_from_bpms(normalized_bpms: &str, target_beat: f64) -> f64 {
-    if !target_beat.is_finite() || target_beat <= 0.0 {
-        return 0.0;
-    }
-    let mut bpm_map = parse_bpm_map(normalized_bpms);
-    if bpm_map.is_empty() {
-        bpm_map.push((0.0, 60.0));
-    }
-    if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
-        let first_bpm = bpm_map[0].1;
-        bpm_map.insert(0, (0.0, first_bpm));
-    }
-    let mut time = 0.0;
-    let mut last_beat = 0.0;
-    let mut last_bpm = bpm_map[0].1;
-    for &(beat, bpm) in &bpm_map {
-        if target_beat <= beat {
-            let delta_beats = (target_beat - last_beat).max(0.0);
-            if last_bpm > 0.0 {
-                time += (delta_beats * 60.0) / last_bpm;
-            }
-            return time.max(0.0);
-        }
-        if beat > last_beat && last_bpm > 0.0 {
-            time += ((beat - last_beat) * 60.0) / last_bpm;
-        }
-        last_beat = beat;
-        last_bpm = bpm;
-    }
-    if last_bpm > 0.0 {
-        time += ((target_beat - last_beat).max(0.0) * 60.0) / last_bpm;
-    }
-    time.max(0.0)
-}
-
-fn beat_at_sec_from_bpms(normalized_bpms: &str, target_sec: f64) -> f64 {
-    if !target_sec.is_finite() || target_sec <= 0.0 {
-        return 0.0;
-    }
-    let mut bpm_map = parse_bpm_map(normalized_bpms);
-    if bpm_map.is_empty() {
-        bpm_map.push((0.0, 60.0));
-    }
-    if bpm_map.first().is_none_or(|(b, _)| *b != 0.0) {
-        let first_bpm = bpm_map[0].1;
-        bpm_map.insert(0, (0.0, first_bpm));
-    }
-    let mut elapsed = 0.0;
-    let mut last_beat = 0.0;
-    let mut last_bpm = bpm_map[0].1;
-    for &(beat, bpm) in &bpm_map {
-        let delta_beats = (beat - last_beat).max(0.0);
-        let delta_sec = if last_bpm > 0.0 {
-            (delta_beats * 60.0) / last_bpm
-        } else {
-            0.0
-        };
-        if elapsed + delta_sec >= target_sec {
-            let remain = (target_sec - elapsed).max(0.0);
-            let add_beats = if last_bpm > 0.0 {
-                remain * last_bpm / 60.0
-            } else {
-                0.0
-            };
-            return (last_beat + add_beats).max(0.0);
-        }
-        elapsed += delta_sec;
-        last_beat = beat;
-        last_bpm = bpm;
-    }
-    let remain = (target_sec - elapsed).max(0.0);
-    let add_beats = if last_bpm > 0.0 {
-        remain * last_bpm / 60.0
-    } else {
-        0.0
-    };
-    (last_beat + add_beats).max(0.0)
-}
-
 fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;

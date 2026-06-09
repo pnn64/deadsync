@@ -3,7 +3,8 @@ use crate::engine::audio::decode;
 use crate::game::song::get_song_cache;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_simfile::cache::{
-    SerializableSongData, build_gameplay_chart, build_song_meta, update_precise_song_bounds,
+    SerializableSongData, build_requested_gameplay_charts, build_song_meta,
+    update_precise_song_bounds,
 };
 use deadsync_simfile::song::{ParseSongOptions, SONG_ANALYSIS_MONO_THRESHOLD, parse_song_file};
 use log::{debug, info, warn};
@@ -110,29 +111,6 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
         ));
     }
     Ok(updated)
-}
-
-fn build_requested_gameplay_charts(
-    song_data: &SerializableSongData,
-    requested_chart_ixs: &[usize],
-    global_offset_seconds: f32,
-) -> Result<Vec<GameplayChartData>, String> {
-    let song_offset = song_data.offset;
-    requested_chart_ixs
-        .iter()
-        .map(|&chart_ix| {
-            let chart = song_data
-                .charts
-                .get(chart_ix)
-                .cloned()
-                .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
-            Ok(build_gameplay_chart(
-                chart,
-                song_offset,
-                global_offset_seconds,
-            ))
-        })
-        .collect()
 }
 
 fn load_gameplay_song_data(
