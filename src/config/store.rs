@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_platform::dirs;
 use std::fmt::Write as _;
 
 #[path = "store/defaults.rs"]

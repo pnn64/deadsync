@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::config::dirs;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{
@@ -14,6 +13,7 @@ use crate::game::{
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_platform::dirs;
 use deadsync_simfile::course as simfile_course;
 use log::info;
 use std::cell::RefCell;

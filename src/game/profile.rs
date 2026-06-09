@@ -1,5 +1,6 @@
-use crate::config::{self, SimpleIni, dirs};
+use crate::config::{self, SimpleIni};
 use chrono::Local;
+use deadsync_platform::dirs;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use log::{debug, info, warn};
 use std::collections::HashSet;

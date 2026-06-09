@@ -30,11 +30,11 @@
 //! `crate::engine::audio::set_music_replaygain_if_matches` so the result can
 //! be applied retroactively to the currently playing stream.
 
-use crate::config::dirs;
 use bincode::{Decode, Encode};
 use deadsync_audio_analysis::{
     ReplayGainInfo, UNITY_GAIN, compute_loudness, gain_linear_from_info,
 };
+use deadsync_platform::dirs;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;

@@ -25,8 +25,6 @@ use super::{
     ENV_RELEASE_URL_OVERRIDE, FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError,
     classify, fetch_latest_release,
 };
-use crate::config;
-
 /// Filename inside `cache_dir` that persists the updater cache.
 pub const CACHE_FILENAME: &str = "updater_state.json";
 
@@ -163,7 +161,9 @@ fn write_cache(new_cache: UpdaterCache) {
         };
         *guard = new_cache.clone();
     }
-    let path = config::dirs::app_dirs().cache_dir.join(CACHE_FILENAME);
+    let path = deadsync_platform::dirs::app_dirs()
+        .cache_dir
+        .join(CACHE_FILENAME);
     if let Err(err) = save_cache_to(&path, &new_cache) {
         log::warn!(
             "Failed to persist updater cache to {}: {err}",
@@ -193,7 +193,9 @@ fn save_cache_to(path: &Path, cache: &UpdaterCache) -> std::io::Result<()> {
 /// it) -- and naturally degrades a stale cached release to
 /// [`UpdateState::UpToDate`] once the user has installed the update.
 pub fn load_persisted_cache() {
-    let path = config::dirs::app_dirs().cache_dir.join(CACHE_FILENAME);
+    let path = deadsync_platform::dirs::app_dirs()
+        .cache_dir
+        .join(CACHE_FILENAME);
     let raw = load_cache_from(&path).unwrap_or_default();
     let override_active = std::env::var(ENV_RELEASE_URL_OVERRIDE).is_ok();
     let loaded = sanitize_loaded_cache(&path, raw, override_active);

@@ -6,6 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 chrono = "0.4.45"
+directories = "6.0.0"
 env_logger = "0.11.10"
 log = "0.4.32"
 winit = "0.30.13"

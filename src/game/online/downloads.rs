@@ -1,11 +1,11 @@
 use super::groovestats;
 use crate::config;
-use crate::config::dirs;
 use deadsync_online::downloads::{
     DownloadSnapshot, DownloadZipError, UnlockCache, UnlockCacheFile, cache_has_destination,
     download_zip_to_path, itl_unlock_pack_ini_content, sanitize_pack_name,
 };
 use deadsync_online::groovestats::ConnectionStatus;
+use deadsync_platform::dirs;
 use log::{debug, warn};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};

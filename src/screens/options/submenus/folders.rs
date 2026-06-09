@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::config::dirs::app_dirs;
+use deadsync_platform::dirs::app_dirs;
 use deadsync_platform::open_path;
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -168,7 +168,7 @@ pub(in crate::screens::options) fn open_folder_for_row(id: SubRowId) {
     let Some(path) = folder_path_for_row(id) else {
         return;
     };
-    crate::config::dirs::ensure_dirs_exist();
+    deadsync_platform::dirs::ensure_dirs_exist();
     let is_file_row = matches!(id, SubRowId::FoldersLogFile | SubRowId::FoldersConfigFile);
     if !is_file_row
         && !path.exists()

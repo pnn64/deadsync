@@ -4,7 +4,7 @@ use crate::assets::{self, AssetManager};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SyncGraphMode, dirs,
+    SyncGraphMode,
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
@@ -46,6 +46,7 @@ use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;

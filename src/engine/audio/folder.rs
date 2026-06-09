@@ -6,11 +6,12 @@
 //! underscore are excluded (matches the `_silent.redir` / theme override
 //! convention used by SL/SM5).
 //!
-//! Resolution goes through [`crate::config::dirs::app_dirs`], so a user-supplied
+//! Resolution goes through [`deadsync_platform::dirs::app_dirs`], so a user-supplied
 //! `{data_dir}/assets/sounds/<folder>/...` overlay is automatically picked up
 //! on top of the bundled `assets/` directory.
 
-use crate::config::{self, dirs};
+use crate::config;
+use deadsync_platform::dirs;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -3,11 +3,11 @@ pub mod i18n;
 mod textures;
 pub mod visual_styles;
 
-use crate::config::dirs;
 use crate::engine::gfx::{
     Backend, SamplerDesc, Texture as GfxTexture, TextureHandle, TextureHandleMap,
 };
 use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
+use deadsync_platform::dirs;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::{HashMap, VecDeque};

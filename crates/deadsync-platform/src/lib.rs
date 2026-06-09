@@ -1,3 +1,4 @@
+pub mod dirs;
 pub mod display;
 pub mod host_time;
 pub mod idle_inhibit;

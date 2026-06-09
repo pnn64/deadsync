@@ -46,7 +46,7 @@ static LANG: OnceLock<RwLock<LangData>> = OnceLock::new();
 static LANG_REVISION: AtomicU64 = AtomicU64::new(0);
 
 fn language_file_path(locale: &str) -> std::path::PathBuf {
-    config::dirs::app_dirs()
+    deadsync_platform::dirs::app_dirs()
         .exe_dir
         .join("assets")
         .join("languages")
@@ -54,7 +54,7 @@ fn language_file_path(locale: &str) -> std::path::PathBuf {
 }
 
 fn languages_dir_path() -> std::path::PathBuf {
-    config::dirs::app_dirs()
+    deadsync_platform::dirs::app_dirs()
         .exe_dir
         .join("assets")
         .join("languages")

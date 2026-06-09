@@ -639,7 +639,9 @@ fn resolve_expected_digest(
 
 /// Absolute path of the directory archives are downloaded into.
 pub fn downloads_dir() -> PathBuf {
-    config::dirs::app_dirs().cache_dir.join(DOWNLOADS_SUBDIR)
+    deadsync_platform::dirs::app_dirs()
+        .cache_dir
+        .join(DOWNLOADS_SUBDIR)
 }
 
 /// Spawn a worker that runs the platform apply + relaunch.  No-op if

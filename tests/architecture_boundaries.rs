@@ -90,7 +90,10 @@ const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "windows_rt",
 ];
 
+const CONFIG_PLATFORM_FACADE_MODULES: &[&str] = &["dirs"];
+
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
+    "src/engine",
     "src/app",
     "src/assets",
     "src/config",
@@ -832,6 +835,22 @@ fn platform_imports_do_not_use_engine_facade() {
             ));
         }
     }
+    for module in CONFIG_PLATFORM_FACADE_MODULES {
+        let file_path = root.join("src").join("config").join(format!("{module}.rs"));
+        let dir_path = root.join("src").join("config").join(module);
+        if file_path.exists() {
+            failures.push(format!(
+                "{} still exists; import deadsync_platform::{module} directly",
+                rel_path(&root, &file_path)
+            ));
+        }
+        if dir_path.exists() {
+            failures.push(format!(
+                "{} still exists; import deadsync_platform::{module} directly",
+                rel_path(&root, &dir_path)
+            ));
+        }
+    }
 
     for dir in ENGINE_PLATFORM_SCAN_DIRS {
         let path = root.join(dir);
@@ -849,6 +868,14 @@ fn platform_imports_do_not_use_engine_facade() {
                 if count != 0 {
                     failures.push(format!(
                         "{rel} references engine::{module} facade {count} times"
+                    ));
+                }
+            }
+            for module in CONFIG_PLATFORM_FACADE_MODULES {
+                let count = count_config_platform_facade_refs(&text, module);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references config::{module} facade {count} times"
                     ));
                 }
             }
@@ -1503,6 +1530,13 @@ fn count_engine_platform_facade_refs(text: &str, module: &str) -> usize {
         + count_token_refs(text, &format!("deadsync::engine::{module}"))
         + count_grouped_game_rule_uses(text, "use crate::engine::{", module)
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", module)
+}
+
+fn count_config_platform_facade_refs(text: &str, module: &str) -> usize {
+    count_token_refs(text, &format!("crate::config::{module}"))
+        + count_token_refs(text, &format!("deadsync::config::{module}"))
+        + count_grouped_game_rule_uses(text, "use crate::config::{", module)
+        + count_grouped_game_rule_uses(text, "use deadsync::config::{", module)
 }
 
 fn count_grouped_engine_input_uses(text: &str, marker: &str, symbol: &str) -> usize {

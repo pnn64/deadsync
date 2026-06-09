@@ -1,6 +1,5 @@
 mod audio;
 mod color;
-pub mod dirs;
 mod ini;
 mod keybinds;
 mod load;

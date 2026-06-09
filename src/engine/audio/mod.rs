@@ -3,8 +3,8 @@ pub mod folder;
 pub mod replaygain;
 mod resample;
 
-use crate::config::dirs;
 use deadsync_audio_decode as decode;
+use deadsync_platform::dirs;
 use deadsync_platform::host_time::{instant_nanos, now_nanos};
 #[cfg(windows)]
 use deadsync_platform::windows_rt::current_qpc_nanos;

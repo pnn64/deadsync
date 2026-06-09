@@ -637,7 +637,7 @@ fn folders_top_level_item_opens_folders_submenu() {
 
 #[test]
 fn folder_path_for_row_resolves_each_folder_row() {
-    use crate::config::dirs::app_dirs;
+    use deadsync_platform::dirs::app_dirs;
     let dirs = app_dirs();
     let expectations: &[(SubRowId, std::path::PathBuf)] = &[
         (SubRowId::FoldersDataDir, dirs.data_dir.clone()),

@@ -273,7 +273,7 @@ pub fn journal_path(exe_dir: &Path) -> PathBuf {
 }
 
 /// Returns true when `rel` is a top-level portability marker that
-/// `crate::config::dirs` reads to switch between portable and
+/// `deadsync_platform::dirs` reads to switch between portable and
 /// system-config modes (`portable.txt` / `portable.ini`).  The
 /// updater uses this to leave the user's existing portability state
 /// alone: if they didn't already have a marker, we don't create one

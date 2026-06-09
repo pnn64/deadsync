@@ -196,7 +196,7 @@ fn save_worker_loop(rx: mpsc::Receiver<SaveReq>) {
 
 #[inline(always)]
 fn write_config_file(content: &str) {
-    if let Err(e) = std::fs::write(super::dirs::app_dirs().config_path(), content) {
+    if let Err(e) = std::fs::write(deadsync_platform::dirs::app_dirs().config_path(), content) {
         warn!("Failed to save config file: {e}");
     }
 }

@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
-use crate::config::dirs;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{self, Actor};
@@ -18,6 +17,7 @@ use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use std::collections::HashMap;

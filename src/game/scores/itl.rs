@@ -4,7 +4,6 @@ use super::{
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts,
 };
-use crate::config::dirs;
 use crate::game::gameplay;
 use crate::game::online::downloads;
 use crate::game::profile;
@@ -16,6 +15,7 @@ use deadsync_online::groovestats::{
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, LeaderboardApiEntry,
     leaderboard_entries_from_api,
 };
+use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use serde::de::Deserializer;

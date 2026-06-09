@@ -316,7 +316,7 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
     if let Some(p) = crate::engine::audio::folder::random_music_path(&folder_rel) {
         return p;
     }
-    crate::config::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
+    deadsync_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
 }
 
 #[inline(always)]

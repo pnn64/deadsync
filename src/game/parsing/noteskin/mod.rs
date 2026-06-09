@@ -9,9 +9,9 @@ use self::{
     itg as noteskin_itg,
 };
 use crate::assets;
-use crate::config::dirs;
 use crate::engine::gfx::SamplerDesc;
 use crate::engine::present::anim as ui_anim;
+use deadsync_platform::dirs;
 use image::{Rgba, RgbaImage, image_dimensions};
 use log::warn;
 use std::borrow::Cow;

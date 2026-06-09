@@ -1,13 +1,13 @@
 use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
-use crate::config::dirs;
 use crate::engine::gfx::TextureHandleMap;
 use crate::engine::present::actors::Actor;
 use crate::engine::space;
 use crate::game::profile;
 use crate::screens::evaluation;
 use chrono::{Datelike, Local};
+use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use log::{info, warn};

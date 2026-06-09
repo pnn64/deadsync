@@ -8,7 +8,7 @@ use crate::config::{
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SyncGraphMode,
-    VersionOverlaySide, VisualStyle, dirs,
+    VersionOverlaySide, VisualStyle,
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BackendType, PresentModePolicy};

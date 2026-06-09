@@ -7,9 +7,9 @@ use super::{
 };
 use crate::assets::visual_styles;
 use crate::config;
-use crate::config::dirs;
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
+use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;

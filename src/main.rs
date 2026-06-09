@@ -4,7 +4,7 @@ use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
 fn startup_lines(cfg: &config::Config) -> Vec<String> {
-    let dirs = config::dirs::app_dirs();
+    let dirs = deadsync_platform::dirs::app_dirs();
     vec![
         format!("Portable mode: {}", dirs.portable),
         format!("Data directory: {}", dirs.data_dir.display()),
@@ -125,12 +125,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     deadsync_platform::host_time::init();
 
     // Resolve and create platform-native data/cache directories.
-    config::dirs::ensure_dirs_exist();
+    deadsync_platform::dirs::ensure_dirs_exist();
 
     // Install logger immediately, then set runtime max level from config after loading it.
     logging::init(
         config::bootstrap_log_to_file(),
-        config::dirs::app_dirs().log_path(),
+        deadsync_platform::dirs::app_dirs().log_path(),
     );
     install_panic_hook();
     // Startup default when config is missing or malformed.

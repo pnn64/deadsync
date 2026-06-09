@@ -1,9 +1,9 @@
 use crate::assets::AssetManager;
-use crate::config::dirs;
 use crate::engine::gfx::{
     Backend, FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap,
     TextureHandle,
 };
+use deadsync_platform::dirs;
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
