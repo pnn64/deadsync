@@ -1,12 +1,10 @@
 use crate::config::dirs;
-use crate::game::{
-    parsing::simfile::{collect_song_scan_roots, fmt_scan_time},
-    song::get_song_cache,
-};
+use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
 use deadsync_simfile::course::{
-    CourseEntry, CourseFile, CourseSong, Difficulty, StepsSpec, collect_merged_course_paths,
-    parse_course_file, validate_course_refs,
+    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths, parse_course_file,
+    validate_course_refs,
 };
+use deadsync_simfile::scan::fmt_scan_time;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -87,67 +85,6 @@ fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
     }
 
     roots
-}
-
-fn autogen_nonstop_group_courses() -> Vec<(PathBuf, CourseFile)> {
-    let song_cache = get_song_cache();
-    let mut out = Vec::with_capacity(song_cache.len());
-
-    for pack in song_cache.iter() {
-        if pack.songs.is_empty() {
-            continue;
-        }
-
-        let group_name = pack.group_name.trim();
-        if group_name.is_empty() {
-            continue;
-        }
-        let display_name = if pack.name.trim().is_empty() {
-            group_name
-        } else {
-            pack.name.trim()
-        };
-
-        let mut entries = Vec::with_capacity(4);
-        for _ in 0..4 {
-            entries.push(CourseEntry {
-                song: CourseSong::RandomWithinGroup {
-                    group: group_name.to_string(),
-                },
-                steps: StepsSpec::Difficulty(Difficulty::Medium),
-                modifiers: String::new(),
-                secret: true,
-                no_difficult: false,
-                gain_lives: -1,
-            });
-        }
-
-        let mut path = dirs::app_dirs().courses_dir();
-        path.push(group_name);
-        path.push("__deadsync_autogen_nonstop_random.crs");
-
-        out.push((
-            path,
-            CourseFile {
-                name: format!("{display_name} Random"),
-                name_translit: String::new(),
-                scripter: "Autogen".to_string(),
-                description: String::new(),
-                banner: pack
-                    .banner_path
-                    .as_ref()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                background: String::new(),
-                repeat: false,
-                lives: -1,
-                meters: [None; 6],
-                entries,
-            },
-        ));
-    }
-
-    out
 }
 
 pub fn scan_and_load_courses(courses_root: &Path, songs_root: &Path) {
@@ -248,7 +185,11 @@ fn scan_and_load_courses_impl<F>(
         report_done();
     }
 
-    let autogen_courses = autogen_nonstop_group_courses();
+    let autogen_courses = {
+        let courses_dir = dirs::app_dirs().courses_dir();
+        let song_cache = get_song_cache();
+        autogen_nonstop_group_courses(&courses_dir, &song_cache)
+    };
     let autogen_count = autogen_courses.len();
     loaded_courses.extend(autogen_courses);
 

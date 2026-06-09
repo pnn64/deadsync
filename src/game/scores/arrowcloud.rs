@@ -1,7 +1,7 @@
 use super::{
     gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
-    lua_chart_submit_allowed, submit_side_ix,
+    lua_chart_submit_allowed,
 };
 use crate::game::gameplay;
 use crate::game::profile;
@@ -87,7 +87,8 @@ fn arrowcloud_reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash:
         return;
     }
     let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
-    state[submit_side_ix(side)].retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    state[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -97,7 +98,8 @@ fn arrowcloud_reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &st
         return;
     }
     let mut state = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    state[submit_side_ix(side)].retain(|entry| !entry.payload.hash.eq_ignore_ascii_case(hash));
+    state[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.payload.hash.eq_ignore_ascii_case(hash));
 }
 
 #[inline(always)]
@@ -112,7 +114,7 @@ fn arrowcloud_set_submit_ui_status(
         return;
     }
     let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
-    let entries = &mut state[submit_side_ix(side)];
+    let entries = &mut state[profile_data::player_side_index(side)];
     if let Some(entry) = entries
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
@@ -140,7 +142,7 @@ fn arrowcloud_update_submit_ui_status_if_token(
         return false;
     }
     let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
-    let Some(entry) = state[submit_side_ix(side)]
+    let Some(entry) = state[profile_data::player_side_index(side)]
         .iter_mut()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
     else {
@@ -174,7 +176,7 @@ fn arrowcloud_store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
     }
     let side = entry.side;
     let mut state = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    let entries = &mut state[submit_side_ix(side)];
+    let entries = &mut state[profile_data::player_side_index(side)];
     if let Some(stored) = entries
         .iter_mut()
         .find(|stored| stored.payload.hash.eq_ignore_ascii_case(hash))
@@ -194,7 +196,7 @@ pub fn get_arrowcloud_submit_ui_status_for_side(
     if hash.is_empty() {
         return None;
     }
-    ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap()[submit_side_ix(side)]
+    ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap()[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .map(|entry| entry.status)
@@ -714,7 +716,7 @@ fn retry_arrowcloud_submit_inner(
     }
     let entry = {
         let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-        let Some(stored) = lock[submit_side_ix(side)]
+        let Some(stored) = lock[profile_data::player_side_index(side)]
             .iter_mut()
             .find(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
         else {
@@ -766,7 +768,7 @@ fn arrowcloud_record_submit_failure(
     status: ArrowCloudSubmitUiStatus,
 ) {
     let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    let Some(entry) = lock[submit_side_ix(side)]
+    let Some(entry) = lock[profile_data::player_side_index(side)]
         .iter_mut()
         .find(|entry| entry.payload.hash.eq_ignore_ascii_case(chart_hash))
     else {
@@ -788,7 +790,8 @@ fn arrowcloud_record_submit_failure(
 /// worker's success path when the status update was accepted.
 fn arrowcloud_record_submit_success(side: profile_data::PlayerSide, chart_hash: &str) {
     let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    lock[submit_side_ix(side)].retain(|entry| !entry.payload.hash.eq_ignore_ascii_case(chart_hash));
+    lock[profile_data::player_side_index(side)]
+        .retain(|entry| !entry.payload.hash.eq_ignore_ascii_case(chart_hash));
 }
 
 /// Returns the seconds remaining until the next retry is allowed (manual
@@ -803,7 +806,7 @@ pub fn arrowcloud_next_retry_remaining_secs(
         return None;
     }
     let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-    let target = lock[submit_side_ix(side)]
+    let target = lock[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))?
         .next_retry_at?;
@@ -822,7 +825,7 @@ pub fn arrowcloud_next_retry_is_auto(chart_hash: &str, side: profile_data::Playe
     }
     let attempt = {
         let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
-        let Some(entry) = lock[submit_side_ix(side)]
+        let Some(entry) = lock[profile_data::player_side_index(side)]
             .iter()
             .find(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
         else {

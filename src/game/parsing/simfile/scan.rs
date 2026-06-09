@@ -1,10 +1,11 @@
-use super::{fmt_scan_time, process_song};
+use super::process_song;
 use crate::config::dirs;
 use crate::game::song::{get_song_cache, set_song_cache};
 use deadsync_chart::{SongData, SongPack};
 use deadsync_simfile::scan::{
     PackScan, ScanFailure, collect_reload_pack_dirs, count_loaded_songs, empty_song_pack_from_scan,
-    finalize_loaded_packs, push_unique_path, replace_song_packs, scan_pack_dirs, scan_song_roots,
+    finalize_loaded_packs, fmt_scan_time, push_unique_path, replace_song_packs, scan_pack_dirs,
+    scan_song_roots,
 };
 use log::{debug, info, warn};
 use std::fs;

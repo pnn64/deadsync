@@ -3065,23 +3065,6 @@ fn compute_column_scroll_dirs(
     dirs
 }
 
-#[inline(always)]
-fn player_side_for_index(
-    play_style: profile_data::PlayStyle,
-    session_side: profile_data::PlayerSide,
-    player_idx: usize,
-) -> profile_data::PlayerSide {
-    if play_style == profile_data::PlayStyle::Versus {
-        if player_idx == 0 {
-            profile_data::PlayerSide::P1
-        } else {
-            profile_data::PlayerSide::P2
-        }
-    } else {
-        session_side
-    }
-}
-
 fn mini_indicator_personal_best_percent(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -3117,33 +3100,11 @@ fn mini_indicator_machine_best_percent(
 }
 
 #[inline(always)]
-const fn single_runtime_player_is_p2(
-    play_style: profile_data::PlayStyle,
-    session_side: profile_data::PlayerSide,
-) -> bool {
-    matches!(
-        (play_style, session_side),
-        (
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P2
-        )
-    )
-}
-
-#[inline(always)]
-const fn side_index(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 pub fn scorebox_snapshot_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> Option<&score_data::CachedPlayerLeaderboardData> {
-    state.scorebox_side_snapshot[side_index(side)].as_ref()
+    state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
 }
 
 #[inline(always)]
@@ -3151,7 +3112,7 @@ pub fn scorebox_profile_for_side(
     state: &State,
     side: profile_data::PlayerSide,
 ) -> &score_data::GameplayScoreboxProfileSnapshot {
-    &state.scorebox_profile_snapshot[side_index(side)]
+    &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -5391,7 +5352,7 @@ pub fn init(
 
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
-    let p2_runtime_player = single_runtime_player_is_p2(play_style, player_side);
+    let p2_runtime_player = profile_data::runtime_player_is_p2(play_style, player_side);
     let (cols_per_player, num_players, num_cols) = match play_style {
         profile_data::PlayStyle::Single => (4, 1, 4),
         profile_data::PlayStyle::Double => (8, 1, 8),
@@ -6169,7 +6130,7 @@ pub fn init(
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
-        let side = player_side_for_index(play_style, player_side, p);
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
         let chart_hash = charts[p].short_hash.as_str();
         let score_type = player_profiles[p].mini_indicator_score_type;
         let personal_best = mini_indicator_personal_best_percent(chart_hash, side, score_type);
@@ -6191,19 +6152,20 @@ pub fn init(
     let mut scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
         std::array::from_fn(|_| score_data::GameplayScoreboxProfileSnapshot::default());
     for p in 0..num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        scorebox_profile_snapshot[side_index(side)] = scores::scorebox_profile_snapshot(
-            &player_profiles[p],
-            profile::is_session_side_joined(side),
-            profile::active_local_profile_id_for_side(side),
-        );
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        scorebox_profile_snapshot[profile_data::player_side_index(side)] =
+            scores::scorebox_profile_snapshot(
+                &player_profiles[p],
+                profile::is_session_side_joined(side),
+                profile::active_local_profile_id_for_side(side),
+            );
     }
 
     let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for p in 0..num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        let profile_snapshot = &scorebox_profile_snapshot[side_index(side)];
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let profile_snapshot = &scorebox_profile_snapshot[profile_data::player_side_index(side)];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
         }
@@ -6211,7 +6173,7 @@ pub fn init(
         if chart_hash.is_empty() {
             continue;
         }
-        scorebox_side_snapshot[side_index(side)] =
+        scorebox_side_snapshot[profile_data::player_side_index(side)] =
             scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
                 profile_snapshot,
@@ -8912,8 +8874,8 @@ fn refresh_scorebox_snapshots(state: &mut State) {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     for p in 0..state.num_players {
-        let side = player_side_for_index(play_style, player_side, p);
-        let idx = side_index(side);
+        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let idx = profile_data::player_side_index(side);
         let profile_snapshot = &state.scorebox_profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
@@ -9036,10 +8998,9 @@ mod tests {
         refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
         replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
-        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
-        step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -9696,30 +9657,6 @@ return Def.ActorFrame{}
             queued_at: now,
             event_music_time_ns,
         }
-    }
-
-    #[test]
-    fn single_runtime_p2_helper_includes_double() {
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P1
-        ));
-        assert!(single_runtime_player_is_p2(
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P2
-        ));
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P1
-        ));
-        assert!(single_runtime_player_is_p2(
-            profile_data::PlayStyle::Double,
-            profile_data::PlayerSide::P2
-        ));
-        assert!(!single_runtime_player_is_p2(
-            profile_data::PlayStyle::Versus,
-            profile_data::PlayerSide::P2
-        ));
     }
 
     #[test]

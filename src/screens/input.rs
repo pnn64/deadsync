@@ -70,14 +70,6 @@ pub enum ThreeKeyMenuAction {
 }
 
 #[inline(always)]
-pub const fn player_side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 pub fn dedicated_three_key_nav_enabled() -> bool {
     let cfg = crate::config::get();
     cfg.three_key_navigation && cfg.only_dedicated_menu_buttons

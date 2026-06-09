@@ -25,6 +25,21 @@ pub struct ParseSongOptions {
     pub bg_animation_roots: Vec<PathBuf>,
 }
 
+impl ParseSongOptions {
+    pub fn new(
+        song_movie_roots: Vec<PathBuf>,
+        random_movie_roots: Vec<PathBuf>,
+        bg_animation_roots: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+            song_movie_roots,
+            random_movie_roots,
+            bg_animation_roots,
+        }
+    }
+}
+
 pub fn parse_song_file(
     path: &Path,
     options: &ParseSongOptions,
@@ -273,12 +288,7 @@ mod tests {
               ;",
         )
         .unwrap();
-        let options = ParseSongOptions {
-            mono_threshold: 6,
-            song_movie_roots: Vec::new(),
-            random_movie_roots: Vec::new(),
-            bg_animation_roots: Vec::new(),
-        };
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
 
         let song = parse_song_file(&simfile, &options, |_| 12.5).unwrap();
 

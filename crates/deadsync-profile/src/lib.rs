@@ -506,6 +506,22 @@ pub const fn player_side_index(side: PlayerSide) -> usize {
 }
 
 #[inline(always)]
+pub const fn player_side_number(side: PlayerSide) -> u8 {
+    match side {
+        PlayerSide::P1 => 1,
+        PlayerSide::P2 => 2,
+    }
+}
+
+#[inline(always)]
+pub const fn player_side_for_index(player_idx: usize) -> PlayerSide {
+    match player_idx {
+        1 => PlayerSide::P2,
+        _ => PlayerSide::P1,
+    }
+}
+
+#[inline(always)]
 pub const fn player_side_joined_mask(side: PlayerSide) -> u8 {
     match side {
         PlayerSide::P1 => SESSION_JOINED_MASK_P1,
@@ -523,6 +539,32 @@ pub const fn joined_player_mask(p1: bool, p2: bool) -> u8 {
 #[inline(always)]
 pub const fn player_side_is_joined(joined_mask: u8, side: PlayerSide) -> bool {
     joined_mask & player_side_joined_mask(side) != 0
+}
+
+#[inline(always)]
+pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bool {
+    matches!(
+        (play_style, side),
+        (PlayStyle::Single | PlayStyle::Double, PlayerSide::P2)
+    )
+}
+
+#[inline(always)]
+pub const fn is_single_p2_side(play_style: PlayStyle, side: PlayerSide) -> bool {
+    matches!((play_style, side), (PlayStyle::Single, PlayerSide::P2))
+}
+
+#[inline(always)]
+pub const fn runtime_player_side(
+    play_style: PlayStyle,
+    session_side: PlayerSide,
+    player_idx: usize,
+) -> PlayerSide {
+    if matches!(play_style, PlayStyle::Versus) {
+        player_side_for_index(player_idx)
+    } else {
+        session_side
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -5624,6 +5666,11 @@ mod tests {
         assert_eq!(LOCAL_PROFILE_MAX_ID, 99_999_999);
         assert_eq!(player_side_index(PlayerSide::P1), 0);
         assert_eq!(player_side_index(PlayerSide::P2), 1);
+        assert_eq!(player_side_number(PlayerSide::P1), 1);
+        assert_eq!(player_side_number(PlayerSide::P2), 2);
+        assert_eq!(player_side_for_index(0), PlayerSide::P1);
+        assert_eq!(player_side_for_index(1), PlayerSide::P2);
+        assert_eq!(player_side_for_index(2), PlayerSide::P1);
         assert_eq!(SESSION_JOINED_MASK_P1, 1 << 0);
         assert_eq!(SESSION_JOINED_MASK_P2, 1 << 1);
         assert_eq!(
@@ -5642,6 +5689,36 @@ mod tests {
         let mask = joined_player_mask(false, true);
         assert!(!player_side_is_joined(mask, PlayerSide::P1));
         assert!(player_side_is_joined(mask, PlayerSide::P2));
+    }
+
+    #[test]
+    fn runtime_player_p2_includes_single_player_styles() {
+        assert!(!runtime_player_is_p2(PlayStyle::Single, PlayerSide::P1));
+        assert!(runtime_player_is_p2(PlayStyle::Single, PlayerSide::P2));
+        assert!(!runtime_player_is_p2(PlayStyle::Double, PlayerSide::P1));
+        assert!(runtime_player_is_p2(PlayStyle::Double, PlayerSide::P2));
+        assert!(!runtime_player_is_p2(PlayStyle::Versus, PlayerSide::P2));
+        assert!(!is_single_p2_side(PlayStyle::Single, PlayerSide::P1));
+        assert!(is_single_p2_side(PlayStyle::Single, PlayerSide::P2));
+        assert!(!is_single_p2_side(PlayStyle::Double, PlayerSide::P2));
+        assert!(!is_single_p2_side(PlayStyle::Versus, PlayerSide::P2));
+
+        assert_eq!(
+            runtime_player_side(PlayStyle::Single, PlayerSide::P2, 0),
+            PlayerSide::P2
+        );
+        assert_eq!(
+            runtime_player_side(PlayStyle::Double, PlayerSide::P1, 1),
+            PlayerSide::P1
+        );
+        assert_eq!(
+            runtime_player_side(PlayStyle::Versus, PlayerSide::P1, 0),
+            PlayerSide::P1
+        );
+        assert_eq!(
+            runtime_player_side(PlayStyle::Versus, PlayerSide::P1, 1),
+            PlayerSide::P2
+        );
     }
 
     #[test]

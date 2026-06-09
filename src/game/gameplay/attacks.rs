@@ -2699,7 +2699,7 @@ fn song_lua_compile_player_screen_x(
         && center_1player_notefield;
     let centered_both_sides = num_players == 1 && play_style == profile_data::PlayStyle::Double;
     let p2_side = if num_players == 1 {
-        play_style == profile_data::PlayStyle::Single && player_side == profile_data::PlayerSide::P2
+        profile_data::is_single_p2_side(play_style, player_side)
     } else {
         player_index == 1
     };

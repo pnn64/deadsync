@@ -1608,8 +1608,7 @@ fn max_play_beat(state: &State) -> f32 {
 fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
     let hud = profile::gameplay_hud_snapshot();
     let play_style = hud.play_style;
-    let is_p2_single = play_style == profile_data::PlayStyle::Single
-        && hud.player_side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
     match play_style {
         profile_data::PlayStyle::Versus => {

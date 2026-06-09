@@ -612,10 +612,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if let Some(side) = screen_input::menu_lr_side(ev.action)
         && !ev.pressed
     {
-        state.menu_lr_undo[screen_input::player_side_ix(side)] = 0;
+        state.menu_lr_undo[deadsync_profile::player_side_index(side)] = 0;
     }
     if let Some((side, nav)) = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev) {
-        let side_ix = screen_input::player_side_ix(side);
+        let side_ix = deadsync_profile::player_side_index(side);
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
                 move_selection(state, -1);

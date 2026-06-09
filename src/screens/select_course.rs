@@ -1981,8 +1981,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
     actors.reserve(256);
     let side = profile::get_session_player_side();
     let play_style = profile::get_session_play_style();
-    let is_p2_single =
-        play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let selected_entry = state.entries.get(state.selected_index);
     let selected_meta = selected_course_meta(state);
     let selected_rating = selected_meta

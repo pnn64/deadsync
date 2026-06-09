@@ -728,7 +728,7 @@ fn start_side(action: VirtualAction) -> Option<profile_data::PlayerSide> {
 }
 
 fn on_start_press(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = screen_input::player_side_ix(side);
+    let idx = profile_data::player_side_index(side);
     state.start_input[idx].held = true;
     let start_input = &mut state.start_input[idx];
     screen_input::reset_hold_repeat(
@@ -739,7 +739,7 @@ fn on_start_press(state: &mut State, side: profile_data::PlayerSide) {
 }
 
 fn clear_start_hold(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = screen_input::player_side_ix(side);
+    let idx = profile_data::player_side_index(side);
     state.start_input[idx] = OptionsStartInput::default();
 }
 
@@ -827,7 +827,7 @@ pub(super) fn repeat_held_dedicated_three_key_start(
         clear_start_hold(state, side);
         return None;
     }
-    let idx = screen_input::player_side_ix(side);
+    let idx = profile_data::player_side_index(side);
     if !state.start_input[idx].held {
         return None;
     };

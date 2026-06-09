@@ -17,11 +17,7 @@ pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
     let persisted_idx = super::session_persisted_player_idx();
     let should_persist = play_style == PlayStyle::Versus || player_idx == persisted_idx;
-    let side = if player_idx == P1 {
-        PlayerSide::P1
-    } else {
-        PlayerSide::P2
-    };
+    let side = deadsync_profile::player_side_for_index(player_idx);
     (should_persist, side)
 }
 

@@ -1,3 +1,4 @@
+use deadsync_chart::SongPack;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
@@ -45,6 +46,66 @@ pub fn collect_merged_course_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
     out.sort_by_cached_key(|p| p.to_string_lossy().to_ascii_lowercase());
+    out
+}
+
+pub fn autogen_nonstop_group_courses(
+    courses_root: &Path,
+    packs: &[SongPack],
+) -> Vec<(PathBuf, CourseFile)> {
+    let mut out = Vec::with_capacity(packs.len());
+
+    for pack in packs {
+        if pack.songs.is_empty() {
+            continue;
+        }
+
+        let group_name = pack.group_name.trim();
+        if group_name.is_empty() {
+            continue;
+        }
+        let display_name = if pack.name.trim().is_empty() {
+            group_name
+        } else {
+            pack.name.trim()
+        };
+
+        let entries = (0..4)
+            .map(|_| CourseEntry {
+                song: CourseSong::RandomWithinGroup {
+                    group: group_name.to_string(),
+                },
+                steps: StepsSpec::Difficulty(Difficulty::Medium),
+                modifiers: String::new(),
+                secret: true,
+                no_difficult: false,
+                gain_lives: -1,
+            })
+            .collect();
+
+        out.push((
+            courses_root
+                .join(group_name)
+                .join("__deadsync_autogen_nonstop_random.crs"),
+            CourseFile {
+                name: format!("{display_name} Random"),
+                name_translit: String::new(),
+                scripter: "Autogen".to_string(),
+                description: String::new(),
+                banner: pack
+                    .banner_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                background: String::new(),
+                repeat: false,
+                lives: -1,
+                meters: [None; 6],
+                entries,
+            },
+        ));
+    }
+
     out
 }
 
@@ -261,6 +322,8 @@ fn course_ref_error(message: String) -> CourseRefError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::{SongData, SyncPref};
+    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_dir(name: &str) -> PathBuf {
@@ -300,6 +363,102 @@ mod tests {
                 gain_lives: -1,
             }],
         }
+    }
+
+    fn test_song() -> SongData {
+        SongData {
+            simfile_path: PathBuf::from("song.ssc"),
+            title: String::new(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            first_second: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        }
+    }
+
+    fn song_pack(group_name: &str, name: &str, songs: usize) -> SongPack {
+        SongPack {
+            group_name: group_name.to_string(),
+            name: name.to_string(),
+            sort_title: String::new(),
+            translit_title: String::new(),
+            series: String::new(),
+            year: 0,
+            sync_pref: SyncPref::Default,
+            directory: PathBuf::new(),
+            banner_path: Some(PathBuf::from("banner.png")),
+            songs: (0..songs).map(|_| Arc::new(test_song())).collect(),
+        }
+    }
+
+    #[test]
+    fn autogen_nonstop_group_courses_builds_random_medium_course() {
+        let courses_root = PathBuf::from("courses");
+        let courses =
+            autogen_nonstop_group_courses(&courses_root, &[song_pack("Pack", "Display", 2)]);
+
+        assert_eq!(courses.len(), 1);
+        assert_eq!(
+            courses[0].0,
+            courses_root
+                .join("Pack")
+                .join("__deadsync_autogen_nonstop_random.crs")
+        );
+        let course = &courses[0].1;
+        assert_eq!(course.name, "Display Random");
+        assert_eq!(course.scripter, "Autogen");
+        assert_eq!(course.banner, "banner.png");
+        assert_eq!(course.entries.len(), 4);
+        for entry in &course.entries {
+            assert!(matches!(
+                &entry.song,
+                CourseSong::RandomWithinGroup { group } if group == "Pack"
+            ));
+            assert!(matches!(
+                entry.steps,
+                StepsSpec::Difficulty(Difficulty::Medium)
+            ));
+            assert!(entry.secret);
+            assert_eq!(entry.gain_lives, -1);
+        }
+    }
+
+    #[test]
+    fn autogen_nonstop_group_courses_skips_empty_or_unnamed_packs() {
+        let courses = autogen_nonstop_group_courses(
+            Path::new("courses"),
+            &[
+                song_pack("Empty", "Empty", 0),
+                song_pack("   ", "Unnamed", 1),
+                song_pack("Valid", "", 1),
+            ],
+        );
+
+        assert_eq!(courses.len(), 1);
+        assert_eq!(courses[0].1.name, "Valid Random");
     }
 
     #[test]

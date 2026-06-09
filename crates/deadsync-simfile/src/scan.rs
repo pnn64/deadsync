@@ -2,6 +2,7 @@ use deadsync_chart::{SongData, SongPack, SyncPref};
 use rssp::pack::{PackScan as RsspPackScan, SongScan as RsspSongScan};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct SongScan {
@@ -39,6 +40,20 @@ pub fn push_unique_path(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<
     }
     keys.push(key);
     roots.push(path);
+}
+
+pub fn fmt_scan_time(d: Duration) -> String {
+    let ms = d.as_millis();
+    if ms < 1000 {
+        return format!("{ms}ms");
+    }
+    if ms < 60_000 {
+        return format!("{:.2}s", ms as f64 / 1000.0);
+    }
+    let total_s = ms as f64 / 1000.0;
+    let m = (total_s / 60.0).floor() as u64;
+    let s = (m as f64).mul_add(-60.0, total_s);
+    format!("{m}m{s:.1}s")
 }
 
 pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailure>) {
@@ -560,5 +575,12 @@ mod tests {
         assert_eq!(cache[2].directory, after_root.join("Pack"));
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn fmt_scan_time_scales_units() {
+        assert_eq!(fmt_scan_time(Duration::from_millis(999)), "999ms");
+        assert_eq!(fmt_scan_time(Duration::from_millis(1500)), "1.50s");
+        assert_eq!(fmt_scan_time(Duration::from_millis(61_200)), "1m1.2s");
     }
 }

@@ -1,5 +1,35 @@
+use deadsync_chart::SongData;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+pub const BG_ANIMATIONS_DIR: &str = "BGAnimations";
+pub const RANDOM_MOVIES_DIR: &str = "RandomMovies";
+pub const SONG_MOVIES_DIR: &str = "SongMovies";
+
+const BACKGROUND_MAPPING_FILE: &str = "BackgroundMapping.ini";
+
+pub fn collect_media_roots(
+    dirname: &str,
+    data_dir: &Path,
+    exe_dir: &Path,
+    cwd: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut roots = Vec::with_capacity(4);
+    push_media_root(&mut roots, data_dir.join(dirname));
+    push_media_root(&mut roots, exe_dir.join(dirname));
+    if let Some(cwd) = cwd {
+        push_media_root(&mut roots, cwd.join(dirname));
+        push_media_root(&mut roots, cwd.join("deadsync").join(dirname));
+    }
+    roots
+}
+
+fn push_media_root(out: &mut Vec<PathBuf>, path: PathBuf) {
+    if path.is_dir() && !out.iter().any(|existing| existing == &path) {
+        out.push(path);
+    }
+}
 
 pub fn collapse_song_asset_path(path: &str) -> String {
     let has_root = path.starts_with('/');
@@ -232,6 +262,124 @@ pub fn is_bgchange_movie_path(path: &Path) -> bool {
         })
 }
 
+pub fn random_movie_paths_for_song(song: &SongData, roots: &[PathBuf]) -> Vec<PathBuf> {
+    let group = song_group_name(song);
+    let genre_whitelist = group
+        .as_deref()
+        .filter(|_| !song.genre.trim().is_empty())
+        .and_then(|group| {
+            roots
+                .iter()
+                .find_map(|root| genre_movie_whitelist(&root.join(group), &song.genre))
+        });
+
+    for root in roots {
+        if let Some(group) = group.as_deref() {
+            let paths = filtered_random_movie_paths(&root.join(group), genre_whitelist.as_ref());
+            if !paths.is_empty() {
+                return paths;
+            }
+        }
+        let paths = filtered_random_movie_paths(root, genre_whitelist.as_ref());
+        if !paths.is_empty() {
+            return paths;
+        }
+    }
+    Vec::new()
+}
+
+fn filtered_random_movie_paths(dir: &Path, whitelist: Option<&HashSet<String>>) -> Vec<PathBuf> {
+    let paths = list_random_movie_paths(dir);
+    let Some(whitelist) = whitelist else {
+        return paths;
+    };
+    let filtered = paths
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| whitelist.contains(name))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if filtered.is_empty() { paths } else { filtered }
+}
+
+fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
+        })
+        .collect::<Vec<_>>();
+    paths.sort_by(|a, b| {
+        a.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .cmp(
+                &b.file_name()
+                    .map(|name| name.to_string_lossy().to_ascii_lowercase()),
+            )
+    });
+    paths
+}
+
+fn song_group_name(song: &SongData) -> Option<String> {
+    song.simfile_path
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+}
+
+fn genre_movie_whitelist(group_dir: &Path, genre: &str) -> Option<HashSet<String>> {
+    let path = group_dir.join(BACKGROUND_MAPPING_FILE);
+    let sections = parse_ini_sections(&fs::read_to_string(path).ok()?);
+    let genre_section = sections
+        .get("GenreToSection")?
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(genre.trim()))?
+        .1
+        .trim()
+        .to_owned();
+    let section = sections.get(genre_section.as_str())?;
+    let out = section
+        .iter()
+        .map(|(key, _)| key.trim().to_owned())
+        .filter(|key| !key.is_empty())
+        .collect::<HashSet<_>>();
+    (!out.is_empty()).then_some(out)
+}
+
+fn parse_ini_sections(text: &str) -> HashMap<String, Vec<(String, String)>> {
+    let mut sections = HashMap::<String, Vec<(String, String)>>::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            current = line[1..line.len() - 1].trim().to_owned();
+            sections.entry(current.clone()).or_default();
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        sections
+            .entry(current.clone())
+            .or_default()
+            .push((key.trim().to_owned(), value.trim().to_owned()));
+    }
+    sections
+}
+
 pub fn is_song_art_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
@@ -261,6 +409,7 @@ pub fn song_art_file_stem(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::SongBackgroundChange;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -305,6 +454,25 @@ mod tests {
         let path = PathBuf::from("Visuals").join("Banner.PNG");
         assert_eq!(song_art_file_key(&path), "visuals/banner.png");
         assert_eq!(song_art_file_stem(&path), Some("banner".to_string()));
+    }
+
+    #[test]
+    fn collect_media_roots_skips_missing_and_dedupes() {
+        let root = test_dir("media-roots");
+        let shared = root.join("shared");
+        let cwd = root.join("work");
+        let cwd_deadsync = cwd.join("deadsync");
+        let shared_movies = shared.join(RANDOM_MOVIES_DIR);
+        let cwd_movies = cwd.join(RANDOM_MOVIES_DIR);
+        let cwd_deadsync_movies = cwd_deadsync.join(RANDOM_MOVIES_DIR);
+        fs::create_dir_all(&shared_movies).unwrap();
+        fs::create_dir_all(&cwd_deadsync_movies).unwrap();
+
+        let roots = collect_media_roots(RANDOM_MOVIES_DIR, &shared, &shared, Some(&cwd));
+
+        assert_eq!(roots, vec![shared_movies, cwd_deadsync_movies]);
+        assert!(!roots.contains(&cwd_movies));
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -364,6 +532,66 @@ mod tests {
     }
 
     #[test]
+    fn random_movie_paths_prefer_group_and_genre_whitelist() {
+        let root = test_dir("random-movies-group-genre");
+        let movies = root.join("RandomMovies");
+        let group = movies.join("Pack");
+        fs::create_dir_all(&group).unwrap();
+        let ambient = group.join("ambient.mp4");
+        let bright = group.join("bright.ogv");
+        let root_movie = movies.join("root.mp4");
+        fs::write(&ambient, b"movie").unwrap();
+        fs::write(&bright, b"movie").unwrap();
+        fs::write(&root_movie, b"movie").unwrap();
+        fs::write(group.join("._fork.mp4"), b"fork").unwrap();
+        fs::write(
+            group.join(BACKGROUND_MAPPING_FILE),
+            "\
+[GenreToSection]
+Tech=Bright
+
+[Bright]
+bright.ogv=1
+",
+        )
+        .unwrap();
+        let song = test_song(
+            root.join("Songs")
+                .join("Pack")
+                .join("Song")
+                .join("song.ssc"),
+            "tech",
+        );
+
+        let paths = random_movie_paths_for_song(&song, &[movies]);
+
+        assert_eq!(paths, vec![bright]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn random_movie_paths_fall_back_to_root_movies() {
+        let root = test_dir("random-movies-root");
+        let movies = root.join("RandomMovies");
+        fs::create_dir_all(&movies).unwrap();
+        let clip = movies.join("clip.webm");
+        fs::write(&clip, b"movie").unwrap();
+        fs::write(movies.join("still.png"), b"png").unwrap();
+        let song = test_song(
+            root.join("Songs")
+                .join("MissingPack")
+                .join("Song")
+                .join("song.ssc"),
+            "",
+        );
+
+        let paths = random_movie_paths_for_song(&song, &[movies]);
+
+        assert_eq!(paths, vec![clip]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn detects_lua_paths_and_resolves_entry_path() {
         let root = test_dir("lua-entry");
         let dir = root.join("Visuals");
@@ -418,5 +646,39 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn test_song(simfile_path: PathBuf, genre: &str) -> SongData {
+        SongData {
+            simfile_path,
+            title: String::new(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: genre.to_string(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::<SongBackgroundChange>::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            first_second: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        }
     }
 }

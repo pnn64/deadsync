@@ -616,14 +616,6 @@ fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
     audio::play_sfx("assets/sounds/boom.ogg");
 }
 
-#[inline(always)]
-const fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
 fn shift_choice(
     state: &mut State,
     side: profile_data::PlayerSide,
@@ -733,7 +725,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     };
     if !ev.pressed {
         if let Some(side) = screen_input::menu_lr_side(ev.action) {
-            state.menu_lr_undo[side_ix(side)] = 0;
+            state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         }
         return ScreenAction::None;
     }
@@ -741,8 +733,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     if let Some(side) = chord_side {
-        let undo = state.menu_lr_undo[side_ix(side)];
-        state.menu_lr_undo[side_ix(side)] = 0;
+        let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
+        state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         if undo != 0 {
             let _ = shift_choice(state, side, i32::from(undo), false);
         }
@@ -754,7 +746,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_up
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_left => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_choice(state, profile_data::PlayerSide::P1, -1, true) {
                     1
                 } else {
@@ -766,7 +758,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_down
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P1)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_choice(state, profile_data::PlayerSide::P1, 1, true) {
                     -1
                 } else {
@@ -824,7 +816,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
                 if shift_choice(state, profile_data::PlayerSide::P2, -1, true) {
                     1
                 } else {
@@ -836,7 +828,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            state.menu_lr_undo[side_ix(profile_data::PlayerSide::P2)] =
+            state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
                 if shift_choice(state, profile_data::PlayerSide::P2, 1, true) {
                     -1
                 } else {

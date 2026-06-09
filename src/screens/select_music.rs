@@ -10839,8 +10839,7 @@ pub fn push_actors(
     actors.reserve(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
-    let is_p2_single =
-        play_style == profile_data::PlayStyle::Single && side == profile_data::PlayerSide::P2;
+    let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let is_versus = play_style == profile_data::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);

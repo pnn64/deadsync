@@ -31,7 +31,7 @@ fn dedicated_press(
 }
 
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
-    let idx = screen_input::player_side_ix(side);
+    let idx = profile_data::player_side_index(side);
     state.start_input[idx].held = true;
     state.start_input[idx].held_for = NAV_INITIAL_HOLD_DELAY;
     state.start_input[idx].next_repeat_at = NAV_INITIAL_HOLD_DELAY;

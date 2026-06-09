@@ -89,14 +89,6 @@ fn any_joined_local_side_missing_key() -> bool {
 }
 
 #[inline]
-fn side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline]
 fn side_label(kind: BackendKind, side: profile_data::PlayerSide) -> Arc<str> {
     let section = i18n_section(kind);
     match side {
@@ -461,7 +453,11 @@ pub(crate) fn build_qr_login_overlay_actors(
     let visible_sides: Vec<profile_data::PlayerSide> = ALL_SIDES
         .iter()
         .copied()
-        .filter(|s| ui.slots[side_ix(*s)].state.is_visible())
+        .filter(|s| {
+            ui.slots[profile_data::player_side_index(*s)]
+                .state
+                .is_visible()
+        })
         .collect();
     let section = ui_section(ui);
 
@@ -492,7 +488,7 @@ pub(crate) fn build_qr_login_overlay_actors(
     let panel_offset: f32 = if two_up { 200.0 } else { 0.0 };
     let qr_size: f32 = if two_up { 150.0 } else { 200.0 };
     for (i, side) in visible_sides.iter().enumerate() {
-        let slot = &ui.slots[side_ix(*side)];
+        let slot = &ui.slots[profile_data::player_side_index(*side)];
         let dx = if two_up && i == 0 {
             -panel_offset
         } else if two_up {
@@ -786,7 +782,7 @@ pub fn create_groovestats_login_ui() -> QrLoginUiState {
         // Pending with the per-side URL embedded.
         let _ = tx.send(LoginMsg::Started {
             short_code: String::new(),
-            verification_url: gs_api::qr_login_url(&uuid, gs_side_byte(side)),
+            verification_url: gs_api::qr_login_url(&uuid, profile_data::player_side_number(side)),
         });
         match side {
             profile_data::PlayerSide::P1 => p1_tx = Some(tx),
@@ -845,14 +841,6 @@ pub fn create_groovestats_login_ui_for_profile(
     QrLoginUiState {
         slots: [p1_slot, p2_slot],
         cancel,
-    }
-}
-
-#[inline]
-fn gs_side_byte(side: profile_data::PlayerSide) -> u8 {
-    match side {
-        profile_data::PlayerSide::P1 => 1,
-        profile_data::PlayerSide::P2 => 2,
     }
 }
 

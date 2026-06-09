@@ -1383,24 +1383,12 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 }
 
 #[inline(always)]
-pub(super) const fn submit_side_ix(side: profile_data::PlayerSide) -> usize {
-    match side {
-        profile_data::PlayerSide::P1 => 0,
-        profile_data::PlayerSide::P2 => 1,
-    }
-}
-
-#[inline(always)]
 pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> profile_data::PlayerSide {
     if gs.num_players >= 2 {
-        if player_idx == 0 {
-            profile_data::PlayerSide::P1
-        } else {
-            profile_data::PlayerSide::P2
-        }
+        profile_data::player_side_for_index(player_idx)
     } else {
         profile::get_session_player_side()
     }

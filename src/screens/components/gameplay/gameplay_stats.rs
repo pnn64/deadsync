@@ -2021,10 +2021,7 @@ fn build_steps_info(
     };
 
     let ar = screen_width() / screen_height().max(1.0);
-    let pnum = match player_side {
-        profile_data::PlayerSide::P1 => 1,
-        profile_data::PlayerSide::P2 => 2,
-    };
+    let pnum = profile_data::player_side_number(player_side);
     let pos_sign = if pnum == 1 { -1.0 } else { 1.0 };
 
     let mut x = -190.0;

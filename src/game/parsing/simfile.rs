@@ -6,12 +6,15 @@ use deadsync_simfile::cache::{
     SerializableSongData, build_requested_gameplay_charts, build_song_meta,
     update_precise_song_bounds,
 };
-use deadsync_simfile::song::{ParseSongOptions, SONG_ANALYSIS_MONO_THRESHOLD, parse_song_file};
+use deadsync_simfile::media::{
+    BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR, collect_media_roots,
+};
+use deadsync_simfile::song::{ParseSongOptions, parse_song_file};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 mod cache;
 mod scan;
@@ -21,26 +24,6 @@ pub use scan::{
     reload_song_dirs_with_progress_counts, scan_and_load_songs, scan_and_load_songs_with_progress,
     scan_and_load_songs_with_progress_counts,
 };
-
-const RANDOM_MOVIES_DIR: &str = "RandomMovies";
-const SONG_MOVIES_DIR: &str = "SongMovies";
-const BG_ANIMATIONS_DIR: &str = "BGAnimations";
-
-// --- CACHING HELPER FUNCTIONS ---
-
-pub(crate) fn fmt_scan_time(d: Duration) -> String {
-    let ms = d.as_millis();
-    if ms < 1000 {
-        return format!("{ms}ms");
-    }
-    if ms < 60_000 {
-        return format!("{:.2}s", ms as f64 / 1000.0);
-    }
-    let total_s = ms as f64 / 1000.0;
-    let m = (total_s / 60.0).floor() as u64;
-    let s = (m as f64).mul_add(-60.0, total_s);
-    format!("{m}m{s:.1}s")
-}
 
 /// Helper to load a song from cache OR parse it if needed.
 /// Returns (`SongData`, `is_cache_hit`).
@@ -264,29 +247,16 @@ pub(crate) fn parse_song_for_test(
 
 fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
     let dirs = dirs::app_dirs();
-    let mut roots = Vec::with_capacity(4);
-    push_existing_unique_dir(&mut roots, dirs.data_dir.join(dirname));
-    push_existing_unique_dir(&mut roots, dirs.exe_dir.join(dirname));
-    if let Ok(cwd) = std::env::current_dir() {
-        push_existing_unique_dir(&mut roots, cwd.join(dirname));
-        push_existing_unique_dir(&mut roots, cwd.join("deadsync").join(dirname));
-    }
-    roots
-}
-
-fn push_existing_unique_dir(out: &mut Vec<PathBuf>, path: PathBuf) {
-    if path.is_dir() && !out.iter().any(|existing| existing == &path) {
-        out.push(path);
-    }
+    let cwd = std::env::current_dir().ok();
+    collect_media_roots(dirname, &dirs.data_dir, &dirs.exe_dir, cwd.as_deref())
 }
 
 fn parse_song_options() -> ParseSongOptions {
-    ParseSongOptions {
-        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
-        song_movie_roots: bgchange_asset_roots(SONG_MOVIES_DIR),
-        random_movie_roots: bgchange_asset_roots(RANDOM_MOVIES_DIR),
-        bg_animation_roots: bgchange_asset_roots(BG_ANIMATIONS_DIR),
-    }
+    ParseSongOptions::new(
+        bgchange_asset_roots(SONG_MOVIES_DIR),
+        bgchange_asset_roots(RANDOM_MOVIES_DIR),
+        bgchange_asset_roots(BG_ANIMATIONS_DIR),
+    )
 }
 
 /// Parse and normalize a simfile on a cache miss.
