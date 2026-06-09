@@ -2,7 +2,7 @@ use super::*;
 
 #[inline(always)]
 fn dedicated_menu_buttons_supported(three_key_navigation: bool) -> bool {
-    crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
+    deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
 }
 
 #[inline(always)]
@@ -23,7 +23,7 @@ pub fn update_input_debounce_seconds(seconds: f32) {
         }
         cfg.input_debounce_seconds = seconds;
     }
-    crate::engine::input::set_input_debounce_seconds(seconds);
+    deadsync_input::set_input_debounce_seconds(seconds);
     save_without_keymaps();
 }
 
@@ -65,7 +65,7 @@ pub fn update_three_key_navigation(enabled: bool) {
         }
         cfg.only_dedicated_menu_buttons
     };
-    crate::engine::input::set_only_dedicated_menu_buttons(dedicated);
+    deadsync_input::set_only_dedicated_menu_buttons(dedicated);
     save_without_keymaps();
 }
 
@@ -201,7 +201,7 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
         cfg.only_dedicated_menu_buttons = enabled;
         enabled
     };
-    crate::engine::input::set_only_dedicated_menu_buttons(enabled);
+    deadsync_input::set_only_dedicated_menu_buttons(enabled);
     save_without_keymaps();
 }
 

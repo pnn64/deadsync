@@ -5,6 +5,15 @@ use deadsync_core::song_time::SongTimeNs;
 
 pub mod backend;
 pub mod debounce;
+pub mod keymap;
+
+pub use keymap::{
+    InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,
+    any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons,
+    clear_debounce_state, drain_debounced_input_events_with, get_keymap, map_keycode_event_with,
+    map_keycode_event_with_host, map_pad_event_with, map_raw_key_event_with,
+    set_input_debounce_seconds, set_keymap, set_only_dedicated_menu_buttons, with_keymap,
+};
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;

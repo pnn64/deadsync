@@ -1,5 +1,5 @@
 use super::*;
-use crate::engine::input::Keymap;
+use deadsync_input::Keymap;
 
 pub(super) fn build_content(
     cfg: &Config,

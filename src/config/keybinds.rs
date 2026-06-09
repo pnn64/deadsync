@@ -1,9 +1,8 @@
 use super::{SimpleIni, save_without_keymaps};
-use crate::engine::input::{InputBinding, Keymap};
 pub(crate) use deadsync_input::{ALL_VIRTUAL_ACTIONS, action_to_ini_key, parse_pad_dir};
 use deadsync_input::{
-    VirtualAction, action_from_ini_key_lower, gamepad_code_binding_to_token,
-    parse_gamepad_code_binding,
+    InputBinding, Keymap, VirtualAction, action_from_ini_key_lower, gamepad_code_binding_to_token,
+    get_keymap, parse_gamepad_code_binding, set_keymap,
 };
 use winit::keyboard::KeyCode;
 
@@ -657,9 +656,9 @@ pub fn update_keymap_binding_unique_keyboard(
     index: usize,
     keycode: KeyCode,
 ) {
-    let current = crate::engine::input::get_keymap();
+    let current = get_keymap();
     let new_map = updated_keymap_unique_keyboard(&current, action, index, keycode);
-    crate::engine::input::set_keymap(new_map);
+    set_keymap(new_map);
     save_without_keymaps();
 }
 
@@ -670,20 +669,20 @@ pub fn update_keymap_binding_unique_gamepad(
     index: usize,
     binding: InputBinding,
 ) {
-    let current = crate::engine::input::get_keymap();
+    let current = get_keymap();
     let new_map = updated_keymap_unique_gamepad(&current, action, index, binding);
-    crate::engine::input::set_keymap(new_map);
+    set_keymap(new_map);
     save_without_keymaps();
 }
 
 /// Clear the requested Primary/Secondary binding slot for an action.
 /// Returns `true` when a binding was removed.
 pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
-    let current = crate::engine::input::get_keymap();
+    let current = get_keymap();
     let (new_map, changed) = cleared_keymap(&current, action, index);
 
     if changed {
-        crate::engine::input::set_keymap(new_map);
+        set_keymap(new_map);
         save_without_keymaps();
     }
     changed

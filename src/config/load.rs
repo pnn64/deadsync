@@ -80,7 +80,7 @@ fn publish_config(cfg: Config) {
 
 fn publish_keymap(conf: &SimpleIni) {
     let km = load_keymap_from_ini_local(conf);
-    crate::engine::input::set_keymap(km);
+    deadsync_input::set_keymap(km);
 }
 
 fn load_defaults_after_error() {
@@ -113,9 +113,7 @@ fn apply_input_runtime_state() {
     let mut dedicated = get().only_dedicated_menu_buttons;
     let three_key_navigation = get().three_key_navigation;
     if dedicated
-        && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
-            three_key_navigation,
-        )
+        && !deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
     {
         warn!(
             "only_dedicated_menu_buttons is enabled but no player has the required dedicated menu buttons mapped for {} mode — disabling.",
@@ -128,8 +126,8 @@ fn apply_input_runtime_state() {
         dedicated = false;
         lock_config().only_dedicated_menu_buttons = false;
     }
-    crate::engine::input::set_only_dedicated_menu_buttons(dedicated);
-    crate::engine::input::set_input_debounce_seconds(get().input_debounce_seconds);
+    deadsync_input::set_only_dedicated_menu_buttons(dedicated);
+    deadsync_input::set_input_debounce_seconds(get().input_debounce_seconds);
 }
 
 pub(super) fn parse_bool_str(raw: &str) -> Option<bool> {

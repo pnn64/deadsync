@@ -7,7 +7,7 @@ use super::null_or_die_cfg::{
     clamp_null_or_die_positive_ms,
 };
 use super::*;
-use crate::engine::input::InputBinding;
+use deadsync_input::InputBinding;
 use deadsync_input::{GamepadCodeBinding, PadDir};
 use winit::keyboard::KeyCode;
 
