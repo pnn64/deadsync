@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
-use crate::engine::input::RawKeyboardEvent;
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
 use crate::game::course::get_course_cache;
@@ -14,6 +13,7 @@ use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,

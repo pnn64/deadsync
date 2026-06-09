@@ -2,6 +2,7 @@ use super::{App, CurrentScreen, TransitionState};
 use crate::config;
 use crate::engine::input;
 use deadsync_input::InputEvent;
+use deadsync_input::backend::RawKeyboardEvent;
 use std::error::Error;
 use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;
@@ -30,9 +31,7 @@ pub(super) fn screen_accepts_queued_input(
 }
 
 #[inline(always)]
-pub(super) fn gameplay_raw_key_event(
-    raw_key: &input::RawKeyboardEvent,
-) -> Option<GameplayQueuedEvent> {
+pub(super) fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
     use winit::keyboard::KeyCode;
 
     if raw_key.repeat {

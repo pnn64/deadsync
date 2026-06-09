@@ -1,6 +1,6 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::engine::host_time::now_nanos;
-use crate::engine::input::RawKeyboardEvent;
+use deadsync_input::backend::RawKeyboardEvent;
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::{HashMap, hash_map::Entry};
@@ -553,7 +553,7 @@ extern "C" fn on_match(
             Entry::Vacant(entry) => {
                 // Stable, persisted slot so this pad keeps the same PadId across launches.
                 let id = PadId(crate::config::pad_index_for_uuid(
-                    crate::config::PadOrderBackend::IoHid,
+                    deadsync_input::backend::PadOrderBackend::IoHid,
                     uuid,
                 ));
                 *entry.insert(id)

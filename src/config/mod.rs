@@ -27,7 +27,7 @@ pub(crate) use self::keybinds::{
 };
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
-pub use self::pad_order::{PadOrderBackend, pad_index_for_uuid};
+pub use self::pad_order::pad_index_for_uuid;
 pub use self::runtime::{
     additional_song_folder_roots, audio_mix_levels, flush_pending_saves, get,
     machine_default_noteskin, smx_pad_assignment, song_path_is_writable,
@@ -59,9 +59,10 @@ use self::runtime::{
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
-use crate::engine::input::WindowsPadBackend;
 use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use crate::engine::logging;
+pub use deadsync_input::backend::PadOrderBackend;
+use deadsync_input::backend::WindowsPadBackend;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;

@@ -1,6 +1,7 @@
-use super::devd::{DevdEvent, DevdWatch};
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, uuid_from_bytes};
 use crate::engine::host_time::now_nanos;
+use deadsync_input::PadDir;
+use deadsync_input::backend::devd::{DevdEvent, DevdWatch};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -541,7 +542,7 @@ fn add_dev_if_new(
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {
         PadId(crate::config::pad_index_for_uuid(
-            crate::config::PadOrderBackend::Hidraw,
+            deadsync_input::backend::PadOrderBackend::Hidraw,
             pending.uuid,
         ))
     });

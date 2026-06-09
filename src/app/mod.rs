@@ -71,12 +71,11 @@ compile_error!(
 );
 
 use crate::engine::present::actors::Actor;
-/* -------------------- gamepad -------------------- */
-use crate::engine::input::GpSystemEvent;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
+use deadsync_input::backend::{GpSystemEvent, RawKeyboardEvent};
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
@@ -87,7 +86,7 @@ use deadsync_rules::timing as timing_rules;
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     Pad(PadEvent),
-    Key(input::RawKeyboardEvent),
+    Key(RawKeyboardEvent),
     GamepadSystem(GpSystemEvent),
 }
 
@@ -7857,7 +7856,7 @@ impl App {
     fn handle_raw_key_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        raw_key: input::RawKeyboardEvent,
+        raw_key: RawKeyboardEvent,
     ) -> bool {
         use winit::keyboard::KeyCode;
 
@@ -8096,11 +8095,7 @@ impl App {
     }
 
     #[inline(always)]
-    fn handle_live_key_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        raw_key: input::RawKeyboardEvent,
-    ) {
+    fn handle_live_key_event(&mut self, event_loop: &ActiveEventLoop, raw_key: RawKeyboardEvent) {
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         let handled_started = Instant::now();
 
@@ -8171,7 +8166,7 @@ impl App {
         };
         self.handle_live_key_event(
             event_loop,
-            input::RawKeyboardEvent {
+            RawKeyboardEvent {
                 code,
                 pressed: key_event.state == ElementState::Pressed,
                 repeat: key_event.repeat,

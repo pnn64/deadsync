@@ -12,7 +12,7 @@ use rustmaniax_sdk::{
     SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
 };
 
-use crate::engine::input::{GpSystemEvent, PadBackend, uuid_from_bytes};
+use deadsync_input::backend::{GpSystemEvent, PadBackend, uuid_from_bytes};
 use deadsync_input::{PadCode, PadEvent, PadId};
 
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).

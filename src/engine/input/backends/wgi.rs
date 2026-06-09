@@ -435,7 +435,7 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
             let id = PadId(crate::config::pad_index_for_uuid(
-                crate::config::PadOrderBackend::Wgi,
+                deadsync_input::backend::PadOrderBackend::Wgi,
                 uuid,
             ));
             *entry.insert(id)

@@ -42,9 +42,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::engine::input::RawKeyboardEvent;
 use crate::game::profile;
 use crate::screens::ScreenAction;
+use deadsync_input::backend::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
 use deadsync_online::groovestats as groovestats_api;
 use deadsync_profile as profile_data;

@@ -2,7 +2,7 @@ use super::{
     GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, event_time, receipt_time,
     uuid_from_bytes,
 };
-use crate::engine::input::RawKeyboardEvent;
+use deadsync_input::backend::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char, c_void};
@@ -950,7 +950,7 @@ fn add_dev_if_new(
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id = existing_id.unwrap_or_else(|| {
         PadId(crate::config::pad_index_for_uuid(
-            crate::config::PadOrderBackend::LinuxEvdev,
+            deadsync_input::backend::PadOrderBackend::LinuxEvdev,
             spec.uuid,
         ))
     });

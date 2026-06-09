@@ -576,7 +576,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         Entry::Vacant(entry) => {
             // Stable, persisted slot so this pad keeps the same PadId across launches.
             let id = PadId(crate::config::pad_index_for_uuid(
-                crate::config::PadOrderBackend::RawInput,
+                deadsync_input::backend::PadOrderBackend::RawInput,
                 uuid,
             ));
             *entry.insert(id)
