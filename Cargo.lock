@@ -983,6 +983,7 @@ dependencies = [
  "coreaudio-rs",
  "deadsync-chart",
  "deadsync-core",
+ "deadsync-hot",
  "deadsync-input",
  "deadsync-net",
  "deadsync-online",
@@ -1066,6 +1067,13 @@ name = "deadsync-core"
 version = "0.1.0"
 
 [[package]]
+name = "deadsync-hot"
+version = "0.1.0"
+dependencies = [
+ "libloading 0.9.0",
+]
+
+[[package]]
 name = "deadsync-input"
 version = "0.1.0"
 dependencies = [
@@ -1123,6 +1131,15 @@ dependencies = [
  "deadsync-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "deadsync-screens"
+version = "0.1.0"
+dependencies = [
+ "deadsync",
+ "deadsync-online",
+ "smallvec",
 ]
 
 [[package]]
@@ -5840,6 +5857,10 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "xtask"
+version = "0.0.0"
 
 [[package]]
 name = "y4m"

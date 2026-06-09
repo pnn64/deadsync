@@ -1,0 +1,7 @@
+# Developer task runner alias. Lets you run `cargo xtask <task>` from anywhere in
+# the workspace. See xtask/ for the available tasks (e.g. `cargo xtask hot-watch`).
+#
+# This file is MERGED with your global ~/.cargo/config.toml (e.g. an sccache
+# rustc-wrapper), it does not replace it.
+[alias]
+xtask = "run --quiet --package xtask --"

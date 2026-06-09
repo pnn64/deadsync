@@ -1,0 +1,10 @@
+[package]
+name = "deadsync-hot"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+publish = false
+description = "App-agnostic Rust hot-reload runtime: poll + shadow-copy + load a reloadable cdylib, validate a versioned C-ABI header, and dispatch through an opaque vtable pointer. Zero dependency on any specific application."
+
+[dependencies]
+libloading = "0.9.0"

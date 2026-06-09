@@ -20,6 +20,9 @@ members = [
     "crates/deadsync-rules",
     "crates/deadsync-score",
     "crates/deadsync-simfile",
+    "crates/deadsync-screens",
+    "crates/deadsync-hot",
+    "xtask",
 ]
 resolver = "3"
 
@@ -54,10 +57,15 @@ path = "scripts/replaygain_bench.rs"
 
 [features]
 pipewire-audio = ["dep:pipewire"]
+# Dev-only: enable the runtime hot-reload dispatch path in `app`. Not in default;
+# release/normal builds are unaffected. Pulls in the `deadsync-hot` runtime crate
+# (and its `libloading`) only when enabled. See crates/deadsync-hot and the plan.
+hot = ["dep:deadsync-hot"]
 
 [dependencies]
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
+deadsync-hot = { path = "crates/deadsync-hot", optional = true }
 deadsync-input = { path = "crates/deadsync-input" }
 deadsync-net = { path = "crates/deadsync-net" }
 deadsync-online = { path = "crates/deadsync-online" }
@@ -266,6 +274,50 @@ panic = "abort"
 [profile.local]
 inherits = "release"
 lto = "thin"
+
+# Hot-reload dev profile. The menu hot boundary moves a real `Vec<Actor>`
+# (carrying host `Arc<str>`s) across the cdylib boundary, so the host
+# (`--features hot`) and `deadsync-screens` MUST share one allocator — both built
+# `-C prefer-dynamic` against one dynamic `std`. `prefer-dynamic` is mutually
+# exclusive with `lto`, so this profile keeps `lto = false`; it also trades
+# runtime perf for rebuild speed (low opt-level, many codegen units, incremental
+# on). `panic = "unwind"` is required because the cdylib's `catch_unwind`
+# contains a bad edit. The non-hot shipping build (`release`) has NO boundary and
+# keeps `lto = true` + `panic = "abort"` — it is untouched by any of this.
+#
+# HOT-RELOAD DEV LOOP (Windows):
+#   1. In BOTH the host shell and the cdylib/watch shell, set:
+#        $env:RUSTFLAGS = "-C prefer-dynamic"          # required: shared std
+#        # optionally also "-C linker=rust-lld" — the bundled LLVM linker links
+#        # the whole engine into deadsync_screens.dll several times faster than
+#        # the default MSVC link.exe (the dominant warm-relink cost).
+#   2. Build + run the host:
+#        cargo build --features hot --profile hot
+#        # The `-C prefer-dynamic` exe needs the dynamic `std-*.dll` at runtime.
+#        # Either copy it next to the exe, or put the sysroot bin on PATH:
+#        #   $env:PATH = "$(rustc --print sysroot)\bin;$env:PATH"
+#        .\target\hot\deadsync.exe
+#   3. Watch + rebuild only the cdylib on a render edit:
+#        cargo watch -w src/screens/menu/render.rs \
+#          -x "build -p deadsync-screens --profile hot"
+#
+# The RUSTFLAGS live per-terminal (NOT in `.cargo/config.toml`) so they never
+# leak into release or CI builds. A static-allocator cdylib (built without
+# `-C prefer-dynamic`) is REJECTED at load: `build.rs` folds the shared-alloc tag
+# into `BUILD_HASH` (see `src/hot`), so the header handshake fails before any
+# cdylib heap could be freed host-side.
+#
+# Caveat: `BUILD_HASH` only tracks committed source via `git HEAD`, so it does
+# NOT detect uncommitted edits to the SHARED boundary (`src/hot`, host
+# `State`/`Context` layouts). Pure `render.rs` edits are fine; if you change
+# shared-contract code, rebuild the host too.
+[profile.hot]
+inherits = "release"
+opt-level = 1
+lto = false
+panic = "unwind"
+codegen-units = 256
+incremental = true
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
