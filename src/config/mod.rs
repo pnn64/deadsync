@@ -58,12 +58,11 @@ use self::runtime::{
     queue_save_write, sync_audio_mix_levels_from_config,
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
-use crate::engine::gfx::BackendType;
 use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 pub use deadsync_input_native::PadOrderBackend;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_platform::logging;
-use deadsync_render::PresentModePolicy;
+use deadsync_render::{BackendType, PresentModePolicy};
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;

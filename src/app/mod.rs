@@ -19,7 +19,7 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::gfx::{self as gfx_backend, BackendType};
+use crate::engine::gfx as gfx_backend;
 use crate::engine::input;
 use crate::engine::lights::{
     self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
@@ -40,7 +40,7 @@ use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
 use deadsync_render as renderer;
-use deadsync_render::{PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
+use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,

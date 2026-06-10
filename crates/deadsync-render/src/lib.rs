@@ -353,6 +353,62 @@ pub enum BlendMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendType {
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+    Vulkan,
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+    VulkanWgpu,
+    #[cfg(target_os = "macos")]
+    Metal,
+    OpenGL,
+    OpenGLWgpu,
+    Software,
+    #[cfg(target_os = "windows")]
+    DirectX,
+}
+
+impl core::fmt::Display for BackendType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Self::Vulkan => f.write_str("Vulkan"),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Self::VulkanWgpu => f.write_str("Vulkan (wgpu)"),
+            #[cfg(target_os = "macos")]
+            Self::Metal => f.write_str("Metal (wgpu)"),
+            Self::OpenGL => f.write_str("OpenGL"),
+            Self::OpenGLWgpu => f.write_str("OpenGL (wgpu)"),
+            Self::Software => f.write_str("Software"),
+            #[cfg(target_os = "windows")]
+            Self::DirectX => f.write_str("DirectX"),
+        }
+    }
+}
+
+impl core::str::FromStr for BackendType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            "vulkan" => Ok(Self::Vulkan),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
+            #[cfg(target_os = "macos")]
+            "metal" | "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => {
+                Ok(Self::Metal)
+            }
+            "opengl" => Ok(Self::OpenGL),
+            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
+            "software" | "cpu" => Ok(Self::Software),
+            #[cfg(target_os = "windows")]
+            "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
+            _ => Err(format!("'{s}' is not a valid video renderer")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresentModePolicy {
     Mailbox,
     Immediate,

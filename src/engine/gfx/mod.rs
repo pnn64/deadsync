@@ -1,5 +1,6 @@
 use deadsync_render::{
-    DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle, TextureHandleMap,
+    BackendType, DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle,
+    TextureHandleMap,
 };
 use deadsync_render_backend_gl as opengl;
 use deadsync_render_backend_software as software;
@@ -7,25 +8,10 @@ use deadsync_render_backend_software as software;
 use deadsync_render_backend_vulkan as vulkan;
 use deadsync_render_backend_wgpu as wgpu_core;
 use image::RgbaImage;
-use std::{error::Error, str::FromStr, sync::Arc};
+use std::{error::Error, sync::Arc};
 use winit::window::Window;
 
 // --- Public API Facade ---
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackendType {
-    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-    Vulkan,
-    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-    VulkanWgpu,
-    #[cfg(target_os = "macos")]
-    Metal,
-    OpenGL,
-    OpenGLWgpu,
-    Software,
-    #[cfg(target_os = "windows")]
-    DirectX,
-}
 
 // A handle to a backend-specific texture resource.
 pub enum Texture {
@@ -542,46 +528,6 @@ impl Backend {
             BackendImpl::DirectX(state) => {
                 wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
             }
-        }
-    }
-}
-
-// -- Boilerplate impls --
-impl core::fmt::Display for BackendType {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            Self::Vulkan => write!(f, "Vulkan"),
-            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            Self::VulkanWgpu => write!(f, "Vulkan (wgpu)"),
-            #[cfg(target_os = "macos")]
-            Self::Metal => write!(f, "Metal (wgpu)"),
-            Self::OpenGL => write!(f, "OpenGL"),
-            Self::OpenGLWgpu => write!(f, "OpenGL (wgpu)"),
-            Self::Software => write!(f, "Software"),
-            #[cfg(target_os = "windows")]
-            Self::DirectX => write!(f, "DirectX"),
-        }
-    }
-}
-impl FromStr for BackendType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan" => Ok(Self::Vulkan),
-            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-            "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
-            #[cfg(target_os = "macos")]
-            "metal" | "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => {
-                Ok(Self::Metal)
-            }
-            "opengl" => Ok(Self::OpenGL),
-            "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
-            "software" | "cpu" => Ok(Self::Software),
-            #[cfg(target_os = "windows")]
-            "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
-            _ => Err(format!("'{s}' is not a valid video renderer")),
         }
     }
 }

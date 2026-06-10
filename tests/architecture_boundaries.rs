@@ -77,6 +77,7 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
 ];
 
 const ENGINE_GFX_RENDER_SYMBOLS: &[&str] = &[
+    "BackendType",
     "BlendMode",
     "ClockDomainTrace",
     "DrawStats",
