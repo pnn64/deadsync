@@ -147,6 +147,114 @@ pub fn write_resampler_output(
     produced_frames
 }
 
+pub fn write_channel_mapped_i16(
+    input: &[i16],
+    in_ch: usize,
+    out_ch: usize,
+    out_tmp: &mut Vec<i16>,
+) -> usize {
+    if input.is_empty() || in_ch == 0 || out_ch == 0 {
+        out_tmp.clear();
+        return 0;
+    }
+    let frames = input.len() / in_ch;
+    let produced_samples = frames * out_ch;
+    resize_output(out_tmp, produced_samples);
+    if in_ch == out_ch {
+        out_tmp.copy_from_slice(&input[..produced_samples]);
+        return frames;
+    }
+    if in_ch == 1 && out_ch == 2 {
+        for frame in 0..frames {
+            let sample = input[frame];
+            let base = frame * 2;
+            out_tmp[base] = sample;
+            out_tmp[base + 1] = sample;
+        }
+        return frames;
+    }
+    for frame in 0..frames {
+        let in_base = frame * in_ch;
+        let out_base = frame * out_ch;
+        for channel in 0..out_ch {
+            out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+        }
+    }
+    frames
+}
+
+#[inline(always)]
+pub fn drop_front_samples(samples: &mut Vec<i16>, drop_samples: usize) {
+    if drop_samples == 0 {
+        return;
+    }
+    if drop_samples >= samples.len() {
+        samples.clear();
+        return;
+    }
+    let remaining = samples.len() - drop_samples;
+    samples.copy_within(drop_samples.., 0);
+    samples.truncate(remaining);
+}
+
+pub fn apply_fade_envelope(
+    samples: &mut [i16],
+    channels: usize,
+    start_frame: u64,
+    fade: (i64, i64),
+) {
+    let (full_volume_frame, silence_frame) = fade;
+    if samples.is_empty() || channels == 0 || full_volume_frame == silence_frame {
+        return;
+    }
+    let frames = samples.len() / channels;
+    if frames == 0 {
+        return;
+    }
+    let start_frame = saturating_i64_from_u64(start_frame);
+    let end_frame = saturating_i64_from_u64(frames as u64).saturating_add(start_frame);
+    let start_volume = volume_for_frame(start_frame, full_volume_frame, silence_frame);
+    let end_volume = volume_for_frame(end_frame, full_volume_frame, silence_frame);
+    if start_volume > 0.9999 && end_volume > 0.9999 {
+        return;
+    }
+    let frames_f = frames as f32;
+    for frame in 0..frames {
+        let t = frame as f32 / frames_f;
+        let mut volume = (end_volume - start_volume).mul_add(t, start_volume);
+        volume = volume.clamp(0.0, 1.0);
+        if (volume - 1.0).abs() < 0.0001 {
+            continue;
+        }
+        for c in 0..channels {
+            let idx = frame * channels + c;
+            let scaled = f32::from(samples[idx]) * volume;
+            samples[idx] = scaled.round().clamp(-32768.0, 32767.0) as i16;
+        }
+    }
+}
+
+#[inline]
+pub fn saturating_i64_from_u64(value: u64) -> i64 {
+    value.min(i64::MAX as u64) as i64
+}
+
+#[inline]
+fn volume_for_frame(position: i64, full_volume_frame: i64, silence_frame: i64) -> f32 {
+    if full_volume_frame == silence_frame {
+        return 1.0;
+    }
+    let full = full_volume_frame as f64;
+    let silence = silence_frame as f64;
+    let pos = position as f64;
+    let denom = silence - full;
+    if denom.abs() < f64::EPSILON {
+        return if silence > full { 0.0 } else { 1.0 };
+    }
+    let volume = ((pos - full) * (0.0 - 1.0) / denom) + 1.0;
+    volume.clamp(0.0, 1.0) as f32
+}
+
 #[inline(always)]
 fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
     if out_tmp.len() < produced_samples {
@@ -163,7 +271,10 @@ fn sample_to_i16(sample: f32) -> i16 {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlanarAccum, write_resampler_output};
+    use super::{
+        PlanarAccum, apply_fade_envelope, drop_front_samples, volume_for_frame,
+        write_channel_mapped_i16, write_resampler_output,
+    };
 
     #[test]
     fn planar_accum_keeps_channel_order() {
@@ -208,5 +319,53 @@ mod tests {
 
         assert_eq!(frames, 2);
         assert_eq!(out_tmp, [0, -32767, 0, -32767, 32767, 16384, 32767, 16384]);
+    }
+
+    #[test]
+    fn channel_map_duplicates_mono_to_stereo() {
+        let mut out_tmp = Vec::new();
+
+        let frames = write_channel_mapped_i16(&[1, 2, 3], 1, 2, &mut out_tmp);
+
+        assert_eq!(frames, 3);
+        assert_eq!(out_tmp, [1, 1, 2, 2, 3, 3]);
+    }
+
+    #[test]
+    fn channel_map_wraps_input_channels() {
+        let mut out_tmp = Vec::new();
+
+        let frames = write_channel_mapped_i16(&[1, 2, 3, 4], 2, 4, &mut out_tmp);
+
+        assert_eq!(frames, 2);
+        assert_eq!(out_tmp, [1, 2, 1, 2, 3, 4, 3, 4]);
+    }
+
+    #[test]
+    fn drop_front_samples_trims_in_place() {
+        let mut samples = vec![1, 2, 3, 4, 5];
+
+        drop_front_samples(&mut samples, 2);
+
+        assert_eq!(samples, [3, 4, 5]);
+    }
+
+    #[test]
+    fn fade_out_longer_than_clip_starts_near_silent() {
+        let clip_frames = 48i64;
+        let fade_frames = 72_000i64;
+        let start_volume = volume_for_frame(0, clip_frames - fade_frames, clip_frames);
+
+        assert!((start_volume - (clip_frames as f32 / fade_frames as f32)).abs() < 0.00001);
+    }
+
+    #[test]
+    fn fade_envelope_does_not_compress_long_fade_to_short_clip() {
+        let mut samples = [30_000i16; 48];
+
+        apply_fade_envelope(&mut samples, 1, 0, (-71_952, 48));
+
+        assert!(samples[0].abs() <= 25);
+        assert_eq!(samples[47], 0);
     }
 }

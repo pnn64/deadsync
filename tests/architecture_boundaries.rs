@@ -933,6 +933,11 @@ fn audio_decode_helpers_live_in_decode_crate() {
             "struct PlanarAccum",
             "fn resampler_params",
             "fn write_resampler_output",
+            "fn write_channel_mapped_i16",
+            "fn drop_front_samples",
+            "fn apply_fade_envelope",
+            "fn volume_for_frame",
+            "fn sat_i64",
             "PLANAR_COMPACT_THRESHOLD_FRAMES",
         ] {
             let count = count_token_refs(&text, token);
