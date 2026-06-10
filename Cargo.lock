@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.661"
+version = "0.4.662"
 dependencies = [
  "alsa",
  "bincode",
@@ -979,6 +979,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "coreaudio-rs",
+ "deadsync-audio",
  "deadsync-audio-analysis",
  "deadsync-audio-decode",
  "deadsync-chart",
@@ -1045,6 +1046,10 @@ dependencies = [
  "xcb",
  "zip",
 ]
+
+[[package]]
+name = "deadsync-audio"
+version = "0.1.0"
 
 [[package]]
 name = "deadsync-audio-analysis"

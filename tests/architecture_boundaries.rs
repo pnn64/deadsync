@@ -159,6 +159,21 @@ const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
 
 const CONFIG_PLATFORM_FACADE_MODULES: &[&str] = &["dirs"];
 
+const AUDIO_CORE_FORBIDDEN_TOKENS: &[&str] = &[
+    "crate::engine",
+    "crate::assets",
+    "crate::config",
+    "crate::game",
+    "crate::screens",
+    "deadsync_platform",
+    "deadsync_audio_decode",
+    "std::fs",
+    "std::path",
+    "std::sync::mpsc",
+    "Mutex",
+    "log::",
+];
+
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/engine",
     "src/app",
@@ -806,6 +821,60 @@ fn game_layer_does_not_import_transport_crates() {
     assert!(
         failures.is_empty(),
         "game layer should depend on deadsync-online DTO/client APIs, not raw transport crates:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn audio_core_lives_in_audio_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-audio/src/lib.rs"),
+        root.join("crates/deadsync-audio/src/ring.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    let engine_audio = root.join("src/engine/audio/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_audio) {
+        for token in [
+            "struct SpscRingI16",
+            "struct SpscRingMusicSeg",
+            "std::cell::UnsafeCell",
+        ] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still defines realtime ring token {token} {count} times",
+                    rel_path(&root, &engine_audio)
+                ));
+            }
+        }
+    }
+
+    let audio_src = root.join("crates/deadsync-audio/src");
+    if audio_src.exists() {
+        for file in rust_files(&audio_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in AUDIO_CORE_FORBIDDEN_TOKENS {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden audio-core token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "audio core primitives should live in deadsync-audio:\n{}",
         failures.join("\n")
     );
 }
