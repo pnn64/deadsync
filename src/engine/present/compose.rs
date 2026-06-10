@@ -1,7 +1,6 @@
 use crate::assets;
-use crate::engine::present::font;
 use deadsync_present::actors::{self, SizeSpec};
-use deadsync_present::{anim, space};
+use deadsync_present::{anim, font, space};
 use deadsync_render as renderer;
 use deadsync_render::{BlendMode, RenderList, RenderObject};
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
@@ -4367,10 +4366,10 @@ mod tests {
         sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::assets;
-    use crate::engine::present::font::{Font, Glyph};
     use deadsync_present::actors::{
         Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
     };
+    use deadsync_present::font::{Font, Glyph};
     use deadsync_present::space::Metrics;
     use deadsync_render::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,

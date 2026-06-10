@@ -4,8 +4,8 @@ mod textures;
 pub mod visual_styles;
 
 use crate::engine::gfx::{Backend, Texture as GfxTexture};
-use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
 use deadsync_platform::dirs;
+use deadsync_present::font::{self, Font, FontLoadData, FontParseError};
 use deadsync_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use image::RgbaImage;
 use log::{debug, warn};
@@ -78,6 +78,28 @@ impl From<Box<dyn StdError>> for AssetError {
         Self::Backend(value.to_string())
     }
 }
+
+struct AssetFontTextureContext;
+
+impl font::FontTextureContext for AssetFontTextureContext {
+    fn canonical_texture_key(&self, path: &Path) -> String {
+        canonical_texture_key(path)
+    }
+
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        sprite_sheet_dims(key)
+    }
+
+    fn texture_hint_is_default(&self, raw: &str) -> bool {
+        parse_texture_hints(raw).is_default()
+    }
+
+    fn texture_hint_doubleres(&self, raw: &str) -> bool {
+        parse_texture_hints(raw).doubleres
+    }
+}
+
+const FONT_TEXTURE_CONTEXT: AssetFontTextureContext = AssetFontTextureContext;
 
 #[derive(Clone, Copy)]
 pub(crate) struct TextureUploadBudget {
@@ -275,7 +297,7 @@ impl AssetManager {
         let FontLoadData {
             font,
             required_textures,
-        } = font::parse(&ini_path.to_string_lossy())?;
+        } = font::parse_with_texture_context(&ini_path.to_string_lossy(), &FONT_TEXTURE_CONTEXT)?;
         self.register_parsed_font(backend, name, font, &required_textures)?;
         debug!("Loaded font '{name}' from '{}'", ini_path.display());
         Ok(())
@@ -549,7 +571,7 @@ impl AssetManager {
             let FontLoadData {
                 mut font,
                 required_textures,
-            } = font::parse(&resolved_str)?;
+            } = font::parse_with_texture_context(&resolved_str, &FONT_TEXTURE_CONTEXT)?;
 
             if name == "miso" {
                 font.fallback_font_name = Some("game");

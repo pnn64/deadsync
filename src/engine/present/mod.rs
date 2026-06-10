@@ -1,8 +1,7 @@
-pub use deadsync_present::{actors, anim, cache, color, density, runtime};
+pub use deadsync_present::{actors, anim, cache, color, density, font, runtime};
 
 pub mod compose;
 pub mod dsl;
-pub mod font;
 
 #[macro_export]
 macro_rules! rgba {

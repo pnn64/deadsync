@@ -9,8 +9,8 @@ use self::{
     itg as noteskin_itg,
 };
 use crate::assets;
-use crate::engine::present::anim as ui_anim;
 use deadsync_platform::dirs;
+use deadsync_present::anim as ui_anim;
 use deadsync_render::SamplerDesc;
 use image::{Rgba, RgbaImage, image_dimensions};
 use log::warn;

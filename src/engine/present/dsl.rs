@@ -1,7 +1,6 @@
 use crate::assets;
-use crate::engine::present::font;
 use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
-use deadsync_present::{anim, runtime};
+use deadsync_present::{anim, font, runtime};
 use deadsync_render::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;

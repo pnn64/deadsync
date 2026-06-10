@@ -1,6 +1,6 @@
-use crate::engine::present::actors::{TextAlign, TextAttribute};
-use crate::engine::present::anim::{EffectClock, EffectMode};
 use crate::game::parsing::noteskin::SpriteSlot;
+use deadsync_present::actors::{TextAlign, TextAttribute};
+use deadsync_present::anim::{EffectClock, EffectMode};
 use deadsync_render::TexturedMeshVertex;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -1515,7 +1515,7 @@ mod tests {
         SongLuaOverlayBlendMode, parse_overlay_blend_mode, parse_overlay_effect_clock,
         parse_overlay_effect_mode,
     };
-    use crate::engine::present::anim::{EffectClock, EffectMode};
+    use deadsync_present::anim::{EffectClock, EffectMode};
 
     #[test]
     fn parse_overlay_blend_mode_accepts_stepmania_add_name() {

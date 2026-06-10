@@ -22,8 +22,6 @@ use std::sync::{Arc, OnceLock};
 use image;
 use log::{debug, trace, warn};
 
-use crate::assets;
-
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
 const DEFAULT_FONT_IMPORT: &str = "Common default";
 const INTERNAL_ALIAS_START: u32 = 0xE000;
@@ -564,6 +562,37 @@ pub struct FontLoadData {
     pub required_textures: Vec<PathBuf>,
 }
 
+pub trait FontTextureContext {
+    fn canonical_texture_key(&self, path: &Path) -> String;
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32);
+    fn texture_hint_is_default(&self, raw: &str) -> bool;
+    fn texture_hint_doubleres(&self, raw: &str) -> bool;
+}
+
+pub struct DefaultFontTextureContext;
+
+impl FontTextureContext for DefaultFontTextureContext {
+    fn canonical_texture_key(&self, path: &Path) -> String {
+        path.strip_prefix(Path::new("assets"))
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/")
+    }
+
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        parse_sprite_sheet_dims_from_key(key)
+    }
+
+    fn texture_hint_is_default(&self, raw: &str) -> bool {
+        let trimmed = raw.trim();
+        trimmed.is_empty() || trimmed.eq_ignore_ascii_case("default")
+    }
+
+    fn texture_hint_doubleres(&self, raw: &str) -> bool {
+        has_ascii_ci(raw, b"doubleres")
+    }
+}
+
 #[inline(always)]
 fn empty_ascii_glyphs() -> Box<[Option<Glyph>; 128]> {
     Box::new(std::array::from_fn(|_| None))
@@ -781,27 +810,122 @@ fn parse_line_entry_raw(raw: &str) -> Option<(u32, &str)> {
 
 #[inline(always)]
 fn is_doubleres_in_name(name: &str) -> bool {
-    let b = name.as_bytes();
-    // search for "doubleres" case-insensitively without allocation
-    for w in b.windows(9) {
-        #[inline(always)]
-        const fn low(x: u8) -> u8 {
-            x | 0x20
+    has_ascii_ci(name, b"doubleres")
+}
+
+#[inline(always)]
+fn has_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
+fn parse_sprite_sheet_dims_from_key(key: &str) -> (u32, u32) {
+    let bytes = key.as_bytes();
+    let mut dims = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if is_res_tag(bytes, i) {
+            i = skip_parenthetical(bytes, i);
+            continue;
         }
-        if low(w[0]) == b'd'
-            && low(w[1]) == b'o'
-            && low(w[2]) == b'u'
-            && low(w[3]) == b'b'
-            && low(w[4]) == b'l'
-            && low(w[5]) == b'e'
-            && low(w[6]) == b'r'
-            && low(w[7]) == b'e'
-            && low(w[8]) == b's'
-        {
-            return true;
+
+        let b = bytes[i];
+        if (b == b'x' || b == b'X') && i > 0 && bytes[i - 1].is_ascii_digit() {
+            let mut left = i;
+            while left > 0 && bytes[left - 1].is_ascii_digit() {
+                left -= 1;
+            }
+
+            let mut right = i + 1;
+            while right < bytes.len() && bytes[right].is_ascii_digit() {
+                right += 1;
+            }
+
+            if left < i
+                && i + 1 < right
+                && is_sprite_sheet_left_boundary(bytes, left)
+                && is_sprite_sheet_right_boundary(bytes, right)
+                && let (Some(w), Some(h)) = (
+                    parse_ascii_digits(&bytes[left..i]),
+                    parse_ascii_digits(&bytes[i + 1..right]),
+                )
+                && w > 0
+                && h > 0
+            {
+                dims = Some((w, h));
+            }
+
+            i = right;
+            continue;
         }
+
+        i += 1;
     }
-    false
+
+    dims.unwrap_or((1, 1))
+}
+
+#[inline(always)]
+fn parse_ascii_digits(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut value = 0u32;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        value = value.checked_mul(10)?.checked_add(u32::from(b - b'0'))?;
+    }
+    Some(value)
+}
+
+#[inline(always)]
+fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
+    idx + 4 <= bytes.len()
+        && bytes[idx] == b'('
+        && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
+        && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
+        && bytes[idx + 3].eq_ignore_ascii_case(&b's')
+}
+
+#[inline(always)]
+fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
+    let mut depth = 0usize;
+    let mut idx = start;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'(' => depth += 1,
+            b')' => {
+                if depth == 0 {
+                    return idx + 1;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return idx + 1;
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    bytes.len()
+}
+
+#[inline(always)]
+fn is_sprite_sheet_left_boundary(bytes: &[u8], left: usize) -> bool {
+    left > 0 && matches!(bytes[left - 1], b' ' | b'\t' | b'\r' | b'\n' | b'_')
+}
+
+#[inline(always)]
+fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
+    right == bytes.len()
+        || matches!(
+            bytes[right],
+            b'.' | b' ' | b'\t' | b'\r' | b'\n' | b'(' | b'_'
+        )
 }
 
 /// [section]->{key->val} (both section/key lowercased, value trimmed). Only std.
@@ -2077,6 +2201,13 @@ fn apply_range_mapping(
 /* ======================= PARSE ======================= */
 
 pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
+    parse_with_texture_context(ini_path_str, &DefaultFontTextureContext)
+}
+
+pub fn parse_with_texture_context(
+    ini_path_str: &str,
+    texture_ctx: &impl FontTextureContext,
+) -> Result<FontLoadData, FontParseError> {
     use std::collections::HashMap;
 
     fn resolve_import_path(base_ini: &Path, spec: &str) -> Option<PathBuf> {
@@ -2248,7 +2379,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
 
     for (spec, is_implicit) in import_specs {
         if let Some(import_ini) = resolve_import_path(ini_path, &spec) {
-            match parse(import_ini.to_string_lossy().as_ref()) {
+            match parse_with_texture_context(import_ini.to_string_lossy().as_ref(), texture_ctx) {
                 Ok(imported) => {
                     // Merge textures
                     required_textures.extend(imported.required_textures.into_iter());
@@ -2285,10 +2416,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
     for (page_idx, tex_path) in texture_paths.iter().enumerate() {
         let page_name = get_page_name_from_path(tex_path);
         let tex_dims = image::image_dimensions(tex_path)?;
-        let texture_key = assets::canonical_texture_key(tex_path);
+        let texture_key = texture_ctx.canonical_texture_key(tex_path);
         required_textures.push(tex_path.clone());
 
-        let (num_frames_wide, num_frames_high) = assets::sprite_sheet_dims(&texture_key);
+        let (num_frames_wide, num_frames_high) = texture_ctx.sprite_sheet_dims(&texture_key);
         let total_frames = (num_frames_wide * num_frames_high) as usize;
 
         // settings: common → page → legacy
@@ -2344,12 +2475,13 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
         }
 
         let hints_raw = settings.texture_hints.trim();
-        let hints = assets::parse_texture_hints(hints_raw);
-        if !hints.is_default() {
+        let hints_default = texture_ctx.texture_hint_is_default(hints_raw);
+        let hints_doubleres = texture_ctx.texture_hint_doubleres(hints_raw);
+        if !hints_default {
             texture_hints_map.insert(texture_key.clone(), hints_raw.to_string());
         }
 
-        let has_doubleres = is_doubleres_in_name(&texture_key) || hints.doubleres;
+        let has_doubleres = is_doubleres_in_name(&texture_key) || hints_doubleres;
         let (base_tex_w, base_tex_h) =
             parse_base_res_from_filename(&texture_key).unwrap_or((tex_dims.0, tex_dims.1));
 
@@ -2386,11 +2518,11 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
         );
 
         if let Some(stroke_path) = find_stroke_texture_path(tex_path) {
-            let stroke_key = assets::canonical_texture_key(&stroke_path);
-            let (stroke_frames_w, stroke_frames_h) = assets::sprite_sheet_dims(&stroke_key);
+            let stroke_key = texture_ctx.canonical_texture_key(&stroke_path);
+            let (stroke_frames_w, stroke_frames_h) = texture_ctx.sprite_sheet_dims(&stroke_key);
             let stroke_total_frames = (stroke_frames_w * stroke_frames_h) as usize;
             let stroke_dims = image::image_dimensions(&stroke_path)?;
-            let stroke_has_doubleres = is_doubleres_in_name(&stroke_key) || hints.doubleres;
+            let stroke_has_doubleres = is_doubleres_in_name(&stroke_key) || hints_doubleres;
             let (stroke_base_w, _stroke_base_h) =
                 parse_base_res_from_filename(&stroke_key).unwrap_or((stroke_dims.0, stroke_dims.1));
 
@@ -2409,7 +2541,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
                 );
                 stroke_texture_map.insert(texture_key.clone(), texture_key.clone());
             }
-            if !hints.is_default() {
+            if !hints_default {
                 texture_hints_map.insert(stroke_key.clone(), hints_raw.to_string());
             }
             required_textures.push(stroke_path);

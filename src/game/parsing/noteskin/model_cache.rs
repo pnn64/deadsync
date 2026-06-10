@@ -182,7 +182,7 @@ mod tests {
             })),
             model_draw: ModelDrawState::default(),
             model_timeline: Arc::<[ModelTweenSegment]>::from([]),
-            model_effect: crate::engine::present::anim::EffectState::default(),
+            model_effect: deadsync_present::anim::EffectState::default(),
             model_auto_rot_total_frames: 0.0,
             model_auto_rot_z_keys: Arc::<[ModelAutoRotKey]>::from([]),
         }

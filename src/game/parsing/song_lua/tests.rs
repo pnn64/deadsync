@@ -6,8 +6,8 @@ use super::{
     THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, multitap_deco_state,
     push_multitap_arrow_sample, push_overlay_sample_eases,
 };
-use crate::engine::present::actors::TextAlign;
 use chrono::{Datelike, Local};
+use deadsync_present::actors::TextAlign;
 use std::fs;
 use std::path::PathBuf;
 
@@ -5906,7 +5906,7 @@ return Def.ActorFrame{
     let text = compiled.overlays[1].initial_state;
     assert_eq!(
         text.effect_mode,
-        crate::engine::present::anim::EffectMode::GlowShift
+        deadsync_present::anim::EffectMode::GlowShift
     );
     assert_eq!(text.effect_color1, [1.0, 1.0, 1.0, 0.2]);
     assert_eq!(text.effect_color2, [1.0, 1.0, 1.0, 0.8]);

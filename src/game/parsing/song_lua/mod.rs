@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use crate::engine::present::actors::{TextAlign, TextAttribute};
-use crate::engine::present::anim::{EffectClock, EffectMode};
+use deadsync_present::actors::{TextAlign, TextAttribute};
+use deadsync_present::anim::{EffectClock, EffectMode};
 
 mod actor_host;
 mod compat;
