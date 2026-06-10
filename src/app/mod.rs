@@ -40,7 +40,7 @@ use deadsync_platform::display;
 use deadsync_platform::host_time;
 use deadsync_render as renderer;
 use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
-use deadsync_renderer as gfx_backend;
+use deadsync_renderer as renderer_backend;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -2811,7 +2811,7 @@ fn model_texture_sampler(key: &str) -> SamplerDesc {
 
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
-    backend: &mut gfx_backend::Backend,
+    backend: &mut renderer_backend::Backend,
     state: &gameplay::State,
 ) {
     fn song_lua_overlay_sampler(
@@ -2907,7 +2907,7 @@ fn prewarm_gameplay_assets(
 
     fn prewarm_model_texture_key(
         assets: &mut AssetManager,
-        backend: &mut gfx_backend::Backend,
+        backend: &mut renderer_backend::Backend,
         seen: &mut HashSet<String>,
         seen_model_textures: &mut HashSet<String>,
         key: &str,
@@ -2922,7 +2922,7 @@ fn prewarm_gameplay_assets(
 
     fn prewarm_noteskin_textures(
         assets: &mut AssetManager,
-        backend: &mut gfx_backend::Backend,
+        backend: &mut renderer_backend::Backend,
         seen: &mut HashSet<String>,
         seen_model_textures: &mut HashSet<String>,
         noteskin: &crate::game::parsing::noteskin::Noteskin,
@@ -3879,7 +3879,7 @@ impl AppState {
 
 pub struct App {
     window: Option<Arc<Window>>,
-    backend: Option<gfx_backend::Backend>,
+    backend: Option<renderer_backend::Backend>,
     backend_type: BackendType,
     _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor,
     fsr_monitor: input::fsr::Monitor,

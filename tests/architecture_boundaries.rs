@@ -115,6 +115,25 @@ const ENGINE_GFX_RENDER_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const RENDER_BACKEND_IMPORT_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/assets",
+    "src/config",
+    "src/engine/present",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+    "crates/deadsync-present/src",
+];
+
+const RENDER_BACKEND_IMPORTS: &[&str] = &[
+    "deadsync_render_backend_gl",
+    "deadsync_render_backend_software",
+    "deadsync_render_backend_vulkan",
+    "deadsync_render_backend_wgpu",
+];
+
 const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/actors.rs",
     "src/engine/present/anim.rs",
@@ -904,14 +923,23 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
         ));
     }
     if gfx_facade_path.exists() {
-        let text = fs::read_to_string(&gfx_facade_path).expect("source file should be readable");
-        if text.trim() != "pub use deadsync_renderer::*;" {
+        failures.push(format!(
+            "{} still exists; import deadsync_renderer directly",
+            rel_path(&root, &gfx_facade_path)
+        ));
+    }
+
+    let engine_mod_path = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+        let count = count_token_refs(&text, "pub mod gfx");
+        if count != 0 {
             failures.push(format!(
-                "{} should only re-export deadsync-renderer",
-                rel_path(&root, &gfx_facade_path)
+                "{} declares engine::gfx {count} times; import deadsync_renderer directly",
+                rel_path(&root, &engine_mod_path)
             ));
         }
     }
+
     let renderer_src = root.join("crates/deadsync-renderer/src");
     if renderer_src.exists() {
         for file in rust_files(&renderer_src) {
@@ -931,6 +959,28 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
                 if count != 0 {
                     failures.push(format!(
                         "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    for dir in RENDER_BACKEND_IMPORT_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in RENDER_BACKEND_IMPORTS {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} imports concrete render backend {token} {count} times"
                     ));
                 }
             }

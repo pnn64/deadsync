@@ -6,7 +6,7 @@ pub mod visual_styles;
 use deadsync_platform::dirs;
 use deadsync_present::font::{self, Font, FontLoadData, FontParseError};
 use deadsync_render::{SamplerDesc, TextureHandle, TextureHandleMap};
-use deadsync_renderer::{Backend, Texture as GfxTexture};
+use deadsync_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::{HashMap, VecDeque};
@@ -176,7 +176,7 @@ impl TextureUploadQueue {
 }
 
 pub struct AssetManager {
-    textures: TextureHandleMap<GfxTexture>,
+    textures: TextureHandleMap<RendererTexture>,
     uploaded_texture_dims: TextureHandleMap<TexMeta>,
     texture_handles: HashMap<String, TextureHandle>,
     next_texture_handle: TextureHandle,
@@ -208,7 +208,7 @@ impl AssetManager {
     }
 
     #[inline(always)]
-    pub fn textures(&self) -> &TextureHandleMap<GfxTexture> {
+    pub fn textures(&self) -> &TextureHandleMap<RendererTexture> {
         &self.textures
     }
 
@@ -229,7 +229,7 @@ impl AssetManager {
         self.pending_texture_uploads.contains(key)
     }
 
-    pub fn take_textures(&mut self) -> TextureHandleMap<GfxTexture> {
+    pub fn take_textures(&mut self) -> TextureHandleMap<RendererTexture> {
         self.texture_handles.clear();
         clear_texture_handles();
         self.uploaded_texture_dims.clear();
@@ -325,10 +325,10 @@ impl AssetManager {
     pub(crate) fn insert_texture(
         &mut self,
         key: String,
-        texture: GfxTexture,
+        texture: RendererTexture,
         width: u32,
         height: u32,
-    ) -> Option<GfxTexture> {
+    ) -> Option<RendererTexture> {
         let handle = self.reserve_texture_handle(key);
         self.uploaded_texture_dims.insert(
             handle,
@@ -340,7 +340,7 @@ impl AssetManager {
         self.textures.insert(handle, texture)
     }
 
-    pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, GfxTexture)> {
+    pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, RendererTexture)> {
         self.pending_texture_uploads.remove(key);
         let handle = self.texture_handles.remove(key)?;
         remove_texture_handle(key);
@@ -354,7 +354,7 @@ impl AssetManager {
         &mut self,
         backend: &mut Backend,
         handle: TextureHandle,
-        texture: GfxTexture,
+        texture: RendererTexture,
     ) {
         let mut textures = TextureHandleMap::default();
         textures.insert(handle, texture);
@@ -365,7 +365,7 @@ impl AssetManager {
         &mut self,
         backend: &mut Backend,
         key: String,
-        texture: GfxTexture,
+        texture: RendererTexture,
         width: u32,
         height: u32,
     ) -> TextureHandle {

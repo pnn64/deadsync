@@ -3,7 +3,7 @@ use crate::assets::{AssetManager, dynamic, open_image_fallback, register_texture
 use crate::game::profile;
 use deadsync_profile as profile_data;
 use deadsync_render::{SamplerDesc, TextureHandle};
-use deadsync_renderer::{Backend, Texture as GfxTexture};
+use deadsync_renderer::{Backend, Texture as RendererTexture};
 use deadsync_video as video;
 use image::RgbaImage;
 use log::warn;
@@ -1021,7 +1021,7 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         key: &str,
-    ) -> Option<(TextureHandle, GfxTexture)> {
+    ) -> Option<(TextureHandle, RendererTexture)> {
         if self.texture_key_in_use(key) {
             None
         } else {
