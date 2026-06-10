@@ -120,6 +120,7 @@ static MUSIC_TARGET_GAIN_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 // Generation counter incremented whenever a track boundary should snap the
 // mixer's interpolated gain to its target instantly.
 static MUSIC_GAIN_SNAP_GEN: AtomicU64 = AtomicU64::new(0);
+static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 
 // Last audio callback timing, used to interpolate playback position between
 // callback invocations so reported stream time advances continuously.
@@ -262,6 +263,16 @@ pub fn snap_music_gain_generation() {
 #[inline(always)]
 pub fn music_gain_snap_generation() -> u64 {
     MUSIC_GAIN_SNAP_GEN.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub fn bump_music_map_generation() {
+    MUSIC_MAP_GEN.fetch_add(1, Ordering::Release);
+}
+
+#[inline(always)]
+pub fn music_map_generation() -> u64 {
+    MUSIC_MAP_GEN.load(Ordering::Acquire)
 }
 
 #[inline(always)]

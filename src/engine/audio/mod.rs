@@ -27,7 +27,7 @@ use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -171,29 +171,6 @@ struct MusicStream {
     stop_signal: Arc<AtomicBool>,
     rate_bits: Arc<AtomicU32>,
 }
-
-// Global playback position tracking for the current music stream.
-// All counters are in *frames* at the device sample rate (not interleaved samples).
-// Song-time fallback for the current/pending music stream. The precise
-// packet map is published by the audio callback, but gameplay can query the
-// clock before the first mapped packet has been consumed.
-// Per-play monotonic id used to associate asynchronous ReplayGain results
-// with the track that requested them. `set_music_replaygain_if_matches` is
-// a no-op if the id no longer matches the active track, preventing a stale
-// gain value from being applied to a different song.
-// Target linear gain for the music stream. The mixer interpolates its
-// own `current_gain` toward this target across ~80 ms (RAMP_FRAMES at the
-// device sample rate) so cache-miss → cache-hit transitions don't produce
-// an audible step. Default 1.0.
-// Generation counter incremented whenever a track boundary (play / stop)
-// should snap the mixer's interpolated gain to its target instantly,
-// rather than ramping across the boundary.
-static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
-
-// Last audio callback timing, used to interpolate the playback position
-// between callback invocations so that the reported stream time is
-// continuous instead of jumping in whole buffer increments.
-// Stored as elapsed nanos + 1 from the shared process host-clock epoch; 0 means "no callback yet".
 
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 
@@ -488,7 +465,7 @@ fn clear_music_pos_map() {
     internal::music_seg_ring_clear(&QUEUED_MUSIC_MAP_SEGS);
     internal::music_seg_ring_clear(&PLAYED_MUSIC_MAP_SEGS);
     PLAYBACK_POS_MAP.lock().unwrap().clear();
-    MUSIC_MAP_GEN.fetch_add(1, Ordering::Release);
+    deadsync_audio::bump_music_map_generation();
 }
 
 #[inline(always)]
@@ -898,7 +875,7 @@ impl RenderState {
             queued_music_map: QUEUED_MUSIC_MAP_SEGS.clone(),
             played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
             active_music_map: None,
-            music_map_generation: MUSIC_MAP_GEN.load(Ordering::Acquire),
+            music_map_generation: deadsync_audio::music_map_generation(),
             music_gain_current: deadsync_audio::music_target_gain(),
             music_gain_snap_seen: deadsync_audio::music_gain_snap_generation(),
         }
@@ -906,7 +883,7 @@ impl RenderState {
 
     #[inline(always)]
     fn begin_callback_nanos(&mut self, anchor_nanos: u64, source: CallbackClockSource) -> u64 {
-        let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
+        let map_generation = deadsync_audio::music_map_generation();
         if map_generation != self.music_map_generation {
             self.active_music_map = None;
             self.music_map_generation = map_generation;
