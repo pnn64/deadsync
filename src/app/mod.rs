@@ -4132,11 +4132,12 @@ impl App {
                     device,
                     button,
                     sensor,
+                    kind,
                     value,
                 } => {
                     let _ = self
                         .fsr_monitor
-                        .set_threshold(device, button, sensor, value);
+                        .set_threshold(device, button, sensor, kind, value);
                 }
                 PadCommand::SensorEnabled {
                     device,

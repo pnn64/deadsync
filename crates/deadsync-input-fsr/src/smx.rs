@@ -1,7 +1,7 @@
 //! StepManiaX FSR sensor monitor using the shared SmxManager.
 
 use deadsync_input::fsr::{
-    BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
+    BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView, ThresholdKind,
 };
 use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
@@ -119,14 +119,17 @@ impl Monitor {
         pads
     }
 
-    /// Set a panel threshold. SMX stores a low + high; we write `high = value`,
-    /// `low = value - 1`. FSR pads allow per-sensor edits (`sensor = Some(i)`);
-    /// load-cell pads have a single per-panel threshold (`sensor` is ignored).
+    /// Set a panel threshold. FSR pads have one user-facing threshold (we write
+    /// `high = value`, `low = value - 1`, so only `Press` is accepted) and allow
+    /// per-sensor edits (`sensor = Some(i)`). Load-cell pads edit their press
+    /// (high) and release (low) thresholds independently by `kind` (`sensor` is
+    /// ignored); keeping release below press is the caller's job.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
+        kind: ThresholdKind,
         value: u16,
     ) -> bool {
         if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
@@ -148,10 +151,11 @@ impl Monitor {
 
         if fsr {
             if info.firmware_version < 5
+                || kind != ThresholdKind::Press
                 || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value)
             {
                 log::trace!(
-                    "SMX: set_threshold pad {pad} panel {panel} rejected (fsr, fw {}, value {value} not in {MIN_FSR_THRESHOLD}..={MAX_FSR_THRESHOLD})",
+                    "SMX: set_threshold pad {pad} panel {panel} rejected (fsr, fw {}, kind {kind:?}, value {value} not in {MIN_FSR_THRESHOLD}..={MAX_FSR_THRESHOLD})",
                     info.firmware_version
                 );
                 return false;
@@ -175,19 +179,22 @@ impl Monitor {
                 }
             }
         } else {
-            // Load cell: one threshold per panel; the sensor index is ignored.
+            // Load cell: per-panel press (high) / release (low) pair; the
+            // sensor index is ignored.
             if !(MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD).contains(&value) {
                 log::trace!(
                     "SMX: set_threshold pad {pad} panel {panel} rejected (load-cell, value {value} not in {MIN_LOADCELL_THRESHOLD}..={MAX_LOADCELL_THRESHOLD})"
                 );
                 return false;
             }
-            settings.load_cell_high_threshold = value as u8;
-            settings.load_cell_low_threshold = (value as u8).saturating_sub(1);
+            match kind {
+                ThresholdKind::Press => settings.load_cell_high_threshold = value as u8,
+                ThresholdKind::Release => settings.load_cell_low_threshold = value as u8,
+            }
         }
         smx::set_config(pad, config);
         log::trace!(
-            "SMX: set_threshold pad {pad} panel {panel} sensor {sensor:?} -> {value} ({})",
+            "SMX: set_threshold pad {pad} panel {panel} sensor {sensor:?} {kind:?} -> {value} ({})",
             if fsr { "fsr" } else { "load-cell" }
         );
         true
@@ -364,6 +371,7 @@ fn fsr_button(
         aggregate_threshold,
         active: input_state & (1u16 << panel) != 0,
         value_scale: FSR_VALUE_SCALE,
+        release_threshold: None,
     }
 }
 
@@ -405,6 +413,7 @@ fn load_cell_button(
         aggregate_threshold: threshold,
         active: input_state & (1u16 << panel) != 0,
         value_scale: LOADCELL_VALUE_SCALE,
+        release_threshold: Some(u16::from(settings.load_cell_low_threshold)),
     }
 }
 

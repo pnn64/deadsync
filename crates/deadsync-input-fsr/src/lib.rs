@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use deadsync_input::fsr::{BackendKind, PadDeviceId, PadView};
+use deadsync_input::fsr::{BackendKind, PadDeviceId, PadView, ThresholdKind};
 
 #[cfg(any(
     windows,
@@ -59,16 +59,22 @@ impl Monitor {
 
     /// Set a threshold on a specific pad. `sensor` of `None` applies to every
     /// sensor in the button (Simple mode); `Some(i)` targets one sensor.
+    /// `kind` picks the press or release threshold; only pads that expose a
+    /// separate release threshold (SMX load cell) accept `Release`.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
+        kind: ThresholdKind,
         value: u16,
     ) -> bool {
         match device.backend {
-            BackendKind::Fsrio => self.fsrio.set_threshold(device, button, sensor, value),
-            BackendKind::Smx => self.smx.set_threshold(device, button, sensor, value),
+            BackendKind::Fsrio => {
+                kind == ThresholdKind::Press
+                    && self.fsrio.set_threshold(device, button, sensor, value)
+            }
+            BackendKind::Smx => self.smx.set_threshold(device, button, sensor, kind, value),
         }
     }
 
@@ -119,7 +125,7 @@ impl Monitor {
     target_os = "macos"
 )))]
 mod unsupported {
-    use super::{PadDeviceId, PadView};
+    use super::{PadDeviceId, PadView, ThresholdKind};
     use std::fmt::Write as _;
     use std::path::Path;
     use std::time::SystemTime;
@@ -141,6 +147,7 @@ mod unsupported {
             _device: PadDeviceId,
             _button: usize,
             _sensor: Option<usize>,
+            _kind: ThresholdKind,
             _value: u16,
         ) -> bool {
             false

@@ -109,6 +109,7 @@ mod imp {
                     aggregate_threshold,
                     active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
                     value_scale: MAX_SENSOR_VALUE,
+                    release_threshold: None,
                 }
             });
             vec![PadView {

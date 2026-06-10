@@ -17,6 +17,17 @@ pub struct PadDeviceId {
     pub index: usize,
 }
 
+/// Which of a panel's two thresholds an edit targets. Only pads that expose a
+/// separate release threshold (`ButtonView::release_threshold`) use `Release`;
+/// everything else edits `Press` and lets the backend derive the release side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThresholdKind {
+    /// The trigger (high) threshold: the panel activates above it.
+    Press,
+    /// The release (low) threshold: the panel deactivates below it.
+    Release,
+}
+
 /// One physical sensor within a button group.
 ///
 /// Sensors are listed in display order (left-to-right in the UI), which is not
@@ -56,6 +67,10 @@ pub struct ButtonView {
     /// Full-scale value for normalizing the live bars (FSR 250, load cell 500).
     /// May exceed `max_raw_threshold` (load-cell readings outrun their threshold range).
     pub value_scale: u16,
+    /// The release (low) threshold, when the pad exposes it as user-editable
+    /// (SMX load-cell pads). `None` means the backend derives it from the
+    /// press threshold and the Simple view shows a single editable value.
+    pub release_threshold: Option<u16>,
 }
 
 /// A single connected FSR pad, exposed to the config screen.
