@@ -1,6 +1,7 @@
 use crate::assets::AssetManager;
 use crate::engine::gfx::Backend;
 use deadsync_platform::dirs;
+use deadsync_present::actors::TextureKeyHandle;
 use deadsync_render::{
     FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
 };
@@ -57,13 +58,13 @@ impl TextureChoice {
     }
 
     #[inline(always)]
-    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+    pub fn texture_key_handle(&self) -> TextureKeyHandle {
         let generation = texture_registry_generation();
         let handle = self.cached_handle.load(Ordering::Relaxed);
         if handle != INVALID_TEXTURE_HANDLE
             && self.cached_generation.load(Ordering::Relaxed) == generation
         {
-            return crate::engine::present::dsl::TextureKeyHandle {
+            return TextureKeyHandle {
                 key: Arc::clone(&self.key),
                 handle,
                 generation,
@@ -73,7 +74,7 @@ impl TextureChoice {
         let handle = texture_handle(self.key.as_ref());
         self.cached_handle.store(handle, Ordering::Relaxed);
         self.cached_generation.store(generation, Ordering::Relaxed);
-        crate::engine::present::dsl::TextureKeyHandle {
+        TextureKeyHandle {
             key: Arc::clone(&self.key),
             handle,
             generation,

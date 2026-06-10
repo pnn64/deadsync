@@ -5,7 +5,7 @@ use deadsync_render::{
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
 use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
-use deadsync::engine::present::dsl::TextureKeyHandle;
+use deadsync_present::actors::TextureKeyHandle;
 use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
 use std::alloc::{GlobalAlloc, Layout, System};

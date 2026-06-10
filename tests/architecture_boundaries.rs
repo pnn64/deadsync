@@ -19,7 +19,6 @@ const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
     ("src/game/parsing/noteskin/compile.rs", "config", 1),
     ("src/game/parsing/noteskin/mod.rs", "assets", 1),
     ("src/game/parsing/noteskin/mod.rs", "config", 1),
-    ("src/game/parsing/noteskin/mod.rs", "engine", 4),
     ("src/game/parsing/simfile.rs", "config", 3),
     ("src/game/parsing/simfile.rs", "engine", 1),
     ("src/game/parsing/simfile/cache.rs", "config", 1),

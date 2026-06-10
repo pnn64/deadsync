@@ -63,6 +63,75 @@ impl SpriteSource {
     }
 }
 
+pub trait IntoTextureKey {
+    fn into_texture_key(self) -> Arc<str>;
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource
+    where
+        Self: Sized,
+    {
+        SpriteSource::Texture(self.into_texture_key())
+    }
+}
+
+pub struct TextureKeyHandle {
+    pub key: Arc<str>,
+    pub handle: TextureHandle,
+    pub generation: u64,
+}
+
+impl IntoTextureKey for TextureKeyHandle {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self.key
+    }
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource {
+        SpriteSource::TextureHandle {
+            key: self.key,
+            handle: self.handle,
+            generation: self.generation,
+        }
+    }
+}
+
+impl IntoTextureKey for Arc<str> {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self
+    }
+}
+
+impl IntoTextureKey for &Arc<str> {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self.clone()
+    }
+}
+
+impl IntoTextureKey for String {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self)
+    }
+}
+
+impl IntoTextureKey for &String {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self.as_str())
+    }
+}
+
+impl IntoTextureKey for &str {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Actor {
     /// Unified Sprite

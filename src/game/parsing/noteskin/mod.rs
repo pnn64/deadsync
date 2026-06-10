@@ -10,6 +10,7 @@ use self::{
 };
 use crate::assets;
 use deadsync_platform::dirs;
+use deadsync_present::actors::TextureKeyHandle;
 use deadsync_present::anim as ui_anim;
 use deadsync_render::SamplerDesc;
 use image::{Rgba, RgbaImage, image_dimensions};
@@ -100,7 +101,7 @@ impl SpriteSource {
     }
 
     #[inline(always)]
-    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+    pub fn texture_key_handle(&self) -> TextureKeyHandle {
         let (texture_key, cached_handle, cached_generation) = match self {
             Self::Atlas {
                 texture_key,
@@ -120,7 +121,7 @@ impl SpriteSource {
         if handle != deadsync_render::INVALID_TEXTURE_HANDLE
             && cached_generation.load(Ordering::Relaxed) == generation
         {
-            return crate::engine::present::dsl::TextureKeyHandle {
+            return TextureKeyHandle {
                 key: texture_key.clone(),
                 handle,
                 generation,
@@ -130,7 +131,7 @@ impl SpriteSource {
         let handle = assets::texture_handle(texture_key.as_ref());
         cached_handle.store(handle, Ordering::Relaxed);
         cached_generation.store(generation, Ordering::Relaxed);
-        crate::engine::present::dsl::TextureKeyHandle {
+        TextureKeyHandle {
             key: texture_key.clone(),
             handle,
             generation,
@@ -351,7 +352,7 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
-    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+    pub fn texture_key_handle(&self) -> TextureKeyHandle {
         self.source.texture_key_handle()
     }
 

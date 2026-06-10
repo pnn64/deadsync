@@ -1,83 +1,14 @@
 use crate::assets;
 use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
+pub use deadsync_present::actors::{IntoTextureKey, TextureKeyHandle};
 use deadsync_present::{anim, font, runtime};
 use deadsync_render::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
-
-pub trait IntoTextureKey {
-    fn into_texture_key(self) -> Arc<str>;
-
-    #[inline(always)]
-    fn into_sprite_source(self) -> SpriteSource
-    where
-        Self: Sized,
-    {
-        SpriteSource::Texture(self.into_texture_key())
-    }
-}
-
-pub struct TextureKeyHandle {
-    pub key: Arc<str>,
-    pub handle: deadsync_render::TextureHandle,
-    pub generation: u64,
-}
-
-impl IntoTextureKey for TextureKeyHandle {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        self.key
-    }
-
-    #[inline(always)]
-    fn into_sprite_source(self) -> SpriteSource {
-        SpriteSource::TextureHandle {
-            key: self.key,
-            handle: self.handle,
-            generation: self.generation,
-        }
-    }
-}
-
-impl IntoTextureKey for Arc<str> {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        self
-    }
-}
-
-impl IntoTextureKey for &Arc<str> {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        self.clone()
-    }
-}
-
-impl IntoTextureKey for String {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        Arc::<str>::from(self)
-    }
-}
-
-impl IntoTextureKey for &String {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        Arc::<str>::from(self.as_str())
-    }
-}
-
-impl IntoTextureKey for &str {
-    #[inline(always)]
-    fn into_texture_key(self) -> Arc<str> {
-        Arc::<str>::from(self)
-    }
-}
 
 #[doc(hidden)]
 #[inline(always)]
