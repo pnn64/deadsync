@@ -1,4 +1,5 @@
 pub mod flac;
+pub mod folder;
 pub mod mp3;
 pub mod ogg_vorbis;
 pub mod opus;

@@ -920,6 +920,7 @@ fn audio_decode_helpers_live_in_decode_crate() {
 
     for file in [
         root.join("crates/deadsync-audio-decode/src/lib.rs"),
+        root.join("crates/deadsync-audio-decode/src/folder.rs"),
         root.join("crates/deadsync-audio-decode/src/resample.rs"),
     ] {
         if !file.exists() {
@@ -945,6 +946,25 @@ fn audio_decode_helpers_live_in_decode_crate() {
                 failures.push(format!(
                     "{} still defines decode helper token {token} {count} times",
                     rel_path(&root, &engine_resample)
+                ));
+            }
+        }
+    }
+
+    let engine_folder = root.join("src/engine/audio/folder.rs");
+    if let Ok(text) = fs::read_to_string(&engine_folder) {
+        for token in [
+            "fn is_ogg",
+            "fn is_skipped_stem",
+            "std::fs::read_dir",
+            "path.is_file() && is_ogg",
+            "dir.join(format!(\"{index}.ogg\"))",
+        ] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still defines decode folder token {token} {count} times",
+                    rel_path(&root, &engine_folder)
                 ));
             }
         }

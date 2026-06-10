@@ -11,6 +11,7 @@
 //! on top of the bundled `assets/` directory.
 
 use crate::config;
+use deadsync_audio_decode::folder as audio_folder;
 use deadsync_platform::dirs;
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -25,37 +26,16 @@ fn listings() -> &'static Mutex<HashMap<PathBuf, Vec<PathBuf>>> {
     FOLDER_LISTINGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-#[inline(always)]
-fn is_ogg(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("ogg"))
-}
-
-#[inline(always)]
-fn is_skipped_stem(path: &Path) -> bool {
-    path.file_stem()
-        .and_then(|s| s.to_str())
-        .is_some_and(|stem| stem.starts_with('_'))
-}
-
 fn list_ogg_files_uncached(dir: &Path) -> Vec<PathBuf> {
-    let read = match std::fs::read_dir(dir) {
-        Ok(r) => r,
+    match audio_folder::list_ogg_files(dir) {
+        Ok(files) => files,
         Err(e) => {
             // Missing directory is normal (the user hasn't dropped anything in
             // yet) so we log at debug, not warn.
             debug!("Custom sound dir unavailable {}: {e}", dir.display());
-            return Vec::new();
+            Vec::new()
         }
-    };
-    let mut out: Vec<PathBuf> = read
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file() && is_ogg(path) && !is_skipped_stem(path))
-        .collect();
-    out.sort();
-    out
+    }
 }
 
 fn cached_listing(dir: &Path) -> Vec<PathBuf> {
@@ -131,15 +111,7 @@ pub fn indexed_sfx_in(rel_dir: &str, index: u32, fallback_name: &str) -> Option<
 
 /// Same as [`indexed_sfx_in`] but takes a fully resolved directory.
 pub fn pick_indexed_in(dir: &Path, index: u32, fallback_name: &str) -> Option<PathBuf> {
-    let indexed = dir.join(format!("{index}.ogg"));
-    if indexed.is_file() {
-        return Some(indexed);
-    }
-    let fallback = dir.join(fallback_name);
-    if fallback.is_file() {
-        return Some(fallback);
-    }
-    None
+    audio_folder::pick_indexed_ogg(dir, index, fallback_name)
 }
 
 fn play_random_sfx_with(rel_dir: &str, play: fn(&str)) {
