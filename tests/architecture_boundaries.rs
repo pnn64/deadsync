@@ -120,6 +120,7 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/anim.rs",
     "src/engine/present/cache.rs",
     "src/engine/present/color.rs",
+    "src/engine/present/compose.rs",
     "src/engine/present/density.rs",
     "src/engine/present/font.rs",
     "src/engine/present/runtime.rs",
@@ -936,10 +937,17 @@ fn present_model_lives_in_present_crate() {
 
     for file in ENGINE_PRESENT_EXTRACTED_FILES {
         let path = root.join(file);
+        let text = fs::read_to_string(&path).ok();
         let is_space_facade = *file == "src/engine/space.rs"
-            && fs::read_to_string(&path)
-                .is_ok_and(|text| text.trim() == "pub use deadsync_present::space::*;");
-        if path.exists() && !is_space_facade {
+            && text
+                .as_deref()
+                .is_some_and(|text| text.trim() == "pub use deadsync_present::space::*;");
+        let is_compose_facade = *file == "src/engine/present/compose.rs"
+            && text.as_deref().is_some_and(|text| {
+                text.contains("use deadsync_present::compose as present_compose;")
+                    && text.contains("impl present_compose::TextureContext for AssetTextureContext")
+            });
+        if path.exists() && !is_space_facade && !is_compose_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)

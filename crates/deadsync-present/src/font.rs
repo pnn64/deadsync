@@ -821,7 +821,7 @@ fn has_ascii_ci(haystack: &str, needle: &[u8]) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
-fn parse_sprite_sheet_dims_from_key(key: &str) -> (u32, u32) {
+pub(crate) fn parse_sprite_sheet_dims_from_key(key: &str) -> (u32, u32) {
     let bytes = key.as_bytes();
     let mut dims = None;
     let mut i = 0usize;
