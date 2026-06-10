@@ -42,6 +42,16 @@ const EDIT_CURSOR_REPEAT_DELAY_SECONDS: f32 = 0.375;
 const EDIT_CURSOR_REPEAT_INTERVAL_SECONDS: f32 = 0.125;
 const MAX_EDIT_CURSOR_REPEATS_PER_FRAME: usize = 64;
 const TAB_FAST_MULTIPLIER: f32 = 4.0;
+/// Time constant for the exponential easing that scrolls the displayed chart
+/// position toward the cursor. Small enough to keep up with the key-repeat
+/// interval, large enough to read as a smooth scroll rather than a jump.
+const DISPLAY_SCROLL_TIME_CONSTANT: f32 = 0.07;
+/// Once the display is within this many beats of the cursor, settle exactly on
+/// it so the chart doesn't creep forever on sub-pixel differences.
+const DISPLAY_SCROLL_SNAP_EPSILON: f32 = 0.001;
+/// Jumps larger than this snap instantly instead of animating, so Home/End and
+/// other long seeks stay responsive instead of blurring across the whole song.
+const DISPLAY_SCROLL_MAX_SMOOTH_BEATS: f32 = 64.0;
 const EDIT_INFO_VALUE_CHARS: usize = 28;
 const EDIT_LINE_SOUND: &str = "assets/sounds/change.ogg";
 const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
@@ -158,6 +168,7 @@ pub struct State {
     mode: Mode,
     menu: Option<MenuState>,
     cursor_beat: f32,
+    display_beat: f32,
     selection_anchor: Option<f32>,
     selection_end: Option<f32>,
     shift_anchor: Option<f32>,
@@ -320,6 +331,7 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         mode: Mode::Editing,
         menu: None,
         cursor_beat: 0.0,
+        display_beat: 0.0,
         selection_anchor: None,
         selection_end: None,
         shift_anchor: None,
@@ -346,6 +358,7 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         flash: None,
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
+    snap_display_to_cursor(&mut state);
     state
 }
 
@@ -381,11 +394,13 @@ pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
     state.selection_anchor = selection_anchor;
     state.selection_end = selection_end;
     set_cursor(state, snapshot.cursor_beat);
+    snap_display_to_cursor(state);
 }
 
 pub fn on_enter(state: &mut State) {
     audio::stop_music();
     set_cursor(state, state.cursor_beat);
+    snap_display_to_cursor(state);
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
@@ -405,6 +420,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.gameplay.total_elapsed_in_screen += delta_time;
         update_cursor_hold(state, delta_time);
         update_page_hold(state, delta_time);
+        update_display_scroll(state, delta_time);
         return ScreenAction::None;
     };
 
@@ -949,6 +965,7 @@ fn stop_playback(state: &mut State) {
     gameplay_core::reset_practice_playback(&mut state.gameplay, current_time);
     state.mode = Mode::Editing;
     set_cursor(state, current_beat);
+    snap_display_to_cursor(state);
 }
 
 const fn opposite_cursor_hold_dir(dir: CursorHoldDir) -> CursorHoldDir {
@@ -1347,8 +1364,44 @@ fn extend_shift_marker(state: &mut State, original_beat: f32) {
 fn set_cursor(state: &mut State, beat: f32) {
     let max_beat = max_play_beat(state);
     state.cursor_beat = beat.clamp(MIN_CURSOR_BEAT, max_beat);
-    let music_time = gameplay_core::music_time_for_beat(&state.gameplay, state.cursor_beat);
+}
+
+/// Immediately move the displayed scroll position to the cursor with no
+/// smoothing. Used when entering or leaving the edit field, where an animated
+/// scroll would be jarring rather than helpful.
+fn snap_display_to_cursor(state: &mut State) {
+    state.display_beat = state.cursor_beat;
+    let music_time = gameplay_core::music_time_for_beat(&state.gameplay, state.display_beat);
     gameplay_core::seek_practice_display(&mut state.gameplay, music_time);
+}
+
+/// Ease the displayed scroll position toward the cursor so seeking through the
+/// chart scrolls smoothly instead of redrawing into the next position. Large
+/// jumps snap instantly to stay responsive.
+fn update_display_scroll(state: &mut State, delta_time: f32) {
+    if delta_time <= 0.0 || same_beat(state.display_beat, state.cursor_beat) {
+        return;
+    }
+    let next = next_display_beat(state.display_beat, state.cursor_beat, delta_time);
+    if same_beat(next, state.cursor_beat) {
+        snap_display_to_cursor(state);
+        return;
+    }
+    state.display_beat = next;
+    let music_time = gameplay_core::music_time_for_beat(&state.gameplay, state.display_beat);
+    gameplay_core::seek_practice_display(&mut state.gameplay, music_time);
+}
+
+/// Pure easing step for [`update_display_scroll`], split out for testing.
+/// Returns the cursor directly when the gap is tiny (settle) or huge (snap),
+/// otherwise an exponential step toward it.
+fn next_display_beat(display_beat: f32, cursor_beat: f32, delta_time: f32) -> f32 {
+    let diff = cursor_beat - display_beat;
+    if diff.abs() <= DISPLAY_SCROLL_SNAP_EPSILON || diff.abs() > DISPLAY_SCROLL_MAX_SMOOTH_BEATS {
+        return cursor_beat;
+    }
+    let t = 1.0 - (-delta_time / DISPLAY_SCROLL_TIME_CONSTANT).exp();
+    display_beat + diff * t
 }
 
 fn change_snap(state: &mut State, delta: isize) {
@@ -2293,14 +2346,16 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        BPM_LABEL_STYLE, CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
+        BPM_LABEL_STYLE, CursorHoldDir, DISPLAY_SCROLL_MAX_SMOOTH_BEATS,
+        DISPLAY_SCROLL_SNAP_EPSILON, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
         MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
         PracticeNavMode, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER, clamp_selection,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
-        page_hold_dir_for_key, practice_edit_beat_travel, practice_nav_mode_from_config,
-        quantized_music_rate, timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        next_display_beat, page_hold_dir_for_key, practice_edit_beat_travel,
+        practice_nav_mode_from_config, quantized_music_rate, timing_label_glow_alpha,
+        timing_label_x, timing_speed_label,
     };
     use crate::assets::i18n;
     use deadsync_input::VirtualAction;
@@ -2450,6 +2505,30 @@ mod tests {
                 .abs()
                 < 1e-5
         );
+    }
+
+    #[test]
+    fn display_scroll_settles_and_snaps() {
+        // Tiny gaps settle exactly on the cursor.
+        assert_eq!(next_display_beat(10.0, 10.0 + 0.0005, 0.016), 10.0 + 0.0005);
+        // Huge jumps snap instantly so Home/End stay responsive.
+        let far = 10.0 + DISPLAY_SCROLL_MAX_SMOOTH_BEATS + 1.0;
+        assert_eq!(next_display_beat(10.0, far, 0.016), far);
+    }
+
+    #[test]
+    fn display_scroll_eases_toward_cursor() {
+        let start = 0.0;
+        let target = 4.0;
+        let step = next_display_beat(start, target, 0.016);
+        // A single frame moves partway, never overshoots, and heads the right way.
+        assert!(step > start && step < target);
+        // Repeated stepping converges onto the cursor.
+        let mut beat = start;
+        for _ in 0..240 {
+            beat = next_display_beat(beat, target, 0.016);
+        }
+        assert!((beat - target).abs() <= DISPLAY_SCROLL_SNAP_EPSILON);
     }
 
     #[test]
