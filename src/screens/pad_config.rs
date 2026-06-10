@@ -65,6 +65,9 @@ const ACTIVE_FILL: [f32; 4] = [0.30, 0.95, 0.45, 0.95];
 const THRESHOLD_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 /// Highlight color for the currently selected bar's text (reads on black and green).
 const SELECTED_TEXT: [f32; 4] = [1.0, 0.55, 0.1, 1.0];
+/// Selected-highlight color while the press/release lock is off: red, to read
+/// as an "at your own risk" state (the thresholds can get arbitrarily close).
+const LOCK_OFF_TEXT: [f32; 4] = [1.0, 0.25, 0.2, 1.0];
 /// Caution color for the Extra Advanced section.
 const CAUTION_TEXT: [f32; 4] = [1.0, 0.45, 0.2, 1.0];
 /// "On" color for enable / auto-recal indicators.
@@ -954,7 +957,9 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
             let selected = focused_kind.is_some();
             let scale = button.value_scale;
             // A pending whole-button edit shows a single value; otherwise show the
-            // live per-sensor range ("200-230") so Advanced edits are visible here.
+            // live per-sensor range ("200-230") so Advanced edits are visible here,
+            // with faded ghost lines at the divergent per-sensor thresholds.
+            let mut ghost_norms: Vec<f32> = Vec::new();
             let (threshold_label, threshold_norm) = if let Some(v) =
                 pending_simple_threshold(state, pad.device_id, btn_idx, ThresholdKind::Press)
             {
@@ -964,6 +969,10 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                 let label = if mn == mx {
                     mx.to_string()
                 } else {
+                    ghost_norms = divergent_sensor_thresholds(button)
+                        .into_iter()
+                        .map(|v| normalize(v, scale))
+                        .collect();
                     format!("{mn}-{mx}")
                 };
                 (label, normalize(mx, scale))
@@ -994,6 +1003,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     button.active,
                     theme,
                     focused_kind,
+                    state.threshold_lock_off,
                     11.0 + zb,
                 );
             } else {
@@ -1007,6 +1017,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     normalize(button.aggregate_value, scale),
                     threshold_label,
                     threshold_norm,
+                    &ghost_norms,
                     button.active,
                     disabled,
                     x,
@@ -1823,6 +1834,20 @@ fn sensor_threshold_range(button: &ButtonView) -> (u16, u16) {
     (mn, mx)
 }
 
+/// Distinct per-sensor thresholds that diverge from a button's displayed
+/// (max) threshold, for the Simple view's faded ghost lines after per-sensor
+/// Advanced edits. Empty when every sensor agrees.
+fn divergent_sensor_thresholds(button: &ButtonView) -> Vec<u16> {
+    let (_, mx) = sensor_threshold_range(button);
+    let mut out: Vec<u16> = Vec::new();
+    for s in &button.sensors {
+        if s.raw_threshold != mx && !out.contains(&s.raw_threshold) {
+            out.push(s.raw_threshold);
+        }
+    }
+    out
+}
+
 fn group_width(sensors: usize) -> f32 {
     if sensors == 0 {
         return ADV_BAR_W;
@@ -2092,9 +2117,17 @@ fn push_value_cluster(
     button_active: bool,
     theme: &Theme,
     focused_kind: Option<ThresholdKind>,
+    lock_off: bool,
     z: f32,
 ) {
     let selected = focused_kind.is_some();
+    // With the press/release lock off, the selection highlight turns red to
+    // read as an "at your own risk" state (dual-threshold clusters only).
+    let sel = if lock_off && release.is_some() {
+        LOCK_OFF_TEXT
+    } else {
+        SELECTED_TEXT
+    };
     let threshold_norm = threshold_norm.clamp(0.0, 1.0);
     let n = sensors.len().max(1);
     let thin_w = 9.0_f32;
@@ -2124,11 +2157,7 @@ fn push_value_cluster(
             );
         }
         // Sensor number (1-based) below its bar.
-        let nc = if selected {
-            SELECTED_TEXT
-        } else {
-            [1.0, 1.0, 1.0, 0.9]
-        };
+        let nc = if selected { sel } else { [1.0, 1.0, 1.0, 0.9] };
         actors.push(act!(text:
             font("miso"): settext((i + 1).to_string()): align(0.5, 0.0):
             xy(bx, y + BAR_HEIGHT + 6.0): zoom(0.5): horizalign(center):
@@ -2143,11 +2172,7 @@ fn push_value_cluster(
     let release_focused = focused_kind == Some(ThresholdKind::Release);
     let threshold_h = 3.0_f32;
     let threshold_y = y + (1.0 - threshold_norm) * BAR_HEIGHT - threshold_h * 0.5;
-    let press_line = if press_focused {
-        SELECTED_TEXT
-    } else {
-        THRESHOLD_COLOR
-    };
+    let press_line = if press_focused { sel } else { THRESHOLD_COLOR };
     push_quad(
         actors,
         x_center,
@@ -2159,11 +2184,7 @@ fn push_value_cluster(
     );
     if let Some((_, release_norm)) = &release {
         let release_y = y + (1.0 - release_norm.clamp(0.0, 1.0)) * BAR_HEIGHT - threshold_h * 0.5;
-        let release_line = if release_focused {
-            SELECTED_TEXT
-        } else {
-            OFF_TEXT
-        };
+        let release_line = if release_focused { sel } else { OFF_TEXT };
         push_quad(
             actors,
             x_center,
@@ -2192,21 +2213,13 @@ fn push_value_cluster(
         ));
     }
 
-    let text_color = if selected {
-        SELECTED_TEXT
-    } else {
-        [1.0, 1.0, 1.0, 0.95]
-    };
+    let text_color = if selected { sel } else { [1.0, 1.0, 1.0, 0.95] };
     if let Some((release_label, _)) = &release {
         // Release / press values side by side above the press line (low on the
         // left, like the official tool), each lit when it is the one focused.
         let plain = [1.0, 1.0, 1.0, 0.95];
-        let rc = if release_focused {
-            SELECTED_TEXT
-        } else {
-            plain
-        };
-        let pc = if press_focused { SELECTED_TEXT } else { plain };
+        let rc = if release_focused { sel } else { plain };
+        let pc = if press_focused { sel } else { plain };
         actors.push(act!(text:
             font("miso"): settext(release_label.clone()): align(1.0, 1.0):
             xy(x_center - 4.0, threshold_y - 3.0): zoom(0.68): horizalign(right):
@@ -2226,7 +2239,7 @@ fn push_value_cluster(
             actors.push(act!(text:
                 font("miso"): settext(caption.to_owned()): align(0.5, 1.0):
                 xy(x_center, y - 10.0): zoom(0.55): horizalign(center):
-                diffuse(SELECTED_TEXT[0], SELECTED_TEXT[1], SELECTED_TEXT[2], SELECTED_TEXT[3]): z(z + 3.0)
+                diffuse(sel[0], sel[1], sel[2], sel[3]): z(z + 3.0)
             ));
         }
     } else {
@@ -2258,6 +2271,7 @@ fn push_bar(
     value_norm: f32,
     threshold_label: String,
     threshold_norm: f32,
+    ghost_norms: &[f32],
     active: bool,
     disabled: bool,
     x: f32,
@@ -2345,6 +2359,20 @@ fn push_bar(
         THRESHOLD_COLOR,
         z + 2.0,
     );
+    // Faded ghost lines at per-sensor thresholds that diverge from the main
+    // (max) line after Advanced edits, so the spread is visible from Simple.
+    for gn in ghost_norms {
+        let gy = y + (1.0 - gn.clamp(0.0, 1.0)) * BAR_HEIGHT - 1.0;
+        push_quad(
+            actors,
+            x,
+            gy,
+            BAR_WIDTH,
+            2.0,
+            with_alpha(THRESHOLD_COLOR, 0.35),
+            z + 1.9,
+        );
+    }
 
     // Current pressure value, kept high above the bar so a near-max threshold
     // number doesn't clip into it.
@@ -2754,6 +2782,18 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn divergent_sensor_thresholds_lists_distinct_non_max_values() {
+        let mut b = mk_button("L", 50);
+        // Uniform sensors: nothing diverges, no ghost lines.
+        assert!(divergent_sensor_thresholds(&b).is_empty());
+        b.sensors[0].raw_threshold = 30;
+        b.sensors[1].raw_threshold = 40;
+        b.sensors[2].raw_threshold = 40;
+        // sensors[3] stays at 50: the max, drawn as the main line.
+        assert_eq!(divergent_sensor_thresholds(&b), vec![30, 40]);
     }
 
     #[test]
