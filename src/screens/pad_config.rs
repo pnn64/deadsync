@@ -2141,7 +2141,9 @@ fn push_value_cluster(
         let vn = normalize(sensor.raw_value, value_scale);
         let fill_h = vn * BAR_HEIGHT;
         if fill_h > 0.0 {
-            let fill = if sensor.active {
+            // All bars color from the PANEL state (the firmware's own
+            // press/release hysteresis on real pads), not per sensor.
+            let fill = if button_active {
                 ACTIVE_FILL
             } else {
                 theme.fill_idle
@@ -2198,9 +2200,9 @@ fn push_value_cluster(
 
     if selected {
         let ox = x_center - (BAR_WIDTH + 12.0) * 0.5;
-        let oy = y - 34.0;
+        let oy = y - 46.0;
         let ow = BAR_WIDTH + 12.0;
-        let oh = BAR_HEIGHT + 70.0;
+        let oh = BAR_HEIGHT + 82.0;
         let t = 2.0_f32;
         let o = [1.0, 1.0, 1.0, 1.0];
         push_quad(actors, x_center, oy, ow, t, o, z + 2.5);
@@ -2214,6 +2216,14 @@ fn push_value_cluster(
     }
 
     let text_color = if selected { sel } else { [1.0, 1.0, 1.0, 0.95] };
+    // Current pressure (peak corner reading) above the bars, like the FSR
+    // view; smaller, leaving room for the Press/Release caption above it.
+    let peak = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
+    actors.push(act!(text:
+        font("miso"): settext(peak.to_string()): align(0.5, 1.0):
+        xy(x_center, y - 6.0): zoom(0.68): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
     if let Some((release_label, _)) = &release {
         // Release / press values side by side above the press line (low on the
         // left, like the official tool), each lit when it is the one focused.
@@ -2230,7 +2240,7 @@ fn push_value_cluster(
             xy(x_center + 4.0, threshold_y - 3.0): zoom(0.68): horizalign(left):
             diffuse(pc[0], pc[1], pc[2], pc[3]): z(z + 3.0)
         ));
-        // Which of the pair the cursor is editing, above the bars.
+        // Which of the pair the cursor is editing, above the pressure value.
         if let Some(kind) = focused_kind {
             let caption = match kind {
                 ThresholdKind::Press => "Press",
@@ -2238,7 +2248,7 @@ fn push_value_cluster(
             };
             actors.push(act!(text:
                 font("miso"): settext(caption.to_owned()): align(0.5, 1.0):
-                xy(x_center, y - 10.0): zoom(0.55): horizalign(center):
+                xy(x_center, y - 28.0): zoom(0.5): horizalign(center):
                 diffuse(sel[0], sel[1], sel[2], sel[3]): z(z + 3.0)
             ));
         }

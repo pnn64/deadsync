@@ -37,18 +37,11 @@ pub(super) const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
     read_active: bool,
-    /// Sticky per-pad/panel/sensor pressed state for load-cell bars, so the
-    /// view colors with the firmware's press/release hysteresis (green above
-    /// the press threshold, idle again only below the release threshold).
-    lc_held: [[[bool; PANEL_SENSOR_COUNT]; smx::PANEL_COUNT]; 2],
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self {
-            read_active: false,
-            lc_held: [[[false; PANEL_SENSOR_COUNT]; smx::PANEL_COUNT]; 2],
-        }
+        Self { read_active: false }
     }
 
     /// Toggle live sensor reads (test mode) on all connected pads. Called by
@@ -96,20 +89,12 @@ impl Monitor {
                 smx::serial_prefix(&info.serial),
             );
 
-            let lc_held = &mut self.lc_held[pad];
             let buttons = std::array::from_fn(|i| {
                 let (panel, label) = VIEW_PANELS[i];
                 if fsr {
                     fsr_button(&config, panel, label, test_data.as_ref(), input_state)
                 } else {
-                    load_cell_button(
-                        &config,
-                        panel,
-                        label,
-                        test_data.as_ref(),
-                        input_state,
-                        &mut lc_held[panel],
-                    )
+                    load_cell_button(&config, panel, label, test_data.as_ref(), input_state)
                 }
             });
 
@@ -393,25 +378,24 @@ fn fsr_button(
 }
 
 /// Build a load-cell panel's button view: four corner readings (numbered 1-4)
-/// that all share the panel's press/release threshold pair. `held` is the
-/// panel's sticky per-sensor pressed state (press/release hysteresis).
+/// that all share the panel's press/release threshold pair. The panel-level
+/// `active` comes from the firmware's input state (its own hysteresis), which
+/// is also what the Simple view colors the bars with; the per-sensor flag is
+/// just the instantaneous press-threshold comparison.
 fn load_cell_button(
     config: &SmxConfig,
     panel: usize,
     label: &'static str,
     test_data: Option<&SensorTestData>,
     input_state: u16,
-    held: &mut [bool; PANEL_SENSOR_COUNT],
 ) -> ButtonView {
     let settings = &config.panel_settings[panel];
     let threshold = u16::from(settings.load_cell_high_threshold);
-    let release = u16::from(settings.load_cell_low_threshold);
     let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
         .map(|s| {
             let raw_value = test_data
                 .filter(|d| d.have_data_from_panel[panel])
                 .map_or(0, |d| calibrate_load_cell(d.sensor_level[panel][s]));
-            held[s] = hysteresis_active(held[s], raw_value, release, threshold);
             SensorView {
                 firmware_index: s,
                 label: None, // corners, not edges -> numbered 1-4 in the UI
@@ -419,7 +403,7 @@ fn load_cell_button(
                 value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
                 raw_threshold: threshold,
                 threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
-                active: held[s],
+                active: raw_value >= threshold && threshold > 0,
                 enabled: true,
             }
         })

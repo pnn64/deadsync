@@ -269,6 +269,9 @@ fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
         .collect();
     let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
     let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+    // The panel reads as pressed while any enabled sensor is over its own
+    // threshold (per-sensor, not max-vs-max, which misreads mixed thresholds).
+    let pressed = sensors.iter().any(|s| s.enabled && s.active);
     ButtonView {
         label: PAD_BUTTON_LABELS[b],
         sensors,
@@ -276,7 +279,7 @@ fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
         max_raw_threshold: MAX_FSR_THRESHOLD,
         aggregate_value,
         aggregate_threshold,
-        active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
+        active: pressed,
         value_scale: FSR_VALUE_SCALE,
         release_threshold: None,
     }
