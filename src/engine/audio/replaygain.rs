@@ -30,21 +30,19 @@
 //! `crate::engine::audio::set_music_replaygain_if_matches` so the result can
 //! be applied retroactively to the currently playing stream.
 
-use bincode::{Decode, Encode};
 use deadsync_audio_analysis::{
-    ReplayGainInfo, UNITY_GAIN, compute_loudness, gain_linear_from_info,
+    ReplayGainCacheEntry, ReplayGainCacheFile, ReplayGainInfo, UNITY_GAIN, compute_loudness,
+    decode_replaygain_cache, encode_replaygain_cache, gain_linear_from_info, replaygain_path_hash,
 };
 use deadsync_platform::dirs;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, UNIX_EPOCH};
-use twox_hash::XxHash64;
 
 /// Sentinel track id used for prewarm jobs that aren't tied to a currently
 /// playing track. `set_music_replaygain_if_matches` will treat this as a
@@ -56,9 +54,6 @@ const PREWARM_TRACK_ID: u64 = 0;
 /// previewed song (foreground) to always jump ahead of any pack-warm work
 /// already in flight without saturating user-visible cores.
 const WORKER_THREADS: usize = 2;
-
-const CACHE_MAGIC: u64 = 0x44535952_47414946; // "DSYRGAIF" — F for File-cache
-const CACHE_VERSION: u32 = 1;
 
 /// How long the flush thread waits after the last cache mutation before
 /// writing the consolidated file to disk. 250 ms collapses bursts of
@@ -363,24 +358,11 @@ fn canonicalize_or_clone(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
-struct PersistedEntry {
-    path_hash: u64,
-    mtime_unix_nanos: u64,
-    lufs: f32,
-    true_peak_linear: f32,
-}
-
-#[derive(Encode, Decode, Default)]
-struct PersistedCacheV1 {
-    entries: Vec<PersistedEntry>,
-}
-
 /// Single-file consolidated cache of every analyzed song. Replaces the
 /// legacy per-song `.bin` layout, which doesn't scale to libraries of
 /// 10k+ songs.
 struct DiskCache {
-    entries: Mutex<HashMap<u64, PersistedEntry>>,
+    entries: Mutex<HashMap<u64, ReplayGainCacheEntry>>,
     flush_state: Mutex<FlushState>,
     flush_cv: Condvar,
 }
@@ -439,10 +421,10 @@ fn init_disk_cache() -> DiskCache {
     cache
 }
 
-fn load_cache_file() -> Option<HashMap<u64, PersistedEntry>> {
+fn load_cache_file() -> Option<HashMap<u64, ReplayGainCacheEntry>> {
     let path = dirs::app_dirs().replaygain_cache_file();
     let bytes = fs::read(&path).ok()?;
-    let parsed = decode_cache_file(&bytes)?;
+    let parsed = decode_replaygain_cache(&bytes)?;
     let mut map = HashMap::with_capacity(parsed.entries.len());
     for entry in parsed.entries {
         map.insert(entry.path_hash, entry);
@@ -479,11 +461,11 @@ fn flush_loop() {
             let was_sync = state.sync_request;
             state.dirty = false;
             state.sync_request = false;
-            let mut entries_vec: Vec<PersistedEntry> = entries.values().copied().collect();
+            let mut entries_vec: Vec<ReplayGainCacheEntry> = entries.values().copied().collect();
             // Stable order so the file is deterministic across runs.
             entries_vec.sort_by_key(|e| e.path_hash);
             (
-                PersistedCacheV1 {
+                ReplayGainCacheFile {
                     entries: entries_vec,
                 },
                 was_sync,
@@ -509,12 +491,12 @@ fn flush_loop() {
     }
 }
 
-fn write_cache_file(payload: &PersistedCacheV1) -> std::io::Result<()> {
+fn write_cache_file(payload: &ReplayGainCacheFile) -> std::io::Result<()> {
     let path = dirs::app_dirs().replaygain_cache_file();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let bytes = encode_cache_file(payload)
+    let bytes = encode_replaygain_cache(payload)
         .map_err(|e| std::io::Error::other(format!("encode failed: {e}")))?;
     let tmp = path.with_extension("bin.tmp");
     {
@@ -523,43 +505,6 @@ fn write_cache_file(payload: &PersistedCacheV1) -> std::io::Result<()> {
         f.sync_all().ok();
     }
     fs::rename(&tmp, &path)
-}
-
-fn encode_cache_file(payload: &PersistedCacheV1) -> Result<Vec<u8>, String> {
-    let body =
-        bincode::encode_to_vec(payload, bincode::config::standard()).map_err(|e| format!("{e}"))?;
-    let mut out = Vec::with_capacity(12 + body.len());
-    out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
-    out.extend_from_slice(&CACHE_VERSION.to_le_bytes());
-    out.extend_from_slice(&body);
-    Ok(out)
-}
-
-fn decode_cache_file(bytes: &[u8]) -> Option<PersistedCacheV1> {
-    if bytes.len() < 12 {
-        return None;
-    }
-    let magic = u64::from_le_bytes(bytes[0..8].try_into().ok()?);
-    if magic != CACHE_MAGIC {
-        return None;
-    }
-    let version = u32::from_le_bytes(bytes[8..12].try_into().ok()?);
-    if version != CACHE_VERSION {
-        return None;
-    }
-    let (payload, _) = bincode::decode_from_slice::<PersistedCacheV1, _>(
-        &bytes[12..],
-        bincode::config::standard(),
-    )
-    .ok()?;
-    Some(payload)
-}
-
-#[inline]
-fn path_hash(path: &Path) -> u64 {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(path.as_os_str().to_string_lossy().as_bytes());
-    hasher.finish()
 }
 
 fn source_mtime_unix_nanos(path: &Path) -> Option<u64> {
@@ -574,7 +519,7 @@ fn source_mtime_unix_nanos(path: &Path) -> Option<u64> {
 }
 
 fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
-    let key = path_hash(song_path);
+    let key = replaygain_path_hash(song_path);
     let entry = {
         let map = disk_cache().entries.lock().unwrap();
         map.get(&key).copied()
@@ -583,21 +528,13 @@ fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
     if entry.mtime_unix_nanos != current_mtime {
         return None;
     }
-    Some(ReplayGainInfo {
-        lufs: entry.lufs,
-        true_peak_linear: entry.true_peak_linear,
-    })
+    Some(entry.info())
 }
 
 fn write_disk_cache(song_path: &Path, info: ReplayGainInfo) {
-    let key = path_hash(song_path);
+    let key = replaygain_path_hash(song_path);
     let mtime = source_mtime_unix_nanos(song_path).unwrap_or(0);
-    let entry = PersistedEntry {
-        path_hash: key,
-        mtime_unix_nanos: mtime,
-        lufs: info.lufs,
-        true_peak_linear: info.true_peak_linear,
-    };
+    let entry = ReplayGainCacheEntry::new(key, mtime, info);
     let cache = disk_cache();
     {
         let mut map = cache.entries.lock().unwrap();
@@ -650,66 +587,6 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::SystemTime;
 
-    fn sample_entries() -> Vec<PersistedEntry> {
-        vec![
-            PersistedEntry {
-                path_hash: 0x1111_1111_1111_1111,
-                mtime_unix_nanos: 123_456_789_000,
-                lufs: -22.5,
-                true_peak_linear: 0.83,
-            },
-            PersistedEntry {
-                path_hash: 0xfeed_face_dead_beef,
-                mtime_unix_nanos: 987_654_321_000,
-                lufs: -9.7,
-                true_peak_linear: 1.12,
-            },
-        ]
-    }
-
-    #[test]
-    fn cache_file_roundtrip() {
-        let payload = PersistedCacheV1 {
-            entries: sample_entries(),
-        };
-        let bytes = encode_cache_file(&payload).expect("encode");
-        let decoded = decode_cache_file(&bytes).expect("decode");
-        assert_eq!(decoded.entries, payload.entries);
-    }
-
-    #[test]
-    fn cache_file_rejects_bad_magic() {
-        let payload = PersistedCacheV1 {
-            entries: sample_entries(),
-        };
-        let mut bytes = encode_cache_file(&payload).expect("encode");
-        bytes[0] ^= 0xff;
-        assert!(decode_cache_file(&bytes).is_none());
-    }
-
-    #[test]
-    fn cache_file_rejects_bad_version() {
-        let payload = PersistedCacheV1 {
-            entries: sample_entries(),
-        };
-        let mut bytes = encode_cache_file(&payload).expect("encode");
-        bytes[8] = bytes[8].wrapping_add(1);
-        assert!(decode_cache_file(&bytes).is_none());
-    }
-
-    #[test]
-    fn cache_file_rejects_truncated() {
-        let payload = PersistedCacheV1 {
-            entries: sample_entries(),
-        };
-        let bytes = encode_cache_file(&payload).expect("encode");
-        assert!(decode_cache_file(&bytes[..bytes.len() - 1]).is_some() || true);
-        // Header truncation always rejects:
-        assert!(decode_cache_file(&[]).is_none());
-        assert!(decode_cache_file(&bytes[..8]).is_none());
-        assert!(decode_cache_file(&bytes[..11]).is_none());
-    }
-
     /// Construct a unique temp file path scoped to this test process.
     fn unique_temp_file(tag: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -729,30 +606,29 @@ mod tests {
         // verify lookup misses.
         let path = unique_temp_file("mtime");
         fs::write(&path, b"alpha").expect("write file");
-        let key = path_hash(&path);
+        let key = replaygain_path_hash(&path);
         let mtime = source_mtime_unix_nanos(&path).expect("mtime");
-        let map: HashMap<u64, PersistedEntry> = std::iter::once((
+        let map: HashMap<u64, ReplayGainCacheEntry> = std::iter::once((
             key,
-            PersistedEntry {
-                path_hash: key,
-                mtime_unix_nanos: mtime,
-                lufs: -16.0,
-                true_peak_linear: 0.9,
-            },
+            ReplayGainCacheEntry::new(
+                key,
+                mtime,
+                ReplayGainInfo {
+                    lufs: -16.0,
+                    true_peak_linear: 0.9,
+                },
+            ),
         ))
         .collect();
 
         // Direct check via the same logic load_disk_cache uses.
         let lookup = |p: &Path| -> Option<ReplayGainInfo> {
-            let entry = map.get(&path_hash(p)).copied()?;
+            let entry = map.get(&replaygain_path_hash(p)).copied()?;
             let current_mtime = source_mtime_unix_nanos(p)?;
             if entry.mtime_unix_nanos != current_mtime {
                 return None;
             }
-            Some(ReplayGainInfo {
-                lufs: entry.lufs,
-                true_peak_linear: entry.true_peak_linear,
-            })
+            Some(entry.info())
         };
 
         assert!(lookup(&path).is_some(), "fresh entry should match");

@@ -5,8 +5,10 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bincode = "2.0.1"
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 ebur128 = "0.1.10"
+twox-hash = "2.1.2"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -1,6 +1,13 @@
+pub mod cache;
+
 use deadsync_audio_decode as decode;
 use ebur128::{EbuR128, Mode};
 use std::path::Path;
+
+pub use cache::{
+    ReplayGainCacheEntry, ReplayGainCacheFile, decode_replaygain_cache, encode_replaygain_cache,
+    replaygain_path_hash,
+};
 
 /// EBU R 128 / ReplayGain 2.0 reference loudness.
 const TARGET_LUFS: f64 = -18.0;

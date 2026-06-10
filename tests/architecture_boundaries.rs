@@ -188,6 +188,20 @@ const AUDIO_DECODE_FORBIDDEN_TOKENS: &[&str] = &[
     "log::",
 ];
 
+const AUDIO_ANALYSIS_FORBIDDEN_TOKENS: &[&str] = &[
+    "crate::engine",
+    "crate::assets",
+    "crate::config",
+    "crate::game",
+    "crate::screens",
+    "deadsync_platform",
+    "deadsync_present",
+    "deadsync_render",
+    "std::sync::mpsc",
+    "Mutex",
+    "log::",
+];
+
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/engine",
     "src/app",
@@ -950,6 +964,66 @@ fn audio_decode_helpers_live_in_decode_crate() {
     assert!(
         failures.is_empty(),
         "audio decode helpers should live in deadsync-audio-decode:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn audio_analysis_cache_lives_in_analysis_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-audio-analysis/src/lib.rs"),
+        root.join("crates/deadsync-audio-analysis/src/cache.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    let engine_replaygain = root.join("src/engine/audio/replaygain.rs");
+    if let Ok(text) = fs::read_to_string(&engine_replaygain) {
+        for token in [
+            "struct PersistedEntry",
+            "struct PersistedCacheV1",
+            "fn encode_cache_file",
+            "fn decode_cache_file",
+            "fn path_hash",
+            "CACHE_MAGIC",
+            "CACHE_VERSION",
+            "use bincode",
+            "XxHash64",
+        ] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still defines ReplayGain cache token {token} {count} times",
+                    rel_path(&root, &engine_replaygain)
+                ));
+            }
+        }
+    }
+
+    let analysis_src = root.join("crates/deadsync-audio-analysis/src");
+    if analysis_src.exists() {
+        for file in rust_files(&analysis_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in AUDIO_ANALYSIS_FORBIDDEN_TOKENS {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden audio-analysis token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "ReplayGain cache data should live in deadsync-audio-analysis:\n{}",
         failures.join("\n")
     );
 }
