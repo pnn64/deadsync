@@ -2,6 +2,7 @@ use super::super::{
     OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
     internal, note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
 };
+use deadsync_audio::AudioOutputMode;
 use deadsync_platform::host_time::now_nanos;
 use libloading::Library;
 use log::{info, warn};
@@ -160,7 +161,7 @@ impl PulseOutputPrep {
             device_channels: self.channels,
             device_name: self.device_name.clone(),
             backend_name: "pulse-shared",
-            requested_output_mode: crate::config::AudioOutputMode::Shared,
+            requested_output_mode: AudioOutputMode::Shared,
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::Monotonic,
             timing_quality: OutputTimingQuality::Trusted,

@@ -10,6 +10,7 @@ use coreaudio::audio_unit::macos_helpers::{
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
+use deadsync_audio::AudioOutputMode;
 use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
@@ -40,7 +41,7 @@ impl CoreAudioOutputPrep {
             device_channels: self.channels,
             device_name: self.device_name.clone(),
             backend_name: "coreaudio-shared",
-            requested_output_mode: crate::config::AudioOutputMode::Shared,
+            requested_output_mode: AudioOutputMode::Shared,
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::HostTime,
             timing_quality: OutputTimingQuality::Trusted,

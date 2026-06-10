@@ -3,18 +3,24 @@ pub mod folder;
 pub mod replaygain;
 mod resample;
 
+#[cfg(target_os = "linux")]
+use deadsync_audio::LinuxAudioBackend;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    MusicMapSeg, OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality, ScheduledOnset,
-    StutterDiagAudioEvent, StutterDiagAudioEventKind, scheduled_onset_decision,
+    AudioOutputMode, MusicMapSeg, OutputBackendReady, OutputTelemetryBackend, OutputTelemetryClock,
+    OutputTimingQuality, PlaybackPosMap, ScheduledOnset, StutterDiagAudioEvent,
+    StutterDiagAudioEventKind, f32_to_i16, fallback_music_position, i16_to_f32,
+    music_clock_seed_enabled, music_nanos_from_seconds, normalized_music_rate,
+    scheduled_onset_decision,
 };
+pub use deadsync_audio::{Cut, OutputDeviceInfo, OutputTimingSnapshot};
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
 use deadsync_platform::host_time::{instant_nanos, now_nanos};
 #[cfg(windows)]
 use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
@@ -27,37 +33,12 @@ const SFX_QUEUE_CAP: usize = 128;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 /* ============================== Public API ============================== */
 
-#[derive(Clone, Copy, Debug)]
-pub struct Cut {
-    pub start_sec: f64,
-    pub length_sec: f64,
-    pub fade_in_sec: f64,
-    pub fade_out_sec: f64,
-}
-impl Default for Cut {
-    fn default() -> Self {
-        Self {
-            start_sec: 0.0,
-            length_sec: f64::INFINITY,
-            fade_in_sec: 0.0,
-            fade_out_sec: 0.0,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct OutputDeviceInfo {
-    pub name: String,
-    pub is_default: bool,
-    pub sample_rates_hz: Vec<u32>,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InitConfig {
     pub output_device_index: Option<u16>,
-    pub output_mode: crate::config::AudioOutputMode,
+    pub output_mode: AudioOutputMode,
     #[cfg(target_os = "linux")]
-    pub linux_backend: crate::config::LinuxAudioBackend,
+    pub linux_backend: LinuxAudioBackend,
     pub sample_rate_hz: Option<u32>,
 }
 
@@ -115,7 +96,7 @@ struct WasapiBackendHint {
     device_id: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "linux")]
@@ -125,7 +106,7 @@ struct AlsaBackendHint {
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "linux")]
@@ -134,7 +115,7 @@ struct AlsaBackendHint {
 struct JackBackendHint {
     requested_device_name: Option<String>,
     requested_rate_hz: Option<u32>,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "linux")]
@@ -144,7 +125,7 @@ struct PipeWireBackendHint {
     requested_device_name: Option<String>,
     sample_rate_hz: u32,
     channels: usize,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "linux")]
@@ -154,7 +135,7 @@ struct PulseBackendHint {
     requested_device_name: Option<String>,
     sample_rate_hz: u32,
     channels: usize,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "macos")]
@@ -164,7 +145,7 @@ struct CoreAudioBackendHint {
     device_name: String,
     requested_rate_hz: Option<u32>,
     channels: usize,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[cfg(target_os = "freebsd")]
@@ -174,7 +155,7 @@ struct FreeBsdPcmBackendHint {
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
-    output_mode: crate::config::AudioOutputMode,
+    output_mode: AudioOutputMode,
 }
 
 #[derive(Clone)]
@@ -182,7 +163,7 @@ struct AudioThreadLaunch {
     #[cfg(target_os = "linux")]
     explicit_device_requested: bool,
     #[cfg(target_os = "linux")]
-    linux_backend: crate::config::LinuxAudioBackend,
+    linux_backend: LinuxAudioBackend,
     #[cfg(target_os = "linux")]
     alsa: Option<AlsaBackendHint>,
     #[cfg(target_os = "linux")]
@@ -202,74 +183,9 @@ struct AudioThreadLaunch {
     wasapi: Option<WasapiBackendHint>,
 }
 
-#[derive(Clone, Debug)]
-struct OutputBackendReady {
-    device_sample_rate: u32,
-    device_channels: usize,
-    device_name: String,
-    backend_name: &'static str,
-    requested_output_mode: crate::config::AudioOutputMode,
-    fallback_from_native: bool,
-    timing_clock: OutputTelemetryClock,
-    timing_quality: OutputTimingQuality,
-}
-
 struct AudioThreadReady {
     backend_ready: OutputBackendReady,
     sfx_sender: SyncSender<QueuedSfx>,
-}
-
-#[inline(always)]
-const fn output_mode_bits(mode: crate::config::AudioOutputMode) -> u8 {
-    match mode {
-        crate::config::AudioOutputMode::Auto => 1,
-        crate::config::AudioOutputMode::Shared => 2,
-        crate::config::AudioOutputMode::Exclusive => 3,
-    }
-}
-
-#[inline(always)]
-const fn output_mode_from_bits(bits: u8) -> crate::config::AudioOutputMode {
-    match bits {
-        2 => crate::config::AudioOutputMode::Shared,
-        3 => crate::config::AudioOutputMode::Exclusive,
-        _ => crate::config::AudioOutputMode::Auto,
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct OutputTimingSnapshot {
-    pub backend: OutputTelemetryBackend,
-    pub requested_output_mode: crate::config::AudioOutputMode,
-    pub fallback_from_native: bool,
-    pub timing_clock: OutputTelemetryClock,
-    pub timing_quality: OutputTimingQuality,
-    pub sample_rate_hz: u32,
-    pub device_period_ns: u64,
-    pub stream_latency_ns: u64,
-    pub buffer_frames: u32,
-    pub padding_frames: u32,
-    pub queued_frames: u32,
-    pub estimated_output_delay_ns: u64,
-    pub clock_fallback_count: u64,
-    pub timing_sanity_failure_count: u64,
-    pub underrun_count: u64,
-}
-
-impl OutputTimingSnapshot {
-    #[inline(always)]
-    pub const fn has_measurement(self) -> bool {
-        !matches!(self.backend, OutputTelemetryBackend::Unknown)
-            || self.device_period_ns != 0
-            || self.stream_latency_ns != 0
-            || self.buffer_frames != 0
-            || self.padding_frames != 0
-            || self.queued_frames != 0
-            || self.estimated_output_delay_ns != 0
-            || self.clock_fallback_count != 0
-            || self.timing_sanity_failure_count != 0
-            || self.underrun_count != 0
-    }
 }
 
 const AUDIO_STUTTER_DIAG_EVENT_COUNT: usize = 64;
@@ -406,58 +322,7 @@ static OUTPUT_TIMING_CLOCK_FALLBACKS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_SANITY_FAILURES: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
-const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
-const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
-
-#[inline(always)]
-fn music_nanos_from_seconds(seconds: f64) -> i64 {
-    if !seconds.is_finite() {
-        return 0;
-    }
-    let nanos = (seconds * NANOS_PER_SECOND).round();
-    nanos.clamp(i64::MIN as f64, i64::MAX as f64) as i64
-}
-
-#[inline(always)]
-fn normalized_music_rate(rate: f32) -> f32 {
-    if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
-fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f32) -> (f32, f32) {
-    let rate = normalized_music_rate(rate);
-    let stream_seconds = if stream_seconds.is_finite() {
-        stream_seconds.max(0.0)
-    } else {
-        0.0
-    };
-    let cut_start_sec = if cut_start_sec.is_finite() {
-        cut_start_sec
-    } else {
-        0.0
-    };
-    if cut_start_sec < 0.0 {
-        let lead_in = (-cut_start_sec) as f32;
-        if stream_seconds < lead_in {
-            return ((cut_start_sec + f64::from(stream_seconds)) as f32, 1.0);
-        }
-        return ((stream_seconds - lead_in) * rate, rate);
-    }
-    (
-        (cut_start_sec + f64::from(stream_seconds * rate)) as f32,
-        rate,
-    )
-}
-
-#[inline(always)]
-fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
-    cut_start_sec.is_finite() && cut_start_sec > 0.0
-}
 
 #[inline(always)]
 fn seed_music_stream_clock(cut: Cut, rate: f32) {
@@ -655,135 +520,6 @@ struct CallbackClockWindow {
     prev_callback_frames: u64,
 }
 
-#[derive(Default)]
-struct PlaybackPosMap {
-    queue: VecDeque<MusicMapSeg>,
-    backlog_frames: i64,
-}
-
-impl PlaybackPosMap {
-    fn clear(&mut self) {
-        self.queue.clear();
-        self.backlog_frames = 0;
-    }
-
-    fn insert(&mut self, seg: MusicMapSeg) {
-        if seg.frames <= 0
-            || !seg.music_start_sec.is_finite()
-            || !seg.music_sec_per_frame.is_finite()
-        {
-            return;
-        }
-        if let Some(last) = self.queue.back_mut() {
-            let contiguous_stream = last.stream_frame_start + last.frames == seg.stream_frame_start;
-            let ratio_match = (last.music_sec_per_frame - seg.music_sec_per_frame).abs() <= 1e-9;
-            let expected_music_start =
-                last.music_start_sec + last.music_sec_per_frame * last.frames as f64;
-            let music_contiguous = (expected_music_start - seg.music_start_sec).abs()
-                <= seg.music_sec_per_frame.abs().max(1e-9);
-            if contiguous_stream && ratio_match && music_contiguous {
-                last.frames += seg.frames;
-                self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
-                self.cleanup();
-                return;
-            }
-        }
-        self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
-        self.queue.push_back(seg);
-        self.cleanup();
-    }
-
-    fn cleanup(&mut self) {
-        while self.backlog_frames > MUSIC_POS_MAP_BACKLOG_FRAMES {
-            let Some(front) = self.queue.front_mut() else {
-                self.backlog_frames = 0;
-                break;
-            };
-            let excess = self.backlog_frames - MUSIC_POS_MAP_BACKLOG_FRAMES;
-            let drop = excess.min(front.frames);
-            front.stream_frame_start += drop;
-            front.music_start_sec += front.music_sec_per_frame * drop as f64;
-            front.frames -= drop;
-            self.backlog_frames -= drop;
-            if front.frames <= 0 {
-                self.queue.pop_front();
-            }
-        }
-    }
-
-    fn search(&self, stream_frame: f64) -> Option<(f64, f64)> {
-        if self.queue.is_empty() || !stream_frame.is_finite() {
-            return None;
-        }
-        let mut closest = None;
-        let mut closest_dist = f64::INFINITY;
-        for seg in &self.queue {
-            let start = seg.stream_frame_start as f64;
-            let end = start + seg.frames as f64;
-            if stream_frame >= start && stream_frame < end {
-                let diff = stream_frame - start;
-                return Some((
-                    seg.music_start_sec + diff * seg.music_sec_per_frame,
-                    seg.music_sec_per_frame,
-                ));
-            }
-            let start_dist = (stream_frame - start).abs();
-            if start_dist < closest_dist {
-                closest_dist = start_dist;
-                closest = Some((
-                    seg.music_start_sec + (stream_frame - start) * seg.music_sec_per_frame,
-                    seg.music_sec_per_frame,
-                ));
-            }
-            let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
-            let end_dist = (stream_frame - end).abs();
-            if end_dist < closest_dist {
-                closest_dist = end_dist;
-                closest = Some((
-                    end_music + (stream_frame - end) * seg.music_sec_per_frame,
-                    seg.music_sec_per_frame,
-                ));
-            }
-        }
-        closest
-    }
-
-    /// Inverse of [`search`]: given a music position in seconds, return the
-    /// track-relative stream frame at which it plays. Prefers the segment that
-    /// contains `music_seconds`; otherwise extrapolates from the nearest segment.
-    fn invert(&self, music_seconds: f64) -> Option<f64> {
-        if self.queue.is_empty() || !music_seconds.is_finite() {
-            return None;
-        }
-        let mut closest = None;
-        let mut closest_dist = f64::INFINITY;
-        for seg in &self.queue {
-            let sec_per_frame = seg.music_sec_per_frame;
-            if !sec_per_frame.is_finite() || sec_per_frame == 0.0 {
-                continue;
-            }
-            let start_sec = seg.music_start_sec;
-            let end_sec = start_sec + sec_per_frame * seg.frames as f64;
-            let (lo, hi) = if start_sec <= end_sec {
-                (start_sec, end_sec)
-            } else {
-                (end_sec, start_sec)
-            };
-            let frame = seg.stream_frame_start as f64 + (music_seconds - start_sec) / sec_per_frame;
-            if music_seconds >= lo && music_seconds < hi {
-                return Some(frame);
-            }
-            let clamped = music_seconds.clamp(lo, hi);
-            let dist = (music_seconds - clamped).abs();
-            if dist < closest_dist {
-                closest_dist = dist;
-                closest = Some(frame);
-            }
-        }
-        closest
-    }
-}
-
 static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
     std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
 static PLAYED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
@@ -826,19 +562,19 @@ pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn available_linux_backends() -> Vec<crate::config::LinuxAudioBackend> {
+pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
     let mut backends = Vec::with_capacity(5);
-    backends.push(crate::config::LinuxAudioBackend::Auto);
+    backends.push(LinuxAudioBackend::Auto);
     #[cfg(has_pipewire_audio)]
-    backends.push(crate::config::LinuxAudioBackend::PipeWire);
+    backends.push(LinuxAudioBackend::PipeWire);
     #[cfg(has_pulse_audio)]
     if backends::linux_pulse::is_available() {
-        backends.push(crate::config::LinuxAudioBackend::PulseAudio);
+        backends.push(LinuxAudioBackend::PulseAudio);
     }
-    backends.push(crate::config::LinuxAudioBackend::Alsa);
+    backends.push(LinuxAudioBackend::Alsa);
     #[cfg(has_jack_audio)]
     if backends::linux_jack::is_available() {
-        backends.push(crate::config::LinuxAudioBackend::Jack);
+        backends.push(LinuxAudioBackend::Jack);
     }
     backends
 }
@@ -1079,101 +815,9 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
     }
 }
 
-#[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
-#[inline(always)]
-fn f32_to_i16(sample: f32) -> i16 {
-    let sample = sample.clamp(-1.0, 1.0);
-    if sample >= 1.0 {
-        i16::MAX
-    } else if sample <= -1.0 {
-        i16::MIN
-    } else {
-        (sample * (i16::MAX as f32 + 1.0)) as i16
-    }
-}
-
-#[inline(always)]
-fn i16_to_f32(sample: i16) -> f32 {
-    sample as f32 / (i16::MAX as f32 + 1.0)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
-        fallback_music_position, music_clock_seed_enabled, stream_position_frames_from_window,
-    };
-
-    #[test]
-    fn fallback_music_position_uses_positive_cut_origin() {
-        let (music_sec, slope) = fallback_music_position(0.25, 37.5, 1.5);
-
-        assert!((music_sec - 37.875).abs() <= 0.000_01);
-        assert!((slope - 1.5).abs() <= 0.000_01);
-    }
-
-    #[test]
-    fn fallback_music_position_keeps_negative_lead_in_unscaled() {
-        let (lead_music_sec, lead_slope) = fallback_music_position(0.75, -1.0, 2.0);
-        let (song_music_sec, song_slope) = fallback_music_position(1.25, -1.0, 2.0);
-
-        assert!((lead_music_sec - -0.25).abs() <= 0.000_01);
-        assert!((lead_slope - 1.0).abs() <= 0.000_01);
-        assert!((song_music_sec - 0.5).abs() <= 0.000_01);
-        assert!((song_slope - 2.0).abs() <= 0.000_01);
-    }
-
-    #[test]
-    fn music_clock_seed_is_only_for_positive_cuts() {
-        assert!(music_clock_seed_enabled(0.001));
-        assert!(!music_clock_seed_enabled(0.0));
-        assert!(!music_clock_seed_enabled(-1.0));
-        assert!(!music_clock_seed_enabled(f64::NAN));
-    }
-
-    #[test]
-    fn playback_pos_map_extrapolates_past_last_segment() {
-        let mut map = PlaybackPosMap::default();
-        map.insert(MusicMapSeg {
-            stream_frame_start: 0,
-            frames: 48_000,
-            music_start_sec: 0.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-
-        let (music_sec, sec_per_frame) = map.search(60_000.0).unwrap();
-        assert!((music_sec - 1.25).abs() <= 1e-9, "music_sec={music_sec}");
-        assert!(
-            (sec_per_frame - (1.0 / 48_000.0)).abs() <= 1e-12,
-            "sec_per_frame={sec_per_frame}"
-        );
-    }
-
-    #[test]
-    fn playback_pos_map_trims_large_segment_without_emptying() {
-        let mut map = PlaybackPosMap::default();
-        map.insert(MusicMapSeg {
-            stream_frame_start: 0,
-            frames: 48_000,
-            music_start_sec: 0.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-        map.insert(MusicMapSeg {
-            stream_frame_start: 48_000,
-            frames: 48_000,
-            music_start_sec: 1.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-
-        assert_eq!(map.backlog_frames, MUSIC_POS_MAP_BACKLOG_FRAMES);
-        assert_eq!(map.queue.len(), 1);
-        let seg = map.queue.front().unwrap();
-        assert_eq!(seg.stream_frame_start, 16_000);
-        assert_eq!(seg.frames, MUSIC_POS_MAP_BACKLOG_FRAMES);
-
-        let (music_sec, _) = map.search(95_000.0).unwrap();
-        assert!((music_sec - (95_000.0 / 48_000.0)).abs() <= 1e-9);
-    }
+    use super::{CallbackClockWindow, stream_position_frames_from_window};
 
     #[test]
     fn stream_clock_extrapolates_back_before_future_callback_anchor() {
@@ -1193,55 +837,6 @@ mod tests {
         );
 
         assert!((frames - 96.0).abs() <= 1e-6, "frames={frames}");
-    }
-
-    #[test]
-    fn playback_pos_map_invert_round_trips_within_segment() {
-        let mut map = PlaybackPosMap::default();
-        map.insert(MusicMapSeg {
-            stream_frame_start: 1_000,
-            frames: 48_000,
-            music_start_sec: 2.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-
-        // 0.5 s into the segment's music => 0.5 * 48_000 = 24_000 frames past start.
-        let frame = map.invert(2.5).unwrap();
-        assert!((frame - 25_000.0).abs() <= 1e-6, "frame={frame}");
-
-        // Round-trips with search().
-        let (music_sec, _) = map.search(frame).unwrap();
-        assert!((music_sec - 2.5).abs() <= 1e-9, "music_sec={music_sec}");
-    }
-
-    #[test]
-    fn playback_pos_map_invert_extrapolates_past_last_segment() {
-        let mut map = PlaybackPosMap::default();
-        map.insert(MusicMapSeg {
-            stream_frame_start: 0,
-            frames: 48_000,
-            music_start_sec: 0.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-
-        // 1.25 s is past the 1.0 s segment end; linear extrapolation => 60_000.
-        let frame = map.invert(1.25).unwrap();
-        assert!((frame - 60_000.0).abs() <= 1e-6, "frame={frame}");
-    }
-
-    #[test]
-    fn playback_pos_map_invert_rejects_empty_and_non_finite() {
-        let empty = PlaybackPosMap::default();
-        assert!(empty.invert(1.0).is_none());
-
-        let mut map = PlaybackPosMap::default();
-        map.insert(MusicMapSeg {
-            stream_frame_start: 0,
-            frames: 48_000,
-            music_start_sec: 0.0,
-            music_sec_per_frame: 1.0 / 48_000.0,
-        });
-        assert!(map.invert(f64::NAN).is_none());
     }
 }
 
@@ -1638,7 +1233,7 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     OutputTimingSnapshot {
         backend: OutputTelemetryBackend::from_bits(OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed)),
-        requested_output_mode: output_mode_from_bits(
+        requested_output_mode: AudioOutputMode::from_bits(
             OUTPUT_TIMING_REQUESTED_MODE.load(Ordering::Relaxed),
         ),
         fallback_from_native: OUTPUT_TIMING_NATIVE_FALLBACK.load(Ordering::Relaxed),
@@ -1667,10 +1262,7 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
         OutputTelemetryBackend::from_backend_name(ready.backend_name) as u8,
         Ordering::Relaxed,
     );
-    OUTPUT_TIMING_REQUESTED_MODE.store(
-        output_mode_bits(ready.requested_output_mode),
-        Ordering::Relaxed,
-    );
+    OUTPUT_TIMING_REQUESTED_MODE.store(ready.requested_output_mode.bits(), Ordering::Relaxed);
     OUTPUT_TIMING_NATIVE_FALLBACK.store(ready.fallback_from_native, Ordering::Relaxed);
     OUTPUT_TIMING_CLOCK.store(ready.timing_clock as u8, Ordering::Relaxed);
     OUTPUT_TIMING_QUALITY.store(ready.timing_quality as u8, Ordering::Relaxed);
@@ -2125,10 +1717,10 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
         }
     }
     let selected_device = requested_device.or_else(|| {
-        (matches!(output_mode, crate::config::AudioOutputMode::Exclusive)
+        (matches!(output_mode, AudioOutputMode::Exclusive)
             && matches!(
                 linux_backend,
-                crate::config::LinuxAudioBackend::Auto | crate::config::LinuxAudioBackend::Alsa
+                LinuxAudioBackend::Auto | LinuxAudioBackend::Alsa
             ))
         .then_some(default_device)
         .flatten()
@@ -2505,10 +2097,8 @@ fn start_linux_alsa_backend(
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     let access_mode = match alsa.output_mode {
-        crate::config::AudioOutputMode::Exclusive => {
-            backends::linux_alsa::AlsaAccessMode::Exclusive
-        }
-        crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
+        AudioOutputMode::Exclusive => backends::linux_alsa::AlsaAccessMode::Exclusive,
+        AudioOutputMode::Auto | AudioOutputMode::Shared => {
             backends::linux_alsa::AlsaAccessMode::Shared
         }
     };
@@ -2532,7 +2122,7 @@ fn start_linux_jack_backend(
     jack: JackBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(jack.output_mode, crate::config::AudioOutputMode::Exclusive) {
+    if matches!(jack.output_mode, AudioOutputMode::Exclusive) {
         return Err("JACK does not expose a separate exclusive output mode.".to_string());
     }
     let prep =
@@ -2550,10 +2140,7 @@ fn start_linux_pipewire_backend(
     pipewire: PipeWireBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(
-        pipewire.output_mode,
-        crate::config::AudioOutputMode::Exclusive
-    ) {
+    if matches!(pipewire.output_mode, AudioOutputMode::Exclusive) {
         return Err("PipeWire does not support a separate exclusive output mode.".to_string());
     }
     if let Some(name) = &pipewire.requested_device_name {
@@ -2580,7 +2167,7 @@ fn start_linux_pulse_backend(
     pulse: PulseBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(pulse.output_mode, crate::config::AudioOutputMode::Exclusive) {
+    if matches!(pulse.output_mode, AudioOutputMode::Exclusive) {
         return Err("PulseAudio does not support exclusive output.".to_string());
     }
     if let Some(name) = &pulse.requested_device_name {
@@ -2606,7 +2193,7 @@ fn start_freebsd_pcm_backend(
     pcm: FreeBsdPcmBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(pcm.output_mode, crate::config::AudioOutputMode::Exclusive) {
+    if matches!(pcm.output_mode, AudioOutputMode::Exclusive) {
         return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
     }
     let prep = backends::freebsd_pcm::prepare(
@@ -2627,10 +2214,7 @@ fn start_macos_coreaudio_backend(
     coreaudio: CoreAudioBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(
-        coreaudio.output_mode,
-        crate::config::AudioOutputMode::Exclusive
-    ) {
+    if matches!(coreaudio.output_mode, AudioOutputMode::Exclusive) {
         return Err("CoreAudio exclusive output is not implemented yet.".to_string());
     }
     let prep = backends::macos_coreaudio::prepare(
@@ -2710,16 +2294,16 @@ fn start_output_backend(
                 None
             }
         })
-        .unwrap_or(crate::config::AudioOutputMode::Auto);
+        .unwrap_or(AudioOutputMode::Auto);
     #[cfg(target_os = "linux")]
     match linux_backend {
-        crate::config::LinuxAudioBackend::Alsa => {
+        LinuxAudioBackend::Alsa => {
             let Some(alsa) = alsa else {
                 return Err("Linux ALSA backend hint unavailable.".to_string());
             };
             start_linux_alsa_backend(alsa, music_ring)
         }
-        crate::config::LinuxAudioBackend::Jack => {
+        LinuxAudioBackend::Jack => {
             #[cfg(has_jack_audio)]
             {
                 let Some(jack) = jack else {
@@ -2732,7 +2316,7 @@ fn start_output_backend(
                 Err("JACK backend support was not built into this binary.".to_string())
             }
         }
-        crate::config::LinuxAudioBackend::PipeWire => {
+        LinuxAudioBackend::PipeWire => {
             #[cfg(has_pipewire_audio)]
             {
                 let Some(pipewire) = pipewire else {
@@ -2745,7 +2329,7 @@ fn start_output_backend(
                 Err("PipeWire backend support was not built into this binary.".to_string())
             }
         }
-        crate::config::LinuxAudioBackend::PulseAudio => {
+        LinuxAudioBackend::PulseAudio => {
             #[cfg(has_pulse_audio)]
             {
                 let Some(pulse) = pulse else {
@@ -2760,11 +2344,8 @@ fn start_output_backend(
                 );
             }
         }
-        crate::config::LinuxAudioBackend::Auto => {
-            if matches!(
-                requested_output_mode,
-                crate::config::AudioOutputMode::Exclusive
-            ) {
+        LinuxAudioBackend::Auto => {
+            if matches!(requested_output_mode, AudioOutputMode::Exclusive) {
                 let Some(alsa) = alsa else {
                     return Err(
                         "Linux ALSA backend hint unavailable for exclusive output.".to_string()
@@ -2852,10 +2433,8 @@ fn start_output_backend(
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {
         let access_mode = match wasapi.output_mode {
-            crate::config::AudioOutputMode::Exclusive => {
-                backends::windows_wasapi::WasapiAccessMode::Exclusive
-            }
-            crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
+            AudioOutputMode::Exclusive => backends::windows_wasapi::WasapiAccessMode::Exclusive,
+            AudioOutputMode::Auto | AudioOutputMode::Shared => {
                 backends::windows_wasapi::WasapiAccessMode::Shared
             }
         };

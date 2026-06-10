@@ -3,6 +3,7 @@ use super::super::{
     internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
     publish_output_timing_quality,
 };
+use deadsync_audio::AudioOutputMode;
 use deadsync_platform::host_time::now_nanos;
 use libc::{c_int, c_ulong};
 use log::info;
@@ -173,7 +174,7 @@ impl FreeBsdPcmOutputPrep {
             device_channels: self.channels,
             device_name: self.device_name.clone(),
             backend_name: "freebsd-pcm",
-            requested_output_mode: crate::config::AudioOutputMode::Shared,
+            requested_output_mode: AudioOutputMode::Shared,
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::Monotonic,
             timing_quality: OutputTimingQuality::Degraded,

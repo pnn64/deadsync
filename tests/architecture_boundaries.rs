@@ -861,6 +861,8 @@ fn audio_core_lives_in_audio_crate() {
     for file in [
         root.join("crates/deadsync-audio/src/lib.rs"),
         root.join("crates/deadsync-audio/src/mixer.rs"),
+        root.join("crates/deadsync-audio/src/output.rs"),
+        root.join("crates/deadsync-audio/src/position.rs"),
         root.join("crates/deadsync-audio/src/ring.rs"),
         root.join("crates/deadsync-audio/src/telemetry.rs"),
     ] {
@@ -879,9 +881,28 @@ fn audio_core_lives_in_audio_crate() {
             "pub enum OutputTimingQuality",
             "pub enum StutterDiagAudioEventKind",
             "pub struct StutterDiagAudioEvent",
+            "pub struct Cut",
+            "pub enum AudioOutputMode",
+            "pub enum LinuxAudioBackend",
+            "pub struct OutputDeviceInfo",
+            "struct OutputBackendReady",
+            "pub struct OutputTimingSnapshot",
+            "const fn output_mode_bits",
+            "const fn output_mode_from_bits",
             "enum ScheduledOnset",
             "fn scheduled_onset_decision",
             "MAX_SCHEDULE_AHEAD_FRAMES",
+            "fn f32_to_i16",
+            "fn i16_to_f32",
+            "struct PlaybackPosMap",
+            "impl PlaybackPosMap",
+            "MUSIC_POS_MAP_BACKLOG_FRAMES",
+            "VecDeque<MusicMapSeg>",
+            "fn music_nanos_from_seconds",
+            "fn normalized_music_rate",
+            "fn fallback_music_position",
+            "fn music_clock_seed_enabled",
+            "NANOS_PER_SECOND",
             "std::cell::UnsafeCell",
         ] {
             let count = count_token_refs(&text, token);
@@ -889,6 +910,24 @@ fn audio_core_lives_in_audio_crate() {
                 failures.push(format!(
                     "{} still defines realtime ring token {token} {count} times",
                     rel_path(&root, &engine_audio)
+                ));
+            }
+        }
+    }
+
+    let config_audio = root.join("src/config/audio.rs");
+    if let Ok(text) = fs::read_to_string(&config_audio) {
+        if !text.contains("pub use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};") {
+            failures.push(format!(
+                "{} should re-export audio output selection types from deadsync-audio",
+                rel_path(&root, &config_audio)
+            ));
+        }
+        for token in ["pub enum AudioOutputMode", "pub enum LinuxAudioBackend"] {
+            if text.contains(token) {
+                failures.push(format!(
+                    "{} still defines audio output selection token {token}",
+                    rel_path(&root, &config_audio)
                 ));
             }
         }
@@ -1282,7 +1321,7 @@ fn present_model_lives_in_present_crate() {
                 .is_some_and(|text| text.trim() == "pub use deadsync_present::space::*;");
         let is_compose_facade = *file == "src/engine/present/compose.rs"
             && text.as_deref().is_some_and(|text| {
-                text.contains("use super::texture::ASSET_TEXTURE_CONTEXT;")
+                text.contains("use crate::assets::PRESENT_TEXTURE_CONTEXT;")
                     && text.contains("use deadsync_present::compose as present_compose;")
                     && text.contains("present_compose::build_screen_with_texture_context")
             });
@@ -1291,21 +1330,18 @@ fn present_model_lives_in_present_crate() {
                 text.contains("use deadsync_present::dsl as present_dsl;")
                     && text.contains("pub struct SpriteBuilder")
                     && text.contains("static_texture_cached")
-                    && text.contains("assets::texture_handle")
+                    && text.contains("static_texture_cached_with_texture_context")
+                    && text.contains("zoomto_with_texture_context")
+                    && text.contains("build_with_texture_context")
+                    && text.contains("::deadsync_present::__act_from_builder!")
+                    && !text.contains("SpriteSource")
+                    && !text.contains("fn with_source")
+                    && !text.contains("macro_rules! __ui_")
+                    && !text.contains("macro_rules! __dsl_apply")
+                    && !text.contains("let mut __tw")
+                    && !text.contains("__dsl_parse_effect_clock")
             });
-        let is_texture_facade = *file == "src/engine/present/texture.rs"
-            && text.as_deref().is_some_and(|text| {
-                text.contains("use crate::assets;")
-                    && text.contains("use deadsync_present::texture as present_texture;")
-                    && text.contains("impl present_texture::TextureContext for AssetTextureContext")
-                    && text.contains("pub(crate) const ASSET_TEXTURE_CONTEXT")
-            });
-        if path.exists()
-            && !is_space_facade
-            && !is_compose_facade
-            && !is_dsl_facade
-            && !is_texture_facade
-        {
+        if path.exists() && !is_space_facade && !is_compose_facade && !is_dsl_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)
@@ -1313,9 +1349,86 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
+    let assets_mod = root.join("src/assets/mod.rs");
+    if let Ok(text) = fs::read_to_string(&assets_mod) {
+        if !text.contains("impl present_texture::TextureContext for PresentTextureContext")
+            || !text.contains("pub(crate) const PRESENT_TEXTURE_CONTEXT")
+        {
+            failures.push(format!(
+                "{} should own the asset-backed presentation texture context",
+                rel_path(&root, &assets_mod)
+            ));
+        }
+    }
+
+    let root_lib = root.join("src/lib.rs");
+    if let Ok(text) = fs::read_to_string(&root_lib) {
+        if !text.contains("pub use deadsync_present::{rgba, rgba_const};") {
+            failures.push(format!(
+                "{} should re-export presentation color macros from deadsync-present",
+                rel_path(&root, &root_lib)
+            ));
+        }
+    }
+
+    let present_mod = root.join("src/engine/present/mod.rs");
+    if let Ok(text) = fs::read_to_string(&present_mod) {
+        for module in [
+            "actors", "anim", "cache", "color", "density", "font", "runtime", "texture",
+        ] {
+            if !text.contains(module) {
+                failures.push(format!(
+                    "{} should re-export deadsync-present::{module}",
+                    rel_path(&root, &present_mod)
+                ));
+            }
+        }
+        if text.contains("macro_rules! rgba") || text.contains("macro_rules! rgba_const") {
+            failures.push(format!(
+                "{} should not define presentation color macro wrappers",
+                rel_path(&root, &present_mod)
+            ));
+        }
+        if text.contains("$crate::engine::present::color::rgba_hex") {
+            failures.push(format!(
+                "{} still routes root color macros through engine::present::color",
+                rel_path(&root, &present_mod)
+            ));
+        }
+    }
+
+    let asset_textures = root.join("src/assets/textures.rs");
+    if let Ok(text) = fs::read_to_string(&asset_textures) {
+        if !text.contains("present_texture::cached_texture_key_handle") {
+            failures.push(format!(
+                "{} should delegate TextureChoice handle caching to deadsync-present",
+                rel_path(&root, &asset_textures)
+            ));
+        }
+    }
+
     let present_crate = root.join("crates/deadsync-present/src/lib.rs");
     if !present_crate.exists() {
         failures.push(format!("{} is missing", rel_path(&root, &present_crate)));
+    }
+
+    let present_dsl = root.join("crates/deadsync-present/src/dsl.rs");
+    if let Ok(text) = fs::read_to_string(&present_dsl) {
+        for macro_name in [
+            "macro_rules! __ui_textalign_from_ident",
+            "macro_rules! __ui_halign_from_ident",
+            "macro_rules! __ui_valign_from_ident",
+            "macro_rules! __dsl_apply",
+            "macro_rules! __dsl_apply_one",
+            "macro_rules! __act_from_builder",
+        ] {
+            if !text.contains(macro_name) {
+                failures.push(format!(
+                    "{} should own DSL alignment helper {macro_name}",
+                    rel_path(&root, &present_dsl)
+                ));
+            }
+        }
     }
 
     let present_src = root.join("crates/deadsync-present/src");

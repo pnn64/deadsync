@@ -1,4 +1,4 @@
-use super::texture::ASSET_TEXTURE_CONTEXT;
+use crate::assets::PRESENT_TEXTURE_CONTEXT;
 use deadsync_present::actors;
 use deadsync_present::compose as present_compose;
 use deadsync_present::font;
@@ -25,7 +25,7 @@ pub fn build_screen(
         m,
         fonts,
         total_elapsed,
-        &ASSET_TEXTURE_CONTEXT,
+        &PRESENT_TEXTURE_CONTEXT,
     )
 }
 
@@ -45,7 +45,7 @@ pub fn build_screen_cached(
         fonts,
         total_elapsed,
         text_cache,
-        &ASSET_TEXTURE_CONTEXT,
+        &PRESENT_TEXTURE_CONTEXT,
     )
 }
 
@@ -67,6 +67,6 @@ pub fn build_screen_cached_with_scratch(
         total_elapsed,
         text_cache,
         scratch,
-        &ASSET_TEXTURE_CONTEXT,
+        &PRESENT_TEXTURE_CONTEXT,
     )
 }

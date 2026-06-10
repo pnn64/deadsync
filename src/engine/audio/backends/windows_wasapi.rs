@@ -2,6 +2,7 @@ use super::super::{
     OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
     internal, publish_output_timing,
 };
+use deadsync_audio::AudioOutputMode;
 use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::ffi::c_void;
@@ -68,8 +69,8 @@ impl WasapiOutputPrep {
             device_name: self.device_name.clone(),
             backend_name: self.mode.backend_name(),
             requested_output_mode: match self.mode {
-                WasapiAccessMode::Shared => crate::config::AudioOutputMode::Shared,
-                WasapiAccessMode::Exclusive => crate::config::AudioOutputMode::Exclusive,
+                WasapiAccessMode::Shared => AudioOutputMode::Shared,
+                WasapiAccessMode::Exclusive => AudioOutputMode::Exclusive,
             },
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::DeviceQpc,

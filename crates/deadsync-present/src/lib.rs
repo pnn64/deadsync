@@ -9,3 +9,6 @@ pub mod font;
 pub mod runtime;
 pub mod space;
 pub mod texture;
+
+#[doc(hidden)]
+pub use deadsync_render as render;

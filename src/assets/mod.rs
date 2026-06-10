@@ -5,6 +5,7 @@ pub mod visual_styles;
 
 use deadsync_platform::dirs;
 use deadsync_present::font::{self, Font, FontLoadData, FontParseError};
+use deadsync_present::texture as present_texture;
 use deadsync_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadsync_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
@@ -100,6 +101,35 @@ impl font::FontTextureContext for AssetFontTextureContext {
 }
 
 const FONT_TEXTURE_CONTEXT: AssetFontTextureContext = AssetFontTextureContext;
+
+pub(crate) struct PresentTextureContext;
+
+impl present_texture::TextureContext for PresentTextureContext {
+    #[inline(always)]
+    fn texture_registry_generation(&self) -> u64 {
+        texture_registry_generation()
+    }
+
+    #[inline(always)]
+    fn texture_dims(&self, key: &str) -> Option<present_texture::TextureMeta> {
+        texture_dims(key).map(|meta| present_texture::TextureMeta {
+            w: meta.w,
+            h: meta.h,
+        })
+    }
+
+    #[inline(always)]
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        sprite_sheet_dims(key)
+    }
+
+    #[inline(always)]
+    fn texture_handle(&self, key: &str) -> TextureHandle {
+        texture_handle(key)
+    }
+}
+
+pub(crate) const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
 
 #[derive(Clone, Copy)]
 pub(crate) struct TextureUploadBudget {

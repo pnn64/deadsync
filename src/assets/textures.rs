@@ -1,6 +1,7 @@
 use crate::assets::AssetManager;
 use deadsync_platform::dirs;
 use deadsync_present::actors::TextureKeyHandle;
+use deadsync_present::texture as present_texture;
 use deadsync_render::{
     FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
 };
@@ -18,7 +19,7 @@ use std::{
     },
 };
 
-use super::{AssetError, visual_styles};
+use super::{AssetError, PRESENT_TEXTURE_CONTEXT, visual_styles};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TexMeta {
@@ -59,26 +60,12 @@ impl TextureChoice {
 
     #[inline(always)]
     pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        let generation = texture_registry_generation();
-        let handle = self.cached_handle.load(Ordering::Relaxed);
-        if handle != INVALID_TEXTURE_HANDLE
-            && self.cached_generation.load(Ordering::Relaxed) == generation
-        {
-            return TextureKeyHandle {
-                key: Arc::clone(&self.key),
-                handle,
-                generation,
-            };
-        }
-
-        let handle = texture_handle(self.key.as_ref());
-        self.cached_handle.store(handle, Ordering::Relaxed);
-        self.cached_generation.store(generation, Ordering::Relaxed);
-        TextureKeyHandle {
-            key: Arc::clone(&self.key),
-            handle,
-            generation,
-        }
+        present_texture::cached_texture_key_handle(
+            &self.key,
+            &self.cached_handle,
+            &self.cached_generation,
+            &PRESENT_TEXTURE_CONTEXT,
+        )
     }
 }
 

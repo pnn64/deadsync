@@ -5,6 +5,7 @@ use super::super::{
 };
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
+use deadsync_audio::AudioOutputMode;
 use deadsync_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};
@@ -48,8 +49,8 @@ impl AlsaOutputPrep {
             device_name: self.device_name.clone(),
             backend_name: self.mode.backend_name(),
             requested_output_mode: match self.mode {
-                AlsaAccessMode::Shared => crate::config::AudioOutputMode::Shared,
-                AlsaAccessMode::Exclusive => crate::config::AudioOutputMode::Exclusive,
+                AlsaAccessMode::Shared => AudioOutputMode::Shared,
+                AlsaAccessMode::Exclusive => AudioOutputMode::Exclusive,
             },
             fallback_from_native: false,
             timing_clock: self.host_clock.telemetry_clock(),
