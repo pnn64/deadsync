@@ -7,30 +7,30 @@ use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
-const PANEL_SENSOR_COUNT: usize = 4;
+pub(super) const PANEL_SENSOR_COUNT: usize = 4;
 
-const MIN_FSR_THRESHOLD: u16 = 5;
-const MAX_FSR_THRESHOLD: u16 = 250;
+pub(super) const MIN_FSR_THRESHOLD: u16 = 5;
+pub(super) const MAX_FSR_THRESHOLD: u16 = 250;
 
 /// Debounce edit bounds (microseconds). Firmware default is 4000us (4.0ms);
 /// we never let the user drop below 0.5ms.
-const MIN_DEBOUNCE_US: u16 = 500;
-const MAX_DEBOUNCE_US: u16 = 25000;
+pub(super) const MIN_DEBOUNCE_US: u16 = 500;
+pub(super) const MAX_DEBOUNCE_US: u16 = 25000;
 
 // Pre-v5 load-cell pads: 8-bit thresholds (20-200) and live values that scale
 // to 500 (no >>2), matching the official SMX config tool.
-const MIN_LOADCELL_THRESHOLD: u16 = 20;
-const MAX_LOADCELL_THRESHOLD: u16 = 200;
-const FSR_VALUE_SCALE: u16 = 250;
-const LOADCELL_VALUE_SCALE: u16 = 500;
+pub(super) const MIN_LOADCELL_THRESHOLD: u16 = 20;
+pub(super) const MAX_LOADCELL_THRESHOLD: u16 = 200;
+pub(super) const FSR_VALUE_SCALE: u16 = 250;
+pub(super) const LOADCELL_VALUE_SCALE: u16 = 500;
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
 /// Edge label for each of a panel's four FSR sensors, by firmware index.
-const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
+pub(super) const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
 /// Firmware-index order to display the sensors in so they read L, D, U, R.
-const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
+pub(super) const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
 
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).

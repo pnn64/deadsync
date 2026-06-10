@@ -15,6 +15,13 @@ mod fsrio;
     target_os = "freebsd",
     target_os = "macos"
 ))]
+mod mock;
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 mod smx;
 
 #[cfg(any(
@@ -26,6 +33,10 @@ mod smx;
 pub struct Monitor {
     fsrio: fsrio::Monitor,
     smx: smx::Monitor,
+    /// Fake SMX pads for UI development (`DEADSYNC_MOCK_PADS`). When set, the
+    /// mock owns the SMX backend slot: native SMX never starts (no pads, no
+    /// USB writes) and SMX-routed edits land here instead.
+    mock: Option<mock::Monitor>,
 }
 
 #[cfg(any(
@@ -39,6 +50,7 @@ impl Monitor {
         Self {
             fsrio: fsrio::Monitor::new(),
             smx: smx::Monitor::new(),
+            mock: mock::Monitor::from_env(),
         }
     }
 
@@ -53,7 +65,10 @@ impl Monitor {
     /// Enumerate every connected FSR pad across all backends.
     pub fn poll_pads(&mut self) -> Vec<PadView> {
         let mut pads = self.fsrio.poll_pads();
-        pads.extend(self.smx.poll_pads());
+        match &mut self.mock {
+            Some(m) => pads.extend(m.poll_pads()),
+            None => pads.extend(self.smx.poll_pads()),
+        }
         pads
     }
 
@@ -74,7 +89,10 @@ impl Monitor {
                 kind == ThresholdKind::Press
                     && self.fsrio.set_threshold(device, button, sensor, value)
             }
-            BackendKind::Smx => self.smx.set_threshold(device, button, sensor, kind, value),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_threshold(device, button, sensor, kind, value),
+                None => self.smx.set_threshold(device, button, sensor, kind, value),
+            },
         }
     }
 
@@ -90,7 +108,10 @@ impl Monitor {
             BackendKind::Fsrio => self
                 .fsrio
                 .set_sensor_enabled(device, button, sensor, enabled),
-            BackendKind::Smx => self.smx.set_sensor_enabled(device, button, sensor, enabled),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_sensor_enabled(device, button, sensor, enabled),
+                None => self.smx.set_sensor_enabled(device, button, sensor, enabled),
+            },
         }
     }
 
@@ -98,7 +119,10 @@ impl Monitor {
     pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
         match device.backend {
             BackendKind::Fsrio => self.fsrio.set_auto_recalibration(device, enabled),
-            BackendKind::Smx => self.smx.set_auto_recalibration(device, enabled),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_auto_recalibration(device, enabled),
+                None => self.smx.set_auto_recalibration(device, enabled),
+            },
         }
     }
 
@@ -106,7 +130,10 @@ impl Monitor {
     pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
         match device.backend {
             BackendKind::Fsrio => self.fsrio.set_debounce_micros(device, micros),
-            BackendKind::Smx => self.smx.set_debounce_micros(device, micros),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_debounce_micros(device, micros),
+                None => self.smx.set_debounce_micros(device, micros),
+            },
         }
     }
 

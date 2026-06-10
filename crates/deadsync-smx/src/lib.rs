@@ -54,9 +54,22 @@ pub struct InitConfig {
     pub p2_serial: Option<String>,
 }
 
+/// Value of `DEADSYNC_MOCK_PADS` when set non-empty. Mock pads (see
+/// `deadsync_input_fsr::mock`) replace native SMX entirely: while this is set,
+/// `init` refuses to start the SDK, so UI work can never touch real hardware.
+pub fn mock_pads_env() -> Option<String> {
+    std::env::var("DEADSYNC_MOCK_PADS")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+}
+
 /// Initialize the shared SMX manager. Call once at startup.
 /// Returns false if initialization failed (e.g., hidapi unavailable).
 pub fn init(config: InitConfig) -> bool {
+    if let Some(spec) = mock_pads_env() {
+        log::info!("SMX: DEADSYNC_MOCK_PADS={spec}; native SMX disabled (no USB traffic)");
+        return false;
+    }
     if SHARED.get().is_some() {
         return true;
     }
