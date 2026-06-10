@@ -860,6 +860,7 @@ fn audio_core_lives_in_audio_crate() {
 
     for file in [
         root.join("crates/deadsync-audio/src/lib.rs"),
+        root.join("crates/deadsync-audio/src/mixer.rs"),
         root.join("crates/deadsync-audio/src/ring.rs"),
         root.join("crates/deadsync-audio/src/telemetry.rs"),
     ] {
@@ -878,6 +879,9 @@ fn audio_core_lives_in_audio_crate() {
             "pub enum OutputTimingQuality",
             "pub enum StutterDiagAudioEventKind",
             "pub struct StutterDiagAudioEvent",
+            "enum ScheduledOnset",
+            "fn scheduled_onset_decision",
+            "MAX_SCHEDULE_AHEAD_FRAMES",
             "std::cell::UnsafeCell",
         ] {
             let count = count_token_refs(&text, token);

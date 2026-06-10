@@ -1,6 +1,8 @@
+pub mod mixer;
 pub mod ring;
 pub mod telemetry;
 
+pub use mixer::{MAX_SCHEDULE_AHEAD_FRAMES, ScheduledOnset, scheduled_onset_decision};
 pub use telemetry::{
     OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality, StutterDiagAudioEvent,
     StutterDiagAudioEventKind,
