@@ -32,17 +32,17 @@
 
 use deadsync_audio_analysis::{
     ReplayGainCacheEntry, ReplayGainCacheFile, ReplayGainInfo, UNITY_GAIN, compute_loudness,
-    decode_replaygain_cache, encode_replaygain_cache, gain_linear_from_info, replaygain_path_hash,
+    gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_entry_for_path,
+    replaygain_cache_info_if_fresh, replaygain_path_hash, write_replaygain_cache_file,
 };
 use deadsync_platform::dirs;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::Duration;
 
 /// Sentinel track id used for prewarm jobs that aren't tied to a currently
 /// playing track. `set_music_replaygain_if_matches` will treat this as a
@@ -423,13 +423,7 @@ fn init_disk_cache() -> DiskCache {
 
 fn load_cache_file() -> Option<HashMap<u64, ReplayGainCacheEntry>> {
     let path = dirs::app_dirs().replaygain_cache_file();
-    let bytes = fs::read(&path).ok()?;
-    let parsed = decode_replaygain_cache(&bytes)?;
-    let mut map = HashMap::with_capacity(parsed.entries.len());
-    for entry in parsed.entries {
-        map.insert(entry.path_hash, entry);
-    }
-    Some(map)
+    read_replaygain_cache_file(&path)
 }
 
 fn flush_loop() {
@@ -461,13 +455,8 @@ fn flush_loop() {
             let was_sync = state.sync_request;
             state.dirty = false;
             state.sync_request = false;
-            let mut entries_vec: Vec<ReplayGainCacheEntry> = entries.values().copied().collect();
-            // Stable order so the file is deterministic across runs.
-            entries_vec.sort_by_key(|e| e.path_hash);
             (
-                ReplayGainCacheFile {
-                    entries: entries_vec,
-                },
+                ReplayGainCacheFile::from_entries(entries.values().copied()),
                 was_sync,
             )
         };
@@ -493,29 +482,7 @@ fn flush_loop() {
 
 fn write_cache_file(payload: &ReplayGainCacheFile) -> std::io::Result<()> {
     let path = dirs::app_dirs().replaygain_cache_file();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let bytes = encode_replaygain_cache(payload)
-        .map_err(|e| std::io::Error::other(format!("encode failed: {e}")))?;
-    let tmp = path.with_extension("bin.tmp");
-    {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(&bytes)?;
-        f.sync_all().ok();
-    }
-    fs::rename(&tmp, &path)
-}
-
-fn source_mtime_unix_nanos(path: &Path) -> Option<u64> {
-    let meta = fs::metadata(path).ok()?;
-    let mtime = meta.modified().ok()?;
-    let dur = mtime.duration_since(UNIX_EPOCH).ok()?;
-    Some(
-        dur.as_secs()
-            .saturating_mul(1_000_000_000)
-            .saturating_add(u64::from(dur.subsec_nanos())),
-    )
+    write_replaygain_cache_file(&path, payload)
 }
 
 fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
@@ -524,21 +491,15 @@ fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
         let map = disk_cache().entries.lock().unwrap();
         map.get(&key).copied()
     }?;
-    let current_mtime = source_mtime_unix_nanos(song_path)?;
-    if entry.mtime_unix_nanos != current_mtime {
-        return None;
-    }
-    Some(entry.info())
+    replaygain_cache_info_if_fresh(entry, song_path)
 }
 
 fn write_disk_cache(song_path: &Path, info: ReplayGainInfo) {
-    let key = replaygain_path_hash(song_path);
-    let mtime = source_mtime_unix_nanos(song_path).unwrap_or(0);
-    let entry = ReplayGainCacheEntry::new(key, mtime, info);
+    let entry = replaygain_cache_entry_for_path(song_path, info);
     let cache = disk_cache();
     {
         let mut map = cache.entries.lock().unwrap();
-        map.insert(key, entry);
+        map.insert(entry.path_hash, entry);
     }
     {
         let mut state = cache.flush_state.lock().unwrap();
@@ -578,73 +539,5 @@ fn flush_now_with_timeout(timeout: Duration) {
         if result.timed_out() {
             return;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::SystemTime;
-
-    /// Construct a unique temp file path scoped to this test process.
-    fn unique_temp_file(tag: &str) -> PathBuf {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let pid = std::process::id();
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        std::env::temp_dir().join(format!("deadsync-replaygain-{tag}-{pid}-{stamp}-{id}.tmp"))
-    }
-
-    #[test]
-    fn lookup_invalidates_on_mtime_change() {
-        // Create a file, snapshot its mtime as a persisted entry, verify
-        // lookup matches; then rewrite the file (changing its mtime) and
-        // verify lookup misses.
-        let path = unique_temp_file("mtime");
-        fs::write(&path, b"alpha").expect("write file");
-        let key = replaygain_path_hash(&path);
-        let mtime = source_mtime_unix_nanos(&path).expect("mtime");
-        let map: HashMap<u64, ReplayGainCacheEntry> = std::iter::once((
-            key,
-            ReplayGainCacheEntry::new(
-                key,
-                mtime,
-                ReplayGainInfo {
-                    lufs: -16.0,
-                    true_peak_linear: 0.9,
-                },
-            ),
-        ))
-        .collect();
-
-        // Direct check via the same logic load_disk_cache uses.
-        let lookup = |p: &Path| -> Option<ReplayGainInfo> {
-            let entry = map.get(&replaygain_path_hash(p)).copied()?;
-            let current_mtime = source_mtime_unix_nanos(p)?;
-            if entry.mtime_unix_nanos != current_mtime {
-                return None;
-            }
-            Some(entry.info())
-        };
-
-        assert!(lookup(&path).is_some(), "fresh entry should match");
-
-        // Sleep just enough for a different mtime to be observable across
-        // filesystems with second-resolution timestamps.
-        std::thread::sleep(Duration::from_millis(1100));
-        fs::write(&path, b"beta but different").expect("rewrite file");
-        let new_mtime = source_mtime_unix_nanos(&path).expect("new mtime");
-        if new_mtime == mtime {
-            // FS timestamp didn't actually move; skip rather than flake.
-            let _ = fs::remove_file(&path);
-            return;
-        }
-        assert!(lookup(&path).is_none(), "stale entry should miss");
-
-        let _ = fs::remove_file(&path);
     }
 }

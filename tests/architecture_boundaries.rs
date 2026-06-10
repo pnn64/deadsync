@@ -994,6 +994,11 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
             "CACHE_VERSION",
             "use bincode",
             "XxHash64",
+            "fn source_mtime_unix_nanos",
+            "ReplayGainCacheEntry::new",
+            "create_dir_all",
+            "write_all",
+            "with_extension(\"bin.tmp\")",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
