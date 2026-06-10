@@ -13,7 +13,7 @@ use deadsync_audio::{
     MusicMapSeg, OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent,
     StutterDiagAudioEventKind, f32_to_i16, fallback_stream_position_frames, i16_to_f32,
     mix_active_sfx, mix_level_gains, music_nanos_from_seconds, normalized_music_rate,
-    push_queued_sfx,
+    push_queued_sfx, sfx_is_stale, sfx_stop_generation,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
 pub use deadsync_audio::{
@@ -189,12 +189,6 @@ struct MusicStream {
 // should snap the mixer's interpolated gain to its target instantly,
 // rather than ramping across the boundary.
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
-static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
-// Generation counter for scheduled assist ticks. Bumped on every music stream
-// reset (stop / seek / track change) so any in-flight scheduled tick whose
-// target frame belongs to the previous timeline is dropped by the mixer rather
-// than firing a stale clap.
-static ASSIST_SFX_GEN: AtomicU64 = AtomicU64::new(0);
 
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
@@ -325,7 +319,7 @@ pub fn play_preloaded_sfx(path: &str) {
 
 /// Stops active and queued screen-owned sound effects.
 pub fn stop_screen_sfx() {
-    SCREEN_SFX_STOP_GEN.fetch_add(1, Ordering::AcqRel);
+    deadsync_audio::bump_screen_sfx_generation();
 }
 
 /// Plays a gameplay assist tick that uses its own volume lane.
@@ -392,24 +386,6 @@ pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
         });
     } else {
         warn!("Scheduled assist tick cache miss for '{path}'; skipping");
-    }
-}
-
-#[inline(always)]
-fn sfx_stop_generation(lane: SfxLane) -> u64 {
-    match lane {
-        SfxLane::Screen => SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
-        SfxLane::AssistTick => ASSIST_SFX_GEN.load(Ordering::Acquire),
-        SfxLane::Effect => 0,
-    }
-}
-
-#[inline(always)]
-fn sfx_is_stale(lane: SfxLane, stop_generation: u64) -> bool {
-    match lane {
-        SfxLane::Screen => stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
-        SfxLane::AssistTick => stop_generation != ASSIST_SFX_GEN.load(Ordering::Acquire),
-        SfxLane::Effect => false,
     }
 }
 
@@ -522,7 +498,7 @@ fn reset_music_stream_clock() {
     deadsync_audio::reset_music_stream_clock_state();
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
-    ASSIST_SFX_GEN.fetch_add(1, Ordering::AcqRel);
+    deadsync_audio::bump_assist_sfx_generation();
     clear_music_pos_map();
 }
 
@@ -719,7 +695,7 @@ pub fn get_music_stream_position_seconds() -> f32 {
 /// (stop / seek / track change). Gameplay reads this to detect that previously
 /// scheduled ticks were invalidated and that its scheduling cursor must re-anchor.
 pub fn assist_sfx_generation() -> u64 {
-    ASSIST_SFX_GEN.load(Ordering::Acquire)
+    deadsync_audio::assist_sfx_generation()
 }
 
 #[inline(always)]

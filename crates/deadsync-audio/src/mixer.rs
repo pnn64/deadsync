@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Upper bound (in device frames) on how far ahead of the audible write head a
 /// scheduled SFX onset may sit before the mixer treats it as stale and drops it.
@@ -12,6 +13,42 @@ pub enum SfxLane {
     Effect,
     Screen,
     AssistTick,
+}
+
+static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
+static ASSIST_SFX_GEN: AtomicU64 = AtomicU64::new(0);
+
+#[inline(always)]
+pub fn bump_screen_sfx_generation() {
+    SCREEN_SFX_STOP_GEN.fetch_add(1, Ordering::AcqRel);
+}
+
+#[inline(always)]
+pub fn bump_assist_sfx_generation() {
+    ASSIST_SFX_GEN.fetch_add(1, Ordering::AcqRel);
+}
+
+#[inline(always)]
+pub fn assist_sfx_generation() -> u64 {
+    ASSIST_SFX_GEN.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub fn sfx_stop_generation(lane: SfxLane) -> u64 {
+    match lane {
+        SfxLane::Screen => SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
+        SfxLane::AssistTick => ASSIST_SFX_GEN.load(Ordering::Acquire),
+        SfxLane::Effect => 0,
+    }
+}
+
+#[inline(always)]
+pub fn sfx_is_stale(lane: SfxLane, stop_generation: u64) -> bool {
+    match lane {
+        SfxLane::Screen => stop_generation != SCREEN_SFX_STOP_GEN.load(Ordering::Acquire),
+        SfxLane::AssistTick => stop_generation != ASSIST_SFX_GEN.load(Ordering::Acquire),
+        SfxLane::Effect => false,
+    }
 }
 
 #[derive(Clone)]

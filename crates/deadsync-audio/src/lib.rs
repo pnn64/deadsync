@@ -6,7 +6,9 @@ pub mod telemetry;
 
 pub use mixer::{
     ActiveSfx, MAX_ACTIVE_SFX, MAX_SCHEDULE_AHEAD_FRAMES, QueuedSfx, ScheduledOnset, SfxLane,
-    f32_to_i16, i16_to_f32, mix_active_sfx, push_queued_sfx, scheduled_onset_decision,
+    assist_sfx_generation, bump_assist_sfx_generation, bump_screen_sfx_generation, f32_to_i16,
+    i16_to_f32, mix_active_sfx, push_queued_sfx, scheduled_onset_decision, sfx_is_stale,
+    sfx_stop_generation,
 };
 pub use output::{
     AudioMixLevels, AudioOutputMode, Cut, InitConfig, LinuxAudioBackend, OutputBackendReady,
