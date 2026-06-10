@@ -4,6 +4,7 @@ pub mod cache;
 pub mod color;
 pub mod compose;
 pub mod density;
+pub mod dsl;
 pub mod font;
 pub mod runtime;
 pub mod space;
