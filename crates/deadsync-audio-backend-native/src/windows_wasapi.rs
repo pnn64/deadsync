@@ -1,10 +1,8 @@
+use crate::telemetry::{publish_output_timing, report_audio_render_callback};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    publish_output_timing, report_audio_render_callback,
 };
 use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
@@ -22,7 +20,7 @@ use windows::Win32::System::{Com, LibraryLoader, Threading, Variant};
 use windows::core::{PCWSTR, PWSTR, s, w};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum WasapiAccessMode {
+pub enum WasapiAccessMode {
     Shared,
     Exclusive,
 }
@@ -53,7 +51,7 @@ impl WasapiSampleFormat {
     }
 }
 
-pub(crate) struct WasapiOutputPrep {
+pub struct WasapiOutputPrep {
     device_id: Option<String>,
     device_name: String,
     format: Vec<u8>,
@@ -65,7 +63,7 @@ pub(crate) struct WasapiOutputPrep {
 }
 
 impl WasapiOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -82,7 +80,7 @@ impl WasapiOutputPrep {
     }
 }
 
-pub(crate) struct WasapiOutputStream {
+pub struct WasapiOutputStream {
     thread: Option<JoinHandle<()>>,
     stop_event: HANDLE,
 }
@@ -106,7 +104,7 @@ impl Drop for WasapiOutputStream {
     }
 }
 
-pub(crate) struct WasapiOutputDevice {
+pub struct WasapiOutputDevice {
     pub id: String,
     pub name: String,
     pub sample_rates_hz: Vec<u32>,
@@ -115,7 +113,7 @@ pub(crate) struct WasapiOutputDevice {
     pub is_default: bool,
 }
 
-pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, String> {
+pub fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, String> {
     let _com = ComGuard::new()?;
     let enumerator = create_device_enumerator()?;
     // SAFETY: COM is initialized for this thread, `enumerator` is a live COM
@@ -175,7 +173,7 @@ pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, Stri
     Ok(devices)
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     device_id: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
@@ -228,7 +226,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: WasapiOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

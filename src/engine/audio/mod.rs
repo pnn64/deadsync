@@ -16,6 +16,24 @@ use deadsync_audio::{
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
+#[cfg(target_os = "linux")]
+use deadsync_audio_backend_native::launch::AlsaBackendHint;
+#[cfg(target_os = "macos")]
+use deadsync_audio_backend_native::launch::CoreAudioBackendHint;
+#[cfg(target_os = "freebsd")]
+use deadsync_audio_backend_native::launch::FreeBsdPcmBackendHint;
+#[cfg(target_os = "linux")]
+#[cfg(has_jack_audio)]
+use deadsync_audio_backend_native::launch::JackBackendHint;
+#[cfg(target_os = "linux")]
+#[cfg(has_pipewire_audio)]
+use deadsync_audio_backend_native::launch::PipeWireBackendHint;
+#[cfg(target_os = "linux")]
+#[cfg(has_pulse_audio)]
+use deadsync_audio_backend_native::launch::PulseBackendHint;
+#[cfg(windows)]
+use deadsync_audio_backend_native::launch::WasapiBackendHint;
+use deadsync_audio_backend_native::launch::{NativeBackendLaunch, SFX_QUEUE_CAP};
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
 use deadsync_platform::host_time::instant_nanos;
@@ -30,7 +48,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
-const SFX_QUEUE_CAP: usize = 128;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 /* ============================== Public API ============================== */
 
@@ -62,99 +79,6 @@ struct AudioEngine {
     device_sample_rate: u32,
     device_channels: usize,
     startup_output_devices: Vec<OutputDeviceInfo>,
-}
-
-#[cfg(windows)]
-#[derive(Clone)]
-struct WasapiBackendHint {
-    device_id: Option<String>,
-    device_name: String,
-    requested_rate_hz: Option<u32>,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "linux")]
-#[derive(Clone)]
-struct AlsaBackendHint {
-    pcm_id: Option<String>,
-    device_name: String,
-    sample_rate_hz: u32,
-    channels: usize,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
-#[derive(Clone)]
-struct JackBackendHint {
-    requested_device_name: Option<String>,
-    requested_rate_hz: Option<u32>,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
-#[derive(Clone)]
-struct PipeWireBackendHint {
-    requested_device_name: Option<String>,
-    sample_rate_hz: u32,
-    channels: usize,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
-#[derive(Clone)]
-struct PulseBackendHint {
-    requested_device_name: Option<String>,
-    sample_rate_hz: u32,
-    channels: usize,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone)]
-struct CoreAudioBackendHint {
-    device_uid: Option<String>,
-    device_name: String,
-    requested_rate_hz: Option<u32>,
-    channels: usize,
-    output_mode: AudioOutputMode,
-}
-
-#[cfg(target_os = "freebsd")]
-#[derive(Clone)]
-struct FreeBsdPcmBackendHint {
-    dsp_path: Option<String>,
-    device_name: String,
-    sample_rate_hz: u32,
-    channels: usize,
-    output_mode: AudioOutputMode,
-}
-
-#[derive(Clone)]
-struct AudioThreadLaunch {
-    #[cfg(target_os = "linux")]
-    explicit_device_requested: bool,
-    #[cfg(target_os = "linux")]
-    linux_backend: LinuxAudioBackend,
-    #[cfg(target_os = "linux")]
-    alsa: Option<AlsaBackendHint>,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
-    jack: Option<JackBackendHint>,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
-    pipewire: Option<PipeWireBackendHint>,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
-    pulse: Option<PulseBackendHint>,
-    #[cfg(target_os = "macos")]
-    coreaudio: Option<CoreAudioBackendHint>,
-    #[cfg(target_os = "freebsd")]
-    freebsd_pcm: Option<FreeBsdPcmBackendHint>,
-    #[cfg(windows)]
-    wasapi: Option<WasapiBackendHint>,
 }
 
 struct AudioThreadReady {
@@ -729,7 +653,7 @@ fn linux_default_output_device(
 }
 
 #[cfg(target_os = "linux")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
     let alsa_devices = backends::linux_alsa::enumerate_output_devices();
     if alsa_devices.is_empty() {
         warn!(
@@ -803,7 +727,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
     );
     (
         device_probes,
-        AudioThreadLaunch {
+        NativeBackendLaunch {
             explicit_device_requested,
             linux_backend,
             alsa: Some(AlsaBackendHint {
@@ -838,7 +762,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
 }
 
 #[cfg(target_os = "macos")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
     let devices = backends::macos_coreaudio::enumerate_output_devices();
     if devices.is_empty() {
         warn!(
@@ -897,7 +821,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
     );
     (
         device_probes,
-        AudioThreadLaunch {
+        NativeBackendLaunch {
             coreaudio: Some(CoreAudioBackendHint {
                 device_uid,
                 device_name,
@@ -910,7 +834,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
 }
 
 #[cfg(windows)]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
     let devices = match backends::windows_wasapi::enumerate_output_devices() {
         Ok(devices) => devices,
         Err(err) => {
@@ -973,7 +897,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
     );
     (
         device_probes,
-        AudioThreadLaunch {
+        NativeBackendLaunch {
             wasapi: Some(WasapiBackendHint {
                 device_id,
                 device_name,
@@ -985,7 +909,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
 }
 
 #[cfg(target_os = "freebsd")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
     let mut device_probes: Vec<_> = backends::freebsd_pcm::enumerate_output_devices()
         .into_iter()
         .map(|dev| OutputDeviceProbe {
@@ -1048,7 +972,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
     );
     (
         device_probes,
-        AudioThreadLaunch {
+        NativeBackendLaunch {
             #[cfg(target_os = "linux")]
             explicit_device_requested: false,
             #[cfg(target_os = "linux")]
@@ -1283,10 +1207,10 @@ fn start_macos_coreaudio_backend(
 }
 
 fn start_output_backend(
-    launch: AudioThreadLaunch,
+    launch: NativeBackendLaunch,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    let AudioThreadLaunch {
+    let NativeBackendLaunch {
         #[cfg(target_os = "linux")]
         explicit_device_requested,
         #[cfg(target_os = "linux")]
@@ -1526,7 +1450,7 @@ fn start_output_backend(
 fn audio_manager_thread(
     command_receiver: Receiver<AudioCommand>,
     ready_sender: Sender<Result<AudioThreadReady, String>>,
-    launch: AudioThreadLaunch,
+    launch: NativeBackendLaunch,
 ) {
     let mut music_stream: Option<MusicStream> = None;
     let music_ring = internal::ring_new(internal::RING_CAP_SAMPLES);

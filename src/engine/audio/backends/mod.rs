@@ -14,4 +14,4 @@ pub mod linux_pulse;
 #[cfg(target_os = "macos")]
 pub mod macos_coreaudio;
 #[cfg(windows)]
-pub mod windows_wasapi;
+pub use deadsync_audio_backend_native::windows_wasapi;

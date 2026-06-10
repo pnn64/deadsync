@@ -875,7 +875,9 @@ fn audio_core_lives_in_audio_crate() {
     for file in [
         root.join("crates/deadsync-audio-backend-native/Cargo.toml"),
         root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/launch.rs"),
         root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/windows_wasapi.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
@@ -885,6 +887,15 @@ fn audio_core_lives_in_audio_crate() {
     if root.join("src/engine/audio/backends/telemetry.rs").exists() {
         failures.push(
             "src/engine/audio/backends/telemetry.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/windows_wasapi.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/windows_wasapi.rs should live in deadsync-audio-backend-native"
                 .to_string(),
         );
     }
@@ -992,6 +1003,15 @@ fn audio_core_lives_in_audio_crate() {
             "fn note_output_underrun",
             "fn note_output_clock_fallback",
             "fn note_output_timing_sanity_failure",
+            "struct WasapiBackendHint",
+            "struct AlsaBackendHint",
+            "struct JackBackendHint",
+            "struct PipeWireBackendHint",
+            "struct PulseBackendHint",
+            "struct CoreAudioBackendHint",
+            "struct FreeBsdPcmBackendHint",
+            "struct AudioThreadLaunch",
+            "struct NativeBackendLaunch",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
