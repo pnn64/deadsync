@@ -1113,6 +1113,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
                 x,
                 top_y,
                 bar_label,
+                sensor.raw_value,
                 sensor.value_norm,
                 sensor.active && enabled,
                 threshold,
@@ -1191,6 +1192,7 @@ fn push_sensor_bar(
     x: f32,
     y: f32,
     sensor_label: String,
+    raw_value: u16,
     value_norm: f32,
     active: bool,
     raw_threshold: u16,
@@ -1257,12 +1259,27 @@ fn push_sensor_bar(
     } else {
         [1.0, 1.0, 1.0, 0.95]
     };
-    // Threshold value above the bar.
+    // Current pressure value above the bar (the threshold sits by its line).
     actors.push(act!(text:
-        font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
+        font("miso"): settext(raw_value.to_string()): align(0.5, 1.0):
         xy(x, y - 2.0): zoom(0.5): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
+    // Threshold value next to its line, like the Simple view; flip it below
+    // the line near the top of the bar so it can't collide with the pressure.
+    if threshold_norm > 0.85 {
+        actors.push(act!(text:
+            font("miso"): settext(raw_threshold.to_string()): align(0.5, 0.0):
+            xy(x, threshold_y + threshold_h + 1.0): zoom(0.45): horizalign(center):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+        ));
+    } else {
+        actors.push(act!(text:
+            font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
+            xy(x, threshold_y - 1.0): zoom(0.45): horizalign(center):
+            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+        ));
+    }
     // Sensor identifier (edge label, or 1-based number) directly below the bar.
     actors.push(act!(text:
         font("miso"): settext(sensor_label): align(0.5, 0.0):
