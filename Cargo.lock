@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.659"
+version = "0.4.660"
 dependencies = [
  "alsa",
  "bincode",
@@ -991,10 +991,7 @@ dependencies = [
  "deadsync-present",
  "deadsync-profile",
  "deadsync-render",
- "deadsync-render-backend-gl",
- "deadsync-render-backend-software",
- "deadsync-render-backend-vulkan",
- "deadsync-render-backend-wgpu",
+ "deadsync-renderer",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
@@ -1233,6 +1230,19 @@ dependencies = [
  "pollster",
  "raw-window-handle",
  "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "deadsync-renderer"
+version = "0.1.0"
+dependencies = [
+ "deadsync-render",
+ "deadsync-render-backend-gl",
+ "deadsync-render-backend-software",
+ "deadsync-render-backend-vulkan",
+ "deadsync-render-backend-wgpu",
+ "image",
  "winit",
 ]
 

@@ -19,7 +19,6 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::gfx as gfx_backend;
 use crate::engine::input;
 use crate::engine::lights::{
     self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
@@ -41,6 +40,7 @@ use deadsync_platform::display;
 use deadsync_platform::host_time;
 use deadsync_render as renderer;
 use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
+use deadsync_renderer as gfx_backend;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,

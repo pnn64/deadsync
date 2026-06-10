@@ -231,15 +231,9 @@ impl Backend {
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
             #[cfg(target_os = "macos")]
             BackendImpl::Metal(state) => wgpu_core::resize(state, width, height),
-            BackendImpl::OpenGL(state) => {
-                crate::engine::space::set_current_window_px(width, height);
-                opengl::resize(state, width, height);
-            }
+            BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
-            BackendImpl::Software(state) => {
-                crate::engine::space::set_current_window_px(width, height);
-                software::resize(state, width, height);
-            }
+            BackendImpl::Software(state) => software::resize(state, width, height),
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_core::resize(state, width, height),
         }
@@ -470,25 +464,19 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::OpenGL => BackendImpl::OpenGL(
-            opengl::init(window, vsync_enabled, gfx_debug_enabled, high_dpi_enabled).inspect(
-                |state| {
-                    let (width, height) = opengl::render_size(state);
-                    crate::engine::space::set_current_window_px(width, height);
-                },
-            )?,
-        ),
+        BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(
+            window,
+            vsync_enabled,
+            gfx_debug_enabled,
+            high_dpi_enabled,
+        )?),
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::Software => {
-            let size = window.inner_size();
-            crate::engine::space::set_current_window_px(size.width, size.height);
-            BackendImpl::Software(software::init(window, vsync_enabled)?)
-        }
+        BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
         #[cfg(target_os = "windows")]
         BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
             window,

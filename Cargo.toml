@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.659"
+version = "0.4.660"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -27,6 +27,7 @@ members = [
     "crates/deadsync-render-backend-software",
     "crates/deadsync-render-backend-vulkan",
     "crates/deadsync-render-backend-wgpu",
+    "crates/deadsync-renderer",
     "crates/deadsync-rules",
     "crates/deadsync-score",
     "crates/deadsync-simfile",
@@ -79,9 +80,7 @@ deadsync-platform = { path = "crates/deadsync-platform" }
 deadsync-present = { path = "crates/deadsync-present" }
 deadsync-profile = { path = "crates/deadsync-profile" }
 deadsync-render = { path = "crates/deadsync-render" }
-deadsync-render-backend-gl = { path = "crates/deadsync-render-backend-gl" }
-deadsync-render-backend-software = { path = "crates/deadsync-render-backend-software" }
-deadsync-render-backend-wgpu = { path = "crates/deadsync-render-backend-wgpu" }
+deadsync-renderer = { path = "crates/deadsync-renderer" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
@@ -196,9 +195,6 @@ windows = { version = "0.62.2", features = [
     "Win32_System_WinRT",
     "Win32_Storage_FileSystem",
 ] }
-
-[target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]
-deadsync-render-backend-vulkan = { path = "crates/deadsync-render-backend-vulkan" }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.186"

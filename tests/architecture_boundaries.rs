@@ -870,6 +870,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
     let software_backend_path = root.join("src/engine/gfx/backends/software.rs");
     let vulkan_backend_path = root.join("src/engine/gfx/backends/vulkan.rs");
     let wgpu_backend_path = root.join("src/engine/gfx/backends/wgpu_core.rs");
+    let gfx_facade_path = root.join("src/engine/gfx/mod.rs");
     let mut failures = Vec::new();
 
     if draw_prep_path.exists() {
@@ -901,6 +902,39 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
             "{} still exists; use deadsync-render-backend-wgpu",
             rel_path(&root, &wgpu_backend_path)
         ));
+    }
+    if gfx_facade_path.exists() {
+        let text = fs::read_to_string(&gfx_facade_path).expect("source file should be readable");
+        if text.trim() != "pub use deadsync_renderer::*;" {
+            failures.push(format!(
+                "{} should only re-export deadsync-renderer",
+                rel_path(&root, &gfx_facade_path)
+            ));
+        }
+    }
+    let renderer_src = root.join("crates/deadsync-renderer/src");
+    if renderer_src.exists() {
+        for file in rust_files(&renderer_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::assets",
+                "crate::game",
+                "crate::screens",
+                "deadsync::engine",
+                "deadsync::assets",
+                "deadsync::game",
+                "deadsync::screens",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
     }
 
     for dir in ENGINE_GFX_RENDER_SCAN_DIRS {

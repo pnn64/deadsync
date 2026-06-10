@@ -1,10 +1,10 @@
 use crate::assets::AssetManager;
-use crate::engine::gfx::Backend;
 use deadsync_platform::dirs;
 use deadsync_present::actors::TextureKeyHandle;
 use deadsync_render::{
     FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
 };
+use deadsync_renderer::Backend;
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
