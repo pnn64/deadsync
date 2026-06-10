@@ -833,6 +833,7 @@ fn audio_core_lives_in_audio_crate() {
     for file in [
         root.join("crates/deadsync-audio/src/lib.rs"),
         root.join("crates/deadsync-audio/src/ring.rs"),
+        root.join("crates/deadsync-audio/src/telemetry.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
@@ -844,6 +845,11 @@ fn audio_core_lives_in_audio_crate() {
         for token in [
             "struct SpscRingI16",
             "struct SpscRingMusicSeg",
+            "pub enum OutputTelemetryBackend",
+            "pub enum OutputTelemetryClock",
+            "pub enum OutputTimingQuality",
+            "pub enum StutterDiagAudioEventKind",
+            "pub struct StutterDiagAudioEvent",
             "std::cell::UnsafeCell",
         ] {
             let count = count_token_refs(&text, token);

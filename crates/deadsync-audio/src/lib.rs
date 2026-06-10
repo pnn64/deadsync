@@ -1,4 +1,10 @@
 pub mod ring;
+pub mod telemetry;
+
+pub use telemetry::{
+    OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality, StutterDiagAudioEvent,
+    StutterDiagAudioEventKind,
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MusicMapSeg {

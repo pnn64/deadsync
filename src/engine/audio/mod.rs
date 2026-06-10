@@ -3,8 +3,11 @@ pub mod folder;
 pub mod replaygain;
 mod resample;
 
-use deadsync_audio::MusicMapSeg;
 pub(crate) use deadsync_audio::ring as internal;
+use deadsync_audio::{
+    MusicMapSeg, OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality,
+    StutterDiagAudioEvent, StutterDiagAudioEventKind,
+};
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
 use deadsync_platform::host_time::{instant_nanos, now_nanos};
@@ -259,205 +262,6 @@ struct AudioThreadReady {
     sfx_sender: SyncSender<QueuedSfx>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum OutputTelemetryBackend {
-    Unknown = 0,
-    #[cfg(target_os = "linux")]
-    AlsaShared = 1,
-    #[cfg(target_os = "linux")]
-    AlsaExclusive = 2,
-    #[cfg(windows)]
-    WasapiShared = 1,
-    #[cfg(windows)]
-    WasapiExclusive = 2,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
-    PulseAudioShared = 3,
-    #[cfg(target_os = "freebsd")]
-    FreeBsdPcm = 1,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
-    JackShared = 4,
-    #[cfg(target_os = "macos")]
-    CoreAudioShared = 1,
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
-    PipeWireShared = 5,
-}
-
-impl OutputTelemetryBackend {
-    #[inline(always)]
-    fn from_backend_name(name: &'static str) -> Self {
-        match name {
-            #[cfg(target_os = "linux")]
-            "alsa-shared" => Self::AlsaShared,
-            #[cfg(target_os = "linux")]
-            "alsa-exclusive" => Self::AlsaExclusive,
-            #[cfg(windows)]
-            "wasapi-shared" => Self::WasapiShared,
-            #[cfg(windows)]
-            "wasapi-exclusive" => Self::WasapiExclusive,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
-            "pulse-shared" => Self::PulseAudioShared,
-            #[cfg(target_os = "freebsd")]
-            "freebsd-pcm" => Self::FreeBsdPcm,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
-            "jack-shared" => Self::JackShared,
-            #[cfg(target_os = "macos")]
-            "coreaudio-shared" => Self::CoreAudioShared,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
-            "pipewire-shared" => Self::PipeWireShared,
-            _ => Self::Unknown,
-        }
-    }
-
-    #[inline(always)]
-    fn load() -> Self {
-        match OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed) {
-            #[cfg(target_os = "linux")]
-            1 => Self::AlsaShared,
-            #[cfg(target_os = "linux")]
-            2 => Self::AlsaExclusive,
-            #[cfg(windows)]
-            1 => Self::WasapiShared,
-            #[cfg(windows)]
-            2 => Self::WasapiExclusive,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
-            3 => Self::PulseAudioShared,
-            #[cfg(target_os = "freebsd")]
-            1 => Self::FreeBsdPcm,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
-            4 => Self::JackShared,
-            #[cfg(target_os = "macos")]
-            1 => Self::CoreAudioShared,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
-            5 => Self::PipeWireShared,
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl std::fmt::Display for OutputTelemetryBackend {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            Self::Unknown => "unknown",
-            #[cfg(target_os = "linux")]
-            Self::AlsaShared => "alsa-shared",
-            #[cfg(target_os = "linux")]
-            Self::AlsaExclusive => "alsa-exclusive",
-            #[cfg(windows)]
-            Self::WasapiShared => "wasapi-shared",
-            #[cfg(windows)]
-            Self::WasapiExclusive => "wasapi-exclusive",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
-            Self::PulseAudioShared => "pulse-shared",
-            #[cfg(target_os = "freebsd")]
-            Self::FreeBsdPcm => "freebsd-pcm",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
-            Self::JackShared => "jack-shared",
-            #[cfg(target_os = "macos")]
-            Self::CoreAudioShared => "coreaudio-shared",
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
-            Self::PipeWireShared => "pipewire-shared",
-        };
-        f.write_str(label)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum OutputTelemetryClock {
-    Unknown = 0,
-    Callback = 1,
-    #[cfg(target_os = "macos")]
-    HostTime = 2,
-    #[cfg(all(unix, not(target_os = "macos")))]
-    Monotonic = 2,
-    #[cfg(all(unix, not(target_os = "macos")))]
-    MonotonicRaw = 3,
-    #[cfg(windows)]
-    DeviceQpc = 4,
-}
-
-impl OutputTelemetryClock {
-    #[inline(always)]
-    fn load() -> Self {
-        match OUTPUT_TIMING_CLOCK.load(Ordering::Relaxed) {
-            1 => Self::Callback,
-            #[cfg(target_os = "macos")]
-            2 => Self::HostTime,
-            #[cfg(all(unix, not(target_os = "macos")))]
-            2 => Self::Monotonic,
-            #[cfg(all(unix, not(target_os = "macos")))]
-            3 => Self::MonotonicRaw,
-            #[cfg(windows)]
-            4 => Self::DeviceQpc,
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl std::fmt::Display for OutputTelemetryClock {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            Self::Unknown => "unknown",
-            Self::Callback => "callback",
-            #[cfg(target_os = "macos")]
-            Self::HostTime => "host_time",
-            #[cfg(all(unix, not(target_os = "macos")))]
-            Self::Monotonic => "monotonic",
-            #[cfg(all(unix, not(target_os = "macos")))]
-            Self::MonotonicRaw => "monotonic_raw",
-            #[cfg(windows)]
-            Self::DeviceQpc => "device+qpc",
-        };
-        f.write_str(label)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum OutputTimingQuality {
-    Unknown = 0,
-    Trusted = 1,
-    Degraded = 2,
-    Fallback = 3,
-}
-
-impl OutputTimingQuality {
-    #[inline(always)]
-    fn load() -> Self {
-        match OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed) {
-            1 => Self::Trusted,
-            2 => Self::Degraded,
-            3 => Self::Fallback,
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl std::fmt::Display for OutputTimingQuality {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            Self::Unknown => "unknown",
-            Self::Trusted => "trusted",
-            Self::Degraded => "degraded",
-            Self::Fallback => "fallback",
-        };
-        f.write_str(label)
-    }
-}
-
 #[inline(always)]
 const fn output_mode_bits(mode: crate::config::AudioOutputMode) -> u8 {
     match mode {
@@ -513,54 +317,6 @@ impl OutputTimingSnapshot {
 
 const AUDIO_STUTTER_DIAG_EVENT_COUNT: usize = 64;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum StutterDiagAudioEventKind {
-    Underrun = 1,
-    CallbackGap = 2,
-    TimingSanity = 3,
-    ClockFallback = 4,
-}
-
-impl StutterDiagAudioEventKind {
-    #[inline(always)]
-    fn from_bits(bits: u8) -> Option<Self> {
-        match bits {
-            1 => Some(Self::Underrun),
-            2 => Some(Self::CallbackGap),
-            3 => Some(Self::TimingSanity),
-            4 => Some(Self::ClockFallback),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for StutterDiagAudioEventKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            Self::Underrun => "underrun",
-            Self::CallbackGap => "callback_gap",
-            Self::TimingSanity => "timing_sanity",
-            Self::ClockFallback => "clock_fallback",
-        };
-        f.write_str(label)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct StutterDiagAudioEvent {
-    pub at_host_nanos: u64,
-    pub kind: StutterDiagAudioEventKind,
-    pub value_ns: u64,
-    pub sample_rate_hz: u32,
-    pub buffer_frames: u32,
-    pub padding_frames: u32,
-    pub queued_frames: u32,
-    pub device_period_ns: u64,
-    pub estimated_output_delay_ns: u64,
-    pub timing_quality: OutputTimingQuality,
-}
-
 struct AudioDiagEventSlot {
     version: AtomicU64,
     at_host_nanos: AtomicU64,
@@ -608,12 +364,9 @@ impl AudioDiagEventSlot {
             queued_frames: self.queued_frames.load(Ordering::Relaxed),
             device_period_ns: self.device_period_ns.load(Ordering::Relaxed),
             estimated_output_delay_ns: self.estimated_output_delay_ns.load(Ordering::Relaxed),
-            timing_quality: match self.timing_quality.load(Ordering::Relaxed) {
-                1 => OutputTimingQuality::Trusted,
-                2 => OutputTimingQuality::Degraded,
-                3 => OutputTimingQuality::Fallback,
-                _ => OutputTimingQuality::Unknown,
-            },
+            timing_quality: OutputTimingQuality::from_bits(
+                self.timing_quality.load(Ordering::Relaxed),
+            ),
         };
         let version_end = self.version.load(Ordering::Acquire);
         (version_start == version_end).then_some((version_end >> 1, event))
@@ -928,7 +681,7 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
                 StutterDiagAudioEventKind::CallbackGap,
                 now_nanos(),
                 gap_ns,
-                OutputTimingQuality::load(),
+                OutputTimingQuality::from_bits(OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed)),
             );
         }
     }
@@ -1971,13 +1724,15 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     OutputTimingSnapshot {
-        backend: OutputTelemetryBackend::load(),
+        backend: OutputTelemetryBackend::from_bits(OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed)),
         requested_output_mode: output_mode_from_bits(
             OUTPUT_TIMING_REQUESTED_MODE.load(Ordering::Relaxed),
         ),
         fallback_from_native: OUTPUT_TIMING_NATIVE_FALLBACK.load(Ordering::Relaxed),
-        timing_clock: OutputTelemetryClock::load(),
-        timing_quality: OutputTimingQuality::load(),
+        timing_clock: OutputTelemetryClock::from_bits(OUTPUT_TIMING_CLOCK.load(Ordering::Relaxed)),
+        timing_quality: OutputTimingQuality::from_bits(
+            OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed),
+        ),
         sample_rate_hz: OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
         device_period_ns: OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
         stream_latency_ns: OUTPUT_TIMING_STREAM_LATENCY_NS.load(Ordering::Relaxed),
@@ -2044,7 +1799,7 @@ pub(crate) fn note_output_underrun() {
         StutterDiagAudioEventKind::Underrun,
         now_nanos(),
         0,
-        OutputTimingQuality::load(),
+        OutputTimingQuality::from_bits(OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed)),
     );
 }
 
