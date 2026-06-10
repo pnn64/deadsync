@@ -9,10 +9,12 @@ use deadsync_audio::LinuxAudioBackend;
 use deadsync_audio::OutputTimingQuality;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    ActiveSfx, AudioOutputMode, MAX_ACTIVE_SFX, MusicMapSeg, OutputBackendReady, PlaybackPosMap,
-    QueuedSfx, SfxLane, StutterDiagAudioEvent, StutterDiagAudioEventKind, f32_to_i16,
-    fallback_music_position, i16_to_f32, mix_active_sfx, mix_level_gains, music_clock_seed_enabled,
-    music_nanos_from_seconds, normalized_music_rate, push_queued_sfx,
+    ActiveSfx, AudioOutputMode, CallbackClockSource, CallbackClockWindow, MAX_ACTIVE_SFX,
+    MusicMapSeg, OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent,
+    StutterDiagAudioEventKind, f32_to_i16, fallback_stream_position_frames, i16_to_f32,
+    mix_active_sfx, mix_level_gains, music_nanos_from_seconds, normalized_music_rate,
+    push_queued_sfx,
+    stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
@@ -25,7 +27,7 @@ use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -172,30 +174,20 @@ struct MusicStream {
 
 // Global playback position tracking for the current music stream.
 // All counters are in *frames* at the device sample rate (not interleaved samples).
-static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
-static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
-static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
-static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Song-time fallback for the current/pending music stream. The precise
 // packet map is published by the audio callback, but gameplay can query the
 // clock before the first mapped packet has been consumed.
-static MUSIC_CLOCK_SEEDED: AtomicBool = AtomicBool::new(false);
-static MUSIC_CLOCK_CUT_START_BITS: AtomicU64 = AtomicU64::new(0.0f64.to_bits());
-static MUSIC_CLOCK_RATE_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 // Per-play monotonic id used to associate asynchronous ReplayGain results
 // with the track that requested them. `set_music_replaygain_if_matches` is
 // a no-op if the id no longer matches the active track, preventing a stale
 // gain value from being applied to a different song.
-static MUSIC_TRACK_ID: AtomicU64 = AtomicU64::new(0);
 // Target linear gain for the music stream. The mixer interpolates its
 // own `current_gain` toward this target across ~80 ms (RAMP_FRAMES at the
 // device sample rate) so cache-miss → cache-hit transitions don't produce
 // an audible step. Default 1.0.
-static MUSIC_TARGET_GAIN_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 // Generation counter incremented whenever a track boundary (play / stop)
 // should snap the mixer's interpolated gain to its target instantly,
 // rather than ramping across the boundary.
-static MUSIC_GAIN_SNAP_GEN: AtomicU64 = AtomicU64::new(0);
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 static SCREEN_SFX_STOP_GEN: AtomicU64 = AtomicU64::new(0);
 // Generation counter for scheduled assist ticks. Bumped on every music stream
@@ -207,63 +199,9 @@ static ASSIST_SFX_GEN: AtomicU64 = AtomicU64::new(0);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static CALLBACK_CLOCK_SEQ: AtomicU64 = AtomicU64::new(0);
-static CALLBACK_CLOCK_SOURCE: AtomicU8 = AtomicU8::new(CallbackClockSource::Instant as u8);
 // Stored as elapsed nanos + 1 from the shared process host-clock epoch; 0 means "no callback yet".
-static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
-static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
-static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
-static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
-static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
-static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
-static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
-static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
-static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
 
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
-
-#[inline(always)]
-fn seed_music_stream_clock(cut: Cut, rate: f32) {
-    MUSIC_CLOCK_CUT_START_BITS.store(cut.start_sec.to_bits(), Ordering::Relaxed);
-    MUSIC_CLOCK_RATE_BITS.store(normalized_music_rate(rate).to_bits(), Ordering::Relaxed);
-    MUSIC_CLOCK_SEEDED.store(music_clock_seed_enabled(cut.start_sec), Ordering::Release);
-}
-
-#[inline(always)]
-fn clear_music_stream_clock_seed() {
-    MUSIC_CLOCK_CUT_START_BITS.store(0.0f64.to_bits(), Ordering::Relaxed);
-    MUSIC_CLOCK_RATE_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
-    MUSIC_CLOCK_SEEDED.store(false, Ordering::Release);
-}
-
-#[inline(always)]
-fn seeded_music_position(stream_seconds: f32) -> Option<(f32, f32)> {
-    if !MUSIC_CLOCK_SEEDED.load(Ordering::Acquire) {
-        return None;
-    }
-    let cut_start_sec = f64::from_bits(MUSIC_CLOCK_CUT_START_BITS.load(Ordering::Relaxed));
-    let rate = f32::from_bits(MUSIC_CLOCK_RATE_BITS.load(Ordering::Relaxed));
-    Some(fallback_music_position(stream_seconds, cut_start_sec, rate))
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-enum CallbackClockSource {
-    Instant = 1,
-    #[cfg(windows)]
-    Qpc = 2,
-}
-
-impl CallbackClockSource {
-    #[inline(always)]
-    fn load() -> Self {
-        match CALLBACK_CLOCK_SOURCE.load(Ordering::Relaxed) {
-            #[cfg(windows)]
-            2 => Self::Qpc,
-            _ => Self::Instant,
-        }
-    }
-}
 
 #[inline(always)]
 pub(crate) fn timing_diag_enabled() -> bool {
@@ -272,7 +210,7 @@ pub(crate) fn timing_diag_enabled() -> bool {
 
 #[inline(always)]
 pub(crate) fn timing_diag_last_callback_gap_ns() -> u64 {
-    AUDIO_TIMING_DIAG_LAST_GAP_NS.load(Ordering::Relaxed)
+    deadsync_audio::timing_diag_last_callback_gap_ns()
 }
 
 #[inline(always)]
@@ -299,17 +237,7 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
     if anchor_nanos == 0 || (!timing_diag && !stutter_diag) {
         return;
     }
-    let source_id = source as u8;
-    let prev_source = AUDIO_TIMING_DIAG_LAST_SOURCE.swap(source_id, Ordering::Relaxed);
-    let prev_nanos = if prev_source == source_id {
-        AUDIO_TIMING_DIAG_LAST_NANOS.swap(anchor_nanos, Ordering::Relaxed)
-    } else {
-        AUDIO_TIMING_DIAG_LAST_NANOS.store(anchor_nanos, Ordering::Relaxed);
-        0
-    };
-    if prev_nanos != 0 && anchor_nanos >= prev_nanos {
-        let gap_ns = anchor_nanos - prev_nanos;
-        AUDIO_TIMING_DIAG_LAST_GAP_NS.store(gap_ns, Ordering::Relaxed);
+    if let Some(gap_ns) = deadsync_audio::note_timing_diag_callback_gap(anchor_nanos, source) {
         if stutter_diag && gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns() {
             deadsync_audio::record_stutter_diag_event(
                 StutterDiagAudioEventKind::CallbackGap,
@@ -319,17 +247,6 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
             );
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct CallbackClockWindow {
-    total_frames: u64,
-    last_nanos: u64,
-    last_base_frames: u64,
-    last_callback_frames: u64,
-    prev_nanos: u64,
-    prev_base_frames: u64,
-    prev_callback_frames: u64,
 }
 
 static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
@@ -445,8 +362,8 @@ pub fn play_preloaded_assist_tick(path: &str) {
 
 /// Plays a preloaded gameplay assist tick scheduled to become audible at an
 /// absolute stream frame (see [`assist_tick_stream_frame_for_music_seconds`]).
-/// Because the target frame lies on the same `MUSIC_TOTAL_FRAMES` timeline the
-/// mixer writes against, output latency is compensated implicitly. Falls back to
+/// Because the target frame lies on the same audio stream timeline the mixer
+/// writes against, output latency is compensated implicitly. Falls back to
 /// immediate playback when `target_stream_frame == 0`.
 pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
     if target_stream_frame == 0 {
@@ -602,14 +519,10 @@ fn clear_music_pos_map() {
 fn reset_music_stream_clock() {
     // Reset immediately on the caller thread so async command handoff can't
     // leak the previous track's stream position into gameplay timing.
-    let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
-    MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
-    MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
-    MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
+    deadsync_audio::reset_music_stream_clock_state();
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     ASSIST_SFX_GEN.fetch_add(1, Ordering::AcqRel);
-    clear_music_stream_clock_seed();
     clear_music_pos_map();
 }
 
@@ -627,93 +540,6 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{CallbackClockWindow, stream_position_frames_from_window};
-
-    #[test]
-    fn stream_clock_extrapolates_back_before_future_callback_anchor() {
-        let frames = stream_position_frames_from_window(
-            48_000,
-            1_000,
-            7_000_000,
-            CallbackClockWindow {
-                total_frames: 1_720,
-                last_nanos: 15_000_001,
-                last_base_frames: 1_480,
-                last_callback_frames: 240,
-                prev_nanos: 10_000_001,
-                prev_base_frames: 1_240,
-                prev_callback_frames: 240,
-            },
-        );
-
-        assert!((frames - 96.0).abs() <= 1e-6, "frames={frames}");
-    }
-}
-
-#[inline(always)]
-fn stream_position_frames_from_callback(
-    sample_rate: u32,
-    start_frame: u64,
-    at_nanos: u64,
-    cb_nanos_plus_one: u64,
-    base_frames: u64,
-    buf_frames: u64,
-) -> Option<f64> {
-    if cb_nanos_plus_one == 0 {
-        return None;
-    }
-    let cb_nanos = cb_nanos_plus_one.saturating_sub(1);
-    if at_nanos < cb_nanos {
-        return None;
-    }
-    let dt = (at_nanos.saturating_sub(cb_nanos) as f64) * 1e-9;
-    let frames_since_cb = (dt * sample_rate as f64).clamp(0.0, buf_frames as f64);
-    let frames_now = base_frames as f64 + frames_since_cb;
-    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
-}
-
-#[inline(always)]
-fn stream_position_frames_from_anchor_pair(
-    start_frame: u64,
-    at_nanos: u64,
-    earlier_nanos_plus_one: u64,
-    earlier_base_frames: u64,
-    later_nanos_plus_one: u64,
-    later_base_frames: u64,
-) -> Option<f64> {
-    if earlier_nanos_plus_one == 0 || later_nanos_plus_one == 0 {
-        return None;
-    }
-    let earlier_nanos = earlier_nanos_plus_one.saturating_sub(1);
-    let later_nanos = later_nanos_plus_one.saturating_sub(1);
-    if later_nanos <= earlier_nanos || later_base_frames <= earlier_base_frames {
-        return None;
-    }
-    let nanos_span = later_nanos.saturating_sub(earlier_nanos) as f64;
-    if nanos_span <= 0.0 {
-        return None;
-    }
-    let frames_per_ns = (later_base_frames - earlier_base_frames) as f64 / nanos_span;
-    if !frames_per_ns.is_finite() || frames_per_ns <= 0.0 {
-        return None;
-    }
-    let dt_ns = at_nanos as f64 - later_nanos as f64;
-    let frames_now = later_base_frames as f64 + dt_ns * frames_per_ns;
-    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
-}
-
-#[inline(always)]
-fn begin_callback_clock_write() {
-    CALLBACK_CLOCK_SEQ.fetch_add(1, Ordering::AcqRel);
-}
-
-#[inline(always)]
-fn end_callback_clock_write() {
-    CALLBACK_CLOCK_SEQ.fetch_add(1, Ordering::Release);
-}
-
 #[inline(always)]
 fn publish_callback_window_start_nanos(
     total_before: u64,
@@ -721,62 +547,16 @@ fn publish_callback_window_start_nanos(
     source: CallbackClockSource,
 ) {
     note_timing_diag_callback_gap(anchor_nanos, source);
-    begin_callback_clock_write();
-    CALLBACK_CLOCK_SOURCE.store(source as u8, Ordering::Relaxed);
-    PREV_CALLBACK_BASE_FRAMES.store(
-        LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    PREV_CALLBACK_FRAMES.store(
-        LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    PREV_CALLBACK_ELAPSED_NANOS.store(
-        LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
-    LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-    LAST_CALLBACK_ELAPSED_NANOS.store(
-        anchor_nanos.min(u64::MAX - 1).saturating_add(1),
-        Ordering::Relaxed,
-    );
-    end_callback_clock_write();
+    deadsync_audio::publish_callback_window_start_nanos(total_before, anchor_nanos, source);
 }
 
 #[inline(always)]
 fn publish_callback_window_end(total_before: u64, frames: u64) {
-    begin_callback_clock_write();
-    LAST_CALLBACK_FRAMES.store(frames, Ordering::Relaxed);
-    MUSIC_TOTAL_FRAMES.store(total_before.saturating_add(frames), Ordering::Relaxed);
-    end_callback_clock_write();
+    deadsync_audio::publish_callback_window_end(total_before, frames);
 }
 
 fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
-    loop {
-        let seq_start = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
-        if seq_start & 1 != 0 {
-            std::hint::spin_loop();
-            continue;
-        }
-        let source = CallbackClockSource::load();
-        let valid_at = Instant::now();
-        let at_nanos = current_callback_clock_nanos(valid_at, source);
-        let window = CallbackClockWindow {
-            total_frames: MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed),
-            last_nanos: LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-            last_base_frames: LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-            last_callback_frames: LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-            prev_nanos: PREV_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-            prev_base_frames: PREV_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-            prev_callback_frames: PREV_CALLBACK_FRAMES.load(Ordering::Relaxed),
-        };
-        let seq_end = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
-        if seq_start == seq_end {
-            let at_nanos = at_nanos.unwrap_or(window.last_nanos.saturating_sub(1));
-            return (valid_at, at_nanos, source, window);
-        }
-    }
+    deadsync_audio::load_callback_clock_snapshot_now(current_callback_clock_nanos)
 }
 
 #[inline(always)]
@@ -786,34 +566,9 @@ fn stream_position_frames_from_window(
     at_nanos: u64,
     window: CallbackClockWindow,
 ) -> f64 {
-    if let Some(frames) = stream_position_frames_from_callback(
-        sample_rate,
-        start_frame,
-        at_nanos,
-        window.last_nanos,
-        window.last_base_frames,
-        window.last_callback_frames,
-    ) {
-        return frames;
-    }
-    if let Some(frames) = stream_position_frames_from_callback(
-        sample_rate,
-        start_frame,
-        at_nanos,
-        window.prev_nanos,
-        window.prev_base_frames,
-        window.prev_callback_frames,
-    ) {
-        return frames;
-    }
-    if let Some(frames) = stream_position_frames_from_anchor_pair(
-        start_frame,
-        at_nanos,
-        window.prev_nanos,
-        window.prev_base_frames,
-        window.last_nanos,
-        window.last_base_frames,
-    ) {
+    if let Some(frames) =
+        audio_stream_position_frames_from_window(sample_rate, start_frame, at_nanos, window)
+    {
         return frames;
     }
     if timing_diag_enabled() {
@@ -831,7 +586,7 @@ fn stream_position_frames_from_window(
             start_frame,
         );
     }
-    window.total_frames.saturating_sub(start_frame) as f64
+    fallback_stream_position_frames(start_frame, window)
 }
 
 fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
@@ -848,7 +603,7 @@ fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f
 }
 
 /// Maps a music position (seconds, pre-global-offset stream time) to the
-/// absolute stream frame on the `MUSIC_TOTAL_FRAMES` timeline at which it will
+/// absolute audio stream frame timeline at which it will
 /// be audible. Returns `None` when there is no usable mapping or the result is
 /// implausible (caller should then fall back to immediate playback).
 ///
@@ -868,7 +623,7 @@ pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<
     if !track_frame.is_finite() || track_frame < 0.0 {
         return None;
     }
-    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+    let start = deadsync_audio::music_track_start_frame();
     Some(start.saturating_add(track_frame.round() as u64))
 }
 
@@ -876,25 +631,23 @@ pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = normalized_music_rate(rate);
     reset_music_stream_clock();
-    seed_music_stream_clock(cut, rate);
+    deadsync_audio::seed_music_stream_clock(cut.start_sec, rate);
 
     // Resolve a per-play track id and decide on the initial ReplayGain
     // value. If the user has the experimental ReplayGain setting on, and we
     // already have a cached/computed value, apply it immediately; otherwise
     // queue a background analysis job. If the setting is off, force unity
     // gain so a previous track's value doesn't leak forward.
-    let track_id = MUSIC_TRACK_ID
-        .fetch_add(1, Ordering::AcqRel)
-        .wrapping_add(1);
+    let track_id = deadsync_audio::next_music_track_id();
     let initial_gain: f32 = if crate::config::get().enable_replaygain {
         replaygain::get_or_queue_gain_linear(&path, track_id).unwrap_or(1.0)
     } else {
         1.0
     };
-    MUSIC_TARGET_GAIN_BITS.store(initial_gain.to_bits(), Ordering::Relaxed);
+    deadsync_audio::set_music_target_gain(initial_gain);
     // Snap to the new target at the track boundary so the previous track's
     // gain doesn't audibly bleed into the start of this one.
-    MUSIC_GAIN_SNAP_GEN.fetch_add(1, Ordering::Release);
+    deadsync_audio::snap_music_gain_generation();
 
     let _ = ENGINE
         .command_sender
@@ -918,19 +671,14 @@ pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
 /// still corresponds to the currently active music track. Called by
 /// [`replaygain`]; safe to call from any thread.
 pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
-    let active_id = MUSIC_TRACK_ID.load(Ordering::Acquire);
+    let active_id = deadsync_audio::active_music_track_id();
     if active_id != track_id {
         return;
     }
-    if !MUSIC_TRACK_ACTIVE.load(Ordering::Acquire) {
+    if !deadsync_audio::music_track_active() {
         return;
     }
-    let gain = if gain_linear.is_finite() && gain_linear > 0.0 {
-        gain_linear
-    } else {
-        1.0
-    };
-    MUSIC_TARGET_GAIN_BITS.store(gain.to_bits(), Ordering::Relaxed);
+    deadsync_audio::set_music_target_gain(gain_linear);
 }
 
 /// Called from the config layer when the user toggles the ReplayGain
@@ -938,22 +686,22 @@ pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
 /// audible without requiring track restart.
 pub fn on_replaygain_setting_changed(enabled: bool) {
     if !enabled {
-        MUSIC_TARGET_GAIN_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
+        deadsync_audio::reset_music_target_gain();
     }
 }
 
 /// Stops the currently playing music track.
 pub fn stop_music() {
     reset_music_stream_clock();
-    MUSIC_TARGET_GAIN_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
-    MUSIC_GAIN_SNAP_GEN.fetch_add(1, Ordering::Release);
+    deadsync_audio::reset_music_target_gain();
+    deadsync_audio::snap_music_gain_generation();
     let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
 }
 
 /// Adjusts the playback rate for the current music stream, if any.
 pub fn set_music_rate(rate: f32) {
     let rate = normalized_music_rate(rate);
-    MUSIC_CLOCK_RATE_BITS.store(rate.to_bits(), Ordering::Relaxed);
+    deadsync_audio::set_music_clock_rate(rate);
     let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
 }
 
@@ -988,7 +736,7 @@ fn music_stream_clock_snapshot_at_nanos(
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
         match lookup_music_position(stream_frames, sample_rate) {
             Some((music_seconds, slope)) => (music_seconds, slope, true),
-            None => match seeded_music_position(stream_seconds) {
+            None => match deadsync_audio::seeded_music_position(stream_seconds) {
                 Some((music_seconds, slope)) => (music_seconds, slope, true),
                 None => (stream_seconds, 1.0, false),
             },
@@ -1014,9 +762,9 @@ fn music_stream_clock_snapshot_at_nanos(
 /// Returns the current stream position and the `Instant` it is valid for.
 pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     let sample_rate = ENGINE.device_sample_rate.max(1);
-    let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
+    let has_started = deadsync_audio::music_track_has_started();
     if !has_started {
-        if let Some((music_seconds, slope)) = seeded_music_position(0.0) {
+        if let Some((music_seconds, slope)) = deadsync_audio::seeded_music_position(0.0) {
             return MusicStreamClockSnapshot {
                 stream_seconds: 0.0,
                 music_seconds,
@@ -1037,7 +785,7 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
             valid_at_host_nanos: 0,
         };
     }
-    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+    let start = deadsync_audio::music_track_start_frame();
     let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
     music_stream_clock_snapshot_at_nanos(sample_rate, start, valid_at, at_nanos, source, window)
 }
@@ -1144,12 +892,11 @@ struct RenderState {
     active_music_map: Option<MusicMapSeg>,
     music_map_generation: u64,
     /// Current music gain as seen by the mixer. Ramps toward
-    /// `MUSIC_TARGET_GAIN_BITS` over [`MUSIC_GAIN_RAMP_FRAMES`] frames so
-    /// asynchronous ReplayGain results don't produce an audible step.
+    /// the shared music gain target over [`MUSIC_GAIN_RAMP_FRAMES`] frames
+    /// so asynchronous ReplayGain results don't produce an audible step.
     music_gain_current: f32,
-    /// Generation of `MUSIC_GAIN_SNAP_GEN` last observed; when it changes
-    /// (e.g. on a track boundary), the mixer snaps `music_gain_current`
-    /// straight to the target instead of ramping.
+    /// Gain snap generation last observed; when it changes, the mixer snaps
+    /// `music_gain_current` straight to the target instead of ramping.
     music_gain_snap_seen: u64,
 }
 
@@ -1176,8 +923,8 @@ impl RenderState {
             played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
             active_music_map: None,
             music_map_generation: MUSIC_MAP_GEN.load(Ordering::Acquire),
-            music_gain_current: f32::from_bits(MUSIC_TARGET_GAIN_BITS.load(Ordering::Relaxed)),
-            music_gain_snap_seen: MUSIC_GAIN_SNAP_GEN.load(Ordering::Acquire),
+            music_gain_current: deadsync_audio::music_target_gain(),
+            music_gain_snap_seen: deadsync_audio::music_gain_snap_generation(),
         }
     }
 
@@ -1188,10 +935,10 @@ impl RenderState {
             self.active_music_map = None;
             self.music_map_generation = map_generation;
         }
-        if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
+        if !deadsync_audio::music_track_active_relaxed() {
             self.active_music_map = None;
         }
-        let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+        let total_before = deadsync_audio::music_total_frames();
         publish_callback_window_start_nanos(total_before, anchor_nanos, source);
         total_before
     }
@@ -1220,17 +967,13 @@ impl RenderState {
     fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
         self.ensure_mix_buffers(len);
         let popped = internal::callback_fill_from_ring_i16(&self.music_ring, &mut self.mix_i16);
-        if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
-            && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
-            && popped > 0
-        {
-            MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
-            MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
+        if popped > 0 {
+            deadsync_audio::mark_music_track_started(total_before);
         }
 
         let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
-        let target_gain = f32::from_bits(MUSIC_TARGET_GAIN_BITS.load(Ordering::Relaxed));
-        let snap_gen = MUSIC_GAIN_SNAP_GEN.load(Ordering::Acquire);
+        let target_gain = deadsync_audio::music_target_gain();
+        let snap_gen = deadsync_audio::music_gain_snap_generation();
         if snap_gen != self.music_gain_snap_seen {
             self.music_gain_current = target_gain;
             self.music_gain_snap_seen = snap_gen;
@@ -1292,14 +1035,14 @@ impl RenderState {
         } else {
             popped_samples / self.device_channels
         };
-        if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
-            && MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+        if deadsync_audio::music_track_active_relaxed()
+            && deadsync_audio::music_track_has_started()
             && popped_frames < frames
         {
             note_output_underrun();
         }
         let track_frames_before =
-            total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
+            total_before.saturating_sub(deadsync_audio::music_track_start_frame());
         if popped_frames > 0 {
             commit_played_music_map(
                 track_frames_before as i64,
@@ -2204,8 +1947,7 @@ fn audio_manager_thread(
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
-                MUSIC_TRACK_ACTIVE.store(true, Ordering::Relaxed);
-                MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Relaxed);
+                deadsync_audio::activate_music_track();
                 let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
                 music_stream = Some(resample::spawn_music_decoder_thread(
                     path,
@@ -2222,8 +1964,7 @@ fn audio_manager_thread(
                     let _ = old.thread.join();
                 }
                 internal::ring_clear(&music_ring);
-                MUSIC_TRACK_ACTIVE.store(false, Ordering::Relaxed);
-                MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Relaxed);
+                deadsync_audio::stop_music_track();
             }
             Ok(AudioCommand::SetMusicRate(new_rate)) => {
                 if let Some(ms) = &music_stream {
