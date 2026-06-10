@@ -174,6 +174,20 @@ const AUDIO_CORE_FORBIDDEN_TOKENS: &[&str] = &[
     "log::",
 ];
 
+const AUDIO_DECODE_FORBIDDEN_TOKENS: &[&str] = &[
+    "crate::engine",
+    "crate::assets",
+    "crate::config",
+    "crate::game",
+    "crate::screens",
+    "deadsync_platform",
+    "deadsync_present",
+    "deadsync_render",
+    "std::sync::mpsc",
+    "Mutex",
+    "log::",
+];
+
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/engine",
     "src/app",
@@ -881,6 +895,61 @@ fn audio_core_lives_in_audio_crate() {
     assert!(
         failures.is_empty(),
         "audio core primitives should live in deadsync-audio:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn audio_decode_helpers_live_in_decode_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-audio-decode/src/lib.rs"),
+        root.join("crates/deadsync-audio-decode/src/resample.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    let engine_resample = root.join("src/engine/audio/resample.rs");
+    if let Ok(text) = fs::read_to_string(&engine_resample) {
+        for token in [
+            "struct PlanarAccum",
+            "fn resampler_params",
+            "fn write_resampler_output",
+            "PLANAR_COMPACT_THRESHOLD_FRAMES",
+        ] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still defines decode helper token {token} {count} times",
+                    rel_path(&root, &engine_resample)
+                ));
+            }
+        }
+    }
+
+    let decode_src = root.join("crates/deadsync-audio-decode/src");
+    if decode_src.exists() {
+        for file in rust_files(&decode_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden audio-decode token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "audio decode helpers should live in deadsync-audio-decode:\n{}",
         failures.join("\n")
     );
 }

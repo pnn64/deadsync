@@ -1,20 +1,19 @@
 use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
 use deadsync_audio_decode as decode;
+use deadsync_audio_decode::resample::{
+    OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, resampler_params,
+    write_resampler_output,
+};
 #[cfg(windows)]
 use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{debug, error, warn};
-use rubato::{
-    Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
-};
+use rubato::{Resampler, SincFixedOut};
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 
-const OUT_FRAMES_PER_CALL: usize = 256;
-const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
-const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
 const SILENCE_CHUNK_FRAMES: usize = 2048;
 const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
@@ -67,160 +66,6 @@ fn push_music_block_with_map(
         next_music_sec += chunk_frames as f64 * music_sec_per_frame;
     }
     Ok(next_music_sec)
-}
-
-struct PlanarAccum {
-    channels: Vec<Vec<f32>>,
-    start_frame: usize,
-}
-
-impl PlanarAccum {
-    fn new(channels: usize, capacity_frames: usize) -> Self {
-        let mut planar = Vec::with_capacity(channels);
-        for _ in 0..channels {
-            planar.push(Vec::with_capacity(capacity_frames));
-        }
-        Self {
-            channels: planar,
-            start_frame: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn available_frames(&self) -> usize {
-        self.channels
-            .first()
-            .map_or(0, |channel| channel.len().saturating_sub(self.start_frame))
-    }
-
-    #[inline(always)]
-    fn is_empty(&self) -> bool {
-        self.available_frames() == 0
-    }
-
-    fn push_i16_interleaved(&mut self, interleaved: &[i16], channels: usize) {
-        if interleaved.is_empty() || channels == 0 {
-            return;
-        }
-        debug_assert_eq!(channels, self.channels.len());
-        let frames = interleaved.len() / channels;
-        if frames == 0 {
-            return;
-        }
-        for channel in &mut self.channels {
-            channel.reserve(frames);
-        }
-        for frame in interleaved.chunks_exact(channels) {
-            for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
-                channel.push(f32::from(*sample) / 32768.0);
-            }
-        }
-    }
-
-    fn consume_frames(&mut self, frames: usize) {
-        let total_frames = self.channels.first().map_or(0, Vec::len);
-        self.start_frame = (self.start_frame + frames).min(total_frames);
-        self.compact_if_needed();
-    }
-
-    fn clear(&mut self) {
-        self.start_frame = 0;
-        for channel in &mut self.channels {
-            channel.clear();
-        }
-    }
-
-    fn compact_if_needed(&mut self) {
-        if self.start_frame == 0 {
-            return;
-        }
-        let total_frames = self.channels.first().map_or(0, Vec::len);
-        let remaining_frames = total_frames.saturating_sub(self.start_frame);
-        if remaining_frames == 0 {
-            self.clear();
-            return;
-        }
-        if self.start_frame < PLANAR_COMPACT_THRESHOLD_FRAMES && self.start_frame * 2 < total_frames
-        {
-            return;
-        }
-        for channel in &mut self.channels {
-            channel.copy_within(self.start_frame.., 0);
-            channel.truncate(remaining_frames);
-        }
-        self.start_frame = 0;
-    }
-}
-
-#[inline(always)]
-fn resampler_params() -> SincInterpolationParameters {
-    SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: 0.95,
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 128,
-        window: WindowFunction::BlackmanHarris2,
-    }
-}
-
-fn write_resampler_output(
-    out: &[Vec<f32>],
-    produced_frames: usize,
-    out_ch: usize,
-    out_tmp: &mut Vec<i16>,
-) -> usize {
-    if out.is_empty() || produced_frames == 0 || out_ch == 0 {
-        out_tmp.clear();
-        return 0;
-    }
-    if out.len() == 2 && out_ch == 2 {
-        let produced_frames = produced_frames.min(out[0].len()).min(out[1].len());
-        let produced_samples = produced_frames * 2;
-        if out_tmp.len() < produced_samples {
-            out_tmp.resize(produced_samples, 0);
-        } else {
-            out_tmp.truncate(produced_samples);
-        }
-        for frame in 0..produced_frames {
-            let base = frame * 2;
-            out_tmp[base] = (out[0][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-            out_tmp[base + 1] = (out[1][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-        }
-        return produced_frames;
-    }
-    if out.len() == 1 && out_ch == 2 {
-        let produced_frames = produced_frames.min(out[0].len());
-        let produced_samples = produced_frames * 2;
-        if out_tmp.len() < produced_samples {
-            out_tmp.resize(produced_samples, 0);
-        } else {
-            out_tmp.truncate(produced_samples);
-        }
-        for frame in 0..produced_frames {
-            let sample = (out[0][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-            let base = frame * 2;
-            out_tmp[base] = sample;
-            out_tmp[base + 1] = sample;
-        }
-        return produced_frames;
-    }
-    let produced_frames = produced_frames
-        .min(out[0].len())
-        .min(out.iter().map(Vec::len).min().unwrap_or(0));
-    let produced_samples = produced_frames.saturating_mul(out_ch);
-    if out_tmp.len() < produced_samples {
-        out_tmp.resize(produced_samples, 0);
-    } else {
-        out_tmp.truncate(produced_samples);
-    }
-    for frame in 0..produced_frames {
-        let base = frame * out_ch;
-        for channel in 0..out_ch {
-            let sample = out[channel % out.len()][frame];
-            out_tmp[base + channel] = (sample * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-        }
-    }
-    produced_frames
 }
 
 fn write_channel_mapped_i16(

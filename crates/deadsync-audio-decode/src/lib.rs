@@ -2,6 +2,7 @@ pub mod flac;
 pub mod mp3;
 pub mod ogg_vorbis;
 pub mod opus;
+pub mod resample;
 pub mod wav;
 
 use std::path::Path;
