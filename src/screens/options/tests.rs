@@ -260,6 +260,55 @@ fn main_options_left_right_move_rows_like_up_down() {
 }
 
 #[test]
+fn link_row_pages_lr_moves_rows_in_standard_mode() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+
+    // Every row on the Input launcher page is an "Open" link, so Left/Right
+    // navigates up/down exactly like the main options menu.
+    assert_eq!(state.sub_selected, 0);
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    assert_eq!(state.sub_selected, 1);
+    press(&mut state, &asset_manager, VirtualAction::p1_left);
+    assert_eq!(state.sub_selected, 0);
+}
+
+#[test]
+fn value_rows_keep_left_right_for_adjustment() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MasterVolume);
+
+    // Master Volume's single choice is a numeric placeholder, not a link:
+    // Left adjusts the value and must not move the cursor.
+    let row_before = state.sub_selected;
+    let volume_before = state.master_volume_pct;
+    press(&mut state, &asset_manager, VirtualAction::p1_left);
+    assert_eq!(state.sub_selected, row_before);
+    assert!(state.master_volume_pct < volume_before);
+}
+
+#[test]
+fn link_row_lr_release_clears_the_nav_hold() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+
+    // Press on a link row arms hold-to-scroll; the release must clear it even
+    // though the cursor moved to a different row in between.
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    assert_eq!(state.nav_key_held_direction, Some(NavDirection::Down));
+    handle_input(
+        &mut state,
+        &asset_manager,
+        &input_event(VirtualAction::p1_right, false),
+    );
+    assert_eq!(state.nav_key_held_direction, None);
+}
+
+#[test]
 fn input_launcher_three_key_lr_moves_rows_like_service_menu() {
     let asset_manager = AssetManager::new();
     let mut state = init();
