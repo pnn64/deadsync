@@ -1,11 +1,11 @@
-use super::telemetry::{
-    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
-};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
+};
+use deadsync_audio_backend_native::telemetry::{
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use libloading::Library;

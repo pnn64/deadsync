@@ -9,7 +9,7 @@ fn stutter_diag_enabled() -> bool {
 }
 
 #[inline(always)]
-pub(crate) fn publish_output_timing(
+pub fn publish_output_timing(
     sample_rate_hz: u32,
     device_period_ns: u64,
     stream_latency_ns: u64,
@@ -31,23 +31,23 @@ pub(crate) fn publish_output_timing(
 
 #[inline(always)]
 #[cfg(unix)]
-pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
+pub fn publish_output_timing_quality(quality: OutputTimingQuality) {
     deadsync_audio::publish_output_timing_quality(quality);
 }
 
 #[inline(always)]
-pub(crate) fn note_output_underrun() {
+pub fn note_output_underrun() {
     deadsync_audio::note_output_underrun(now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
 #[cfg(unix)]
-pub(crate) fn note_output_clock_fallback() {
+pub fn note_output_clock_fallback() {
     deadsync_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
-pub(crate) fn report_audio_render_callback(result: AudioRenderCallbackResult) {
+pub fn report_audio_render_callback(result: AudioRenderCallbackResult) {
     if result.callback_gap_ns != 0
         && stutter_diag_enabled()
         && result.callback_gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns()

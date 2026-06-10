@@ -872,6 +872,23 @@ fn audio_core_lives_in_audio_crate() {
         }
     }
 
+    for file in [
+        root.join("crates/deadsync-audio-backend-native/Cargo.toml"),
+        root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    if root.join("src/engine/audio/backends/telemetry.rs").exists() {
+        failures.push(
+            "src/engine/audio/backends/telemetry.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+
     let engine_audio = root.join("src/engine/audio/mod.rs");
     if let Ok(text) = fs::read_to_string(&engine_audio) {
         for token in [
@@ -994,7 +1011,11 @@ fn audio_core_lives_in_audio_crate() {
                 continue;
             }
             let text = fs::read_to_string(&file).expect("backend source file should be readable");
-            for token in ["super::super", "crate::engine::audio::internal"] {
+            for token in [
+                "super::super",
+                "crate::engine::audio::internal",
+                "super::telemetry",
+            ] {
                 if text.contains(token) {
                     failures.push(format!(
                         "{rel} should import backend contracts directly instead of {token}"

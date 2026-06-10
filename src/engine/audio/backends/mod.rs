@@ -13,6 +13,5 @@ pub mod linux_pipewire;
 pub mod linux_pulse;
 #[cfg(target_os = "macos")]
 pub mod macos_coreaudio;
-pub(crate) mod telemetry;
 #[cfg(windows)]
 pub mod windows_wasapi;

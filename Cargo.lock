@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.695"
+version = "0.4.696"
 dependencies = [
  "alsa",
  "bincode",
@@ -981,6 +981,7 @@ dependencies = [
  "coreaudio-rs",
  "deadsync-audio",
  "deadsync-audio-analysis",
+ "deadsync-audio-backend-native",
  "deadsync-audio-decode",
  "deadsync-chart",
  "deadsync-core",
@@ -1059,6 +1060,15 @@ dependencies = [
  "deadsync-audio-decode",
  "ebur128",
  "twox-hash",
+]
+
+[[package]]
+name = "deadsync-audio-backend-native"
+version = "0.1.0"
+dependencies = [
+ "deadsync-audio",
+ "deadsync-platform",
+ "log",
 ]
 
 [[package]]
