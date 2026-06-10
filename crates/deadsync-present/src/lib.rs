@@ -4,3 +4,4 @@ pub mod cache;
 pub mod color;
 pub mod density;
 pub mod runtime;
+pub mod space;

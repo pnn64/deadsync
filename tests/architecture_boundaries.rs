@@ -126,6 +126,7 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/color.rs",
     "src/engine/present/density.rs",
     "src/engine/present/runtime.rs",
+    "src/engine/space.rs",
 ];
 
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
@@ -938,7 +939,10 @@ fn present_model_lives_in_present_crate() {
 
     for file in ENGINE_PRESENT_EXTRACTED_FILES {
         let path = root.join(file);
-        if path.exists() {
+        let is_space_facade = *file == "src/engine/space.rs"
+            && fs::read_to_string(&path)
+                .is_ok_and(|text| text.trim() == "pub use deadsync_present::space::*;");
+        if path.exists() && !is_space_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)

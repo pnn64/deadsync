@@ -1,11 +1,12 @@
 use crate::assets;
-use crate::engine::present::actors::{self, SizeSpec};
-use crate::engine::present::{anim, font};
-use crate::engine::space::Metrics;
+use crate::engine::present::font;
+use deadsync_present::actors::{self, SizeSpec};
+use deadsync_present::{anim, space};
 use deadsync_render as renderer;
 use deadsync_render::{BlendMode, RenderList, RenderObject};
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
+use space::Metrics;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
@@ -136,7 +137,7 @@ pub fn build_screen_cached_with_scratch(
     // every camera in clip space. This single global point
     // covers the base camera, any custom pushed cameras, and screenshots, and is
     // applied live without rebuilding projections.
-    if let Some(centering) = crate::engine::space::current_centering_matrix() {
+    if let Some(centering) = space::current_centering_matrix() {
         for cam in &mut cameras {
             *cam = centering * *cam;
         }
@@ -4366,11 +4367,11 @@ mod tests {
         sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::assets;
-    use crate::engine::present::actors::{
+    use crate::engine::present::font::{Font, Glyph};
+    use deadsync_present::actors::{
         Actor, SizeSpec, SpriteSource, TextAlign, TextAttribute, TextContent,
     };
-    use crate::engine::present::font::{Font, Glyph};
-    use crate::engine::space::Metrics;
+    use deadsync_present::space::Metrics;
     use deadsync_render::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
         SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
