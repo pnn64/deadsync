@@ -119,6 +119,15 @@ const ENGINE_GFX_RENDER_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
+    "src/engine/present/actors.rs",
+    "src/engine/present/anim.rs",
+    "src/engine/present/cache.rs",
+    "src/engine/present/color.rs",
+    "src/engine/present/density.rs",
+    "src/engine/present/runtime.rs",
+];
+
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "display",
     "host_time",
@@ -918,6 +927,59 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
     assert!(
         failures.is_empty(),
         "render contract should be imported from deadsync_render:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn present_model_lives_in_present_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in ENGINE_PRESENT_EXTRACTED_FILES {
+        let path = root.join(file);
+        if path.exists() {
+            failures.push(format!(
+                "{} still exists; use deadsync-present",
+                rel_path(&root, &path)
+            ));
+        }
+    }
+
+    let present_crate = root.join("crates/deadsync-present/src/lib.rs");
+    if !present_crate.exists() {
+        failures.push(format!("{} is missing", rel_path(&root, &present_crate)));
+    }
+
+    let present_src = root.join("crates/deadsync-present/src");
+    if present_src.exists() {
+        for file in rust_files(&present_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::assets",
+                "crate::game",
+                "crate::screens",
+                "winit::",
+                "wgpu::",
+                "glow::",
+                "use ash::",
+                "ash::vk",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "presentation model should live in deadsync-present:\n{}",
         failures.join("\n")
     );
 }

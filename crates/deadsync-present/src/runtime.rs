@@ -4,7 +4,7 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-use crate::engine::present::anim::{Step, TweenSeq, TweenState};
+use crate::anim::{Step, TweenSeq, TweenState};
 use twox_hash::XxHash64;
 
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
@@ -142,7 +142,7 @@ pub fn clear_all() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::present::anim;
+    use crate::anim;
 
     fn reset_registry(frame: u64) {
         REG.with(|r| {

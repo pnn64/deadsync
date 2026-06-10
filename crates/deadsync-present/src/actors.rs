@@ -1,4 +1,4 @@
-use crate::engine::present::anim;
+use crate::anim;
 use deadsync_render::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;

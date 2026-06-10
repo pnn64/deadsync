@@ -1,9 +1,22 @@
-pub mod actors;
-pub mod anim;
-pub mod cache;
-pub mod color;
+pub use deadsync_present::{actors, anim, cache, color, density, runtime};
+
 pub mod compose;
-pub mod density;
 pub mod dsl;
 pub mod font;
-pub mod runtime;
+
+#[macro_export]
+macro_rules! rgba {
+    ($hex:literal $(,)?) => {
+        $crate::engine::present::color::rgba_hex($hex)
+    };
+}
+
+#[macro_export]
+macro_rules! rgba_const {
+    ($name:ident, $hex:literal $(,)?) => {
+        const $name: [f32; 4] = $crate::engine::present::color::rgba_hex($hex);
+    };
+    ($vis:vis $name:ident, $hex:literal $(,)?) => {
+        $vis const $name: [f32; 4] = $crate::engine::present::color::rgba_hex($hex);
+    };
+}

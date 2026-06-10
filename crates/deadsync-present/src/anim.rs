@@ -2,7 +2,7 @@
 //!
 //! Usage sketch:
 //! ```ignore
-//! use crate::engine::present::anim::*;
+//! use deadsync_present::anim::*;
 //!
 //! // initialize per-actor animation state
 //! let mut tw = TweenSeq::new(TweenState::default());

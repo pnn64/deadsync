@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.650"
+version = "0.4.651"
 dependencies = [
  "alsa",
  "bincode",
@@ -988,6 +988,7 @@ dependencies = [
  "deadsync-net",
  "deadsync-online",
  "deadsync-platform",
+ "deadsync-present",
  "deadsync-profile",
  "deadsync-render",
  "deadsync-render-backend-gl",
@@ -1138,6 +1139,16 @@ dependencies = [
  "windows",
  "winit",
  "xcb",
+]
+
+[[package]]
+name = "deadsync-present"
+version = "0.1.0"
+dependencies = [
+ "deadsync-render",
+ "glam",
+ "smallvec",
+ "twox-hash",
 ]
 
 [[package]]
