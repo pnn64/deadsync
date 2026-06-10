@@ -121,6 +121,7 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/color.rs",
     "src/engine/present/compose.rs",
     "src/engine/present/density.rs",
+    "src/engine/present/dsl.rs",
     "src/engine/present/font.rs",
     "src/engine/present/runtime.rs",
     "src/engine/space.rs",
@@ -946,7 +947,14 @@ fn present_model_lives_in_present_crate() {
                 text.contains("use deadsync_present::compose as present_compose;")
                     && text.contains("impl present_compose::TextureContext for AssetTextureContext")
             });
-        if path.exists() && !is_space_facade && !is_compose_facade {
+        let is_dsl_facade = *file == "src/engine/present/dsl.rs"
+            && text.as_deref().is_some_and(|text| {
+                text.contains("use deadsync_present::dsl as present_dsl;")
+                    && text.contains("pub struct SpriteBuilder")
+                    && text.contains("static_texture_cached")
+                    && text.contains("assets::texture_handle")
+            });
+        if path.exists() && !is_space_facade && !is_compose_facade && !is_dsl_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)
