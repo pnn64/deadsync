@@ -277,6 +277,28 @@ fn append_beat_bar(
     }
 }
 
+/// Measure Cues: a colored line marking a timing event (BPM change / Stop /
+/// Delay / Scroll). Drawn at `Z_MEASURE_LINES`, so when emitted after the white
+/// measure-line pass it sits on top of any coinciding white line. `alpha`
+/// mirrors the white lines' per-subdivision opacity.
+fn append_cue_bar(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    thickness: f32,
+    color: (f32, f32, f32),
+    alpha: f32,
+) {
+    let (r, g, b) = color;
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(x_center, y):
+        zoomto(width, thickness):
+        diffuse(r, g, b, alpha):
+        z(Z_MEASURE_LINES)
+    ));
+}
+
 fn append_edit_beat_bar(
     actors: &mut Vec<Actor>,
     frame: u32,
@@ -4419,6 +4441,7 @@ pub fn build_bundles(
     };
     let actor_cap = (num_cols * 10).max(28)
         + measure_line_extra
+        + if profile.measure_cues { 32 } else { 0 }
         + if profile.column_cues { num_cols + 4 } else { 0 }
         + if profile.column_flash_on_miss {
             num_cols
@@ -4895,7 +4918,9 @@ pub fn build_bundles(
         // ScreenEdit/Practice always draws editor beat bars at 16th-note spacing.
         let show_measure_lines = view.edit_beat_bars
             || !matches!(profile.measure_lines, profile_data::MeasureLines::Off);
-        if show_measure_lines {
+        // Measure Cues reuse the same playfield geometry as the white measure
+        // lines, so enter this block when either feature is active.
+        if show_measure_lines || profile.measure_cues {
             let edit_bar_speed =
                 edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
             let time_signatures = state
@@ -5123,11 +5148,117 @@ pub fn build_bundles(
                 }
             };
 
-            if pos_any {
-                draw_group(pos_min_x, pos_max_x, pos_receptor_y, 1.0);
+            if show_measure_lines {
+                if pos_any {
+                    draw_group(pos_min_x, pos_max_x, pos_receptor_y, 1.0);
+                }
+                if neg_any {
+                    draw_group(neg_min_x, neg_max_x, neg_receptor_y, -1.0);
+                }
             }
-            if neg_any {
-                draw_group(neg_min_x, neg_max_x, neg_receptor_y, -1.0);
+
+            // Measure Cues: colored lines marking Scrolls (tan), BPM changes
+            // (yellow), Delays (pink), and Stops (red). Drawn after the white
+            // pass so the colored line takes priority, and in tan -> yellow ->
+            // pink -> red order so that when events coincide on a beat the
+            // higher-priority color ends up on top (Red > Pink > Yellow > Tan).
+            // Iterates only the sparse timing lists, so it adds no per-beat
+            // overhead beyond the existing measure-line walk.
+            if profile.measure_cues {
+                const CUE_SCROLL: (f32, f32, f32) = (0.824, 0.706, 0.549);
+                const CUE_BPM: (f32, f32, f32) = (1.0, 1.0, 0.0);
+                const CUE_DELAY: (f32, f32, f32) = (1.0, 0.45, 0.75);
+                const CUE_STOP: (f32, f32, f32) = (1.0, 0.0, 0.0);
+
+                let (bpms, stops, delays, scrolls) = state
+                    .gameplay_charts
+                    .get(player_idx)
+                    .map(|chart| {
+                        (
+                            chart.timing_segments.bpms.as_slice(),
+                            chart.timing_segments.stops.as_slice(),
+                            chart.timing_segments.delays.as_slice(),
+                            chart.timing_segments.scrolls.as_slice(),
+                        )
+                    })
+                    .unwrap_or((&[], &[], &[], &[]));
+
+                // Thickness keys off the cue beat's position on the same 0.5-beat
+                // grid the gameplay measure lines use, mirroring the editor's
+                // measure-line gradation (measure thickest, quarter a step down,
+                // eighth/off-grid thinnest). Alpha is held constant and readable:
+                // cues mark discrete timing events, so unlike grid lines they
+                // should stay clearly visible wherever they land rather than
+                // fading out on finer subdivisions.
+                const CUE_ALPHA: f32 = 0.7;
+                let cue_style_for_beat = |beat: f32| -> (f32, f32) {
+                    let units = beat / 0.5;
+                    let rounded = units.round();
+                    let scale = if (units - rounded).abs() <= 1e-3 {
+                        match (rounded as i64).rem_euclid(8) {
+                            0 => 3.0,         // measure
+                            2 | 4 | 6 => 2.0, // quarter
+                            _ => 1.0,         // eighth
+                        }
+                    } else {
+                        1.0 // off the eighth grid -> finest
+                    };
+                    ((scale * field_zoom).max(1.0), CUE_ALPHA)
+                };
+
+                let groups = [
+                    (pos_any, pos_min_x, pos_max_x, pos_receptor_y, 1.0f32),
+                    (neg_any, neg_min_x, neg_max_x, neg_receptor_y, -1.0f32),
+                ];
+                for (active, min_x, max_x, receptor_y, dir) in groups {
+                    if !active {
+                        continue;
+                    }
+                    let center_x_offset = 0.5 * (min_x + max_x) * field_zoom;
+                    let w = ((max_x - min_x) + ScrollSpeedSetting::ARROW_SPACING) * field_zoom;
+                    if !w.is_finite() || w <= 0.0 {
+                        continue;
+                    }
+                    let x_center = playfield_center_x + center_x_offset;
+
+                    let mut push_cue = |beat: f32, color: (f32, f32, f32)| {
+                        let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
+                        if y.is_finite() && y >= y_min && y <= y_max {
+                            let (line_thickness, alpha) = cue_style_for_beat(beat);
+                            append_cue_bar(
+                                &mut actors,
+                                x_center,
+                                y,
+                                w,
+                                line_thickness,
+                                color,
+                                alpha,
+                            );
+                        }
+                    };
+
+                    // Tan (lowest priority, drawn first): only beats where the
+                    // scroll ratio actually changes (the initial scroll is
+                    // skipped).
+                    for win in scrolls.windows(2) {
+                        if win[1].ratio != win[0].ratio {
+                            push_cue(win[1].beat, CUE_SCROLL);
+                        }
+                    }
+                    // Yellow: only beats where the BPM actually changes from the
+                    // previous segment (the initial BPM at beat 0 is skipped).
+                    for win in bpms.windows(2) {
+                        if win[1].1 != win[0].1 {
+                            push_cue(win[1].0, CUE_BPM);
+                        }
+                    }
+                    for delay in delays {
+                        push_cue(delay.beat, CUE_DELAY);
+                    }
+                    for stop in stops {
+                        push_cue(stop.beat, CUE_STOP);
+                    }
+                }
             }
         }
 
