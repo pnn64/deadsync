@@ -11,7 +11,7 @@
 use super::smx::{
     FSR_VALUE_SCALE, LOADCELL_VALUE_SCALE, MAX_DEBOUNCE_US, MAX_FSR_THRESHOLD,
     MAX_LOADCELL_THRESHOLD, MIN_DEBOUNCE_US, MIN_FSR_THRESHOLD, MIN_LOADCELL_THRESHOLD,
-    PANEL_SENSOR_COUNT, SENSOR_DISPLAY_ORDER, SENSOR_EDGE_LABELS,
+    PANEL_SENSOR_COUNT, SENSOR_DISPLAY_ORDER, SENSOR_EDGE_LABELS, hysteresis_active,
 };
 use deadsync_input::fsr::{
     BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView, SensorView,
@@ -40,6 +40,8 @@ struct MockPad {
     release: [u16; PAD_BUTTON_COUNT],
     /// Per-sensor enable flags (FSR only).
     enabled: [[bool; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+    /// Sticky per-sensor pressed state (load cell press/release hysteresis).
+    held: [[bool; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
     auto_recal: bool,
     debounce_us: u16,
 }
@@ -55,6 +57,7 @@ impl MockPad {
             press: [[press; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
             release: [INIT_LOADCELL_RELEASE; PAD_BUTTON_COUNT],
             enabled: [[true; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
+            held: [[false; PANEL_SENSOR_COUNT]; PAD_BUTTON_COUNT],
             auto_recal: true,
             debounce_us: INIT_DEBOUNCE_US,
         }
@@ -103,7 +106,7 @@ impl Monitor {
     pub fn poll_pads(&mut self) -> Vec<PadView> {
         let t = self.started.elapsed().as_secs_f32();
         self.pads
-            .iter()
+            .iter_mut()
             .enumerate()
             .map(|(i, pad)| {
                 let buttons = std::array::from_fn(|b| match pad.kind {
@@ -212,11 +215,13 @@ fn wave(t: f32, pad: usize, button: usize, sensor: usize, scale: u16) -> u16 {
     (s.max(0.0).powi(3) * 0.85 * f32::from(scale)) as u16
 }
 
-fn load_cell_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
+fn load_cell_button(pad: &mut MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
     let threshold = pad.press[b][0];
+    let release = pad.release[b];
     let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
         .map(|s| {
             let raw_value = wave(t, pad_idx, b, s, LOADCELL_VALUE_SCALE);
+            pad.held[b][s] = hysteresis_active(pad.held[b][s], raw_value, release, threshold);
             SensorView {
                 firmware_index: s,
                 label: None, // corners, numbered 1-4 in the UI
@@ -224,7 +229,7 @@ fn load_cell_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonVi
                 value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
                 raw_threshold: threshold,
                 threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
-                active: raw_value >= threshold && threshold > 0,
+                active: pad.held[b][s],
                 enabled: true,
             }
         })
@@ -237,7 +242,8 @@ fn load_cell_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonVi
         max_raw_threshold: MAX_LOADCELL_THRESHOLD,
         aggregate_value,
         aggregate_threshold: threshold,
-        active: aggregate_value >= threshold,
+        // The panel reads as pressed while any sensor is held (hysteresis).
+        active: pad.held[b].iter().any(|&h| h),
         value_scale: LOADCELL_VALUE_SCALE,
         release_threshold: Some(pad.release[b]),
     }

@@ -2449,7 +2449,7 @@ mod tests {
             aggregate_value: 0,
             aggregate_threshold: press,
             active: false,
-            value_scale: 500,
+            value_scale: 250,
             release_threshold: Some(release),
         }
     }

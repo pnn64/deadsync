@@ -17,12 +17,14 @@ pub(super) const MAX_FSR_THRESHOLD: u16 = 250;
 pub(super) const MIN_DEBOUNCE_US: u16 = 500;
 pub(super) const MAX_DEBOUNCE_US: u16 = 25000;
 
-// Pre-v5 load-cell pads: 8-bit thresholds (20-200) and live values that scale
-// to 500 (no >>2), matching the official SMX config tool.
+// Pre-v5 load-cell pads: 8-bit thresholds (20-200) and raw live values that
+// reach 500 (no >>2). We cap the display scale at 250 so the threshold band
+// uses most of the bar's height (200 sits at 80%) instead of topping out
+// midway; readings past 250 just show a full bar (far beyond "pressed").
 pub(super) const MIN_LOADCELL_THRESHOLD: u16 = 20;
 pub(super) const MAX_LOADCELL_THRESHOLD: u16 = 200;
 pub(super) const FSR_VALUE_SCALE: u16 = 250;
-pub(super) const LOADCELL_VALUE_SCALE: u16 = 500;
+pub(super) const LOADCELL_VALUE_SCALE: u16 = 250;
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
@@ -35,11 +37,18 @@ pub(super) const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
     read_active: bool,
+    /// Sticky per-pad/panel/sensor pressed state for load-cell bars, so the
+    /// view colors with the firmware's press/release hysteresis (green above
+    /// the press threshold, idle again only below the release threshold).
+    lc_held: [[[bool; PANEL_SENSOR_COUNT]; smx::PANEL_COUNT]; 2],
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self { read_active: false }
+        Self {
+            read_active: false,
+            lc_held: [[[false; PANEL_SENSOR_COUNT]; smx::PANEL_COUNT]; 2],
+        }
     }
 
     /// Toggle live sensor reads (test mode) on all connected pads. Called by
@@ -87,12 +96,20 @@ impl Monitor {
                 smx::serial_prefix(&info.serial),
             );
 
+            let lc_held = &mut self.lc_held[pad];
             let buttons = std::array::from_fn(|i| {
                 let (panel, label) = VIEW_PANELS[i];
                 if fsr {
                     fsr_button(&config, panel, label, test_data.as_ref(), input_state)
                 } else {
-                    load_cell_button(&config, panel, label, test_data.as_ref(), input_state)
+                    load_cell_button(
+                        &config,
+                        panel,
+                        label,
+                        test_data.as_ref(),
+                        input_state,
+                        &mut lc_held[panel],
+                    )
                 }
             });
 
@@ -376,21 +393,25 @@ fn fsr_button(
 }
 
 /// Build a load-cell panel's button view: four corner readings (numbered 1-4)
-/// that all share the panel's single load-cell threshold.
+/// that all share the panel's press/release threshold pair. `held` is the
+/// panel's sticky per-sensor pressed state (press/release hysteresis).
 fn load_cell_button(
     config: &SmxConfig,
     panel: usize,
     label: &'static str,
     test_data: Option<&SensorTestData>,
     input_state: u16,
+    held: &mut [bool; PANEL_SENSOR_COUNT],
 ) -> ButtonView {
     let settings = &config.panel_settings[panel];
     let threshold = u16::from(settings.load_cell_high_threshold);
+    let release = u16::from(settings.load_cell_low_threshold);
     let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
         .map(|s| {
             let raw_value = test_data
                 .filter(|d| d.have_data_from_panel[panel])
                 .map_or(0, |d| calibrate_load_cell(d.sensor_level[panel][s]));
+            held[s] = hysteresis_active(held[s], raw_value, release, threshold);
             SensorView {
                 firmware_index: s,
                 label: None, // corners, not edges -> numbered 1-4 in the UI
@@ -398,7 +419,7 @@ fn load_cell_button(
                 value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
                 raw_threshold: threshold,
                 threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
-                active: raw_value >= threshold && threshold > 0,
+                active: held[s],
                 enabled: true,
             }
         })
@@ -461,8 +482,8 @@ fn calibrate_fsr(value: i16) -> u16 {
     (value >> 2) as u16
 }
 
-/// Load-cell readings are used unscaled (0-500 range, no `>>2`), clamping
-/// noise at/below zero to zero.
+/// Load-cell readings are used unscaled (no `>>2`), clamping noise at/below
+/// zero to zero and capping at the display scale.
 fn calibrate_load_cell(value: i16) -> u16 {
     if value <= 0 {
         return 0;
@@ -470,9 +491,43 @@ fn calibrate_load_cell(value: i16) -> u16 {
     (value as u16).min(LOADCELL_VALUE_SCALE)
 }
 
+/// Sticky pressed state with the firmware's hysteresis: turns on at/above the
+/// press (`high`) threshold and off only below the release (`low`) threshold;
+/// in between it keeps its previous state.
+pub(super) fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
+    if high == 0 {
+        false
+    } else if value >= high {
+        true
+    } else if value < low {
+        false
+    } else {
+        was
+    }
+}
+
 fn normalize(value: u16, max: u16) -> f32 {
     if max == 0 {
         return 0.0;
     }
     (value as f32 / max as f32).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hysteresis_active;
+
+    #[test]
+    fn hysteresis_holds_between_release_and_press() {
+        // Rising: stays off through the band, on at/above press.
+        assert!(!hysteresis_active(false, 69, 70, 80));
+        assert!(!hysteresis_active(false, 75, 70, 80));
+        assert!(hysteresis_active(false, 80, 70, 80));
+        // Falling: stays on through the band, off only below release.
+        assert!(hysteresis_active(true, 79, 70, 80));
+        assert!(hysteresis_active(true, 70, 70, 80));
+        assert!(!hysteresis_active(true, 69, 70, 80));
+        // An unset press threshold never reads as pressed.
+        assert!(!hysteresis_active(true, 100, 0, 0));
+    }
 }
