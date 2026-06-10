@@ -5,14 +5,12 @@ mod resample;
 
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
-#[cfg(unix)]
-use deadsync_audio::OutputTimingQuality;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderCallbackResult, AudioRenderMaps, CallbackClockSource,
-    CallbackClockWindow, MusicMapSeg, OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane,
-    StutterDiagAudioEvent, StutterDiagAudioEventKind, fallback_stream_position_frames,
-    music_nanos_from_seconds, normalized_music_rate, sfx_stop_generation,
+    AudioOutputMode, AudioRenderMaps, CallbackClockSource, CallbackClockWindow, MusicMapSeg,
+    OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent,
+    fallback_stream_position_frames, music_nanos_from_seconds, normalized_music_rate,
+    sfx_stop_generation,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
 pub use deadsync_audio::{
@@ -20,7 +18,7 @@ pub use deadsync_audio::{
 };
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
-use deadsync_platform::host_time::{instant_nanos, now_nanos};
+use deadsync_platform::host_time::instant_nanos;
 #[cfg(windows)]
 use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
@@ -183,11 +181,6 @@ pub(crate) fn timing_diag_last_callback_gap_ns() -> u64 {
     deadsync_audio::timing_diag_last_callback_gap_ns()
 }
 
-#[inline(always)]
-fn stutter_diag_enabled() -> bool {
-    log::log_enabled!(log::Level::Trace)
-}
-
 pub fn stutter_diag_trigger_seq() -> u64 {
     deadsync_audio::stutter_diag_trigger_seq()
 }
@@ -210,24 +203,6 @@ static PLAYBACK_POS_MAP: std::sync::LazyLock<Mutex<PlaybackPosMap>> =
 #[inline(always)]
 fn audio_render_maps() -> AudioRenderMaps {
     AudioRenderMaps::new(QUEUED_MUSIC_MAP_SEGS.clone(), PLAYED_MUSIC_MAP_SEGS.clone())
-}
-
-#[inline(always)]
-pub(crate) fn report_audio_render_callback(result: AudioRenderCallbackResult) {
-    if result.callback_gap_ns != 0
-        && stutter_diag_enabled()
-        && result.callback_gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns()
-    {
-        deadsync_audio::record_stutter_diag_event(
-            StutterDiagAudioEventKind::CallbackGap,
-            now_nanos(),
-            result.callback_gap_ns,
-            deadsync_audio::current_output_timing_quality(),
-        );
-    }
-    if result.output_underrun {
-        note_output_underrun();
-    }
 }
 
 /* ============================ Public functions ============================ */
@@ -740,50 +715,6 @@ pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
 #[inline(always)]
 fn publish_output_backend_ready(ready: OutputBackendReady) {
     deadsync_audio::publish_output_backend_ready(ready);
-}
-
-#[inline(always)]
-pub(crate) fn publish_output_timing(
-    sample_rate_hz: u32,
-    device_period_ns: u64,
-    stream_latency_ns: u64,
-    buffer_frames: u32,
-    padding_frames: u32,
-    queued_frames: u32,
-    estimated_output_delay_ns: u64,
-) {
-    deadsync_audio::publish_output_timing(
-        sample_rate_hz,
-        device_period_ns,
-        stream_latency_ns,
-        buffer_frames,
-        padding_frames,
-        queued_frames,
-        estimated_output_delay_ns,
-    );
-}
-
-#[inline(always)]
-pub(crate) fn note_output_underrun() {
-    deadsync_audio::note_output_underrun(now_nanos(), stutter_diag_enabled());
-}
-
-#[inline(always)]
-#[cfg(unix)]
-pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
-    deadsync_audio::publish_output_timing_quality(quality);
-}
-
-#[inline(always)]
-#[cfg(unix)]
-pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
-    deadsync_audio::note_output_timing_sanity_failure(quality, now_nanos(), stutter_diag_enabled());
-}
-
-#[inline(always)]
-#[cfg(unix)]
-pub(crate) fn note_output_clock_fallback() {
-    deadsync_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
 }
 
 #[cfg(target_os = "linux")]

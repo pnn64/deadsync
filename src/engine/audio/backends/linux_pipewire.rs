@@ -1,6 +1,7 @@
-use super::super::{
-    internal, publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+use super::telemetry::{
+    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
+use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,

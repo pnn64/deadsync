@@ -863,6 +863,7 @@ fn audio_core_lives_in_audio_crate() {
         root.join("crates/deadsync-audio/src/mixer.rs"),
         root.join("crates/deadsync-audio/src/output.rs"),
         root.join("crates/deadsync-audio/src/position.rs"),
+        root.join("crates/deadsync-audio/src/render.rs"),
         root.join("crates/deadsync-audio/src/ring.rs"),
         root.join("crates/deadsync-audio/src/telemetry.rs"),
     ] {
@@ -968,6 +969,12 @@ fn audio_core_lives_in_audio_crate() {
             "fn render_f32_host_nanos",
             "fn render_i16_qpc",
             "fn render_f32_qpc",
+            "fn report_audio_render_callback",
+            "fn publish_output_timing(",
+            "fn publish_output_timing_quality",
+            "fn note_output_underrun",
+            "fn note_output_clock_fallback",
+            "fn note_output_timing_sanity_failure",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
@@ -975,6 +982,24 @@ fn audio_core_lives_in_audio_crate() {
                     "{} still defines realtime ring token {token} {count} times",
                     rel_path(&root, &engine_audio)
                 ));
+            }
+        }
+    }
+
+    let backend_dir = root.join("src/engine/audio/backends");
+    if backend_dir.exists() {
+        for file in rust_files(&backend_dir) {
+            let rel = rel_path(&root, &file);
+            if rel.ends_with("mod.rs") || rel.ends_with("telemetry.rs") {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("backend source file should be readable");
+            for token in ["super::super", "crate::engine::audio::internal"] {
+                if text.contains(token) {
+                    failures.push(format!(
+                        "{rel} should import backend contracts directly instead of {token}"
+                    ));
+                }
             }
         }
     }
