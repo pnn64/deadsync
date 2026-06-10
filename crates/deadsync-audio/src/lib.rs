@@ -1,6 +1,7 @@
 pub mod mixer;
 pub mod output;
 pub mod position;
+pub mod render;
 pub mod ring;
 pub mod telemetry;
 
@@ -12,8 +13,8 @@ pub use mixer::{
 };
 pub use output::{
     AudioMixLevels, AudioOutputMode, Cut, InitConfig, LinuxAudioBackend, OutputBackendReady,
-    OutputDeviceInfo, OutputTimingSnapshot, mix_level_gains, pack_audio_mix_levels,
-    unpack_audio_mix_levels,
+    OutputDeviceInfo, OutputTimingSnapshot, audio_mix_level_gains, audio_mix_levels,
+    mix_level_gains, pack_audio_mix_levels, set_audio_mix_levels, unpack_audio_mix_levels,
 };
 pub use position::{
     CallbackClockSource, CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES,
@@ -29,6 +30,7 @@ pub use position::{
     seeded_music_position, set_music_clock_rate, set_music_target_gain, snap_music_gain_generation,
     stop_music_track, stream_position_frames_from_window, timing_diag_last_callback_gap_ns,
 };
+pub use render::{AudioRenderCallbackResult, AudioRenderMaps, RenderState};
 pub use telemetry::{
     AUDIO_STUTTER_DIAG_EVENT_COUNT, OutputTelemetryBackend, OutputTelemetryClock,
     OutputTimingQuality, StutterDiagAudioEvent, StutterDiagAudioEventKind,

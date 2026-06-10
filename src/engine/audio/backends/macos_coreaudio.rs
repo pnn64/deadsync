@@ -1,5 +1,6 @@
 use super::super::{
-    RenderState, note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
 };
 use crate::engine::audio::internal;
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
@@ -10,7 +11,8 @@ use coreaudio::audio_unit::macos_helpers::{
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
 use deadsync_audio::{
-    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
+    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    OutputTimingQuality, QueuedSfx, RenderState,
 };
 use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
@@ -196,9 +198,10 @@ pub(crate) fn start(
     mut prep: CoreAudioOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
+    render_maps: AudioRenderMaps,
 ) -> Result<CoreAudioOutputStream, String> {
     let host_clock = CoreAudioHostClock::calibrate()?;
-    let mut render = RenderState::new(music_ring, sfx_receiver, prep.channels);
+    let mut render = RenderState::new(music_ring, prep.channels, render_maps);
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
     let device_name = prep.device_name.clone();
@@ -207,7 +210,12 @@ pub(crate) fn start(
     prep.audio_unit
         .set_render_callback(move |args: Args| {
             let (anchor_nanos, quality) = host_clock.callback_nanos(args.time_stamp.mHostTime);
-            render.render_f32_host_nanos(args.data.buffer, anchor_nanos);
+            let result = render.render_f32_host_nanos(
+                args.data.buffer,
+                anchor_nanos,
+                sfx_receiver.try_iter(),
+            );
+            report_audio_render_callback(result);
             let period_frames = args.num_frames.max(1) as u32;
             let latency_frames = buffer_frames.max(period_frames);
             let period_ns = frames_to_nanos(sample_rate_hz, period_frames);

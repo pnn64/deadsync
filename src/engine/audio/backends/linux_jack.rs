@@ -1,6 +1,9 @@
-use super::super::{RenderState, internal, publish_output_timing, publish_output_timing_quality};
+use super::super::{
+    internal, publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+};
 use deadsync_audio::{
-    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
+    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    OutputTimingQuality, QueuedSfx, RenderState,
 };
 use deadsync_platform::host_time::now_nanos;
 use libloading::Library;
@@ -294,6 +297,7 @@ impl Drop for JackClient {
 struct JackCallbackState {
     api: &'static JackApi,
     render: RenderState,
+    sfx_receiver: Receiver<QueuedSfx>,
     port_l: *mut JackPortRaw,
     port_r: *mut JackPortRaw,
     sample_rate_hz: u32,
@@ -310,8 +314,12 @@ impl JackCallbackState {
             self.interleaved.resize(samples, 0.0);
         }
         let anchor_nanos = now_nanos();
-        self.render
-            .render_f32_host_nanos(&mut self.interleaved, anchor_nanos);
+        let result = self.render.render_f32_host_nanos(
+            &mut self.interleaved,
+            anchor_nanos,
+            self.sfx_receiver.try_iter(),
+        );
+        report_audio_render_callback(result);
         // SAFETY: JACK owns the port buffers for exactly this callback invocation,
         // and `port_buffer` returns slices over those frame-local buffers.
         let left = unsafe { port_buffer(self.api, self.port_l, nframes) };
@@ -432,6 +440,7 @@ pub(crate) fn start(
     prep: JackOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
+    render_maps: AudioRenderMaps,
 ) -> Result<JackOutputStream, String> {
     let JackOutputPrep {
         mut client,
@@ -441,7 +450,8 @@ pub(crate) fn start(
     } = prep;
     let callback_state = Box::new(JackCallbackState {
         api: client.api,
-        render: RenderState::new(music_ring, sfx_receiver, 2),
+        render: RenderState::new(music_ring, 2, render_maps),
+        sfx_receiver,
         port_l: client.port_l,
         port_r: client.port_r,
         sample_rate_hz,

@@ -929,6 +929,10 @@ fn audio_core_lives_in_audio_crate() {
             "fn mix_active_sfx",
             "pub struct InitConfig",
             "pub struct AudioMixLevels",
+            "static AUDIO_MIX_LEVELS_PACKED",
+            "fn set_audio_mix_levels",
+            "fn audio_mix_levels",
+            "fn audio_mix_level_gains",
             "fn mix_level_gains",
             "const fn pack_audio_mix_levels",
             "const fn unpack_audio_mix_levels",
@@ -954,6 +958,16 @@ fn audio_core_lives_in_audio_crate() {
             "fn music_clock_seed_enabled",
             "NANOS_PER_SECOND",
             "std::cell::UnsafeCell",
+            "struct RenderState",
+            "impl RenderState",
+            "pub struct AudioRenderMaps",
+            "pub struct AudioRenderCallbackResult",
+            "const MUSIC_GAIN_RAMP_FRAMES",
+            "fn commit_played_music_map",
+            "fn render_i16_host_nanos",
+            "fn render_f32_host_nanos",
+            "fn render_i16_qpc",
+            "fn render_f32_qpc",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
@@ -975,25 +989,45 @@ fn audio_core_lives_in_audio_crate() {
                 rel_path(&root, &config_audio)
             ));
         }
-        if !text.contains(
-            "pub(crate) use deadsync_audio::{pack_audio_mix_levels, unpack_audio_mix_levels};",
-        ) {
-            failures.push(format!(
-                "{} should use deadsync-audio packed mix-level helpers",
-                rel_path(&root, &config_audio)
-            ));
-        }
         for token in [
             "pub enum AudioOutputMode",
             "pub enum LinuxAudioBackend",
             "pub struct AudioMixLevels",
             "fn pack_audio_mix_levels",
             "fn unpack_audio_mix_levels",
+            "pub(crate) use deadsync_audio::{pack_audio_mix_levels, unpack_audio_mix_levels};",
         ] {
             if text.contains(token) {
                 failures.push(format!(
                     "{} still defines audio contract token {token}",
                     rel_path(&root, &config_audio)
+                ));
+            }
+        }
+    }
+
+    let config_runtime = root.join("src/config/runtime.rs");
+    if let Ok(text) = fs::read_to_string(&config_runtime) {
+        for required in [
+            "deadsync_audio::set_audio_mix_levels",
+            "deadsync_audio::audio_mix_levels",
+        ] {
+            if !text.contains(required) {
+                failures.push(format!(
+                    "{} should delegate live audio mix-level state through {required}",
+                    rel_path(&root, &config_runtime)
+                ));
+            }
+        }
+        for token in [
+            "AUDIO_MIX_LEVELS_PACKED",
+            "pack_audio_mix_levels",
+            "unpack_audio_mix_levels",
+        ] {
+            if text.contains(token) {
+                failures.push(format!(
+                    "{} still owns audio mix-level state token {token}",
+                    rel_path(&root, &config_runtime)
                 ));
             }
         }

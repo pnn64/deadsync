@@ -1,8 +1,7 @@
-use super::audio::{pack_audio_mix_levels, unpack_audio_mix_levels};
 use super::{AdditionalSongFolder, AudioMixLevels, Config, DEFAULT_MACHINE_NOTESKIN};
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -11,15 +10,6 @@ use std::time::{Duration, Instant};
 static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
 static LOCK_WAIT_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
-static AUDIO_MIX_LEVELS_PACKED: std::sync::LazyLock<AtomicU32> = std::sync::LazyLock::new(|| {
-    let cfg = Config::default();
-    AtomicU32::new(pack_audio_mix_levels(
-        cfg.master_volume,
-        cfg.music_volume,
-        cfg.sfx_volume,
-        cfg.assist_tick_volume,
-    ))
-});
 pub(super) static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 pub(super) static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<Vec<AdditionalSongFolder>>> =
@@ -125,15 +115,12 @@ pub(super) fn lock_config() -> std::sync::MutexGuard<'static, Config> {
 
 #[inline(always)]
 pub(super) fn sync_audio_mix_levels_from_config(cfg: &Config) {
-    AUDIO_MIX_LEVELS_PACKED.store(
-        pack_audio_mix_levels(
-            cfg.master_volume,
-            cfg.music_volume,
-            cfg.sfx_volume,
-            cfg.assist_tick_volume,
-        ),
-        Ordering::Release,
-    );
+    deadsync_audio::set_audio_mix_levels(AudioMixLevels {
+        master_volume: cfg.master_volume,
+        music_volume: cfg.music_volume,
+        sfx_volume: cfg.sfx_volume,
+        assist_tick_volume: cfg.assist_tick_volume,
+    });
 }
 
 enum SaveReq {
@@ -215,7 +202,7 @@ pub fn get() -> Config {
 }
 
 pub fn audio_mix_levels() -> AudioMixLevels {
-    unpack_audio_mix_levels(AUDIO_MIX_LEVELS_PACKED.load(Ordering::Acquire))
+    deadsync_audio::audio_mix_levels()
 }
 
 pub fn machine_default_noteskin() -> String {

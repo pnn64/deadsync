@@ -9,11 +9,10 @@ use deadsync_audio::LinuxAudioBackend;
 use deadsync_audio::OutputTimingQuality;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    ActiveSfx, AudioOutputMode, CallbackClockSource, CallbackClockWindow, MAX_ACTIVE_SFX,
-    MusicMapSeg, OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent,
-    StutterDiagAudioEventKind, f32_to_i16, fallback_stream_position_frames, i16_to_f32,
-    mix_active_sfx, mix_level_gains, music_nanos_from_seconds, normalized_music_rate,
-    push_queued_sfx, sfx_is_stale, sfx_stop_generation,
+    AudioOutputMode, AudioRenderCallbackResult, AudioRenderMaps, CallbackClockSource,
+    CallbackClockWindow, MusicMapSeg, OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane,
+    StutterDiagAudioEvent, StutterDiagAudioEventKind, fallback_stream_position_frames,
+    music_nanos_from_seconds, normalized_music_rate, sfx_stop_generation,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
 pub use deadsync_audio::{
@@ -201,31 +200,35 @@ pub fn collect_stutter_diag_events(
     deadsync_audio::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
-#[inline(always)]
-fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource) {
-    let timing_diag = timing_diag_enabled();
-    let stutter_diag = stutter_diag_enabled();
-    if anchor_nanos == 0 || (!timing_diag && !stutter_diag) {
-        return;
-    }
-    if let Some(gap_ns) = deadsync_audio::note_timing_diag_callback_gap(anchor_nanos, source) {
-        if stutter_diag && gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns() {
-            deadsync_audio::record_stutter_diag_event(
-                StutterDiagAudioEventKind::CallbackGap,
-                now_nanos(),
-                gap_ns,
-                deadsync_audio::current_output_timing_quality(),
-            );
-        }
-    }
-}
-
 static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
     std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
 static PLAYED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
     std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
 static PLAYBACK_POS_MAP: std::sync::LazyLock<Mutex<PlaybackPosMap>> =
     std::sync::LazyLock::new(|| Mutex::new(PlaybackPosMap::default()));
+
+#[inline(always)]
+fn audio_render_maps() -> AudioRenderMaps {
+    AudioRenderMaps::new(QUEUED_MUSIC_MAP_SEGS.clone(), PLAYED_MUSIC_MAP_SEGS.clone())
+}
+
+#[inline(always)]
+pub(crate) fn report_audio_render_callback(result: AudioRenderCallbackResult) {
+    if result.callback_gap_ns != 0
+        && stutter_diag_enabled()
+        && result.callback_gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns()
+    {
+        deadsync_audio::record_stutter_diag_event(
+            StutterDiagAudioEventKind::CallbackGap,
+            now_nanos(),
+            result.callback_gap_ns,
+            deadsync_audio::current_output_timing_quality(),
+        );
+    }
+    if result.output_underrun {
+        note_output_underrun();
+    }
+}
 
 /* ============================ Public functions ============================ */
 
@@ -491,21 +494,6 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
         #[cfg(windows)]
         CallbackClockSource::Qpc => current_qpc_nanos(),
     }
-}
-
-#[inline(always)]
-fn publish_callback_window_start_nanos(
-    total_before: u64,
-    anchor_nanos: u64,
-    source: CallbackClockSource,
-) {
-    note_timing_diag_callback_gap(anchor_nanos, source);
-    deadsync_audio::publish_callback_window_start_nanos(total_before, anchor_nanos, source);
-}
-
-#[inline(always)]
-fn publish_callback_window_end(total_before: u64, frames: u64) {
-    deadsync_audio::publish_callback_window_end(total_before, frames);
 }
 
 fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
@@ -796,270 +784,6 @@ pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
 #[cfg(unix)]
 pub(crate) fn note_output_clock_fallback() {
     deadsync_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
-}
-
-fn commit_played_music_map(
-    track_frame_start: i64,
-    frames_popped: i64,
-    queued_seg_ring: &internal::SpscRingMusicSeg,
-    played_seg_ring: &internal::SpscRingMusicSeg,
-    current_seg: &mut Option<MusicMapSeg>,
-) {
-    let mut stream_frame = track_frame_start;
-    let mut remaining = frames_popped.max(0);
-    while remaining > 0 {
-        let mut seg = match current_seg.take() {
-            Some(seg) => seg,
-            None => match internal::music_seg_ring_pop(queued_seg_ring) {
-                Some(seg) => seg,
-                None => break,
-            },
-        };
-        let take = remaining.min(seg.frames);
-        let played = MusicMapSeg {
-            stream_frame_start: stream_frame,
-            frames: take,
-            music_start_sec: seg.music_start_sec,
-            music_sec_per_frame: seg.music_sec_per_frame,
-        };
-        let _ = internal::music_seg_ring_push(played_seg_ring, played);
-        seg.frames -= take;
-        seg.music_start_sec += seg.music_sec_per_frame * take as f64;
-        stream_frame += take;
-        remaining -= take;
-        if seg.frames > 0 {
-            *current_seg = Some(seg);
-        }
-    }
-}
-
-struct RenderState {
-    music_ring: Arc<internal::SpscRingI16>,
-    sfx_receiver: Receiver<QueuedSfx>,
-    device_channels: usize,
-    mix_i16: Vec<i16>,
-    mix_f32: Vec<f32>,
-    active_sfx: Vec<ActiveSfx>,
-    queued_music_map: Arc<internal::SpscRingMusicSeg>,
-    played_music_map: Arc<internal::SpscRingMusicSeg>,
-    active_music_map: Option<MusicMapSeg>,
-    music_map_generation: u64,
-    /// Current music gain as seen by the mixer. Ramps toward
-    /// the shared music gain target over [`MUSIC_GAIN_RAMP_FRAMES`] frames
-    /// so asynchronous ReplayGain results don't produce an audible step.
-    music_gain_current: f32,
-    /// Gain snap generation last observed; when it changes, the mixer snaps
-    /// `music_gain_current` straight to the target instead of ramping.
-    music_gain_snap_seen: u64,
-}
-
-/// Number of device frames over which the music gain ramps when the
-/// target changes. 4000 frames ≈ 83 ms at 48 kHz and ≈ 91 ms at 44.1 kHz —
-/// fast enough to feel instantaneous, slow enough to eliminate the
-/// click/step that an atomic gain swap would produce.
-const MUSIC_GAIN_RAMP_FRAMES: f32 = 4000.0;
-
-impl RenderState {
-    fn new(
-        music_ring: Arc<internal::SpscRingI16>,
-        sfx_receiver: Receiver<QueuedSfx>,
-        device_channels: usize,
-    ) -> Self {
-        Self {
-            music_ring,
-            sfx_receiver,
-            device_channels,
-            mix_i16: Vec::new(),
-            mix_f32: Vec::new(),
-            active_sfx: Vec::with_capacity(MAX_ACTIVE_SFX),
-            queued_music_map: QUEUED_MUSIC_MAP_SEGS.clone(),
-            played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
-            active_music_map: None,
-            music_map_generation: deadsync_audio::music_map_generation(),
-            music_gain_current: deadsync_audio::music_target_gain(),
-            music_gain_snap_seen: deadsync_audio::music_gain_snap_generation(),
-        }
-    }
-
-    #[inline(always)]
-    fn begin_callback_nanos(&mut self, anchor_nanos: u64, source: CallbackClockSource) -> u64 {
-        let map_generation = deadsync_audio::music_map_generation();
-        if map_generation != self.music_map_generation {
-            self.active_music_map = None;
-            self.music_map_generation = map_generation;
-        }
-        if !deadsync_audio::music_track_active_relaxed() {
-            self.active_music_map = None;
-        }
-        let total_before = deadsync_audio::music_total_frames();
-        publish_callback_window_start_nanos(total_before, anchor_nanos, source);
-        total_before
-    }
-
-    #[cfg(windows)]
-    #[inline(always)]
-    fn begin_callback_qpc(&mut self, anchor_nanos: u64) -> u64 {
-        self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Qpc)
-    }
-
-    #[inline(always)]
-    fn ensure_mix_buffers(&mut self, len: usize) {
-        if self.mix_i16.len() != len {
-            self.mix_i16.resize(len, 0);
-        }
-        if self.mix_f32.len() != len {
-            self.mix_f32.resize(len, 0.0);
-        }
-    }
-
-    #[inline(always)]
-    fn mix_levels() -> (f32, f32, f32) {
-        mix_level_gains(crate::config::audio_mix_levels())
-    }
-
-    fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
-        self.ensure_mix_buffers(len);
-        let popped = internal::callback_fill_from_ring_i16(&self.music_ring, &mut self.mix_i16);
-        if popped > 0 {
-            deadsync_audio::mark_music_track_started(total_before);
-        }
-
-        let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
-        let target_gain = deadsync_audio::music_target_gain();
-        let snap_gen = deadsync_audio::music_gain_snap_generation();
-        if snap_gen != self.music_gain_snap_seen {
-            self.music_gain_current = target_gain;
-            self.music_gain_snap_seen = snap_gen;
-        }
-        let device_channels = self.device_channels.max(1);
-        let frames_in_buf = len / device_channels;
-        let max_step = 1.0 / MUSIC_GAIN_RAMP_FRAMES;
-        for f in 0..frames_in_buf {
-            let diff = target_gain - self.music_gain_current;
-            if diff.abs() <= max_step {
-                self.music_gain_current = target_gain;
-            } else {
-                self.music_gain_current += diff.signum() * max_step;
-            }
-            let scale = music_vol * self.music_gain_current;
-            let base = f * device_channels;
-            for ch in 0..device_channels {
-                let idx = base + ch;
-                self.mix_f32[idx] = i16_to_f32(self.mix_i16[idx]) * scale;
-            }
-        }
-        // Zero any tail that doesn't divide evenly into whole frames; the
-        // mixer downstream expects exactly `len` valid f32 samples.
-        for idx in frames_in_buf * device_channels..len {
-            self.mix_f32[idx] = 0.0;
-        }
-
-        for new_sfx in self.sfx_receiver.try_iter() {
-            push_queued_sfx(&mut self.active_sfx, new_sfx, sfx_is_stale);
-        }
-
-        let mixed_sfx = mix_active_sfx(
-            &mut self.active_sfx,
-            &mut self.mix_f32,
-            total_before,
-            device_channels,
-            sfx_vol,
-            assist_tick_vol,
-            sfx_is_stale,
-        );
-
-        (popped, mixed_sfx)
-    }
-
-    #[inline(always)]
-    fn finish_callback(
-        &mut self,
-        total_before: u64,
-        emitted_samples: usize,
-        popped_samples: usize,
-    ) {
-        let frames = if self.device_channels == 0 {
-            0
-        } else {
-            emitted_samples / self.device_channels
-        };
-        let popped_frames = if self.device_channels == 0 {
-            0
-        } else {
-            popped_samples / self.device_channels
-        };
-        if deadsync_audio::music_track_active_relaxed()
-            && deadsync_audio::music_track_has_started()
-            && popped_frames < frames
-        {
-            note_output_underrun();
-        }
-        let track_frames_before =
-            total_before.saturating_sub(deadsync_audio::music_track_start_frame());
-        if popped_frames > 0 {
-            commit_played_music_map(
-                track_frames_before as i64,
-                popped_frames as i64,
-                &self.queued_music_map,
-                &self.played_music_map,
-                &mut self.active_music_map,
-            );
-        }
-        if frames > 0 {
-            publish_callback_window_end(total_before, frames as u64);
-        }
-    }
-
-    #[cfg(windows)]
-    fn render_i16_qpc(&mut self, out: &mut [i16], anchor_nanos: u64) {
-        let total_before = self.begin_callback_qpc(anchor_nanos);
-        let (popped, _) = self.mix_f32_buffer(total_before, out.len());
-        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = f32_to_i16(*src);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
-        let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let (popped, _) = self.mix_f32_buffer(total_before, out.len());
-        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = f32_to_i16(*src);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
-    #[cfg(any(
-        target_os = "macos",
-        all(target_os = "linux", any(has_jack_audio, has_pipewire_audio))
-    ))]
-    fn render_f32_host_nanos(&mut self, out: &mut [f32], anchor_nanos: u64) {
-        let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let (popped, mixed_sfx) = self.mix_f32_buffer(total_before, out.len());
-        if mixed_sfx {
-            for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-                *dst = src.clamp(-1.0, 1.0);
-            }
-        } else {
-            out.copy_from_slice(&self.mix_f32[..out.len()]);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
-    #[cfg(windows)]
-    fn render_f32_qpc(&mut self, out: &mut [f32], anchor_nanos: u64) {
-        let total_before = self.begin_callback_qpc(anchor_nanos);
-        let (popped, mixed_sfx) = self.mix_f32_buffer(total_before, out.len());
-        if mixed_sfx {
-            for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-                *dst = src.clamp(-1.0, 1.0);
-            }
-        } else {
-            out.copy_from_slice(&self.mix_f32[..out.len()]);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1507,7 +1231,7 @@ fn start_linux_alsa_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver)?;
+    let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
 }
 
@@ -1525,7 +1249,7 @@ fn start_linux_jack_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver)?;
+    let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Jack(stream), ready, sfx_sender))
 }
 
@@ -1552,7 +1276,8 @@ fn start_linux_pipewire_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_pipewire::start(prep, music_ring, sfx_receiver)?;
+    let stream =
+        backends::linux_pipewire::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::PipeWire(stream), ready, sfx_sender))
 }
 
@@ -1579,7 +1304,7 @@ fn start_linux_pulse_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_pulse::start(prep, music_ring, sfx_receiver)?;
+    let stream = backends::linux_pulse::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
 }
 
@@ -1600,7 +1325,7 @@ fn start_freebsd_pcm_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::freebsd_pcm::start(prep, music_ring, sfx_receiver)?;
+    let stream = backends::freebsd_pcm::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
 }
 
@@ -1621,7 +1346,8 @@ fn start_macos_coreaudio_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::macos_coreaudio::start(prep, music_ring, sfx_receiver)?;
+    let stream =
+        backends::macos_coreaudio::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::CoreAudio(stream), ready, sfx_sender))
 }
 
@@ -1849,12 +1575,13 @@ fn start_output_backend(
         ready.requested_output_mode = wasapi.output_mode;
         let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
         let stream =
-            backends::windows_wasapi::start(prep, music_ring, sfx_receiver).map_err(|err| {
-                format!(
-                    "failed to start native WASAPI output for '{}': {err}",
-                    wasapi.device_name
-                )
-            })?;
+            backends::windows_wasapi::start(prep, music_ring, sfx_receiver, audio_render_maps())
+                .map_err(|err| {
+                    format!(
+                        "failed to start native WASAPI output for '{}': {err}",
+                        wasapi.device_name
+                    )
+                })?;
         return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
     }
 

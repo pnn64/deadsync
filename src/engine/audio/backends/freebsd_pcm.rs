@@ -1,9 +1,10 @@
 use super::super::{
-    RenderState, internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
-    publish_output_timing_quality,
+    internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    publish_output_timing_quality, report_audio_render_callback,
 };
 use deadsync_audio::{
-    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
+    AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
+    OutputTimingQuality, QueuedSfx, RenderState,
 };
 use deadsync_platform::host_time::now_nanos;
 use libc::{c_int, c_ulong};
@@ -220,13 +221,23 @@ pub(crate) fn start(
     prep: FreeBsdPcmOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
+    render_maps: AudioRenderMaps,
 ) -> Result<FreeBsdPcmOutputStream, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_thread = stop_flag.clone();
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
     let thread = thread::Builder::new()
         .name("freebsd_pcm".to_string())
-        .spawn(move || render_thread(prep, music_ring, sfx_receiver, stop_flag_thread, ready_tx))
+        .spawn(move || {
+            render_thread(
+                prep,
+                music_ring,
+                sfx_receiver,
+                render_maps,
+                stop_flag_thread,
+                ready_tx,
+            )
+        })
         .map_err(|e| format!("failed to spawn FreeBSD PCM render thread: {e}"))?;
     match ready_rx.recv() {
         Ok(Ok(())) => Ok(FreeBsdPcmOutputStream {
@@ -256,10 +267,18 @@ fn render_thread(
     prep: FreeBsdPcmOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
+    render_maps: AudioRenderMaps,
     stop_flag: Arc<AtomicBool>,
     ready_tx: Sender<Result<(), String>>,
 ) {
-    if let Err(err) = render_thread_inner(prep, music_ring, sfx_receiver, &stop_flag, &ready_tx) {
+    if let Err(err) = render_thread_inner(
+        prep,
+        music_ring,
+        sfx_receiver,
+        render_maps,
+        &stop_flag,
+        &ready_tx,
+    ) {
         let _ = ready_tx.send(Err(err));
     }
 }
@@ -268,6 +287,7 @@ fn render_thread_inner(
     prep: FreeBsdPcmOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
+    render_maps: AudioRenderMaps,
     stop_flag: &AtomicBool,
     ready_tx: &Sender<Result<(), String>>,
 ) -> Result<(), String> {
@@ -299,7 +319,7 @@ fn render_thread_inner(
         return Ok(());
     }
 
-    let mut render = RenderState::new(music_ring, sfx_receiver, actual.channels);
+    let mut render = RenderState::new(music_ring, actual.channels, render_maps);
     let mut mix = vec![0i16; actual.period_frames as usize * actual.channels];
     while !stop_flag.load(Ordering::Relaxed) {
         let timing_before = playback_timing(
@@ -308,7 +328,12 @@ fn render_thread_inner(
             actual.bytes_per_frame,
             actual.buffer_frames,
         );
-        render.render_i16_host_nanos(&mut mix, timing_before.playback_host_nanos);
+        let result = render.render_i16_host_nanos(
+            &mut mix,
+            timing_before.playback_host_nanos,
+            sfx_receiver.try_iter(),
+        );
+        report_audio_render_callback(result);
         write_all(file.as_raw_fd(), &mix, stop_flag, &prep.device_name)?;
         let timing_after = playback_timing(
             file.as_raw_fd(),

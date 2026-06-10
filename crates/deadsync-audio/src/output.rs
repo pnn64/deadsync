@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::telemetry::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
 
@@ -122,6 +123,20 @@ pub struct AudioMixLevels {
     pub assist_tick_volume: u8,
 }
 
+const DEFAULT_AUDIO_MIX_LEVELS: AudioMixLevels = AudioMixLevels {
+    master_volume: 90,
+    music_volume: 100,
+    sfx_volume: 100,
+    assist_tick_volume: 100,
+};
+
+static AUDIO_MIX_LEVELS_PACKED: AtomicU32 = AtomicU32::new(pack_audio_mix_levels(
+    DEFAULT_AUDIO_MIX_LEVELS.master_volume,
+    DEFAULT_AUDIO_MIX_LEVELS.music_volume,
+    DEFAULT_AUDIO_MIX_LEVELS.sfx_volume,
+    DEFAULT_AUDIO_MIX_LEVELS.assist_tick_volume,
+));
+
 #[inline(always)]
 pub const fn pack_audio_mix_levels(
     master_volume: u8,
@@ -144,6 +159,24 @@ pub const fn unpack_audio_mix_levels(packed: u32) -> AudioMixLevels {
 }
 
 #[inline(always)]
+pub fn set_audio_mix_levels(levels: AudioMixLevels) {
+    AUDIO_MIX_LEVELS_PACKED.store(
+        pack_audio_mix_levels(
+            levels.master_volume,
+            levels.music_volume,
+            levels.sfx_volume,
+            levels.assist_tick_volume,
+        ),
+        Ordering::Release,
+    );
+}
+
+#[inline(always)]
+pub fn audio_mix_levels() -> AudioMixLevels {
+    unpack_audio_mix_levels(AUDIO_MIX_LEVELS_PACKED.load(Ordering::Acquire))
+}
+
+#[inline(always)]
 pub fn mix_level_gains(levels: AudioMixLevels) -> (f32, f32, f32) {
     let master_vol = f32::from(levels.master_volume) * 0.01;
     let music_vol = f32::from(levels.music_volume) * 0.01;
@@ -154,6 +187,11 @@ pub fn mix_level_gains(levels: AudioMixLevels) -> (f32, f32, f32) {
         master_vol * sfx_vol,
         master_vol * assist_tick_vol,
     )
+}
+
+#[inline(always)]
+pub fn audio_mix_level_gains() -> (f32, f32, f32) {
+    mix_level_gains(audio_mix_levels())
 }
 
 #[derive(Clone, Debug)]
