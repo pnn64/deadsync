@@ -1,11 +1,12 @@
 use super::super::{
-    OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
-    internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    RenderState, internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
     publish_output_timing_quality,
 };
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
-use deadsync_audio::AudioOutputMode;
+use deadsync_audio::{
+    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
+};
 use deadsync_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};

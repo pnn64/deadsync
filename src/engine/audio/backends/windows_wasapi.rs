@@ -1,8 +1,7 @@
-use super::super::{
-    OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
-    internal, publish_output_timing,
+use super::super::{RenderState, internal, publish_output_timing};
+use deadsync_audio::{
+    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
 };
-use deadsync_audio::AudioOutputMode;
 use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::ffi::c_void;

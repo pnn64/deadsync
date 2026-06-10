@@ -1,8 +1,103 @@
+use std::sync::Arc;
+
 /// Upper bound (in device frames) on how far ahead of the audible write head a
 /// scheduled SFX onset may sit before the mixer treats it as stale and drops it.
 /// This is a last-resort sanity bound; seek/stop/track-change staleness is
 /// handled by the caller's generation guard.
 pub const MAX_SCHEDULE_AHEAD_FRAMES: u64 = 192_000;
+pub const MAX_ACTIVE_SFX: usize = 32;
+
+#[derive(Clone, Copy, Debug)]
+pub enum SfxLane {
+    Effect,
+    Screen,
+    AssistTick,
+}
+
+#[derive(Clone)]
+pub struct QueuedSfx {
+    pub data: Arc<[i16]>,
+    pub lane: SfxLane,
+    pub stop_generation: u64,
+    /// Absolute stream frame at which the first sample should become audible.
+    /// `0` means "play immediately" at the start of the next buffer.
+    pub target_stream_frame: u64,
+}
+
+/// Active SFX state retained across output callbacks.
+pub struct ActiveSfx {
+    pub data: Arc<[i16]>,
+    pub cursor: usize,
+    pub lane: SfxLane,
+    pub stop_generation: u64,
+    pub target_stream_frame: u64,
+}
+
+impl ActiveSfx {
+    #[inline(always)]
+    pub fn from_queued(queued: QueuedSfx) -> Self {
+        Self {
+            data: queued.data,
+            cursor: 0,
+            lane: queued.lane,
+            stop_generation: queued.stop_generation,
+            target_stream_frame: queued.target_stream_frame,
+        }
+    }
+}
+
+#[inline(always)]
+pub fn push_queued_sfx(
+    active: &mut Vec<ActiveSfx>,
+    queued: QueuedSfx,
+    is_stale: impl Fn(SfxLane, u64) -> bool,
+) {
+    if !is_stale(queued.lane, queued.stop_generation) && active.len() < MAX_ACTIVE_SFX {
+        active.push(ActiveSfx::from_queued(queued));
+    }
+}
+
+pub fn mix_active_sfx(
+    active: &mut Vec<ActiveSfx>,
+    mix_f32: &mut [f32],
+    total_before: u64,
+    device_channels: usize,
+    sfx_vol: f32,
+    assist_tick_vol: f32,
+    is_stale: impl Fn(SfxLane, u64) -> bool,
+) -> bool {
+    let buf_len = mix_f32.len();
+    let mut mixed_sfx = false;
+    active.retain_mut(|sfx| {
+        if is_stale(sfx.lane, sfx.stop_generation) {
+            return false;
+        }
+        let start_sample = match scheduled_onset_decision(
+            sfx.target_stream_frame,
+            total_before,
+            device_channels,
+            buf_len,
+        ) {
+            ScheduledOnset::Drop => return false,
+            ScheduledOnset::Pending => return true,
+            ScheduledOnset::StartAt(offset) => offset,
+        };
+        sfx.target_stream_frame = 0;
+        let n = (sfx.data.len().saturating_sub(sfx.cursor)).min(buf_len - start_sample);
+        mixed_sfx |= n > 0;
+        let lane_vol = match sfx.lane {
+            SfxLane::Effect | SfxLane::Screen => sfx_vol,
+            SfxLane::AssistTick => assist_tick_vol,
+        };
+        for i in 0..n {
+            let sfx_sample_f32 = i16_to_f32(sfx.data[sfx.cursor + i]) * lane_vol;
+            mix_f32[start_sample + i] += sfx_sample_f32;
+        }
+        sfx.cursor += n;
+        sfx.cursor < sfx.data.len()
+    });
+    mixed_sfx
+}
 
 /// Where a scheduled SFX onset lands relative to the buffer currently being
 /// filled. See [`scheduled_onset_decision`].

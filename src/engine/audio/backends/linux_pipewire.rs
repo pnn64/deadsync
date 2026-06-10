@@ -1,8 +1,7 @@
-use super::super::{
-    OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
-    internal, publish_output_timing, publish_output_timing_quality,
+use super::super::{RenderState, internal, publish_output_timing, publish_output_timing_quality};
+use deadsync_audio::{
+    AudioOutputMode, OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx,
 };
-use deadsync_audio::AudioOutputMode;
 use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
 use pipewire as pw;

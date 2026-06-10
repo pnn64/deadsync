@@ -5,15 +5,18 @@ mod resample;
 
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
+#[cfg(unix)]
+use deadsync_audio::OutputTimingQuality;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, MusicMapSeg, OutputBackendReady, OutputTelemetryBackend, OutputTelemetryClock,
-    OutputTimingQuality, PlaybackPosMap, ScheduledOnset, StutterDiagAudioEvent,
-    StutterDiagAudioEventKind, f32_to_i16, fallback_music_position, i16_to_f32,
-    music_clock_seed_enabled, music_nanos_from_seconds, normalized_music_rate,
-    scheduled_onset_decision,
+    ActiveSfx, AudioOutputMode, MAX_ACTIVE_SFX, MusicMapSeg, OutputBackendReady, PlaybackPosMap,
+    QueuedSfx, SfxLane, StutterDiagAudioEvent, StutterDiagAudioEventKind, f32_to_i16,
+    fallback_music_position, i16_to_f32, mix_active_sfx, mix_level_gains, music_clock_seed_enabled,
+    music_nanos_from_seconds, normalized_music_rate, push_queued_sfx,
 };
-pub use deadsync_audio::{Cut, OutputDeviceInfo, OutputTimingSnapshot};
+pub use deadsync_audio::{
+    Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
+};
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
 use deadsync_platform::host_time::{instant_nanos, now_nanos};
@@ -28,42 +31,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
-const MAX_ACTIVE_SFX: usize = 32;
 const SFX_QUEUE_CAP: usize = 128;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 /* ============================== Public API ============================== */
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InitConfig {
-    pub output_device_index: Option<u16>,
-    pub output_mode: AudioOutputMode,
-    #[cfg(target_os = "linux")]
-    pub linux_backend: LinuxAudioBackend,
-    pub sample_rate_hz: Option<u32>,
-}
 
 struct OutputDeviceProbe {
     info: OutputDeviceInfo,
     #[cfg(target_os = "freebsd")]
     freebsd_dsp_path: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum SfxLane {
-    Effect,
-    Screen,
-    AssistTick,
-}
-
-#[derive(Clone)]
-struct QueuedSfx {
-    data: Arc<[i16]>,
-    lane: SfxLane,
-    stop_generation: u64,
-    /// Absolute stream frame (on the `MUSIC_TOTAL_FRAMES` timeline) at which the
-    /// first sample should become audible. `0` means "play immediately" at the
-    /// start of the next buffer (the behaviour for non-scheduled SFX).
-    target_stream_frame: u64,
 }
 
 // Commands to the audio engine
@@ -188,64 +163,6 @@ struct AudioThreadReady {
     sfx_sender: SyncSender<QueuedSfx>,
 }
 
-const AUDIO_STUTTER_DIAG_EVENT_COUNT: usize = 64;
-
-struct AudioDiagEventSlot {
-    version: AtomicU64,
-    at_host_nanos: AtomicU64,
-    kind: AtomicU8,
-    value_ns: AtomicU64,
-    sample_rate_hz: AtomicU32,
-    buffer_frames: AtomicU32,
-    padding_frames: AtomicU32,
-    queued_frames: AtomicU32,
-    device_period_ns: AtomicU64,
-    estimated_output_delay_ns: AtomicU64,
-    timing_quality: AtomicU8,
-}
-
-impl AudioDiagEventSlot {
-    #[inline(always)]
-    fn new() -> Self {
-        Self {
-            version: AtomicU64::new(0),
-            at_host_nanos: AtomicU64::new(0),
-            kind: AtomicU8::new(0),
-            value_ns: AtomicU64::new(0),
-            sample_rate_hz: AtomicU32::new(0),
-            buffer_frames: AtomicU32::new(0),
-            padding_frames: AtomicU32::new(0),
-            queued_frames: AtomicU32::new(0),
-            device_period_ns: AtomicU64::new(0),
-            estimated_output_delay_ns: AtomicU64::new(0),
-            timing_quality: AtomicU8::new(OutputTimingQuality::Unknown as u8),
-        }
-    }
-
-    fn load(&self) -> Option<(u64, StutterDiagAudioEvent)> {
-        let version_start = self.version.load(Ordering::Acquire);
-        if version_start == 0 || version_start & 1 != 0 {
-            return None;
-        }
-        let event = StutterDiagAudioEvent {
-            at_host_nanos: self.at_host_nanos.load(Ordering::Relaxed),
-            kind: StutterDiagAudioEventKind::from_bits(self.kind.load(Ordering::Relaxed))?,
-            value_ns: self.value_ns.load(Ordering::Relaxed),
-            sample_rate_hz: self.sample_rate_hz.load(Ordering::Relaxed),
-            buffer_frames: self.buffer_frames.load(Ordering::Relaxed),
-            padding_frames: self.padding_frames.load(Ordering::Relaxed),
-            queued_frames: self.queued_frames.load(Ordering::Relaxed),
-            device_period_ns: self.device_period_ns.load(Ordering::Relaxed),
-            estimated_output_delay_ns: self.estimated_output_delay_ns.load(Ordering::Relaxed),
-            timing_quality: OutputTimingQuality::from_bits(
-                self.timing_quality.load(Ordering::Relaxed),
-            ),
-        };
-        let version_end = self.version.load(Ordering::Acquire);
-        (version_start == version_end).then_some((version_end >> 1, event))
-    }
-}
-
 /// A handle to a streaming music track.
 struct MusicStream {
     thread: thread::JoinHandle<()>,
@@ -302,25 +219,6 @@ static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
 static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
-static AUDIO_STUTTER_DIAG_EVENT_HEAD: AtomicU64 = AtomicU64::new(0);
-static AUDIO_STUTTER_DIAG_EVENTS: std::sync::LazyLock<
-    [AudioDiagEventSlot; AUDIO_STUTTER_DIAG_EVENT_COUNT],
-> = std::sync::LazyLock::new(|| std::array::from_fn(|_| AudioDiagEventSlot::new()));
-static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::Unknown as u8);
-static OUTPUT_TIMING_REQUESTED_MODE: AtomicU8 = AtomicU8::new(1);
-static OUTPUT_TIMING_NATIVE_FALLBACK: AtomicBool = AtomicBool::new(false);
-static OUTPUT_TIMING_CLOCK: AtomicU8 = AtomicU8::new(OutputTelemetryClock::Unknown as u8);
-static OUTPUT_TIMING_QUALITY: AtomicU8 = AtomicU8::new(OutputTimingQuality::Unknown as u8);
-static OUTPUT_TIMING_SAMPLE_RATE_HZ: AtomicU32 = AtomicU32::new(0);
-static OUTPUT_TIMING_DEVICE_PERIOD_NS: AtomicU64 = AtomicU64::new(0);
-static OUTPUT_TIMING_STREAM_LATENCY_NS: AtomicU64 = AtomicU64::new(0);
-static OUTPUT_TIMING_BUFFER_FRAMES: AtomicU32 = AtomicU32::new(0);
-static OUTPUT_TIMING_PADDING_FRAMES: AtomicU32 = AtomicU32::new(0);
-static OUTPUT_TIMING_QUEUED_FRAMES: AtomicU32 = AtomicU32::new(0);
-static OUTPUT_TIMING_EST_DELAY_NS: AtomicU64 = AtomicU64::new(0);
-static OUTPUT_TIMING_CLOCK_FALLBACKS: AtomicU64 = AtomicU64::new(0);
-static OUTPUT_TIMING_SANITY_FAILURES: AtomicU64 = AtomicU64::new(0);
-static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 
@@ -346,19 +244,6 @@ fn seeded_music_position(stream_seconds: f32) -> Option<(f32, f32)> {
     let cut_start_sec = f64::from_bits(MUSIC_CLOCK_CUT_START_BITS.load(Ordering::Relaxed));
     let rate = f32::from_bits(MUSIC_CLOCK_RATE_BITS.load(Ordering::Relaxed));
     Some(fallback_music_position(stream_seconds, cut_start_sec, rate))
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct MusicStreamClockSnapshot {
-    pub stream_seconds: f32,
-    pub music_seconds: f32,
-    pub music_nanos: i64,
-    pub music_seconds_per_second: f32,
-    pub has_music_mapping: bool,
-    pub valid_at: Instant,
-    // Host/QPC clock for `valid_at` when the backend publishes one; 0 means
-    // the snapshot only has a local `Instant` anchor.
-    pub valid_at_host_nanos: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -395,68 +280,8 @@ fn stutter_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Trace)
 }
 
-#[inline(always)]
-fn stutter_diag_callback_gap_threshold_ns() -> u64 {
-    let device_period_ns = OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed);
-    if device_period_ns > 0 {
-        return device_period_ns.saturating_mul(2).max(5_000_000);
-    }
-    let sample_rate_hz = OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed);
-    let buffer_frames = OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed);
-    if sample_rate_hz > 0 && buffer_frames > 0 {
-        let buffer_ns =
-            (u64::from(buffer_frames) * 1_000_000_000).saturating_div(u64::from(sample_rate_hz));
-        return buffer_ns.saturating_mul(2).max(5_000_000);
-    }
-    10_000_000
-}
-
-fn record_stutter_diag_event(
-    kind: StutterDiagAudioEventKind,
-    at_host_nanos: u64,
-    value_ns: u64,
-    timing_quality: OutputTimingQuality,
-) {
-    if !stutter_diag_enabled() {
-        return;
-    }
-    let seq = AUDIO_STUTTER_DIAG_EVENT_HEAD.fetch_add(1, Ordering::Relaxed) + 1;
-    let slot = &AUDIO_STUTTER_DIAG_EVENTS[(seq as usize - 1) % AUDIO_STUTTER_DIAG_EVENT_COUNT];
-    slot.version.store((seq << 1) | 1, Ordering::Relaxed);
-    slot.at_host_nanos.store(at_host_nanos, Ordering::Relaxed);
-    slot.kind.store(kind as u8, Ordering::Relaxed);
-    slot.value_ns.store(value_ns, Ordering::Relaxed);
-    slot.sample_rate_hz.store(
-        OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.buffer_frames.store(
-        OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.padding_frames.store(
-        OUTPUT_TIMING_PADDING_FRAMES.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.queued_frames.store(
-        OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.device_period_ns.store(
-        OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.estimated_output_delay_ns.store(
-        OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
-        Ordering::Relaxed,
-    );
-    slot.timing_quality
-        .store(timing_quality as u8, Ordering::Relaxed);
-    slot.version.store(seq << 1, Ordering::Release);
-}
-
 pub fn stutter_diag_trigger_seq() -> u64 {
-    AUDIO_STUTTER_DIAG_EVENT_HEAD.load(Ordering::Acquire)
+    deadsync_audio::stutter_diag_trigger_seq()
 }
 
 pub fn collect_stutter_diag_events(
@@ -464,20 +289,7 @@ pub fn collect_stutter_diag_events(
     window_ns: u64,
     out: &mut Vec<StutterDiagAudioEvent>,
 ) {
-    let head = AUDIO_STUTTER_DIAG_EVENT_HEAD.load(Ordering::Acquire);
-    let start = head.saturating_sub(AUDIO_STUTTER_DIAG_EVENT_COUNT as u64);
-    for seq in (start + 1)..=head {
-        let slot = &AUDIO_STUTTER_DIAG_EVENTS[(seq as usize - 1) % AUDIO_STUTTER_DIAG_EVENT_COUNT];
-        let Some((loaded_seq, event)) = slot.load() else {
-            continue;
-        };
-        if loaded_seq != seq || event.at_host_nanos == 0 {
-            continue;
-        }
-        if now_host_nanos.saturating_sub(event.at_host_nanos) <= window_ns {
-            out.push(event);
-        }
-    }
+    deadsync_audio::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
 #[inline(always)]
@@ -498,12 +310,12 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
     if prev_nanos != 0 && anchor_nanos >= prev_nanos {
         let gap_ns = anchor_nanos - prev_nanos;
         AUDIO_TIMING_DIAG_LAST_GAP_NS.store(gap_ns, Ordering::Relaxed);
-        if stutter_diag && gap_ns >= stutter_diag_callback_gap_threshold_ns() {
-            record_stutter_diag_event(
+        if stutter_diag && gap_ns >= deadsync_audio::stutter_diag_callback_gap_threshold_ns() {
+            deadsync_audio::record_stutter_diag_event(
                 StutterDiagAudioEventKind::CallbackGap,
                 now_nanos(),
                 gap_ns,
-                OutputTimingQuality::from_bits(OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed)),
+                deadsync_audio::current_output_timing_quality(),
             );
         }
     }
@@ -1231,51 +1043,14 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
-    OutputTimingSnapshot {
-        backend: OutputTelemetryBackend::from_bits(OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed)),
-        requested_output_mode: AudioOutputMode::from_bits(
-            OUTPUT_TIMING_REQUESTED_MODE.load(Ordering::Relaxed),
-        ),
-        fallback_from_native: OUTPUT_TIMING_NATIVE_FALLBACK.load(Ordering::Relaxed),
-        timing_clock: OutputTelemetryClock::from_bits(OUTPUT_TIMING_CLOCK.load(Ordering::Relaxed)),
-        timing_quality: OutputTimingQuality::from_bits(
-            OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed),
-        ),
-        sample_rate_hz: OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
-        device_period_ns: OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
-        stream_latency_ns: OUTPUT_TIMING_STREAM_LATENCY_NS.load(Ordering::Relaxed),
-        buffer_frames: OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed),
-        padding_frames: OUTPUT_TIMING_PADDING_FRAMES.load(Ordering::Relaxed),
-        queued_frames: OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
-        estimated_output_delay_ns: OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
-        clock_fallback_count: OUTPUT_TIMING_CLOCK_FALLBACKS.load(Ordering::Relaxed),
-        timing_sanity_failure_count: OUTPUT_TIMING_SANITY_FAILURES.load(Ordering::Relaxed),
-        underrun_count: OUTPUT_TIMING_UNDERRUNS.load(Ordering::Relaxed),
-    }
+    deadsync_audio::get_output_timing_snapshot()
 }
 
 /* ============================ Engine internals ============================ */
 
 #[inline(always)]
 fn publish_output_backend_ready(ready: OutputBackendReady) {
-    OUTPUT_TIMING_BACKEND.store(
-        OutputTelemetryBackend::from_backend_name(ready.backend_name) as u8,
-        Ordering::Relaxed,
-    );
-    OUTPUT_TIMING_REQUESTED_MODE.store(ready.requested_output_mode.bits(), Ordering::Relaxed);
-    OUTPUT_TIMING_NATIVE_FALLBACK.store(ready.fallback_from_native, Ordering::Relaxed);
-    OUTPUT_TIMING_CLOCK.store(ready.timing_clock as u8, Ordering::Relaxed);
-    OUTPUT_TIMING_QUALITY.store(ready.timing_quality as u8, Ordering::Relaxed);
-    OUTPUT_TIMING_SAMPLE_RATE_HZ.store(ready.device_sample_rate, Ordering::Relaxed);
-    OUTPUT_TIMING_DEVICE_PERIOD_NS.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_STREAM_LATENCY_NS.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_BUFFER_FRAMES.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_PADDING_FRAMES.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_QUEUED_FRAMES.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_EST_DELAY_NS.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_CLOCK_FALLBACKS.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_SANITY_FAILURES.store(0, Ordering::Relaxed);
-    OUTPUT_TIMING_UNDERRUNS.store(0, Ordering::Relaxed);
+    deadsync_audio::publish_output_backend_ready(ready);
 }
 
 #[inline(always)]
@@ -1288,58 +1063,38 @@ pub(crate) fn publish_output_timing(
     queued_frames: u32,
     estimated_output_delay_ns: u64,
 ) {
-    OUTPUT_TIMING_SAMPLE_RATE_HZ.store(sample_rate_hz, Ordering::Relaxed);
-    OUTPUT_TIMING_DEVICE_PERIOD_NS.store(device_period_ns, Ordering::Relaxed);
-    OUTPUT_TIMING_STREAM_LATENCY_NS.store(stream_latency_ns, Ordering::Relaxed);
-    OUTPUT_TIMING_BUFFER_FRAMES.store(buffer_frames, Ordering::Relaxed);
-    OUTPUT_TIMING_PADDING_FRAMES.store(padding_frames, Ordering::Relaxed);
-    OUTPUT_TIMING_QUEUED_FRAMES.store(queued_frames, Ordering::Relaxed);
-    OUTPUT_TIMING_EST_DELAY_NS.store(estimated_output_delay_ns, Ordering::Relaxed);
+    deadsync_audio::publish_output_timing(
+        sample_rate_hz,
+        device_period_ns,
+        stream_latency_ns,
+        buffer_frames,
+        padding_frames,
+        queued_frames,
+        estimated_output_delay_ns,
+    );
 }
 
 #[inline(always)]
 pub(crate) fn note_output_underrun() {
-    OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
-    record_stutter_diag_event(
-        StutterDiagAudioEventKind::Underrun,
-        now_nanos(),
-        0,
-        OutputTimingQuality::from_bits(OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed)),
-    );
+    deadsync_audio::note_output_underrun(now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
 #[cfg(unix)]
 pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
-    OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
+    deadsync_audio::publish_output_timing_quality(quality);
 }
 
 #[inline(always)]
 #[cfg(unix)]
 pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
-    OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
-    OUTPUT_TIMING_SANITY_FAILURES.fetch_add(1, Ordering::Relaxed);
-    if !matches!(quality, OutputTimingQuality::Fallback) {
-        record_stutter_diag_event(
-            StutterDiagAudioEventKind::TimingSanity,
-            now_nanos(),
-            0,
-            quality,
-        );
-    }
+    deadsync_audio::note_output_timing_sanity_failure(quality, now_nanos(), stutter_diag_enabled());
 }
 
 #[inline(always)]
 #[cfg(unix)]
 pub(crate) fn note_output_clock_fallback() {
-    note_output_timing_sanity_failure(OutputTimingQuality::Fallback);
-    OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
-    record_stutter_diag_event(
-        StutterDiagAudioEventKind::ClockFallback,
-        now_nanos(),
-        0,
-        OutputTimingQuality::Fallback,
-    );
+    deadsync_audio::note_output_clock_fallback(now_nanos(), stutter_diag_enabled());
 }
 
 fn commit_played_music_map(
@@ -1376,12 +1131,6 @@ fn commit_played_music_map(
         }
     }
 }
-
-/// One actively-mixing SFX voice:
-/// `(samples, cursor, lane, stop_generation, target_stream_frame)`.
-/// `target_stream_frame == 0` means "play immediately"; otherwise the onset is
-/// placed at that absolute stream frame for sample-accurate scheduling.
-type ActiveSfx = (Arc<[i16]>, usize, SfxLane, u64, u64);
 
 struct RenderState {
     music_ring: Arc<internal::SpscRingI16>,
@@ -1465,16 +1214,7 @@ impl RenderState {
 
     #[inline(always)]
     fn mix_levels() -> (f32, f32, f32) {
-        let config = crate::config::audio_mix_levels();
-        let master_vol = f32::from(config.master_volume) * 0.01;
-        let music_vol = f32::from(config.music_volume) * 0.01;
-        let sfx_vol = f32::from(config.sfx_volume) * 0.01;
-        let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
-        (
-            master_vol * music_vol,
-            master_vol * sfx_vol,
-            master_vol * assist_tick_vol,
-        )
+        mix_level_gains(crate::config::audio_mix_levels())
     }
 
     fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
@@ -1519,58 +1259,17 @@ impl RenderState {
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
-            if !sfx_is_stale(new_sfx.lane, new_sfx.stop_generation)
-                && self.active_sfx.len() < MAX_ACTIVE_SFX
-            {
-                self.active_sfx.push((
-                    new_sfx.data,
-                    0,
-                    new_sfx.lane,
-                    new_sfx.stop_generation,
-                    new_sfx.target_stream_frame,
-                ));
-            }
+            push_queued_sfx(&mut self.active_sfx, new_sfx, sfx_is_stale);
         }
 
-        let buf_len = self.mix_f32.len();
-        let mut mixed_sfx = false;
-        self.active_sfx.retain_mut(
-            |(data, cursor, lane, stop_generation, target_stream_frame)| {
-                if sfx_is_stale(*lane, *stop_generation) {
-                    return false;
-                }
-                // Scheduled onset: place the first sample at an absolute stream
-                // frame. Because that frame is on the same timeline the mixer
-                // writes against, output latency is compensated implicitly.
-                let start_sample = match scheduled_onset_decision(
-                    *target_stream_frame,
-                    total_before,
-                    device_channels,
-                    buf_len,
-                ) {
-                    // Implausibly far ahead (e.g. a stale timeline that the
-                    // generation guard somehow missed); drop it.
-                    ScheduledOnset::Drop => return false,
-                    // Onset is in a later buffer: keep pending, do not mix or
-                    // advance the cursor so it stays sample-accurate.
-                    ScheduledOnset::Pending => return true,
-                    ScheduledOnset::StartAt(offset) => offset,
-                };
-                // From here on it behaves like a normal cursor sound.
-                *target_stream_frame = 0;
-                let n = (data.len().saturating_sub(*cursor)).min(buf_len - start_sample);
-                mixed_sfx |= n > 0;
-                let lane_vol = match *lane {
-                    SfxLane::Effect | SfxLane::Screen => sfx_vol,
-                    SfxLane::AssistTick => assist_tick_vol,
-                };
-                for i in 0..n {
-                    let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
-                    self.mix_f32[start_sample + i] += sfx_sample_f32;
-                }
-                *cursor += n;
-                *cursor < data.len()
-            },
+        let mixed_sfx = mix_active_sfx(
+            &mut self.active_sfx,
+            &mut self.mix_f32,
+            total_before,
+            device_channels,
+            sfx_vol,
+            assist_tick_vol,
+            sfx_is_stale,
         );
 
         (popped, mixed_sfx)

@@ -105,6 +105,57 @@ impl FromStr for LinuxAudioBackend {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InitConfig {
+    pub output_device_index: Option<u16>,
+    pub output_mode: AudioOutputMode,
+    #[cfg(target_os = "linux")]
+    pub linux_backend: LinuxAudioBackend,
+    pub sample_rate_hz: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioMixLevels {
+    pub master_volume: u8,
+    pub music_volume: u8,
+    pub sfx_volume: u8,
+    pub assist_tick_volume: u8,
+}
+
+#[inline(always)]
+pub const fn pack_audio_mix_levels(
+    master_volume: u8,
+    music_volume: u8,
+    sfx_volume: u8,
+    assist_tick_volume: u8,
+) -> u32 {
+    u32::from_le_bytes([master_volume, music_volume, sfx_volume, assist_tick_volume])
+}
+
+#[inline(always)]
+pub const fn unpack_audio_mix_levels(packed: u32) -> AudioMixLevels {
+    let [master_volume, music_volume, sfx_volume, assist_tick_volume] = packed.to_le_bytes();
+    AudioMixLevels {
+        master_volume,
+        music_volume,
+        sfx_volume,
+        assist_tick_volume,
+    }
+}
+
+#[inline(always)]
+pub fn mix_level_gains(levels: AudioMixLevels) -> (f32, f32, f32) {
+    let master_vol = f32::from(levels.master_volume) * 0.01;
+    let music_vol = f32::from(levels.music_volume) * 0.01;
+    let sfx_vol = f32::from(levels.sfx_volume) * 0.01;
+    let assist_tick_vol = f32::from(levels.assist_tick_volume) * 0.01;
+    (
+        master_vol * music_vol,
+        master_vol * sfx_vol,
+        master_vol * assist_tick_vol,
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct OutputDeviceInfo {
     pub name: String,

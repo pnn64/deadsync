@@ -1,5 +1,6 @@
 use crate::MusicMapSeg;
 use std::collections::VecDeque;
+use std::time::Instant;
 
 pub const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
@@ -51,6 +52,19 @@ pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f3
 #[inline(always)]
 pub fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
     cut_start_sec.is_finite() && cut_start_sec > 0.0
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MusicStreamClockSnapshot {
+    pub stream_seconds: f32,
+    pub music_seconds: f32,
+    pub music_nanos: i64,
+    pub music_seconds_per_second: f32,
+    pub has_music_mapping: bool,
+    pub valid_at: Instant,
+    // Host/QPC clock for `valid_at` when the backend publishes one; 0 means
+    // the snapshot only has a local `Instant` anchor.
+    pub valid_at_host_nanos: u64,
 }
 
 #[derive(Default)]

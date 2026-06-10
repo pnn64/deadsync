@@ -881,7 +881,26 @@ fn audio_core_lives_in_audio_crate() {
             "pub enum OutputTimingQuality",
             "pub enum StutterDiagAudioEventKind",
             "pub struct StutterDiagAudioEvent",
+            "struct AudioDiagEventSlot",
+            "struct AudioTelemetryState",
+            "AUDIO_STUTTER_DIAG_EVENT_COUNT",
+            "static AUDIO_STUTTER_DIAG_",
+            "static OUTPUT_TIMING_",
+            "fn record_stutter_diag_event",
+            "fn stutter_diag_callback_gap_threshold_ns",
             "pub struct Cut",
+            "pub struct MusicStreamClockSnapshot",
+            "enum SfxLane",
+            "struct QueuedSfx",
+            "struct ActiveSfx",
+            "type ActiveSfx",
+            "fn push_queued_sfx",
+            "fn mix_active_sfx",
+            "pub struct InitConfig",
+            "pub struct AudioMixLevels",
+            "fn mix_level_gains",
+            "const fn pack_audio_mix_levels",
+            "const fn unpack_audio_mix_levels",
             "pub enum AudioOutputMode",
             "pub enum LinuxAudioBackend",
             "pub struct OutputDeviceInfo",
@@ -917,16 +936,32 @@ fn audio_core_lives_in_audio_crate() {
 
     let config_audio = root.join("src/config/audio.rs");
     if let Ok(text) = fs::read_to_string(&config_audio) {
-        if !text.contains("pub use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};") {
+        if !text.contains(
+            "pub use deadsync_audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};",
+        ) {
             failures.push(format!(
-                "{} should re-export audio output selection types from deadsync-audio",
+                "{} should re-export audio mix/config contracts from deadsync-audio",
                 rel_path(&root, &config_audio)
             ));
         }
-        for token in ["pub enum AudioOutputMode", "pub enum LinuxAudioBackend"] {
+        if !text.contains(
+            "pub(crate) use deadsync_audio::{pack_audio_mix_levels, unpack_audio_mix_levels};",
+        ) {
+            failures.push(format!(
+                "{} should use deadsync-audio packed mix-level helpers",
+                rel_path(&root, &config_audio)
+            ));
+        }
+        for token in [
+            "pub enum AudioOutputMode",
+            "pub enum LinuxAudioBackend",
+            "pub struct AudioMixLevels",
+            "fn pack_audio_mix_levels",
+            "fn unpack_audio_mix_levels",
+        ] {
             if text.contains(token) {
                 failures.push(format!(
-                    "{} still defines audio output selection token {token}",
+                    "{} still defines audio contract token {token}",
                     rel_path(&root, &config_audio)
                 ));
             }
