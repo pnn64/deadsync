@@ -1,4 +1,5 @@
 use crate::actors::{Actor, IntoTextureKey, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::texture::TextureContext;
 use crate::{anim, font, runtime};
 use deadsync_render::BlendMode;
 use glam::Mat4 as Matrix4;
@@ -22,6 +23,173 @@ pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
         _ if lower.contains("beat") => anim::EffectClock::Beat,
         _ => anim::EffectClock::Time,
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actors::SpriteSource;
+    use crate::texture::{TextureContext, TextureMeta};
+
+    struct TestTextureContext;
+
+    impl TextureContext for TestTextureContext {
+        fn texture_registry_generation(&self) -> u64 {
+            7
+        }
+
+        fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+            match key {
+                "banner" => Some(TextureMeta { w: 320, h: 120 }),
+                "sheet" => Some(TextureMeta { w: 400, h: 200 }),
+                "grid" => Some(TextureMeta { w: 500, h: 300 }),
+                _ => None,
+            }
+        }
+
+        fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+            match key {
+                "sheet" => (4, 2),
+                _ => (1, 1),
+            }
+        }
+
+        fn texture_handle(&self, _key: &str) -> deadsync_render::TextureHandle {
+            99
+        }
+    }
+
+    #[test]
+    fn sprite_native_dims_resolves_texture_dims() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("banner"),
+            None,
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [320.0, 120.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_applies_uv_rect() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("banner"),
+            Some([0.25, 0.0, 0.75, 0.5]),
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [160.0, 60.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_uses_sheet_hints() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("sheet"),
+            None,
+            None,
+            None,
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [100.0, 100.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_uses_explicit_grid_for_cell() {
+        let dims = sprite_native_dims(
+            &SpriteSource::TextureStatic("grid"),
+            None,
+            Some((2, u32::MAX)),
+            Some((5, 3)),
+            &TestTextureContext,
+        );
+
+        assert_eq!(dims, [100.0, 100.0]);
+    }
+
+    #[test]
+    fn sprite_native_dims_returns_unit_for_solid() {
+        let dims = sprite_native_dims(&SpriteSource::Solid, None, None, None, &TestTextureContext);
+
+        assert_eq!(dims, [1.0, 1.0]);
+    }
+
+    #[test]
+    fn zoomto_with_native_dims_preserves_native_scale() {
+        let mut sprite = SpriteBuilder::static_texture("banner");
+        sprite.zoomto_with_native_dims(160.0, 30.0, [320.0, 120.0]);
+
+        let actor = sprite.build(0);
+        let Actor::Sprite { scale, .. } = actor else {
+            panic!("sprite builder should produce a sprite actor");
+        };
+
+        assert_eq!(scale, [0.5, 0.25]);
+    }
+}
+
+#[inline(always)]
+pub fn sprite_native_dims<T: TextureContext + ?Sized>(
+    source: &SpriteSource,
+    uv: Option<[f32; 4]>,
+    cell: Option<(u32, u32)>,
+    grid: Option<(u32, u32)>,
+    texture_ctx: &T,
+) -> [f32; 2] {
+    match source {
+        SpriteSource::Solid => [1.0, 1.0],
+        SpriteSource::TextureStatic(key) | SpriteSource::TextureStaticHandle { key, .. } => {
+            texture_native_dims(key, uv, cell, grid, texture_ctx)
+        }
+        SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
+            texture_native_dims(key.as_ref(), uv, cell, grid, texture_ctx)
+        }
+    }
+}
+
+#[inline(always)]
+fn texture_native_dims<T: TextureContext + ?Sized>(
+    key: &str,
+    uv: Option<[f32; 4]>,
+    cell: Option<(u32, u32)>,
+    grid: Option<(u32, u32)>,
+    texture_ctx: &T,
+) -> [f32; 2] {
+    let Some(meta) = texture_ctx.texture_dims(key) else {
+        return [0.0, 0.0];
+    };
+    let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
+
+    if let Some([u0, v0, u1, v1]) = uv {
+        tw *= (u1 - u0).abs().max(1e-6);
+        th *= (v1 - v0).abs().max(1e-6);
+        return [tw, th];
+    }
+
+    let effective_cell = if cell.is_some() {
+        cell
+    } else {
+        let (gc, gr) = grid.unwrap_or_else(|| texture_ctx.sprite_sheet_dims(key));
+        if gc.saturating_mul(gr) > 1 {
+            Some((0, u32::MAX))
+        } else {
+            None
+        }
+    };
+
+    if effective_cell.is_some() {
+        let (gc, gr) = grid.unwrap_or_else(|| texture_ctx.sprite_sheet_dims(key));
+        let cols = gc.max(1);
+        let rows = gr.max(1);
+        tw /= cols as f32;
+        th /= rows as f32;
+    }
+
+    [tw, th]
 }
 
 /* ======================== SPRITE/QUAD CORE ======================== */

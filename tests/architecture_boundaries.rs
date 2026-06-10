@@ -124,6 +124,7 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/dsl.rs",
     "src/engine/present/font.rs",
     "src/engine/present/runtime.rs",
+    "src/engine/present/texture.rs",
     "src/engine/space.rs",
 ];
 
@@ -944,8 +945,9 @@ fn present_model_lives_in_present_crate() {
                 .is_some_and(|text| text.trim() == "pub use deadsync_present::space::*;");
         let is_compose_facade = *file == "src/engine/present/compose.rs"
             && text.as_deref().is_some_and(|text| {
-                text.contains("use deadsync_present::compose as present_compose;")
-                    && text.contains("impl present_compose::TextureContext for AssetTextureContext")
+                text.contains("use super::texture::ASSET_TEXTURE_CONTEXT;")
+                    && text.contains("use deadsync_present::compose as present_compose;")
+                    && text.contains("present_compose::build_screen_with_texture_context")
             });
         let is_dsl_facade = *file == "src/engine/present/dsl.rs"
             && text.as_deref().is_some_and(|text| {
@@ -954,7 +956,19 @@ fn present_model_lives_in_present_crate() {
                     && text.contains("static_texture_cached")
                     && text.contains("assets::texture_handle")
             });
-        if path.exists() && !is_space_facade && !is_compose_facade && !is_dsl_facade {
+        let is_texture_facade = *file == "src/engine/present/texture.rs"
+            && text.as_deref().is_some_and(|text| {
+                text.contains("use crate::assets;")
+                    && text.contains("use deadsync_present::texture as present_texture;")
+                    && text.contains("impl present_texture::TextureContext for AssetTextureContext")
+                    && text.contains("pub(crate) const ASSET_TEXTURE_CONTEXT")
+            });
+        if path.exists()
+            && !is_space_facade
+            && !is_compose_facade
+            && !is_dsl_facade
+            && !is_texture_facade
+        {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)

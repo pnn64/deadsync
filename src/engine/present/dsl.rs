@@ -1,3 +1,4 @@
+use super::texture::ASSET_TEXTURE_CONTEXT;
 use crate::assets;
 use deadsync_present::actors::{Actor, SpriteSource};
 pub use deadsync_present::actors::{IntoTextureKey, TextureKeyHandle};
@@ -7,86 +8,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
-
-#[inline(always)]
-fn sprite_native_dims(
-    source: &SpriteSource,
-    uv: Option<[f32; 4]>,
-    cell: Option<(u32, u32)>,
-    grid: Option<(u32, u32)>,
-) -> (f32, f32) {
-    match source {
-        SpriteSource::Solid => (1.0, 1.0),
-        SpriteSource::TextureStatic(key) | SpriteSource::TextureStaticHandle { key, .. } => {
-            let Some(meta) = assets::texture_dims(key) else {
-                return (0.0, 0.0);
-            };
-            let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
-
-            if let Some([u0, v0, u1, v1]) = uv {
-                tw *= (u1 - u0).abs().max(1e-6);
-                th *= (v1 - v0).abs().max(1e-6);
-                return (tw, th);
-            }
-
-            let effective_cell = if cell.is_some() {
-                cell
-            } else {
-                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
-                if gc.saturating_mul(gr) > 1 {
-                    Some((0, u32::MAX))
-                } else {
-                    None
-                }
-            };
-
-            if effective_cell.is_some() {
-                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
-                let cols = gc.max(1);
-                let rows = gr.max(1);
-                tw /= cols as f32;
-                th /= rows as f32;
-            }
-
-            (tw, th)
-        }
-        SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
-            let Some(meta) = assets::texture_dims(key) else {
-                return (0.0, 0.0);
-            };
-            let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
-
-            if let Some([u0, v0, u1, v1]) = uv {
-                tw *= (u1 - u0).abs().max(1e-6);
-                th *= (v1 - v0).abs().max(1e-6);
-                return (tw, th);
-            }
-
-            // Match compose: if the texture looks like a sheet and no cell is specified,
-            // default to cell 0 for sizing (per-frame dimensions).
-            let effective_cell = if cell.is_some() {
-                cell
-            } else {
-                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
-                if gc.saturating_mul(gr) > 1 {
-                    Some((0, u32::MAX))
-                } else {
-                    None
-                }
-            };
-
-            if effective_cell.is_some() {
-                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
-                let cols = gc.max(1);
-                let rows = gr.max(1);
-                tw /= cols as f32;
-                th /= rows as f32;
-            }
-
-            (tw, th)
-        }
-    }
-}
 
 #[doc(hidden)]
 pub struct SpriteBuilder {
@@ -146,13 +67,13 @@ impl SpriteBuilder {
 
     #[inline(always)]
     fn native_dims(&self) -> [f32; 2] {
-        let (w, h) = sprite_native_dims(
+        present_dsl::sprite_native_dims(
             self.inner.source(),
             self.inner.uv_rect(),
             self.inner.cell(),
             self.inner.grid(),
-        );
-        [w, h]
+            &ASSET_TEXTURE_CONTEXT,
+        )
     }
 
     #[inline(always)]

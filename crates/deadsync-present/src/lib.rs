@@ -8,3 +8,4 @@ pub mod dsl;
 pub mod font;
 pub mod runtime;
 pub mod space;
+pub mod texture;

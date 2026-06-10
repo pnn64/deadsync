@@ -1,44 +1,15 @@
-use crate::assets;
+use super::texture::ASSET_TEXTURE_CONTEXT;
 use deadsync_present::actors;
 use deadsync_present::compose as present_compose;
 use deadsync_present::font;
 use deadsync_present::space::Metrics;
-use deadsync_render::{RenderList, TextureHandle};
+use deadsync_render::RenderList;
 use std::collections::HashMap;
 
 pub use deadsync_present::compose::{
     ComposeScratch, NullTextureContext, TextLayoutCache, TextLayoutFrameStats, TextureContext,
     TextureMeta,
 };
-
-struct AssetTextureContext;
-
-impl present_compose::TextureContext for AssetTextureContext {
-    #[inline(always)]
-    fn texture_registry_generation(&self) -> u64 {
-        assets::texture_registry_generation()
-    }
-
-    #[inline(always)]
-    fn texture_dims(&self, key: &str) -> Option<present_compose::TextureMeta> {
-        assets::texture_dims(key).map(|meta| present_compose::TextureMeta {
-            w: meta.w,
-            h: meta.h,
-        })
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-        assets::sprite_sheet_dims(key)
-    }
-
-    #[inline(always)]
-    fn texture_handle(&self, key: &str) -> TextureHandle {
-        assets::texture_handle(key)
-    }
-}
-
-const ASSET_TEXTURE_CONTEXT: AssetTextureContext = AssetTextureContext;
 
 #[inline(always)]
 pub fn build_screen(
