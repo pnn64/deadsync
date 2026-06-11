@@ -8,6 +8,7 @@ license = "GPL-3.0"
 deadsync-input = { path = "../deadsync-input" }
 deadsync-input-native = { path = "../deadsync-input-native" }
 deadlib-platform = { path = "../deadlib-platform" }
+image = { version = "0.25.10", default-features = false, features = ["gif"] }
 log = "0.4.33"
 rustmaniax-sdk = "2.0.0"
 
