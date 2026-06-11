@@ -72,7 +72,7 @@ pub fn smx_panel_for_col(
 const MIN_FRAME_DURATION_S: f32 = 0.001;
 
 /// How a playing background animation advances.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Clock {
     /// Advance by wall-clock time using the GIF's own frame durations.
     Realtime,

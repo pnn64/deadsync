@@ -85,6 +85,50 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+/// Byte capacity of an SMX animation pack name.
+const SMX_PACK_NAME_CAP: usize = 64;
+
+/// Fixed-capacity pack-directory name, so `Config` stays `Copy`. Empty means
+/// the built-in (`common/`) animation set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmxPackName {
+    bytes: [u8; SMX_PACK_NAME_CAP],
+    len: u8,
+}
+
+impl Default for SmxPackName {
+    fn default() -> Self {
+        Self {
+            bytes: [0; SMX_PACK_NAME_CAP],
+            len: 0,
+        }
+    }
+}
+
+impl SmxPackName {
+    /// Parse a pack name from the ini. Names longer than the capacity fall
+    /// back to empty (the built-in set).
+    pub fn parse(raw: &str) -> Self {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.len() > SMX_PACK_NAME_CAP {
+            return Self::default();
+        }
+        let mut out = Self::default();
+        out.bytes[..trimmed.len()].copy_from_slice(trimmed.as_bytes());
+        out.len = trimmed.len() as u8;
+        out
+    }
+
+    pub fn as_str(&self) -> &str {
+        // Always valid: the bytes are a prefix copied from a &str.
+        std::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
@@ -159,6 +203,12 @@ pub struct Config {
     /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
     /// plus a sustained colour for held freezes and rolls.
     pub smx_panel_lights: bool,
+    /// Play full-pad background GIF animations on SMX pads, per screen
+    /// (menus, song select, gameplay), from `assets/smx/pad_animations/`.
+    pub smx_pad_gifs: bool,
+    /// User animation pack supplying the pad backgrounds (a directory under
+    /// `assets/smx/pad_animations/user/`). Empty selects the built-in set.
+    pub smx_pad_gifs_pack: SmxPackName,
     /// Set the SMX pad edge underglow LEDs to the player's theme colour.
     pub smx_underglow_theme: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
@@ -413,6 +463,8 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
+            smx_pad_gifs: false,
+            smx_pad_gifs_pack: SmxPackName::default(),
             smx_underglow_theme: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,

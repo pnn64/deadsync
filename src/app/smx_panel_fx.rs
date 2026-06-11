@@ -6,11 +6,14 @@
 //! decisions are pure helpers (`tap_flash`, `hold_edge`, `hold_outcome_flash`, `mine_flash`)
 //! so they can be unit-tested without constructing a whole gameplay `State`.
 
+use std::sync::Arc;
+
 use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo, active_hold_is_engaged};
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_side};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
-use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
+use deadsync_smx::gifs::FullPadAnim;
+use deadsync_smx::panels::{Clock, PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::{GameplayCoreState, profile};
 
@@ -101,7 +104,12 @@ fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
 /// per `App` and keep it for the app's lifetime.
 pub struct SmxPanelDriver {
     lights: SmxPanelLights,
-    active: bool,
+    /// Gameplay judgement effects are running (the original "active").
+    gameplay_active: bool,
+    /// The worker owns the pad lights (gameplay effects or a background).
+    worker_active: bool,
+    /// Background currently applied to the worker, for change detection.
+    background: Option<(Arc<FullPadAnim>, Clock)>,
     notes_ptr: usize,
     /// Chart pad index -> physical SMX slot, resolved once per activation from the
     /// session play style and side so the per-frame loop stays branch-free.
@@ -116,7 +124,9 @@ impl Default for SmxPanelDriver {
     fn default() -> Self {
         Self {
             lights: SmxPanelLights::new(),
-            active: false,
+            gameplay_active: false,
+            worker_active: false,
+            background: None,
             notes_ptr: 0,
             slot_for_pad: std::array::from_fn(|pad| pad),
             prev_flash: [NO_EVENT; MAX_COLS],
@@ -134,7 +144,7 @@ impl SmxPanelDriver {
         // Re-arm on entering gameplay or when the chart's note buffer changes (a restart or
         // a new song), so stale `*_at_screen_s` values do not swallow the first event.
         let notes_ptr = state.notes().as_ptr() as usize;
-        if !self.active || notes_ptr != self.notes_ptr {
+        if !self.gameplay_active || notes_ptr != self.notes_ptr {
             self.activate(state);
         }
 
@@ -184,17 +194,35 @@ impl SmxPanelDriver {
         }
     }
 
-    /// Called when leaving gameplay or when the feature is disabled. Clears the panels and
-    /// hands the pad back to its firmware idle lighting.
+    /// Called when leaving gameplay or when judgement lighting is disabled. Ends the
+    /// gameplay effects; the worker stays active (and the pad stays ours) while a
+    /// background animation is showing, otherwise the pad returns to firmware lighting.
     pub fn deactivate(&mut self) {
-        if self.active {
-            self.active = false;
-            self.lights.set_active(false);
+        if self.gameplay_active {
+            self.gameplay_active = false;
+            self.sync_worker();
         }
     }
 
+    /// Show, swap, or clear the full-pad background animation. Deduplicates, so calling
+    /// every frame with the screen's resolved background is cheap; only an actual change
+    /// is sent to the worker.
+    pub fn set_background(&mut self, background: Option<(Arc<FullPadAnim>, Clock)>) {
+        let unchanged = match (&self.background, &background) {
+            (None, None) => true,
+            (Some((a, ca)), Some((b, cb))) => Arc::ptr_eq(a, b) && ca == cb,
+            _ => false,
+        };
+        if unchanged {
+            return;
+        }
+        self.background = background.clone();
+        self.lights.set_background(background);
+        self.sync_worker();
+    }
+
     fn activate(&mut self, state: &GameplayCoreState) {
-        self.active = true;
+        self.gameplay_active = true;
         self.notes_ptr = state.notes().as_ptr() as usize;
         // Resolve the chart-pad -> physical-slot map once per song (the session play style
         // and side are fixed for the run), keeping the per-frame loop off the session lock.
@@ -207,7 +235,22 @@ impl SmxPanelDriver {
         self.prev_engaged = [false; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
         self.prev_mine = [NO_EVENT; MAX_COLS];
+        // Always (re)send: entering active clears stale panel effects worker-side even
+        // when the worker was already running for a background.
+        self.worker_active = true;
         self.lights.set_active(true);
+    }
+
+    /// Activate or release the worker from the gameplay and background states. Releasing
+    /// clears the worker (including its background copy) and restores firmware lighting;
+    /// `self.background` is already `None` whenever that happens, so the driver and
+    /// worker stay in step.
+    fn sync_worker(&mut self) {
+        let want = self.gameplay_active || self.background.is_some();
+        if want != self.worker_active {
+            self.worker_active = want;
+            self.lights.set_active(want);
+        }
     }
 }
 

@@ -773,6 +773,20 @@ const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
     }
 }
 
+/// Which named SMX background animation a screen shows (the role half of the
+/// `<role>_<size>.gif` asset name), or `None` where the pad lights are owned by
+/// something else. Precedence per the pad-gifs design: the pad-assignment screen
+/// drives whole-pad player colours itself and the lights test owns all lighting,
+/// then gameplay and song select get their own roles, then the operator default.
+const fn smx_background_role(screen: CurrentScreen) -> Option<&'static str> {
+    match screen {
+        CurrentScreen::SmxAssignPads | CurrentScreen::TestLights | CurrentScreen::Init => None,
+        CurrentScreen::Gameplay | CurrentScreen::Practice => Some("gameplay"),
+        CurrentScreen::SelectMusic | CurrentScreen::SelectCourse => Some("song_select"),
+        _ => Some("default"),
+    }
+}
+
 const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     match screen {
         CurrentScreen::Init => LightMode::Attract,
@@ -4132,6 +4146,12 @@ pub struct App {
     /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
     /// cached so the resolve-and-push only fires when the value actually changes.
     smx_light_brightness: [u8; 2],
+    /// Preloaded SMX pad GIF animations, decoded once on first use (the pad-gifs
+    /// option toggling on). `None` until then; never loaded on the gameplay path.
+    smx_gifs: Option<std::sync::Arc<deadsync_smx::gifs::GifRegistry>>,
+    /// Background state last pushed to `smx_panels`, so the per-frame sync only
+    /// does registry lookups when the screen, pack, or toggle changes.
+    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName)>,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -4785,6 +4805,7 @@ impl App {
             config.lights_simplify_bass,
             config.smx_input && config.smx_panel_lights,
         );
+        self.sync_smx_pad_background(config.smx_pad_gifs, config.smx_pad_gifs_pack);
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -4853,6 +4874,45 @@ impl App {
         }
         self.gameplay_lights.clear();
         self.smx_panels.deactivate();
+    }
+
+    /// Keep the SMX full-pad background animation in step with the current screen.
+    /// Cheap per frame: registry lookups only happen when the (enabled, screen role,
+    /// pack) triple changes, and the driver deduplicates the rest.
+    fn sync_smx_pad_background(&mut self, enabled: bool, pack: config::SmxPackName) {
+        let role = if enabled {
+            smx_background_role(self.state.screens.current_screen)
+        } else {
+            None
+        };
+        if self.smx_bg_synced == Some((enabled, role, pack)) {
+            return;
+        }
+        self.smx_bg_synced = Some((enabled, role, pack));
+
+        let background = role.and_then(|role| {
+            let registry = self.smx_gif_registry();
+            let pack = (!pack.is_empty()).then_some(pack);
+            // `_25` is the baseline that renders on both pad LED layouts; 16-LED
+            // pads simply show its outer ring.
+            registry
+                .background(
+                    pack.as_ref().map(|p| p.as_str()),
+                    role,
+                    deadsync_smx::gifs::PadSize::Leds25,
+                )
+                .map(|anim| (anim, deadsync_smx::panels::Clock::Realtime))
+        });
+        self.smx_panels.set_background(background);
+    }
+
+    /// Decode the SMX GIF assets on first use. A cold path: runs when the pad-gifs
+    /// option first resolves a background, never per frame.
+    fn smx_gif_registry(&mut self) -> &std::sync::Arc<deadsync_smx::gifs::GifRegistry> {
+        self.smx_gifs.get_or_insert_with(|| {
+            let root = dirs::app_dirs().resolve_asset_path("assets/smx");
+            std::sync::Arc::new(deadsync_smx::gifs::GifRegistry::load(&root))
+        })
     }
 
     #[inline(always)]
@@ -5476,6 +5536,8 @@ impl App {
             gameplay_lights: GameplayLightTracker::default(),
             smx_panels: smx_panel_fx::SmxPanelDriver::default(),
             smx_light_brightness: [100, 100],
+            smx_gifs: None,
+            smx_bg_synced: None,
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting

@@ -123,6 +123,20 @@ pub fn update_smx_panel_lights(enabled: bool) {
     save_without_keymaps();
 }
 
+/// Persist whether SMX pads play full-pad background GIF animations. Like the
+/// panel-lights flag, saving is all this does: `App::sync_lights` reads it each
+/// frame and swaps or clears the background on the panel worker accordingly.
+pub fn update_smx_pad_gifs(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_pad_gifs == enabled {
+            return;
+        }
+        cfg.smx_pad_gifs = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_smx_underglow_theme(enabled: bool) {
     {
         let mut cfg = lock_config();

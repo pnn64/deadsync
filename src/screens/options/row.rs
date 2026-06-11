@@ -57,6 +57,8 @@ pub enum SubRowId {
     SmxConfig,
     SmxManagesPadConfig,
     SmxPanelLights,
+    SmxPadGifs,
+    SmxUsbPolling,
     SmxUnderglowTheme,
     SmxDefaultPadConfig,
     SmxSinglePadPlayer,
