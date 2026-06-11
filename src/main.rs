@@ -179,11 +179,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    engine::updater::state::load_persisted_cache();
+    deadsync_updater::state::load_persisted_cache();
     if cli.no_update_check {
         log::info!("Startup update check disabled by --no-update-check");
     } else {
-        engine::updater::state::spawn_startup_check();
+        deadsync_updater::state::spawn_startup_check();
     }
 
     // Initialize localization after config (which provides the language preference)

@@ -16,6 +16,7 @@ use std::time::Duration;
 
 pub mod cli;
 pub mod download;
+pub mod state;
 
 #[cfg(windows)]
 pub mod apply_windows;

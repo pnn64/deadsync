@@ -430,7 +430,7 @@ fn run_check_now(generation: u64) {
     // check refreshes that too.  This is unconditional: even a
     // superseded worker's freshly-fetched release info is useful for
     // the banner, and `replace_snapshot` has its own staleness check.
-    super::state::replace_snapshot(state.clone());
+    deadsync_updater::state::replace_snapshot(state.clone());
     set_phase_if_current(generation, classify_check_result(state));
 }
 

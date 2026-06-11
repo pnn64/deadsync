@@ -208,7 +208,7 @@ fn menu_info_text(state: &State) -> Arc<str> {
 }
 
 fn update_banner_tag() -> Option<String> {
-    match crate::engine::updater::state::snapshot()? {
+    match deadsync_updater::state::snapshot()? {
         deadsync_updater::UpdateState::Available(info) => Some(info.tag),
         _ => None,
     }

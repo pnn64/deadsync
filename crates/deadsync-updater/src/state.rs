@@ -10,10 +10,9 @@
 //!   GitHub's 60/hr unauthenticated rate limit) and so the banner
 //!   survives a 304 / offline launch.
 //!
-//! The persisted cache lives outside [`crate::config::Config`] on
-//! purpose.  Config is `Copy`, copied per-frame, and exposed in the
-//! user-editable `deadsync.ini`.  The updater cache contains opaque
-//! ETag strings the user has no business seeing or editing.
+//! The persisted cache lives outside the user-editable app config on
+//! purpose.  The updater cache contains opaque ETag strings the user
+//! has no business seeing or editing.
 
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -21,7 +20,7 @@ use std::path::Path;
 use std::sync::{LazyLock, RwLock};
 use std::thread;
 
-use deadsync_updater::{
+use crate::{
     ENV_RELEASE_URL_OVERRIDE, FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError,
     check_agent, classify, fetch_latest_release,
 };
@@ -134,7 +133,7 @@ static CACHE: LazyLock<RwLock<UpdaterCache>> =
 static SNAPSHOT: LazyLock<RwLock<Option<UpdateState>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Replace the in-memory snapshot.  Used by both the passive startup
-/// check and the manual "Check now" worker in [`crate::engine::updater::action`].
+/// check and the manual "Check now" worker.
 pub fn replace_snapshot(state: UpdateState) {
     if let Ok(mut snap) = SNAPSHOT.write() {
         *snap = Some(state);

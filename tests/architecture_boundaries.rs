@@ -214,11 +214,13 @@ const UPDATER_CORE_FILES: &[&str] = &[
     "apply_windows.rs",
     "cli.rs",
     "download.rs",
+    "state.rs",
 ];
 
 const UPDATER_CORE_TOKENS: &[&str] = &[
     "cli",
     "download",
+    "state",
     "apply_journal",
     "apply_unix",
     "apply_windows",
