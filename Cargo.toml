@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.708"
+version = "0.4.709"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -36,6 +36,7 @@ members = [
     "crates/deadsync-score",
     "crates/deadsync-simfile",
     "crates/deadsync-smx",
+    "crates/deadsync-updater",
     "crates/deadsync-version",
     "crates/deadsync-video",
 ]
@@ -95,6 +96,7 @@ deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-smx = { path = "crates/deadsync-smx" }
+deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
 deadsync-video = { path = "crates/deadsync-video" }
 winit = "0.30.13"
@@ -128,9 +130,6 @@ tungstenite = "0.29.0"
 
 # Unlocks
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-sha2 = "0.11.0"
-tar = { version = "0.4.46", default-features = false }
-flate2 = "1.1.9"
 
 # Song cache
 bincode = "2.0.1"

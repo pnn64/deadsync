@@ -18,7 +18,7 @@
 //!    startup runs [`apply_journal::recover`], which deletes the
 //!    backups and the staging directory.
 //!
-//! The crash-recovery story lives in [`crate::engine::updater::apply_journal`]:
+//! The crash-recovery story lives in [`crate::apply_journal`]:
 //! a crash with the journal still in `Applying` rolls back to a
 //! bit-identical pre-apply tree on the next launch.
 //!

@@ -282,7 +282,7 @@ pub(super) fn visible_items() -> Vec<&'static Item> {
 
 fn item_visible(id: ItemId) -> bool {
     match id {
-        ItemId::CheckForUpdates => crate::engine::updater::apply_supported_for_host(),
+        ItemId::CheckForUpdates => deadsync_updater::apply_supported_for_host(),
         _ => true,
     }
 }

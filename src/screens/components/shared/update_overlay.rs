@@ -554,7 +554,7 @@ fn format_sha256_short(raw: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::updater::{ReleaseAsset, ReleaseInfo};
+    use deadsync_updater::{ReleaseAsset, ReleaseInfo};
     use semver::Version;
     use std::path::PathBuf;
 

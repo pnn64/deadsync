@@ -26,14 +26,15 @@ use std::sync::{LazyLock, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::download::{
+use crate::config;
+use deadsync_updater::download::{
     download_to_file, fetch_checksum_sidecar, parse_api_digest, parse_checksum_sidecar, sha256_hex,
 };
-use super::{
+use deadsync_updater::{
     FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError, apply_supported_for_host,
-    classify, expected_asset_name, fetch_latest_release, host_target, pick_asset_for_host,
+    check_agent, classify, download_agent, expected_asset_name, fetch_latest_release, host_target,
+    pick_asset_for_host,
 };
-use crate::config;
 
 /// Subdirectory of `cache_dir` where downloaded archives land.
 pub const DOWNLOADS_SUBDIR: &str = "updates";
@@ -391,7 +392,7 @@ pub fn request_check_now() {
 }
 
 fn run_check_now(generation: u64) {
-    let agent = super::check_agent();
+    let agent = check_agent();
     // We deliberately ignore the persisted ETag so a manual "Check now"
     // always returns Fresh; otherwise the user would be stuck staring at
     // a Checking spinner with nothing happening on a 304.
@@ -475,7 +476,7 @@ pub fn request_download() {
 }
 
 fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
-    let check = super::check_agent();
+    let check = check_agent();
     let expected = match resolve_expected_digest(&check, &asset) {
         Ok(d) => d,
         Err(err) => {
@@ -547,7 +548,7 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
     };
 
     match download_to_file(
-        &super::download_agent(),
+        &download_agent(),
         &asset,
         &expected,
         &dest,
@@ -669,11 +670,11 @@ pub fn request_apply() {
     }
 }
 
-fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]) {
+fn run_apply(info: ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]) {
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     {
         let _ = &info;
-        match super::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
+        match deadsync_updater::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
             Ok(()) => {
                 log::info!("Spawned self-update helper; exiting current process");
                 log::logger().flush();
@@ -693,12 +694,12 @@ fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
-    match super::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
-        Ok(super::cli::ApplyOutcome::Relaunched) => {
+    match deadsync_updater::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
+        Ok(deadsync_updater::cli::ApplyOutcome::Relaunched) => {
             log::info!("Self-update applied; exiting to let new process take over");
             std::process::exit(0);
         }
-        Ok(super::cli::ApplyOutcome::AppliedNoRelaunch { detail }) => {
+        Ok(deadsync_updater::cli::ApplyOutcome::AppliedNoRelaunch { detail }) => {
             // Apply committed but spawn failed.  The on-disk install
             // is on the new version and the journal is `Applied`;
             // staying in this old process against a mutated install

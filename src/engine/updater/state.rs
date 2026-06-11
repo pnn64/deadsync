@@ -21,9 +21,9 @@ use std::path::Path;
 use std::sync::{LazyLock, RwLock};
 use std::thread;
 
-use super::{
+use deadsync_updater::{
     ENV_RELEASE_URL_OVERRIDE, FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError,
-    classify, fetch_latest_release,
+    check_agent, classify, fetch_latest_release,
 };
 /// Filename inside `cache_dir` that persists the updater cache.
 pub const CACHE_FILENAME: &str = "updater_state.json";
@@ -332,7 +332,7 @@ pub fn apply_fresh_to_cache(
 /// persisted cache on success.  Errors are logged, not returned, so the
 /// caller (a fire-and-forget thread) can stay simple.
 pub fn run_check_once() {
-    let agent = super::check_agent();
+    let agent = check_agent();
     // Capture the cache once.  We use this both to derive the
     // `If-None-Match` ETag for the request and as the baseline for
     // `apply_fresh_to_cache`; reading `cache()` twice would let a

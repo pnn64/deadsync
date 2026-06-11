@@ -141,7 +141,7 @@ pub fn run_cleanup(exe_dir: &std::path::Path, staging_dir: &std::path::Path) -> 
     // file at the install root is now the source of truth for both
     // the staging dir path and the per-op backup names.
     let _ = staging_dir;
-    let report = crate::engine::updater::apply_journal::recover(exe_dir);
+    let report = crate::apply_journal::recover(exe_dir);
     let staging_removed = report.staging_removed;
     let removed_count = report.backups_removed + report.backups_restored + report.installed_removed;
     (removed_count, staging_removed)
@@ -247,32 +247,6 @@ fn process_exists(pid: u32) -> bool {
     std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
 }
 
-/// Try to apply the downloaded archive at [`Ready`] and re-launch.
-///
-/// Returns `Ok(true)` when the calling process should exit `0`
-/// (because the new process has been spawned), `Ok(false)` when the
-/// caller should continue normal startup (no Ready snapshot found),
-/// and `Err` on apply failure.  The Ready snapshot is consumed by
-/// transitioning to [`ActionPhase::Idle`] regardless of outcome so
-/// the menu UI doesn't re-prompt indefinitely.
-///
-/// The platform split lives behind `cfg`: Windows uses the zip path,
-/// while Linux, FreeBSD, and macOS use the tar helper path.
-#[allow(clippy::result_large_err)]
-pub fn apply_pending_and_relaunch() -> Result<bool, super::UpdaterError> {
-    use super::action::{ActionPhase, current, dismiss};
-    let phase = current();
-    let (archive_path, _info, sha256) = match phase {
-        ActionPhase::Ready { path, info, sha256 } => (path, info, sha256),
-        _ => return Ok(false),
-    };
-    // Always clear the snapshot so the UI doesn't re-prompt if apply
-    // bails out below.
-    dismiss();
-    apply_archive_and_relaunch(&archive_path, &sha256)?;
-    Ok(true)
-}
-
 /// Outcome of [`apply_archive_and_relaunch`].
 ///
 /// Distinguishes a true apply failure (install tree untouched or
@@ -294,7 +268,7 @@ pub enum ApplyOutcome {
 }
 
 /// Lower-level apply: caller has already chosen the archive (e.g. via
-/// the [`super::action::ActionPhase::Ready`] snapshot) and is responsible
+/// an updater action phase) and is responsible
 /// for any phase bookkeeping.  Re-hashes the staged file and verifies
 /// against `expected_sha256` before extraction so that any
 /// modification, corruption, or mid-flight tampering between download

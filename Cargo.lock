@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.708"
+version = "0.4.709"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -999,9 +999,9 @@ dependencies = [
  "deadsync-score",
  "deadsync-simfile",
  "deadsync-smx",
+ "deadsync-updater",
  "deadsync-version",
  "deadsync-video",
- "flate2",
  "fs_extra",
  "glam",
  "gpu-allocator",
@@ -1028,11 +1028,9 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "sha2",
  "smallvec",
  "smithay-client-toolkit 0.20.0",
  "sys-locale",
- "tar",
  "tokio",
  "tungstenite",
  "twox-hash",
@@ -1333,6 +1331,24 @@ dependencies = [
  "deadsync-platform",
  "log",
  "rustmaniax-sdk",
+]
+
+[[package]]
+name = "deadsync-updater"
+version = "0.1.0"
+dependencies = [
+ "deadsync-version",
+ "flate2",
+ "libc",
+ "log",
+ "rand 0.10.1",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "ureq",
+ "zip",
 ]
 
 [[package]]

@@ -208,6 +208,31 @@ const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
 const VERSION_IMPORT_SCAN_DIRS: &[&str] =
     &["src", "crates", "tests", "tests/compose", "tests/draw"];
 
+const UPDATER_CORE_FILES: &[&str] = &[
+    "apply_journal.rs",
+    "apply_unix.rs",
+    "apply_windows.rs",
+    "cli.rs",
+    "download.rs",
+];
+
+const UPDATER_CORE_TOKENS: &[&str] = &[
+    "cli",
+    "download",
+    "apply_journal",
+    "apply_unix",
+    "apply_windows",
+    "ReleaseAsset",
+    "ReleaseInfo",
+    "UpdateState",
+    "FetchOutcome",
+    "UpdaterError",
+    "apply_supported_for_host",
+    "check_agent",
+    "download_agent",
+    "fetch_latest_release",
+];
+
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "display",
     "host_time",
@@ -2195,6 +2220,109 @@ fn version_utils_live_in_version_crate() {
     assert!(
         failures.is_empty(),
         "version utilities should be imported from deadsync_version:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn updater_core_lives_in_updater_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    let updater_crate = root.join("crates/deadsync-updater/src/lib.rs");
+    if !updater_crate.exists() {
+        failures.push(format!("{} is missing", rel_path(&root, &updater_crate)));
+    }
+
+    for file_name in UPDATER_CORE_FILES {
+        let crate_file = root.join("crates/deadsync-updater/src").join(file_name);
+        if !crate_file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &crate_file)));
+        }
+        let root_file = root.join("src/engine/updater").join(file_name);
+        if root_file.exists() {
+            failures.push(format!(
+                "{} still exists; import deadsync_updater directly",
+                rel_path(&root, &root_file)
+            ));
+        }
+    }
+
+    let engine_updater = root.join("src/engine/updater/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_updater) {
+        for module in [
+            "cli",
+            "download",
+            "apply_journal",
+            "apply_unix",
+            "apply_windows",
+        ] {
+            if text.contains(&format!("pub mod {module}")) {
+                failures.push(format!(
+                    "{} declares engine::updater::{module}; import deadsync_updater::{module} directly",
+                    rel_path(&root, &engine_updater)
+                ));
+            }
+        }
+    }
+
+    for dir in ["src", "tests"] {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in UPDATER_CORE_TOKENS {
+                for prefix in ["crate::engine::updater", "deadsync::engine::updater"] {
+                    let full = format!("{prefix}::{token}");
+                    let count = count_token_refs(&text, &full);
+                    if count != 0 {
+                        failures.push(format!(
+                            "{rel} references engine updater core token {full} {count} times"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    let updater_src = root.join("crates/deadsync-updater/src");
+    if updater_src.exists() {
+        for file in rust_files(&updater_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::app",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync::engine",
+                "deadsync::app",
+                "deadsync::assets",
+                "deadsync::config",
+                "deadsync::game",
+                "deadsync::screens",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "updater core should live in deadsync-updater:\n{}",
         failures.join("\n")
     );
 }

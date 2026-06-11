@@ -120,7 +120,7 @@ fn install_panic_hook() {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = engine::updater::cli::UpdaterCli::from_env();
+    let cli = deadsync_updater::cli::UpdaterCli::from_env();
     deadsync_platform::runtime_dir::set_current_dir_to_exe_dir()?;
     deadsync_platform::host_time::init();
 
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::set_max_level(log::LevelFilter::Warn);
 
     if let Some(request) = cli.apply_update.clone() {
-        let code = engine::updater::cli::run_apply_helper(request);
+        let code = deadsync_updater::cli::run_apply_helper(request);
         log::logger().flush();
         std::process::exit(code);
     }
@@ -167,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|p| p.parent().map(std::path::PathBuf::from))
     {
         let _ = cli.cleanup_old.as_deref();
-        let report = engine::updater::apply_journal::recover(&exe_dir);
+        let report = deadsync_updater::apply_journal::recover(&exe_dir);
         if report.journal_removed {
             log::info!(
                 "Updater recovery: backups_removed={} backups_restored={} installed_removed={} staging_removed={}",
