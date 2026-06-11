@@ -1,13 +1,12 @@
-use deadsync::assets;
+use deadsync::assets::{self, PRESENT_TEXTURE_CONTEXT};
 use deadsync_render::{
     self as gfx, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
     TexturedMeshInstanceRaw as GfxTexturedMeshInstanceRaw,
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
-use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
-use deadsync_present::actors::TextureKeyHandle;
-use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
+use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextContent, TextureKeyHandle};
+use deadsync_present::{anim, compose, font};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -482,7 +481,7 @@ fn bench_compose_registry_churn() {
         "stable registry retained compose",
         COMPOSE_REGISTRY_CHURN_ITERS,
         || {
-            let render = compose::build_screen_cached_with_scratch(
+            let render = compose::build_screen_cached_with_scratch_and_texture_context(
                 black_box(&scenario.actors),
                 scenario.clear_color,
                 &scenario.metrics,
@@ -490,6 +489,7 @@ fn bench_compose_registry_churn() {
                 scenario.total_elapsed,
                 &mut stable_cache,
                 &mut stable_scratch,
+                &PRESENT_TEXTURE_CONTEXT,
             );
             checksum_gfx_render(black_box(&render))
         },
@@ -502,7 +502,7 @@ fn bench_compose_registry_churn() {
         COMPOSE_REGISTRY_CHURN_ITERS,
         || {
             assets::register_texture_dims("__engine_perf_video_frame", 1280, 720);
-            let render = compose::build_screen_cached_with_scratch(
+            let render = compose::build_screen_cached_with_scratch_and_texture_context(
                 black_box(&scenario.actors),
                 scenario.clear_color,
                 &scenario.metrics,
@@ -510,6 +510,7 @@ fn bench_compose_registry_churn() {
                 scenario.total_elapsed,
                 &mut churn_cache,
                 &mut churn_scratch,
+                &PRESENT_TEXTURE_CONTEXT,
             );
             checksum_gfx_render(black_box(&render))
         },
@@ -548,7 +549,7 @@ fn bench_text_layout_cache_churn() {
         COMPOSE_TEXT_CACHE_ITERS,
         || {
             stable_cache.begin_frame_stats();
-            let render = compose::build_screen_cached_with_scratch(
+            let render = compose::build_screen_cached_with_scratch_and_texture_context(
                 black_box(&stable_scenario.actors),
                 stable_scenario.clear_color,
                 &stable_scenario.metrics,
@@ -556,6 +557,7 @@ fn bench_text_layout_cache_churn() {
                 stable_scenario.total_elapsed,
                 &mut stable_cache,
                 &mut stable_scratch,
+                &PRESENT_TEXTURE_CONTEXT,
             );
             let stats = stable_cache.frame_stats();
             checksum_gfx_render(black_box(&render))
@@ -578,7 +580,7 @@ fn bench_text_layout_cache_churn() {
             let text_count = retarget_text_contents(&mut churn_scenario.actors, &text_pool, frame);
             frame = frame.wrapping_add(1);
             churn_cache.begin_frame_stats();
-            let render = compose::build_screen_cached_with_scratch(
+            let render = compose::build_screen_cached_with_scratch_and_texture_context(
                 black_box(&churn_scenario.actors),
                 churn_scenario.clear_color,
                 &churn_scenario.metrics,
@@ -586,6 +588,7 @@ fn bench_text_layout_cache_churn() {
                 churn_scenario.total_elapsed,
                 &mut churn_cache,
                 &mut churn_scratch,
+                &PRESENT_TEXTURE_CONTEXT,
             );
             let stats = churn_cache.frame_stats();
             checksum_gfx_render(black_box(&render))

@@ -7,7 +7,6 @@ use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribut
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
-use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
 use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
@@ -30,6 +29,7 @@ use deadsync_chart::{
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_present::compose::TextLayoutCache;
 use deadsync_present::space::widescale;
 use deadsync_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,

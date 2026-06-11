@@ -1,11 +1,13 @@
 use deadsync::assets::AssetManager;
-use deadsync::engine::present::{actors::Actor, compose};
+use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
     gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
     pane_stats_bench, player_options_bench, visual_style_bg_bench,
 };
+use deadsync_present::actors::Actor;
+use deadsync_present::compose;
 use deadsync_render::RenderList;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -721,18 +723,24 @@ fn build_screen_for_mode(
     total_elapsed: f32,
 ) -> RenderList {
     match cache_mode {
-        CacheMode::Fresh => {
-            compose::build_screen(actors, clear_color, metrics, fonts, total_elapsed)
-        }
-        CacheMode::Retained => compose::build_screen_cached(
+        CacheMode::Fresh => compose::build_screen_with_texture_context(
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            total_elapsed,
+            &PRESENT_TEXTURE_CONTEXT,
+        ),
+        CacheMode::Retained => compose::build_screen_cached_with_texture_context(
             actors,
             clear_color,
             metrics,
             fonts,
             total_elapsed,
             text_cache,
+            &PRESENT_TEXTURE_CONTEXT,
         ),
-        CacheMode::Scratch => compose::build_screen_cached_with_scratch(
+        CacheMode::Scratch => compose::build_screen_cached_with_scratch_and_texture_context(
             actors,
             clear_color,
             metrics,
@@ -740,6 +748,7 @@ fn build_screen_for_mode(
             total_elapsed,
             text_cache,
             scratch,
+            &PRESENT_TEXTURE_CONTEXT,
         ),
     }
 }

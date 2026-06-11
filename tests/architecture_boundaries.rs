@@ -2004,12 +2004,6 @@ fn present_model_lives_in_present_crate() {
     for file in ENGINE_PRESENT_EXTRACTED_FILES {
         let path = root.join(file);
         let text = fs::read_to_string(&path).ok();
-        let is_compose_facade = *file == "src/engine/present/compose.rs"
-            && text.as_deref().is_some_and(|text| {
-                text.contains("use crate::assets::PRESENT_TEXTURE_CONTEXT;")
-                    && text.contains("use deadsync_present::compose as present_compose;")
-                    && text.contains("present_compose::build_screen_with_texture_context")
-            });
         let is_dsl_facade = *file == "src/engine/present/dsl.rs"
             && text.as_deref().is_some_and(|text| {
                 text.contains("use deadsync_present::dsl as present_dsl;")
@@ -2026,7 +2020,7 @@ fn present_model_lives_in_present_crate() {
                     && !text.contains("let mut __tw")
                     && !text.contains("__dsl_parse_effect_clock")
             });
-        if path.exists() && !is_compose_facade && !is_dsl_facade {
+        if path.exists() && !is_dsl_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)
@@ -2070,7 +2064,7 @@ fn present_model_lives_in_present_crate() {
     let assets_mod = root.join("src/assets/mod.rs");
     if let Ok(text) = fs::read_to_string(&assets_mod) {
         if !text.contains("impl present_texture::TextureContext for PresentTextureContext")
-            || !text.contains("pub(crate) const PRESENT_TEXTURE_CONTEXT")
+            || !text.contains("pub const PRESENT_TEXTURE_CONTEXT")
         {
             failures.push(format!(
                 "{} should own the asset-backed presentation texture context",
@@ -2107,6 +2101,12 @@ fn present_model_lives_in_present_crate() {
                 rel_path(&root, &present_mod)
             ));
         }
+        if text.contains("pub mod compose") {
+            failures.push(format!(
+                "{} declares engine::present::compose; import deadsync_present::compose directly",
+                rel_path(&root, &present_mod)
+            ));
+        }
         if text.contains("$crate::engine::present::color::rgba_hex") {
             failures.push(format!(
                 "{} still routes root color macros through engine::present::color",
@@ -2122,6 +2122,38 @@ fn present_model_lives_in_present_crate() {
                 "{} should delegate TextureChoice handle caching to deadsync-present",
                 rel_path(&root, &asset_textures)
             ));
+        }
+    }
+
+    for dir in [
+        "src/app",
+        "src/config",
+        "src/game",
+        "src/screens",
+        "src/test_support",
+        "tests",
+    ] {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in [
+                "crate::engine::present::compose",
+                "deadsync::engine::present::compose",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::present::compose facade token {token} {count} times"
+                    ));
+                }
+            }
         }
     }
 

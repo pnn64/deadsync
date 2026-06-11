@@ -18,7 +18,7 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
+use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::engine::present::color;
 use crate::game::parsing::simfile as song_loading;
@@ -34,6 +34,7 @@ use deadsync_platform::dirs;
 use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
+use deadsync_present::compose;
 use deadsync_present::space::{self as space, Metrics};
 use deadsync_render as renderer;
 use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
@@ -1269,7 +1270,7 @@ struct ComposeBreakdown {
     resolve_textures_us: u32,
     render_objects: u32,
     render_cameras: u32,
-    text_layout: crate::engine::present::compose::TextLayoutFrameStats,
+    text_layout: compose::TextLayoutFrameStats,
 }
 
 #[inline(always)]
@@ -3144,7 +3145,7 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
 fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
-    cache: &mut crate::engine::present::compose::TextLayoutCache,
+    cache: &mut compose::TextLayoutCache,
     state: &mut gameplay::State,
 ) {
     let started = Instant::now();
@@ -3163,13 +3164,14 @@ fn prewarm_gameplay_text_layout_cache(
         assets,
         gameplay::ActorViewOverride::default(),
     );
-    let _ = crate::engine::present::compose::build_screen_cached(
+    let _ = compose::build_screen_cached_with_texture_context(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
         fonts,
         0.0,
         cache,
+        &PRESENT_TEXTURE_CONTEXT,
     );
     gameplay::prewarm_text_layout(cache, fonts, state);
     crate::screens::components::gameplay::gameplay_stats::prewarm_text_layout(
@@ -3896,10 +3898,10 @@ pub struct App {
     smx_panels: smx_panel_fx::SmxPanelDriver,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
-    ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
-    gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
-    ui_compose_scratch: crate::engine::present::compose::ComposeScratch,
-    gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch,
+    ui_text_layout_cache: compose::TextLayoutCache,
+    gameplay_text_layout_cache: compose::TextLayoutCache,
+    ui_compose_scratch: compose::ComposeScratch,
+    gameplay_compose_scratch: compose::ComposeScratch,
     actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
@@ -4904,7 +4906,7 @@ impl App {
                 let text_layout_cache = &mut self.gameplay_text_layout_cache;
                 let compose_scratch = &mut self.gameplay_compose_scratch;
                 text_layout_cache.begin_frame_stats();
-                let screen = crate::engine::present::compose::build_screen_cached_with_scratch(
+                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -4912,13 +4914,14 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
                 );
                 (screen, text_layout_cache.frame_stats())
             } else {
                 let text_layout_cache = &mut self.ui_text_layout_cache;
                 let compose_scratch = &mut self.ui_compose_scratch;
                 text_layout_cache.begin_frame_stats();
-                let screen = crate::engine::present::compose::build_screen_cached_with_scratch(
+                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -4926,6 +4929,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
+                    &PRESENT_TEXTURE_CONTEXT,
                 );
                 (screen, text_layout_cache.frame_stats())
             };
@@ -5078,14 +5082,12 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
-            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
-                UI_TEXT_LAYOUT_CACHE_LIMIT,
-            ),
-            gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
+            ui_text_layout_cache: compose::TextLayoutCache::new(UI_TEXT_LAYOUT_CACHE_LIMIT),
+            gameplay_text_layout_cache: compose::TextLayoutCache::new(
                 GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
             ),
-            ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
-            gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
+            ui_compose_scratch: compose::ComposeScratch::default(),
+            gameplay_compose_scratch: compose::ComposeScratch::default(),
             actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,

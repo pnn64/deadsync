@@ -3,7 +3,6 @@ use crate::assets;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
-use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::font;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
@@ -34,6 +33,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+use deadsync_present::compose::TextLayoutCache;
 use deadsync_present::space::*;
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, TexturedMeshVertex};

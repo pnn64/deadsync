@@ -1,5 +1,6 @@
-use deadsync::engine::present::compose;
+use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
 use deadsync::test_support::{compose_case, compose_scenarios};
+use deadsync_present::compose;
 use deadsync_render::draw_prep::{self, DrawOp, DrawScratch, PrepareStats, TexturedMeshSource};
 use deadsync_render::{
     BlendMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshInstanceRaw,
@@ -263,12 +264,13 @@ fn run_scenario(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Erro
             compose_scenarios::scenario_names().join(", ")
         )
     })?;
-    let render = compose::build_screen(
+    let render = compose::build_screen_with_texture_context(
         &scenario.actors,
         scenario.clear_color,
         &scenario.metrics,
         &scenario.fonts,
         scenario.total_elapsed,
+        &PRESENT_TEXTURE_CONTEXT,
     );
     benchmark_draw(
         scenario.name,

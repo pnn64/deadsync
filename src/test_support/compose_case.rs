@@ -1,10 +1,10 @@
-use crate::assets;
+use crate::assets::{self, PRESENT_TEXTURE_CONTEXT};
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
 use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
-use crate::engine::present::compose;
 use crate::engine::present::font::{self, Font, Glyph};
+use deadsync_present::compose;
 use deadsync_present::space::Metrics;
 use deadsync_render::{
     BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
@@ -373,7 +373,14 @@ pub fn capture_case(
         })
         .collect::<BTreeMap<_, _>>();
     let actor_snapshots = actors.iter().map(actor_snapshot).collect::<Vec<_>>();
-    let render = compose::build_screen(actors, clear_color, metrics, fonts, total_elapsed);
+    let render = compose::build_screen_with_texture_context(
+        actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+        &PRESENT_TEXTURE_CONTEXT,
+    );
     let render_snapshot = render_list_snapshot(&render);
     let output_hash = render_snapshot_hash(&render_snapshot)?;
 
@@ -444,13 +451,16 @@ pub fn replay_case(case: &ComposeCase) -> Result<ReplayCase, Box<dyn Error>> {
 pub fn render_case_output(case: &ComposeCase) -> Result<RenderListSnapshot, Box<dyn Error>> {
     let replay = replay_case(case)?;
     let _assets = asset_manager_for_scene(&replay.screen, &replay.actors, &replay.fonts)?;
-    Ok(render_list_snapshot(&compose::build_screen(
-        &replay.actors,
-        replay.clear_color,
-        &replay.metrics,
-        &replay.fonts,
-        replay.total_elapsed,
-    )))
+    Ok(render_list_snapshot(
+        &compose::build_screen_with_texture_context(
+            &replay.actors,
+            replay.clear_color,
+            &replay.metrics,
+            &replay.fonts,
+            replay.total_elapsed,
+            &PRESENT_TEXTURE_CONTEXT,
+        ),
+    ))
 }
 
 pub fn asset_manager_for_case(case: &ComposeCase) -> Result<assets::AssetManager, Box<dyn Error>> {

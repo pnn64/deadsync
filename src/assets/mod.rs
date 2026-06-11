@@ -102,7 +102,7 @@ impl font::FontTextureContext for AssetFontTextureContext {
 
 const FONT_TEXTURE_CONTEXT: AssetFontTextureContext = AssetFontTextureContext;
 
-pub(crate) struct PresentTextureContext;
+pub struct PresentTextureContext;
 
 impl present_texture::TextureContext for PresentTextureContext {
     #[inline(always)]
@@ -129,7 +129,7 @@ impl present_texture::TextureContext for PresentTextureContext {
     }
 }
 
-pub(crate) const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
+pub const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
 
 #[derive(Clone, Copy)]
 pub(crate) struct TextureUploadBudget {
