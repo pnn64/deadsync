@@ -4806,6 +4806,14 @@ impl App {
             config.smx_input && config.smx_panel_lights,
         );
         self.sync_smx_pad_gifs(config.smx_pad_gifs, config.smx_pad_gifs_pack);
+        if config.smx_pad_gifs && self.state.screens.current_screen == CurrentScreen::SelectMusic {
+            // One f32 per frame; the driver drops it unless the background is
+            // actually beat-locked.
+            self.smx_panels
+                .set_beat(crate::screens::select_music::selection_anim_beat(
+                    &self.state.screens.select_music_state,
+                ));
+        }
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -4899,12 +4907,24 @@ impl App {
         let pack = (!pack.is_empty()).then_some(pack);
         let pack_str = pack.as_ref().map(|p| p.as_str());
 
+        let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic;
         let background = role.and_then(|role| {
             // `_25` is the baseline that renders on both pad LED layouts; 16-LED
             // pads simply show its outer ring.
             self.smx_gif_registry()
                 .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
-                .map(|anim| (anim, deadsync_smx::panels::Clock::Realtime))
+                .map(|anim| {
+                    // An `@Nb` gif beat-locks on song select, the one screen with a
+                    // live beat source (the music preview); elsewhere it plays
+                    // realtime rather than freezing on a stale beat.
+                    let clock = match anim.beats_per_loop {
+                        Some(beats_per_loop) if on_select_music => {
+                            deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
+                        }
+                        _ => deadsync_smx::panels::Clock::Realtime,
+                    };
+                    (anim, clock)
+                })
         });
         self.smx_panels.set_background(background);
 

@@ -594,6 +594,14 @@ fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) ->
     }
 }
 
+/// The beat position driving selection-synced animations on this screen (what
+/// the bouncing selection arrow follows): the playing preview's musical beat,
+/// or steady fallbacks when nothing is previewing. Used by the app to beat-lock
+/// SMX pad background animations on song select.
+pub fn selection_anim_beat(state: &State) -> f32 {
+    sl_selection_anim_beat(state.entries.get(state.selected_index), state)
+}
+
 #[inline(always)]
 fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     let beat = sl_selection_anim_beat(entry_opt, state);

@@ -338,6 +338,14 @@ impl SmxPanelDriver {
         self.judgement_gifs = gifs;
     }
 
+    /// Feed the current song beat position. Dropped unless the active background is
+    /// beat-locked, so callers can push it every frame without flooding the worker.
+    pub fn set_beat(&self, beat: f32) {
+        if matches!(self.background, Some((_, Clock::BeatLocked { .. }))) {
+            self.lights.set_beat(beat);
+        }
+    }
+
     fn activate(&mut self, state: &GameplayCoreState) {
         self.gameplay_active = true;
         self.notes_ptr = state.notes().as_ptr() as usize;
