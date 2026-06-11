@@ -1,4 +1,4 @@
-use deadsync::{app, assets, config, engine, game};
+use deadsync::{app, assets, config, game};
 use deadsync_platform::logging::{self, StartupBuildInfo};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
@@ -69,7 +69,7 @@ fn audio_request_line(cfg: &config::Config) -> String {
     }
 }
 
-fn audio_device_lines(devices: &[engine::audio::OutputDeviceInfo]) -> Vec<String> {
+fn audio_device_lines(devices: &[deadsync_audio_stream::OutputDeviceInfo]) -> Vec<String> {
     devices
         .iter()
         .enumerate()
@@ -195,7 +195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     let _windows_timing = deadsync_platform::windows_rt::boost_main_thread_timing();
     game::profile::load();
-    if let Err(e) = engine::audio::init(engine::audio::InitConfig {
+    if let Err(e) = deadsync_audio_stream::init(deadsync_audio_stream::InitConfig {
         output_device_index: cfg.audio_output_device_index,
         output_mode: cfg.audio_output_mode,
         #[cfg(target_os = "linux")]
@@ -203,11 +203,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sample_rate_hz: cfg.audio_sample_rate_hz,
     }) {
         // The game can run without audio; log the error and continue.
-        log::error!("Failed to initialize audio engine: {e}");
+        log::error!("Failed to initialize audio runtime: {e}");
     } else {
         logging::write_report_block(
             "Startup audio devices",
-            &audio_device_lines(&engine::audio::startup_output_devices()),
+            &audio_device_lines(&deadsync_audio_stream::startup_output_devices()),
         );
     }
     app::run()

@@ -10,8 +10,9 @@
 //! `{data_dir}/assets/sounds/<folder>/...` overlay is automatically picked up
 //! on top of the bundled `assets/` directory.
 
-use crate::{config, engine::audio};
+use crate::config;
 use deadsync_audio_decode::folder as audio_folder;
+use deadsync_audio_stream as audio;
 use deadsync_platform::dirs;
 use log::{debug, warn};
 use std::collections::HashMap;

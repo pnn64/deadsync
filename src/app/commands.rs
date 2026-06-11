@@ -297,16 +297,16 @@ impl App {
     }
 
     fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
-        crate::engine::audio::play_music(
+        deadsync_audio_stream::play_music(
             path,
-            crate::engine::audio::Cut::default(),
+            deadsync_audio_stream::Cut::default(),
             looped,
             volume,
         );
     }
 
     fn stop_music_command(&self) {
-        crate::engine::audio::stop_music();
+        deadsync_audio_stream::stop_music();
     }
 
     pub(super) fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {

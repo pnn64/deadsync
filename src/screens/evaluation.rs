@@ -3489,7 +3489,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 for si in state.score_info.iter().flatten() {
                     if si.side == side {
                         let is_now_fav = profile::toggle_favorite(side, &si.chart.short_hash);
-                        crate::engine::audio::play_sfx(if is_now_fav {
+                        deadsync_audio_stream::play_sfx(if is_now_fav {
                             "assets/sounds/start.ogg"
                         } else {
                             "assets/sounds/start.ogg"
@@ -3713,7 +3713,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_back
         | VirtualAction::p2_start => {
             if return_target == Screen::SelectMusic {
-                crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+                deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
             }
             ScreenAction::Navigate(return_target)
         }

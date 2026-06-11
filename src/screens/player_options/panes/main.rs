@@ -387,7 +387,7 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
             }
         }
         gp::set_session_music_rate(state.music_rate);
-        crate::engine::audio::set_music_rate(state.music_rate);
+        deadsync_audio_stream::set_music_rate(state.music_rate);
         Outcome::persisted()
     },
 };

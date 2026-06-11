@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
-use crate::engine::audio;
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile;
 use crate::game::scores;
@@ -12,6 +11,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_platform::dirs;
 use deadsync_present::actors::{self, Actor};

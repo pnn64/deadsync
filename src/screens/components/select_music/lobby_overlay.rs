@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::audio;
 use crate::game::online::lobbies;
+use deadsync_audio_stream as audio;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;

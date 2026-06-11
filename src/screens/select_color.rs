@@ -498,7 +498,7 @@ fn scroll_by(state: &mut State, delta: i32) {
     state.active_color_index += delta;
     state.scroll_to = state.active_color_index as f32;
     state.scroll_t = 0.0;
-    crate::engine::audio::play_sfx("assets/sounds/expand.ogg");
+    deadsync_audio_stream::play_sfx("assets/sounds/expand.ogg");
     crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
     state.bg_from_index = current_visible_bg_index(state);
     state.bg_to_index = state.active_color_index;
@@ -544,7 +544,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
             state.scroll_t = SCROLL_TWEEN_DURATION;
-            crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+            deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
             ScreenAction::Navigate(Screen::SelectStyle)
         }
         Some(Nav::Back) => {

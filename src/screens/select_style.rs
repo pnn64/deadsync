@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::audio;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_present::actors::Actor;
 use deadsync_present::color;

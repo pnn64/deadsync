@@ -65,6 +65,7 @@ fn publish_config(cfg: Config) {
         let mut current = lock_config();
         *current = cfg;
         sync_audio_mix_levels_from_config(&current);
+        deadsync_audio_stream::set_replaygain_enabled(current.enable_replaygain);
         deadsync_present::space::set_overscan(
             current.center_image_translate_x,
             current.center_image_translate_y,
@@ -89,6 +90,7 @@ fn load_defaults_after_error() {
     ADDITIONAL_SONG_FOLDERS.lock().unwrap().clear();
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
+    deadsync_audio_stream::set_replaygain_enabled(Config::default().enable_replaygain);
     pad_order::reset();
 }
 

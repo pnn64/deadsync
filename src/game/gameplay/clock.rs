@@ -1,4 +1,4 @@
-use crate::engine::audio;
+use deadsync_audio_stream as audio;
 use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;

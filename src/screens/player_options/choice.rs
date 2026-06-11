@@ -1,6 +1,6 @@
 use super::*;
-use crate::engine::audio;
 use crate::game::profile as gp;
+use deadsync_audio_stream as audio;
 use deadsync_profile::{PlayStyle, PlayerSide};
 
 // ============================ Dispatchers ============================

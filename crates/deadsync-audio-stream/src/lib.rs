@@ -1,9 +1,13 @@
 mod clock;
 mod music_map;
+mod runtime;
 mod sfx_cache;
 mod stream_runtime;
 
-use deadsync_audio::{Cut, MusicMapSeg, ring as internal};
+pub use deadsync_audio::{
+    Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
+};
+use deadsync_audio::{MusicMapSeg, ring as internal};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
@@ -24,6 +28,16 @@ pub use clock::{music_stream_clock_snapshot, timing_diag_enabled};
 pub use music_map::{
     assist_tick_stream_frame_for_music_seconds, clear_music_pos_map, force_music_map_runtime,
     lookup_music_position, music_render_maps, queued_music_map,
+};
+#[cfg(target_os = "linux")]
+pub use runtime::available_linux_backends;
+pub use runtime::{
+    assist_sfx_generation, collect_stutter_diag_events, get_music_stream_clock_snapshot,
+    get_music_stream_position_seconds, get_output_timing_snapshot, init, is_initialized,
+    play_assist_tick, play_music, play_preloaded_assist_tick, play_preloaded_sfx,
+    play_scheduled_assist_tick, play_screen_sfx, play_sfx, preload_sfx, replaygain_enabled,
+    set_music_rate, set_replaygain_enabled, startup_output_devices, stop_music, stop_screen_sfx,
+    stutter_diag_trigger_seq, timing_diag_last_callback_gap_ns,
 };
 pub use sfx_cache::SfxCache;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand, new_music_sample_ring};

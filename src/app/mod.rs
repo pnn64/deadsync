@@ -3108,8 +3108,8 @@ fn prewarm_gameplay_assets(
 }
 
 fn prewarm_gameplay_sfx(state: &gameplay::State) {
-    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
-    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
+    deadsync_audio_stream::preload_sfx("assets/sounds/boom.ogg");
+    deadsync_audio_stream::preload_sfx("assets/sounds/assist_tick.ogg");
 
     let mut seen = HashSet::<String>::with_capacity(state.song_lua_sound_paths.len());
     let mut prewarm_sound_overlays =
@@ -3122,7 +3122,7 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
                 };
                 let key = sound_path.to_string_lossy().into_owned();
                 if seen.insert(key.clone()) {
-                    crate::engine::audio::preload_sfx(&key);
+                    deadsync_audio_stream::preload_sfx(&key);
                 }
             }
         };
@@ -3137,7 +3137,7 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
     for sound_path in &state.song_lua_sound_paths {
         let key = sound_path.to_string_lossy().into_owned();
         if seen.insert(key.clone()) {
-            crate::engine::audio::preload_sfx(&key);
+            deadsync_audio_stream::preload_sfx(&key);
         }
     }
 }
@@ -4485,7 +4485,7 @@ impl App {
     fn stats_overlay_audio(
         &self,
     ) -> Option<crate::screens::components::shared::stats_overlay::AudioHealth> {
-        let audio = crate::engine::audio::get_output_timing_snapshot();
+        let audio = deadsync_audio_stream::get_output_timing_snapshot();
         if !audio.has_measurement() {
             return None;
         }
@@ -5750,7 +5750,7 @@ impl App {
                     moved = true;
                 }
                 if moved {
-                    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+                    deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
                 }
                 None
             }
@@ -5763,7 +5763,7 @@ impl App {
                     moved = true;
                 }
                 if moved {
-                    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+                    deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
                 }
                 None
             }
@@ -5777,7 +5777,7 @@ impl App {
                         .gameplay_offset_save_prompt
                         .as_ref()
                         .is_some_and(|prompt| prompt.active_choice == 0);
-                    crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+                    deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
                     Some(save_changes)
                 }
                 VirtualAction::p1_back | VirtualAction::p2_back => None,
@@ -6254,7 +6254,7 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
-        crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+        deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -6391,7 +6391,7 @@ impl App {
             }
         }
 
-        crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+        deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
         true
     }
 
@@ -7270,7 +7270,7 @@ impl App {
             &mut frames,
         );
         let mut audio_events = Vec::with_capacity(32);
-        crate::engine::audio::collect_stutter_diag_events(
+        deadsync_audio_stream::collect_stutter_diag_events(
             now_host_nanos,
             STUTTER_DIAG_DUMP_WINDOW_NS,
             &mut audio_events,
@@ -7384,7 +7384,7 @@ impl App {
         }
         let expected = self.expected_frame_seconds_for_stutter();
         let stutter_severity = stutter_severity(frame_seconds, expected);
-        let audio_trigger_seq = crate::engine::audio::stutter_diag_trigger_seq();
+        let audio_trigger_seq = deadsync_audio_stream::stutter_diag_trigger_seq();
         let display_trigger_seq = self
             .state
             .screens
@@ -7501,7 +7501,7 @@ impl App {
             0.0
         };
         let actor_stats = actor_tree_stats(actors);
-        let audio_stats = crate::engine::audio::get_output_timing_snapshot();
+        let audio_stats = deadsync_audio_stream::get_output_timing_snapshot();
         log::trace!(
             "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
@@ -7716,7 +7716,7 @@ impl App {
         let ms = |sum_us: u64| sum_us as f64 / frames as f64 / 1000.0;
         let interval_samples = trace.present_interval_samples.max(1);
         let margin_samples = trace.present_margin_samples.max(1);
-        let audio_stats = crate::engine::audio::get_output_timing_snapshot();
+        let audio_stats = deadsync_audio_stream::get_output_timing_snapshot();
         log::trace!(
             "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
@@ -8068,7 +8068,7 @@ impl App {
             let new_value = !config::get().translated_titles;
             config::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
-            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+            deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
         }
         if raw_key.pressed
             && !raw_key.repeat
@@ -8267,7 +8267,7 @@ impl App {
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
 
         if prev == CurrentScreen::Evaluation && target != CurrentScreen::Evaluation {
-            crate::engine::audio::stop_screen_sfx();
+            deadsync_audio_stream::stop_screen_sfx();
         }
 
         if target_menu_music {
@@ -8706,7 +8706,7 @@ impl App {
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
         }
         if target == CurrentScreen::Practice {
-            crate::engine::audio::stop_music();
+            deadsync_audio_stream::stop_music();
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
                 let edit_snapshot = (prev == CurrentScreen::PlayerOptions
                     && po_state.return_screen == CurrentScreen::Practice)
@@ -8939,7 +8939,7 @@ impl App {
             }
         }
         if target == CurrentScreen::Gameplay {
-            crate::engine::audio::stop_music();
+            deadsync_audio_stream::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
                 self.state.session.restart_pending = false;

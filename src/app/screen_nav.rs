@@ -210,17 +210,17 @@ impl App {
 
         if target_menu_music {
             if !prev_menu_music {
-                crate::engine::audio::play_music(
+                deadsync_audio_stream::play_music(
                     visual_styles::menu_music_resolved_path(),
-                    crate::engine::audio::Cut::default(),
+                    deadsync_audio_stream::Cut::default(),
                     true,
                     1.0,
                 );
             }
         } else if prev_menu_music {
-            crate::engine::audio::stop_music();
+            deadsync_audio_stream::stop_music();
         } else if !keep_preview {
-            crate::engine::audio::stop_music();
+            deadsync_audio_stream::stop_music();
         }
 
         if target_screen == CurrentScreen::Menu {
@@ -470,7 +470,7 @@ impl App {
         if self.state.screens.current_screen == CurrentScreen::Evaluation
             && target != CurrentScreen::Evaluation
         {
-            crate::engine::audio::stop_screen_sfx();
+            deadsync_audio_stream::stop_screen_sfx();
         }
         let (_, out_duration) =
             self.get_out_transition_for_screen(self.state.screens.current_screen);

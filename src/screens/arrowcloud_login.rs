@@ -124,7 +124,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         state.ui = None;
         state.target_profile = None;
-        crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+        deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else {
@@ -138,7 +138,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         state.ui = None;
         state.target_profile = None;
-        crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+        deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else {

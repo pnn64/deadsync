@@ -221,7 +221,7 @@ impl App {
                             }
                         }
 
-                        crate::engine::audio::play_sfx("assets/sounds/screenshot.ogg");
+                        deadsync_audio_stream::play_sfx("assets/sounds/screenshot.ogg");
                         info!("Saved screenshot to {}", path.display());
                     }
                     Err(e) => warn!("Failed to save screenshot: {e}"),

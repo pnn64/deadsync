@@ -18,7 +18,6 @@
 use std::sync::atomic::Ordering;
 
 use crate::config;
-use crate::engine::audio;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
@@ -26,6 +25,7 @@ use crate::screens::options::qr_login::{
     create_groovestats_login_ui_for_profile, poll_qr_login_ui,
 };
 use crate::screens::{Screen, ScreenAction};
+use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_present::actors::Actor;
 

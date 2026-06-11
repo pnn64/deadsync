@@ -10,13 +10,13 @@ use crate::config::{
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SyncGraphMode,
     VersionOverlaySide, VisualStyle,
 };
-use crate::engine::audio;
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;

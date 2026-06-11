@@ -6,7 +6,6 @@ use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode,
 };
-use crate::engine::audio;
 use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
@@ -28,6 +27,7 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
     input as screen_input,
 };
+use deadsync_audio_stream as audio;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,

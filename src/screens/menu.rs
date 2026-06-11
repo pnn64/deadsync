@@ -569,12 +569,12 @@ fn move_selection(state: &mut State, delta: isize) {
     let n = OPTION_COUNT as isize;
     let cur = state.selected_index as isize;
     state.selected_index = (cur + delta).rem_euclid(n) as usize;
-    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+    deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
 }
 
 #[inline(always)]
 fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
-    crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+    deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
     state.started_by_p2 = started_by_p2;
     match state.selected_index {
         0 => ScreenAction::Navigate(Screen::SelectProfile),

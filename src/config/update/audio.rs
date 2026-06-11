@@ -172,6 +172,6 @@ pub fn update_enable_replaygain(enabled: bool) {
         }
         cfg.enable_replaygain = enabled;
     }
-    crate::engine::audio::on_replaygain_setting_changed(enabled);
+    deadsync_audio_stream::set_replaygain_enabled(enabled);
     save_without_keymaps();
 }

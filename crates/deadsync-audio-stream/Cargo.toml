@@ -6,7 +6,9 @@ license = "GPL-3.0"
 
 [dependencies]
 deadsync-audio = { path = "../deadsync-audio" }
+deadsync-audio-backend-native = { path = "../deadsync-audio-backend-native" }
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
+deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadsync-platform = { path = "../deadsync-platform" }
 log = "0.4.32"
 rubato = "0.16.2"

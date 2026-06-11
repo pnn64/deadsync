@@ -1,7 +1,7 @@
 use crate::config;
-use crate::engine::audio;
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
+use deadsync_audio_stream as audio;
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action};
 use deadsync_profile as profile_data;
