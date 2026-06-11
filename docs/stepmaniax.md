@@ -93,6 +93,69 @@ are connected. The assignment is stored by serial in `deadsync.ini`
 (`SmxP1Serial` / `SmxP2Serial`) and pushed to the SDK on launch, so it survives
 reconnects and restarts.
 
+### Single-pad auto-promote
+
+If you have only **one pad** connected and no serial assignment is saved,
+DeadSync automatically assigns it as **Player 1** regardless of its hardware
+jumper setting. This means a single-stage setup works out of the box even if the
+pad's internal jumper is set to P2.
+
+If you later connect a second pad, clear or update the assignment through the
+Assign Pads to Players flow (or edit `deadsync.ini` directly — see below).
+
+### Manual serial assignment
+
+You can bypass the in-game flow and assign pads directly in `deadsync.ini`. This
+is useful if:
+
+- You want to force a single pad to **P2** (rare, e.g. a dedicated doubles
+  second stage).
+- You want to pre-configure assignments before first launch.
+- The in-game assignment screen isn't cooperating.
+
+#### Finding your pad's serial
+
+Your pad's full 32-character serial appears in several places:
+
+1. **Trace logs** — set `LogLevel=Trace` in `deadsync.ini`, launch the game, and
+   look for the connect line:
+   ```
+   SMX: pad connected at slot 0: P2 fw=5 serial=fbd71fe2ad721359d4a4a9fcbbb32785
+   ```
+
+2. **FSR debug dump** — from Options → Input Options → Input Options →
+   StepManiaX, the FSR debug dump (when available) prints each pad's serial.
+
+3. **HID capture** — if you run with `SMX_CAPTURE_DIR` set, decode the
+   `.smxhid` file; the `DeviceInfo` response shows the serial.
+
+#### Editing deadsync.ini
+
+Under `[Options]`, set one or both:
+
+```ini
+[Options]
+SmxP1Serial=fbd71fe2ad721359d4a4a9fcbbb32785
+SmxP2Serial=
+```
+
+- **`SmxP1Serial`** — the serial of the pad that should be Player 1.
+- **`SmxP2Serial`** — the serial of the pad that should be Player 2.
+
+Leave a field empty (or remove the line) to not pin that side — it will fall
+back to the hardware jumper for any pad not explicitly assigned.
+
+To assign a single pad as P2 only (overriding auto-promote), set its serial as
+`SmxP2Serial` and leave `SmxP1Serial` empty:
+
+```ini
+[Options]
+SmxP1Serial=
+SmxP2Serial=fbd71fe2ad721359d4a4a9fcbbb32785
+```
+
+Changes take effect on the next launch of DeadSync.
+
 ---
 
 ## 3. Two ways to configure a pad
