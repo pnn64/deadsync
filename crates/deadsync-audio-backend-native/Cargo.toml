@@ -26,6 +26,9 @@ windows = { version = "0.62.2", features = [
     "Win32_UI_Shell_PropertiesSystem",
 ] }
 
+[target.'cfg(target_os = "freebsd")'.dependencies]
+libc = "0.2.186"
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

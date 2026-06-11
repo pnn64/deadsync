@@ -3,19 +3,22 @@ pub mod folder;
 pub mod replaygain;
 mod resample;
 
+#[cfg(not(windows))]
+use deadsync_audio::AudioOutputMode;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
 pub(crate) use deadsync_audio::ring as internal;
 use deadsync_audio::{
-    AudioOutputMode, AudioRenderMaps, CallbackClockSource, CallbackClockWindow, MusicMapSeg,
-    OutputBackendReady, PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent,
-    fallback_stream_position_frames, music_nanos_from_seconds, normalized_music_rate,
-    sfx_stop_generation,
+    AudioRenderMaps, CallbackClockSource, CallbackClockWindow, MusicMapSeg, OutputBackendReady,
+    PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent, fallback_stream_position_frames,
+    music_nanos_from_seconds, normalized_music_rate, sfx_stop_generation,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
+#[cfg(target_os = "freebsd")]
+use deadsync_audio_backend_native::freebsd_pcm;
 #[cfg(target_os = "linux")]
 use deadsync_audio_backend_native::launch::AlsaBackendHint;
 #[cfg(target_os = "macos")]
@@ -25,15 +28,23 @@ use deadsync_audio_backend_native::launch::FreeBsdPcmBackendHint;
 #[cfg(target_os = "linux")]
 #[cfg(has_jack_audio)]
 use deadsync_audio_backend_native::launch::JackBackendHint;
+use deadsync_audio_backend_native::launch::NativeBackendLaunch;
+#[cfg(not(windows))]
+use deadsync_audio_backend_native::launch::OutputDeviceProbe;
 #[cfg(target_os = "linux")]
 #[cfg(has_pipewire_audio)]
 use deadsync_audio_backend_native::launch::PipeWireBackendHint;
 #[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 use deadsync_audio_backend_native::launch::PulseBackendHint;
+#[cfg(not(windows))]
+use deadsync_audio_backend_native::launch::SFX_QUEUE_CAP;
 #[cfg(windows)]
-use deadsync_audio_backend_native::launch::WasapiBackendHint;
-use deadsync_audio_backend_native::launch::{NativeBackendLaunch, SFX_QUEUE_CAP};
+use deadsync_audio_backend_native::launch::build_audio_launch;
+#[cfg(windows)]
+use deadsync_audio_backend_native::launch::start_wasapi_backend;
+#[cfg(windows)]
+use deadsync_audio_backend_native::windows_wasapi::WasapiOutputStream;
 use deadsync_audio_decode as decode;
 use deadsync_platform::dirs;
 use deadsync_platform::host_time::instant_nanos;
@@ -43,19 +54,15 @@ use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
+#[cfg(not(windows))]
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 /* ============================== Public API ============================== */
-
-struct OutputDeviceProbe {
-    info: OutputDeviceInfo,
-    #[cfg(target_os = "freebsd")]
-    freebsd_dsp_path: Option<String>,
-}
 
 // Commands to the audio engine
 enum AudioCommand {
@@ -833,84 +840,9 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
     )
 }
 
-#[cfg(windows)]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let devices = match backends::windows_wasapi::enumerate_output_devices() {
-        Ok(devices) => devices,
-        Err(err) => {
-            warn!("Failed to enumerate WASAPI output devices at startup: {err}");
-            Vec::new()
-        }
-    };
-    if devices.is_empty() {
-        warn!(
-            "No WASAPI output devices were enumerated at startup; native audio will use the system default device."
-        );
-    }
-    let device_probes: Vec<_> = devices
-        .iter()
-        .map(|device| OutputDeviceProbe {
-            info: OutputDeviceInfo {
-                name: device.name.clone(),
-                is_default: device.is_default,
-                sample_rates_hz: device.sample_rates_hz.clone(),
-            },
-        })
-        .collect();
-    let output_mode = cfg.output_mode;
-    let requested_rate_hz = cfg.sample_rate_hz;
-    let default_device = devices
-        .iter()
-        .find(|device| device.is_default)
-        .or_else(|| devices.first());
-    let requested_device = cfg
-        .output_device_index
-        .and_then(|idx| devices.get(idx as usize));
-    if let Some(requested_idx) = cfg.output_device_index {
-        if let Some(device) = requested_device {
-            info!(
-                "Audio output device override selected: index {} '{}'.",
-                requested_idx, device.name
-            );
-        } else {
-            warn!(
-                "Audio output device override index {} not found; using default device.",
-                requested_idx
-            );
-        }
-    }
-    let selected_device = requested_device.or(default_device);
-    let device_name = selected_device
-        .map(|device| device.name.clone())
-        .unwrap_or_else(|| "Default Audio Device".to_string());
-    let device_id = selected_device.map(|device| device.id.clone());
-    let native_sample_rate_hz = selected_device.map_or(48_000, |device| device.mix_rate_hz);
-    let native_channels = selected_device.map_or(2, |device| device.channels);
-    debug!(
-        "Audio device: '{}' (native={} Hz, channels={}).",
-        device_name, native_sample_rate_hz, native_channels
-    );
-    debug!(
-        "Audio output stream config: {} Hz request, mode={} (WASAPI native path).",
-        requested_rate_hz.unwrap_or(native_sample_rate_hz),
-        output_mode.as_str()
-    );
-    (
-        device_probes,
-        NativeBackendLaunch {
-            wasapi: Some(WasapiBackendHint {
-                device_id,
-                device_name,
-                requested_rate_hz,
-                output_mode,
-            }),
-        },
-    )
-}
-
 #[cfg(target_os = "freebsd")]
 fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let mut device_probes: Vec<_> = backends::freebsd_pcm::enumerate_output_devices()
+    let mut device_probes: Vec<_> = freebsd_pcm::enumerate_output_devices()
         .into_iter()
         .map(|dev| OutputDeviceProbe {
             info: OutputDeviceInfo {
@@ -1060,9 +992,9 @@ enum OutputBackend {
     #[cfg(target_os = "macos")]
     CoreAudio(backends::macos_coreaudio::CoreAudioOutputStream),
     #[cfg(target_os = "freebsd")]
-    FreeBsdPcm(backends::freebsd_pcm::FreeBsdPcmOutputStream),
+    FreeBsdPcm(freebsd_pcm::FreeBsdPcmOutputStream),
     #[cfg(windows)]
-    Wasapi(backends::windows_wasapi::WasapiOutputStream),
+    Wasapi(WasapiOutputStream),
 }
 
 #[cfg(target_os = "linux")]
@@ -1171,7 +1103,7 @@ fn start_freebsd_pcm_backend(
     if matches!(pcm.output_mode, AudioOutputMode::Exclusive) {
         return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
     }
-    let prep = backends::freebsd_pcm::prepare(
+    let prep = freebsd_pcm::prepare(
         pcm.dsp_path.clone(),
         pcm.device_name.clone(),
         pcm.sample_rate_hz,
@@ -1180,7 +1112,7 @@ fn start_freebsd_pcm_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::freebsd_pcm::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = freebsd_pcm::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
 }
 
@@ -1408,35 +1340,8 @@ fn start_output_backend(
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {
-        let access_mode = match wasapi.output_mode {
-            AudioOutputMode::Exclusive => backends::windows_wasapi::WasapiAccessMode::Exclusive,
-            AudioOutputMode::Auto | AudioOutputMode::Shared => {
-                backends::windows_wasapi::WasapiAccessMode::Shared
-            }
-        };
-        let prep = backends::windows_wasapi::prepare(
-            wasapi.device_id.clone(),
-            wasapi.device_name.clone(),
-            wasapi.requested_rate_hz,
-            access_mode,
-        )
-        .map_err(|err| {
-            format!(
-                "failed to prepare native WASAPI output for '{}': {err}",
-                wasapi.device_name
-            )
-        })?;
-        let mut ready = prep.ready();
-        ready.requested_output_mode = wasapi.output_mode;
-        let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-        let stream =
-            backends::windows_wasapi::start(prep, music_ring, sfx_receiver, audio_render_maps())
-                .map_err(|err| {
-                    format!(
-                        "failed to start native WASAPI output for '{}': {err}",
-                        wasapi.device_name
-                    )
-                })?;
+        let (stream, ready, sfx_sender) =
+            start_wasapi_backend(wasapi, music_ring, audio_render_maps())?;
         return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
     }
 

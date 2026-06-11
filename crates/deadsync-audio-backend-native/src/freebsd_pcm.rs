@@ -1,11 +1,11 @@
+use crate::telemetry::{
+    note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    publish_output_timing_quality, report_audio_render_callback,
+};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    note_output_clock_fallback, note_output_underrun, publish_output_timing,
-    publish_output_timing_quality, report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use libc::{c_int, c_ulong};
@@ -67,13 +67,13 @@ const SNDCTL_DSP_GETOSPACE: c_ulong = ior::<AudioBufInfo>(b'P', 12);
 const SNDCTL_DSP_GETODELAY: c_ulong = ior::<c_int>(b'P', 23);
 const SNDCTL_DSP_GETBLKSIZE: c_ulong = iowr::<c_int>(b'P', 4);
 
-pub(crate) struct FreeBsdPcmDevice {
+pub struct FreeBsdPcmDevice {
     pub path: String,
     pub name: String,
     pub is_default: bool,
 }
 
-pub(crate) fn enumerate_output_devices() -> Vec<FreeBsdPcmDevice> {
+pub fn enumerate_output_devices() -> Vec<FreeBsdPcmDevice> {
     let Ok(entries) = fs::read_dir("/dev") else {
         return Vec::new();
     };
@@ -161,7 +161,7 @@ fn default_unit() -> Option<u32> {
     Some(unit as u32)
 }
 
-pub(crate) struct FreeBsdPcmOutputPrep {
+pub struct FreeBsdPcmOutputPrep {
     dsp_path: String,
     device_name: String,
     sample_rate_hz: u32,
@@ -171,7 +171,7 @@ pub(crate) struct FreeBsdPcmOutputPrep {
 }
 
 impl FreeBsdPcmOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -185,7 +185,7 @@ impl FreeBsdPcmOutputPrep {
     }
 }
 
-pub(crate) struct FreeBsdPcmOutputStream {
+pub struct FreeBsdPcmOutputStream {
     stop_flag: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -199,7 +199,7 @@ impl Drop for FreeBsdPcmOutputStream {
     }
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     dsp_path: Option<String>,
     device_name: String,
     sample_rate_hz: u32,
@@ -218,7 +218,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: FreeBsdPcmOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

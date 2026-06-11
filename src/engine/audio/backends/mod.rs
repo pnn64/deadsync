@@ -1,5 +1,3 @@
-#[cfg(target_os = "freebsd")]
-pub mod freebsd_pcm;
 #[cfg(target_os = "linux")]
 pub mod linux_alsa;
 #[cfg(target_os = "linux")]
@@ -13,5 +11,3 @@ pub mod linux_pipewire;
 pub mod linux_pulse;
 #[cfg(target_os = "macos")]
 pub mod macos_coreaudio;
-#[cfg(windows)]
-pub use deadsync_audio_backend_native::windows_wasapi;

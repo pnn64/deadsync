@@ -875,6 +875,7 @@ fn audio_core_lives_in_audio_crate() {
     for file in [
         root.join("crates/deadsync-audio-backend-native/Cargo.toml"),
         root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/freebsd_pcm.rs"),
         root.join("crates/deadsync-audio-backend-native/src/launch.rs"),
         root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
         root.join("crates/deadsync-audio-backend-native/src/windows_wasapi.rs"),
@@ -887,6 +888,15 @@ fn audio_core_lives_in_audio_crate() {
     if root.join("src/engine/audio/backends/telemetry.rs").exists() {
         failures.push(
             "src/engine/audio/backends/telemetry.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/freebsd_pcm.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/freebsd_pcm.rs should live in deadsync-audio-backend-native"
                 .to_string(),
         );
     }
@@ -1012,6 +1022,13 @@ fn audio_core_lives_in_audio_crate() {
             "struct FreeBsdPcmBackendHint",
             "struct AudioThreadLaunch",
             "struct NativeBackendLaunch",
+            "struct OutputDeviceProbe",
+            "WasapiAccessMode",
+            "backends::windows_wasapi",
+            "backends::freebsd_pcm",
+            "windows_wasapi::prepare",
+            "windows_wasapi::start",
+            "fn start_wasapi_backend",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
@@ -1025,6 +1042,23 @@ fn audio_core_lives_in_audio_crate() {
 
     let backend_dir = root.join("src/engine/audio/backends");
     if backend_dir.exists() {
+        let backend_mod = backend_dir.join("mod.rs");
+        if let Ok(text) = fs::read_to_string(&backend_mod)
+            && text.contains("windows_wasapi")
+        {
+            failures.push(format!(
+                "{} should not re-export the moved WASAPI backend",
+                rel_path(&root, &backend_mod)
+            ));
+        }
+        if let Ok(text) = fs::read_to_string(&backend_mod)
+            && text.contains("freebsd_pcm")
+        {
+            failures.push(format!(
+                "{} should not re-export the moved FreeBSD PCM backend",
+                rel_path(&root, &backend_mod)
+            ));
+        }
         for file in rust_files(&backend_dir) {
             let rel = rel_path(&root, &file);
             if rel.ends_with("mod.rs") || rel.ends_with("telemetry.rs") {
