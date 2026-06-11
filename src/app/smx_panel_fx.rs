@@ -6,11 +6,10 @@
 //! decisions are pure helpers (`tap_flash`, `hold_edge`, `hold_outcome_flash`, `mine_flash`)
 //! so they can be unit-tested without constructing a whole gameplay `State`.
 
+use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
+use deadsync_smx::panels::{Rgb, SmxPanelLights, smx_panel_for_col};
 
-use crate::engine::smx_panels::{
-    FLASH_SECONDS_JUDGMENT, Rgb, SmxPanelLights, flash_color, flash_duration, smx_panel_for_col,
-};
 use crate::game::gameplay::{
     ColumnTapJudgment, HoldJudgmentRenderInfo, State, active_hold_is_engaged,
 };
@@ -20,6 +19,11 @@ const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
 
+/// Tap flash durations, matching the on-screen column flash (`gameplay.rs:650`).
+const FLASH_SECONDS_MISS: f32 = 0.16;
+const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
+/// Fantastic colour for the bright FA+ inner window.
+const PAD_FANTASTIC_WHITE: Rgb = [255, 255, 255];
 /// Sustained colour shown while a freeze or roll is held (steady teal).
 const HOLD_RGB: Rgb = [0, 160, 160];
 /// Flash shown when a freeze or roll is completed.
@@ -30,6 +34,43 @@ const HOLD_DROP_RGB: Rgb = [255, 0, 0];
 const MINE_RGB: Rgb = [255, 0, 180];
 /// Duration of the mine-hit flash.
 const MINE_FLASH_SECONDS: f32 = 0.25;
+
+/// Per-grade panel colour. Tuned for the SMX LED diffuser (saturated, well-separated hues)
+/// rather than reusing the on-screen palette, which washes out on the pad; the SDK scales
+/// output by ~0.67 on send. A `match` (not a table indexed by `judge_grade_ix`) so adding a
+/// `JudgeGrade` is a compile error here instead of a silent out-of-range panic.
+fn pad_grade_color(grade: JudgeGrade) -> Rgb {
+    match grade {
+        JudgeGrade::Fantastic => [0, 90, 255], // blue (white for the FA+ inner window)
+        JudgeGrade::Excellent => [255, 140, 0], // orange
+        JudgeGrade::Great => [0, 220, 0],      // green
+        JudgeGrade::Decent => [170, 0, 255],   // purple
+        JudgeGrade::WayOff => [255, 230, 0],   // yellow
+        JudgeGrade::Miss => [255, 0, 0],       // red
+    }
+}
+
+/// Flash duration for a judgement grade.
+fn flash_duration(grade: JudgeGrade) -> f32 {
+    match grade {
+        JudgeGrade::Miss => FLASH_SECONDS_MISS,
+        _ => FLASH_SECONDS_JUDGMENT,
+    }
+}
+
+/// Colour for a tap judgement flash.
+///
+/// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash` (`gameplay.rs:6772`):
+/// `true` for the blue (outer) Fantastic, `false` for the bright FA+ inner window (white). All
+/// other grades use the pad palette. The pad uses its own saturated palette rather than the
+/// on-screen colours, which wash out on the LED diffuser.
+fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
+    if grade == JudgeGrade::Fantastic && !blue_fantastic {
+        PAD_FANTASTIC_WHITE
+    } else {
+        pad_grade_color(grade)
+    }
+}
 
 /// Owns the panel-lighting worker handle plus the per-column "last seen" trackers used to
 /// detect new judgements and hold transitions by diffing gameplay `State` each frame.
@@ -208,7 +249,6 @@ fn mine_flash(hit_at: Option<f32>, prev: &mut f32) -> Option<Rgb> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_rules::judgment::JudgeGrade;
 
     fn tap(grade: JudgeGrade, blue_fantastic: bool, at: f32) -> ColumnTapJudgment {
         ColumnTapJudgment {
@@ -253,6 +293,34 @@ mod tests {
         let (color, dur) = tap_flash(Some(tap(JudgeGrade::Miss, false, 1.0)), &mut prev).unwrap();
         assert_eq!(color, flash_color(JudgeGrade::Miss, false));
         assert_eq!(dur, flash_duration(JudgeGrade::Miss));
+    }
+
+    #[test]
+    fn flash_color_uses_pad_palette() {
+        use JudgeGrade::*;
+        // Normal (blue) Fantastic uses the blue pad colour, not white.
+        assert_eq!(flash_color(Fantastic, true), pad_grade_color(Fantastic));
+        // Bright (inner FA+) Fantastic is white.
+        assert_eq!(flash_color(Fantastic, false), PAD_FANTASTIC_WHITE);
+        // Other grades use their pad palette colour.
+        assert_eq!(flash_color(Miss, false), pad_grade_color(Miss));
+        // Every grade colour is distinct so judgements stay readable on the pad.
+        let all = [Fantastic, Excellent, Great, Decent, WayOff, Miss];
+        for i in 0..all.len() {
+            for j in (i + 1)..all.len() {
+                assert_ne!(pad_grade_color(all[i]), pad_grade_color(all[j]));
+            }
+        }
+    }
+
+    #[test]
+    fn flash_duration_miss_is_shorter() {
+        assert_eq!(flash_duration(JudgeGrade::Miss), FLASH_SECONDS_MISS);
+        assert_eq!(
+            flash_duration(JudgeGrade::Fantastic),
+            FLASH_SECONDS_JUDGMENT
+        );
+        assert_eq!(flash_duration(JudgeGrade::WayOff), FLASH_SECONDS_JUDGMENT);
     }
 
     #[test]

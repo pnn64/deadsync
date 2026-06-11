@@ -1,18 +1,14 @@
 //! StepManiaX pad panel lighting effects.
 //!
-//! Pure effect engine for the SMX 3x3 panels (`PanelFx`), the helpers that map a gameplay
-//! column to a pad/panel and a judgement to a colour, and the 30Hz worker thread
-//! (`SmxPanelLights`) that owns the effect state and hands frames to the SDK. Building the
-//! RGB frame off the render thread keeps the colour math and timers out of the gameplay
-//! per-frame path. The app-side diff that feeds the worker lives in `app::smx_panel_fx`.
+//! Pure effect engine for the SMX 3x3 panels (`PanelFx`), the helper that maps a logical
+//! column to a pad/panel, and the 30Hz worker thread (`SmxPanelLights`) that owns the
+//! effect state and hands frames to the SDK. Building the RGB frame off the render thread
+//! keeps the colour math and timers out of the per-frame path. The app-side diff and
+//! palette live in `app::smx_panel_fx`.
 
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-
-use deadsync_rules::judgment::JudgeGrade;
-
-use deadsync_smx as smx;
 
 /// Pads addressed by the SMX SDK (slot 0 and slot 1).
 pub const PADS: usize = 2;
@@ -30,33 +26,11 @@ pub type Rgb = [u8; 3];
 
 const BLACK: Rgb = [0, 0, 0];
 
-/// Tap flash durations, matching the on-screen column flash (`gameplay.rs:650`).
-pub const FLASH_SECONDS_MISS: f32 = 0.16;
-pub const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
-
-/// Fantastic colour for the bright FA+ inner window.
-const PAD_FANTASTIC_WHITE: Rgb = [255, 255, 255];
-
-/// Per-grade panel colour. Tuned for the SMX LED diffuser (saturated, well-separated hues)
-/// rather than reusing the on-screen palette, which washes out on the pad; the SDK scales
-/// output by ~0.67 on send. A `match` (not a table indexed by `judge_grade_ix`) so adding a
-/// `JudgeGrade` is a compile error here instead of a silent out-of-range panic.
-fn pad_grade_color(grade: JudgeGrade) -> Rgb {
-    match grade {
-        JudgeGrade::Fantastic => [0, 90, 255], // blue (white for the FA+ inner window)
-        JudgeGrade::Excellent => [255, 140, 0], // orange
-        JudgeGrade::Great => [0, 220, 0],      // green
-        JudgeGrade::Decent => [170, 0, 255],   // purple
-        JudgeGrade::WayOff => [255, 230, 0],   // yellow
-        JudgeGrade::Miss => [255, 0, 0],       // red
-    }
-}
-
 /// L, D, U, R direction columns mapped to 3x3 grid panel indices
 /// (panel names: UL,U,UR,L,C,R,DL,D,DR).
 const DIR_TO_PANEL: [usize; 4] = [3, 7, 1, 5];
 
-/// Map a gameplay column to the SMX pad slot and panel index.
+/// Map a logical column to the SMX pad slot and panel index.
 ///
 /// Mirrors `pad_light_for_col` (app/mod.rs): handles singles, versus, and one-player
 /// doubles via `cols_per_player` and `num_players`. Returns `None` for an out-of-range
@@ -81,28 +55,6 @@ pub fn smx_panel_for_col(
         (pad, local)
     };
     DIR_TO_PANEL.get(local_col).map(|&panel| (pad, panel))
-}
-
-/// Flash duration for a judgement grade.
-pub fn flash_duration(grade: JudgeGrade) -> f32 {
-    match grade {
-        JudgeGrade::Miss => FLASH_SECONDS_MISS,
-        _ => FLASH_SECONDS_JUDGMENT,
-    }
-}
-
-/// Colour for a tap judgement flash.
-///
-/// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash` (`gameplay.rs:6772`):
-/// `true` for the blue (outer) Fantastic, `false` for the bright FA+ inner window (white). All
-/// other grades use the pad palette. The pad uses its own saturated palette rather than the
-/// on-screen colours, which wash out on the LED diffuser.
-pub fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
-    if grade == JudgeGrade::Fantastic && !blue_fantastic {
-        PAD_FANTASTIC_WHITE
-    } else {
-        pad_grade_color(grade)
-    }
 }
 
 /// One panel's effect state: an optional sustained colour plus a decaying flash.
@@ -208,14 +160,14 @@ pub fn put_panel(frame: &mut [u8; FRAME_BYTES], pad: usize, panel: usize, color:
     }
 }
 
-// ─── 30Hz worker thread ──────────────────────────────────────────────────────
+// 30Hz worker thread
 
 /// One frame interval at ~30Hz. The SDK also throttles its sends to this rate and
 /// coalesces to the newest frame, so this only governs how often we rebuild a frame.
 const FRAME_INTERVAL: Duration = Duration::from_micros(33_333);
 
 /// Messages from the app diff to the worker. Small and `Copy`; pad/panel/colour are
-/// resolved app-side so the worker stays free of gameplay and style knowledge.
+/// resolved app-side so the worker stays free of app policy and style knowledge.
 #[derive(Clone, Copy, Debug)]
 enum Ev {
     Flash {
@@ -233,8 +185,8 @@ enum Ev {
         pad: u8,
         panel: u8,
     },
-    /// Enter (true) or leave (false) the gameplay screens. Leaving hands the pad back to
-    /// its firmware idle lighting.
+    /// Enter (true) or leave (false) active panel effect ownership. Leaving hands the pad
+    /// back to its firmware idle lighting.
     Active(bool),
     Shutdown,
 }
@@ -293,8 +245,8 @@ impl SmxPanelLights {
         });
     }
 
-    /// Mark whether gameplay is active. On `false` the worker clears the panels and hands
-    /// the pad back to its firmware idle lighting.
+    /// Mark whether panel effects are active. On `false` the worker clears the panels and
+    /// hands the pad back to its firmware idle lighting.
     pub fn set_active(&self, active: bool) {
         self.send(Ev::Active(active));
     }
@@ -399,13 +351,13 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
 }
 
 fn send_lights(frame: &[u8]) {
-    if let Some(m) = smx::manager() {
+    if let Some(m) = crate::manager() {
         m.set_lights(frame);
     }
 }
 
 fn reenable_auto() {
-    if let Some(m) = smx::manager() {
+    if let Some(m) = crate::manager() {
         m.reenable_auto_lights();
     }
 }
@@ -485,34 +437,6 @@ mod tests {
         fx.hold_start(5, 5, [1, 2, 3]);
         let frame = fx.tick(0.0);
         assert!(frame.iter().all(|&b| b == 0));
-    }
-
-    #[test]
-    fn flash_color_uses_pad_palette() {
-        use JudgeGrade::*;
-        // Normal (blue) Fantastic uses the blue pad colour, not white.
-        assert_eq!(flash_color(Fantastic, true), pad_grade_color(Fantastic));
-        // Bright (inner FA+) Fantastic is white.
-        assert_eq!(flash_color(Fantastic, false), PAD_FANTASTIC_WHITE);
-        // Other grades use their pad palette colour.
-        assert_eq!(flash_color(Miss, false), pad_grade_color(Miss));
-        // Every grade colour is distinct so judgements stay readable on the pad.
-        let all = [Fantastic, Excellent, Great, Decent, WayOff, Miss];
-        for i in 0..all.len() {
-            for j in (i + 1)..all.len() {
-                assert_ne!(pad_grade_color(all[i]), pad_grade_color(all[j]));
-            }
-        }
-    }
-
-    #[test]
-    fn flash_duration_miss_is_shorter() {
-        assert_eq!(flash_duration(JudgeGrade::Miss), FLASH_SECONDS_MISS);
-        assert_eq!(
-            flash_duration(JudgeGrade::Fantastic),
-            FLASH_SECONDS_JUDGMENT
-        );
-        assert_eq!(flash_duration(JudgeGrade::WayOff), FLASH_SECONDS_JUDGMENT);
     }
 
     #[test]

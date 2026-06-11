@@ -1667,10 +1667,6 @@ fn lights_imports_do_not_use_engine_facade() {
         failures
             .push("src/engine/lights still exists; import deadsync_lights directly".to_string());
     }
-    if !root.join("src/engine/smx_panels.rs").exists() {
-        failures.push("src/engine/smx_panels.rs is missing".to_string());
-    }
-
     let engine_mod_path = root.join("src/engine/mod.rs");
     if let Ok(text) = fs::read_to_string(&engine_mod_path) {
         let count = count_token_refs(&text, "pub mod lights");
@@ -1746,6 +1742,7 @@ fn smx_imports_do_not_use_engine_facade() {
     for file in [
         root.join("crates/deadsync-smx/Cargo.toml"),
         root.join("crates/deadsync-smx/src/lib.rs"),
+        root.join("crates/deadsync-smx/src/panels.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
@@ -1755,6 +1752,12 @@ fn smx_imports_do_not_use_engine_facade() {
     if root.join("src/engine/smx.rs").exists() {
         failures.push("src/engine/smx.rs still exists; import deadsync_smx directly".to_string());
     }
+    if root.join("src/engine/smx_panels.rs").exists() {
+        failures.push(
+            "src/engine/smx_panels.rs still exists; import deadsync_smx::panels directly"
+                .to_string(),
+        );
+    }
 
     let engine_mod_path = root.join("src/engine/mod.rs");
     if let Ok(text) = fs::read_to_string(&engine_mod_path) {
@@ -1762,6 +1765,13 @@ fn smx_imports_do_not_use_engine_facade() {
         if count != 0 {
             failures.push(format!(
                 "{} declares engine::smx {count} times; import deadsync_smx directly",
+                rel_path(&root, &engine_mod_path)
+            ));
+        }
+        let panel_count = count_token_refs(&text, "pub mod smx_panels");
+        if panel_count != 0 {
+            failures.push(format!(
+                "{} declares engine::smx_panels {panel_count} times; import deadsync_smx::panels directly",
                 rel_path(&root, &engine_mod_path)
             ));
         }
@@ -3123,8 +3133,12 @@ fn count_engine_lights_facade_refs(text: &str) -> usize {
 fn count_engine_smx_facade_refs(text: &str) -> usize {
     count_token_refs(text, "crate::engine::smx")
         + count_token_refs(text, "deadsync::engine::smx")
+        + count_token_refs(text, "crate::engine::smx_panels")
+        + count_token_refs(text, "deadsync::engine::smx_panels")
         + count_grouped_game_rule_uses(text, "use crate::engine::{", "smx")
+        + count_grouped_game_rule_uses(text, "use crate::engine::{", "smx_panels")
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "smx")
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "smx_panels")
 }
 
 fn count_engine_gfx_render_symbol_refs(text: &str, symbol: &str) -> usize {

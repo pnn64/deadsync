@@ -16,6 +16,8 @@ pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, Smx
 use deadsync_input::{PadCode, PadEvent, PadId};
 use deadsync_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
 
+pub mod panels;
+
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
 

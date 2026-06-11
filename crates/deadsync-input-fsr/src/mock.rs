@@ -6,7 +6,7 @@
 //! leave the mock off). Each kind becomes one fake pad on the Configure Pads
 //! screen, with animated sensor readings and thresholds edited in memory, so
 //! the whole editor can be exercised without hardware. While the mock is on,
-//! `engine::smx::init` refuses to start the SDK, so native SMX is fully off
+//! `deadsync_smx::init` refuses to start the SDK, so native SMX is fully off
 //! and nothing is written over USB.
 
 use super::smx::{
