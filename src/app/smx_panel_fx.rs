@@ -8,11 +8,12 @@
 
 use std::sync::Arc;
 
+use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo, active_hold_is_engaged};
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_side};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
-use deadsync_smx::gifs::FullPadAnim;
+use deadsync_smx::gifs::{FullPadAnim, GifRegistry, PadSize, PanelAnim};
 use deadsync_smx::panels::{Clock, PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::{GameplayCoreState, profile};
@@ -97,6 +98,80 @@ fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
     }
 }
 
+/// Resolved per-panel judgement animations from the GIF registry. Any slot left `None`
+/// falls back to that event's solid colour, so a pack only has to supply the gifs it
+/// cares about and judgements always stay visible.
+#[derive(Default, Clone)]
+pub struct JudgementGifs {
+    pub fantastic_blue: Option<Arc<PanelAnim>>,
+    pub fantastic_white: Option<Arc<PanelAnim>>,
+    pub excellent: Option<Arc<PanelAnim>>,
+    pub great: Option<Arc<PanelAnim>>,
+    pub decent: Option<Arc<PanelAnim>>,
+    pub way_off: Option<Arc<PanelAnim>>,
+    pub miss: Option<Arc<PanelAnim>>,
+    pub mine: Option<Arc<PanelAnim>>,
+    /// Successful freeze/roll/lift release.
+    pub ok: Option<Arc<PanelAnim>>,
+    /// Looping sustain while a freeze is engaged.
+    pub freeze: Option<Arc<PanelAnim>>,
+    /// Looping sustain while a roll is engaged.
+    pub roll: Option<Arc<PanelAnim>>,
+}
+
+impl JudgementGifs {
+    /// Resolve the standard judgement names from a registry through the usual
+    /// pack-then-size fallback. `_25` is the baseline both pad layouts render.
+    pub fn resolve(registry: &GifRegistry, pack: Option<&str>) -> Self {
+        let j = |name: &str| registry.judgement(pack, name, PadSize::Leds25);
+        Self {
+            fantastic_blue: j("fantastic_blue"),
+            fantastic_white: j("fantastic_white"),
+            excellent: j("excellent"),
+            great: j("great"),
+            decent: j("decent"),
+            way_off: j("way_off"),
+            miss: j("miss"),
+            mine: j("mine"),
+            ok: j("ok"),
+            freeze: j("freeze"),
+            roll: j("roll"),
+        }
+    }
+
+    /// The one-shot animation for a tap grade, honouring the FA+ white/blue split.
+    fn for_grade(&self, grade: JudgeGrade, blue_fantastic: bool) -> Option<&Arc<PanelAnim>> {
+        match grade {
+            JudgeGrade::Fantastic if blue_fantastic => self.fantastic_blue.as_ref(),
+            JudgeGrade::Fantastic => self.fantastic_white.as_ref(),
+            JudgeGrade::Excellent => self.excellent.as_ref(),
+            JudgeGrade::Great => self.great.as_ref(),
+            JudgeGrade::Decent => self.decent.as_ref(),
+            JudgeGrade::WayOff => self.way_off.as_ref(),
+            JudgeGrade::Miss => self.miss.as_ref(),
+        }
+    }
+}
+
+/// The looping sustain animation for an engaged hold, by its note kind.
+fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc<PanelAnim>> {
+    match kind {
+        Some(NoteType::Hold) => gifs.freeze.as_ref(),
+        Some(NoteType::Roll) => gifs.roll.as_ref(),
+        _ => None,
+    }
+}
+
+/// What `update` started on a column's panel for the current sustain, so the matching
+/// end call is sent when it disengages (an overlay and a colour hold end differently).
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+enum HoldFx {
+    #[default]
+    None,
+    Color,
+    Overlay,
+}
+
 /// Owns the panel-lighting worker handle plus the per-column "last seen" trackers used to
 /// detect new judgements and hold transitions by diffing gameplay `State` each frame.
 ///
@@ -110,12 +185,15 @@ pub struct SmxPanelDriver {
     worker_active: bool,
     /// Background currently applied to the worker, for change detection.
     background: Option<(Arc<FullPadAnim>, Clock)>,
+    /// Judgement animations; empty (all `None`) means solid colours throughout.
+    judgement_gifs: JudgementGifs,
     notes_ptr: usize,
     /// Chart pad index -> physical SMX slot, resolved once per activation from the
     /// session play style and side so the per-frame loop stays branch-free.
     slot_for_pad: [usize; PADS],
     prev_flash: [f32; MAX_COLS],
     prev_engaged: [bool; MAX_COLS],
+    prev_hold_fx: [HoldFx; MAX_COLS],
     prev_hold_judged: [f32; MAX_COLS],
     prev_mine: [f32; MAX_COLS],
 }
@@ -127,10 +205,12 @@ impl Default for SmxPanelDriver {
             gameplay_active: false,
             worker_active: false,
             background: None,
+            judgement_gifs: JudgementGifs::default(),
             notes_ptr: 0,
             slot_for_pad: std::array::from_fn(|pad| pad),
             prev_flash: [NO_EVENT; MAX_COLS],
             prev_engaged: [false; MAX_COLS],
+            prev_hold_fx: [HoldFx::None; MAX_COLS],
             prev_hold_judged: [NO_EVENT; MAX_COLS],
             prev_mine: [NO_EVENT; MAX_COLS],
         }
@@ -158,37 +238,68 @@ impl SmxPanelDriver {
             // no panel, so events are consumed rather than replayed later.
             let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
 
-            if let Some((color, dur)) =
-                tap_flash(state.last_tap_judgment(col), &mut self.prev_flash[col])
+            if let Some((grade, blue)) =
+                tap_event(state.last_tap_judgment(col), &mut self.prev_flash[col])
+                && let Some((pad, p)) = panel
             {
-                if let Some((pad, p)) = panel {
-                    self.lights.flash(pad, p, color, dur);
-                }
-            }
-
-            let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
-            if let Some(now_engaged) = hold_edge(engaged, &mut self.prev_engaged[col]) {
-                if let Some((pad, p)) = panel {
-                    if now_engaged {
-                        self.lights.hold_start(pad, p, HOLD_RGB);
-                    } else {
-                        self.lights.hold_end(pad, p);
+                match self.judgement_gifs.for_grade(grade, blue) {
+                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    None => {
+                        self.lights
+                            .flash(pad, p, flash_color(grade, blue), flash_duration(grade));
                     }
                 }
             }
 
-            if let Some(color) =
-                hold_outcome_flash(state.hold_judgment(col), &mut self.prev_hold_judged[col])
+            let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
+            if let Some(now_engaged) = hold_edge(engaged, &mut self.prev_engaged[col])
+                && let Some((pad, p)) = panel
             {
-                if let Some((pad, p)) = panel {
-                    self.lights.flash(pad, p, color, FLASH_SECONDS_JUDGMENT);
+                if now_engaged {
+                    let kind = state.active_hold(col).map(|h| h.note_type);
+                    match sustain_anim(&self.judgement_gifs, kind) {
+                        Some(anim) => {
+                            self.lights.play_overlay(pad, p, anim.clone(), true);
+                            self.prev_hold_fx[col] = HoldFx::Overlay;
+                        }
+                        None => {
+                            self.lights.hold_start(pad, p, HOLD_RGB);
+                            self.prev_hold_fx[col] = HoldFx::Color;
+                        }
+                    }
+                } else {
+                    // End whichever effect this column's engage started; the hold
+                    // state may already be gone, so we use the recorded kind.
+                    match self.prev_hold_fx[col] {
+                        HoldFx::Overlay => self.lights.end_overlay(pad, p),
+                        HoldFx::Color => self.lights.hold_end(pad, p),
+                        HoldFx::None => {}
+                    }
+                    self.prev_hold_fx[col] = HoldFx::None;
+                }
+            }
+
+            if let Some(result) =
+                hold_outcome_event(state.hold_judgment(col), &mut self.prev_hold_judged[col])
+                && let Some((pad, p)) = panel
+            {
+                let (anim, color) = match result {
+                    HoldResult::Held => (self.judgement_gifs.ok.as_ref(), HOLD_OK_RGB),
+                    _ => (self.judgement_gifs.miss.as_ref(), HOLD_DROP_RGB),
+                };
+                match anim {
+                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    None => self.lights.flash(pad, p, color, FLASH_SECONDS_JUDGMENT),
                 }
             }
 
             let mine_at = state.mine_started_at_screen_s(col);
-            if let Some(color) = mine_flash(mine_at, &mut self.prev_mine[col]) {
-                if let Some((pad, p)) = panel {
-                    self.lights.flash(pad, p, color, MINE_FLASH_SECONDS);
+            if mine_event(mine_at, &mut self.prev_mine[col])
+                && let Some((pad, p)) = panel
+            {
+                match &self.judgement_gifs.mine {
+                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    None => self.lights.flash(pad, p, MINE_RGB, MINE_FLASH_SECONDS),
                 }
             }
         }
@@ -221,6 +332,12 @@ impl SmxPanelDriver {
         self.sync_worker();
     }
 
+    /// Swap the judgement animation set (resolved app-side from the registry). Takes
+    /// effect from the next event; in-flight overlays play out as started.
+    pub fn set_judgement_gifs(&mut self, gifs: JudgementGifs) {
+        self.judgement_gifs = gifs;
+    }
+
     fn activate(&mut self, state: &GameplayCoreState) {
         self.gameplay_active = true;
         self.notes_ptr = state.notes().as_ptr() as usize;
@@ -233,6 +350,7 @@ impl SmxPanelDriver {
             std::array::from_fn(|pad| physical_slot(play_style, session_side, doubles, pad));
         self.prev_flash = [NO_EVENT; MAX_COLS];
         self.prev_engaged = [false; MAX_COLS];
+        self.prev_hold_fx = [HoldFx::None; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
         self.prev_mine = [NO_EVENT; MAX_COLS];
         // Always (re)send: entering active clears stale panel effects worker-side even
@@ -254,16 +372,14 @@ impl SmxPanelDriver {
     }
 }
 
-/// Decide a tap flash for a column. Records the judgement time so the same one is not
-/// re-flashed, and re-arms (sentinel) when the column currently has no judgement.
-fn tap_flash(judged: Option<ColumnTapJudgment>, prev: &mut f32) -> Option<(Rgb, f32)> {
+/// Decide a new tap judgement for a column (the grade and its FA+ white/blue flag).
+/// Records the judgement time so the same one is not re-fired, and re-arms (sentinel)
+/// when the column currently has no judgement.
+fn tap_event(judged: Option<ColumnTapJudgment>, prev: &mut f32) -> Option<(JudgeGrade, bool)> {
     match judged {
         Some(j) if j.at_screen_s != *prev => {
             *prev = j.at_screen_s;
-            Some((
-                flash_color(j.grade, j.blue_fantastic),
-                flash_duration(j.grade),
-            ))
+            Some((j.grade, j.blue_fantastic))
         }
         None => {
             *prev = NO_EVENT;
@@ -284,15 +400,17 @@ fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
     }
 }
 
-/// Decide a freeze/roll outcome flash. Held flashes OK, dropped flashes drop, missed
-/// consumes the event but shows nothing.
-fn hold_outcome_flash(judged: Option<HoldJudgmentRenderInfo>, prev: &mut f32) -> Option<Rgb> {
+/// Decide a new freeze/roll outcome for a column. Held shows OK, dropped shows the
+/// failure effect, missed consumes the event but shows nothing.
+fn hold_outcome_event(
+    judged: Option<HoldJudgmentRenderInfo>,
+    prev: &mut f32,
+) -> Option<HoldResult> {
     match judged {
         Some(j) if j.started_at_screen_s != *prev => {
             *prev = j.started_at_screen_s;
             match j.result {
-                HoldResult::Held => Some(HOLD_OK_RGB),
-                HoldResult::LetGo => Some(HOLD_DROP_RGB),
+                HoldResult::Held | HoldResult::LetGo => Some(j.result),
                 HoldResult::Missed => None,
             }
         }
@@ -304,19 +422,19 @@ fn hold_outcome_flash(judged: Option<HoldJudgmentRenderInfo>, prev: &mut f32) ->
     }
 }
 
-/// Decide a mine-hit flash, keyed by hit time so a second hit on the same column while an
+/// Decide a new mine hit, keyed by hit time so a second hit on the same column while an
 /// earlier explosion is still active is still caught.
-fn mine_flash(hit_at: Option<f32>, prev: &mut f32) -> Option<Rgb> {
+fn mine_event(hit_at: Option<f32>, prev: &mut f32) -> bool {
     match hit_at {
         Some(ts) if ts != *prev => {
             *prev = ts;
-            Some(MINE_RGB)
+            true
         }
         None => {
             *prev = NO_EVENT;
-            None
+            false
         }
-        _ => None,
+        _ => false,
     }
 }
 
@@ -359,30 +477,35 @@ mod tests {
     fn tap_flash_fires_once_per_new_judgment() {
         let mut prev = NO_EVENT;
         // First judgement fires and records its time.
-        assert!(tap_flash(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_some());
         assert_eq!(prev, 1.0);
         // Same timestamp does not re-fire.
-        assert!(tap_flash(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_none());
+        assert!(tap_event(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_none());
         // A new timestamp fires again.
-        assert!(tap_flash(Some(tap(JudgeGrade::Miss, false, 2.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(JudgeGrade::Miss, false, 2.0)), &mut prev).is_some());
         assert_eq!(prev, 2.0);
     }
 
     #[test]
     fn tap_flash_none_rearms() {
         let mut prev = 5.0;
-        assert!(tap_flash(None, &mut prev).is_none());
+        assert!(tap_event(None, &mut prev).is_none());
         assert_eq!(prev, NO_EVENT);
         // After re-arm a judgement at any time reads as new.
-        assert!(tap_flash(Some(tap(JudgeGrade::Decent, false, 0.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(JudgeGrade::Decent, false, 0.0)), &mut prev).is_some());
     }
 
     #[test]
-    fn tap_flash_color_and_duration_match_grade() {
+    fn tap_event_carries_grade_and_fa_plus_flag() {
         let mut prev = NO_EVENT;
-        let (color, dur) = tap_flash(Some(tap(JudgeGrade::Miss, false, 1.0)), &mut prev).unwrap();
-        assert_eq!(color, flash_color(JudgeGrade::Miss, false));
-        assert_eq!(dur, flash_duration(JudgeGrade::Miss));
+        assert_eq!(
+            tap_event(Some(tap(JudgeGrade::Miss, false, 1.0)), &mut prev),
+            Some((JudgeGrade::Miss, false))
+        );
+        assert_eq!(
+            tap_event(Some(tap(JudgeGrade::Fantastic, true, 2.0)), &mut prev),
+            Some((JudgeGrade::Fantastic, true))
+        );
     }
 
     #[test]
@@ -423,51 +546,94 @@ mod tests {
     }
 
     #[test]
-    fn hold_outcome_flash_maps_result() {
+    fn hold_outcome_event_maps_result() {
         let mut prev = NO_EVENT;
         assert_eq!(
-            hold_outcome_flash(Some(hold(HoldResult::Held, 1.0)), &mut prev),
-            Some(HOLD_OK_RGB)
+            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
+            Some(HoldResult::Held)
         );
         // Drop at a new time.
         assert_eq!(
-            hold_outcome_flash(Some(hold(HoldResult::LetGo, 2.0)), &mut prev),
-            Some(HOLD_DROP_RGB)
+            hold_outcome_event(Some(hold(HoldResult::LetGo, 2.0)), &mut prev),
+            Some(HoldResult::LetGo)
         );
         // Missed consumes the event (records its time) but shows nothing.
         assert_eq!(
-            hold_outcome_flash(Some(hold(HoldResult::Missed, 3.0)), &mut prev),
+            hold_outcome_event(Some(hold(HoldResult::Missed, 3.0)), &mut prev),
             None
         );
         assert_eq!(prev, 3.0);
     }
 
     #[test]
-    fn hold_outcome_flash_ignores_repeat_and_rearms() {
+    fn hold_outcome_event_ignores_repeat_and_rearms() {
         let mut prev = NO_EVENT;
         assert_eq!(
-            hold_outcome_flash(Some(hold(HoldResult::Held, 1.0)), &mut prev),
-            Some(HOLD_OK_RGB)
+            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
+            Some(HoldResult::Held)
         );
         assert_eq!(
-            hold_outcome_flash(Some(hold(HoldResult::Held, 1.0)), &mut prev),
+            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
             None
         );
-        assert_eq!(hold_outcome_flash(None, &mut prev), None);
+        assert_eq!(hold_outcome_event(None, &mut prev), None);
         assert_eq!(prev, NO_EVENT);
     }
 
     #[test]
-    fn mine_flash_catches_consecutive_hits() {
+    fn mine_event_catches_consecutive_hits() {
         let mut prev = NO_EVENT;
         // First hit.
-        assert_eq!(mine_flash(Some(1.0), &mut prev), Some(MINE_RGB));
+        assert!(mine_event(Some(1.0), &mut prev));
         // Same explosion (same hit time) does not re-fire.
-        assert_eq!(mine_flash(Some(1.0), &mut prev), None);
+        assert!(!mine_event(Some(1.0), &mut prev));
         // A second hit while the first explosion may still be active re-fires.
-        assert_eq!(mine_flash(Some(1.5), &mut prev), Some(MINE_RGB));
+        assert!(mine_event(Some(1.5), &mut prev));
         // Explosion ended; re-arm.
-        assert_eq!(mine_flash(None, &mut prev), None);
+        assert!(!mine_event(None, &mut prev));
         assert_eq!(prev, NO_EVENT);
+    }
+
+    // Judgement animation selection
+
+    fn anim(tag: u8) -> Arc<PanelAnim> {
+        Arc::new(PanelAnim {
+            frames: vec![[tag; deadsync_smx::gifs::PANEL_RGB_BYTES]],
+            durations: vec![0.1],
+            loop_frame: 0,
+        })
+    }
+
+    #[test]
+    fn for_grade_picks_the_right_animation_and_falls_back() {
+        let gifs = JudgementGifs {
+            fantastic_blue: Some(anim(1)),
+            fantastic_white: Some(anim(2)),
+            miss: Some(anim(3)),
+            ..Default::default()
+        };
+        let frame0 = |a: Option<&Arc<PanelAnim>>| a.unwrap().frames[0][0];
+        // The FA+ flag selects blue vs white Fantastic.
+        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Fantastic, true)), 1);
+        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Fantastic, false)), 2);
+        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Miss, false)), 3);
+        // A grade without a gif yields None so the caller uses the solid colour.
+        assert!(gifs.for_grade(JudgeGrade::Great, false).is_none());
+    }
+
+    #[test]
+    fn sustain_anim_distinguishes_freeze_and_roll() {
+        let gifs = JudgementGifs {
+            freeze: Some(anim(1)),
+            roll: Some(anim(2)),
+            ..Default::default()
+        };
+        let frame0 = |a: Option<&Arc<PanelAnim>>| a.unwrap().frames[0][0];
+        assert_eq!(frame0(sustain_anim(&gifs, Some(NoteType::Hold))), 1);
+        assert_eq!(frame0(sustain_anim(&gifs, Some(NoteType::Roll))), 2);
+        assert!(sustain_anim(&gifs, Some(NoteType::Tap)).is_none());
+        assert!(sustain_anim(&gifs, None).is_none());
+        // No gifs at all: both kinds fall back to the solid hold colour.
+        assert!(sustain_anim(&JudgementGifs::default(), Some(NoteType::Hold)).is_none());
     }
 }

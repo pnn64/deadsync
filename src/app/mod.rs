@@ -4805,7 +4805,7 @@ impl App {
             config.lights_simplify_bass,
             config.smx_input && config.smx_panel_lights,
         );
-        self.sync_smx_pad_background(config.smx_pad_gifs, config.smx_pad_gifs_pack);
+        self.sync_smx_pad_gifs(config.smx_pad_gifs, config.smx_pad_gifs_pack);
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -4876,34 +4876,47 @@ impl App {
         self.smx_panels.deactivate();
     }
 
-    /// Keep the SMX full-pad background animation in step with the current screen.
-    /// Cheap per frame: registry lookups only happen when the (enabled, screen role,
-    /// pack) triple changes, and the driver deduplicates the rest.
-    fn sync_smx_pad_background(&mut self, enabled: bool, pack: config::SmxPackName) {
+    /// Keep the SMX pad GIF state in step with the options and the current screen:
+    /// the full-pad background follows the screen role, and the judgement animation
+    /// set follows the (enabled, pack) pair. Cheap per frame: registry lookups only
+    /// happen when the (enabled, screen role, pack) triple changes, and the driver
+    /// deduplicates the rest.
+    fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName) {
         let role = if enabled {
             smx_background_role(self.state.screens.current_screen)
         } else {
             None
         };
-        if self.smx_bg_synced == Some((enabled, role, pack)) {
+        let synced = Some((enabled, role, pack));
+        if self.smx_bg_synced == synced {
             return;
         }
-        self.smx_bg_synced = Some((enabled, role, pack));
+        let pack_changed = self
+            .smx_bg_synced
+            .is_none_or(|(e, _, p)| e != enabled || p != pack);
+        self.smx_bg_synced = synced;
+
+        let pack = (!pack.is_empty()).then_some(pack);
+        let pack_str = pack.as_ref().map(|p| p.as_str());
 
         let background = role.and_then(|role| {
-            let registry = self.smx_gif_registry();
-            let pack = (!pack.is_empty()).then_some(pack);
             // `_25` is the baseline that renders on both pad LED layouts; 16-LED
             // pads simply show its outer ring.
-            registry
-                .background(
-                    pack.as_ref().map(|p| p.as_str()),
-                    role,
-                    deadsync_smx::gifs::PadSize::Leds25,
-                )
+            self.smx_gif_registry()
+                .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
                 .map(|anim| (anim, deadsync_smx::panels::Clock::Realtime))
         });
         self.smx_panels.set_background(background);
+
+        if pack_changed {
+            let gifs = if enabled {
+                let registry = self.smx_gif_registry().clone();
+                smx_panel_fx::JudgementGifs::resolve(&registry, pack_str)
+            } else {
+                smx_panel_fx::JudgementGifs::default()
+            };
+            self.smx_panels.set_judgement_gifs(gifs);
+        }
     }
 
     /// Decode the SMX GIF assets on first use. A cold path: runs when the pad-gifs
