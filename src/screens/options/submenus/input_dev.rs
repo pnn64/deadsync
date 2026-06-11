@@ -22,7 +22,7 @@ pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
 /// not yet assigned.
 fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
     use crate::assets::i18n::{tr, tr_fmt};
-    use crate::engine::smx;
+    use deadsync_smx as smx;
     let label = |slot: usize| -> String {
         let info = smx::get_info(slot);
         if info.connected && !info.serial.is_empty() {

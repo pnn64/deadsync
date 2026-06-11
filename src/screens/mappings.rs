@@ -1019,7 +1019,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
             // generic "Pad N Btn 0x.." form.
             if let Some(label) = binding
                 .device
-                .and_then(|dev| crate::engine::smx::trigger_label(dev, binding.code_u32))
+                .and_then(|dev| deadsync_smx::trigger_label(dev, binding.code_u32))
             {
                 return label;
             }

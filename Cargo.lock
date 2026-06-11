@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.703"
+version = "0.4.704"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -997,6 +997,7 @@ dependencies = [
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
+ "deadsync-smx",
  "deadsync-video",
  "flate2",
  "fs_extra",
@@ -1023,7 +1024,6 @@ dependencies = [
  "rubato",
  "rust-ini",
  "rustc-hash 2.1.2",
- "rustmaniax-sdk",
  "semver",
  "serde",
  "serde_json",
@@ -1311,6 +1311,17 @@ dependencies = [
  "rssp",
  "serde",
  "twox-hash",
+]
+
+[[package]]
+name = "deadsync-smx"
+version = "0.1.0"
+dependencies = [
+ "deadsync-input",
+ "deadsync-input-native",
+ "deadsync-platform",
+ "log",
+ "rustmaniax-sdk",
 ]
 
 [[package]]

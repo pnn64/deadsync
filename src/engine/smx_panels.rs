@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use deadsync_rules::judgment::JudgeGrade;
 
-use crate::engine::smx;
+use deadsync_smx as smx;
 
 /// Pads addressed by the SMX SDK (slot 0 and slot 1).
 pub const PADS: usize = 2;

@@ -3,14 +3,15 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use rustmaniax_sdk::{
-    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID,
-    SensorTestData, SensorTestMode, SmxConfig, SmxEvent, SmxInfo, SmxManager,
+    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID, SmxEvent,
 };
+pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
 use deadsync_input::{PadCode, PadEvent, PadId};
 use deadsync_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
@@ -38,6 +39,8 @@ struct SmxShared {
     uuid: [Mutex<[u8; 16]>; 2],
     /// Per-pad serial string, cached at connect, used for friendly trigger labels.
     serial: [Mutex<String>; 2],
+    p1_assigned: AtomicBool,
+    p2_assigned: AtomicBool,
     /// Set while a deferred `set_serial_numbers()` is in flight, so a burst of
     /// serial-less connect events only spawns one assignment at a time.
     serial_assign_inflight: AtomicBool,
@@ -45,9 +48,15 @@ struct SmxShared {
 
 static SHARED: OnceLock<Arc<SmxShared>> = OnceLock::new();
 
+pub struct InitConfig {
+    pub usb_polling_us: u16,
+    pub p1_serial: Option<String>,
+    pub p2_serial: Option<String>,
+}
+
 /// Initialize the shared SMX manager. Call once at startup.
 /// Returns false if initialization failed (e.g., hidapi unavailable).
-pub fn init() -> bool {
+pub fn init(config: InitConfig) -> bool {
     if SHARED.get().is_some() {
         return true;
     }
@@ -64,6 +73,8 @@ pub fn init() -> bool {
             prev_input: [AtomicU16::new(0), AtomicU16::new(0)],
             uuid: [Mutex::new([0u8; 16]), Mutex::new([0u8; 16])],
             serial: [Mutex::new(String::new()), Mutex::new(String::new())],
+            p1_assigned: AtomicBool::new(config.p1_serial.is_some()),
+            p2_assigned: AtomicBool::new(config.p2_serial.is_some()),
             serial_assign_inflight: AtomicBool::new(false),
         }),
         Err(e) => {
@@ -73,12 +84,11 @@ pub fn init() -> bool {
     };
 
     let _ = SHARED.set(shared);
-    set_usb_polling_us(crate::config::get().smx_usb_polling_us);
+    set_usb_polling_us(config.usb_polling_us);
     // Push any saved pad→player assignment so the SDK orders slots by serial as
     // pads connect (overriding the jumper). No-op when nothing is saved.
-    let (p1, p2) = crate::config::smx_pad_assignment();
-    if p1.is_some() || p2.is_some() {
-        set_player_assignment(p1, p2);
+    if config.p1_serial.is_some() || config.p2_serial.is_some() {
+        set_player_assignment(config.p1_serial, config.p2_serial);
     }
     log::info!("SMX: SDK initialized, polling for pads");
     true
@@ -187,19 +197,57 @@ pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
 /// with a different label, e.g. "SMX P2 D" (native) versus "Pad 2 Btn 0x90008"
 /// (generic HID). Gated on `smx_input` (the same flag that starts the SDK), so
 /// with native SMX off the pad still works as a plain gamepad.
-pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>) -> bool {
-    native_smx_owns_device_with_flag(vendor, product, crate::config::get().smx_input)
+pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>, smx_input: bool) -> bool {
+    smx_input && is_smx_usb_device(vendor, product)
 }
 
-/// Pure form of [`native_smx_owns_device`] with the `smx_input` flag supplied,
-/// so the skip contract (only skip an SMX pad, and only while native input is
-/// on) is testable without the process-global config.
-fn native_smx_owns_device_with_flag(
-    vendor: Option<u16>,
-    product: Option<u16>,
-    smx_input: bool,
-) -> bool {
-    smx_input && is_smx_usb_device(vendor, product)
+/// Built-in StepManiaX threshold preset (sensitivity), mirroring the official
+/// SMX config tool's Low / Normal / High.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmxPadPreset {
+    Low,
+    Medium,
+    High,
+}
+
+impl SmxPadPreset {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+        }
+    }
+
+    /// 0/1/2 index used by the options choice list.
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Low => 0,
+            Self::Medium => 1,
+            Self::High => 2,
+        }
+    }
+
+    pub const fn from_index(i: usize) -> Self {
+        match i {
+            1 => Self::Medium,
+            2 => Self::High,
+            _ => Self::Low,
+        }
+    }
+}
+
+impl FromStr for SmxPadPreset {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            _ => Err(()),
+        }
+    }
 }
 
 /// The sensor type of a connected pad (`None` if its config isn't available yet).
@@ -218,7 +266,7 @@ pub fn pad_sensor_type(pad: usize) -> Option<SmxPadType> {
 /// (`0x0F`) for odd panels; sensor `s` is bit `base + s`. Shared by the config
 /// encode/decode here and the live per-sensor edits in the input backend, so the
 /// firmware bit layout has a single source of truth.
-pub(crate) fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
+pub fn enabled_bit(panel: usize, sensor: usize) -> (usize, u8) {
     let byte = panel / 2;
     let base = if panel % 2 == 0 { 4 } else { 0 };
     (byte, 1u8 << (base + sensor))
@@ -400,8 +448,7 @@ struct PresetThresholds {
     fsr_high_center: u8,
 }
 
-fn preset_thresholds(preset: crate::config::SmxPadPreset) -> PresetThresholds {
-    use crate::config::SmxPadPreset;
+fn preset_thresholds(preset: SmxPadPreset) -> PresetThresholds {
     match preset {
         SmxPadPreset::Low => PresetThresholds {
             load_cell_low: 70,
@@ -439,7 +486,7 @@ fn preset_thresholds(preset: crate::config::SmxPadPreset) -> PresetThresholds {
 /// Flash a built-in preset to a pad: every panel's FSR and load-cell thresholds
 /// (center panel 4 overridden), mirroring the official SMX tool. Returns false
 /// if the pad's config isn't available yet.
-pub fn apply_preset(pad: usize, preset: crate::config::SmxPadPreset) -> bool {
+pub fn apply_preset(pad: usize, preset: SmxPadPreset) -> bool {
     let Some(mut config) = get_config(pad) else {
         log::trace!("SMX: apply_preset pad {pad} skipped (config unavailable)");
         return false;
@@ -497,6 +544,8 @@ pub fn set_serial_numbers() {
 /// which re-orders the slots live.
 pub fn set_player_assignment(p1: Option<String>, p2: Option<String>) {
     if let Some(s) = SHARED.get() {
+        s.p1_assigned.store(p1.is_some(), Ordering::Release);
+        s.p2_assigned.store(p2.is_some(), Ordering::Release);
         s.manager.set_player_assignment(p1, p2);
     }
 }
@@ -559,8 +608,13 @@ pub fn same_jumper_conflict() -> bool {
 /// source of truth for the main-Menu badge, the options-page warning, and the
 /// auto-prompt, so they always agree.
 pub fn conflict_warning_active() -> bool {
-    let (p1, p2) = crate::config::smx_pad_assignment();
-    conflict_unresolved(same_jumper_conflict(), p1.is_some(), p2.is_some())
+    SHARED.get().is_some_and(|s| {
+        conflict_unresolved(
+            same_jumper_conflict(),
+            s.p1_assigned.load(Ordering::Acquire),
+            s.p2_assigned.load(Ordering::Acquire),
+        )
+    })
 }
 
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
@@ -789,10 +843,9 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 mod tests {
     use super::{
         PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
-        conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
+        SmxPadPreset, conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
         preset_thresholds,
     };
-    use crate::config::SmxPadPreset;
     use rustmaniax_sdk::SmxInfo;
 
     #[test]
@@ -812,16 +865,19 @@ mod tests {
 
     #[test]
     fn native_smx_owns_device_only_when_smx_input_on() {
-        use super::native_smx_owns_device_with_flag as owns;
         use rustmaniax_sdk::{SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID};
 
         let (vid, pid) = (Some(SMX_USB_VENDOR_ID), Some(SMX_USB_PRODUCT_ID));
         // The pad is skipped only while native StepManiaX input is on; with it
         // off the pad must stay available to the generic gamepad backends.
-        assert!(owns(vid, pid, true));
-        assert!(!owns(vid, pid, false));
+        assert!(super::native_smx_owns_device(vid, pid, true));
+        assert!(!super::native_smx_owns_device(vid, pid, false));
         // A non-SMX controller is never skipped, even with native input on.
-        assert!(!owns(Some(0x046D), Some(0xC216), true));
+        assert!(!super::native_smx_owns_device(
+            Some(0x046D),
+            Some(0xC216),
+            true
+        ));
     }
 
     #[test]

@@ -4055,10 +4055,9 @@ impl App {
             // controller borrow below). The config *list* only depends on the
             // profile + sensor type; `is_default` is per-serial, computed per entry.
             let cursor_pad_type = cursor_dev
-                .and_then(|dev| crate::engine::smx::pad_sensor_type(dev.index))
+                .and_then(|dev| deadsync_smx::pad_sensor_type(dev.index))
                 .map(|t| t.as_str().to_owned());
-            let cursor_serial =
-                cursor_dev.map(|dev| crate::engine::smx::get_info(dev.index).serial);
+            let cursor_serial = cursor_dev.map(|dev| deadsync_smx::get_info(dev.index).serial);
             // Cache + markers are keyed by pad slot (always unambiguous, unlike the
             // player side, which two pads can share).
             let cursor_slot = cursor_dev.map(|dev| dev.index);
@@ -4076,7 +4075,7 @@ impl App {
                     .filter(|c| {
                         pad_profile_data::config_matches(
                             c,
-                            crate::engine::smx::BACKEND_ID,
+                            deadsync_smx::BACKEND_ID,
                             cursor_pad_type.as_deref(),
                         )
                     })
@@ -4178,23 +4177,22 @@ impl App {
             name: preset.as_str().to_owned(),
         };
         let Some(id) = profile_id else {
-            return (crate::engine::smx::apply_preset(pad, preset), preset_label);
+            return (deadsync_smx::apply_preset(pad, preset), preset_label);
         };
         let configs = crate::game::pad_profiles::load(id);
-        match pad_profile_data::resolve(&configs, crate::engine::smx::BACKEND_ID, pad_type, serial)
+        match pad_profile_data::resolve(&configs, deadsync_smx::BACKEND_ID, pad_type, serial)
             .and_then(|c| {
-                crate::engine::smx::PadConfigData::from_settings(&c.settings)
-                    .map(|d| (c.name.clone(), d))
+                deadsync_smx::PadConfigData::from_settings(&c.settings).map(|d| (c.name.clone(), d))
             }) {
             Some((name, data)) => (
-                crate::engine::smx::apply_config_data(pad, &data),
+                deadsync_smx::apply_config_data(pad, &data),
                 AppliedPadConfig {
                     preset: false,
                     name,
                 },
             ),
             // No matching/default config (or corrupt) → machine preset.
-            None => (crate::engine::smx::apply_preset(pad, preset), preset_label),
+            None => (deadsync_smx::apply_preset(pad, preset), preset_label),
         }
     }
 
@@ -4226,11 +4224,11 @@ impl App {
         if p1.is_some() || p2.is_some() {
             return;
         }
-        let a = crate::engine::smx::get_info(0);
-        let b = crate::engine::smx::get_info(1);
+        let a = deadsync_smx::get_info(0);
+        let b = deadsync_smx::get_info(1);
         // SDK orders slot 0 = P1-jumpered, slot 1 = P2-jumpered, so the pair is
         // already in (P1, P2) order when the jumpers are distinct.
-        if let Some((p1, p2)) = crate::engine::smx::jumper_derived_pair(&a, &b) {
+        if let Some((p1, p2)) = deadsync_smx::jumper_derived_pair(&a, &b) {
             log::info!("SMX: auto-saving pad assignment from jumpers (P1={p1}, P2={p2})");
             config::update_smx_pad_assignment(Some(p1), Some(p2));
         }
@@ -4245,7 +4243,7 @@ impl App {
         {
             return;
         }
-        if !(config::get().smx_input && crate::engine::smx::conflict_warning_active()) {
+        if !(config::get().smx_input && deadsync_smx::conflict_warning_active()) {
             // No unresolved conflict, so re-arm for the next episode.
             self.state.screens.smx_autoprompt_latched = false;
             return;
@@ -4272,12 +4270,12 @@ impl App {
             && config::get().smx_input
             && options::is_smx_config_view(&self.state.screens.options_state);
         if active {
-            let colors = crate::engine::smx::player_indicator_colors();
+            let colors = deadsync_smx::player_indicator_colors();
             self.state.screens.smx_options_light_timer += dt;
             if colors != self.state.screens.smx_options_last_lights
                 || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
             {
-                crate::engine::smx::set_player_lights(colors);
+                deadsync_smx::set_player_lights(colors);
                 self.state.screens.smx_options_last_lights = colors;
                 self.state.screens.smx_options_light_timer = 0.0;
             }
@@ -4289,7 +4287,7 @@ impl App {
             // The assignment screen drives the pad lights itself, so don't restore
             // auto-lighting when handing off to it (avoids a one-frame flicker).
             if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
-                crate::engine::smx::reenable_auto_lights();
+                deadsync_smx::reenable_auto_lights();
             }
         }
     }
@@ -4319,7 +4317,7 @@ impl App {
 
         let cfg = config::get();
         for pad in 0..2 {
-            let info = crate::engine::smx::get_info(pad);
+            let info = deadsync_smx::get_info(pad);
             if !cfg.smx_input || !cfg.smx_manages_pad_config || !info.connected {
                 self.pad_config_sync.signature[pad] = None;
                 continue;
@@ -4328,7 +4326,7 @@ impl App {
             // pad maps to its own side. Side is the slot (the SDK orders slot 0 =
             // P1, slot 1 = P2 per the pad→player assignment), not the raw jumper.
             let profile_id = profile::active_local_profile_id_for_pad(pad == 1);
-            let pad_type = crate::engine::smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
+            let pad_type = deadsync_smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             // Compare against the cached signature by borrow: the steady-state
             // path allocates nothing just to find that nothing changed. The owned
             // `Sig` is built (by moving these values) only when we re-resolve.
@@ -10174,11 +10172,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     if config.smx_input {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
-        if crate::engine::smx::init() {
-            crate::engine::smx::add_input_listener(Box::new(move |pe| {
+        let (p1_serial, p2_serial) = config::smx_pad_assignment();
+        if deadsync_smx::init(deadsync_smx::InitConfig {
+            usb_polling_us: config.smx_usb_polling_us,
+            p1_serial,
+            p2_serial,
+        }) {
+            deadsync_smx::add_input_listener(Box::new(move |pe| {
                 let _ = proxy_pad.send_event(UserEvent::Pad(pe));
             }));
-            crate::engine::smx::add_sys_listener(Box::new(move |se| {
+            deadsync_smx::add_sys_listener(Box::new(move |se| {
                 let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
             }));
         }

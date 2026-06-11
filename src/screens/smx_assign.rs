@@ -2,7 +2,7 @@
 //!
 //! Walks the user through a press-a-panel flow: press a panel on the pad you
 //! want as P1, then the pad you want as P2. The pressed pad's serial is pinned to
-//! that player slot (see [`crate::engine::smx::set_player_assignment`]), which
+//! that player slot (see [`deadsync_smx::set_player_assignment`]), which
 //! decouples the assignment from the hardware P1/P2 jumper, the only way to fix
 //! two pads that share a jumper or are physically installed swapped. The pads are
 //! lit blue (P1) / red (P2) throughout so the user can see which is which.
@@ -12,11 +12,11 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::smx;
 use crate::engine::space::{self, screen_center_x, screen_height, screen_width};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_smx as smx;
 use std::sync::Mutex;
 
 /// Screen to return to when the assignment screen finishes/cancels. Set by the

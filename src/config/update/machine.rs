@@ -147,7 +147,7 @@ pub fn update_smx_usb_polling(micros: u16) {
         }
         cfg.smx_usb_polling_us = micros;
     }
-    crate::engine::smx::set_usb_polling_us(micros);
+    deadsync_smx::set_usb_polling_us(micros);
     save_without_keymaps();
 }
 
@@ -164,7 +164,7 @@ pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<St
         *p1 = p1_serial.clone();
         *p2 = p2_serial.clone();
     }
-    crate::engine::smx::set_player_assignment(p1_serial, p2_serial);
+    deadsync_smx::set_player_assignment(p1_serial, p2_serial);
     save_without_keymaps();
 }
 
@@ -174,7 +174,7 @@ pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<St
 /// `false` (no-op) unless both pads are connected, since a swap is undefined with
 /// fewer than two pads.
 pub fn swap_smx_pad_assignment() -> bool {
-    let [s0, s1] = crate::engine::smx::connected_serials();
+    let [s0, s1] = deadsync_smx::connected_serials();
     if let (Some(a), Some(b)) = (s0, s1) {
         update_smx_pad_assignment(Some(b), Some(a));
         true

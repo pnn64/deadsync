@@ -4073,7 +4073,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
     let style = profile::get_session_play_style();
     let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
     for slot in 0..2 {
-        let info = crate::engine::smx::get_info(slot);
+        let info = deadsync_smx::get_info(slot);
         if !info.connected {
             continue;
         }
@@ -4128,16 +4128,12 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // gets presets only).
         let Some(pid) = pid else { continue };
         // Only the configs that match this pad's sensor type (FSR vs load cell).
-        let pad_type = crate::engine::smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
-        let serial = crate::engine::smx::get_info(*slot).serial;
+        let pad_type = deadsync_smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
+        let serial = deadsync_smx::get_info(*slot).serial;
         let configs: Vec<_> = crate::game::pad_profiles::load(pid)
             .into_iter()
             .filter(|c| {
-                pad_profile_data::config_matches(
-                    c,
-                    crate::engine::smx::BACKEND_ID,
-                    pad_type.as_deref(),
-                )
+                pad_profile_data::config_matches(c, deadsync_smx::BACKEND_ID, pad_type.as_deref())
             })
             .collect();
         for c in &configs {
@@ -8109,8 +8105,8 @@ fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
     let Some(c) = configs.iter().find(|c| c.name == name) else {
         return false;
     };
-    match crate::engine::smx::PadConfigData::from_settings(&c.settings) {
-        Some(data) => crate::engine::smx::apply_config_data(slot, &data),
+    match deadsync_smx::PadConfigData::from_settings(&c.settings) {
+        Some(data) => deadsync_smx::apply_config_data(slot, &data),
         None => false,
     }
 }
@@ -8121,12 +8117,12 @@ fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &st
     // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2 per the
     // pad→player assignment): P1 -> slot 0, P2 -> slot 1.
     let slot = usize::from(p2);
-    if !crate::engine::smx::get_info(slot).connected {
+    if !deadsync_smx::get_info(slot).connected {
         return false;
     }
     let applied = if preset {
         match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
-            Ok(p) => crate::engine::smx::apply_preset(slot, p),
+            Ok(p) => deadsync_smx::apply_preset(slot, p),
             Err(()) => false,
         }
     } else {
@@ -8188,7 +8184,7 @@ fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, re
     // A disconnected sibling has no list to sync, and its profile read off stale
     // info would be meaningless; the pure helper folds both cases into `None`.
     let other = 1 - slot;
-    let other_info = crate::engine::smx::get_info(other);
+    let other_info = deadsync_smx::get_info(other);
     // Sibling's player side is its slot, not the raw jumper bit.
     let sibling_profile = profile::active_local_profile_id_for_pad(other == 1);
     if let Some(intent) = sibling_refresh_intent(
@@ -8220,7 +8216,7 @@ fn perform_pad_profile_save(state: &mut State) {
         return;
     }
     let slot = device.index;
-    let info = crate::engine::smx::get_info(slot);
+    let info = deadsync_smx::get_info(slot);
     // Player side is the slot, not the raw jumper bit (the serial below still
     // comes from whichever pad occupies this slot).
     let Some(profile_id) = profile::active_local_profile_id_for_pad(slot == 1) else {
@@ -8265,14 +8261,14 @@ fn perform_pad_profile_save(state: &mut State) {
     }
     // Save new: capture the pad's live tuning under the given name, tagged with
     // the backend + sensor type so it only applies to a matching pad.
-    let Some(data) = crate::engine::smx::capture_config(slot) else {
+    let Some(data) = deadsync_smx::capture_config(slot) else {
         return;
     };
-    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
     crate::game::pad_profiles::upsert(
         &profile_id,
         &name,
-        crate::engine::smx::BACKEND_ID,
+        deadsync_smx::BACKEND_ID,
         pad_type,
         Some(info.serial),
         draft.set_default,
@@ -8335,17 +8331,17 @@ fn perform_pad_profile_overwrite(state: &mut State) {
     let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
-    let info = crate::engine::smx::get_info(slot);
+    let info = deadsync_smx::get_info(slot);
     // upsert preserves the config's existing default associations, so overwrite
     // passes make_default=false (it only re-captures the threshold values).
-    let Some(data) = crate::engine::smx::capture_config(slot) else {
+    let Some(data) = deadsync_smx::capture_config(slot) else {
         return;
     };
-    let pad_type = crate::engine::smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
+    let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
     crate::game::pad_profiles::upsert(
         &profile_id,
         &name,
-        crate::engine::smx::BACKEND_ID,
+        deadsync_smx::BACKEND_ID,
         pad_type,
         Some(info.serial),
         false,
@@ -8361,7 +8357,7 @@ fn perform_pad_profile_overwrite(state: &mut State) {
 fn perform_pad_profile_set_default(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
-        let info = crate::engine::smx::get_info(slot);
+        let info = deadsync_smx::get_info(slot);
         crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).

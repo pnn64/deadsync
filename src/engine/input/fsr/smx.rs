@@ -1,10 +1,9 @@
 //! StepManiaX FSR sensor monitor using the shared SmxManager.
 
-use crate::engine::smx;
 use deadsync_input::fsr::{
     BackendKind, ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView,
 };
-use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig};
+use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
@@ -440,7 +439,7 @@ fn fsr_config_for_edit(pad: usize, op: &str) -> Option<SmxConfig> {
 }
 
 fn is_fsr(config: &SmxConfig) -> bool {
-    crate::engine::smx::is_fsr(config)
+    deadsync_smx::is_fsr(config)
 }
 
 /// Scale a raw calibrated FSR sensor reading to the 0-250 range used by the

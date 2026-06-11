@@ -63,6 +63,7 @@ use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_platform::logging;
 use deadsync_render::{BackendType, PresentModePolicy};
+pub use deadsync_smx::SmxPadPreset;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
@@ -80,55 +81,6 @@ pub struct AdditionalSongFolder {
 pub enum DisplayMode {
     Windowed,
     Fullscreen(FullscreenType),
-}
-
-/// Built-in StepManiaX threshold preset (sensitivity), mirroring the official
-/// SMX config tool's Low / Normal / High.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmxPadPreset {
-    Low,
-    Medium,
-    High,
-}
-
-impl SmxPadPreset {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "Low",
-            Self::Medium => "Medium",
-            Self::High => "High",
-        }
-    }
-
-    /// 0/1/2 index used by the options choice list.
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Low => 0,
-            Self::Medium => 1,
-            Self::High => 2,
-        }
-    }
-
-    pub const fn from_index(i: usize) -> Self {
-        match i {
-            1 => Self::Medium,
-            2 => Self::High,
-            _ => Self::Low,
-        }
-    }
-}
-
-impl FromStr for SmxPadPreset {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "low" => Ok(Self::Low),
-            "medium" => Ok(Self::Medium),
-            "high" => Ok(Self::High),
-            _ => Err(()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

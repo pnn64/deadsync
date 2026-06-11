@@ -4,7 +4,9 @@ use deadsync_input_native::{BackendHost, InputThreadPolicy};
 pub(super) fn host() -> BackendHost {
     BackendHost::new(
         crate::config::pad_index_for_uuid,
-        crate::engine::smx::native_smx_owns_device,
+        |vendor, product| {
+            deadsync_smx::native_smx_owns_device(vendor, product, crate::config::get().smx_input)
+        },
         deadsync_platform::host_time::now_nanos,
         deadsync_platform::host_time::instant_nanos,
         qpc_ticks_to_nanos,

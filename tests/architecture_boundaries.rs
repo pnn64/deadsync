@@ -143,6 +143,16 @@ const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const SMX_IMPORT_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/engine",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/actors.rs",
     "src/engine/present/anim.rs",
@@ -1486,6 +1496,89 @@ fn lights_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn smx_imports_do_not_use_engine_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-smx/Cargo.toml"),
+        root.join("crates/deadsync-smx/src/lib.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    if root.join("src/engine/smx.rs").exists() {
+        failures.push("src/engine/smx.rs still exists; import deadsync_smx directly".to_string());
+    }
+
+    let engine_mod_path = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+        let count = count_token_refs(&text, "pub mod smx");
+        if count != 0 {
+            failures.push(format!(
+                "{} declares engine::smx {count} times; import deadsync_smx directly",
+                rel_path(&root, &engine_mod_path)
+            ));
+        }
+    }
+
+    let smx_src = root.join("crates/deadsync-smx/src");
+    if smx_src.exists() {
+        for file in rust_files(&smx_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::app",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync::engine",
+                "deadsync::app",
+                "deadsync::assets",
+                "deadsync::config",
+                "deadsync::game",
+                "deadsync::screens",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    for dir in SMX_IMPORT_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let count = count_engine_smx_facade_refs(&text);
+            if count != 0 {
+                failures.push(format!("{rel} references engine::smx facade {count} times"));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "StepManiaX SDK manager should be imported from deadsync_smx:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn video_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let facade_path = root.join("src/engine/video");
@@ -2533,6 +2626,13 @@ fn count_engine_lights_facade_refs(text: &str) -> usize {
         + count_token_refs(text, "deadsync::engine::lights")
         + count_grouped_game_rule_uses(text, "use crate::engine::{", "lights")
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "lights")
+}
+
+fn count_engine_smx_facade_refs(text: &str) -> usize {
+    count_token_refs(text, "crate::engine::smx")
+        + count_token_refs(text, "deadsync::engine::smx")
+        + count_grouped_game_rule_uses(text, "use crate::engine::{", "smx")
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "smx")
 }
 
 fn count_engine_gfx_render_symbol_refs(text: &str, symbol: &str) -> usize {
