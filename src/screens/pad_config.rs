@@ -340,10 +340,9 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         } else if matches!(
             ui_action(ev.action),
             Some(UiAction::Raise | UiAction::Lower)
-        ) {
-            if let Some(d) = state.saving.as_mut() {
-                d.set_default = !d.set_default;
-            }
+        ) && let Some(d) = state.saving.as_mut()
+        {
+            d.set_default = !d.set_default;
         }
         return EditResult::Handled;
     }
@@ -988,13 +987,15 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     button.label,
                     &button.sensors,
                     scale,
-                    press.to_string(),
-                    normalize(press, scale),
-                    Some((release.to_string(), normalize(release, scale))),
+                    ClusterThresholds {
+                        press_label: press.to_string(),
+                        press_norm: normalize(press, scale),
+                        release: Some((release.to_string(), normalize(release, scale))),
+                        focused: focused_kind,
+                        lock_off: state.threshold_lock_off,
+                    },
                     button.active,
                     theme,
-                    focused_kind,
-                    state.threshold_lock_off,
                     11.0 + zb,
                 );
                 continue;
@@ -1029,13 +1030,15 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     button.label,
                     &button.sensors,
                     scale,
-                    threshold_label,
-                    threshold_norm,
-                    None,
+                    ClusterThresholds {
+                        press_label: threshold_label,
+                        press_norm: threshold_norm,
+                        release: None,
+                        focused: focused_kind,
+                        lock_off: state.threshold_lock_off,
+                    },
                     button.active,
                     theme,
-                    focused_kind,
-                    state.threshold_lock_off,
                     11.0 + zb,
                 );
             } else {
@@ -1299,19 +1302,16 @@ fn push_sensor_bar(
     ));
     // Threshold value next to its line, like the Simple view; flip it below
     // the line near the top of the bar so it can't collide with the pressure.
-    if threshold_norm > 0.85 {
-        actors.push(act!(text:
-            font("miso"): settext(raw_threshold.to_string()): align(0.5, 0.0):
-            xy(x, threshold_y + threshold_h + 1.0): zoom(0.45): horizalign(center):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
-        ));
+    let (v_align, label_y) = if threshold_norm > 0.85 {
+        (0.0, threshold_y + threshold_h + 1.0)
     } else {
-        actors.push(act!(text:
-            font("miso"): settext(raw_threshold.to_string()): align(0.5, 1.0):
-            xy(x, threshold_y - 1.0): zoom(0.45): horizalign(center):
-            diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
-        ));
-    }
+        (1.0, threshold_y - 1.0)
+    };
+    actors.push(act!(text:
+        font("miso"): settext(raw_threshold.to_string()): align(0.5, v_align):
+        xy(x, label_y): zoom(0.45): horizalign(center):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
+    ));
     // Sensor identifier (edge label, or 1-based number) directly below the bar.
     actors.push(act!(text:
         font("miso"): settext(sensor_label): align(0.5, 0.0):
@@ -1576,15 +1576,50 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
         return;
     };
 
-    // Dual-threshold (load-cell) button: move the edited threshold, dragging
-    // the partner along when they would end up closer than the gap. The pair
-    // is queued as one command so it reaches the pad in a single write.
-    let gap = i32::from(threshold_gap(state));
+    // Dual-threshold (load-cell) button: the pair is queued as one command so
+    // it reaches the pad in a single write.
     let (pending_press, pending_release) = pending_threshold_pair(state, device, button)
         .unwrap_or((bar.aggregate_threshold, live_release));
-    let press = i32::from(pending_press);
-    let release = i32::from(pending_release);
-    let (new_press, new_release) = match slot.kind {
+    let Some((press, release)) = step_threshold_pair(
+        slot.kind,
+        pending_press,
+        pending_release,
+        delta,
+        threshold_gap(state),
+        bar.min_raw_threshold,
+        bar.max_raw_threshold,
+    ) else {
+        return;
+    };
+    queue_unique(
+        state,
+        PadCommand::ThresholdPair {
+            device,
+            button,
+            press,
+            release,
+        },
+    );
+}
+
+/// Step one side of a press/release pair by `delta`: move the edited
+/// threshold, dragging the partner along when they would end up closer than
+/// `gap`, keeping both inside `min..=max`. `None` when the edited threshold
+/// can't move, or when the clamps would move it against the requested
+/// direction (possible if the stored pair starts closer together than the
+/// gap).
+fn step_threshold_pair(
+    kind: ThresholdKind,
+    press: u16,
+    release: u16,
+    delta: i32,
+    gap: u16,
+    min: u16,
+    max: u16,
+) -> Option<(u16, u16)> {
+    let (press, release) = (i32::from(press), i32::from(release));
+    let (gap, min, max) = (i32::from(gap), i32::from(min), i32::from(max));
+    let (new_press, new_release) = match kind {
         ThresholdKind::Press => {
             let p = (press + delta).clamp(min + gap, max);
             (p, release.min(p - gap))
@@ -1594,25 +1629,14 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
             (press.max(r + gap), r)
         }
     };
-    // No-op when the edited threshold can't move, or when the clamps would
-    // move it against the requested direction (possible if the stored pair
-    // starts closer together than the gap).
-    let (cur, new) = match slot.kind {
+    let (cur, new) = match kind {
         ThresholdKind::Press => (press, new_press),
         ThresholdKind::Release => (release, new_release),
     };
     if new == cur || (delta > 0) != (new > cur) {
-        return;
+        return None;
     }
-    queue_unique(
-        state,
-        PadCommand::ThresholdPair {
-            device,
-            button,
-            press: new_press as u16,
-            release: new_release as u16,
-        },
-    );
+    Some((new_press as u16, new_release as u16))
 }
 
 fn adjust_sensor_threshold(
@@ -2155,6 +2179,20 @@ fn push_frame(
     ));
 }
 
+/// Threshold display inputs for one Simple-view value cluster: the press
+/// (high) value and line position, the optional release (low) pair for
+/// dual-threshold (load-cell) buttons, and the cursor/lock state that decides
+/// which line is highlighted and in what color.
+struct ClusterThresholds {
+    press_label: String,
+    press_norm: f32,
+    /// Release label + normalized line position (load-cell buttons only).
+    release: Option<(String, f32)>,
+    /// Which of the pair the cursor is on, when this cluster is selected.
+    focused: Option<ThresholdKind>,
+    lock_off: bool,
+}
+
 /// Simple-view renderer for load-cell panels: draws each corner sensor as a
 /// thin value bar (numbered 1-N) sharing one panel threshold line, inside the
 /// same slot a single Simple bar would occupy.
@@ -2166,15 +2204,18 @@ fn push_value_cluster(
     label: &str,
     sensors: &[SensorView],
     value_scale: u16,
-    threshold_label: String,
-    threshold_norm: f32,
-    release: Option<(String, f32)>,
+    thresholds: ClusterThresholds,
     button_active: bool,
     theme: &Theme,
-    focused_kind: Option<ThresholdKind>,
-    lock_off: bool,
     z: f32,
 ) {
+    let ClusterThresholds {
+        press_label: threshold_label,
+        press_norm: threshold_norm,
+        release,
+        focused: focused_kind,
+        lock_off,
+    } = thresholds;
     let selected = focused_kind.is_some();
     // With the press/release lock off, the selection highlight turns red to
     // read as an "at your own risk" state (dual-threshold clusters only).
@@ -2279,14 +2320,14 @@ fn push_value_cluster(
         xy(x_center, y - 6.0): zoom(0.68): horizalign(center):
         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]): z(z + 3.0)
     ));
-    if let Some((release_label, _)) = &release {
+    if let Some((release_label, _)) = release {
         // Release / press values side by side above the press line (low on the
         // left, like the official tool), each lit when it is the one focused.
         let plain = [1.0, 1.0, 1.0, 0.95];
         let rc = if release_focused { sel } else { plain };
         let pc = if press_focused { sel } else { plain };
         actors.push(act!(text:
-            font("miso"): settext(release_label.clone()): align(1.0, 1.0):
+            font("miso"): settext(release_label): align(1.0, 1.0):
             xy(x_center - 4.0, threshold_y - 3.0): zoom(0.68): horizalign(right):
             diffuse(rc[0], rc[1], rc[2], rc[3]): z(z + 3.0)
         ));
@@ -2967,6 +3008,27 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // onto L press
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
         assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn step_threshold_pair_drags_clamps_and_noops() {
+        use ThresholdKind::{Press, Release};
+        let step = |kind, press, release, delta| {
+            step_threshold_pair(kind, press, release, delta, 10, 20, 200)
+        };
+        // Raising release drags press along to keep the gap…
+        assert_eq!(step(Release, 80, 70, 5), Some((85, 75)));
+        // …raising press just widens the gap…
+        assert_eq!(step(Press, 80, 70, 5), Some((85, 70)));
+        // …and lowering press drags release.
+        assert_eq!(step(Press, 80, 70, -5), Some((75, 65)));
+        // Clamped at the top of the range, the partner still keeps the gap.
+        assert_eq!(step(Release, 195, 185, 5), Some((200, 190)));
+        // At the limit the edited threshold can't move at all.
+        assert_eq!(step(Press, 200, 190, 5), None);
+        // A pair stored closer than the gap (possible after unlocked edits):
+        // the clamp would move press AGAINST the keypress, so it must no-op.
+        assert_eq!(step(Press, 25, 20, -5), None);
     }
 
     #[test]
