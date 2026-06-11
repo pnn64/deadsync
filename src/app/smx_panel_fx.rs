@@ -8,7 +8,7 @@
 
 use deadsync_rules::note::HoldResult;
 
-use crate::engine::lights::smx_panels::{
+use crate::engine::smx_panels::{
     FLASH_SECONDS_JUDGMENT, Rgb, SmxPanelLights, flash_color, flash_duration, smx_panel_for_col,
 };
 use crate::game::gameplay::{

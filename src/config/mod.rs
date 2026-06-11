@@ -58,9 +58,9 @@ use self::runtime::{
     queue_save_write, sync_audio_mix_levels_from_config,
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
-use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 pub use deadsync_input_native::PadOrderBackend;
 use deadsync_input_native::WindowsPadBackend;
+use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_platform::logging;
 use deadsync_render::{BackendType, PresentModePolicy};
 use log::{info, warn};

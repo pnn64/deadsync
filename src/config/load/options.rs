@@ -1,4 +1,7 @@
 use super::*;
+use deadsync_lights::{
+    SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
+};
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     load_system_opts(conf, default, cfg);
@@ -572,16 +575,11 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .unwrap_or(default.use_fsrs);
     cfg.lights_driver = conf
         .get("Options", "LightsDriver")
-        .map(|v| crate::engine::lights::parse_driver_or_default(&v, default.lights_driver))
+        .map(|v| parse_driver_or_default(&v, default.lights_driver))
         .unwrap_or(default.lights_driver);
     cfg.lights_gameplay_pad_lights = conf
         .get("Options", "GameplayPadLights")
-        .map(|v| {
-            crate::engine::lights::parse_gameplay_pad_lights_or_default(
-                &v,
-                default.lights_gameplay_pad_lights,
-            )
-        })
+        .map(|v| parse_gameplay_pad_lights_or_default(&v, default.lights_gameplay_pad_lights))
         .unwrap_or(default.lights_gameplay_pad_lights);
     cfg.lights_simplify_bass = conf
         .get("Options", "LightsSimplifyBass")
@@ -589,7 +587,7 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .unwrap_or(default.lights_simplify_bass);
     cfg.lights_com_port = conf
         .get("Options", "LightsComPort")
-        .map(|v| crate::engine::lights::SerialPortName::parse(&v, default.lights_com_port))
+        .map(|v| SerialPortName::parse(&v, default.lights_com_port))
         .unwrap_or(default.lights_com_port);
     cfg.only_dedicated_menu_buttons = conf
         .get("Options", "OnlyDedicatedMenuButtons")

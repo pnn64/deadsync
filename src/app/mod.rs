@@ -20,9 +20,6 @@ use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::engine::input;
-use crate::engine::lights::{
-    self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
-};
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
@@ -80,6 +77,9 @@ use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_input_native::GpSystemEvent;
+use deadsync_lights::{
+    self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
+};
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;

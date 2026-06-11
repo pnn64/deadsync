@@ -1,0 +1,32 @@
+[package]
+name = "deadsync-lights"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+log = "0.4.32"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.186"
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Devices_Communication",
+    "Win32_Foundation",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false, features = ["linux-static-hidraw"] }
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

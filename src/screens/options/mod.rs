@@ -11,9 +11,6 @@ use crate::config::{
     VersionOverlaySide, VisualStyle,
 };
 use crate::engine::audio;
-use crate::engine::lights::{
-    DriverKind as LightsDriverKind, GameplayPadLightMode as LightsGameplayPadMode,
-};
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};
@@ -24,6 +21,9 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
 use deadsync_input_native::WindowsPadBackend;
+use deadsync_lights::{
+    DriverKind as LightsDriverKind, GameplayPadLightMode as LightsGameplayPadMode,
+};
 use deadsync_platform::display::{self, MonitorSpec};
 use deadsync_render::{BackendType, PresentModePolicy};
 use deadsync_score as score_data;

@@ -134,6 +134,15 @@ const RENDER_BACKEND_IMPORTS: &[&str] = &[
     "deadsync_render_backend_wgpu",
 ];
 
+const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/present/actors.rs",
     "src/engine/present/anim.rs",
@@ -1379,6 +1388,104 @@ fn logical_input_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn lights_imports_do_not_use_engine_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-lights/Cargo.toml"),
+        root.join("crates/deadsync-lights/src/lib.rs"),
+        root.join("crates/deadsync-lights/src/fusion.rs"),
+        root.join("crates/deadsync-lights/src/gpb.rs"),
+        root.join("crates/deadsync-lights/src/hid_blue_dot.rs"),
+        root.join("crates/deadsync-lights/src/linux_leds.rs"),
+        root.join("crates/deadsync-lights/src/litboard.rs"),
+        root.join("crates/deadsync-lights/src/minimaid_hid.rs"),
+        root.join("crates/deadsync-lights/src/pac_drive.rs"),
+        root.join("crates/deadsync-lights/src/snek.rs"),
+        root.join("crates/deadsync-lights/src/stac2.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    if root.join("src/engine/lights").exists() {
+        failures
+            .push("src/engine/lights still exists; import deadsync_lights directly".to_string());
+    }
+    if !root.join("src/engine/smx_panels.rs").exists() {
+        failures.push("src/engine/smx_panels.rs is missing".to_string());
+    }
+
+    let engine_mod_path = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+        let count = count_token_refs(&text, "pub mod lights");
+        if count != 0 {
+            failures.push(format!(
+                "{} declares engine::lights {count} times; import deadsync_lights directly",
+                rel_path(&root, &engine_mod_path)
+            ));
+        }
+    }
+
+    let lights_src = root.join("crates/deadsync-lights/src");
+    if lights_src.exists() {
+        for file in rust_files(&lights_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::app",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync::engine",
+                "deadsync::app",
+                "deadsync::assets",
+                "deadsync::config",
+                "deadsync::game",
+                "deadsync::screens",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    for dir in LIGHTS_IMPORT_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            let count = count_engine_lights_facade_refs(&text);
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references engine::lights facade {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "lights should be imported from deadsync_lights:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn video_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let facade_path = root.join("src/engine/video");
@@ -2419,6 +2526,13 @@ fn count_engine_video_facade_refs(text: &str) -> usize {
         + count_token_refs(text, "deadsync::engine::video")
         + count_grouped_game_rule_uses(text, "use crate::engine::{", "video")
         + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "video")
+}
+
+fn count_engine_lights_facade_refs(text: &str) -> usize {
+    count_token_refs(text, "crate::engine::lights")
+        + count_token_refs(text, "deadsync::engine::lights")
+        + count_grouped_game_rule_uses(text, "use crate::engine::{", "lights")
+        + count_grouped_game_rule_uses(text, "use deadsync::engine::{", "lights")
 }
 
 fn count_engine_gfx_render_symbol_refs(text: &str, symbol: &str) -> usize {

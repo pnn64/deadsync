@@ -8,9 +8,6 @@ mod pac_drive;
 mod snek;
 mod stac2;
 
-/// StepManiaX pad panel RGB lighting (judgement flashes, freeze/roll effects).
-pub mod smx_panels;
-
 use log::warn;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -849,6 +846,7 @@ mod tests {
     #[test]
     fn hide_flags_apply_only_to_joined_players() {
         let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_mode(Mode::Gameplay);
         lights.blink_cabinet(CabinetLight::MarqueeUpperLeft);
         lights.set_hide_flags([
             HideFlags {

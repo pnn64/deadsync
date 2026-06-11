@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.702"
+version = "0.4.703"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -986,6 +986,7 @@ dependencies = [
  "deadsync-core",
  "deadsync-input",
  "deadsync-input-native",
+ "deadsync-lights",
  "deadsync-net",
  "deadsync-online",
  "deadsync-platform",
@@ -1037,7 +1038,6 @@ dependencies = [
  "ureq",
  "windows",
  "windows-core",
- "windows-sys 0.61.2",
  "windows-targets 0.53.5",
  "winit",
  "winres",
@@ -1119,6 +1119,16 @@ dependencies = [
  "mach2",
  "windows",
  "winit",
+]
+
+[[package]]
+name = "deadsync-lights"
+version = "0.1.0"
+dependencies = [
+ "hidapi",
+ "libc",
+ "log",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.702"
+version = "0.4.703"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -19,6 +19,7 @@ members = [
     "crates/deadsync-core",
     "crates/deadsync-input",
     "crates/deadsync-input-native",
+    "crates/deadsync-lights",
     "crates/deadsync-net",
     "crates/deadsync-online",
     "crates/deadsync-platform",
@@ -78,6 +79,7 @@ deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-input = { path = "crates/deadsync-input" }
 deadsync-input-native = { path = "crates/deadsync-input-native" }
+deadsync-lights = { path = "crates/deadsync-lights" }
 deadsync-net = { path = "crates/deadsync-net" }
 deadsync-online = { path = "crates/deadsync-online" }
 deadsync-platform = { path = "crates/deadsync-platform" }
@@ -144,10 +146,6 @@ gpu-allocator = { version = "0.28.0", default-features = false, features = ["std
 hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
 windows-core = "0.62.2"
 windows-targets = "0.53.5"
-windows-sys = { version = "0.61.2", features = [
-    "Win32_Devices_Communication",
-    "Win32_Foundation",
-] }
 
 [target.'cfg(all(windows, target_vendor = "win7"))'.dependencies]
 windows = { version = "0.62.2", features = [
