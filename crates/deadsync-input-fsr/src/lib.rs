@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use deadsync_input::fsr::{BackendKind, PadDeviceId, PadView, ThresholdKind};
+use deadsync_input::fsr::{BackendKind, PadDeviceId, PadView};
 
 #[cfg(any(
     windows,
@@ -35,7 +35,7 @@ pub struct Monitor {
     smx: smx::Monitor,
     /// Fake SMX pads for UI development (`DEADSYNC_MOCK_PADS`). When set, the
     /// mock owns the SMX backend slot: native SMX never starts (no pads, no
-    /// USB writes) and SMX-routed edits land here instead.
+    /// USB writes) and SMX-routed calls land here instead.
     mock: Option<mock::Monitor>,
 }
 
@@ -58,7 +58,10 @@ impl Monitor {
         let mut out = String::new();
         out.push_str(&self.fsrio.debug_dump());
         out.push_str("\n\n");
-        out.push_str(&self.smx.debug_dump());
+        match &mut self.mock {
+            Some(m) => out.push_str(&m.debug_dump()),
+            None => out.push_str(&self.smx.debug_dump()),
+        }
         write_dump_file(path, out)
     }
 
@@ -72,26 +75,41 @@ impl Monitor {
         pads
     }
 
-    /// Set a threshold on a specific pad. `sensor` of `None` applies to every
-    /// sensor in the button (Simple mode); `Some(i)` targets one sensor.
-    /// `kind` picks the press or release threshold; only pads that expose a
-    /// separate release threshold (SMX load cell) accept `Release`.
+    /// Set a single threshold on a specific pad (the backend derives its own
+    /// release side). `sensor` of `None` applies to every sensor in the button
+    /// (Simple mode); `Some(i)` targets one sensor. Load-cell pads edit their
+    /// press/release pair through `set_threshold_pair` instead.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
-        kind: ThresholdKind,
         value: u16,
     ) -> bool {
         match device.backend {
-            BackendKind::Fsrio => {
-                kind == ThresholdKind::Press
-                    && self.fsrio.set_threshold(device, button, sensor, value)
-            }
+            BackendKind::Fsrio => self.fsrio.set_threshold(device, button, sensor, value),
             BackendKind::Smx => match &mut self.mock {
-                Some(m) => m.set_threshold(device, button, sensor, kind, value),
-                None => self.smx.set_threshold(device, button, sensor, kind, value),
+                Some(m) => m.set_threshold(device, button, sensor, value),
+                None => self.smx.set_threshold(device, button, sensor, value),
+            },
+        }
+    }
+
+    /// Set a load-cell button's press (high) and release (low) thresholds in
+    /// one config write, so the pad can never observe an inverted intermediate
+    /// pair. Only SMX load-cell pads support this.
+    pub fn set_threshold_pair(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
+    ) -> bool {
+        match device.backend {
+            BackendKind::Fsrio => false,
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_threshold_pair(device, button, press, release),
+                None => self.smx.set_threshold_pair(device, button, press, release),
             },
         }
     }
@@ -141,7 +159,10 @@ impl Monitor {
     /// while the config screen is open and `false` when leaving it.
     pub fn set_active(&mut self, active: bool) {
         self.fsrio.set_active(active);
-        self.smx.set_active(active);
+        match &mut self.mock {
+            Some(m) => m.set_active(active),
+            None => self.smx.set_active(active),
+        }
     }
 }
 
@@ -152,7 +173,7 @@ impl Monitor {
     target_os = "macos"
 )))]
 mod unsupported {
-    use super::{PadDeviceId, PadView, ThresholdKind};
+    use super::{PadDeviceId, PadView};
     use std::fmt::Write as _;
     use std::path::Path;
     use std::time::SystemTime;
@@ -174,8 +195,17 @@ mod unsupported {
             _device: PadDeviceId,
             _button: usize,
             _sensor: Option<usize>,
-            _kind: ThresholdKind,
             _value: u16,
+        ) -> bool {
+            false
+        }
+
+        pub fn set_threshold_pair(
+            &mut self,
+            _device: PadDeviceId,
+            _button: usize,
+            _press: u16,
+            _release: u16,
         ) -> bool {
             false
         }

@@ -19,11 +19,19 @@ use crate::engine::present::color;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{
-    ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView, ThresholdKind,
-};
+use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height};
+
+/// Which of a load-cell button's two thresholds a Simple-view cursor stop
+/// edits. Pads without a separate release threshold only use `Press`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThresholdKind {
+    /// The trigger (high) threshold: the panel activates above it.
+    Press,
+    /// The release (low) threshold: the panel deactivates below it.
+    Release,
+}
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -83,15 +91,23 @@ struct Theme {
 /// A pending pad-config edit for the app loop to apply to hardware.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadCommand {
-    /// Threshold edit. `sensor: None` applies to every sensor in the button
-    /// (Simple mode); `Some(i)` targets one sensor (Advanced mode). `kind` is
-    /// `Release` only for the separate release threshold of load-cell pads.
+    /// Single-threshold edit (the backend derives its own release side).
+    /// `sensor: None` applies to every sensor in the button (Simple mode);
+    /// `Some(i)` targets one sensor (Advanced mode).
     Threshold {
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
-        kind: ThresholdKind,
         value: u16,
+    },
+    /// Press+release pair edit for a load-cell button, applied as a single
+    /// config write so the pad can never observe an inverted intermediate
+    /// state (release >= press).
+    ThresholdPair {
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
     },
     /// Enable/disable a single sensor (Advanced mode).
     SensorEnabled {
@@ -430,6 +446,9 @@ pub fn reset_modes(state: &mut State) {
     state.saving = None;
     state.delete_armed = false;
     state.profiles_sel = 0;
+    // The press/release lock returns to ON each time the editor is entered,
+    // like the official tool; "at your own risk" mode is opt-in per session.
+    state.threshold_lock_off = false;
 }
 
 pub fn is_profiles_mode(state: &State) -> bool {
@@ -956,40 +975,53 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                 .map(|s| s.kind);
             let selected = focused_kind.is_some();
             let scale = button.value_scale;
-            // A pending whole-button edit shows a single value; otherwise show the
-            // live per-sensor range ("200-230") so Advanced edits are visible here,
-            // with faded ghost lines at the divergent per-sensor thresholds.
-            let mut ghost_norms: Vec<f32> = Vec::new();
-            let (threshold_label, threshold_norm) = if let Some(v) =
-                pending_simple_threshold(state, pad.device_id, btn_idx, ThresholdKind::Press)
-            {
-                (v.to_string(), normalize(v, scale))
-            } else {
-                let (mn, mx) = sensor_threshold_range(button);
-                let label = if mn == mx {
-                    mx.to_string()
-                } else {
-                    ghost_norms = divergent_sensor_thresholds(button)
-                        .into_iter()
-                        .map(|v| normalize(v, scale))
-                        .collect();
-                    format!("{mn}-{mx}")
-                };
-                (label, normalize(mx, scale))
-            };
-            if pad.simple_per_sensor_bars {
+            if let Some(live_release) = button.release_threshold {
                 // Load cells: four corner readings (numbered) sharing the
-                // panel's press/release threshold pair.
-                let release = button.release_threshold.map(|live| {
-                    let v = pending_simple_threshold(
-                        state,
-                        pad.device_id,
-                        btn_idx,
-                        ThresholdKind::Release,
-                    )
-                    .unwrap_or(live);
+                // panel's press/release threshold pair (pending edits are
+                // queued as a pair, so both values come from one lookup).
+                let (press, release) = pending_threshold_pair(state, pad.device_id, btn_idx)
+                    .unwrap_or((button.aggregate_threshold, live_release));
+                push_value_cluster(
+                    actors,
+                    x,
+                    track_y,
+                    button.label,
+                    &button.sensors,
+                    scale,
+                    press.to_string(),
+                    normalize(press, scale),
+                    Some((release.to_string(), normalize(release, scale))),
+                    button.active,
+                    theme,
+                    focused_kind,
+                    state.threshold_lock_off,
+                    11.0 + zb,
+                );
+                continue;
+            }
+            // Single-threshold buttons: a pending whole-button edit shows one
+            // value; otherwise show the live per-sensor range ("200-230") so
+            // Advanced edits are visible here, with faded ghost lines at the
+            // divergent per-sensor thresholds.
+            let mut ghost_norms: Vec<f32> = Vec::new();
+            let (threshold_label, threshold_norm) =
+                if let Some(v) = pending_simple_threshold(state, pad.device_id, btn_idx) {
                     (v.to_string(), normalize(v, scale))
-                });
+                } else {
+                    let (mn, mx) = sensor_threshold_range(button);
+                    let label = if mn == mx {
+                        mx.to_string()
+                    } else {
+                        ghost_norms = divergent_sensor_thresholds(button)
+                            .into_iter()
+                            .map(|v| normalize(v, scale))
+                            .collect();
+                        format!("{mn}-{mx}")
+                    };
+                    (label, normalize(mx, scale))
+                };
+            if pad.simple_per_sensor_bars {
+                // Per-sensor bars without a separate release threshold.
                 push_value_cluster(
                     actors,
                     x,
@@ -999,7 +1031,7 @@ fn build_simple(actors: &mut Vec<Actor>, state: &State, theme: &Theme, as_overla
                     scale,
                     threshold_label,
                     threshold_norm,
-                    release,
+                    None,
                     button.active,
                     theme,
                     focused_kind,
@@ -1526,8 +1558,8 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
 
     let Some(live_release) = bar.release_threshold else {
         // Single-threshold button: the backend derives its own release side.
-        let current = pending_simple_threshold(state, device, button, ThresholdKind::Press)
-            .unwrap_or(bar.aggregate_threshold);
+        let current =
+            pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
         let next = (i32::from(current) + delta).clamp(min, max) as u16;
         if next == current {
             return;
@@ -1538,7 +1570,6 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
                 device,
                 button,
                 sensor: None,
-                kind: ThresholdKind::Press,
                 value: next,
             },
         );
@@ -1546,16 +1577,13 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     };
 
     // Dual-threshold (load-cell) button: move the edited threshold, dragging
-    // the partner along when they would end up closer than the gap.
+    // the partner along when they would end up closer than the gap. The pair
+    // is queued as one command so it reaches the pad in a single write.
     let gap = i32::from(threshold_gap(state));
-    let press = i32::from(
-        pending_simple_threshold(state, device, button, ThresholdKind::Press)
-            .unwrap_or(bar.aggregate_threshold),
-    );
-    let release = i32::from(
-        pending_simple_threshold(state, device, button, ThresholdKind::Release)
-            .unwrap_or(live_release),
-    );
+    let (pending_press, pending_release) = pending_threshold_pair(state, device, button)
+        .unwrap_or((bar.aggregate_threshold, live_release));
+    let press = i32::from(pending_press);
+    let release = i32::from(pending_release);
     let (new_press, new_release) = match slot.kind {
         ThresholdKind::Press => {
             let p = (press + delta).clamp(min + gap, max);
@@ -1576,31 +1604,15 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     if new == cur || (delta > 0) != (new > cur) {
         return;
     }
-    // Queue the edited threshold first, then the dragged partner (if it moved).
-    let edits = match slot.kind {
-        ThresholdKind::Press => [
-            (ThresholdKind::Press, new_press, press),
-            (ThresholdKind::Release, new_release, release),
-        ],
-        ThresholdKind::Release => [
-            (ThresholdKind::Release, new_release, release),
-            (ThresholdKind::Press, new_press, press),
-        ],
-    };
-    for (kind, value, old) in edits {
-        if value != old {
-            queue_unique(
-                state,
-                PadCommand::Threshold {
-                    device,
-                    button,
-                    sensor: None,
-                    kind,
-                    value: value as u16,
-                },
-            );
-        }
-    }
+    queue_unique(
+        state,
+        PadCommand::ThresholdPair {
+            device,
+            button,
+            press: new_press as u16,
+            release: new_release as u16,
+        },
+    );
 }
 
 fn adjust_sensor_threshold(
@@ -1633,7 +1645,6 @@ fn adjust_sensor_threshold(
             device: dev,
             button,
             sensor: Some(fw),
-            kind: ThresholdKind::Press,
             value: next,
         },
     );
@@ -1654,17 +1665,27 @@ fn same_target(a: &PadCommand, b: &PadCommand) -> bool {
                 device: d1,
                 button: b1,
                 sensor: s1,
-                kind: k1,
                 ..
             },
             Threshold {
                 device: d2,
                 button: b2,
                 sensor: s2,
-                kind: k2,
                 ..
             },
-        ) => d1 == d2 && b1 == b2 && s1 == s2 && k1 == k2,
+        ) => d1 == d2 && b1 == b2 && s1 == s2,
+        (
+            ThresholdPair {
+                device: d1,
+                button: b1,
+                ..
+            },
+            ThresholdPair {
+                device: d2,
+                button: b2,
+                ..
+            },
+        ) => d1 == d2 && b1 == b2,
         (
             SensorEnabled {
                 device: d1,
@@ -1687,22 +1708,28 @@ fn same_target(a: &PadCommand, b: &PadCommand) -> bool {
 
 // ─── Pending / live value lookups ──────────────────────────────────────────────
 
-/// Most recently queued Simple-mode (whole-button) threshold for a
-/// pad+button+kind (`Release` only exists for load-cell buttons).
-fn pending_simple_threshold(
-    state: &State,
-    device: PadDeviceId,
-    button: usize,
-    kind: ThresholdKind,
-) -> Option<u16> {
+/// Most recently queued Simple-mode (whole-button) threshold for a pad+button.
+fn pending_simple_threshold(state: &State, device: PadDeviceId, button: usize) -> Option<u16> {
     state.pending.iter().rev().find_map(|c| match *c {
         PadCommand::Threshold {
             device: d,
             button: b,
             sensor: None,
-            kind: k,
             value,
-        } if d == device && b == button && k == kind => Some(value),
+        } if d == device && b == button => Some(value),
+        _ => None,
+    })
+}
+
+/// Most recently queued press/release pair for a load-cell pad+button.
+fn pending_threshold_pair(state: &State, device: PadDeviceId, button: usize) -> Option<(u16, u16)> {
+    state.pending.iter().rev().find_map(|c| match *c {
+        PadCommand::ThresholdPair {
+            device: d,
+            button: b,
+            press,
+            release,
+        } if d == device && b == button => Some((press, release)),
         _ => None,
     })
 }
@@ -1719,7 +1746,6 @@ fn current_sensor_threshold(
             device: d,
             button: b,
             sensor: Some(s),
-            kind: ThresholdKind::Press,
             value,
         } if d == device && b == button && s == sensor => Some(value),
         _ => None,
@@ -1790,32 +1816,35 @@ struct SimpleSlot {
     kind: ThresholdKind,
 }
 
-/// The Simple-view cursor stops, in display order. Dual-threshold buttons
-/// contribute two: release (low) first, then press (high), so stepping right
-/// reads L-release, L-press, D-release, D-press, …
-fn simple_slots(state: &State) -> Vec<SimpleSlot> {
-    let mut slots = Vec::with_capacity(state.pads.len() * PAD_BUTTON_COUNT * 2);
-    for (p, pad) in state.pads.iter().enumerate() {
-        for (b, button) in pad.buttons.iter().enumerate() {
-            if button.release_threshold.is_some() {
-                slots.push(SimpleSlot {
-                    pad: p,
-                    button: b,
-                    kind: ThresholdKind::Release,
-                });
-            }
-            slots.push(SimpleSlot {
-                pad: p,
-                button: b,
-                kind: ThresholdKind::Press,
-            });
-        }
-    }
-    slots
+/// How many Simple-view cursor stops a button holds: dual-threshold (load
+/// cell) buttons get two, release (low) first then press (high), so stepping
+/// right reads L-release, L-press, D-release, D-press, …
+fn button_stops(button: &ButtonView) -> usize {
+    1 + usize::from(button.release_threshold.is_some())
 }
 
+/// Resolve the flat cursor index to its stop without materializing the list.
 fn selected_slot(state: &State) -> Option<SimpleSlot> {
-    simple_slots(state).get(state.selected).copied()
+    let mut rest = state.selected;
+    for (p, pad) in state.pads.iter().enumerate() {
+        for (b, button) in pad.buttons.iter().enumerate() {
+            let stops = button_stops(button);
+            if rest < stops {
+                let kind = if stops == 2 && rest == 0 {
+                    ThresholdKind::Release
+                } else {
+                    ThresholdKind::Press
+                };
+                return Some(SimpleSlot {
+                    pad: p,
+                    button: b,
+                    kind,
+                });
+            }
+            rest -= stops;
+        }
+    }
+    None
 }
 
 /// Whether a pad has separately editable release thresholds (load cell).
@@ -1833,31 +1862,40 @@ fn threshold_gap(state: &State) -> u16 {
 }
 
 fn total_bars(state: &State) -> usize {
-    simple_slots(state).len()
+    state
+        .pads
+        .iter()
+        .flat_map(|p| p.buttons.iter())
+        .map(button_stops)
+        .sum()
 }
 
-/// Min/max live threshold across a button's sensors (for the Simple-view
-/// range display). Empty buttons report `(0, 0)`.
+/// Min/max live threshold across a button's enabled sensors (for the
+/// Simple-view range display); a disabled sensor's stale threshold never
+/// fires, so it shouldn't widen the range. Buttons with no enabled sensors
+/// report `(0, 0)` (the Simple bar shows OFF instead of a threshold).
 fn sensor_threshold_range(button: &ButtonView) -> (u16, u16) {
     let mut mn = u16::MAX;
     let mut mx = 0u16;
-    for s in &button.sensors {
+    let mut any = false;
+    for s in button.sensors.iter().filter(|s| s.enabled) {
         mn = mn.min(s.raw_threshold);
         mx = mx.max(s.raw_threshold);
+        any = true;
     }
-    if button.sensors.is_empty() {
+    if !any {
         return (0, 0);
     }
     (mn, mx)
 }
 
-/// Distinct per-sensor thresholds that diverge from a button's displayed
+/// Distinct enabled-sensor thresholds that diverge from a button's displayed
 /// (max) threshold, for the Simple view's faded ghost lines after per-sensor
-/// Advanced edits. Empty when every sensor agrees.
+/// Advanced edits. Empty when every enabled sensor agrees.
 fn divergent_sensor_thresholds(button: &ButtonView) -> Vec<u16> {
     let (_, mx) = sensor_threshold_range(button);
     let mut out: Vec<u16> = Vec::new();
-    for s in &button.sensors {
+    for s in button.sensors.iter().filter(|s| s.enabled) {
         if s.raw_threshold != mx && !out.contains(&s.raw_threshold) {
             out.push(s.raw_threshold);
         }
@@ -2763,10 +2801,10 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
         assert!(s.advanced.is_none());
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
-        // Still Simple → a whole-button edit (sensor: None), not a per-sensor one.
+        // Still Simple → a whole-button pair edit, not a per-sensor one.
         assert!(matches!(
             take_commands(&mut s)[0],
-            PadCommand::Threshold { sensor: None, .. }
+            PadCommand::ThresholdPair { .. }
         ));
     }
 
@@ -2777,24 +2815,27 @@ mod tests {
         let mut s = init();
         set_pads(&mut s, vec![load_cell_pad(0)]);
         assert_eq!(total_bars(&s), 2 * PAD_BUTTON_COUNT);
-        // The landing slot is L's release (low) threshold…
+        // The landing slot is L's release (low) threshold: raising it (with
+        // the lock on, 80/70) drags press along in the same pair command…
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         assert!(matches!(
             take_commands(&mut s)[0],
-            PadCommand::Threshold {
+            PadCommand::ThresholdPair {
                 button: 0,
-                kind: ThresholdKind::Release,
+                press: 85,
+                release: 75,
                 ..
             }
         ));
-        // …one step right is L's press (high)…
+        // …one step right is L's press (high), which raises alone…
         apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         assert!(matches!(
             take_commands(&mut s)[0],
-            PadCommand::Threshold {
+            PadCommand::ThresholdPair {
                 button: 0,
-                kind: ThresholdKind::Press,
+                press: 85,
+                release: 70,
                 ..
             }
         ));
@@ -2803,16 +2844,17 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         assert!(matches!(
             take_commands(&mut s)[0],
-            PadCommand::Threshold {
+            PadCommand::ThresholdPair {
                 button: 1,
-                kind: ThresholdKind::Release,
+                press: 85,
+                release: 75,
                 ..
             }
         ));
     }
 
     #[test]
-    fn divergent_sensor_thresholds_lists_distinct_non_max_values() {
+    fn divergent_sensor_thresholds_lists_distinct_enabled_non_max_values() {
         let mut b = mk_button("L", 50);
         // Uniform sensors: nothing diverges, no ghost lines.
         assert!(divergent_sensor_thresholds(&b).is_empty());
@@ -2821,6 +2863,11 @@ mod tests {
         b.sensors[2].raw_threshold = 40;
         // sensors[3] stays at 50: the max, drawn as the main line.
         assert_eq!(divergent_sensor_thresholds(&b), vec![30, 40]);
+        // A disabled sensor's stale threshold never fires, so it draws no
+        // ghost line and stops widening the range label.
+        b.sensors[0].enabled = false;
+        assert_eq!(divergent_sensor_thresholds(&b), vec![40]);
+        assert_eq!(sensor_threshold_range(&b), (40, 50));
     }
 
     #[test]
@@ -2841,20 +2888,12 @@ mod tests {
         set_pads(&mut s, vec![load_cell_pad(0)]); // 80/70: exactly the gap apart
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false); // release 70 -> 75
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds.len(), 1);
         assert!(matches!(
             cmds[0],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Release,
-                value: 75,
-                ..
-            }
-        ));
-        assert!(matches!(
-            cmds[1],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Press,
-                value: 85,
+            PadCommand::ThresholdPair {
+                press: 85,
+                release: 75,
                 ..
             }
         ));
@@ -2867,20 +2906,12 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // onto L press
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false); // press 80 -> 75
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds.len(), 1);
         assert!(matches!(
             cmds[0],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Press,
-                value: 75,
-                ..
-            }
-        ));
-        assert!(matches!(
-            cmds[1],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Release,
-                value: 65,
+            PadCommand::ThresholdPair {
+                press: 75,
+                release: 65,
                 ..
             }
         ));
@@ -2896,9 +2927,9 @@ mod tests {
         assert_eq!(cmds.len(), 1);
         assert!(matches!(
             cmds[0],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Press,
-                value: 85,
+            PadCommand::ThresholdPair {
+                press: 85,
+                release: 70,
                 ..
             }
         ));
@@ -2912,21 +2943,14 @@ mod tests {
         apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // onto L press
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false); // 80 -> 75: release untouched
         apply_edit(&mut s, &ev(VirtualAction::p1_down), false); // 75 -> 70: release nudged to 69
+        // Same-frame edits collapse into the latest pair.
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds.len(), 1);
         assert!(matches!(
             cmds[0],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Press,
-                value: 70,
-                ..
-            }
-        ));
-        assert!(matches!(
-            cmds[1],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Release,
-                value: 69,
+            PadCommand::ThresholdPair {
+                press: 70,
+                release: 69,
                 ..
             }
         ));
@@ -2953,20 +2977,12 @@ mod tests {
         set_pads(&mut s, vec![pad]);
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false); // release 185 -> 190 (top of range minus gap)
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds.len(), 1);
         assert!(matches!(
             cmds[0],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Release,
-                value: 190,
-                ..
-            }
-        ));
-        assert!(matches!(
-            cmds[1],
-            PadCommand::Threshold {
-                kind: ThresholdKind::Press,
-                value: 200,
+            PadCommand::ThresholdPair {
+                press: 200,
+                release: 190,
                 ..
             }
         ));
@@ -2981,15 +2997,11 @@ mod tests {
             apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // step onto the load-cell pad
         }
         assert_eq!(selected_device(&s).map(|d| d.index), Some(1));
-        // Its first slot is L's release threshold.
+        // Its first slot is L's release threshold (a pair edit).
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         assert!(matches!(
             take_commands(&mut s)[0],
-            PadCommand::Threshold {
-                button: 0,
-                kind: ThresholdKind::Release,
-                ..
-            }
+            PadCommand::ThresholdPair { button: 0, .. }
         ));
     }
 
@@ -3175,9 +3187,12 @@ mod tests {
         let mut s = with_pad();
         set_save_available(&mut s, true);
         begin_profiles(&mut s);
+        s.threshold_lock_off = true;
         reset_modes(&mut s);
         assert!(!is_profiles_mode(&s));
         assert!(!is_saving(&s));
+        // Entering the editor always restores the press/release lock.
+        assert!(!s.threshold_lock_off);
     }
 
     #[test]

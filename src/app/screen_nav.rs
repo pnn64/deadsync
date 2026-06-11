@@ -238,6 +238,7 @@ impl App {
                 pad_state,
                 crate::screens::pad_config::PadFilter::All,
             );
+            crate::screens::pad_config::reset_modes(pad_state);
         } else if target_screen == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.manage_local_profiles_state = manage_local_profiles::init();

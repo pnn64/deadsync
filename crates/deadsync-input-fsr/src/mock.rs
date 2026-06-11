@@ -2,21 +2,20 @@
 //!
 //! Set the variable to a comma-separated list of pad kinds, e.g.
 //! `DEADSYNC_MOCK_PADS=loadcell` or `DEADSYNC_MOCK_PADS=loadcell,fsr` (any
-//! other non-empty value means one load-cell pad). Each kind becomes one fake
-//! pad on the Configure Pads screen, with animated sensor readings and
-//! thresholds edited in memory, so the whole editor can be exercised without
-//! hardware. While the variable is set, `engine::smx::init` refuses to start
-//! the SDK, so native SMX is fully off and nothing is written over USB.
+//! other truthy value means one load-cell pad; empty/`0`/`false`/`off`/`no`
+//! leave the mock off). Each kind becomes one fake pad on the Configure Pads
+//! screen, with animated sensor readings and thresholds edited in memory, so
+//! the whole editor can be exercised without hardware. While the mock is on,
+//! `engine::smx::init` refuses to start the SDK, so native SMX is fully off
+//! and nothing is written over USB.
 
 use super::smx::{
-    FSR_VALUE_SCALE, LOADCELL_VALUE_SCALE, MAX_DEBOUNCE_US, MAX_FSR_THRESHOLD,
-    MAX_LOADCELL_THRESHOLD, MIN_DEBOUNCE_US, MIN_FSR_THRESHOLD, MIN_LOADCELL_THRESHOLD,
-    PANEL_SENSOR_COUNT, SENSOR_DISPLAY_ORDER, SENSOR_EDGE_LABELS, hysteresis_active,
+    LOADCELL_RAW_MAX, MAX_DEBOUNCE_US, MAX_FSR_THRESHOLD, MAX_LOADCELL_THRESHOLD, MIN_DEBOUNCE_US,
+    MIN_FSR_THRESHOLD, MIN_LOADCELL_THRESHOLD, PANEL_SENSOR_COUNT, SENSOR_DISPLAY_ORDER,
+    SENSOR_EDGE_LABELS, SensorReading, fsr_button_view, hysteresis_active, load_cell_button_view,
 };
-use deadsync_input::fsr::{
-    BackendKind, ButtonView, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView, SensorView,
-    ThresholdKind,
-};
+use deadsync_input::fsr::{BackendKind, PAD_BUTTON_COUNT, PAD_BUTTON_LABELS, PadDeviceId, PadView};
+use std::fmt::Write as _;
 use std::time::Instant;
 
 /// Starting thresholds: the Low preset's load-cell pair and Medium's FSR value.
@@ -62,13 +61,6 @@ impl MockPad {
             debounce_us: INIT_DEBOUNCE_US,
         }
     }
-
-    fn threshold_range(&self) -> (u16, u16) {
-        match self.kind {
-            MockKind::LoadCell => (MIN_LOADCELL_THRESHOLD, MAX_LOADCELL_THRESHOLD),
-            MockKind::Fsr => (MIN_FSR_THRESHOLD, MAX_FSR_THRESHOLD),
-        }
-    }
 }
 
 pub struct Monitor {
@@ -92,7 +84,7 @@ impl Monitor {
             })
             .take(2)
             .collect();
-        // Any other non-empty value (e.g. "1") still turns the mock on.
+        // Any other truthy value (e.g. "1") still turns the mock on.
         if kinds.is_empty() {
             kinds.push(MockKind::LoadCell);
         }
@@ -132,33 +124,50 @@ impl Monitor {
             .collect()
     }
 
+    /// Single-threshold (FSR-style) edit; load-cell pads use the pair edit.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
         button: usize,
         sensor: Option<usize>,
-        kind: ThresholdKind,
         value: u16,
     ) -> bool {
         let Some(pad) = self.pad_mut(device, button) else {
             return false;
         };
-        let (min, max) = pad.threshold_range();
-        if !(min..=max).contains(&value) {
+        if pad.kind != MockKind::Fsr || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value) {
             return false;
         }
-        match (pad.kind, kind) {
-            (MockKind::LoadCell, ThresholdKind::Press) => {
-                pad.press[button] = [value; PANEL_SENSOR_COUNT];
-            }
-            (MockKind::LoadCell, ThresholdKind::Release) => pad.release[button] = value,
-            (MockKind::Fsr, ThresholdKind::Press) => match sensor {
-                Some(s) if s < PANEL_SENSOR_COUNT => pad.press[button][s] = value,
-                Some(_) => return false,
-                None => pad.press[button] = [value; PANEL_SENSOR_COUNT],
-            },
-            (MockKind::Fsr, ThresholdKind::Release) => return false,
+        match sensor {
+            Some(s) if s < PANEL_SENSOR_COUNT => pad.press[button][s] = value,
+            Some(_) => return false,
+            None => pad.press[button] = [value; PANEL_SENSOR_COUNT],
         }
+        true
+    }
+
+    /// Press/release pair edit for a load-cell button, mirroring the real
+    /// backend's checks (ranges, release strictly below press).
+    pub fn set_threshold_pair(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
+    ) -> bool {
+        let Some(pad) = self.pad_mut(device, button) else {
+            return false;
+        };
+        let range = MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD;
+        if pad.kind != MockKind::LoadCell
+            || !range.contains(&press)
+            || !range.contains(&release)
+            || release >= press
+        {
+            return false;
+        }
+        pad.press[button] = [press; PANEL_SENSOR_COUNT];
+        pad.release[button] = release;
         true
     }
 
@@ -198,6 +207,38 @@ impl Monitor {
         true
     }
 
+    /// The mock has no hardware test mode to toggle.
+    pub fn set_active(&mut self, _active: bool) {}
+
+    /// Mock section for the FSR debug dump, in place of the (dormant) native
+    /// SMX section, so the dump matches what the UI shows.
+    pub fn debug_dump(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(out, "DeadSync StepManiaX mock pads (DEADSYNC_MOCK_PADS)");
+        for (i, pad) in self.pads.iter().enumerate() {
+            let _ = writeln!(out, "Pad {i}: {:?}", pad.kind);
+            for b in 0..PAD_BUTTON_COUNT {
+                match pad.kind {
+                    MockKind::LoadCell => {
+                        let _ = writeln!(
+                            out,
+                            "  {} press: {} release: {}",
+                            PAD_BUTTON_LABELS[b], pad.press[b][0], pad.release[b]
+                        );
+                    }
+                    MockKind::Fsr => {
+                        let _ = writeln!(
+                            out,
+                            "  {} thresholds: {:?} enabled: {:?}",
+                            PAD_BUTTON_LABELS[b], pad.press[b], pad.enabled[b]
+                        );
+                    }
+                }
+            }
+        }
+        out
+    }
+
     fn pad_mut(&mut self, device: PadDeviceId, button: usize) -> Option<&mut MockPad> {
         if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
             return None;
@@ -208,88 +249,47 @@ impl Monitor {
 
 /// A smooth fake sensor reading: idles at zero with staggered "press" bumps
 /// that cross typical thresholds, so bars move and active states light up.
-fn wave(t: f32, pad: usize, button: usize, sensor: usize, scale: u16) -> u16 {
+fn wave(t: f32, pad: usize, button: usize, sensor: usize, peak: u16) -> u16 {
     let period = 3.0 + 0.7 * button as f32 + 0.35 * sensor as f32 + 1.3 * pad as f32;
     let phase = 1.1 * sensor as f32 + 2.3 * button as f32;
     let s = (t * std::f32::consts::TAU / period + phase).sin();
-    (s.max(0.0).powi(3) * 0.85 * f32::from(scale)) as u16
+    (s.max(0.0).powi(3) * 0.85 * f32::from(peak)) as u16
 }
 
-fn load_cell_button(pad: &mut MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
-    let threshold = pad.press[b][0];
+fn load_cell_button(
+    pad: &mut MockPad,
+    pad_idx: usize,
+    b: usize,
+    t: f32,
+) -> deadsync_input::fsr::ButtonView {
+    let press = pad.press[b][0];
     let release = pad.release[b];
-    let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
-        .map(|s| {
-            let raw_value = wave(t, pad_idx, b, s, LOADCELL_VALUE_SCALE);
-            pad.held[b][s] = hysteresis_active(pad.held[b][s], raw_value, release, threshold);
-            SensorView {
-                firmware_index: s,
-                label: None, // corners, numbered 1-4 in the UI
-                raw_value,
-                value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
-                raw_threshold: threshold,
-                threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
-                active: pad.held[b][s],
-                enabled: true,
-            }
-        })
-        .collect();
-    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-    ButtonView {
-        label: PAD_BUTTON_LABELS[b],
-        sensors,
-        min_raw_threshold: MIN_LOADCELL_THRESHOLD,
-        max_raw_threshold: MAX_LOADCELL_THRESHOLD,
-        aggregate_value,
-        aggregate_threshold: threshold,
-        // The panel reads as pressed while any sensor is held (hysteresis).
-        active: pad.held[b].iter().any(|&h| h),
-        value_scale: LOADCELL_VALUE_SCALE,
-        release_threshold: Some(pad.release[b]),
+    // Real load-cell readings reach 500, well past the 250 display scale, so
+    // the mock does too (pegged bars + readouts above 250 get exercised).
+    let values: [u16; PANEL_SENSOR_COUNT] =
+        std::array::from_fn(|s| wave(t, pad_idx, b, s, LOADCELL_RAW_MAX));
+    for (s, &v) in values.iter().enumerate() {
+        pad.held[b][s] = hysteresis_active(pad.held[b][s], v, release, press);
     }
+    // The panel reads as pressed while any sensor is held (hysteresis).
+    let panel_active = pad.held[b].iter().any(|&h| h);
+    load_cell_button_view(PAD_BUTTON_LABELS[b], values, press, release, panel_active)
 }
 
-fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> ButtonView {
-    let sensors: Vec<SensorView> = SENSOR_DISPLAY_ORDER
-        .iter()
-        .map(|&s| {
-            let raw_value = wave(t, pad_idx, b, s, FSR_VALUE_SCALE);
-            let raw_threshold = pad.press[b][s];
-            SensorView {
-                firmware_index: s,
-                label: Some(SENSOR_EDGE_LABELS[s]),
-                raw_value,
-                value_norm: normalize(raw_value, FSR_VALUE_SCALE),
-                raw_threshold,
-                threshold_norm: normalize(raw_threshold, FSR_VALUE_SCALE),
-                active: raw_value >= raw_threshold && raw_threshold > 0,
-                enabled: pad.enabled[b][s],
-            }
-        })
-        .collect();
-    let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-    let aggregate_threshold = sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
+fn fsr_button(pad: &MockPad, pad_idx: usize, b: usize, t: f32) -> deadsync_input::fsr::ButtonView {
+    let readings = SENSOR_DISPLAY_ORDER.map(|s| SensorReading {
+        firmware_index: s,
+        label: Some(SENSOR_EDGE_LABELS[s]),
+        value: wave(t, pad_idx, b, s, MAX_FSR_THRESHOLD),
+        threshold: pad.press[b][s],
+        enabled: pad.enabled[b][s],
+    });
     // The panel reads as pressed while any enabled sensor is over its own
     // threshold (per-sensor, not max-vs-max, which misreads mixed thresholds).
-    let pressed = sensors.iter().any(|s| s.enabled && s.active);
-    ButtonView {
-        label: PAD_BUTTON_LABELS[b],
-        sensors,
-        min_raw_threshold: MIN_FSR_THRESHOLD,
-        max_raw_threshold: MAX_FSR_THRESHOLD,
-        aggregate_value,
-        aggregate_threshold,
-        active: pressed,
-        value_scale: FSR_VALUE_SCALE,
-        release_threshold: None,
-    }
-}
-
-fn normalize(value: u16, max: u16) -> f32 {
-    if max == 0 {
-        return 0.0;
-    }
-    (f32::from(value) / f32::from(max)).clamp(0.0, 1.0)
+    let panel_active = readings
+        .iter()
+        .any(|r| r.enabled && r.threshold > 0 && r.value >= r.threshold);
+    fsr_button_view(PAD_BUTTON_LABELS[b], readings, panel_active)
 }
 
 #[cfg(test)]
@@ -309,30 +309,32 @@ mod tests {
         assert_eq!(m.pads.len(), 2);
         assert_eq!(m.pads[0].kind, MockKind::LoadCell);
         assert_eq!(m.pads[1].kind, MockKind::Fsr);
-        // Any other non-empty value still enables one load-cell pad.
+        // Any other truthy value still enables one load-cell pad.
         let m = Monitor::from_spec("1");
         assert_eq!(m.pads.len(), 1);
         assert_eq!(m.pads[0].kind, MockKind::LoadCell);
     }
 
     #[test]
-    fn load_cell_edits_round_trip_into_the_view() {
+    fn load_cell_pair_edits_round_trip_into_the_view() {
         let mut m = Monitor::from_spec("loadcell");
-        assert!(m.set_threshold(dev(0), 1, None, ThresholdKind::Press, 120));
-        assert!(m.set_threshold(dev(0), 1, None, ThresholdKind::Release, 95));
+        assert!(m.set_threshold_pair(dev(0), 1, 120, 95));
         let pads = m.poll_pads();
         assert_eq!(pads[0].buttons[1].aggregate_threshold, 120);
         assert_eq!(pads[0].buttons[1].release_threshold, Some(95));
-        // Out-of-range values are rejected like the real backend.
-        assert!(!m.set_threshold(dev(0), 1, None, ThresholdKind::Press, 201));
-        assert!(!m.set_threshold(dev(0), 1, None, ThresholdKind::Release, 19));
+        // Out-of-range or inverted pairs are rejected like the real backend,
+        // as are single-threshold edits on a load-cell pad.
+        assert!(!m.set_threshold_pair(dev(0), 1, 201, 95));
+        assert!(!m.set_threshold_pair(dev(0), 1, 120, 19));
+        assert!(!m.set_threshold_pair(dev(0), 1, 95, 95));
+        assert!(!m.set_threshold(dev(0), 1, None, 120));
     }
 
     #[test]
-    fn fsr_edits_target_sensors_and_reject_release() {
+    fn fsr_edits_target_sensors_and_reject_pairs() {
         let mut m = Monitor::from_spec("fsr");
-        assert!(m.set_threshold(dev(0), 2, Some(3), ThresholdKind::Press, 60));
-        assert!(!m.set_threshold(dev(0), 2, None, ThresholdKind::Release, 60));
+        assert!(m.set_threshold(dev(0), 2, Some(3), 60));
+        assert!(!m.set_threshold_pair(dev(0), 2, 80, 70));
         assert!(m.set_sensor_enabled(dev(0), 2, 3, false));
         let pads = m.poll_pads();
         let button = &pads[0].buttons[2];

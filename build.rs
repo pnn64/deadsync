@@ -143,14 +143,20 @@ fn emit_build_info() {
 }
 
 /// Tell cargo to watch the git files that change when HEAD moves: `.git/HEAD`
-/// (checkouts), the ref file HEAD points at (new commits on the branch), and
-/// `packed-refs` (refs can live there instead after gc). Only existing paths
-/// are emitted; a missing path would make cargo re-run the script every build.
+/// (checkouts), `.git/logs/HEAD` (the reflog, appended on every commit and
+/// checkout — this is what keeps the hash fresh even when the branch ref is
+/// packed or, in a worktree, lives in the common git dir), the ref file HEAD
+/// points at, and `packed-refs`. Only existing paths are emitted; a missing
+/// path would make cargo re-run the script every build.
 fn emit_git_rerun_paths(manifest_dir: &Path) {
     let git_dir = git_output(manifest_dir, &["rev-parse", "--git-dir"])
         .map(|d| manifest_dir.join(d))
         .unwrap_or_else(|| manifest_dir.join(".git"));
-    let mut watch = vec![git_dir.join("HEAD"), git_dir.join("packed-refs")];
+    let mut watch = vec![
+        git_dir.join("HEAD"),
+        git_dir.join("logs/HEAD"),
+        git_dir.join("packed-refs"),
+    ];
     if let Ok(head) = fs::read_to_string(git_dir.join("HEAD"))
         && let Some(reference) = head.trim().strip_prefix("ref: ")
     {
