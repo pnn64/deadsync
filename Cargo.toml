@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.707"
+version = "0.4.708"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -36,6 +36,7 @@ members = [
     "crates/deadsync-score",
     "crates/deadsync-simfile",
     "crates/deadsync-smx",
+    "crates/deadsync-version",
     "crates/deadsync-video",
 ]
 resolver = "3"
@@ -94,6 +95,7 @@ deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-smx = { path = "crates/deadsync-smx" }
+deadsync-version = { path = "crates/deadsync-version" }
 deadsync-video = { path = "crates/deadsync-video" }
 winit = "0.30.13"
 log = "0.4.32"

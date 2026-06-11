@@ -158,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cli.restart {
         log::info!(
             "Restarted after self-update to {}",
-            engine::version::current_tag()
+            deadsync_version::current_tag()
         );
     }
 

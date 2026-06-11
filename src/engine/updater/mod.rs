@@ -8,7 +8,7 @@
 //! without re-downloading the (~14 KB) JSON payload, and it returns a typed
 //! [`FetchOutcome`] that distinguishes a fresh response from a 304.
 
-use crate::engine::version;
+use deadsync_version as version;
 use semver::Version;
 use serde::Deserialize;
 use std::error::Error;

@@ -298,7 +298,7 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 tr_fmt(
                     "Updater",
                     "BodyCurrent",
-                    &[("version", &crate::engine::version::current_tag())],
+                    &[("version", &deadsync_version::current_tag())],
                 )
                 .to_string(),
             );

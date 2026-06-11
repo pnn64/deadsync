@@ -183,7 +183,7 @@ fn menu_info_text(state: &State) -> Arc<str> {
         return text.clone();
     }
 
-    let version = crate::engine::version::current().to_string();
+    let version = deadsync_version::current().to_string();
     let song_cache = get_song_cache();
     let num_packs = song_cache.len();
     let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();

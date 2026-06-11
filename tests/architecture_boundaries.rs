@@ -205,6 +205,9 @@ const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const VERSION_IMPORT_SCAN_DIRS: &[&str] =
+    &["src", "crates", "tests", "tests/compose", "tests/draw"];
+
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "display",
     "host_time",
@@ -2135,6 +2138,63 @@ fn present_model_lives_in_present_crate() {
     assert!(
         failures.is_empty(),
         "presentation model should live in deadsync-present:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn version_utils_live_in_version_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    let version_crate = root.join("crates/deadsync-version/src/lib.rs");
+    if !version_crate.exists() {
+        failures.push(format!("{} is missing", rel_path(&root, &version_crate)));
+    }
+
+    let old_version = root.join("src/engine/version.rs");
+    if old_version.exists() {
+        failures.push(format!(
+            "{} still exists; import deadsync_version directly",
+            rel_path(&root, &old_version)
+        ));
+    }
+
+    let engine_mod = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod) {
+        if count_token_refs(&text, "pub mod version") != 0 {
+            failures.push(format!(
+                "{} declares engine::version; import deadsync_version directly",
+                rel_path(&root, &engine_mod)
+            ));
+        }
+    }
+
+    for dir in VERSION_IMPORT_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in ["crate::engine::version", "deadsync::engine::version"] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::version facade token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "version utilities should be imported from deadsync_version:\n{}",
         failures.join("\n")
     );
 }

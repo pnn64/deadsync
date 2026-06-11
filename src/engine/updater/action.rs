@@ -310,7 +310,7 @@ pub fn classify_check_result(state: UpdateState) -> ActionPhase {
 pub fn classify_check_result_with(state: UpdateState, install_enabled: bool) -> ActionPhase {
     match state {
         UpdateState::UpToDate => ActionPhase::UpToDate {
-            tag: crate::engine::version::current_tag(),
+            tag: deadsync_version::current_tag(),
         },
         UpdateState::UnknownLatest => ActionPhase::Error {
             kind: ActionErrorKind::Parse,
@@ -417,7 +417,7 @@ fn run_check_now(generation: u64) {
             set_phase_if_current(
                 generation,
                 ActionPhase::UpToDate {
-                    tag: crate::engine::version::current_tag(),
+                    tag: deadsync_version::current_tag(),
                 },
             );
             return;
@@ -725,7 +725,7 @@ fn run_apply(info: super::ReleaseInfo, archive_path: PathBuf, expected_sha256: [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::version;
+    use deadsync_version as version;
     use semver::Version;
 
     #[test]
