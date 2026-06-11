@@ -8,12 +8,18 @@
 //!
 //! Formats (shared with the SDK and the stepmaniax-gif-maker tool):
 //! - Full-pad: 23x24 (25-LED pads) or 14x15 (16-LED pads). Each panel is a
-//!   block in a 3x3 grid with 1px gaps; the extra bottom row carries the loop
-//!   marker (bottom-left pixel white-ish marks the frame to loop back to).
+//!   block in a 3x3 grid with 1px gaps; the extra bottom row carries the
+//!   markers.
 //! - Per-panel: 7x8 (25-LED) or 4x5 (16-LED) with the same trailing marker
 //!   row, or bare 7x7 / 4x4 which loops the whole sequence. The 7x7 canvas is
 //!   a staggered LED grid: an LED sits only where x and y share parity, the
 //!   16 even/even LEDs first ("outer 4x4") then the 9 odd/odd ("inner 3x3").
+//!
+//! The marker row carries one flag pixel per column (white-ish: alpha 255,
+//! R >= 128). x 0 marks the frame playback loops back to. On per-panel GIFs,
+//! x 1 marks the last frame of the loop region: frames after it form an outro
+//! that plays on panel release (see `panels::OverlayDrive`). Backgrounds
+//! ignore x 1.
 //!
 //! Frames are stored in the 25-LED layout (75 bytes) regardless of source
 //! size; 16-LED sources leave the inner-ring bytes black, matching how the
@@ -74,6 +80,16 @@ pub struct PanelAnim {
     /// Frame index playback returns to after the last frame (for sustained
     /// freeze/roll loops; one-shots simply stop at the end).
     pub loop_frame: usize,
+    /// Last frame of the loop region. Frames after it form an outro played on
+    /// panel release; equals the last frame when the GIF has no outro marker.
+    pub loop_end: usize,
+}
+
+impl PanelAnim {
+    /// Whether frames exist after `loop_end`: an outro to play on release.
+    pub fn has_outro(&self) -> bool {
+        self.loop_end + 1 < self.frames.len()
+    }
 }
 
 // GIF decoding
@@ -106,16 +122,14 @@ fn decode_gif(data: &[u8]) -> Result<DecodedGif, &'static str> {
     Ok(DecodedGif { images, durations })
 }
 
-/// First frame whose loop marker is set: the bottom-left pixel of the marker
-/// row is white-ish (alpha 255, R >= 128). Defaults to 0 when none is marked.
-fn marked_loop_frame(images: &[RgbaImage], marker_y: u32) -> usize {
-    images
-        .iter()
-        .position(|img| {
-            let px = img.get_pixel(0, marker_y);
-            px[3] == 255 && px[0] >= 128
-        })
-        .unwrap_or(0)
+/// First frame whose marker pixel at `(x, marker_y)` is white-ish (alpha 255,
+/// R >= 128). The marker row carries one flag pixel per column: x 0 is the
+/// loop start, x 1 the loop end.
+fn marked_frame(images: &[RgbaImage], x: u32, marker_y: u32) -> Option<usize> {
+    images.iter().position(|img| {
+        let px = img.get_pixel(x, marker_y);
+        px[3] == 255 && px[0] >= 128
+    })
 }
 
 // LED sampling
@@ -194,7 +208,7 @@ pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static s
     let first = &gif.images[0];
     let (w, h) = (first.width(), first.height());
     let size = full_pad_size(w, h).ok_or("a full-pad GIF must be 23x24 or 14x15")?;
-    let loop_frame = marked_loop_frame(&gif.images, h - 1);
+    let loop_frame = marked_frame(&gif.images, 0, h - 1).unwrap_or(0);
     let mut panels: [Vec<PanelFrame>; PANELS] =
         std::array::from_fn(|_| Vec::with_capacity(gif.images.len()));
     for img in &gif.images {
@@ -214,17 +228,22 @@ pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static s
 }
 
 /// Decode a per-panel judgement GIF (7x8, 7x7, 4x5, or 4x4). Bare 7x7 / 4x4
-/// canvases have no marker row, so they loop from frame 0.
+/// canvases have no marker row, so they loop from frame 0 with no outro.
 pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
     let gif = decode_gif(data)?;
     let first = &gif.images[0];
     let (w, h) = (first.width(), first.height());
     let (size, has_marker_row) =
         panel_canvas(w, h).ok_or("a per-panel GIF must be 7x8, 7x7, 4x5, or 4x4")?;
-    let loop_frame = if has_marker_row {
-        marked_loop_frame(&gif.images, h - 1)
+    let (loop_frame, loop_end) = if has_marker_row {
+        let loop_frame = marked_frame(&gif.images, 0, h - 1).unwrap_or(0);
+        // A loop end marked before the loop start is author error; ignore it.
+        let loop_end = marked_frame(&gif.images, 1, h - 1)
+            .filter(|&end| end >= loop_frame)
+            .unwrap_or(gif.images.len() - 1);
+        (loop_frame, loop_end)
     } else {
-        0
+        (0, gif.images.len() - 1)
     };
     let frames = gif
         .images
@@ -239,6 +258,7 @@ pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
             frames,
             durations: gif.durations,
             loop_frame,
+            loop_end,
         },
         size,
     ))
@@ -632,6 +652,68 @@ mod tests {
         let gif = encode_gif((7, 8), &[([0, 0, 0], 100), ([255, 255, 255], 100)]);
         let (anim, _) = decode_panel(&gif).unwrap();
         assert_eq!(anim.loop_frame, 1);
+    }
+
+    /// Encode black 7x8 frames with white marker pixels written into the
+    /// bottom row: `markers[f]` lists the marked x positions of frame `f`.
+    fn encode_marked_panel_gif(markers: &[&[u32]]) -> Vec<u8> {
+        use image::codecs::gif::GifEncoder;
+        use image::{Delay, Frame};
+
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut enc = GifEncoder::new(&mut buf);
+            for xs in markers {
+                let mut img = RgbaImage::from_pixel(7, 8, Rgba([0, 0, 0, 255]));
+                for &x in *xs {
+                    img.put_pixel(x, 7, Rgba([255, 255, 255, 255]));
+                }
+                let frame = Frame::from_parts(img, 0, 0, Delay::from_numer_denom_ms(100, 1));
+                enc.encode_frames(std::iter::once(frame)).unwrap();
+            }
+        }
+        buf.into_inner()
+    }
+
+    #[test]
+    fn outro_marker_sets_the_loop_end() {
+        // Loop start on frame 1 (x 0), loop end on frame 2 (x 1): frame 3 is
+        // the outro.
+        let gif = encode_marked_panel_gif(&[&[], &[0], &[1], &[]]);
+        let (anim, _) = decode_panel(&gif).unwrap();
+        assert_eq!(anim.loop_frame, 1);
+        assert_eq!(anim.loop_end, 2);
+        assert!(anim.has_outro());
+    }
+
+    #[test]
+    fn both_markers_on_one_frame_make_a_single_frame_loop() {
+        let gif = encode_marked_panel_gif(&[&[], &[0, 1], &[]]);
+        let (anim, _) = decode_panel(&gif).unwrap();
+        assert_eq!(anim.loop_frame, 1);
+        assert_eq!(anim.loop_end, 1);
+        assert!(anim.has_outro());
+    }
+
+    #[test]
+    fn loop_end_before_the_loop_start_is_ignored() {
+        let gif = encode_marked_panel_gif(&[&[1], &[], &[0]]);
+        let (anim, _) = decode_panel(&gif).unwrap();
+        assert_eq!(anim.loop_frame, 2);
+        assert_eq!(anim.loop_end, 2, "invalid marker falls back to the end");
+        assert!(!anim.has_outro());
+    }
+
+    #[test]
+    fn unmarked_gifs_have_no_outro() {
+        for gif in [
+            encode_marked_panel_gif(&[&[0], &[]]),
+            encode_gif((7, 7), &[([255, 0, 0], 100), ([255, 0, 0], 100)]),
+        ] {
+            let (anim, _) = decode_panel(&gif).unwrap();
+            assert_eq!(anim.loop_end, anim.frames.len() - 1);
+            assert!(!anim.has_outro());
+        }
     }
 
     #[test]

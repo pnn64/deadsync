@@ -14,7 +14,7 @@ use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
 use deadsync_smx::gifs::{FullPadAnim, GifRegistry, PadSize, PanelAnim};
-use deadsync_smx::panels::{Clock, PADS, Rgb, SmxPanelLights, smx_panel_for_col};
+use deadsync_smx::panels::{Clock, OverlayDrive, PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::{GameplayCoreState, profile};
 
@@ -196,6 +196,9 @@ pub struct SmxPanelDriver {
     prev_hold_fx: [HoldFx; MAX_COLS],
     prev_hold_judged: [f32; MAX_COLS],
     prev_mine: [f32; MAX_COLS],
+    /// Physical per-column press state, to release a tap overlay holding in
+    /// its loop region when the panel lifts.
+    prev_pressed: [bool; MAX_COLS],
 }
 
 impl Default for SmxPanelDriver {
@@ -213,6 +216,7 @@ impl Default for SmxPanelDriver {
             prev_hold_fx: [HoldFx::None; MAX_COLS],
             prev_hold_judged: [NO_EVENT; MAX_COLS],
             prev_mine: [NO_EVENT; MAX_COLS],
+            prev_pressed: [false; MAX_COLS],
         }
     }
 }
@@ -237,13 +241,32 @@ impl SmxPanelDriver {
             // stands on slot 1). The trackers below still update even when a column maps to
             // no panel, so events are consumed rather than replayed later.
             let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
+            let pressed = state.lane_is_pressed(col);
+            let released = hold_edge(pressed, &mut self.prev_pressed[col]) == Some(false);
+
+            // Panel lift: let a tap overlay holding in its loop region play its outro.
+            // Sustains are governed by the engage/disengage edges below instead; a lift
+            // during a roll (still engaged between hits) must not release its overlay.
+            if released
+                && self.prev_hold_fx[col] == HoldFx::None
+                && let Some((pad, p)) = panel
+            {
+                self.lights.release_overlay(pad, p);
+            }
 
             if let Some((grade, blue)) =
                 tap_event(state.last_tap_judgment(col), &mut self.prev_flash[col])
                 && let Some((pad, p)) = panel
             {
                 match self.judgement_gifs.for_grade(grade, blue) {
-                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    Some(anim) => {
+                        self.lights.play_overlay(
+                            pad,
+                            p,
+                            anim.clone(),
+                            OverlayDrive::OneShot { pressed },
+                        );
+                    }
                     None => {
                         self.lights
                             .flash(pad, p, flash_color(grade, blue), flash_duration(grade));
@@ -259,7 +282,10 @@ impl SmxPanelDriver {
                     let kind = state.active_hold(col).map(|h| h.note_type);
                     match sustain_anim(&self.judgement_gifs, kind) {
                         Some(anim) => {
-                            self.lights.play_overlay(pad, p, anim.clone(), true);
+                            // A re-engage during the outro of the same animation (a
+                            // freeze/roll re-press) resumes its loop region worker-side.
+                            self.lights
+                                .play_overlay(pad, p, anim.clone(), OverlayDrive::Sustain);
                             self.prev_hold_fx[col] = HoldFx::Overlay;
                         }
                         None => {
@@ -271,7 +297,7 @@ impl SmxPanelDriver {
                     // End whichever effect this column's engage started; the hold
                     // state may already be gone, so we use the recorded kind.
                     match self.prev_hold_fx[col] {
-                        HoldFx::Overlay => self.lights.end_overlay(pad, p),
+                        HoldFx::Overlay => self.lights.release_overlay(pad, p),
                         HoldFx::Color => self.lights.hold_end(pad, p),
                         HoldFx::None => {}
                     }
@@ -288,7 +314,14 @@ impl SmxPanelDriver {
                     _ => (self.judgement_gifs.miss.as_ref(), HOLD_DROP_RGB),
                 };
                 match anim {
-                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    Some(anim) => {
+                        self.lights.play_overlay(
+                            pad,
+                            p,
+                            anim.clone(),
+                            OverlayDrive::OneShot { pressed },
+                        );
+                    }
                     None => self.lights.flash(pad, p, color, FLASH_SECONDS_JUDGMENT),
                 }
             }
@@ -298,7 +331,14 @@ impl SmxPanelDriver {
                 && let Some((pad, p)) = panel
             {
                 match &self.judgement_gifs.mine {
-                    Some(anim) => self.lights.play_overlay(pad, p, anim.clone(), false),
+                    Some(anim) => {
+                        self.lights.play_overlay(
+                            pad,
+                            p,
+                            anim.clone(),
+                            OverlayDrive::OneShot { pressed },
+                        );
+                    }
                     None => self.lights.flash(pad, p, MINE_RGB, MINE_FLASH_SECONDS),
                 }
             }
@@ -361,6 +401,7 @@ impl SmxPanelDriver {
         self.prev_hold_fx = [HoldFx::None; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
         self.prev_mine = [NO_EVENT; MAX_COLS];
+        self.prev_pressed = [false; MAX_COLS];
         // Always (re)send: entering active clears stale panel effects worker-side even
         // when the worker was already running for a background.
         self.worker_active = true;
@@ -397,8 +438,8 @@ fn tap_event(judged: Option<ColumnTapJudgment>, prev: &mut f32) -> Option<(Judge
     }
 }
 
-/// Decide a freeze/roll engage transition: `Some(true)` to start the sustained colour,
-/// `Some(false)` to clear it, `None` when nothing changed.
+/// Decide an edge on a boolean tracker (a freeze/roll engage or a physical panel
+/// press): `Some(true)` on rise, `Some(false)` on fall, `None` when nothing changed.
 fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
     if engaged == *prev {
         None
@@ -609,6 +650,7 @@ mod tests {
             frames: vec![[tag; deadsync_smx::gifs::PANEL_RGB_BYTES]],
             durations: vec![0.1],
             loop_frame: 0,
+            loop_end: 0,
         })
     }
 

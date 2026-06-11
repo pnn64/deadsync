@@ -90,12 +90,27 @@ struct Background {
     time_in_frame: f32,
 }
 
-/// A per-panel GIF animation playing over the background: one-shot for tap
-/// judgements (clears itself when the frames run out) or looping for a
-/// sustained freeze/roll (until `end_overlay`).
+/// How a panel overlay is driven by the player's panel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OverlayDrive {
+    /// Tap judgement: plays once and clears itself. If the GIF has an outro
+    /// segment and the panel is still pressed, it holds in its loop region
+    /// until `release_overlay` lets the outro play.
+    OneShot { pressed: bool },
+    /// Freeze/roll sustain: loops in its loop region until `release_overlay`,
+    /// which plays the outro if the GIF has one and clears otherwise.
+    Sustain,
+}
+
+/// A per-panel GIF animation playing over the background. See `OverlayDrive`
+/// for the press/release-driven lifecycle.
 struct Overlay {
     anim: Arc<PanelAnim>,
-    looping: bool,
+    /// Sustain overlays loop until released even without an outro segment.
+    sustain: bool,
+    /// While engaged, playback wraps from `loop_end` back to `loop_frame`.
+    /// Cleared by `release_overlay`; re-set when a sustain re-engages.
+    engaged: bool,
     frame: usize,
     time_in_frame: f32,
 }
@@ -176,24 +191,60 @@ impl PanelFx {
         self.beat = beat;
     }
 
-    /// Start a GIF animation on a panel, over the background. One-shots
-    /// (`looping` false) clear themselves after their last frame; looping
-    /// overlays play until `end_overlay`. Out-of-range indices are ignored.
-    pub fn play_overlay(&mut self, pad: usize, panel: usize, anim: Arc<PanelAnim>, looping: bool) {
-        if let Some(p) = self.panel_mut(pad, panel) {
-            p.overlay = Some(Overlay {
-                anim,
-                looping,
-                frame: 0,
-                time_in_frame: 0.0,
-            });
+    /// Start a GIF animation on a panel, over the background. Out-of-range
+    /// indices are ignored. A sustain re-playing the animation its panel is
+    /// already showing (a freeze/roll re-press during the release cooldown)
+    /// re-engages it, jumping from the outro back into the loop region
+    /// instead of restarting from the intro.
+    pub fn play_overlay(
+        &mut self,
+        pad: usize,
+        panel: usize,
+        anim: Arc<PanelAnim>,
+        drive: OverlayDrive,
+    ) {
+        let Some(p) = self.panel_mut(pad, panel) else {
+            return;
+        };
+        if drive == OverlayDrive::Sustain
+            && let Some(o) = &mut p.overlay
+            && o.sustain
+            && Arc::ptr_eq(&o.anim, &anim)
+        {
+            o.engaged = true;
+            if o.frame > o.anim.loop_end {
+                o.frame = o.anim.loop_frame.min(o.anim.loop_end);
+                o.time_in_frame = 0.0;
+            }
+            return;
         }
+        let engaged = match drive {
+            OverlayDrive::OneShot { pressed } => pressed,
+            OverlayDrive::Sustain => true,
+        };
+        p.overlay = Some(Overlay {
+            anim,
+            sustain: drive == OverlayDrive::Sustain,
+            engaged,
+            frame: 0,
+            time_in_frame: 0.0,
+        });
     }
 
-    /// Stop a panel's GIF overlay (a freeze/roll release), revealing the
-    /// layers under it.
-    pub fn end_overlay(&mut self, pad: usize, panel: usize) {
-        if let Some(p) = self.panel_mut(pad, panel) {
+    /// Release a panel's GIF overlay (panel lift / freeze-roll disengage): an
+    /// overlay with an outro segment plays it out and clears itself, a
+    /// sustain without one clears immediately (revealing the layers under
+    /// it), and a plain one-shot is unaffected.
+    pub fn release_overlay(&mut self, pad: usize, panel: usize) {
+        let Some(p) = self.panel_mut(pad, panel) else {
+            return;
+        };
+        let Some(o) = &mut p.overlay else {
+            return;
+        };
+        if o.anim.has_outro() {
+            o.engaged = false;
+        } else if o.sustain {
             p.overlay = None;
         }
     }
@@ -293,21 +344,26 @@ fn beat_frame(anim: &FullPadAnim, beats_per_loop: f32, beat: f32) -> usize {
     start + ((phase * region as f32) as usize).min(region - 1)
 }
 
-/// Advance a panel overlay; a finished one-shot clears itself to reveal the
-/// layers under it.
+/// Advance a panel overlay; one that plays past its last frame clears itself
+/// to reveal the layers under it.
 fn advance_overlay(overlay: &mut Option<Overlay>, dt: f32) {
     let Some(o) = overlay else { return };
     o.time_in_frame += dt;
     while o.time_in_frame >= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S) {
         o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
-        o.frame += 1;
-        if o.frame >= o.anim.frames.len() {
-            if o.looping {
-                o.frame = o.anim.loop_frame.min(o.anim.frames.len() - 1);
-            } else {
-                *overlay = None;
-                return;
-            }
+        let last = o.anim.frames.len() - 1;
+        let loop_end = o.anim.loop_end.min(last);
+        // An engaged overlay wraps at the loop end when there is an outro to
+        // hold back, and a sustain wraps there regardless; everything else
+        // runs through to the last frame and clears.
+        let wraps = o.engaged && (o.sustain || o.anim.has_outro());
+        if o.frame == loop_end && wraps {
+            o.frame = o.anim.loop_frame.min(loop_end);
+        } else if o.frame >= last {
+            *overlay = None;
+            return;
+        } else {
+            o.frame += 1;
         }
     }
 }
@@ -369,10 +425,10 @@ enum Ev {
         pad: u8,
         panel: u8,
         anim: Arc<PanelAnim>,
-        looping: bool,
+        drive: OverlayDrive,
     },
-    /// Stop a panel's GIF overlay (freeze/roll release).
-    OverlayEnd {
+    /// Release a panel's GIF overlay (panel lift / freeze-roll disengage).
+    OverlayRelease {
         pad: u8,
         panel: u8,
     },
@@ -446,20 +502,26 @@ impl SmxPanelLights {
         self.send(Ev::Beat(beat));
     }
 
-    /// Play a GIF on one panel over the background: one-shot (judgements) or
-    /// looping until `end_overlay` (freeze/roll sustains).
-    pub fn play_overlay(&self, pad: usize, panel: usize, anim: Arc<PanelAnim>, looping: bool) {
+    /// Play a GIF on one panel over the background; see `OverlayDrive` for
+    /// the one-shot/sustain and press/release semantics.
+    pub fn play_overlay(
+        &self,
+        pad: usize,
+        panel: usize,
+        anim: Arc<PanelAnim>,
+        drive: OverlayDrive,
+    ) {
         self.send(Ev::Overlay {
             pad: pad as u8,
             panel: panel as u8,
             anim,
-            looping,
+            drive,
         });
     }
 
-    /// Stop a panel's GIF overlay.
-    pub fn end_overlay(&self, pad: usize, panel: usize) {
-        self.send(Ev::OverlayEnd {
+    /// Release a panel's GIF overlay (panel lift / freeze-roll disengage).
+    pub fn release_overlay(&self, pad: usize, panel: usize) {
+        self.send(Ev::OverlayRelease {
             pad: pad as u8,
             panel: panel as u8,
         });
@@ -562,9 +624,9 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
             pad,
             panel,
             anim,
-            looping,
-        } => fx.play_overlay(pad.into(), panel.into(), anim, looping),
-        Ev::OverlayEnd { pad, panel } => fx.end_overlay(pad.into(), panel.into()),
+            drive,
+        } => fx.play_overlay(pad.into(), panel.into(), anim, drive),
+        Ev::OverlayRelease { pad, panel } => fx.release_overlay(pad.into(), panel.into()),
         Ev::Active(a) => {
             *active = a;
             if a {
@@ -729,8 +791,13 @@ mod tests {
         lights.hold_end(0, 5);
         lights.set_background(Some((bg_anim(&[1, 2], 0), Clock::Realtime)));
         lights.set_beat(1.5);
-        lights.play_overlay(0, 3, panel_anim(&[9], 0), false);
-        lights.end_overlay(0, 3);
+        lights.play_overlay(
+            0,
+            3,
+            panel_anim(&[9], 0),
+            OverlayDrive::OneShot { pressed: false },
+        );
+        lights.release_overlay(0, 3);
         lights.set_active(false);
         drop(lights); // joins the worker thread
     }
@@ -750,12 +817,19 @@ mod tests {
         })
     }
 
-    /// A per-panel animation filling every LED with `values[f]`, 0.1s per frame.
+    /// A per-panel animation filling every LED with `values[f]`, 0.1s per
+    /// frame, with no outro (the loop region runs to the last frame).
     fn panel_anim(values: &[u8], loop_frame: usize) -> Arc<PanelAnim> {
+        panel_anim_outro(values, loop_frame, values.len() - 1)
+    }
+
+    /// A per-panel animation with an explicit loop region `[loop_frame..=loop_end]`.
+    fn panel_anim_outro(values: &[u8], loop_frame: usize, loop_end: usize) -> Arc<PanelAnim> {
         Arc::new(PanelAnim {
             frames: values.iter().map(|&v| [v; PANEL_RGB_BYTES]).collect(),
             durations: vec![0.1; values.len()],
             loop_frame,
+            loop_end,
         })
     }
 
@@ -845,7 +919,12 @@ mod tests {
     fn one_shot_overlay_plays_once_then_reveals_the_background() {
         let mut fx = PanelFx::new();
         fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
-        fx.play_overlay(0, 3, panel_anim(&[91, 92], 0), false);
+        fx.play_overlay(
+            0,
+            3,
+            panel_anim(&[91, 92], 0),
+            OverlayDrive::OneShot { pressed: false },
+        );
         let frame = fx.tick(0.05);
         assert_eq!(led0(frame, 0, 3), 91);
         // Other panels keep showing the background while the overlay plays.
@@ -859,14 +938,95 @@ mod tests {
     fn looping_overlay_holds_until_ended() {
         let mut fx = PanelFx::new();
         fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
-        fx.play_overlay(1, 7, panel_anim(&[91, 92], 0), true);
+        fx.play_overlay(1, 7, panel_anim(&[91, 92], 0), OverlayDrive::Sustain);
         let mut seen = Vec::new();
         for _ in 0..4 {
             seen.push(led0(fx.tick(0.1), 1, 7));
         }
         assert_eq!(seen, vec![92, 91, 92, 91]);
-        fx.end_overlay(1, 7);
+        fx.release_overlay(1, 7);
         assert_eq!(led0(fx.tick(0.0), 1, 7), 10);
+    }
+
+    #[test]
+    fn pressed_one_shot_with_outro_holds_its_loop_until_release() {
+        let mut fx = PanelFx::new();
+        // Intro frame 1, loop region [1..=2] (values 2,3), outro 4,5.
+        fx.play_overlay(
+            0,
+            3,
+            panel_anim_outro(&[1, 2, 3, 4, 5], 1, 2),
+            OverlayDrive::OneShot { pressed: true },
+        );
+        let mut seen = vec![led0(fx.tick(0.05), 0, 3)];
+        for _ in 0..4 {
+            seen.push(led0(fx.tick(0.1), 0, 3));
+        }
+        // Intro once, then the loop region repeats while pressed.
+        assert_eq!(seen, vec![1, 2, 3, 2, 3]);
+        // Release: the outro plays out, then the overlay clears itself.
+        fx.release_overlay(0, 3);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 4);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 5);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 0);
+    }
+
+    #[test]
+    fn unpressed_one_shot_with_outro_plays_straight_through() {
+        let mut fx = PanelFx::new();
+        fx.play_overlay(
+            0,
+            3,
+            panel_anim_outro(&[1, 2, 3], 0, 1),
+            OverlayDrive::OneShot { pressed: false },
+        );
+        assert_eq!(led0(fx.tick(0.05), 0, 3), 1);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 2);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 3);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 0);
+    }
+
+    #[test]
+    fn pressed_one_shot_without_outro_still_plays_once() {
+        let mut fx = PanelFx::new();
+        fx.play_overlay(
+            0,
+            3,
+            panel_anim(&[91, 92], 0),
+            OverlayDrive::OneShot { pressed: true },
+        );
+        assert_eq!(led0(fx.tick(0.05), 0, 3), 91);
+        // Releasing a plain one-shot does not cut it short.
+        fx.release_overlay(0, 3);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 92);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 0);
+    }
+
+    #[test]
+    fn sustain_with_outro_releases_into_the_outro_and_reengages() {
+        let mut fx = PanelFx::new();
+        // Intro frame 1, single-frame loop region [1..=1], outro 3,4.
+        let anim = panel_anim_outro(&[1, 2, 3, 4], 1, 1);
+        fx.play_overlay(0, 5, anim.clone(), OverlayDrive::Sustain);
+        assert_eq!(led0(fx.tick(0.05), 0, 5), 1);
+        // Holds on the loop frame while engaged.
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+        // Release: the outro starts.
+        fx.release_overlay(0, 5);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
+        // Re-press during the outro (freeze/roll cooldown): back to the loop.
+        fx.play_overlay(0, 5, anim.clone(), OverlayDrive::Sustain);
+        assert_eq!(led0(fx.tick(0.0), 0, 5), 2);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+        // Release again: outro runs to the end and the overlay clears.
+        fx.release_overlay(0, 5);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 4);
+        assert_eq!(led0(fx.tick(0.1), 0, 5), 0);
+        // A fresh engage after the overlay cleared restarts from the intro.
+        fx.play_overlay(0, 5, anim, OverlayDrive::Sustain);
+        assert_eq!(led0(fx.tick(0.0), 0, 5), 1);
     }
 
     #[test]
@@ -875,10 +1035,10 @@ mod tests {
         fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
         fx.hold_start(0, 5, [30, 30, 30]);
         fx.flash(0, 5, [40, 40, 40], 1.0);
-        fx.play_overlay(0, 5, panel_anim(&[91], 0), true);
+        fx.play_overlay(0, 5, panel_anim(&[91], 0), OverlayDrive::Sustain);
         // Overlay wins over the flash and hold.
         assert_eq!(led0(fx.tick(0.01), 0, 5), 91);
-        fx.end_overlay(0, 5);
+        fx.release_overlay(0, 5);
         // Then the flash, then the hold, then the background.
         assert_eq!(led0(fx.tick(0.01), 0, 5), 40);
         assert_eq!(led0(fx.tick(2.0), 0, 5), 30);
@@ -890,7 +1050,7 @@ mod tests {
     fn clear_panels_keeps_the_background_and_clear_all_drops_it() {
         let mut fx = PanelFx::new();
         fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
-        fx.play_overlay(0, 1, panel_anim(&[91], 0), true);
+        fx.play_overlay(0, 1, panel_anim(&[91], 0), OverlayDrive::Sustain);
         fx.flash(0, 2, [40, 40, 40], 1.0);
 
         fx.clear_panels();
@@ -905,8 +1065,8 @@ mod tests {
     #[test]
     fn overlay_on_out_of_range_panel_is_ignored() {
         let mut fx = PanelFx::new();
-        fx.play_overlay(PADS, 0, panel_anim(&[91], 0), true);
-        fx.play_overlay(0, PANELS, panel_anim(&[91], 0), true);
+        fx.play_overlay(PADS, 0, panel_anim(&[91], 0), OverlayDrive::Sustain);
+        fx.play_overlay(0, PANELS, panel_anim(&[91], 0), OverlayDrive::Sustain);
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
     }
 }
