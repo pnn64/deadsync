@@ -1,10 +1,8 @@
 use crate::assets::{self, PRESENT_TEXTURE_CONTEXT};
-use crate::engine::present::actors::{
-    Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
-};
-use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
-use crate::engine::present::font::{self, Font, Glyph};
+use deadsync_present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use deadsync_present::anim::{EffectClock, EffectMode, EffectState};
 use deadsync_present::compose;
+use deadsync_present::font::{self, Font, Glyph};
 use deadsync_present::space::Metrics;
 use deadsync_render::{
     BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,

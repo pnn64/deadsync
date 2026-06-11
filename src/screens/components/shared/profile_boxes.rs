@@ -2,8 +2,6 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::engine::audio;
-use crate::engine::present::actors::{self, Actor};
-use crate::engine::present::color;
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile;
 use crate::game::scores;
@@ -16,6 +14,8 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_platform::dirs;
+use deadsync_present::actors::{self, Actor};
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y};
 use deadsync_profile as profile_data;
 use deadsync_render::BlendMode;
@@ -877,7 +877,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    static STEPS: std::sync::OnceLock<Vec<crate::engine::present::anim::Step>> =
+    static STEPS: std::sync::OnceLock<Vec<deadsync_present::anim::Step>> =
         std::sync::OnceLock::new();
     super::transitions::linear_elapsed(
         exiting,
@@ -889,7 +889,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
 
 #[inline(always)]
 fn exit_zoom(exit_t: f32) -> f32 {
-    let p = crate::engine::present::anim::bouncebegin_p(
+    let p = deadsync_present::anim::bouncebegin_p(
         (exit_t / PLAYERFRAME_EXIT_ZOOM_OUT_DURATION).clamp(0.0, 1.0),
     );
     (1.0 - p).max(0.0)
@@ -905,8 +905,7 @@ fn join_pulse_zoom(join_t: f32) -> f32 {
     if join_t >= JOIN_PULSE_DURATION {
         return 1.0;
     }
-    let p =
-        crate::engine::present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
+    let p = deadsync_present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
     lerp(JOIN_PULSE_ZOOM_IN, 1.0, p).max(0.0)
 }
 
@@ -915,18 +914,18 @@ fn shake_x(shake_t: f32) -> f32 {
     if shake_t >= SHAKE_DUR {
         return 0.0;
     }
-    let p = crate::engine::present::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+    let p = deadsync_present::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
     if shake_t < SHAKE_STEP_DUR {
         lerp(0.0, 5.0, p)
     } else if shake_t < SHAKE_STEP_DUR * 2.0 {
         let t = (shake_t - SHAKE_STEP_DUR).clamp(0.0, SHAKE_STEP_DUR);
-        let p = crate::engine::present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = deadsync_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(5.0, -5.0, p)
     } else {
         let t = SHAKE_STEP_DUR
             .mul_add(-2.0, shake_t)
             .clamp(0.0, SHAKE_STEP_DUR);
-        let p = crate::engine::present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = deadsync_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(-5.0, 0.0, p)
     }
 }
@@ -1185,7 +1184,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
 
 #[inline(always)]
 fn box_inner_alpha() -> f32 {
-    use crate::engine::present::{anim, runtime};
+    use deadsync_present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 
     let steps = STEPS.get_or_init(|| {

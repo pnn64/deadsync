@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
+use deadsync_present::actors::Actor;
 use deadsync_present::space::screen_center_x;
 use std::sync::Arc;
 

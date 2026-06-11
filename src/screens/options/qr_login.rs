@@ -15,13 +15,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::online::arrowcloud as ac_online;
 use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use deadsync_online::arrowcloud as ac_api;
 use deadsync_online::groovestats as gs_api;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 

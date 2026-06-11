@@ -528,11 +528,9 @@ pub(super) fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str)
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font(current_machine_font_key(FontRole::Header), |metrics_font| {
-            let w = crate::engine::present::font::measure_line_width_logical(
-                metrics_font,
-                text,
-                all_fonts,
-            ) as f32;
+            let w =
+                deadsync_present::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                    as f32;
             if w.is_finite() && w > 0.0 {
                 out_w = w;
             }

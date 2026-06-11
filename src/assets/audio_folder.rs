@@ -10,7 +10,7 @@
 //! `{data_dir}/assets/sounds/<folder>/...` overlay is automatically picked up
 //! on top of the bundled `assets/` directory.
 
-use crate::config;
+use crate::{config, engine::audio};
 use deadsync_audio_decode::folder as audio_folder;
 use deadsync_platform::dirs;
 use log::{debug, warn};
@@ -126,19 +126,19 @@ fn play_random_sfx_with(rel_dir: &str, play: fn(&str)) {
     }
 }
 
-/// Plays a random `.ogg` from `rel_dir` via [`super::play_sfx`]. No-op when
+/// Plays a random `.ogg` from `rel_dir` via [`audio::play_sfx`]. No-op when
 /// the [`config::Config::custom_sounds_enabled`] flag is off or the folder
 /// is empty.
 pub fn play_random_sfx(rel_dir: &str) {
-    play_random_sfx_with(rel_dir, super::play_sfx);
+    play_random_sfx_with(rel_dir, audio::play_sfx);
 }
 
 /// Plays a random `.ogg` from `rel_dir` as screen-owned SFX.
 pub fn play_random_screen_sfx(rel_dir: &str) {
-    play_random_sfx_with(rel_dir, super::play_screen_sfx);
+    play_random_sfx_with(rel_dir, audio::play_screen_sfx);
 }
 
-/// Plays the indexed `.ogg` (or fallback) from `rel_dir` via [`super::play_sfx`].
+/// Plays the indexed `.ogg` (or fallback) from `rel_dir` via [`audio::play_sfx`].
 /// No-op when [`config::Config::custom_sounds_enabled`] is off.
 pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
     if !enabled() {
@@ -146,7 +146,7 @@ pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
     }
     if let Some(path) = indexed_sfx_in(rel_dir, index, fallback_name) {
         let path_str = path.to_string_lossy().into_owned();
-        super::play_sfx(&path_str);
+        audio::play_sfx(&path_str);
     } else {
         debug!("No custom SFX for {rel_dir} index {index} (fallback {fallback_name})");
     }

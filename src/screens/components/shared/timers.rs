@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::{Actor, TextContent};
+use deadsync_present::actors::{Actor, TextContent};
 use deadsync_present::space::{screen_center_x, widescale};
 
 pub fn build_session(text: impl Into<TextContent>) -> Actor {

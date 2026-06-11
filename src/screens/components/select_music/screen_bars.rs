@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use deadsync_present::actors::{Actor, SizeSpec};
 use deadsync_present::space::screen_center_x;
 use deadsync_profile as profile_data;
 

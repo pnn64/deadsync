@@ -3,15 +3,15 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
-use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
+use deadsync_present::font;
 use deadsync_present::space::{screen_center_x, screen_center_y};
 use deadsync_profile as profile_data;
 
@@ -144,7 +144,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    static STEPS: std::sync::OnceLock<Vec<crate::engine::present::anim::Step>> =
+    static STEPS: std::sync::OnceLock<Vec<deadsync_present::anim::Step>> =
         std::sync::OnceLock::new();
     crate::screens::components::shared::transitions::linear_elapsed(
         exiting,
@@ -317,7 +317,7 @@ fn arrow_rotation(dir: &str) -> f32 {
 
 #[inline(always)]
 fn ease01(x: f32, f_ease: f32) -> f32 {
-    use crate::engine::present::anim;
+    use deadsync_present::anim;
     let x = x.clamp(0.0, 1.0);
     // Use the same curve implementation as tween segments.
     anim::eval_ease_p_for_f_ease(x, f_ease)

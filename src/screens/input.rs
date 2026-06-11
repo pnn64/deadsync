@@ -1,10 +1,10 @@
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, with_keymap};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 /* ---------------------------- transitions ---------------------------- */

@@ -324,7 +324,7 @@ impl App {
             Ok(()) => {
                 config::update_video_renderer(target);
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
-                crate::engine::present::runtime::clear_all();
+                deadsync_present::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
                 if let Some(window) = self.window.clone() {
                     self.request_redraw(&window, "switch_renderer");

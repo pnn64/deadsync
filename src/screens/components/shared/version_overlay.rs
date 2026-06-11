@@ -10,7 +10,7 @@
 
 use crate::act;
 use crate::config::{LogLevel, VersionOverlaySide};
-use crate::engine::present::actors::Actor;
+use deadsync_present::actors::Actor;
 use deadsync_present::space::{screen_height, screen_width};
 use std::sync::{Arc, OnceLock};
 

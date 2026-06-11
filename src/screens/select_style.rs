@@ -2,14 +2,14 @@ use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_profile as profile_data;
 
@@ -207,7 +207,7 @@ fn not_chosen_alpha(exit_t: f32) -> f32 {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    static STEPS: std::sync::OnceLock<Vec<crate::engine::present::anim::Step>> =
+    static STEPS: std::sync::OnceLock<Vec<deadsync_present::anim::Step>> =
         std::sync::OnceLock::new();
     crate::screens::components::shared::transitions::linear_elapsed(
         exiting,
@@ -257,7 +257,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
     let exit_t = exit_anim_t(state.exit_chosen_anim);
     let (chosen_p, other_alpha) = if state.exit_chosen_anim {
         (
-            crate::engine::present::anim::bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
+            deadsync_present::anim::bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
             not_chosen_alpha(exit_t),
         )
     } else {

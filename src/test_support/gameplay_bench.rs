@@ -1,8 +1,8 @@
 use crate::assets::AssetManager;
-use crate::engine::present::actors::Actor;
 use crate::game::{gameplay, profile};
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
 use deadsync_render::MeshVertex;
 use std::sync::Arc;

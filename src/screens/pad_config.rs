@@ -14,13 +14,13 @@
 //!   pad-level controls (auto-recalibration, panel debounce).
 
 use crate::act;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height};
 
 /// Which of a load-cell button's two thresholds a Simple-view cursor stop

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::present::actors::{Actor, SizeSpec};
+use deadsync_present::actors::{Actor, SizeSpec};
 use deadsync_render::{BlendMode, MeshVertex};
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::collections::HashMap;

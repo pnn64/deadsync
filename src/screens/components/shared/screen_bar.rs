@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::config::{self, MachineBarColor};
-use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
-use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
-use crate::engine::present::color;
+use deadsync_present::actors::{self, Actor, Background, SizeSpec};
+use deadsync_present::cache::{SharedStrCache, cached_shared_str};
+use deadsync_present::color;
 use deadsync_present::space;
 use deadsync_present::space::{screen_center_x, screen_height, screen_width};
 use std::cell::RefCell;

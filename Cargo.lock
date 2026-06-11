@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.715"
+version = "0.4.726"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -982,6 +982,8 @@ dependencies = [
  "deadsync-audio-analysis",
  "deadsync-audio-backend-native",
  "deadsync-audio-decode",
+ "deadsync-audio-replaygain",
+ "deadsync-audio-stream",
  "deadsync-chart",
  "deadsync-core",
  "deadsync-input",
@@ -1083,6 +1085,26 @@ dependencies = [
  "opusic-c",
  "rubato",
  "symphonia",
+]
+
+[[package]]
+name = "deadsync-audio-replaygain"
+version = "0.1.0"
+dependencies = [
+ "deadsync-audio-analysis",
+ "log",
+]
+
+[[package]]
+name = "deadsync-audio-stream"
+version = "0.1.0"
+dependencies = [
+ "deadsync-audio",
+ "deadsync-audio-decode",
+ "deadsync-platform",
+ "log",
+ "rubato",
+ "smallvec",
 ]
 
 [[package]]

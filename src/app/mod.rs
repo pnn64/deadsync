@@ -20,7 +20,6 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::present::color;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, stage_stats};
 use crate::screens::{
@@ -34,6 +33,7 @@ use deadsync_platform::dirs;
 use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
+use deadsync_present::color;
 use deadsync_present::compose;
 use deadsync_present::space::{self as space, Metrics};
 use deadsync_render as renderer;
@@ -69,7 +69,6 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
-use crate::engine::present::actors::Actor;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
@@ -82,6 +81,7 @@ use deadsync_input_native::GpSystemEvent;
 use deadsync_lights::{
     self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
 };
+use deadsync_present::actors::Actor;
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1282,48 +1282,48 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn actor_tree_stats(actors: &[crate::engine::present::actors::Actor]) -> ActorTreeStats {
-    fn visit(stats: &mut ActorTreeStats, actor: &crate::engine::present::actors::Actor) {
+fn actor_tree_stats(actors: &[deadsync_present::actors::Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &deadsync_present::actors::Actor) {
         stats.total = stats.total.saturating_add(1);
         match actor {
-            crate::engine::present::actors::Actor::Sprite { .. } => {
+            deadsync_present::actors::Actor::Sprite { .. } => {
                 stats.sprites = stats.sprites.saturating_add(1);
             }
-            crate::engine::present::actors::Actor::Text { content, .. } => {
+            deadsync_present::actors::Actor::Text { content, .. } => {
                 stats.texts = stats.texts.saturating_add(1);
                 stats.text_chars = stats
                     .text_chars
                     .saturating_add(saturating_u32(content.len()));
             }
-            crate::engine::present::actors::Actor::Mesh { .. } => {
+            deadsync_present::actors::Actor::Mesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
-            crate::engine::present::actors::Actor::TexturedMesh { .. } => {
+            deadsync_present::actors::Actor::TexturedMesh { .. } => {
                 stats.textured_meshes = stats.textured_meshes.saturating_add(1);
             }
-            crate::engine::present::actors::Actor::Frame { children, .. } => {
+            deadsync_present::actors::Actor::Frame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::engine::present::actors::Actor::SharedFrame { children, .. } => {
+            deadsync_present::actors::Actor::SharedFrame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children.iter() {
                     visit(stats, child);
                 }
             }
-            crate::engine::present::actors::Actor::Camera { children, .. } => {
+            deadsync_present::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::engine::present::actors::Actor::CameraPush { .. } => {
+            deadsync_present::actors::Actor::CameraPush { .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
             }
-            crate::engine::present::actors::Actor::CameraPop => {}
-            crate::engine::present::actors::Actor::Shadow { child, .. } => {
+            deadsync_present::actors::Actor::CameraPop => {}
+            deadsync_present::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);
             }
@@ -4642,7 +4642,7 @@ impl App {
             self.state.shell.slow_down_held,
             self.state.shell.tab_acceleration_enabled,
         );
-        crate::engine::present::runtime::tick(logic_dt);
+        deadsync_present::runtime::tick(logic_dt);
         crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
@@ -6142,7 +6142,7 @@ impl App {
         } else {
             "assets/sounds/evaluation_pass"
         };
-        crate::engine::audio::folder::play_random_screen_sfx(folder);
+        crate::assets::audio_folder::play_random_screen_sfx(folder);
 
         if self
             .state
@@ -7431,7 +7431,7 @@ impl App {
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
-        actors: &[crate::engine::present::actors::Actor],
+        actors: &[deadsync_present::actors::Actor],
         draw_stats: renderer::DrawStats,
         compose_breakdown: ComposeBreakdown,
     ) {
@@ -9370,9 +9370,9 @@ impl App {
                 // arrived).
                 let restart_count = self.state.session.gameplay_restart_count;
                 if restart_count == 0 {
-                    crate::engine::audio::folder::play_random_sfx("assets/sounds/song_start");
+                    crate::assets::audio_folder::play_random_sfx("assets/sounds/song_start");
                 } else {
-                    crate::engine::audio::folder::play_indexed_sfx(
+                    crate::assets::audio_folder::play_indexed_sfx(
                         "assets/sounds/song_start/restart",
                         restart_count,
                         "restart.ogg",

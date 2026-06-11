@@ -778,7 +778,7 @@ pub(super) fn draw_inline_choices(
         rc.fc.asset_manager.with_font("miso", |metrics_font| {
             text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
             for text in &rc.row.choices {
-                let mut w = crate::engine::present::font::measure_line_width_logical(
+                let mut w = deadsync_present::font::measure_line_width_logical(
                     metrics_font,
                     text,
                     all_fonts,
@@ -920,7 +920,7 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 } else {
                     choice_text.clone()
                 };
-            let mut text_w = crate::engine::present::font::measure_line_width_logical(
+            let mut text_w = deadsync_present::font::measure_line_width_logical(
                 metrics_font,
                 &choice_display_text,
                 all_fonts,
@@ -971,7 +971,7 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
             };
             if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
                 let p2_choice_center_x = rc.fc.option_column_x[P2];
-                let mut p2_w = crate::engine::present::font::measure_line_width_logical(
+                let mut p2_w = deadsync_present::font::measure_line_width_logical(
                     metrics_font,
                     &p2_text,
                     all_fonts,

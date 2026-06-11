@@ -7,10 +7,6 @@ use crate::config::{
     SyncGraphMode,
 };
 use crate::engine::audio;
-use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
-use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
-use crate::engine::present::color;
-use crate::engine::present::font;
 use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
@@ -42,6 +38,10 @@ use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_platform::dirs;
+use deadsync_present::actors::{Actor, SizeSpec, SpriteSource};
+use deadsync_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
+use deadsync_present::color;
+use deadsync_present::font;
 use deadsync_present::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
@@ -3704,9 +3704,9 @@ fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
     if paths.is_empty() {
         return;
     }
-    crate::engine::audio::replaygain::prewarm_paths(
+    deadsync_audio_replaygain::prewarm_paths(
         paths,
-        crate::engine::audio::replaygain::Priority::Background,
+        deadsync_audio_replaygain::Priority::Background,
     );
 }
 
@@ -7939,7 +7939,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
         .pad_config_intents
         .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
-    crate::engine::present::runtime::clear_all();
+    deadsync_present::runtime::clear_all();
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -13310,7 +13310,7 @@ mod tests {
         let overlay = test_running_sync_overlay();
         let actors = super::build_null_or_die_overlay(&overlay, 0).unwrap();
         let heat_alpha = actors.iter().find_map(|actor| match actor {
-            crate::engine::present::actors::Actor::Sprite { source, tint, .. }
+            deadsync_present::actors::Actor::Sprite { source, tint, .. }
                 if source.texture_key() == Some(super::SYNC_HEAT_TEXTURE_KEY) =>
             {
                 Some(tint[3])

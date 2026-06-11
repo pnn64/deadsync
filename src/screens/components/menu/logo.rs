@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use crate::engine::present::actors::Actor;
+use deadsync_present::actors::Actor;
 use deadsync_present::space::screen_center_x;
 
 /// Parameters to tweak the layout easily.

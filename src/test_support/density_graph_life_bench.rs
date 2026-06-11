@@ -1,5 +1,5 @@
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::density;
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::density;
 use deadsync_present::space::screen_center_x;
 use deadsync_render::BlendMode;
 use std::cell::RefCell;

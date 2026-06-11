@@ -4,12 +4,12 @@ use crate::assets::visual_styles;
 use crate::game::profile;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 // Screen navigation handled in app
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 // Keyboard handling is centralized in app via virtual actions
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -233,7 +233,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
 
     #[inline(always)]
     fn wheel_form_p() -> f32 {
-        use crate::engine::present::{anim, runtime};
+        use deadsync_present::{anim, runtime};
         static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         let steps = STEPS.get_or_init(|| vec![anim::linear(WHEEL_FORM_DURATION).x(1.0).build()]);
 
@@ -246,7 +246,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
 
     #[inline(always)]
     fn wheel_exit_t(wide: bool) -> f32 {
-        use crate::engine::present::{anim, runtime};
+        use deadsync_present::{anim, runtime};
         static STEPS_WIDE: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         static STEPS_NARROW: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 

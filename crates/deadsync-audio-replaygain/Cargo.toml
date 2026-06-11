@@ -1,0 +1,14 @@
+[package]
+name = "deadsync-audio-replaygain"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-audio-analysis = { path = "../deadsync-audio-analysis" }
+log = "0.4.32"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

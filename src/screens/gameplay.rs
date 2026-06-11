@@ -3,12 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
-use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
-use crate::engine::present::anim::EffectState;
-use crate::engine::present::cache::{TextCache, cached_text};
-use crate::engine::present::color;
-use crate::engine::present::density::{self, DensityHistCache};
-use crate::engine::present::font;
 use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
@@ -29,7 +23,13 @@ use deadsync_chart::{
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
+use deadsync_present::anim::EffectState;
+use deadsync_present::cache::{TextCache, cached_text};
+use deadsync_present::color;
 use deadsync_present::compose::TextLayoutCache;
+use deadsync_present::density::{self, DensityHistCache};
+use deadsync_present::font;
 use deadsync_present::space::widescale;
 use deadsync_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
@@ -4324,7 +4324,7 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     }
     matches!(
         state.effect_mode,
-        crate::engine::present::anim::EffectMode::GlowShift
+        deadsync_present::anim::EffectMode::GlowShift
     ) && (state.effect_color1[3] > f32::EPSILON || state.effect_color2[3] > f32::EPSILON)
 }
 
@@ -4339,18 +4339,15 @@ fn song_lua_apply_overlay_effect(
     scale: &mut [f32; 3],
     rot_deg: &mut [f32; 3],
 ) {
-    if matches!(effect.mode, crate::engine::present::anim::EffectMode::Spin) {
-        let units =
-            crate::engine::present::anim::effect_clock_units(effect, effect_time, effect_beat);
+    if matches!(effect.mode, deadsync_present::anim::EffectMode::Spin) {
+        let units = deadsync_present::anim::effect_clock_units(effect, effect_time, effect_beat);
         rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
         rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
         rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
     }
-    if let Some(percent) =
-        crate::engine::present::anim::effect_mix(effect, effect_time, effect_beat)
-    {
+    if let Some(percent) = deadsync_present::anim::effect_mix(effect, effect_time, effect_beat) {
         match effect.mode {
-            crate::engine::present::anim::EffectMode::DiffuseRamp => {
+            deadsync_present::anim::EffectMode::DiffuseRamp => {
                 for (idx, out) in tint.iter_mut().enumerate() {
                     let color =
                         song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], percent)
@@ -4358,8 +4355,8 @@ fn song_lua_apply_overlay_effect(
                     *out = (*out * color).clamp(0.0, 1.0);
                 }
             }
-            crate::engine::present::anim::EffectMode::DiffuseShift => {
-                let between = crate::engine::present::anim::glowshift_mix(percent);
+            deadsync_present::anim::EffectMode::DiffuseShift => {
+                let between = deadsync_present::anim::glowshift_mix(percent);
                 for (idx, out) in tint.iter_mut().enumerate() {
                     let color =
                         song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
@@ -4367,14 +4364,14 @@ fn song_lua_apply_overlay_effect(
                     *out = (*out * color).clamp(0.0, 1.0);
                 }
             }
-            crate::engine::present::anim::EffectMode::GlowShift => {
-                let between = crate::engine::present::anim::glowshift_mix(percent);
+            deadsync_present::anim::EffectMode::GlowShift => {
+                let between = deadsync_present::anim::glowshift_mix(percent);
                 for (idx, out) in glow.iter_mut().enumerate() {
                     *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
                         .clamp(0.0, 1.0);
                 }
             }
-            crate::engine::present::anim::EffectMode::Pulse => {
+            deadsync_present::anim::EffectMode::Pulse => {
                 let pulse = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
                 let zoom =
                     song_lua_effect_lerp(effect.magnitude[0], effect.magnitude[1], pulse).max(0.0);
@@ -4382,26 +4379,26 @@ fn song_lua_apply_overlay_effect(
                 scale[1] *= zoom * song_lua_effect_lerp(effect.color1[1], effect.color2[1], pulse);
                 scale[2] *= zoom * song_lua_effect_lerp(effect.color1[2], effect.color2[2], pulse);
             }
-            crate::engine::present::anim::EffectMode::Bob => {
+            deadsync_present::anim::EffectMode::Bob => {
                 let bob = (percent * 2.0 * std::f32::consts::PI).sin();
                 for i in 0..3 {
                     offset[i] += effect.magnitude[i] * bob;
                 }
             }
-            crate::engine::present::anim::EffectMode::Bounce => {
+            deadsync_present::anim::EffectMode::Bounce => {
                 let bounce = (percent * std::f32::consts::PI).sin();
                 for i in 0..3 {
                     offset[i] += effect.magnitude[i] * bounce;
                 }
             }
-            crate::engine::present::anim::EffectMode::Wag => {
+            deadsync_present::anim::EffectMode::Wag => {
                 let wag = (percent * 2.0 * std::f32::consts::PI).sin();
                 for i in 0..3 {
                     rot_deg[i] += effect.magnitude[i] * wag;
                 }
             }
-            crate::engine::present::anim::EffectMode::Spin
-            | crate::engine::present::anim::EffectMode::None => {}
+            deadsync_present::anim::EffectMode::Spin | deadsync_present::anim::EffectMode::None => {
+            }
         }
     }
     if rainbow {
@@ -9119,12 +9116,12 @@ pub fn push_actors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::present::actors::TextAttribute;
+    use deadsync_present::actors::TextAttribute;
 
     fn empty_text_attributes() -> Arc<[TextAttribute]> {
         Arc::from([])
     }
-    use crate::engine::present::actors::{SizeSpec, TextAlign};
+    use deadsync_present::actors::{SizeSpec, TextAlign};
 
     fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {
         SongLuaOverlayKind::Sprite {
@@ -10951,8 +10948,8 @@ mod tests {
                 x: 320.0,
                 y: 240.0,
                 size: Some([100.0, 50.0]),
-                effect_mode: crate::engine::present::anim::EffectMode::Bounce,
-                effect_clock: crate::engine::present::anim::EffectClock::Beat,
+                effect_mode: deadsync_present::anim::EffectMode::Bounce,
+                effect_clock: deadsync_present::anim::EffectClock::Beat,
                 effect_period: 2.0,
                 effect_offset: 1.0,
                 effect_magnitude: [10.0, 20.0, 5.0],
@@ -11006,8 +11003,8 @@ mod tests {
                 x: 320.0,
                 y: 240.0,
                 size: Some([100.0, 50.0]),
-                effect_mode: crate::engine::present::anim::EffectMode::Bob,
-                effect_clock: crate::engine::present::anim::EffectClock::Time,
+                effect_mode: deadsync_present::anim::EffectMode::Bob,
+                effect_clock: deadsync_present::anim::EffectClock::Time,
                 effect_period: 2.0,
                 effect_timing: Some([0.0, 1.0, 0.0, 0.0, 1.0]),
                 effect_magnitude: [10.0, 20.0, 5.0],
@@ -11931,7 +11928,7 @@ mod tests {
                 y: 240.0,
                 size: Some([100.0, 50.0]),
                 diffuse: [1.0, 1.0, 1.0, 0.0],
-                effect_mode: crate::engine::present::anim::EffectMode::GlowShift,
+                effect_mode: deadsync_present::anim::EffectMode::GlowShift,
                 effect_color1: [0.3, 0.4, 0.5, 0.6],
                 effect_color2: [0.1, 0.2, 0.3, 0.1],
                 effect_period: 1.0,

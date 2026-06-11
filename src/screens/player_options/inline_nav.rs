@@ -259,11 +259,9 @@ pub(super) fn measure_option_text(
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("miso", |metrics_font| {
             out_h = (metrics_font.height as f32).max(1.0) * zoom;
-            let mut w = crate::engine::present::font::measure_line_width_logical(
-                metrics_font,
-                text,
-                all_fonts,
-            ) as f32;
+            let mut w =
+                deadsync_present::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                    as f32;
             if !w.is_finite() || w <= 0.0 {
                 w = 1.0;
             }

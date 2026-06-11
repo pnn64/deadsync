@@ -1,7 +1,7 @@
-use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
 };
+use deadsync_present::actors::{Actor, SizeSpec};
 use deadsync_render::{BlendMode, TexturedMeshVertex};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;

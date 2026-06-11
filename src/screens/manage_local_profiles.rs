@@ -3,8 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
 use crate::engine::audio;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -15,6 +13,8 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_height, screen_width};
 use deadsync_profile as profile_data;
 use std::sync::Arc;

@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::color;
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 
 use super::utils::pane_origin_x;

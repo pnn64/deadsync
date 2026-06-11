@@ -1,7 +1,7 @@
 use super::{App, CurrentScreen};
-use crate::engine::present::density;
 use crate::game::{profile, scores};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
+use deadsync_present::density;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, warn};

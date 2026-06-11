@@ -313,7 +313,7 @@ pub fn menu_music_asset_path() -> &'static str {
 pub fn menu_music_resolved_path() -> std::path::PathBuf {
     let style = current_style();
     let folder_rel = format!("assets/music/menu/{}", style.as_str().to_ascii_lowercase());
-    if let Some(p) = crate::engine::audio::folder::random_music_path(&folder_rel) {
+    if let Some(p) = crate::assets::audio_folder::random_music_path(&folder_rel) {
         return p;
     }
     deadsync_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())

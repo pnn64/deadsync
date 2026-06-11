@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::present::actors::{Actor, TextContent};
+use deadsync_present::actors::{Actor, TextContent};
 use deadsync_present::space::screen_height;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,7 +103,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::present::actors::TextContent;
+    use deadsync_present::actors::TextContent;
 
     fn params(layout: StepArtistBarLayout) -> StepArtistBarParams {
         StepArtistBarParams {

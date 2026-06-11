@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 
 use super::{Action, Item, scroll_anim_dir, set_text_clip_rect};

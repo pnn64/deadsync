@@ -1,100 +1,35 @@
-pub mod folder;
-pub mod replaygain;
-mod resample;
-
-#[cfg(not(windows))]
-use deadsync_audio::AudioOutputMode;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
-pub(crate) use deadsync_audio::ring as internal;
-use deadsync_audio::{
-    AudioRenderMaps, CallbackClockSource, CallbackClockWindow, MusicMapSeg, OutputBackendReady,
-    PlaybackPosMap, QueuedSfx, SfxLane, StutterDiagAudioEvent, fallback_stream_position_frames,
-    music_nanos_from_seconds, normalized_music_rate, sfx_stop_generation,
-    stream_position_frames_from_window as audio_stream_position_frames_from_window,
-};
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
-#[cfg(target_os = "freebsd")]
-use deadsync_audio_backend_native::freebsd_pcm;
-#[cfg(target_os = "linux")]
-use deadsync_audio_backend_native::launch::AlsaBackendHint;
-#[cfg(target_os = "macos")]
-use deadsync_audio_backend_native::launch::CoreAudioBackendHint;
-#[cfg(target_os = "freebsd")]
-use deadsync_audio_backend_native::launch::FreeBsdPcmBackendHint;
-#[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
-use deadsync_audio_backend_native::launch::JackBackendHint;
-use deadsync_audio_backend_native::launch::NativeBackendLaunch;
-#[cfg(not(windows))]
-use deadsync_audio_backend_native::launch::OutputDeviceProbe;
-#[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
-use deadsync_audio_backend_native::launch::PipeWireBackendHint;
-#[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
-use deadsync_audio_backend_native::launch::PulseBackendHint;
-#[cfg(not(windows))]
-use deadsync_audio_backend_native::launch::SFX_QUEUE_CAP;
-#[cfg(windows)]
-use deadsync_audio_backend_native::launch::build_audio_launch;
-#[cfg(windows)]
-use deadsync_audio_backend_native::launch::start_wasapi_backend;
-#[cfg(target_os = "linux")]
-use deadsync_audio_backend_native::linux_alsa;
-#[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
-use deadsync_audio_backend_native::linux_jack;
-#[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
-use deadsync_audio_backend_native::linux_pipewire;
-#[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
-use deadsync_audio_backend_native::linux_pulse;
-#[cfg(target_os = "macos")]
-use deadsync_audio_backend_native::macos_coreaudio;
-#[cfg(windows)]
-use deadsync_audio_backend_native::windows_wasapi::WasapiOutputStream;
-use deadsync_audio_decode as decode;
+use deadsync_audio::{
+    OutputBackendReady, QueuedSfx, SfxLane, StutterDiagAudioEvent, normalized_music_rate,
+};
+use deadsync_audio_backend_native::launch::{
+    NativeBackendLaunch, build_audio_launch, start_output_backend,
+};
+use deadsync_audio_replaygain as replaygain;
+use deadsync_audio_stream as audio_stream;
+use deadsync_audio_stream::{OutputFormat, StreamCommand};
 use deadsync_platform::dirs;
-use deadsync_platform::host_time::instant_nanos;
-#[cfg(windows)]
-use deadsync_platform::windows_rt::current_qpc_nanos;
-use log::{debug, info, warn};
-use std::collections::HashMap;
+use log::info;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-#[cfg(not(windows))]
-use std::sync::mpsc::sync_channel;
+use std::sync::OnceLock;
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel};
-use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::Instant;
 
-const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 /* ============================== Public API ============================== */
-
-// Commands to the audio engine
-enum AudioCommand {
-    // Path, cut, looping, rate (1.0 = normal)
-    PlayMusic(PathBuf, Cut, bool, f32),
-    StopMusic,
-    // Change rate of currently playing music without restarting
-    SetMusicRate(f32),
-}
 
 // Global engine (initialized once)
 static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
 static ENGINE: std::sync::LazyLock<AudioEngine> =
     std::sync::LazyLock::new(|| init_engine_and_thread(engine_init_cfg()));
-static ASSIST_TICK_SFX: OnceLock<Arc<[i16]>> = OnceLock::new();
 
 struct AudioEngine {
-    command_sender: Sender<AudioCommand>,
+    command_sender: Sender<StreamCommand>,
     sfx_sender: SyncSender<QueuedSfx>,
-    sfx_cache: Mutex<HashMap<String, Arc<[i16]>>>,
+    sfx_cache: audio_stream::SfxCache,
     device_sample_rate: u32,
     device_channels: usize,
     startup_output_devices: Vec<OutputDeviceInfo>,
@@ -105,18 +40,17 @@ struct AudioThreadReady {
     sfx_sender: SyncSender<QueuedSfx>,
 }
 
-/// A handle to a streaming music track.
-struct MusicStream {
-    thread: thread::JoinHandle<()>,
-    stop_signal: Arc<AtomicBool>,
-    rate_bits: Arc<AtomicU32>,
+#[inline(always)]
+fn output_format() -> OutputFormat {
+    OutputFormat {
+        sample_rate_hz: ENGINE.device_sample_rate,
+        channels: ENGINE.device_channels,
+    }
 }
-
-const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 
 #[inline(always)]
 pub(crate) fn timing_diag_enabled() -> bool {
-    log::log_enabled!(log::Level::Debug)
+    audio_stream::timing_diag_enabled()
 }
 
 #[inline(always)]
@@ -134,18 +68,6 @@ pub fn collect_stutter_diag_events(
     out: &mut Vec<StutterDiagAudioEvent>,
 ) {
     deadsync_audio::collect_stutter_diag_events(now_host_nanos, window_ns, out);
-}
-
-static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
-    std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
-static PLAYED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
-    std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
-static PLAYBACK_POS_MAP: std::sync::LazyLock<Mutex<PlaybackPosMap>> =
-    std::sync::LazyLock::new(|| Mutex::new(PlaybackPosMap::default()));
-
-#[inline(always)]
-fn audio_render_maps() -> AudioRenderMaps {
-    AudioRenderMaps::new(QUEUED_MUSIC_MAP_SEGS.clone(), PLAYED_MUSIC_MAP_SEGS.clone())
 }
 
 /* ============================ Public functions ============================ */
@@ -171,10 +93,15 @@ pub fn init(cfg: InitConfig) -> Result<(), String> {
     } else {
         let _ = ENGINE_INIT_CFG.set(cfg);
     }
+    let app_dirs = dirs::app_dirs();
+    replaygain::init(replaygain::InitConfig {
+        cache_file: app_dirs.replaygain_cache_file(),
+        legacy_cache_dir: app_dirs.replaygain_cache_dir(),
+        result_callback: set_music_replaygain_if_matches,
+    })
+    .map_err(str::to_string)?;
     std::sync::LazyLock::force(&ENGINE);
-    std::sync::LazyLock::force(&QUEUED_MUSIC_MAP_SEGS);
-    std::sync::LazyLock::force(&PLAYED_MUSIC_MAP_SEGS);
-    std::sync::LazyLock::force(&PLAYBACK_POS_MAP);
+    audio_stream::force_music_map_runtime();
     Ok(())
 }
 
@@ -184,20 +111,7 @@ pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
 
 #[cfg(target_os = "linux")]
 pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
-    let mut backends = Vec::with_capacity(5);
-    backends.push(LinuxAudioBackend::Auto);
-    #[cfg(has_pipewire_audio)]
-    backends.push(LinuxAudioBackend::PipeWire);
-    #[cfg(has_pulse_audio)]
-    if linux_pulse::is_available() {
-        backends.push(LinuxAudioBackend::PulseAudio);
-    }
-    backends.push(LinuxAudioBackend::Alsa);
-    #[cfg(has_jack_audio)]
-    if linux_jack::is_available() {
-        backends.push(LinuxAudioBackend::Jack);
-    }
-    backends
+    deadsync_audio_backend_native::launch::available_linux_backends()
 }
 
 /// Plays a sound effect from the given path (cached after first load).
@@ -222,34 +136,27 @@ pub fn stop_screen_sfx() {
 
 /// Plays a gameplay assist tick that uses its own volume lane.
 pub fn play_assist_tick(path: &str) {
-    if path == ASSIST_TICK_SFX_PATH
-        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
-    {
-        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-            data: sound_data,
-            lane: SfxLane::AssistTick,
-            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
-            target_stream_frame: 0,
-        });
+    #[cfg(test)]
+    if !is_initialized() {
         return;
     }
-    play_sfx_on_lane(path, SfxLane::AssistTick);
+    ENGINE.sfx_cache.play_assist_tick(
+        path,
+        output_format(),
+        &ENGINE.sfx_sender,
+        resolve_asset_path,
+    );
 }
 
 /// Plays a preloaded gameplay assist tick without decoding on miss.
 pub fn play_preloaded_assist_tick(path: &str) {
-    if path == ASSIST_TICK_SFX_PATH
-        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
-    {
-        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-            data: sound_data,
-            lane: SfxLane::AssistTick,
-            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
-            target_stream_frame: 0,
-        });
+    #[cfg(test)]
+    if !is_initialized() {
         return;
     }
-    play_preloaded_sfx_on_lane(path, SfxLane::AssistTick);
+    ENGINE
+        .sfx_cache
+        .play_preloaded_assist_tick(path, &ENGINE.sfx_sender);
 }
 
 /// Plays a preloaded gameplay assist tick scheduled to become audible at an
@@ -258,135 +165,48 @@ pub fn play_preloaded_assist_tick(path: &str) {
 /// writes against, output latency is compensated implicitly. Falls back to
 /// immediate playback when `target_stream_frame == 0`.
 pub fn play_scheduled_assist_tick(path: &str, target_stream_frame: u64) {
-    if target_stream_frame == 0 {
-        play_preloaded_assist_tick(path);
-        return;
-    }
-    if path == ASSIST_TICK_SFX_PATH
-        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
-    {
-        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-            data: sound_data,
-            lane: SfxLane::AssistTick,
-            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
-            target_stream_frame,
-        });
-        return;
-    }
-    // Cache-miss fallback: schedule whatever is cached for this path.
-    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
-    if let Some(sound_data) = cached {
-        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-            data: sound_data,
-            lane: SfxLane::AssistTick,
-            stop_generation: sfx_stop_generation(SfxLane::AssistTick),
-            target_stream_frame,
-        });
-    } else {
-        warn!("Scheduled assist tick cache miss for '{path}'; skipping");
-    }
-}
-
-fn play_cached_sfx_on_lane(path: &str, lane: SfxLane) -> bool {
     #[cfg(test)]
     if !is_initialized() {
-        return true;
+        return;
     }
-
-    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
-    if let Some(sound_data) = cached {
-        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-            data: sound_data,
-            lane,
-            stop_generation: sfx_stop_generation(lane),
-            target_stream_frame: 0,
-        });
-        return true;
-    }
-    false
+    ENGINE
+        .sfx_cache
+        .play_scheduled_assist_tick(path, target_stream_frame, &ENGINE.sfx_sender);
 }
 
 fn play_preloaded_sfx_on_lane(path: &str, lane: SfxLane) {
-    if !play_cached_sfx_on_lane(path, lane) {
-        warn!("Preloaded SFX cache miss for '{path}'; skipping synchronous decode");
+    #[cfg(test)]
+    if !is_initialized() {
+        return;
     }
+    ENGINE
+        .sfx_cache
+        .play_preloaded(path, lane, &ENGINE.sfx_sender);
 }
 
 fn play_sfx_on_lane(path: &str, lane: SfxLane) {
-    if play_cached_sfx_on_lane(path, lane) {
+    #[cfg(test)]
+    if !is_initialized() {
         return;
     }
-
-    let resolved = dirs::app_dirs().resolve_asset_path(path);
-    let resolved_str = resolved.to_string_lossy();
-    let decoded = match resample::load_and_resample_sfx(&resolved_str) {
-        Ok(data) => data,
-        Err(e) => {
-            warn!("Failed to load SFX '{path}': {e}");
-            return;
-        }
-    };
-
-    let sound_data = {
-        let mut cache = ENGINE.sfx_cache.lock().unwrap();
-        cache
-            .entry(path.to_string())
-            .or_insert_with(|| {
-                debug!("Cached SFX: {path}");
-                decoded
-            })
-            .clone()
-    };
-    cache_assist_tick(path, sound_data.clone());
-    let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
-        data: sound_data,
+    ENGINE.sfx_cache.play(
+        path,
         lane,
-        stop_generation: sfx_stop_generation(lane),
-        target_stream_frame: 0,
-    });
+        output_format(),
+        &ENGINE.sfx_sender,
+        resolve_asset_path,
+    );
 }
 
 /// Preloads a sound effect into cache without playing it.
 pub fn preload_sfx(path: &str) {
-    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
-    if let Some(data) = cached {
-        cache_assist_tick(path, data);
-        return;
-    }
-
-    let resolved = dirs::app_dirs().resolve_asset_path(path);
-    let resolved_str = resolved.to_string_lossy();
-    let decoded = match resample::load_and_resample_sfx(&resolved_str) {
-        Ok(data) => data,
-        Err(e) => {
-            warn!("Failed to preload SFX '{path}': {e}");
-            return;
-        }
-    };
-
-    let mut cache = ENGINE.sfx_cache.lock().unwrap();
-    let data = cache
-        .entry(path.to_string())
-        .or_insert_with(|| {
-            debug!("Cached SFX: {path}");
-            decoded
-        })
-        .clone();
-    cache_assist_tick(path, data);
+    ENGINE
+        .sfx_cache
+        .preload(path, output_format(), resolve_asset_path);
 }
 
-fn cache_assist_tick(path: &str, data: Arc<[i16]>) {
-    if path == ASSIST_TICK_SFX_PATH {
-        let _ = ASSIST_TICK_SFX.set(data);
-    }
-}
-
-#[inline(always)]
-fn clear_music_pos_map() {
-    internal::music_seg_ring_clear(&QUEUED_MUSIC_MAP_SEGS);
-    internal::music_seg_ring_clear(&PLAYED_MUSIC_MAP_SEGS);
-    PLAYBACK_POS_MAP.lock().unwrap().clear();
-    deadsync_audio::bump_music_map_generation();
+fn resolve_asset_path(path: &str) -> PathBuf {
+    dirs::app_dirs().resolve_asset_path(path)
 }
 
 #[inline(always)]
@@ -397,68 +217,7 @@ fn reset_music_stream_clock() {
     // Invalidate any assist ticks scheduled against the previous timeline; their
     // absolute target frames no longer correspond to the music position.
     deadsync_audio::bump_assist_sfx_generation();
-    clear_music_pos_map();
-}
-
-#[inline(always)]
-fn callback_nanos_at(at: Instant) -> u64 {
-    instant_nanos(at)
-}
-
-#[inline(always)]
-fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) -> Option<u64> {
-    match source {
-        CallbackClockSource::Instant => Some(callback_nanos_at(valid_at)),
-        #[cfg(windows)]
-        CallbackClockSource::Qpc => current_qpc_nanos(),
-    }
-}
-
-fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
-    deadsync_audio::load_callback_clock_snapshot_now(current_callback_clock_nanos)
-}
-
-#[inline(always)]
-fn stream_position_frames_from_window(
-    sample_rate: u32,
-    start_frame: u64,
-    at_nanos: u64,
-    window: CallbackClockWindow,
-) -> f64 {
-    if let Some(frames) =
-        audio_stream_position_frames_from_window(sample_rate, start_frame, at_nanos, window)
-    {
-        return frames;
-    }
-    if timing_diag_enabled() {
-        debug!(
-            "AUDIO_DIAG stream_pos_fallback sample_rate_hz={} at_nanos={} last_nanos={} last_base_frames={} last_callback_frames={} prev_nanos={} prev_base_frames={} prev_callback_frames={} total_frames={} start_frame={}",
-            sample_rate,
-            at_nanos,
-            window.last_nanos,
-            window.last_base_frames,
-            window.last_callback_frames,
-            window.prev_nanos,
-            window.prev_base_frames,
-            window.prev_callback_frames,
-            window.total_frames,
-            start_frame,
-        );
-    }
-    fallback_stream_position_frames(start_frame, window)
-}
-
-fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
-    let mut map = PLAYBACK_POS_MAP.lock().unwrap();
-    while let Some(seg) = internal::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
-        map.insert(seg);
-    }
-    map.search(stream_frames).map(|(music_sec, sec_per_frame)| {
-        (
-            music_sec as f32,
-            (sec_per_frame * sample_rate as f64) as f32,
-        )
-    })
+    audio_stream::clear_music_pos_map();
 }
 
 /// Maps a music position (seconds, pre-global-offset stream time) to the
@@ -469,21 +228,7 @@ fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f
 /// Runs on the gameplay thread; the lock is fine there since the audio callback
 /// never takes it on its hot path.
 pub fn assist_tick_stream_frame_for_music_seconds(music_seconds: f64) -> Option<u64> {
-    if !music_seconds.is_finite() {
-        return None;
-    }
-    let track_frame = {
-        let mut map = PLAYBACK_POS_MAP.lock().unwrap();
-        while let Some(seg) = internal::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
-            map.insert(seg);
-        }
-        map.invert(music_seconds)?
-    };
-    if !track_frame.is_finite() || track_frame < 0.0 {
-        return None;
-    }
-    let start = deadsync_audio::music_track_start_frame();
-    Some(start.saturating_add(track_frame.round() as u64))
+    audio_stream::assist_tick_stream_frame_for_music_seconds(music_seconds)
 }
 
 /// Plays a music track from a file path.
@@ -508,27 +253,21 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     // gain doesn't audibly bleed into the start of this one.
     deadsync_audio::snap_music_gain_generation();
 
-    let _ = ENGINE
-        .command_sender
-        .send(AudioCommand::PlayMusic(path, cut, looping, rate));
+    let _ = ENGINE.command_sender.send(StreamCommand::PlayMusic {
+        path,
+        cut,
+        looping,
+        rate,
+    });
 }
 
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
-    let Ok(Some(snapped)) = decode::snap_start_forward_to_packet(path, start_sec) else {
-        return start_sec;
-    };
-    if snapped < start_sec || snapped - start_sec > MAX_PACKET_START_SNAP_SEC {
-        return start_sec;
-    }
-    if (snapped - start_sec).abs() > f64::EPSILON {
-        debug!("Snapped music cut start from {start_sec:.6}s to packet boundary {snapped:.6}s.");
-    }
-    snapped
+    audio_stream::snap_music_start_sec(path, start_sec)
 }
 
 /// Applies a ReplayGain result from the background analyzer, but only if it
 /// still corresponds to the currently active music track. Called by
-/// [`replaygain`]; safe to call from any thread.
+/// `deadsync_audio_replaygain`; safe to call from any thread.
 pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
     let active_id = deadsync_audio::active_music_track_id();
     if active_id != track_id {
@@ -554,14 +293,16 @@ pub fn stop_music() {
     reset_music_stream_clock();
     deadsync_audio::reset_music_target_gain();
     deadsync_audio::snap_music_gain_generation();
-    let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
+    let _ = ENGINE.command_sender.send(StreamCommand::StopMusic);
 }
 
 /// Adjusts the playback rate for the current music stream, if any.
 pub fn set_music_rate(rate: f32) {
     let rate = normalized_music_rate(rate);
     deadsync_audio::set_music_clock_rate(rate);
-    let _ = ENGINE.command_sender.send(AudioCommand::SetMusicRate(rate));
+    let _ = ENGINE
+        .command_sender
+        .send(StreamCommand::SetMusicRate(rate));
 }
 
 /// Returns the elapsed real time (in seconds) of the currently playing
@@ -581,72 +322,9 @@ pub fn assist_sfx_generation() -> u64 {
     deadsync_audio::assist_sfx_generation()
 }
 
-#[inline(always)]
-fn music_stream_clock_snapshot_at_nanos(
-    sample_rate: u32,
-    start: u64,
-    valid_at: Instant,
-    at_nanos: u64,
-    source: CallbackClockSource,
-    window: CallbackClockWindow,
-) -> MusicStreamClockSnapshot {
-    let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
-    let stream_seconds = (stream_frames / sample_rate as f64) as f32;
-    let (music_seconds, music_seconds_per_second, has_music_mapping) =
-        match lookup_music_position(stream_frames, sample_rate) {
-            Some((music_seconds, slope)) => (music_seconds, slope, true),
-            None => match deadsync_audio::seeded_music_position(stream_seconds) {
-                Some((music_seconds, slope)) => (music_seconds, slope, true),
-                None => (stream_seconds, 1.0, false),
-            },
-        };
-    MusicStreamClockSnapshot {
-        stream_seconds,
-        music_seconds,
-        music_nanos: music_nanos_from_seconds(music_seconds as f64),
-        music_seconds_per_second,
-        has_music_mapping,
-        valid_at,
-        valid_at_host_nanos: match source {
-            #[cfg(windows)]
-            CallbackClockSource::Qpc => at_nanos,
-            #[cfg(windows)]
-            CallbackClockSource::Instant => 0,
-            #[cfg(not(windows))]
-            CallbackClockSource::Instant => at_nanos,
-        },
-    }
-}
-
 /// Returns the current stream position and the `Instant` it is valid for.
 pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
-    let sample_rate = ENGINE.device_sample_rate.max(1);
-    let has_started = deadsync_audio::music_track_has_started();
-    if !has_started {
-        if let Some((music_seconds, slope)) = deadsync_audio::seeded_music_position(0.0) {
-            return MusicStreamClockSnapshot {
-                stream_seconds: 0.0,
-                music_seconds,
-                music_nanos: music_nanos_from_seconds(f64::from(music_seconds)),
-                music_seconds_per_second: slope,
-                has_music_mapping: true,
-                valid_at: Instant::now(),
-                valid_at_host_nanos: 0,
-            };
-        }
-        return MusicStreamClockSnapshot {
-            stream_seconds: 0.0,
-            music_seconds: 0.0,
-            music_nanos: 0,
-            music_seconds_per_second: 1.0,
-            has_music_mapping: false,
-            valid_at: Instant::now(),
-            valid_at_host_nanos: 0,
-        };
-    }
-    let start = deadsync_audio::music_track_start_frame();
-    let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
-    music_stream_clock_snapshot_at_nanos(sample_rate, start, valid_at, at_nanos, source, window)
+    audio_stream::music_stream_clock_snapshot(ENGINE.device_sample_rate)
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
@@ -658,293 +336,6 @@ pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
 #[inline(always)]
 fn publish_output_backend_ready(ready: OutputBackendReady) {
     deadsync_audio::publish_output_backend_ready(ready);
-}
-
-#[cfg(target_os = "linux")]
-#[inline(always)]
-fn linux_default_output_device(
-    devices: &[linux_alsa::AlsaOutputDevice],
-) -> Option<&linux_alsa::AlsaOutputDevice> {
-    devices
-        .iter()
-        .find(|device| device.is_default)
-        .or_else(|| devices.first())
-}
-
-#[cfg(target_os = "linux")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let alsa_devices = linux_alsa::enumerate_output_devices();
-    if alsa_devices.is_empty() {
-        warn!(
-            "No ALSA playback devices were enumerated at startup; Linux audio will rely on backend defaults."
-        );
-    }
-    let device_probes: Vec<_> = alsa_devices
-        .iter()
-        .map(|device| OutputDeviceProbe {
-            info: OutputDeviceInfo {
-                name: device.name.clone(),
-                is_default: device.is_default,
-                sample_rates_hz: device.sample_rates_hz.clone(),
-            },
-        })
-        .collect();
-    let output_mode = cfg.output_mode;
-    let linux_backend = cfg.linux_backend;
-    let default_device = linux_default_output_device(&alsa_devices);
-    let requested_device = cfg
-        .output_device_index
-        .and_then(|idx| alsa_devices.get(idx as usize));
-    let explicit_device_requested = requested_device.is_some();
-    if let Some(requested_idx) = cfg.output_device_index {
-        if let Some(device) = requested_device {
-            info!(
-                "Audio output device override selected: index {} '{}'.",
-                requested_idx, device.name
-            );
-        } else {
-            warn!(
-                "Audio output device override index {} not found; using default device.",
-                requested_idx
-            );
-        }
-    }
-    let selected_device = requested_device.or_else(|| {
-        (matches!(output_mode, AudioOutputMode::Exclusive)
-            && matches!(
-                linux_backend,
-                LinuxAudioBackend::Auto | LinuxAudioBackend::Alsa
-            ))
-        .then_some(default_device)
-        .flatten()
-    });
-    let (device_name, alsa_pcm_id) = if let Some(device) = selected_device {
-        if !explicit_device_requested {
-            info!(
-                "Audio output device auto-selected for ALSA exclusive mode: '{}' ({})",
-                device.name, device.pcm_id
-            );
-        }
-        (device.name.clone(), Some(device.pcm_id.clone()))
-    } else {
-        ("Default Audio Device".to_string(), None)
-    };
-    let fallback_device = selected_device.or(default_device);
-    let native_sample_rate_hz = cfg
-        .sample_rate_hz
-        .unwrap_or_else(|| fallback_device.map_or(48_000, |device| device.default_rate_hz));
-    let native_channels = fallback_device.map_or(2, |device| device.channels);
-    debug!(
-        "Audio device: '{}' (native={} Hz, channels={}).",
-        device_name, native_sample_rate_hz, native_channels
-    );
-    debug!(
-        "Audio output stream config: {} Hz, {} ch, mode={} (Linux native path).",
-        native_sample_rate_hz,
-        native_channels,
-        output_mode.as_str()
-    );
-    (
-        device_probes,
-        NativeBackendLaunch {
-            explicit_device_requested,
-            linux_backend,
-            alsa: Some(AlsaBackendHint {
-                pcm_id: alsa_pcm_id,
-                device_name: device_name.clone(),
-                sample_rate_hz: native_sample_rate_hz,
-                channels: native_channels,
-                output_mode,
-            }),
-            #[cfg(has_jack_audio)]
-            jack: Some(JackBackendHint {
-                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
-                requested_rate_hz: cfg.sample_rate_hz,
-                output_mode,
-            }),
-            #[cfg(has_pipewire_audio)]
-            pipewire: Some(PipeWireBackendHint {
-                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
-                sample_rate_hz: native_sample_rate_hz,
-                channels: native_channels,
-                output_mode,
-            }),
-            #[cfg(has_pulse_audio)]
-            pulse: Some(PulseBackendHint {
-                requested_device_name: explicit_device_requested.then_some(device_name),
-                sample_rate_hz: native_sample_rate_hz,
-                channels: native_channels,
-                output_mode,
-            }),
-        },
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let devices = macos_coreaudio::enumerate_output_devices();
-    if devices.is_empty() {
-        warn!(
-            "No CoreAudio output devices were enumerated at startup; native audio will use the system default device."
-        );
-    }
-    let device_probes: Vec<_> = devices
-        .iter()
-        .map(|device| OutputDeviceProbe {
-            info: OutputDeviceInfo {
-                name: device.name.clone(),
-                is_default: device.is_default,
-                sample_rates_hz: device.sample_rates_hz.clone(),
-            },
-        })
-        .collect();
-    let output_mode = cfg.output_mode;
-    let default_device = devices
-        .iter()
-        .find(|device| device.is_default)
-        .or_else(|| devices.first());
-    let requested_device = cfg
-        .output_device_index
-        .and_then(|idx| devices.get(idx as usize));
-    if let Some(requested_idx) = cfg.output_device_index {
-        if let Some(device) = requested_device {
-            info!(
-                "Audio output device override selected: index {} '{}'.",
-                requested_idx, device.name
-            );
-        } else {
-            warn!(
-                "Audio output device override index {} not found; using default device.",
-                requested_idx
-            );
-        }
-    }
-    let selected_device = requested_device.or(default_device);
-    let device_name = selected_device
-        .map(|device| device.name.clone())
-        .unwrap_or_else(|| "Default Audio Device".to_string());
-    let device_uid = selected_device.map(|device| device.uid.clone());
-    let requested_rate_hz = cfg.sample_rate_hz;
-    let native_sample_rate_hz = requested_rate_hz
-        .unwrap_or_else(|| selected_device.map_or(48_000, |device| device.default_rate_hz));
-    let native_channels = selected_device.map_or(2, |device| device.channels);
-    debug!(
-        "Audio device: '{}' (native={} Hz, channels={}).",
-        device_name, native_sample_rate_hz, native_channels
-    );
-    debug!(
-        "Audio output stream config: {} Hz, {} ch, mode={} (CoreAudio native path).",
-        native_sample_rate_hz,
-        native_channels,
-        output_mode.as_str()
-    );
-    (
-        device_probes,
-        NativeBackendLaunch {
-            coreaudio: Some(CoreAudioBackendHint {
-                device_uid,
-                device_name,
-                requested_rate_hz,
-                channels: native_channels,
-                output_mode,
-            }),
-        },
-    )
-}
-
-#[cfg(target_os = "freebsd")]
-fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let mut device_probes: Vec<_> = freebsd_pcm::enumerate_output_devices()
-        .into_iter()
-        .map(|dev| OutputDeviceProbe {
-            info: OutputDeviceInfo {
-                name: dev.name,
-                is_default: dev.is_default,
-                sample_rates_hz: Vec::new(),
-            },
-            freebsd_dsp_path: Some(dev.path),
-        })
-        .collect();
-    let output_mode = cfg.output_mode;
-    let mut device_name = device_probes
-        .iter()
-        .find(|probe| probe.info.is_default)
-        .map(|probe| probe.info.name.clone())
-        .unwrap_or_else(|| "FreeBSD PCM default".to_string());
-    let mut dsp_path = device_probes
-        .iter()
-        .find(|probe| probe.info.is_default)
-        .and_then(|probe| probe.freebsd_dsp_path.clone());
-    if let Some(requested_idx) = cfg.output_device_index {
-        if let Some(probe) = device_probes.get(requested_idx as usize) {
-            device_name = probe.info.name.clone();
-            dsp_path = probe.freebsd_dsp_path.clone();
-            info!(
-                "Audio output device override selected: index {} '{}'.",
-                requested_idx, device_name
-            );
-        } else {
-            warn!(
-                "Audio output device override index {} not found; using default device.",
-                requested_idx
-            );
-        }
-    }
-    if device_probes.is_empty() {
-        warn!(
-            "No FreeBSD PCM devices were enumerated at startup; native audio will still try /dev/dsp."
-        );
-        device_probes.push(OutputDeviceProbe {
-            info: OutputDeviceInfo {
-                name: "FreeBSD PCM (/dev/dsp)".to_string(),
-                is_default: true,
-                sample_rates_hz: Vec::new(),
-            },
-            freebsd_dsp_path: Some("/dev/dsp".to_string()),
-        });
-        if dsp_path.is_none() {
-            dsp_path = Some("/dev/dsp".to_string());
-            device_name = "FreeBSD PCM (/dev/dsp)".to_string();
-        }
-    }
-    let sample_rate_hz = cfg.sample_rate_hz.unwrap_or(48_000).max(1);
-    debug!(
-        "FreeBSD PCM device '{}' selected at {} Hz, 2 ch, mode={}.",
-        device_name,
-        sample_rate_hz,
-        output_mode.as_str()
-    );
-    (
-        device_probes,
-        NativeBackendLaunch {
-            #[cfg(target_os = "linux")]
-            explicit_device_requested: false,
-            #[cfg(target_os = "linux")]
-            linux_backend: cfg.linux_backend,
-            #[cfg(target_os = "linux")]
-            alsa: None,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
-            jack: None,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
-            pipewire: None,
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
-            pulse: None,
-            #[cfg(target_os = "macos")]
-            coreaudio: None,
-            freebsd_pcm: Some(FreeBsdPcmBackendHint {
-                dsp_path,
-                device_name,
-                sample_rate_hz,
-                channels: 2,
-                output_mode,
-            }),
-            #[cfg(windows)]
-            wasapi: None,
-        },
-    )
 }
 
 fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
@@ -981,398 +372,34 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
     AudioEngine {
         command_sender,
         sfx_sender,
-        sfx_cache: Mutex::new(HashMap::new()),
+        sfx_cache: audio_stream::SfxCache::new(),
         device_sample_rate: ready.device_sample_rate,
         device_channels: ready.device_channels,
         startup_output_devices: device_probes.into_iter().map(|probe| probe.info).collect(),
     }
 }
 
-#[allow(dead_code)]
-enum OutputBackend {
-    #[cfg(target_os = "linux")]
-    Alsa(linux_alsa::AlsaOutputStream),
-    #[cfg(target_os = "linux")]
-    #[cfg(has_jack_audio)]
-    Jack(linux_jack::JackOutputStream),
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pipewire_audio)]
-    PipeWire(linux_pipewire::PipeWireOutputStream),
-    #[cfg(target_os = "linux")]
-    #[cfg(has_pulse_audio)]
-    Pulse(linux_pulse::PulseOutputStream),
-    #[cfg(target_os = "macos")]
-    CoreAudio(macos_coreaudio::CoreAudioOutputStream),
-    #[cfg(target_os = "freebsd")]
-    FreeBsdPcm(freebsd_pcm::FreeBsdPcmOutputStream),
-    #[cfg(windows)]
-    Wasapi(WasapiOutputStream),
-}
-
-#[cfg(target_os = "linux")]
-fn start_linux_alsa_backend(
-    alsa: AlsaBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    let access_mode = match alsa.output_mode {
-        AudioOutputMode::Exclusive => linux_alsa::AlsaAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => linux_alsa::AlsaAccessMode::Shared,
-    };
-    let prep = linux_alsa::prepare(
-        alsa.pcm_id.clone(),
-        alsa.device_name.clone(),
-        alsa.sample_rate_hz,
-        alsa.channels,
-        access_mode,
-    )?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = alsa.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = linux_alsa::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_jack_audio)]
-fn start_linux_jack_backend(
-    jack: JackBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(jack.output_mode, AudioOutputMode::Exclusive) {
-        return Err("JACK does not expose a separate exclusive output mode.".to_string());
-    }
-    let prep = linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = jack.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = linux_jack::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::Jack(stream), ready, sfx_sender))
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_pipewire_audio)]
-fn start_linux_pipewire_backend(
-    pipewire: PipeWireBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(pipewire.output_mode, AudioOutputMode::Exclusive) {
-        return Err("PipeWire does not support a separate exclusive output mode.".to_string());
-    }
-    if let Some(name) = &pipewire.requested_device_name {
-        warn!(
-            "PipeWire backend ignores explicit Sound Device selection '{}'; using the default PipeWire sink.",
-            name
-        );
-    }
-    let prep = linux_pipewire::prepare(
-        pipewire.requested_device_name.clone(),
-        pipewire.sample_rate_hz,
-        pipewire.channels,
-    )?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = pipewire.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = linux_pipewire::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::PipeWire(stream), ready, sfx_sender))
-}
-
-#[cfg(target_os = "linux")]
-#[cfg(has_pulse_audio)]
-fn start_linux_pulse_backend(
-    pulse: PulseBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(pulse.output_mode, AudioOutputMode::Exclusive) {
-        return Err("PulseAudio does not support exclusive output.".to_string());
-    }
-    if let Some(name) = &pulse.requested_device_name {
-        warn!(
-            "PulseAudio backend ignores explicit Sound Device selection '{}'; using the default PulseAudio sink.",
-            name
-        );
-    }
-    let prep = linux_pulse::prepare(
-        pulse.requested_device_name.clone(),
-        pulse.sample_rate_hz,
-        pulse.channels,
-    )?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = pulse.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = linux_pulse::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
-}
-
-#[cfg(target_os = "freebsd")]
-fn start_freebsd_pcm_backend(
-    pcm: FreeBsdPcmBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(pcm.output_mode, AudioOutputMode::Exclusive) {
-        return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
-    }
-    let prep = freebsd_pcm::prepare(
-        pcm.dsp_path.clone(),
-        pcm.device_name.clone(),
-        pcm.sample_rate_hz,
-        pcm.channels,
-    )?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = pcm.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = freebsd_pcm::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
-}
-
-#[cfg(target_os = "macos")]
-fn start_macos_coreaudio_backend(
-    coreaudio: CoreAudioBackendHint,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    if matches!(coreaudio.output_mode, AudioOutputMode::Exclusive) {
-        return Err("CoreAudio exclusive output is not implemented yet.".to_string());
-    }
-    let prep = macos_coreaudio::prepare(
-        coreaudio.device_uid.clone(),
-        coreaudio.device_name.clone(),
-        coreaudio.requested_rate_hz,
-        coreaudio.channels,
-    )?;
-    let mut ready = prep.ready();
-    ready.requested_output_mode = coreaudio.output_mode;
-    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = macos_coreaudio::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
-    Ok((OutputBackend::CoreAudio(stream), ready, sfx_sender))
-}
-
-fn start_output_backend(
-    launch: NativeBackendLaunch,
-    music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
-    let NativeBackendLaunch {
-        #[cfg(target_os = "linux")]
-        explicit_device_requested,
-        #[cfg(target_os = "linux")]
-        linux_backend,
-        #[cfg(target_os = "linux")]
-        alsa,
-        #[cfg(target_os = "linux")]
-        #[cfg(has_jack_audio)]
-        jack,
-        #[cfg(target_os = "linux")]
-        #[cfg(has_pipewire_audio)]
-        pipewire,
-        #[cfg(target_os = "linux")]
-        #[cfg(has_pulse_audio)]
-        pulse,
-        #[cfg(target_os = "macos")]
-        coreaudio,
-        #[cfg(target_os = "freebsd")]
-        freebsd_pcm,
-        #[cfg(windows)]
-        wasapi,
-    } = launch;
-    #[cfg(target_os = "linux")]
-    let requested_output_mode = alsa
-        .as_ref()
-        .map(|hint| hint.output_mode)
-        .or({
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pipewire_audio)]
-            {
-                pipewire.as_ref().map(|hint| hint.output_mode)
-            }
-            #[cfg(not(all(target_os = "linux", has_pipewire_audio)))]
-            {
-                None
-            }
-        })
-        .or({
-            #[cfg(target_os = "linux")]
-            #[cfg(has_jack_audio)]
-            {
-                jack.as_ref().map(|hint| hint.output_mode)
-            }
-            #[cfg(not(all(target_os = "linux", has_jack_audio)))]
-            {
-                None
-            }
-        })
-        .or({
-            #[cfg(target_os = "linux")]
-            #[cfg(has_pulse_audio)]
-            {
-                pulse.as_ref().map(|hint| hint.output_mode)
-            }
-            #[cfg(not(all(target_os = "linux", has_pulse_audio)))]
-            {
-                None
-            }
-        })
-        .unwrap_or(AudioOutputMode::Auto);
-    #[cfg(target_os = "linux")]
-    match linux_backend {
-        LinuxAudioBackend::Alsa => {
-            let Some(alsa) = alsa else {
-                return Err("Linux ALSA backend hint unavailable.".to_string());
-            };
-            start_linux_alsa_backend(alsa, music_ring)
-        }
-        LinuxAudioBackend::Jack => {
-            #[cfg(has_jack_audio)]
-            {
-                let Some(jack) = jack else {
-                    return Err("JACK backend hint unavailable.".to_string());
-                };
-                start_linux_jack_backend(jack, music_ring)
-            }
-            #[cfg(not(has_jack_audio))]
-            {
-                Err("JACK backend support was not built into this binary.".to_string())
-            }
-        }
-        LinuxAudioBackend::PipeWire => {
-            #[cfg(has_pipewire_audio)]
-            {
-                let Some(pipewire) = pipewire else {
-                    return Err("PipeWire backend hint unavailable.".to_string());
-                };
-                return start_linux_pipewire_backend(pipewire, music_ring);
-            }
-            #[cfg(not(has_pipewire_audio))]
-            {
-                Err("PipeWire backend support was not built into this binary.".to_string())
-            }
-        }
-        LinuxAudioBackend::PulseAudio => {
-            #[cfg(has_pulse_audio)]
-            {
-                let Some(pulse) = pulse else {
-                    return Err("PulseAudio backend hint unavailable.".to_string());
-                };
-                start_linux_pulse_backend(pulse, music_ring)
-            }
-            #[cfg(not(has_pulse_audio))]
-            {
-                return Err(
-                    "PulseAudio backend support was not built into this binary.".to_string()
-                );
-            }
-        }
-        LinuxAudioBackend::Auto => {
-            if matches!(requested_output_mode, AudioOutputMode::Exclusive) {
-                let Some(alsa) = alsa else {
-                    return Err(
-                        "Linux ALSA backend hint unavailable for exclusive output.".to_string()
-                    );
-                };
-                return start_linux_alsa_backend(alsa, music_ring);
-            }
-            if explicit_device_requested {
-                let Some(alsa) = alsa else {
-                    return Err(
-                        "Linux ALSA backend hint unavailable for the selected Sound Device."
-                            .to_string(),
-                    );
-                };
-                return start_linux_alsa_backend(alsa, music_ring).map_err(|err| {
-                    format!(
-                        "failed to start native ALSA output for the selected Sound Device: {err}"
-                    )
-                });
-            }
-            #[cfg(has_pipewire_audio)]
-            if let Some(pipewire) = pipewire {
-                match start_linux_pipewire_backend(pipewire, music_ring.clone()) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        warn!(
-                            "Failed to start native PipeWire output: {err}. Falling back to PulseAudio/ALSA."
-                        );
-                    }
-                }
-            }
-            #[cfg(has_pulse_audio)]
-            if linux_pulse::is_available()
-                && let Some(pulse) = pulse
-            {
-                match start_linux_pulse_backend(pulse, music_ring.clone()) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        warn!(
-                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA/JACK."
-                        );
-                    }
-                }
-            }
-            if let Some(alsa) = alsa {
-                match start_linux_alsa_backend(alsa, music_ring.clone()) {
-                    Ok(output) => return Ok(output),
-                    Err(err) => {
-                        #[cfg(has_jack_audio)]
-                        if linux_jack::is_available()
-                            && let Some(jack) = jack
-                        {
-                            match start_linux_jack_backend(jack, music_ring) {
-                                Ok(output) => return Ok(output),
-                                Err(jack_err) => {
-                                    return Err(format!(
-                                        "failed to start native ALSA output: {err}; JACK fallback also failed: {jack_err}"
-                                    ));
-                                }
-                            }
-                        }
-                        return Err(format!("failed to start native ALSA output: {err}"));
-                    }
-                }
-            }
-            Err("no native Linux audio backend hint is available.".to_string())
-        }
-    }
-    #[cfg(target_os = "freebsd")]
-    if let Some(pcm) = freebsd_pcm {
-        return start_freebsd_pcm_backend(pcm.clone(), music_ring)
-            .map_err(|err| format!("failed to start native FreeBSD PCM output: {err}"));
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Some(coreaudio) = coreaudio {
-        return start_macos_coreaudio_backend(coreaudio.clone(), music_ring).map_err(|err| {
-            format!(
-                "failed to start native CoreAudio output for '{}': {err}",
-                coreaudio.device_name
-            )
-        });
-    }
-
-    #[cfg(windows)]
-    if let Some(wasapi) = wasapi {
-        let (stream, ready, sfx_sender) =
-            start_wasapi_backend(wasapi, music_ring, audio_render_maps())?;
-        return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        Err("no native audio backend hint is available on this platform build.".to_string())
-    }
-}
-
-/// Manager thread: builds the output backend and manages music decoder lifecycle.
+/// Manager thread: builds the output backend and forwards stream commands.
 fn audio_manager_thread(
-    command_receiver: Receiver<AudioCommand>,
+    command_receiver: Receiver<StreamCommand>,
     ready_sender: Sender<Result<AudioThreadReady, String>>,
     launch: NativeBackendLaunch,
 ) {
-    let mut music_stream: Option<MusicStream> = None;
-    let music_ring = internal::ring_new(internal::RING_CAP_SAMPLES);
-    let (mut _backend, _ready, sfx_sender) = match start_output_backend(launch, music_ring.clone())
-    {
+    let music_ring = audio_stream::new_music_sample_ring();
+    let (mut _backend, _ready, sfx_sender) = match start_output_backend(
+        launch,
+        music_ring.clone(),
+        audio_stream::music_render_maps(),
+    ) {
         Ok(output) => output,
         Err(err) => {
             let _ = ready_sender.send(Err(err));
             return;
         }
+    };
+    let stream_output = OutputFormat {
+        sample_rate_hz: _ready.device_sample_rate,
+        channels: _ready.device_channels,
     };
     if ready_sender
         .send(Ok(AudioThreadReady {
@@ -1384,50 +411,8 @@ fn audio_manager_thread(
         return;
     }
 
-    // Command loop: manage music decoder thread.
-    loop {
-        match command_receiver.recv() {
-            Ok(AudioCommand::PlayMusic(path, cut, looping, rate)) => {
-                if let Some(old) = music_stream.take() {
-                    old.stop_signal
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let _ = old.thread.join();
-                }
-                internal::ring_clear(&music_ring);
-                deadsync_audio::activate_music_track();
-                let rate_bits = Arc::new(AtomicU32::new(rate.to_bits()));
-                music_stream = Some(resample::spawn_music_decoder_thread(
-                    path,
-                    cut,
-                    looping,
-                    rate_bits,
-                    music_ring.clone(),
-                ));
-            }
-            Ok(AudioCommand::StopMusic) => {
-                if let Some(old) = music_stream.take() {
-                    old.stop_signal
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let _ = old.thread.join();
-                }
-                internal::ring_clear(&music_ring);
-                deadsync_audio::stop_music_track();
-            }
-            Ok(AudioCommand::SetMusicRate(new_rate)) => {
-                if let Some(ms) = &music_stream {
-                    ms.rate_bits.store(new_rate.to_bits(), Ordering::Relaxed);
-                }
-                // Drop buffered old-rate samples so the change is heard immediately.
-                internal::ring_clear(&music_ring);
-                clear_music_pos_map();
-            }
-            Err(_) => break,
-        }
-    }
-
-    if let Some(old) = music_stream.take() {
-        old.stop_signal
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = old.thread.join();
+    let mut music_runtime = audio_stream::MusicStreamRuntime::new(music_ring, stream_output);
+    while let Ok(command) = command_receiver.recv() {
+        music_runtime.handle(command);
     }
 }

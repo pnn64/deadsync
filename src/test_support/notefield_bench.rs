@@ -1,4 +1,3 @@
-use crate::engine::present::actors::Actor;
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
 };
@@ -10,6 +9,7 @@ use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, Te
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
+use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;

@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
+use deadsync_present::actors::Actor;
 use deadsync_present::space::{screen_width, widescale};
 use deadsync_profile as profile_data;
 

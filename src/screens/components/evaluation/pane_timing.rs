@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::color;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, MeshVertex};
 use deadsync_rules::timing;

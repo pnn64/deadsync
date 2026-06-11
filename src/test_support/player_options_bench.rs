@@ -1,9 +1,9 @@
 use crate::assets::AssetManager;
-use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::player_options::RowId;
 use crate::screens::{Screen, player_options};
 use crate::test_support::{compose_scenarios, notefield_bench};
+use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
 
 pub const SCENARIO_NAME: &str = "player-options";

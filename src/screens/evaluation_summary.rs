@@ -2,8 +2,6 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::color;
 use crate::game::profile;
 use crate::game::stage_stats;
 use crate::screens::components::evaluation::eval_grades;
@@ -19,6 +17,8 @@ use chrono::Local;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
@@ -218,8 +218,8 @@ fn build_player_stats(
             -widescale(194.0, 250.0),
             1.0,
             0.0,
-            crate::engine::present::actors::TextAlign::Right,
-            crate::engine::present::actors::TextAlign::Left,
+            deadsync_present::actors::TextAlign::Right,
+            deadsync_present::actors::TextAlign::Left,
             -1.0,
         ),
         profile_data::PlayerSide::P2 => (
@@ -228,8 +228,8 @@ fn build_player_stats(
             widescale(194.0, 250.0),
             0.0,
             1.0,
-            crate::engine::present::actors::TextAlign::Left,
-            crate::engine::present::actors::TextAlign::Right,
+            deadsync_present::actors::TextAlign::Left,
+            deadsync_present::actors::TextAlign::Right,
             1.0,
         ),
     };

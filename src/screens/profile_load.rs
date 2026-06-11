@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_present::actors::Actor;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use std::sync::mpsc;
@@ -31,7 +31,7 @@ enum PreparedState {
 
 pub fn init() -> State {
     State {
-        active_color_index: crate::engine::present::color::DEFAULT_COLOR_INDEX,
+        active_color_index: deadsync_present::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
         rx: None,
         prepared_select_music: None,

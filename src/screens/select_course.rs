@@ -3,9 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::cache::{TextCache, cached_text};
-use crate::engine::present::color;
 use crate::game::course::get_course_cache;
 use crate::game::profile;
 use crate::game::scores;
@@ -22,6 +19,9 @@ use crate::screens::{Screen, ScreenAction};
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::cache::{TextCache, cached_text};
+use deadsync_present::color;
 use deadsync_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };

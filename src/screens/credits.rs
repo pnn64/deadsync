@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_height, screen_width};
 
 /* ---------------------------- transitions ---------------------------- */

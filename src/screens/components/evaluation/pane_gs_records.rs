@@ -1,7 +1,7 @@
 use crate::act;
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::color;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 

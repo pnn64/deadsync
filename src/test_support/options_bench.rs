@@ -1,8 +1,8 @@
 use crate::assets::AssetManager;
-use crate::engine::present::actors::Actor;
 use crate::screens::options;
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
 use std::time::Instant;
 
 use crate::test_support::compose_scenarios;

@@ -1,0 +1,18 @@
+[package]
+name = "deadsync-audio-stream"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-audio = { path = "../deadsync-audio" }
+deadsync-audio-decode = { path = "../deadsync-audio-decode" }
+deadsync-platform = { path = "../deadsync-platform" }
+log = "0.4.32"
+rubato = "0.16.2"
+smallvec = "1.15.1"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

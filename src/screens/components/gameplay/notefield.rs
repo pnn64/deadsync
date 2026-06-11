@@ -1,9 +1,5 @@
 use crate::act;
 use crate::assets;
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::cache::{TextCache, cached_text};
-use crate::engine::present::color;
-use crate::engine::present::font;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
@@ -33,7 +29,11 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::cache::{TextCache, cached_text};
+use deadsync_present::color;
 use deadsync_present::compose::TextLayoutCache;
+use deadsync_present::font;
 use deadsync_present::space::*;
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, TexturedMeshVertex};
@@ -9601,8 +9601,6 @@ mod tests {
         zmod_mini_indicator_zoom, zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
-    use crate::engine::present::actors::Actor;
-    use crate::engine::present::color;
     use crate::game::gameplay::{
         AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
         SongLuaColumnOffsetWindowRuntime, VisualEffects,
@@ -9613,6 +9611,8 @@ mod tests {
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
+    use deadsync_present::actors::Actor;
+    use deadsync_present::color;
     use deadsync_profile as profile_data;
     use deadsync_render::BlendMode;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};

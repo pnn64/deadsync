@@ -1,13 +1,13 @@
 //! Experimental ReplayGain 2.0 / EBU R 128 loudness analysis and caching.
 //!
 //! Public API:
-//! - [`get_or_queue_gain_linear`] — returns the linear playback gain for a
+//! - [`get_or_queue_gain_linear`] - returns the linear playback gain for a
 //!   song if already known (either in memory or on disk), otherwise enqueues
 //!   a background analysis job and returns `None`.
-//! - [`prewarm_paths`] — submit a batch of song paths at a priority class.
+//! - [`prewarm_paths`] - submit a batch of song paths at a priority class.
 //!   Used by the music wheel to warm the cache for every song in a pack
 //!   on expansion.
-//! - [`clear_cache`] — drop all in-memory state and the on-disk cache file.
+//! - [`clear_cache`] - drop all in-memory state and the on-disk cache file.
 //!   Intended for debug / a future "rescan" option.
 //!
 //! Behavior summary:
@@ -26,16 +26,14 @@
 //!   +12 dB.
 //!
 //! When a song that triggered a queued analysis completes computation, the
-//! worker calls back into the audio engine via
-//! `crate::engine::audio::set_music_replaygain_if_matches` so the result can
-//! be applied retroactively to the currently playing stream.
+//! worker reports the result through the callback passed to [`init`], so the
+//! shell can apply it retroactively to the currently playing stream.
 
 use deadsync_audio_analysis::{
     ReplayGainCacheEntry, ReplayGainCacheFile, ReplayGainInfo, UNITY_GAIN, compute_loudness,
     gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_entry_for_path,
     replaygain_cache_info_if_fresh, replaygain_path_hash, write_replaygain_cache_file,
 };
-use deadsync_platform::dirs;
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -59,6 +57,34 @@ const WORKER_THREADS: usize = 2;
 /// writing the consolidated file to disk. 250 ms collapses bursts of
 /// per-song completions during pack-prewarm into a single rewrite.
 const FLUSH_DEBOUNCE: Duration = Duration::from_millis(250);
+
+#[derive(Clone)]
+pub struct InitConfig {
+    pub cache_file: PathBuf,
+    pub legacy_cache_dir: PathBuf,
+    pub result_callback: fn(u64, f32),
+}
+
+static INIT_CONFIG: OnceLock<InitConfig> = OnceLock::new();
+
+pub fn init(config: InitConfig) -> Result<(), &'static str> {
+    match INIT_CONFIG.set(config) {
+        Ok(()) => Ok(()),
+        Err(_) => Ok(()),
+    }
+}
+
+#[inline(always)]
+fn init_config() -> &'static InitConfig {
+    INIT_CONFIG
+        .get()
+        .expect("deadsync_audio_replaygain::init must be called before use")
+}
+
+#[inline(always)]
+fn publish_gain(track_id: u64, gain_linear: f32) {
+    (init_config().result_callback)(track_id, gain_linear);
+}
 
 #[derive(Clone, Copy)]
 enum SlotState {
@@ -164,8 +190,8 @@ fn enqueue(job: Job, priority: Priority) {
 /// Returns the linear gain to apply when playing `path`, if it has already
 /// been computed (memory or disk). If the value is not yet known, queues a
 /// foreground analysis job tagged with `track_id` and returns `None`. When
-/// the analysis later completes, the worker pushes the resulting gain back
-/// into the audio engine via [`crate::engine::audio::set_music_replaygain_if_matches`].
+/// the analysis later completes, the worker reports the resulting gain
+/// through the callback passed to [`init`].
 pub fn get_or_queue_gain_linear(path: &Path, track_id: u64) -> Option<f32> {
     let abs = canonicalize_or_clone(path);
 
@@ -247,9 +273,9 @@ pub fn clear_cache() {
         cache.flush_cv.notify_one();
         flush_now();
     } else {
-        // DiskCache hasn't been initialized yet — remove the file directly
+        // DiskCache hasn't been initialized yet; remove the file directly
         // so a later init() starts empty.
-        let file = dirs::app_dirs().replaygain_cache_file();
+        let file = init_config().cache_file.clone();
         if let Err(err) = fs::remove_file(&file)
             && err.kind() != std::io::ErrorKind::NotFound
         {
@@ -260,7 +286,7 @@ pub fn clear_cache() {
         }
     }
 
-    let legacy = dirs::app_dirs().replaygain_cache_dir();
+    let legacy = init_config().legacy_cache_dir.clone();
     if legacy.exists()
         && let Err(err) = fs::remove_dir_all(&legacy)
         && err.kind() != std::io::ErrorKind::NotFound
@@ -290,15 +316,12 @@ fn analyze_one(job: Job) {
             // (no-op for prewarm) and skip re-running the analyzer.
             Some(SlotState::Ready(info)) => {
                 drop(map);
-                crate::engine::audio::set_music_replaygain_if_matches(
-                    track_id,
-                    gain_linear_from_info(info),
-                );
+                publish_gain(track_id, gain_linear_from_info(info));
                 return;
             }
             Some(SlotState::Failed) => {
                 drop(map);
-                crate::engine::audio::set_music_replaygain_if_matches(track_id, UNITY_GAIN);
+                publish_gain(track_id, UNITY_GAIN);
                 return;
             }
             // None / Pending: claim or coexist with another Pending slot
@@ -321,10 +344,7 @@ fn analyze_one(job: Job) {
             .lock()
             .unwrap()
             .insert(canonical, SlotState::Ready(info));
-        crate::engine::audio::set_music_replaygain_if_matches(
-            track_id,
-            gain_linear_from_info(info),
-        );
+        publish_gain(track_id, gain_linear_from_info(info));
         return;
     }
 
@@ -339,7 +359,7 @@ fn analyze_one(job: Job) {
                 .lock()
                 .unwrap()
                 .insert(canonical.clone(), SlotState::Failed);
-            crate::engine::audio::set_music_replaygain_if_matches(track_id, UNITY_GAIN);
+            publish_gain(track_id, UNITY_GAIN);
             return;
         }
     };
@@ -349,7 +369,7 @@ fn analyze_one(job: Job) {
         .lock()
         .unwrap()
         .insert(canonical, SlotState::Ready(info));
-    crate::engine::audio::set_music_replaygain_if_matches(track_id, gain_linear_from_info(info));
+    publish_gain(track_id, gain_linear_from_info(info));
 }
 
 /* ---------------------------- Disk cache I/O ---------------------------- */
@@ -391,8 +411,8 @@ fn disk_cache() -> &'static DiskCache {
 
 fn init_disk_cache() -> DiskCache {
     // The feature hasn't shipped, so don't bother migrating the legacy
-    // per-file directory — just remove it if it's there.
-    let legacy_dir = dirs::app_dirs().replaygain_cache_dir();
+    // per-file directory; just remove it if it's there.
+    let legacy_dir = init_config().legacy_cache_dir.clone();
     if legacy_dir.exists()
         && let Err(err) = fs::remove_dir_all(&legacy_dir)
         && err.kind() != std::io::ErrorKind::NotFound
@@ -422,8 +442,7 @@ fn init_disk_cache() -> DiskCache {
 }
 
 fn load_cache_file() -> Option<HashMap<u64, ReplayGainCacheEntry>> {
-    let path = dirs::app_dirs().replaygain_cache_file();
-    read_replaygain_cache_file(&path)
+    read_replaygain_cache_file(&init_config().cache_file)
 }
 
 fn flush_loop() {
@@ -467,7 +486,7 @@ fn flush_loop() {
             debug!(
                 "ReplayGain cache flushed: {} entries -> {}",
                 snapshot.entries.len(),
-                dirs::app_dirs().replaygain_cache_file().display()
+                init_config().cache_file.display()
             );
         }
 
@@ -481,8 +500,7 @@ fn flush_loop() {
 }
 
 fn write_cache_file(payload: &ReplayGainCacheFile) -> std::io::Result<()> {
-    let path = dirs::app_dirs().replaygain_cache_file();
-    write_replaygain_cache_file(&path, payload)
+    write_replaygain_cache_file(&init_config().cache_file, payload)
 }
 
 fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {

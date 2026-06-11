@@ -2,8 +2,6 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
-use crate::engine::present::actors::{Actor, TextAlign};
-use crate::engine::present::color;
 use crate::game::course::get_course_cache;
 use crate::game::online::{arrowcloud as arrowcloud_online, groovestats as groovestats_online};
 use crate::game::song::get_song_cache;
@@ -19,6 +17,8 @@ use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
 };
 use deadsync_online::groovestats::{ConnectionError as GrooveStatsError, ConnectionStatus};
+use deadsync_present::actors::{Actor, TextAlign};
+use deadsync_present::color;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;

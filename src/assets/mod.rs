@@ -1,3 +1,4 @@
+pub mod audio_folder;
 pub(crate) mod dynamic;
 pub mod i18n;
 #[doc(hidden)]

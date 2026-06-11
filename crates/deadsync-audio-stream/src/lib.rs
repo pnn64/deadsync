@@ -1,4 +1,9 @@
-use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
+mod clock;
+mod music_map;
+mod sfx_cache;
+mod stream_runtime;
+
+use deadsync_audio::{Cut, MusicMapSeg, ring as internal};
 use deadsync_audio_decode as decode;
 use deadsync_audio_decode::resample::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, apply_fade_envelope,
@@ -15,10 +20,51 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 
+pub use clock::{music_stream_clock_snapshot, timing_diag_enabled};
+pub use music_map::{
+    assist_tick_stream_frame_for_music_seconds, clear_music_pos_map, force_music_map_runtime,
+    lookup_music_position, music_render_maps, queued_music_map,
+};
+pub use sfx_cache::SfxCache;
+pub use stream_runtime::{MusicStreamRuntime, StreamCommand, new_music_sample_ring};
+
 const SILENCE_CHUNK_FRAMES: usize = 2048;
 const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
+const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OutputFormat {
+    pub sample_rate_hz: u32,
+    pub channels: usize,
+}
+
+#[derive(Clone)]
+pub struct MusicDecodeContext {
+    pub output: OutputFormat,
+    pub queued_music_map: Arc<internal::SpscRingMusicSeg>,
+}
+
+/// A handle to a streaming music track.
+pub struct MusicStream {
+    pub thread: thread::JoinHandle<()>,
+    pub stop_signal: Arc<AtomicBool>,
+    pub rate_bits: Arc<AtomicU32>,
+}
+
+pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
+    let Ok(Some(snapped)) = decode::snap_start_forward_to_packet(path, start_sec) else {
+        return start_sec;
+    };
+    if snapped < start_sec || snapped - start_sec > MAX_PACKET_START_SNAP_SEC {
+        return start_sec;
+    }
+    if (snapped - start_sec).abs() > f64::EPSILON {
+        debug!("Snapped music cut start from {start_sec:.6}s to packet boundary {snapped:.6}s.");
+    }
+    snapped
+}
 
 fn push_music_block_with_map(
     sample_ring: &internal::SpscRingI16,
@@ -101,12 +147,13 @@ fn push_silence_with_map(
     Ok(next_music_sec)
 }
 
-pub(super) fn spawn_music_decoder_thread(
+pub fn spawn_music_decoder_thread(
     path: PathBuf,
     cut: Cut,
     looping: bool,
     rate_bits: Arc<AtomicU32>,
     ring: Arc<internal::SpscRingI16>,
+    context: MusicDecodeContext,
 ) -> MusicStream {
     let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
@@ -115,9 +162,15 @@ pub(super) fn spawn_music_decoder_thread(
     let thread = thread::spawn(move || {
         #[cfg(windows)]
         let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
-        if let Err(e) =
-            music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone)
-        {
+        if let Err(e) = music_decoder_thread_loop(
+            path,
+            cut,
+            looping,
+            rate_bits_clone,
+            ring,
+            stop_signal_clone,
+            context,
+        ) {
             error!("Music decoder thread failed: {e}");
         }
     });
@@ -187,15 +240,16 @@ fn music_decoder_thread_loop(
     rate_bits: Arc<AtomicU32>,
     ring: Arc<internal::SpscRingI16>,
     stop: Arc<AtomicBool>,
+    context: MusicDecodeContext,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let opened = decode::open_file(&path)?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
 
-    let out_ch = ENGINE.device_channels;
-    let out_hz = ENGINE.device_sample_rate;
-    let queued_music_map = QUEUED_MUSIC_MAP_SEGS.clone();
+    let out_ch = context.output.channels;
+    let out_hz = context.output.sample_rate_hz;
+    let queued_music_map = context.queued_music_map;
     let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
@@ -664,15 +718,16 @@ fn music_decoder_thread_loop(
     Ok(())
 }
 
-pub(super) fn load_and_resample_sfx(
+pub fn load_and_resample_sfx(
     path: &str,
+    output: OutputFormat,
 ) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
     let opened = decode::open_file(Path::new(path))?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
-    let out_ch = ENGINE.device_channels;
-    let out_hz = ENGINE.device_sample_rate;
+    let out_ch = output.channels;
+    let out_hz = output.sample_rate_hz;
 
     if in_hz == out_hz {
         let mut pkt_buf = Vec::new();

@@ -1,7 +1,7 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use deadsync_online::lobbies;
+use deadsync_present::actors::Actor;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use std::cmp::Ordering;

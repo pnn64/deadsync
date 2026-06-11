@@ -3,8 +3,6 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config;
 use crate::engine::audio;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::select_music::sync_analysis;
 use crate::screens::components::shared::loading_bar;
@@ -12,6 +10,8 @@ use crate::screens::input as screen_input;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };

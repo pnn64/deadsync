@@ -1,7 +1,7 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use std::sync::Arc;
 
 use super::utils::eval_style_alpha;
@@ -52,7 +52,7 @@ fn build_modifiers_pane_with_text(
 #[cfg(test)]
 mod tests {
     use super::build_modifiers_pane_with_text;
-    use crate::engine::present::actors::Actor;
+    use deadsync_present::actors::Actor;
     use std::sync::Arc;
 
     #[test]

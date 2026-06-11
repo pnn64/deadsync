@@ -12,7 +12,6 @@
 
 use std::sync::atomic::Ordering;
 
-use crate::engine::present::actors::Actor;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
@@ -21,6 +20,7 @@ use crate::screens::options::qr_login::{
 };
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
 
 const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;

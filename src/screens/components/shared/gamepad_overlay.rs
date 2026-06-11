@@ -1,6 +1,6 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_width, widescale};
 
 // --- Constants to match StepMania's SystemMessage display ---

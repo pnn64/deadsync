@@ -1,8 +1,8 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::parsing::noteskin;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_depth_sorted_affine;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::sync::{Arc, OnceLock};

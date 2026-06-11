@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::cache::{TextCache, cached_text};
-use crate::engine::present::color;
 use crate::game::{profile, scores};
+use deadsync_present::actors::Actor;
+use deadsync_present::cache::{TextCache, cached_text};
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;

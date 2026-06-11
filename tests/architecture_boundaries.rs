@@ -183,6 +183,7 @@ const SMX_IMPORT_SCAN_DIRS: &[&str] = &[
 ];
 
 const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
+    "src/engine/present/mod.rs",
     "src/engine/present/actors.rs",
     "src/engine/present/anim.rs",
     "src/engine/present/cache.rs",
@@ -300,6 +301,16 @@ const AUDIO_ANALYSIS_FORBIDDEN_TOKENS: &[&str] = &[
     "std::sync::mpsc",
     "Mutex",
     "log::",
+];
+
+const AUDIO_STREAM_FORBIDDEN_TOKENS: &[&str] = &[
+    "crate::engine",
+    "crate::assets",
+    "crate::config",
+    "crate::game",
+    "crate::screens",
+    "deadsync_present",
+    "deadsync_render",
 ];
 
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
@@ -1141,7 +1152,13 @@ fn audio_core_lives_in_audio_crate() {
             "struct PlaybackPosMap",
             "impl PlaybackPosMap",
             "MUSIC_POS_MAP_BACKLOG_FRAMES",
+            "static QUEUED_MUSIC_MAP_SEGS",
+            "static PLAYED_MUSIC_MAP_SEGS",
+            "static PLAYBACK_POS_MAP",
             "VecDeque<MusicMapSeg>",
+            "fn audio_render_maps",
+            "fn clear_music_pos_map",
+            "fn lookup_music_position",
             "fn music_nanos_from_seconds",
             "fn normalized_music_rate",
             "fn fallback_music_position",
@@ -1171,10 +1188,46 @@ fn audio_core_lives_in_audio_crate() {
             "struct PulseBackendHint",
             "struct CoreAudioBackendHint",
             "struct FreeBsdPcmBackendHint",
+            "enum OutputBackend",
             "struct AudioThreadLaunch",
             "struct NativeBackendLaunch",
             "struct OutputDeviceProbe",
+            "fn build_audio_launch",
+            "fn linux_default_output_device",
+            "fn start_linux_alsa_backend",
+            "fn start_linux_jack_backend",
+            "fn start_linux_pipewire_backend",
+            "fn start_linux_pulse_backend",
+            "fn start_freebsd_pcm_backend",
+            "fn start_macos_coreaudio_backend",
+            "fn start_output_backend",
             "WasapiAccessMode",
+            "static ASSIST_TICK_SFX",
+            "const ASSIST_TICK_SFX_PATH",
+            "HashMap<String, Arc<[i16]>>",
+            "fn play_cached_sfx_on_lane",
+            "fn cache_assist_tick",
+            "load_and_resample_sfx",
+            "enum AudioCommand",
+            "MusicDecodeContext",
+            "Option<MusicStream",
+            "spawn_music_decoder_thread",
+            "ring_new",
+            "ring_clear",
+            "activate_music_track",
+            "stop_music_track",
+            "AtomicU32",
+            "Ordering",
+            "pub(crate) use deadsync_audio::ring",
+            "fn callback_nanos_at",
+            "fn current_callback_clock_nanos",
+            "fn load_callback_clock_snapshot_now",
+            "fn stream_position_frames_from_window",
+            "fn music_stream_clock_snapshot_at_nanos",
+            "deadsync_platform::host_time::instant_nanos",
+            "current_qpc_nanos",
+            "fallback_stream_position_frames",
+            "stream_position_frames_from_window as audio_stream_position_frames_from_window",
             "backends::windows_wasapi",
             "backends::freebsd_pcm",
             "backends::macos_coreaudio",
@@ -1311,6 +1364,11 @@ fn audio_decode_helpers_live_in_decode_crate() {
         root.join("crates/deadsync-audio-decode/src/lib.rs"),
         root.join("crates/deadsync-audio-decode/src/folder.rs"),
         root.join("crates/deadsync-audio-decode/src/resample.rs"),
+        root.join("crates/deadsync-audio-stream/Cargo.toml"),
+        root.join("crates/deadsync-audio-stream/src/clock.rs"),
+        root.join("crates/deadsync-audio-stream/src/lib.rs"),
+        root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"),
+        root.join("crates/deadsync-audio-stream/src/stream_runtime.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
@@ -1318,30 +1376,56 @@ fn audio_decode_helpers_live_in_decode_crate() {
     }
 
     let engine_resample = root.join("src/engine/audio/resample.rs");
-    if let Ok(text) = fs::read_to_string(&engine_resample) {
+    if engine_resample.exists() {
+        failures.push(format!(
+            "{} still exists; decoder stream runtime should live in deadsync-audio-stream",
+            rel_path(&root, &engine_resample)
+        ));
+    }
+
+    let engine_audio = root.join("src/engine/audio/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_audio) {
         for token in [
-            "struct PlanarAccum",
-            "fn resampler_params",
-            "fn write_resampler_output",
-            "fn write_channel_mapped_i16",
-            "fn drop_front_samples",
-            "fn apply_fade_envelope",
-            "fn volume_for_frame",
-            "fn sat_i64",
-            "PLANAR_COMPACT_THRESHOLD_FRAMES",
+            "deadsync_audio_decode as decode",
+            "snap_start_forward_to_packet",
+            "MAX_PACKET_START_SNAP_SEC",
         ] {
             let count = count_token_refs(&text, token);
             if count != 0 {
                 failures.push(format!(
-                    "{} still defines decode helper token {token} {count} times",
-                    rel_path(&root, &engine_resample)
+                    "{} still references decode stream token {token} {count} times",
+                    rel_path(&root, &engine_audio)
+                ));
+            }
+        }
+    }
+
+    let stream_runtime = root.join("crates/deadsync-audio-stream/src/lib.rs");
+    if let Ok(text) = fs::read_to_string(&stream_runtime) {
+        for token in ["ENGINE", "crate::engine::audio"] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still references root audio runtime token {token} {count} times",
+                    rel_path(&root, &stream_runtime)
                 ));
             }
         }
     }
 
     let engine_folder = root.join("src/engine/audio/folder.rs");
-    if let Ok(text) = fs::read_to_string(&engine_folder) {
+    if engine_folder.exists() {
+        failures.push(format!(
+            "{} still exists; asset-path audio folder helpers should live in src/assets/audio_folder.rs",
+            rel_path(&root, &engine_folder)
+        ));
+    }
+
+    let assets_folder = root.join("src/assets/audio_folder.rs");
+    if !assets_folder.exists() {
+        failures.push(format!("{} is missing", rel_path(&root, &assets_folder)));
+    }
+    if let Ok(text) = fs::read_to_string(&assets_folder) {
         for token in [
             "fn is_ogg",
             "fn is_skipped_stem",
@@ -1353,7 +1437,7 @@ fn audio_decode_helpers_live_in_decode_crate() {
             if count != 0 {
                 failures.push(format!(
                     "{} still defines decode folder token {token} {count} times",
-                    rel_path(&root, &engine_folder)
+                    rel_path(&root, &assets_folder)
                 ));
             }
         }
@@ -1375,9 +1459,25 @@ fn audio_decode_helpers_live_in_decode_crate() {
         }
     }
 
+    let stream_src = root.join("crates/deadsync-audio-stream/src");
+    if stream_src.exists() {
+        for file in rust_files(&stream_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in AUDIO_STREAM_FORBIDDEN_TOKENS {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden audio-stream token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
     assert!(
         failures.is_empty(),
-        "audio decode helpers should live in deadsync-audio-decode:\n{}",
+        "audio decode helpers and stream runtime should live in audio crates:\n{}",
         failures.join("\n")
     );
 }
@@ -1390,6 +1490,8 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
     for file in [
         root.join("crates/deadsync-audio-analysis/src/lib.rs"),
         root.join("crates/deadsync-audio-analysis/src/cache.rs"),
+        root.join("crates/deadsync-audio-replaygain/Cargo.toml"),
+        root.join("crates/deadsync-audio-replaygain/src/lib.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
@@ -1397,7 +1499,15 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
     }
 
     let engine_replaygain = root.join("src/engine/audio/replaygain.rs");
-    if let Ok(text) = fs::read_to_string(&engine_replaygain) {
+    if engine_replaygain.exists() {
+        failures.push(format!(
+            "{} still exists; ReplayGain worker runtime should live in deadsync-audio-replaygain",
+            rel_path(&root, &engine_replaygain)
+        ));
+    }
+
+    let replaygain_runtime = root.join("crates/deadsync-audio-replaygain/src/lib.rs");
+    if let Ok(text) = fs::read_to_string(&replaygain_runtime) {
         for token in [
             "struct PersistedEntry",
             "struct PersistedCacheV1",
@@ -1418,7 +1528,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
             if count != 0 {
                 failures.push(format!(
                     "{} still defines ReplayGain cache token {token} {count} times",
-                    rel_path(&root, &engine_replaygain)
+                    rel_path(&root, &replaygain_runtime)
                 ));
             }
         }
@@ -1440,9 +1550,34 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
         }
     }
 
+    let replaygain_src = root.join("crates/deadsync-audio-replaygain/src");
+    if replaygain_src.exists() {
+        for file in rust_files(&replaygain_src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync_platform",
+                "deadsync_present",
+                "deadsync_render",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden audio-replaygain token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
     assert!(
         failures.is_empty(),
-        "ReplayGain cache data should live in deadsync-audio-analysis:\n{}",
+        "ReplayGain cache data and worker runtime should live in audio crates:\n{}",
         failures.join("\n")
     );
 }
@@ -2030,6 +2165,13 @@ fn present_model_lives_in_present_crate() {
                 rel_path(&root, &engine_mod)
             ));
         }
+        let present_count = count_token_refs(&text, "pub mod present");
+        if present_count != 0 {
+            failures.push(format!(
+                "{} declares engine::present {present_count} times; import deadsync_present directly",
+                rel_path(&root, &engine_mod)
+            ));
+        }
     }
 
     for dir in PRESENT_SPACE_SCAN_DIRS {
@@ -2101,44 +2243,6 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    let present_mod = root.join("src/engine/present/mod.rs");
-    if let Ok(text) = fs::read_to_string(&present_mod) {
-        for module in [
-            "actors", "anim", "cache", "color", "density", "font", "runtime", "texture",
-        ] {
-            if !text.contains(module) {
-                failures.push(format!(
-                    "{} should re-export deadsync-present::{module}",
-                    rel_path(&root, &present_mod)
-                ));
-            }
-        }
-        if text.contains("macro_rules! rgba") || text.contains("macro_rules! rgba_const") {
-            failures.push(format!(
-                "{} should not define presentation color macro wrappers",
-                rel_path(&root, &present_mod)
-            ));
-        }
-        if text.contains("pub mod compose") {
-            failures.push(format!(
-                "{} declares engine::present::compose; import deadsync_present::compose directly",
-                rel_path(&root, &present_mod)
-            ));
-        }
-        if text.contains("pub mod dsl") {
-            failures.push(format!(
-                "{} declares engine::present::dsl; use crate::act! or deadsync_present::dsl directly",
-                rel_path(&root, &present_mod)
-            ));
-        }
-        if text.contains("$crate::engine::present::color::rgba_hex") {
-            failures.push(format!(
-                "{} still routes root color macros through engine::present::color",
-                rel_path(&root, &present_mod)
-            ));
-        }
-    }
-
     let asset_textures = root.join("src/assets/textures.rs");
     if let Ok(text) = fs::read_to_string(&asset_textures) {
         if !text.contains("present_texture::cached_texture_key_handle") {
@@ -2168,6 +2272,8 @@ fn present_model_lives_in_present_crate() {
                 continue;
             }
             for token in [
+                "crate::engine::present",
+                "deadsync::engine::present",
                 "crate::engine::present::compose",
                 "deadsync::engine::present::compose",
                 "crate::engine::present::dsl",
@@ -2176,7 +2282,7 @@ fn present_model_lives_in_present_crate() {
                 let count = count_token_refs(&text, token);
                 if count != 0 {
                     failures.push(format!(
-                        "{rel} references engine::present::compose facade token {token} {count} times"
+                        "{rel} references engine::present facade token {token} {count} times"
                     ));
                 }
             }

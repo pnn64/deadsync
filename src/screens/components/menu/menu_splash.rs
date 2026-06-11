@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::visual_styles;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{screen_center_x, screen_center_y};
 
 // Visual-style splash used when leaving the main menu.

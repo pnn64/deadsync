@@ -35,12 +35,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
-use crate::engine::present::actors;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
-use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
+use deadsync_present::actors;
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
+use deadsync_present::font;
 
 // Submodules — wildcard re-exports let sibling modules reach every item via
 // `use super::*`.

@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::color;
 use crate::screens::evaluation::ScoreInfo;
+use deadsync_present::actors::{Actor, SizeSpec};
+use deadsync_present::color;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing::ArrowTimingBucket;
 

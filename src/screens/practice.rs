@@ -2,14 +2,14 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
 use crate::engine::audio;
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_for_player};
 use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::actors::Actor;
+use deadsync_present::color;
 use deadsync_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };

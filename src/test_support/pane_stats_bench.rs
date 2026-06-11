@@ -1,10 +1,10 @@
 use crate::assets::AssetManager;
-use crate::engine::present::actors::Actor;
 use crate::screens::components::evaluation::pane_stats;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use crate::test_support::compose_scenarios;
 use deadsync_chart::SongData;
 use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{HistogramMs, TimingStats, WindowCounts};
