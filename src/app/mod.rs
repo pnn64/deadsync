@@ -4218,11 +4218,12 @@ impl App {
     /// cheap per-pad signature avoids loading config files or rewriting the pad
     /// unless something relevant changed (so manual edits aren't clobbered).
     /// Finally mirror the markers to the screen. Off → DeadSync writes nothing.
-    /// Once both pads are present with real serials and *distinct* jumpers, and
-    /// nothing is saved yet, persist the jumper-derived P1/P2 serial map. This
-    /// pins the (unambiguous) good case so it stays stable even if a pad later
-    /// loses or shares a jumper, and gives the UI a concrete assignment to show.
-    /// The ambiguous same-jumper case is left for the user to assign manually.
+    /// Auto-save the pad→player assignment when none is saved yet:
+    /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
+    /// - **Single pad:** auto-promote to P1 regardless of jumper (the 99%
+    ///   single-stage case; manual `SmxP2Serial` in `deadsync.ini` covers the
+    ///   rare P2-only need).
+    /// The ambiguous same-jumper-two-pad case is left for the user to assign.
     fn reconcile_smx_assignment(&mut self) {
         if matches!(
             self.state.screens.current_screen,
@@ -4245,6 +4246,23 @@ impl App {
         if let Some((p1, p2)) = deadsync_smx::jumper_derived_pair(&a, &b) {
             log::info!("SMX: auto-saving pad assignment from jumpers (P1={p1}, P2={p2})");
             config::update_smx_pad_assignment(Some(p1), Some(p2));
+            return;
+        }
+        // Single pad connected with no saved assignment: auto-promote to P1.
+        // With one stage the user virtually always wants P1; the rare P2-only
+        // case can be set manually via SmxP2Serial in deadsync.ini.
+        let single = match (a.connected, b.connected) {
+            (true, false) if a.has_serial_number && !a.serial.is_empty() => Some(&a),
+            (false, true) if b.has_serial_number && !b.serial.is_empty() => Some(&b),
+            _ => None,
+        };
+        if let Some(pad) = single {
+            log::info!(
+                "SMX: single pad connected (jumper P{}), auto-promoting to P1 (serial={})",
+                if pad.is_player2 { 2 } else { 1 },
+                pad.serial
+            );
+            config::update_smx_pad_assignment(Some(pad.serial.clone()), None);
         }
     }
 
