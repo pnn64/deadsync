@@ -1,4 +1,4 @@
-use crate::assets::PRESENT_TEXTURE_CONTEXT;
+use super::PRESENT_TEXTURE_CONTEXT;
 use deadsync_present::actors::Actor;
 pub use deadsync_present::actors::{IntoTextureKey, TextureKeyHandle};
 use deadsync_present::dsl as present_dsl;
@@ -82,7 +82,7 @@ macro_rules! act {
             ::std::sync::atomic::AtomicU64::new(::core::u64::MAX);
         ::deadsync_present::__act_from_builder!(
             ($($tail)+)
-            $crate::engine::present::dsl::SpriteBuilder::static_texture_cached(
+            $crate::assets::present_dsl::SpriteBuilder::static_texture_cached(
                 $tex,
                 &__TEXTURE_HANDLE,
                 &__TEXTURE_GENERATION,
@@ -92,19 +92,19 @@ macro_rules! act {
     (sprite($tex:expr): $($tail:tt)+) => {{
         ::deadsync_present::__act_from_builder!(
             ($($tail)+)
-            $crate::engine::present::dsl::SpriteBuilder::texture($tex)
+            $crate::assets::present_dsl::SpriteBuilder::texture($tex)
         )
     }};
     (quad: $($tail:tt)+) => {{
         ::deadsync_present::__act_from_builder!(
             ($($tail)+)
-            $crate::engine::present::dsl::SpriteBuilder::solid()
+            $crate::assets::present_dsl::SpriteBuilder::solid()
         )
     }};
     (text: $($tail:tt)+) => {{
         ::deadsync_present::__act_from_builder!(
             ($($tail)+)
-            $crate::engine::present::dsl::TextBuilder::new()
+            $crate::assets::present_dsl::TextBuilder::new()
         )
     }};
 }

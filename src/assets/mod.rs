@@ -1,5 +1,7 @@
 pub(crate) mod dynamic;
 pub mod i18n;
+#[doc(hidden)]
+pub mod present_dsl;
 mod textures;
 pub mod visual_styles;
 

@@ -2003,24 +2003,7 @@ fn present_model_lives_in_present_crate() {
 
     for file in ENGINE_PRESENT_EXTRACTED_FILES {
         let path = root.join(file);
-        let text = fs::read_to_string(&path).ok();
-        let is_dsl_facade = *file == "src/engine/present/dsl.rs"
-            && text.as_deref().is_some_and(|text| {
-                text.contains("use deadsync_present::dsl as present_dsl;")
-                    && text.contains("pub struct SpriteBuilder")
-                    && text.contains("static_texture_cached")
-                    && text.contains("static_texture_cached_with_texture_context")
-                    && text.contains("zoomto_with_texture_context")
-                    && text.contains("build_with_texture_context")
-                    && text.contains("::deadsync_present::__act_from_builder!")
-                    && !text.contains("SpriteSource")
-                    && !text.contains("fn with_source")
-                    && !text.contains("macro_rules! __ui_")
-                    && !text.contains("macro_rules! __dsl_apply")
-                    && !text.contains("let mut __tw")
-                    && !text.contains("__dsl_parse_effect_clock")
-            });
-        if path.exists() && !is_dsl_facade {
+        if path.exists() {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)
@@ -2065,12 +2048,37 @@ fn present_model_lives_in_present_crate() {
     if let Ok(text) = fs::read_to_string(&assets_mod) {
         if !text.contains("impl present_texture::TextureContext for PresentTextureContext")
             || !text.contains("pub const PRESENT_TEXTURE_CONTEXT")
+            || !text.contains("pub mod present_dsl")
         {
             failures.push(format!(
-                "{} should own the asset-backed presentation texture context",
+                "{} should own the asset-backed presentation texture context and DSL bridge",
                 rel_path(&root, &assets_mod)
             ));
         }
+    }
+
+    let asset_dsl = root.join("src/assets/present_dsl.rs");
+    if let Ok(text) = fs::read_to_string(&asset_dsl) {
+        for token in [
+            "use deadsync_present::dsl as present_dsl",
+            "pub struct SpriteBuilder",
+            "static_texture_cached",
+            "static_texture_cached_with_texture_context",
+            "zoomto_with_texture_context",
+            "build_with_texture_context",
+            "$crate::assets::present_dsl::SpriteBuilder",
+            "$crate::assets::present_dsl::TextBuilder",
+            "::deadsync_present::__act_from_builder!",
+        ] {
+            if !text.contains(token) {
+                failures.push(format!(
+                    "{} should own asset-backed act! DSL token {token}",
+                    rel_path(&root, &asset_dsl)
+                ));
+            }
+        }
+    } else {
+        failures.push(format!("{} is missing", rel_path(&root, &asset_dsl)));
     }
 
     let root_lib = root.join("src/lib.rs");
@@ -2104,6 +2112,12 @@ fn present_model_lives_in_present_crate() {
         if text.contains("pub mod compose") {
             failures.push(format!(
                 "{} declares engine::present::compose; import deadsync_present::compose directly",
+                rel_path(&root, &present_mod)
+            ));
+        }
+        if text.contains("pub mod dsl") {
+            failures.push(format!(
+                "{} declares engine::present::dsl; use crate::act! or deadsync_present::dsl directly",
                 rel_path(&root, &present_mod)
             ));
         }
@@ -2146,6 +2160,8 @@ fn present_model_lives_in_present_crate() {
             for token in [
                 "crate::engine::present::compose",
                 "deadsync::engine::present::compose",
+                "crate::engine::present::dsl",
+                "deadsync::engine::present::dsl",
             ] {
                 let count = count_token_refs(&text, token);
                 if count != 0 {
