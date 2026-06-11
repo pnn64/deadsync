@@ -86,6 +86,15 @@ const NATIVE_INPUT_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const INPUT_FSR_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "src/app",
     "src/assets",
@@ -1422,12 +1431,28 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
 
+    let input_dir = root.join("src/engine/input");
+    if input_dir.exists() {
+        failures.push("src/engine/input still exists; import input crates directly".to_string());
+    }
+
     let backend_dir = root.join("src/engine/input/backends");
     if backend_dir.exists() {
         failures.push(
             "src/engine/input/backends still exists; import deadsync_input_native directly"
                 .to_string(),
         );
+    }
+
+    let engine_mod_path = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+        let count = count_token_refs(&text, "pub mod input");
+        if count != 0 {
+            failures.push(format!(
+                "{} declares engine::input {count} times; import input crates directly",
+                rel_path(&root, &engine_mod_path)
+            ));
+        }
     }
 
     let input_mod_path = root.join("src/engine/input/mod.rs");
@@ -1482,9 +1507,83 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
         }
     }
 
+    for dir in INPUT_FSR_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in ["crate::engine::input", "deadsync::engine::input"] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::input facade token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
     assert!(
         failures.is_empty(),
         "native input launch should be imported from deadsync_input_native:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn fsr_monitor_lives_in_input_fsr_crate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in [
+        root.join("crates/deadsync-input-fsr/Cargo.toml"),
+        root.join("crates/deadsync-input-fsr/src/lib.rs"),
+        root.join("crates/deadsync-input-fsr/src/fsrio.rs"),
+        root.join("crates/deadsync-input-fsr/src/smx.rs"),
+    ] {
+        if !file.exists() {
+            failures.push(format!("{} is missing", rel_path(&root, &file)));
+        }
+    }
+
+    let src = root.join("crates/deadsync-input-fsr/src");
+    if src.exists() {
+        for file in rust_files(&src) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in [
+                "crate::engine",
+                "crate::app",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync::engine",
+                "deadsync::app",
+                "deadsync::assets",
+                "deadsync::config",
+                "deadsync::game",
+                "deadsync::screens",
+            ] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references forbidden root token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "FSR hardware monitor should live in deadsync-input-fsr:\n{}",
         failures.join("\n")
     );
 }

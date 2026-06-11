@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.705"
+version = "0.4.706"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -18,6 +18,7 @@ members = [
     "crates/deadsync-chart",
     "crates/deadsync-core",
     "crates/deadsync-input",
+    "crates/deadsync-input-fsr",
     "crates/deadsync-input-native",
     "crates/deadsync-lights",
     "crates/deadsync-net",
@@ -79,6 +80,7 @@ deadsync-audio-decode = { path = "crates/deadsync-audio-decode" }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-input = { path = "crates/deadsync-input" }
+deadsync-input-fsr = { path = "crates/deadsync-input-fsr" }
 deadsync-input-native = { path = "crates/deadsync-input-native" }
 deadsync-lights = { path = "crates/deadsync-lights" }
 deadsync-net = { path = "crates/deadsync-net" }
@@ -142,7 +144,6 @@ bitflags = "2.13.0"
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
 gpu-allocator = { version = "0.28.0", default-features = false, features = ["std", "d3d12"] }
-hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
 windows-core = "0.62.2"
 windows-targets = "0.53.5"
 
@@ -204,14 +205,9 @@ smithay-client-toolkit = { version = "0.20.0", default-features = false }
 
 [target.'cfg(target_os = "freebsd")'.dependencies]
 hidparser = "1.0.3"
-hidapi = { version = "2.6.6", default-features = false }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false, features = ["linux-static-hidraw"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio = { package = "coreaudio-rs", version = "0.14.2" }
-hidapi = { version = "2.6.6", default-features = false }
 libc = "0.2.186"
 mach2 = "0.6.0"
 objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }

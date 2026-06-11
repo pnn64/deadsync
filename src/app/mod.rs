@@ -20,7 +20,6 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::input::fsr as fsr_input;
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
@@ -77,6 +76,7 @@ use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input_fsr as fsr_input;
 use deadsync_input_native::GpSystemEvent;
 use deadsync_lights::{
     self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,

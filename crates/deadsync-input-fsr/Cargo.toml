@@ -1,0 +1,27 @@
+[package]
+name = "deadsync-input-fsr"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-input = { path = "../deadsync-input" }
+deadsync-smx = { path = "../deadsync-smx" }
+log = "0.4.32"
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false, features = ["linux-static-hidraw"] }
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+hidapi = { version = "2.6.6", default-features = false }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"
