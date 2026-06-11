@@ -5,7 +5,6 @@ use crate::engine::audio;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
-use crate::engine::space::{screen_height, screen_width, widescale};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
@@ -16,6 +15,7 @@ use deadsync_input::{
     GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
     any_player_has_dedicated_menu_buttons_for_mode, clamp_input_debounce_seconds, with_keymap,
 };
+use deadsync_present::space::{screen_height, screen_width, widescale};
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 

@@ -16,12 +16,12 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height};
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;

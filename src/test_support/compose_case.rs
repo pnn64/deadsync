@@ -5,7 +5,7 @@ use crate::engine::present::actors::{
 use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
 use crate::engine::present::compose;
 use crate::engine::present::font::{self, Font, Glyph};
-use crate::engine::space::Metrics;
+use deadsync_present::space::Metrics;
 use deadsync_render::{
     BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     TexturedMeshInstanceRaw, TexturedMeshVertex,

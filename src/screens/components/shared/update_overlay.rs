@@ -21,9 +21,9 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::updater::action::{self, ActionErrorKind, ActionPhase};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 
 use super::loading_bar;
 

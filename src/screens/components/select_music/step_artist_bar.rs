@@ -1,6 +1,6 @@
 use crate::act;
 use crate::engine::present::actors::{Actor, TextContent};
-use crate::engine::space::screen_height;
+use deadsync_present::space::screen_height;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepArtistBarLayout {

@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
-use crate::engine::space::screen_center_x;
+use deadsync_present::space::screen_center_x;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;

@@ -7,8 +7,6 @@ use crate::config::{
 use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
-use crate::engine::space::widescale;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::banner as shared_banner;
@@ -17,6 +15,8 @@ use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
+use deadsync_present::space::widescale;
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;

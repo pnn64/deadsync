@@ -11,7 +11,7 @@
 use crate::act;
 use crate::config::{LogLevel, VersionOverlaySide};
 use crate::engine::present::actors::Actor;
-use crate::engine::space::{screen_height, screen_width};
+use deadsync_present::space::{screen_height, screen_width};
 use std::sync::{Arc, OnceLock};
 
 /// Z just under the FPS/stats overlay (`32020`) so the two don't fight

@@ -1,5 +1,5 @@
 use crate::config::{MachineEvaluationStyle, VisualStyle};
-use crate::engine::space::screen_center_x;
+use deadsync_present::space::screen_center_x;
 use deadsync_profile as profile_data;
 
 const MONTH_ABBR: [&str; 12] = [

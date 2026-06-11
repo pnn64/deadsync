@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{TextCache, cached_text};
-use crate::engine::space::{screen_height, screen_width};
 use deadsync_audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
+use deadsync_present::space::{screen_height, screen_width};
 use deadsync_render::{BackendType, ClockDomainTrace, PresentModeTrace};
 use std::cell::RefCell;
 use std::collections::HashMap;

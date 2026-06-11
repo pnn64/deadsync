@@ -1,7 +1,7 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::{anim, runtime};
-use crate::engine::space::{screen_height, screen_width};
+use deadsync_present::space::{screen_height, screen_width};
 use std::sync::OnceLock;
 
 pub fn fade_in_black_actor(duration: f32, z: i16) -> Actor {

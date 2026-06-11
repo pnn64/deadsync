@@ -4,7 +4,6 @@ use crate::assets::{self, AssetManager};
 use crate::engine::audio;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, widescale};
 use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
 };
@@ -17,6 +16,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, widescale};
 use deadsync_profile as profile_data;
 use deadsync_render::BlendMode;
 use std::collections::HashMap;

@@ -4,7 +4,7 @@ use crate::assets::visual_styles;
 use crate::config::{self, VisualStyle};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::{
     Arc, Mutex, OnceLock,
     atomic::{AtomicU32, Ordering},

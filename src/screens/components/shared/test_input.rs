@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 use winit::keyboard::KeyCode;

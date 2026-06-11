@@ -228,7 +228,7 @@ impl App {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     ) {
-        let (graph_w, graph_h) = if crate::engine::space::is_wide() {
+        let (graph_w, graph_h) = if deadsync_present::space::is_wide() {
             (286.0_f32, 64.0_f32)
         } else {
             (276.0_f32, 64.0_f32)

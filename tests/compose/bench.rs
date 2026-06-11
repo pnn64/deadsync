@@ -716,7 +716,7 @@ fn build_screen_for_mode(
     scratch: &mut compose::ComposeScratch,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
 ) -> RenderList {
@@ -758,7 +758,7 @@ fn recycle_screen_for_mode(
 fn benchmark_actor_builder<F>(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
     iters: u64,
@@ -873,7 +873,7 @@ where
 fn benchmark_actor_pusher<F>(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
     iters: u64,
@@ -993,7 +993,7 @@ where
 fn benchmark_notefield_actor_builder(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
     iters: u64,
@@ -1130,7 +1130,7 @@ fn benchmark_compose<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     iters: u64,
     warmup: u64,
@@ -1277,7 +1277,7 @@ fn benchmark_compose_resolve<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::engine::space::Metrics,
+    metrics: &deadsync_present::space::Metrics,
     fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     iters: u64,
     warmup: u64,

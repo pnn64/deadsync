@@ -21,7 +21,6 @@ use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::engine::present::color;
-use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, stage_stats};
 use crate::screens::{
@@ -35,6 +34,7 @@ use deadsync_platform::dirs;
 use deadsync_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadsync_platform::host_time;
+use deadsync_present::space::{self as space, Metrics};
 use deadsync_render as renderer;
 use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
 use deadsync_renderer as renderer_backend;

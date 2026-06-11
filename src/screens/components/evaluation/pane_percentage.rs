@@ -48,7 +48,7 @@ pub(crate) fn build_pane_percentage_display(
     }
 
     let pane_origin_x = pane_origin_x(controller);
-    let cy = crate::engine::space::screen_center_y();
+    let cy = deadsync_present::space::screen_center_y();
 
     let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
     let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));

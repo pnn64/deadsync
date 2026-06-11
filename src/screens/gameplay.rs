@@ -10,10 +10,6 @@ use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
-use crate::engine::space::widescale;
-use crate::engine::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
-};
 use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
@@ -34,6 +30,10 @@ use deadsync_chart::{
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_present::space::widescale;
+use deadsync_present::space::{
+    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+};
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use deadsync_rules::scroll::ScrollSpeedSetting;

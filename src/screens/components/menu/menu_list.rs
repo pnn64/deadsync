@@ -1,6 +1,6 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
-use crate::engine::space::screen_center_x;
+use deadsync_present::space::screen_center_x;
 use std::sync::Arc;
 
 // --- CONSTANTS TO MATCH THE LUA SCRIPT'S STATIC STATE ---

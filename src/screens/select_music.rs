@@ -11,10 +11,6 @@ use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::font;
-use crate::engine::space::{
-    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
-    widescale,
-};
 use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
@@ -46,6 +42,10 @@ use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_platform::dirs;
+use deadsync_present::space::{
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    widescale,
+};
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};

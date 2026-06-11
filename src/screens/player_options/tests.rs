@@ -1620,7 +1620,7 @@ pub(super) mod tests {
             };
             let y_matches = if bottom {
                 (align[1] - 1.0).abs() < 0.001
-                    && (offset[1] - crate::engine::space::screen_height()).abs() < 0.001
+                    && (offset[1] - deadsync_present::space::screen_height()).abs() < 0.001
             } else {
                 align[1].abs() < 0.001 && offset[1].abs() < 0.001
             };

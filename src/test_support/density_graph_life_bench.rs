@@ -1,6 +1,6 @@
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::density;
-use crate::engine::space::screen_center_x;
+use deadsync_present::space::screen_center_x;
 use deadsync_render::BlendMode;
 use std::cell::RefCell;
 use std::sync::Arc;

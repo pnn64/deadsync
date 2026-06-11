@@ -2,13 +2,13 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_lights::{
     ButtonLight, CabinetLight, Mode as LightMode, Player as LightPlayer, State as LightState,
 };
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;

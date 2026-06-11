@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
-use crate::engine::space::{screen_width, widescale};
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
+use deadsync_present::space::{screen_width, widescale};
 use deadsync_profile as profile_data;
 
 pub fn build_label(text: String) -> Actor {

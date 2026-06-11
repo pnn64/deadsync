@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::visual_styles;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y};
+use deadsync_present::space::{screen_center_x, screen_center_y};
 
 // Visual-style splash used when leaving the main menu.
 // This mirrors Simply Love's ScreenTitleMenu out.lua behavior.

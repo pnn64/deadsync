@@ -3,11 +3,11 @@ use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::online::lobbies;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::time::{Duration, Instant};
 
 const DIM_ALPHA: f32 = 0.875;

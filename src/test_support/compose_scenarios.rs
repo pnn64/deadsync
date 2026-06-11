@@ -4,7 +4,6 @@ use crate::engine::present::actors::{
 };
 use crate::engine::present::anim::{EffectMode, EffectState};
 use crate::engine::present::font::{self, Font, Glyph};
-use crate::engine::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
 use crate::test_support::gameplay_bench;
@@ -20,6 +19,7 @@ use crate::test_support::options_bench;
 use crate::test_support::pane_stats_bench;
 use crate::test_support::player_options_bench;
 use crate::test_support::visual_style_bg_bench;
+use deadsync_present::space::{Metrics, metrics_for_window};
 use deadsync_render::{BlendMode, MeshVertex, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};

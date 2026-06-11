@@ -43,7 +43,7 @@ pub fn build_timing_arrows_pane(
 
     let pane_origin_x = pane_origin_x(controller);
     let frame_x = pane_origin_x - pane_width * 0.5;
-    let frame_y = crate::engine::space::screen_center_y() - 56.0;
+    let frame_y = deadsync_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();
 

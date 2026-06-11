@@ -2,8 +2,6 @@ use crate::act;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
-use crate::engine::space::widescale;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -15,6 +13,8 @@ use crate::screens::components::{
         visual_style_bg,
     },
 };
+use deadsync_present::space::widescale;
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_render::{BlendMode, MeshVertex};
 use deadsync_score as score_data;
 

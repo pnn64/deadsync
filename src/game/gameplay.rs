@@ -1,6 +1,5 @@
 use crate::config::DefaultFailType;
 use crate::engine::audio;
-use crate::engine::space::{is_wide, screen_height, screen_width};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
@@ -14,6 +13,7 @@ use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 use deadsync_input::InputEdge;
+use deadsync_present::space::{is_wide, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{

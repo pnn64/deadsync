@@ -196,6 +196,15 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/space.rs",
 ];
 
+const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
     "display",
     "host_time",
@@ -1952,10 +1961,6 @@ fn present_model_lives_in_present_crate() {
     for file in ENGINE_PRESENT_EXTRACTED_FILES {
         let path = root.join(file);
         let text = fs::read_to_string(&path).ok();
-        let is_space_facade = *file == "src/engine/space.rs"
-            && text
-                .as_deref()
-                .is_some_and(|text| text.trim() == "pub use deadsync_present::space::*;");
         let is_compose_facade = *file == "src/engine/present/compose.rs"
             && text.as_deref().is_some_and(|text| {
                 text.contains("use crate::assets::PRESENT_TEXTURE_CONTEXT;")
@@ -1978,11 +1983,44 @@ fn present_model_lives_in_present_crate() {
                     && !text.contains("let mut __tw")
                     && !text.contains("__dsl_parse_effect_clock")
             });
-        if path.exists() && !is_space_facade && !is_compose_facade && !is_dsl_facade {
+        if path.exists() && !is_compose_facade && !is_dsl_facade {
             failures.push(format!(
                 "{} still exists; use deadsync-present",
                 rel_path(&root, &path)
             ));
+        }
+    }
+
+    let engine_mod = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod) {
+        let count = count_token_refs(&text, "pub mod space");
+        if count != 0 {
+            failures.push(format!(
+                "{} declares engine::space {count} times; import deadsync_present::space directly",
+                rel_path(&root, &engine_mod)
+            ));
+        }
+    }
+
+    for dir in PRESENT_SPACE_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in ["crate::engine::space", "deadsync::engine::space"] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references engine::space facade token {token} {count} times"
+                    ));
+                }
+            }
         }
     }
 

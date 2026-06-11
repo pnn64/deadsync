@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::visual_styles;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
+use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 // Screen navigation handled in app
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
