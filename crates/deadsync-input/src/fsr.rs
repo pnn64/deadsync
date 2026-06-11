@@ -53,9 +53,14 @@ pub struct ButtonView {
     pub aggregate_value: u16,
     pub aggregate_threshold: u16,
     pub active: bool,
-    /// Full-scale value for normalizing the live bars (FSR 250, load cell 500).
-    /// May exceed `max_raw_threshold` (load-cell readings outrun their threshold range).
+    /// Full-scale value for normalizing the live bars and threshold lines.
+    /// May exceed `max_raw_threshold`; backends pick it so the threshold range
+    /// covers most of the bar (readings past it display as a full bar).
     pub value_scale: u16,
+    /// The release (low) threshold, when the pad exposes it as user-editable
+    /// (SMX load-cell pads). `None` means the backend derives it from the
+    /// press threshold and the Simple view shows a single editable value.
+    pub release_threshold: Option<u16>,
 }
 
 /// A single connected FSR pad, exposed to the config screen.

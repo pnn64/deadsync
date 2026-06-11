@@ -7,30 +7,34 @@ use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
 use std::time::SystemTime;
 
-const PANEL_SENSOR_COUNT: usize = 4;
+pub(super) const PANEL_SENSOR_COUNT: usize = 4;
 
-const MIN_FSR_THRESHOLD: u16 = 5;
-const MAX_FSR_THRESHOLD: u16 = 250;
+pub(super) const MIN_FSR_THRESHOLD: u16 = 5;
+pub(super) const MAX_FSR_THRESHOLD: u16 = 250;
 
 /// Debounce edit bounds (microseconds). Firmware default is 4000us (4.0ms);
 /// we never let the user drop below 0.5ms.
-const MIN_DEBOUNCE_US: u16 = 500;
-const MAX_DEBOUNCE_US: u16 = 25000;
+pub(super) const MIN_DEBOUNCE_US: u16 = 500;
+pub(super) const MAX_DEBOUNCE_US: u16 = 25000;
 
-// Pre-v5 load-cell pads: 8-bit thresholds (20-200) and live values that scale
-// to 500 (no >>2), matching the official SMX config tool.
-const MIN_LOADCELL_THRESHOLD: u16 = 20;
-const MAX_LOADCELL_THRESHOLD: u16 = 200;
-const FSR_VALUE_SCALE: u16 = 250;
-const LOADCELL_VALUE_SCALE: u16 = 500;
+// Pre-v5 load-cell pads: 8-bit thresholds (20-200) and raw live values that
+// reach 500 (no >>2). The display scale is capped at 250 so the threshold band
+// uses most of the bar's height (200 sits at 80%) instead of topping out
+// midway; readings past 250 show a full bar but the numeric readout still
+// reports the true value up to `LOADCELL_RAW_MAX`.
+pub(super) const MIN_LOADCELL_THRESHOLD: u16 = 20;
+pub(super) const MAX_LOADCELL_THRESHOLD: u16 = 200;
+pub(super) const FSR_VALUE_SCALE: u16 = 250;
+pub(super) const LOADCELL_VALUE_SCALE: u16 = 250;
+pub(super) const LOADCELL_RAW_MAX: u16 = 500;
 
 /// Panels exposed for config: (panel_index, label), in L/D/U/R order.
 const VIEW_PANELS: [(usize, &str); PAD_BUTTON_COUNT] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
 
 /// Edge label for each of a panel's four FSR sensors, by firmware index.
-const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
+pub(super) const SENSOR_EDGE_LABELS: [&str; PANEL_SENSOR_COUNT] = ["L", "R", "U", "D"];
 /// Firmware-index order to display the sensors in so they read L, D, U, R.
-const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
+pub(super) const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
 
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
@@ -119,9 +123,10 @@ impl Monitor {
         pads
     }
 
-    /// Set a panel threshold. SMX stores a low + high; we write `high = value`,
-    /// `low = value - 1`. FSR pads allow per-sensor edits (`sensor = Some(i)`);
-    /// load-cell pads have a single per-panel threshold (`sensor` is ignored).
+    /// Set an FSR panel threshold: we write `high = value`, `low = value - 1`.
+    /// `sensor = Some(i)` targets one sensor, `None` every sensor in the
+    /// panel. Load-cell pads are rejected; their press/release pair is edited
+    /// atomically through `set_threshold_pair`.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
@@ -143,52 +148,82 @@ impl Monitor {
             return false;
         };
         let (panel, _) = VIEW_PANELS[button];
-        let fsr = is_fsr(&config);
+        if !is_fsr(&config) {
+            log::trace!("SMX: set_threshold pad {pad} rejected (load-cell pad uses pair edits)");
+            return false;
+        }
         let settings = &mut config.panel_settings[panel];
 
-        if fsr {
-            if info.firmware_version < 5
-                || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value)
-            {
-                log::trace!(
-                    "SMX: set_threshold pad {pad} panel {panel} rejected (fsr, fw {}, value {value} not in {MIN_FSR_THRESHOLD}..={MAX_FSR_THRESHOLD})",
-                    info.firmware_version
-                );
+        if info.firmware_version < 5 || !(MIN_FSR_THRESHOLD..=MAX_FSR_THRESHOLD).contains(&value) {
+            log::trace!(
+                "SMX: set_threshold pad {pad} panel {panel} rejected (fsr, fw {}, value {value} not in {MIN_FSR_THRESHOLD}..={MAX_FSR_THRESHOLD})",
+                info.firmware_version
+            );
+            return false;
+        }
+        let high = value as u8;
+        let low = high.saturating_sub(1);
+        match sensor {
+            Some(s) if s < PANEL_SENSOR_COUNT => {
+                settings.fsr_high_threshold[s] = high;
+                settings.fsr_low_threshold[s] = low;
+            }
+            Some(s) => {
+                log::trace!("SMX: set_threshold pad {pad} rejected (sensor {s} out of range)");
                 return false;
             }
-            let high = value as u8;
-            let low = high.saturating_sub(1);
-            match sensor {
-                Some(s) if s < PANEL_SENSOR_COUNT => {
+            None => {
+                for s in 0..PANEL_SENSOR_COUNT {
                     settings.fsr_high_threshold[s] = high;
                     settings.fsr_low_threshold[s] = low;
                 }
-                Some(s) => {
-                    log::trace!("SMX: set_threshold pad {pad} rejected (sensor {s} out of range)");
-                    return false;
-                }
-                None => {
-                    for s in 0..PANEL_SENSOR_COUNT {
-                        settings.fsr_high_threshold[s] = high;
-                        settings.fsr_low_threshold[s] = low;
-                    }
-                }
             }
-        } else {
-            // Load cell: one threshold per panel; the sensor index is ignored.
-            if !(MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD).contains(&value) {
-                log::trace!(
-                    "SMX: set_threshold pad {pad} panel {panel} rejected (load-cell, value {value} not in {MIN_LOADCELL_THRESHOLD}..={MAX_LOADCELL_THRESHOLD})"
-                );
-                return false;
-            }
-            settings.load_cell_high_threshold = value as u8;
-            settings.load_cell_low_threshold = (value as u8).saturating_sub(1);
         }
         smx::set_config(pad, config);
+        log::trace!("SMX: set_threshold pad {pad} panel {panel} sensor {sensor:?} -> {value}");
+        true
+    }
+
+    /// Set a load-cell panel's press (high) and release (low) thresholds in a
+    /// single config write, so the pad never observes an inverted intermediate
+    /// pair. Rejects FSR pads, out-of-range values, and `release >= press`.
+    pub fn set_threshold_pair(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
+    ) -> bool {
+        if device.backend != BackendKind::Smx || button >= PAD_BUTTON_COUNT {
+            return false;
+        }
+        let pad = device.index;
+        if !smx::get_info(pad).connected {
+            log::trace!("SMX: set_threshold_pair pad {pad} rejected (not connected)");
+            return false;
+        }
+        let Some(mut config) = smx::get_config(pad) else {
+            log::trace!("SMX: set_threshold_pair pad {pad} rejected (config unavailable)");
+            return false;
+        };
+        let (panel, _) = VIEW_PANELS[button];
+        if is_fsr(&config) {
+            log::trace!("SMX: set_threshold_pair pad {pad} rejected (fsr pad)");
+            return false;
+        }
+        let range = MIN_LOADCELL_THRESHOLD..=MAX_LOADCELL_THRESHOLD;
+        if !range.contains(&press) || !range.contains(&release) || release >= press {
+            log::trace!(
+                "SMX: set_threshold_pair pad {pad} panel {panel} rejected (press {press} / release {release} invalid)"
+            );
+            return false;
+        }
+        let settings = &mut config.panel_settings[panel];
+        settings.load_cell_high_threshold = press as u8;
+        settings.load_cell_low_threshold = release as u8;
+        smx::set_config(pad, config);
         log::trace!(
-            "SMX: set_threshold pad {pad} panel {panel} sensor {sensor:?} -> {value} ({})",
-            if fsr { "fsr" } else { "load-cell" }
+            "SMX: set_threshold_pair pad {pad} panel {panel} -> press {press} release {release}"
         );
         true
     }
@@ -324,8 +359,9 @@ impl Drop for Monitor {
     }
 }
 
-/// Build an FSR panel's button view: four edge sensors (displayed L,D,U,R),
-/// each with its own threshold and enable bit.
+/// Build an FSR panel's button view from the live config: four edge sensors
+/// (displayed L,D,U,R), each with its own threshold and enable bit. The panel
+/// pressed state comes from the firmware's input bitmask.
 fn fsr_button(
     config: &SmxConfig,
     panel: usize,
@@ -334,23 +370,72 @@ fn fsr_button(
     input_state: u16,
 ) -> ButtonView {
     let settings = &config.panel_settings[panel];
-    let sensors: Vec<SensorView> = SENSOR_DISPLAY_ORDER
+    let readings = SENSOR_DISPLAY_ORDER.map(|s| SensorReading {
+        firmware_index: s,
+        label: Some(SENSOR_EDGE_LABELS[s]),
+        value: test_data
+            .filter(|d| d.have_data_from_panel[panel])
+            .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s])),
+        threshold: u16::from(settings.fsr_high_threshold[s]),
+        enabled: sensor_enabled(config, panel, s),
+    });
+    fsr_button_view(label, readings, input_state & (1u16 << panel) != 0)
+}
+
+/// Build a load-cell panel's button view from the live config: four corner
+/// readings sharing the panel's press/release pair. The panel pressed state
+/// comes from the firmware's input bitmask (its own hysteresis).
+fn load_cell_button(
+    config: &SmxConfig,
+    panel: usize,
+    label: &'static str,
+    test_data: Option<&SensorTestData>,
+    input_state: u16,
+) -> ButtonView {
+    let settings = &config.panel_settings[panel];
+    let values = std::array::from_fn(|s| {
+        test_data
+            .filter(|d| d.have_data_from_panel[panel])
+            .map_or(0, |d| calibrate_load_cell(d.sensor_level[panel][s]))
+    });
+    load_cell_button_view(
+        label,
+        values,
+        u16::from(settings.load_cell_high_threshold),
+        u16::from(settings.load_cell_low_threshold),
+        input_state & (1u16 << panel) != 0,
+    )
+}
+
+/// One sensor's inputs for the shared button-view builders below, which both
+/// the live backend and the mock use so their presentation can't diverge.
+pub(super) struct SensorReading {
+    pub firmware_index: usize,
+    pub label: Option<&'static str>,
+    pub value: u16,
+    pub threshold: u16,
+    pub enabled: bool,
+}
+
+/// Assemble an FSR-style button view (per-sensor thresholds and enable bits).
+/// `panel_active` is the panel's pressed state; per-sensor `active` stays the
+/// instantaneous comparison the Advanced view tunes against.
+pub(super) fn fsr_button_view(
+    label: &'static str,
+    readings: [SensorReading; PANEL_SENSOR_COUNT],
+    panel_active: bool,
+) -> ButtonView {
+    let sensors: Vec<SensorView> = readings
         .iter()
-        .map(|&s| {
-            let raw_value = test_data
-                .filter(|d| d.have_data_from_panel[panel])
-                .map_or(0, |d| calibrate_fsr(d.sensor_level[panel][s]));
-            let raw_threshold = u16::from(settings.fsr_high_threshold[s]);
-            SensorView {
-                firmware_index: s,
-                label: Some(SENSOR_EDGE_LABELS[s]),
-                raw_value,
-                value_norm: normalize(raw_value, FSR_VALUE_SCALE),
-                raw_threshold,
-                threshold_norm: normalize(raw_threshold, FSR_VALUE_SCALE),
-                active: raw_value >= raw_threshold && raw_threshold > 0,
-                enabled: sensor_enabled(config, panel, s),
-            }
+        .map(|r| SensorView {
+            firmware_index: r.firmware_index,
+            label: r.label,
+            raw_value: r.value,
+            value_norm: normalize(r.value, FSR_VALUE_SCALE),
+            raw_threshold: r.threshold,
+            threshold_norm: normalize(r.threshold, FSR_VALUE_SCALE),
+            active: r.value >= r.threshold && r.threshold > 0,
+            enabled: r.enabled,
         })
         .collect();
     let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
@@ -362,37 +447,34 @@ fn fsr_button(
         max_raw_threshold: MAX_FSR_THRESHOLD,
         aggregate_value,
         aggregate_threshold,
-        active: input_state & (1u16 << panel) != 0,
+        active: panel_active,
         value_scale: FSR_VALUE_SCALE,
+        release_threshold: None,
     }
 }
 
-/// Build a load-cell panel's button view: four corner readings (numbered 1-4)
-/// that all share the panel's single load-cell threshold.
-fn load_cell_button(
-    config: &SmxConfig,
-    panel: usize,
+/// Assemble a load-cell button view: four corner readings (numbered 1-4 in
+/// the UI) sharing one press/release pair. Per-sensor `active` mirrors the
+/// panel state so the view can never disagree with what the bars show.
+pub(super) fn load_cell_button_view(
     label: &'static str,
-    test_data: Option<&SensorTestData>,
-    input_state: u16,
+    values: [u16; PANEL_SENSOR_COUNT],
+    press: u16,
+    release: u16,
+    panel_active: bool,
 ) -> ButtonView {
-    let settings = &config.panel_settings[panel];
-    let threshold = u16::from(settings.load_cell_high_threshold);
-    let sensors: Vec<SensorView> = (0..PANEL_SENSOR_COUNT)
-        .map(|s| {
-            let raw_value = test_data
-                .filter(|d| d.have_data_from_panel[panel])
-                .map_or(0, |d| calibrate_load_cell(d.sensor_level[panel][s]));
-            SensorView {
-                firmware_index: s,
-                label: None, // corners, not edges -> numbered 1-4 in the UI
-                raw_value,
-                value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
-                raw_threshold: threshold,
-                threshold_norm: normalize(threshold, LOADCELL_VALUE_SCALE),
-                active: raw_value >= threshold && threshold > 0,
-                enabled: true,
-            }
+    let sensors: Vec<SensorView> = values
+        .iter()
+        .enumerate()
+        .map(|(s, &raw_value)| SensorView {
+            firmware_index: s,
+            label: None, // corners, not edges -> numbered 1-4 in the UI
+            raw_value,
+            value_norm: normalize(raw_value, LOADCELL_VALUE_SCALE),
+            raw_threshold: press,
+            threshold_norm: normalize(press, LOADCELL_VALUE_SCALE),
+            active: panel_active,
+            enabled: true,
         })
         .collect();
     let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
@@ -402,9 +484,10 @@ fn load_cell_button(
         min_raw_threshold: MIN_LOADCELL_THRESHOLD,
         max_raw_threshold: MAX_LOADCELL_THRESHOLD,
         aggregate_value,
-        aggregate_threshold: threshold,
-        active: input_state & (1u16 << panel) != 0,
+        aggregate_threshold: press,
+        active: panel_active,
         value_scale: LOADCELL_VALUE_SCALE,
+        release_threshold: Some(release),
     }
 }
 
@@ -452,13 +535,29 @@ fn calibrate_fsr(value: i16) -> u16 {
     (value >> 2) as u16
 }
 
-/// Load-cell readings are used unscaled (0-500 range, no `>>2`), clamping
-/// noise at/below zero to zero.
+/// Load-cell readings are used unscaled (no `>>2`), clamping noise at/below
+/// zero to zero and capping at the hardware's 500 ceiling. The display scale
+/// (250) only affects the bars; the numeric readout shows this raw value.
 fn calibrate_load_cell(value: i16) -> u16 {
     if value <= 0 {
         return 0;
     }
-    (value as u16).min(LOADCELL_VALUE_SCALE)
+    (value as u16).min(LOADCELL_RAW_MAX)
+}
+
+/// Sticky pressed state with the firmware's hysteresis: turns on at/above the
+/// press (`high`) threshold and off only below the release (`low`) threshold;
+/// in between it keeps its previous state.
+pub(super) fn hysteresis_active(was: bool, value: u16, low: u16, high: u16) -> bool {
+    if high == 0 {
+        false
+    } else if value >= high {
+        true
+    } else if value < low {
+        false
+    } else {
+        was
+    }
 }
 
 fn normalize(value: u16, max: u16) -> f32 {
@@ -466,4 +565,23 @@ fn normalize(value: u16, max: u16) -> f32 {
         return 0.0;
     }
     (value as f32 / max as f32).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hysteresis_active;
+
+    #[test]
+    fn hysteresis_holds_between_release_and_press() {
+        // Rising: stays off through the band, on at/above press.
+        assert!(!hysteresis_active(false, 69, 70, 80));
+        assert!(!hysteresis_active(false, 75, 70, 80));
+        assert!(hysteresis_active(false, 80, 70, 80));
+        // Falling: stays on through the band, off only below release.
+        assert!(hysteresis_active(true, 79, 70, 80));
+        assert!(hysteresis_active(true, 70, 70, 80));
+        assert!(!hysteresis_active(true, 69, 70, 80));
+        // An unset press threshold never reads as pressed.
+        assert!(!hysteresis_active(true, 100, 0, 0));
+    }
 }

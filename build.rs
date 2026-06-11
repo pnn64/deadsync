@@ -122,6 +122,9 @@ fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {
 fn emit_build_info() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()));
+    // Re-run when the checked-out commit moves, so an otherwise cached build
+    // can't keep reporting a stale hash/stamp in the startup banner.
+    emit_git_rerun_paths(&manifest_dir);
     let hash = git_output(&manifest_dir, &["rev-parse", "--short=10", "HEAD"])
         .unwrap_or_else(|| "unknown".to_string());
     let stamp = git_output(
@@ -137,6 +140,33 @@ fn emit_build_info() {
     .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=DEADSYNC_BUILD_HASH={hash}");
     println!("cargo:rustc-env=DEADSYNC_BUILD_STAMP={stamp}");
+}
+
+/// Tell cargo to watch the git files that change when HEAD moves: `.git/HEAD`
+/// (checkouts), `.git/logs/HEAD` (the reflog, appended on every commit and
+/// checkout — this is what keeps the hash fresh even when the branch ref is
+/// packed or, in a worktree, lives in the common git dir), the ref file HEAD
+/// points at, and `packed-refs`. Only existing paths are emitted; a missing
+/// path would make cargo re-run the script every build.
+fn emit_git_rerun_paths(manifest_dir: &Path) {
+    let git_dir = git_output(manifest_dir, &["rev-parse", "--git-dir"])
+        .map(|d| manifest_dir.join(d))
+        .unwrap_or_else(|| manifest_dir.join(".git"));
+    let mut watch = vec![
+        git_dir.join("HEAD"),
+        git_dir.join("logs/HEAD"),
+        git_dir.join("packed-refs"),
+    ];
+    if let Ok(head) = fs::read_to_string(git_dir.join("HEAD"))
+        && let Some(reference) = head.trim().strip_prefix("ref: ")
+    {
+        watch.push(git_dir.join(reference));
+    }
+    for path in watch {
+        if path.exists() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
 }
 
 fn git_output(cwd: &Path, args: &[&str]) -> Option<String> {

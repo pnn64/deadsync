@@ -54,9 +54,33 @@ pub struct InitConfig {
     pub p2_serial: Option<String>,
 }
 
+/// Value of `DEADSYNC_MOCK_PADS` when it enables mock pads (see
+/// `deadsync_input_fsr::mock`). Mock pads replace native SMX entirely: while
+/// enabled, `init` refuses to start the SDK, so UI work can never touch real
+/// hardware. Empty and common falsey values count as unset, so someone
+/// "disabling" with `DEADSYNC_MOCK_PADS=0` doesn't silently get mock pads.
+pub fn mock_pads_env() -> Option<String> {
+    std::env::var("DEADSYNC_MOCK_PADS")
+        .ok()
+        .filter(|v| mock_spec_enabled(v))
+}
+
+fn mock_spec_enabled(value: &str) -> bool {
+    let v = value.trim();
+    !(v.is_empty()
+        || v == "0"
+        || v.eq_ignore_ascii_case("false")
+        || v.eq_ignore_ascii_case("off")
+        || v.eq_ignore_ascii_case("no"))
+}
+
 /// Initialize the shared SMX manager. Call once at startup.
 /// Returns false if initialization failed (e.g., hidapi unavailable).
 pub fn init(config: InitConfig) -> bool {
+    if let Some(spec) = mock_pads_env() {
+        log::info!("SMX: DEADSYNC_MOCK_PADS={spec}; native SMX disabled (no USB traffic)");
+        return false;
+    }
     if SHARED.get().is_some() {
         return true;
     }
@@ -844,9 +868,19 @@ mod tests {
     use super::{
         PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
         SmxPadPreset, conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
-        preset_thresholds,
+        mock_spec_enabled, preset_thresholds,
     };
     use rustmaniax_sdk::SmxInfo;
+
+    #[test]
+    fn mock_spec_falsey_values_leave_the_mock_off() {
+        for off in ["", "  ", "0", "false", "FALSE", "off", "Off", "no"] {
+            assert!(!mock_spec_enabled(off), "{off:?} should not enable mocks");
+        }
+        for on in ["1", "true", "loadcell", "fsr", "loadcell,fsr"] {
+            assert!(mock_spec_enabled(on), "{on:?} should enable mocks");
+        }
+    }
 
     #[test]
     fn is_smx_usb_device_requires_both_vid_and_pid() {

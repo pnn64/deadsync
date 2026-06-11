@@ -4125,6 +4125,7 @@ impl App {
         for cmd in commands {
             let device = match &cmd {
                 PadCommand::Threshold { device, .. }
+                | PadCommand::ThresholdPair { device, .. }
                 | PadCommand::SensorEnabled { device, .. }
                 | PadCommand::AutoRecalibration { device, .. }
                 | PadCommand::Debounce { device, .. } => *device,
@@ -4139,6 +4140,16 @@ impl App {
                     let _ = self
                         .fsr_monitor
                         .set_threshold(device, button, sensor, value);
+                }
+                PadCommand::ThresholdPair {
+                    device,
+                    button,
+                    press,
+                    release,
+                } => {
+                    let _ = self
+                        .fsr_monitor
+                        .set_threshold_pair(device, button, press, release);
                 }
                 PadCommand::SensorEnabled {
                     device,

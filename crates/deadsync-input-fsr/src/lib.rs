@@ -15,6 +15,13 @@ mod fsrio;
     target_os = "freebsd",
     target_os = "macos"
 ))]
+mod mock;
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 mod smx;
 
 #[cfg(any(
@@ -26,6 +33,10 @@ mod smx;
 pub struct Monitor {
     fsrio: fsrio::Monitor,
     smx: smx::Monitor,
+    /// Fake SMX pads for UI development (`DEADSYNC_MOCK_PADS`). When set, the
+    /// mock owns the SMX backend slot: native SMX never starts (no pads, no
+    /// USB writes) and SMX-routed calls land here instead.
+    mock: Option<mock::Monitor>,
 }
 
 #[cfg(any(
@@ -39,6 +50,7 @@ impl Monitor {
         Self {
             fsrio: fsrio::Monitor::new(),
             smx: smx::Monitor::new(),
+            mock: mock::Monitor::from_env(),
         }
     }
 
@@ -46,19 +58,27 @@ impl Monitor {
         let mut out = String::new();
         out.push_str(&self.fsrio.debug_dump());
         out.push_str("\n\n");
-        out.push_str(&self.smx.debug_dump());
+        match &mut self.mock {
+            Some(m) => out.push_str(&m.debug_dump()),
+            None => out.push_str(&self.smx.debug_dump()),
+        }
         write_dump_file(path, out)
     }
 
     /// Enumerate every connected FSR pad across all backends.
     pub fn poll_pads(&mut self) -> Vec<PadView> {
         let mut pads = self.fsrio.poll_pads();
-        pads.extend(self.smx.poll_pads());
+        match &mut self.mock {
+            Some(m) => pads.extend(m.poll_pads()),
+            None => pads.extend(self.smx.poll_pads()),
+        }
         pads
     }
 
-    /// Set a threshold on a specific pad. `sensor` of `None` applies to every
-    /// sensor in the button (Simple mode); `Some(i)` targets one sensor.
+    /// Set a single threshold on a specific pad (the backend derives its own
+    /// release side). `sensor` of `None` applies to every sensor in the button
+    /// (Simple mode); `Some(i)` targets one sensor. Load-cell pads edit their
+    /// press/release pair through `set_threshold_pair` instead.
     pub fn set_threshold(
         &mut self,
         device: PadDeviceId,
@@ -68,7 +88,29 @@ impl Monitor {
     ) -> bool {
         match device.backend {
             BackendKind::Fsrio => self.fsrio.set_threshold(device, button, sensor, value),
-            BackendKind::Smx => self.smx.set_threshold(device, button, sensor, value),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_threshold(device, button, sensor, value),
+                None => self.smx.set_threshold(device, button, sensor, value),
+            },
+        }
+    }
+
+    /// Set a load-cell button's press (high) and release (low) thresholds in
+    /// one config write, so the pad can never observe an inverted intermediate
+    /// pair. Only SMX load-cell pads support this.
+    pub fn set_threshold_pair(
+        &mut self,
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
+    ) -> bool {
+        match device.backend {
+            BackendKind::Fsrio => false,
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_threshold_pair(device, button, press, release),
+                None => self.smx.set_threshold_pair(device, button, press, release),
+            },
         }
     }
 
@@ -84,7 +126,10 @@ impl Monitor {
             BackendKind::Fsrio => self
                 .fsrio
                 .set_sensor_enabled(device, button, sensor, enabled),
-            BackendKind::Smx => self.smx.set_sensor_enabled(device, button, sensor, enabled),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_sensor_enabled(device, button, sensor, enabled),
+                None => self.smx.set_sensor_enabled(device, button, sensor, enabled),
+            },
         }
     }
 
@@ -92,7 +137,10 @@ impl Monitor {
     pub fn set_auto_recalibration(&mut self, device: PadDeviceId, enabled: bool) -> bool {
         match device.backend {
             BackendKind::Fsrio => self.fsrio.set_auto_recalibration(device, enabled),
-            BackendKind::Smx => self.smx.set_auto_recalibration(device, enabled),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_auto_recalibration(device, enabled),
+                None => self.smx.set_auto_recalibration(device, enabled),
+            },
         }
     }
 
@@ -100,7 +148,10 @@ impl Monitor {
     pub fn set_debounce_micros(&mut self, device: PadDeviceId, micros: u16) -> bool {
         match device.backend {
             BackendKind::Fsrio => self.fsrio.set_debounce_micros(device, micros),
-            BackendKind::Smx => self.smx.set_debounce_micros(device, micros),
+            BackendKind::Smx => match &mut self.mock {
+                Some(m) => m.set_debounce_micros(device, micros),
+                None => self.smx.set_debounce_micros(device, micros),
+            },
         }
     }
 
@@ -108,7 +159,10 @@ impl Monitor {
     /// while the config screen is open and `false` when leaving it.
     pub fn set_active(&mut self, active: bool) {
         self.fsrio.set_active(active);
-        self.smx.set_active(active);
+        match &mut self.mock {
+            Some(m) => m.set_active(active),
+            None => self.smx.set_active(active),
+        }
     }
 }
 
@@ -142,6 +196,16 @@ mod unsupported {
             _button: usize,
             _sensor: Option<usize>,
             _value: u16,
+        ) -> bool {
+            false
+        }
+
+        pub fn set_threshold_pair(
+            &mut self,
+            _device: PadDeviceId,
+            _button: usize,
+            _press: u16,
+            _release: u16,
         ) -> bool {
             false
         }
