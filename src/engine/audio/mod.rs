@@ -44,6 +44,9 @@ use deadsync_audio_backend_native::launch::build_audio_launch;
 #[cfg(windows)]
 use deadsync_audio_backend_native::launch::start_wasapi_backend;
 #[cfg(target_os = "linux")]
+#[cfg(has_jack_audio)]
+use deadsync_audio_backend_native::linux_jack;
+#[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 use deadsync_audio_backend_native::linux_pulse;
 #[cfg(target_os = "macos")]
@@ -187,7 +190,7 @@ pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
     }
     backends.push(LinuxAudioBackend::Alsa);
     #[cfg(has_jack_audio)]
-    if backends::linux_jack::is_available() {
+    if linux_jack::is_available() {
         backends.push(LinuxAudioBackend::Jack);
     }
     backends
@@ -987,7 +990,7 @@ enum OutputBackend {
     Alsa(backends::linux_alsa::AlsaOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_jack_audio)]
-    Jack(backends::linux_jack::JackOutputStream),
+    Jack(linux_jack::JackOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_pipewire_audio)]
     PipeWire(backends::linux_pipewire::PipeWireOutputStream),
@@ -1036,12 +1039,11 @@ fn start_linux_jack_backend(
     if matches!(jack.output_mode, AudioOutputMode::Exclusive) {
         return Err("JACK does not expose a separate exclusive output mode.".to_string());
     }
-    let prep =
-        backends::linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
+    let prep = linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = linux_jack::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Jack(stream), ready, sfx_sender))
 }
 
@@ -1307,7 +1309,7 @@ fn start_output_backend(
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         #[cfg(has_jack_audio)]
-                        if backends::linux_jack::is_available()
+                        if linux_jack::is_available()
                             && let Some(jack) = jack
                         {
                             match start_linux_jack_backend(jack, music_ring) {

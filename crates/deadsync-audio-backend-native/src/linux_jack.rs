@@ -1,10 +1,10 @@
+use crate::telemetry::{
+    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use libloading::Library;
@@ -120,7 +120,7 @@ struct JackApi {
 
 static JACK_API: OnceLock<Result<JackApi, String>> = OnceLock::new();
 
-pub(crate) fn is_available() -> bool {
+pub fn is_available() -> bool {
     let Ok(api) = jack_api() else {
         return false;
     };
@@ -216,7 +216,7 @@ unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> 
         })
 }
 
-pub(crate) struct JackOutputPrep {
+pub struct JackOutputPrep {
     client: JackClient,
     device_name: String,
     sample_rate_hz: u32,
@@ -224,7 +224,7 @@ pub(crate) struct JackOutputPrep {
 }
 
 impl JackOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: 2,
@@ -238,7 +238,7 @@ impl JackOutputPrep {
     }
 }
 
-pub(crate) struct JackOutputStream {
+pub struct JackOutputStream {
     client: JackClient,
     callback_state: *mut JackCallbackState,
 }
@@ -345,7 +345,7 @@ impl JackCallbackState {
     }
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     requested_device_name: Option<String>,
     requested_rate_hz: Option<u32>,
 ) -> Result<JackOutputPrep, String> {
@@ -437,7 +437,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: JackOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

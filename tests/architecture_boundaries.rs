@@ -874,9 +874,11 @@ fn audio_core_lives_in_audio_crate() {
 
     for file in [
         root.join("crates/deadsync-audio-backend-native/Cargo.toml"),
+        root.join("crates/deadsync-audio-backend-native/build.rs"),
         root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
         root.join("crates/deadsync-audio-backend-native/src/freebsd_pcm.rs"),
         root.join("crates/deadsync-audio-backend-native/src/launch.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/linux_jack.rs"),
         root.join("crates/deadsync-audio-backend-native/src/linux_pulse.rs"),
         root.join("crates/deadsync-audio-backend-native/src/macos_coreaudio.rs"),
         root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
@@ -917,6 +919,15 @@ fn audio_core_lives_in_audio_crate() {
     {
         failures.push(
             "src/engine/audio/backends/linux_pulse.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/linux_jack.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/linux_jack.rs should live in deadsync-audio-backend-native"
                 .to_string(),
         );
     }
@@ -1048,6 +1059,7 @@ fn audio_core_lives_in_audio_crate() {
             "backends::freebsd_pcm",
             "backends::macos_coreaudio",
             "backends::linux_pulse",
+            "backends::linux_jack",
             "windows_wasapi::prepare",
             "windows_wasapi::start",
             "fn start_wasapi_backend",
@@ -1094,6 +1106,14 @@ fn audio_core_lives_in_audio_crate() {
         {
             failures.push(format!(
                 "{} should not re-export the moved PulseAudio backend",
+                rel_path(&root, &backend_mod)
+            ));
+        }
+        if let Ok(text) = fs::read_to_string(&backend_mod)
+            && text.contains("linux_jack")
+        {
+            failures.push(format!(
+                "{} should not re-export the moved JACK backend",
                 rel_path(&root, &backend_mod)
             ));
         }
