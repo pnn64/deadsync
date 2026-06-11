@@ -14,6 +14,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+pub mod action;
 pub mod cli;
 pub mod download;
 pub mod state;

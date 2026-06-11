@@ -1131,7 +1131,7 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::CheckForUpdates => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    crate::engine::updater::action::request_check_now();
+                    deadsync_updater::action::request_check_now();
                 }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
@@ -1450,12 +1450,10 @@ pub fn handle_input(
 ) -> ScreenAction {
     use crate::screens::components::shared::update_overlay;
 
-    let overlay_phase = crate::engine::updater::action::current();
-    if !matches!(
-        overlay_phase,
-        crate::engine::updater::action::ActionPhase::Idle
-    ) && update_overlay::handle_input(&overlay_phase, ev)
-        == update_overlay::InputOutcome::Consumed
+    let overlay_phase = deadsync_updater::action::current();
+    if !matches!(overlay_phase, deadsync_updater::action::ActionPhase::Idle)
+        && update_overlay::handle_input(&overlay_phase, ev)
+            == update_overlay::InputOutcome::Consumed
     {
         return ScreenAction::None;
     }

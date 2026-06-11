@@ -21,16 +21,15 @@
 //! this module touches winit, fonts, or the renderer.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::config;
-use deadsync_updater::download::{
+use crate::download::{
     download_to_file, fetch_checksum_sidecar, parse_api_digest, parse_checksum_sidecar, sha256_hex,
 };
-use deadsync_updater::{
+use crate::{
     FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError, apply_supported_for_host,
     check_agent, classify, download_agent, expected_asset_name, fetch_latest_release, host_target,
     pick_asset_for_host,
@@ -200,6 +199,11 @@ impl ProgressThrottle {
 
 static PHASE: LazyLock<RwLock<ActionPhase>> = LazyLock::new(|| RwLock::new(ActionPhase::Idle));
 
+/// App-controlled install gate.  Defaults to enabled so tests and
+/// embedded updater callers get the normal release flow unless the app
+/// explicitly mirrors `[Options] UpdaterInstallEnabled = 0`.
+static INSTALL_ENABLED: AtomicBool = AtomicBool::new(true);
+
 /// Worker-thread mutex.  Held only by `request_*` helpers so that two
 /// rapid-fire button presses never spawn two workers; the second call
 /// becomes a no-op.
@@ -232,6 +236,17 @@ fn worker_should_stop(generation: u64) -> bool {
 #[cfg(test)]
 fn cancel_requested_for(generation: u64) -> bool {
     worker_should_stop(generation)
+}
+
+/// Mirrors the app config's install-enabled flag into the updater
+/// crate without making the updater depend on the root config module.
+pub fn set_install_enabled(enabled: bool) {
+    INSTALL_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+#[inline]
+fn install_enabled() -> bool {
+    INSTALL_ENABLED.load(Ordering::Relaxed)
 }
 
 /// Mark the in-flight check / download as cancelled and immediately
@@ -298,11 +313,12 @@ fn set_phase_if_current(generation: u64, next: ActionPhase) -> bool {
 /// Pure transition: "check completed, here is the result, what should
 /// the overlay show?".  Lifted out of the worker so we can unit-test it.
 ///
-/// Reads `[Options] UpdaterInstallEnabled` from the live config; for
-/// pure unit tests, prefer [`classify_check_result_with`] to inject the
-/// flag directly without touching global state.
+/// Reads the install-enabled flag mirrored by the app from
+/// `[Options] UpdaterInstallEnabled`; for pure unit tests, prefer
+/// [`classify_check_result_with`] to inject the flag directly without
+/// touching global state.
 pub fn classify_check_result(state: UpdateState) -> ActionPhase {
-    classify_check_result_with(state, config::get().updater_install_enabled)
+    classify_check_result_with(state, install_enabled())
 }
 
 /// Same as [`classify_check_result`] but takes the install-enabled flag
@@ -430,7 +446,7 @@ fn run_check_now(generation: u64) {
     // check refreshes that too.  This is unconditional: even a
     // superseded worker's freshly-fetched release info is useful for
     // the banner, and `replace_snapshot` has its own staleness check.
-    deadsync_updater::state::replace_snapshot(state.clone());
+    crate::state::replace_snapshot(state.clone());
     set_phase_if_current(generation, classify_check_result(state));
 }
 
@@ -446,7 +462,7 @@ pub fn request_download() {
         ActionPhase::ConfirmDownload { info, asset } => (info, asset),
         _ => return,
     };
-    if !config::get().updater_install_enabled {
+    if !install_enabled() {
         // Operator opted out via `[Options] UpdaterInstallEnabled = 0`
         // after the ConfirmDownload phase was published.  Re-route to
         // the no-install variant so the overlay drops the Download
@@ -674,7 +690,7 @@ fn run_apply(info: ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     {
         let _ = &info;
-        match deadsync_updater::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
+        match crate::cli::spawn_apply_helper(&archive_path, &expected_sha256) {
             Ok(()) => {
                 log::info!("Spawned self-update helper; exiting current process");
                 log::logger().flush();
@@ -694,12 +710,12 @@ fn run_apply(info: ReleaseInfo, archive_path: PathBuf, expected_sha256: [u8; 32]
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
-    match deadsync_updater::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
-        Ok(deadsync_updater::cli::ApplyOutcome::Relaunched) => {
+    match crate::cli::apply_archive_and_relaunch(&archive_path, &expected_sha256) {
+        Ok(crate::cli::ApplyOutcome::Relaunched) => {
             log::info!("Self-update applied; exiting to let new process take over");
             std::process::exit(0);
         }
-        Ok(deadsync_updater::cli::ApplyOutcome::AppliedNoRelaunch { detail }) => {
+        Ok(crate::cli::ApplyOutcome::AppliedNoRelaunch { detail }) => {
             // Apply committed but spawn failed.  The on-disk install
             // is on the new version and the journal is `Applied`;
             // staying in this old process against a mutated install

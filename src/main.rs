@@ -144,6 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     config::load();
     let cfg = config::get();
+    deadsync_updater::action::set_install_enabled(cfg.updater_install_enabled);
     log::set_max_level(cfg.log_level.as_level_filter());
     logging::write_startup_report(
         StartupBuildInfo {

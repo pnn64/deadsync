@@ -1,4 +1,4 @@
-//! Modal overlay that visualises [`crate::engine::updater::action::ActionPhase`].
+//! Modal overlay that visualises [`deadsync_updater::action::ActionPhase`].
 //!
 //! The overlay renders only when the action state is non-Idle.  It owns
 //! no state of its own — every frame the screen passes the current
@@ -21,9 +21,9 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::present::actors::{Actor, TextAlign};
 use crate::engine::present::color;
-use crate::engine::updater::action::{self, ActionErrorKind, ActionPhase};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_updater::action::{self, ActionErrorKind, ActionPhase};
 
 use super::loading_bar;
 

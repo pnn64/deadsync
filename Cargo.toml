@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.710"
+version = "0.4.711"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -124,8 +124,6 @@ pollster = "0.4.0"
 # Audio
 rubato = "0.16.2"
 
-# Networking
-ureq = { version = "3.3.0", features = ["json", "rustls"] }
 tungstenite = "0.29.0"
 
 # Unlocks

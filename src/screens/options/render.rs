@@ -1303,7 +1303,7 @@ pub fn push_actors(
     }
 
     actors.extend(crate::screens::components::shared::update_overlay::build(
-        &crate::engine::updater::action::current(),
+        &deadsync_updater::action::current(),
         state.active_color_index,
     ));
 }

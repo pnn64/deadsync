@@ -209,6 +209,7 @@ const VERSION_IMPORT_SCAN_DIRS: &[&str] =
     &["src", "crates", "tests", "tests/compose", "tests/draw"];
 
 const UPDATER_CORE_FILES: &[&str] = &[
+    "action.rs",
     "apply_journal.rs",
     "apply_unix.rs",
     "apply_windows.rs",
@@ -218,6 +219,7 @@ const UPDATER_CORE_FILES: &[&str] = &[
 ];
 
 const UPDATER_CORE_TOKENS: &[&str] = &[
+    "action",
     "cli",
     "download",
     "state",
@@ -229,10 +231,21 @@ const UPDATER_CORE_TOKENS: &[&str] = &[
     "UpdateState",
     "FetchOutcome",
     "UpdaterError",
+    "ActionPhase",
+    "ActionErrorKind",
     "apply_supported_for_host",
     "check_agent",
+    "classify_check_result",
+    "classify_error",
+    "current",
+    "dismiss",
     "download_agent",
+    "downloads_dir",
     "fetch_latest_release",
+    "request_apply",
+    "request_cancel",
+    "request_check_now",
+    "request_download",
 ];
 
 const ENGINE_PLATFORM_FACADE_MODULES: &[&str] = &[
@@ -2253,6 +2266,8 @@ fn updater_core_lives_in_updater_crate() {
     let engine_updater = root.join("src/engine/updater/mod.rs");
     if let Ok(text) = fs::read_to_string(&engine_updater) {
         for module in [
+            "action",
+            "state",
             "cli",
             "download",
             "apply_journal",
@@ -2266,6 +2281,16 @@ fn updater_core_lives_in_updater_crate() {
                 ));
             }
         }
+    }
+
+    let engine_mod = root.join("src/engine/mod.rs");
+    if let Ok(text) = fs::read_to_string(&engine_mod)
+        && count_token_refs(&text, "pub mod updater") != 0
+    {
+        failures.push(format!(
+            "{} declares engine::updater; import deadsync_updater directly",
+            rel_path(&root, &engine_mod)
+        ));
     }
 
     for dir in ["src", "tests"] {
