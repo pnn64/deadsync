@@ -43,6 +43,8 @@ use deadsync_audio_backend_native::launch::SFX_QUEUE_CAP;
 use deadsync_audio_backend_native::launch::build_audio_launch;
 #[cfg(windows)]
 use deadsync_audio_backend_native::launch::start_wasapi_backend;
+#[cfg(target_os = "macos")]
+use deadsync_audio_backend_native::macos_coreaudio;
 #[cfg(windows)]
 use deadsync_audio_backend_native::windows_wasapi::WasapiOutputStream;
 use deadsync_audio_decode as decode;
@@ -770,7 +772,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
 
 #[cfg(target_os = "macos")]
 fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let devices = backends::macos_coreaudio::enumerate_output_devices();
+    let devices = macos_coreaudio::enumerate_output_devices();
     if devices.is_empty() {
         warn!(
             "No CoreAudio output devices were enumerated at startup; native audio will use the system default device."
@@ -990,7 +992,7 @@ enum OutputBackend {
     #[cfg(has_pulse_audio)]
     Pulse(backends::linux_pulse::PulseOutputStream),
     #[cfg(target_os = "macos")]
-    CoreAudio(backends::macos_coreaudio::CoreAudioOutputStream),
+    CoreAudio(macos_coreaudio::CoreAudioOutputStream),
     #[cfg(target_os = "freebsd")]
     FreeBsdPcm(freebsd_pcm::FreeBsdPcmOutputStream),
     #[cfg(windows)]
@@ -1124,7 +1126,7 @@ fn start_macos_coreaudio_backend(
     if matches!(coreaudio.output_mode, AudioOutputMode::Exclusive) {
         return Err("CoreAudio exclusive output is not implemented yet.".to_string());
     }
-    let prep = backends::macos_coreaudio::prepare(
+    let prep = macos_coreaudio::prepare(
         coreaudio.device_uid.clone(),
         coreaudio.device_name.clone(),
         coreaudio.requested_rate_hz,
@@ -1133,8 +1135,7 @@ fn start_macos_coreaudio_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream =
-        backends::macos_coreaudio::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = macos_coreaudio::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::CoreAudio(stream), ready, sfx_sender))
 }
 

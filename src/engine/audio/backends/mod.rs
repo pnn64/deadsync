@@ -9,5 +9,3 @@ pub mod linux_pipewire;
 #[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 pub mod linux_pulse;
-#[cfg(target_os = "macos")]
-pub mod macos_coreaudio;

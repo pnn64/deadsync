@@ -29,6 +29,12 @@ windows = { version = "0.62.2", features = [
 [target.'cfg(target_os = "freebsd")'.dependencies]
 libc = "0.2.186"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio = { package = "coreaudio-rs", version = "0.14.2" }
+mach2 = "0.6.0"
+objc2-core-audio = "0.3.2"
+objc2-core-foundation = "0.3.2"
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

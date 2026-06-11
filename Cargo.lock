@@ -971,7 +971,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.698"
+version = "0.4.699"
 dependencies = [
  "alsa",
  "bincode",
@@ -1066,10 +1066,14 @@ dependencies = [
 name = "deadsync-audio-backend-native"
 version = "0.1.0"
 dependencies = [
+ "coreaudio-rs",
  "deadsync-audio",
  "deadsync-platform",
  "libc",
  "log",
+ "mach2",
+ "objc2-core-audio",
+ "objc2-core-foundation",
  "windows",
 ]
 

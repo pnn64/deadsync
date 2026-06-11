@@ -1,3 +1,7 @@
+use crate::telemetry::{
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
+};
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
 use coreaudio::audio_unit::macos_helpers::{
     audio_unit_from_device_id, get_audio_device_ids_for_scope, get_available_sample_rates,
@@ -9,10 +13,6 @@ use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
@@ -29,7 +29,7 @@ use std::ptr::{NonNull, null};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
-pub(crate) struct CoreAudioOutputPrep {
+pub struct CoreAudioOutputPrep {
     audio_unit: AudioUnit,
     device_name: String,
     sample_rate_hz: u32,
@@ -38,7 +38,7 @@ pub(crate) struct CoreAudioOutputPrep {
 }
 
 impl CoreAudioOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -52,7 +52,7 @@ impl CoreAudioOutputPrep {
     }
 }
 
-pub(crate) struct CoreAudioOutputStream {
+pub struct CoreAudioOutputStream {
     audio_unit: Option<AudioUnit>,
 }
 
@@ -64,7 +64,7 @@ impl Drop for CoreAudioOutputStream {
     }
 }
 
-pub(crate) struct CoreAudioOutputDevice {
+pub struct CoreAudioOutputDevice {
     pub uid: String,
     pub name: String,
     pub sample_rates_hz: Vec<u32>,
@@ -77,7 +77,7 @@ const COMMON_SAMPLE_RATES_HZ: [u32; 11] = [
     48_000, 44_100, 96_000, 88_200, 192_000, 176_400, 32_000, 22_050, 16_000, 11_025, 384_000,
 ];
 
-pub(crate) fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
+pub fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
     let default_device_id = get_default_device_id(false);
     let Ok(device_ids) = get_audio_device_ids_for_scope(Scope::Output) else {
         warn!("failed to enumerate CoreAudio output devices at startup");
@@ -171,7 +171,7 @@ struct ConfiguredUnit {
     buffer_frames: u32,
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     device_uid: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
@@ -194,7 +194,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     mut prep: CoreAudioOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

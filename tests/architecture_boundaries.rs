@@ -877,6 +877,7 @@ fn audio_core_lives_in_audio_crate() {
         root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
         root.join("crates/deadsync-audio-backend-native/src/freebsd_pcm.rs"),
         root.join("crates/deadsync-audio-backend-native/src/launch.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/macos_coreaudio.rs"),
         root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
         root.join("crates/deadsync-audio-backend-native/src/windows_wasapi.rs"),
     ] {
@@ -897,6 +898,15 @@ fn audio_core_lives_in_audio_crate() {
     {
         failures.push(
             "src/engine/audio/backends/freebsd_pcm.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/macos_coreaudio.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/macos_coreaudio.rs should live in deadsync-audio-backend-native"
                 .to_string(),
         );
     }
@@ -1026,6 +1036,7 @@ fn audio_core_lives_in_audio_crate() {
             "WasapiAccessMode",
             "backends::windows_wasapi",
             "backends::freebsd_pcm",
+            "backends::macos_coreaudio",
             "windows_wasapi::prepare",
             "windows_wasapi::start",
             "fn start_wasapi_backend",
@@ -1056,6 +1067,14 @@ fn audio_core_lives_in_audio_crate() {
         {
             failures.push(format!(
                 "{} should not re-export the moved FreeBSD PCM backend",
+                rel_path(&root, &backend_mod)
+            ));
+        }
+        if let Ok(text) = fs::read_to_string(&backend_mod)
+            && text.contains("macos_coreaudio")
+        {
+            failures.push(format!(
+                "{} should not re-export the moved CoreAudio backend",
                 rel_path(&root, &backend_mod)
             ));
         }
