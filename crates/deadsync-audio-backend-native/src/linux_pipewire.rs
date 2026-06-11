@@ -1,10 +1,10 @@
+use crate::telemetry::{
+    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
+};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    publish_output_timing, publish_output_timing_quality, report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use log::{info, warn};
@@ -19,14 +19,14 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
 
-pub(crate) struct PipeWireOutputPrep {
+pub struct PipeWireOutputPrep {
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
 }
 
 impl PipeWireOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -40,7 +40,7 @@ impl PipeWireOutputPrep {
     }
 }
 
-pub(crate) struct PipeWireOutputStream {
+pub struct PipeWireOutputStream {
     stop_sender: pw::channel::Sender<()>,
     thread: Option<JoinHandle<()>>,
 }
@@ -130,7 +130,7 @@ impl CallbackState {
     }
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     requested_device_name: Option<String>,
     sample_rate_hz: u32,
     channels: usize,
@@ -148,7 +148,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: PipeWireOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

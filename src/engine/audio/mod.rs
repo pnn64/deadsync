@@ -1,4 +1,3 @@
-mod backends;
 pub mod folder;
 pub mod replaygain;
 mod resample;
@@ -44,8 +43,13 @@ use deadsync_audio_backend_native::launch::build_audio_launch;
 #[cfg(windows)]
 use deadsync_audio_backend_native::launch::start_wasapi_backend;
 #[cfg(target_os = "linux")]
+use deadsync_audio_backend_native::linux_alsa;
+#[cfg(target_os = "linux")]
 #[cfg(has_jack_audio)]
 use deadsync_audio_backend_native::linux_jack;
+#[cfg(target_os = "linux")]
+#[cfg(has_pipewire_audio)]
+use deadsync_audio_backend_native::linux_pipewire;
 #[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 use deadsync_audio_backend_native::linux_pulse;
@@ -659,8 +663,8 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
 #[cfg(target_os = "linux")]
 #[inline(always)]
 fn linux_default_output_device(
-    devices: &[backends::linux_alsa::AlsaOutputDevice],
-) -> Option<&backends::linux_alsa::AlsaOutputDevice> {
+    devices: &[linux_alsa::AlsaOutputDevice],
+) -> Option<&linux_alsa::AlsaOutputDevice> {
     devices
         .iter()
         .find(|device| device.is_default)
@@ -669,7 +673,7 @@ fn linux_default_output_device(
 
 #[cfg(target_os = "linux")]
 fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBackendLaunch) {
-    let alsa_devices = backends::linux_alsa::enumerate_output_devices();
+    let alsa_devices = linux_alsa::enumerate_output_devices();
     if alsa_devices.is_empty() {
         warn!(
             "No ALSA playback devices were enumerated at startup; Linux audio will rely on backend defaults."
@@ -987,13 +991,13 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
 #[allow(dead_code)]
 enum OutputBackend {
     #[cfg(target_os = "linux")]
-    Alsa(backends::linux_alsa::AlsaOutputStream),
+    Alsa(linux_alsa::AlsaOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_jack_audio)]
     Jack(linux_jack::JackOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_pipewire_audio)]
-    PipeWire(backends::linux_pipewire::PipeWireOutputStream),
+    PipeWire(linux_pipewire::PipeWireOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
     Pulse(linux_pulse::PulseOutputStream),
@@ -1011,12 +1015,10 @@ fn start_linux_alsa_backend(
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     let access_mode = match alsa.output_mode {
-        AudioOutputMode::Exclusive => backends::linux_alsa::AlsaAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => {
-            backends::linux_alsa::AlsaAccessMode::Shared
-        }
+        AudioOutputMode::Exclusive => linux_alsa::AlsaAccessMode::Exclusive,
+        AudioOutputMode::Auto | AudioOutputMode::Shared => linux_alsa::AlsaAccessMode::Shared,
     };
-    let prep = backends::linux_alsa::prepare(
+    let prep = linux_alsa::prepare(
         alsa.pcm_id.clone(),
         alsa.device_name.clone(),
         alsa.sample_rate_hz,
@@ -1026,7 +1028,7 @@ fn start_linux_alsa_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = linux_alsa::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
 }
 
@@ -1062,7 +1064,7 @@ fn start_linux_pipewire_backend(
             name
         );
     }
-    let prep = backends::linux_pipewire::prepare(
+    let prep = linux_pipewire::prepare(
         pipewire.requested_device_name.clone(),
         pipewire.sample_rate_hz,
         pipewire.channels,
@@ -1070,8 +1072,7 @@ fn start_linux_pipewire_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream =
-        backends::linux_pipewire::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = linux_pipewire::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::PipeWire(stream), ready, sfx_sender))
 }
 

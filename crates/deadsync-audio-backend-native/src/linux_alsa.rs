@@ -1,13 +1,13 @@
+use crate::telemetry::{
+    note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    publish_output_timing_quality, report_audio_render_callback,
+};
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    note_output_clock_fallback, note_output_underrun, publish_output_timing,
-    publish_output_timing_quality, report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use libc::timespec;
@@ -18,7 +18,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum AlsaAccessMode {
+pub enum AlsaAccessMode {
     Shared,
     Exclusive,
 }
@@ -33,7 +33,7 @@ impl AlsaAccessMode {
     }
 }
 
-pub(crate) struct AlsaOutputPrep {
+pub struct AlsaOutputPrep {
     pcm_id: String,
     device_name: String,
     sample_rate_hz: u32,
@@ -45,7 +45,7 @@ pub(crate) struct AlsaOutputPrep {
 }
 
 impl AlsaOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -62,7 +62,7 @@ impl AlsaOutputPrep {
     }
 }
 
-pub(crate) struct AlsaOutputStream {
+pub struct AlsaOutputStream {
     stop_flag: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -76,7 +76,7 @@ impl Drop for AlsaOutputStream {
     }
 }
 
-pub(crate) struct AlsaOutputDevice {
+pub struct AlsaOutputDevice {
     pub pcm_id: String,
     pub name: String,
     pub sample_rates_hz: Vec<u32>,
@@ -92,7 +92,7 @@ struct PhysicalOutputDevice {
     device_name: String,
 }
 
-pub(crate) fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
+pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
     let default_pcm_id = default_hw_pcm_id();
     let mut devices = physical_output_devices()
         .into_iter()
@@ -243,7 +243,7 @@ fn supported_sample_rates(hw: &HwParams<'_>, default_rate_hz: u32) -> Vec<u32> {
     sample_rates_hz
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     pcm_id: Option<String>,
     device_name: String,
     sample_rate_hz: u32,
@@ -265,7 +265,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: AlsaOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

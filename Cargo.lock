@@ -971,9 +971,8 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.701"
+version = "0.4.702"
 dependencies = [
- "alsa",
  "bincode",
  "bitflags 2.13.0",
  "bytemuck",
@@ -1006,7 +1005,6 @@ dependencies = [
  "hidparser",
  "image",
  "libc",
- "libloading 0.9.0",
  "log",
  "mach2",
  "mlua",
@@ -1017,7 +1015,6 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
- "pipewire",
  "pollster",
  "qrcodegen",
  "rand 0.10.1",
@@ -1066,6 +1063,7 @@ dependencies = [
 name = "deadsync-audio-backend-native"
 version = "0.1.0"
 dependencies = [
+ "alsa",
  "coreaudio-rs",
  "deadsync-audio",
  "deadsync-platform",
@@ -1075,6 +1073,7 @@ dependencies = [
  "mach2",
  "objc2-core-audio",
  "objc2-core-foundation",
+ "pipewire",
  "windows",
 ]
 

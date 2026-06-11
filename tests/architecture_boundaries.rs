@@ -878,7 +878,9 @@ fn audio_core_lives_in_audio_crate() {
         root.join("crates/deadsync-audio-backend-native/src/lib.rs"),
         root.join("crates/deadsync-audio-backend-native/src/freebsd_pcm.rs"),
         root.join("crates/deadsync-audio-backend-native/src/launch.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/linux_alsa.rs"),
         root.join("crates/deadsync-audio-backend-native/src/linux_jack.rs"),
+        root.join("crates/deadsync-audio-backend-native/src/linux_pipewire.rs"),
         root.join("crates/deadsync-audio-backend-native/src/linux_pulse.rs"),
         root.join("crates/deadsync-audio-backend-native/src/macos_coreaudio.rs"),
         root.join("crates/deadsync-audio-backend-native/src/telemetry.rs"),
@@ -928,6 +930,24 @@ fn audio_core_lives_in_audio_crate() {
     {
         failures.push(
             "src/engine/audio/backends/linux_jack.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/linux_pipewire.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/linux_pipewire.rs should live in deadsync-audio-backend-native"
+                .to_string(),
+        );
+    }
+    if root
+        .join("src/engine/audio/backends/linux_alsa.rs")
+        .exists()
+    {
+        failures.push(
+            "src/engine/audio/backends/linux_alsa.rs should live in deadsync-audio-backend-native"
                 .to_string(),
         );
     }
@@ -1060,6 +1080,9 @@ fn audio_core_lives_in_audio_crate() {
             "backends::macos_coreaudio",
             "backends::linux_pulse",
             "backends::linux_jack",
+            "backends::linux_pipewire",
+            "backends::linux_alsa",
+            "mod backends;",
             "windows_wasapi::prepare",
             "windows_wasapi::start",
             "fn start_wasapi_backend",
@@ -1075,51 +1098,16 @@ fn audio_core_lives_in_audio_crate() {
     }
 
     let backend_dir = root.join("src/engine/audio/backends");
+    if backend_dir.join("mod.rs").exists() {
+        failures.push(
+            "src/engine/audio/backends/mod.rs should be deleted after native backend extraction"
+                .to_string(),
+        );
+    }
     if backend_dir.exists() {
-        let backend_mod = backend_dir.join("mod.rs");
-        if let Ok(text) = fs::read_to_string(&backend_mod)
-            && text.contains("windows_wasapi")
-        {
-            failures.push(format!(
-                "{} should not re-export the moved WASAPI backend",
-                rel_path(&root, &backend_mod)
-            ));
-        }
-        if let Ok(text) = fs::read_to_string(&backend_mod)
-            && text.contains("freebsd_pcm")
-        {
-            failures.push(format!(
-                "{} should not re-export the moved FreeBSD PCM backend",
-                rel_path(&root, &backend_mod)
-            ));
-        }
-        if let Ok(text) = fs::read_to_string(&backend_mod)
-            && text.contains("macos_coreaudio")
-        {
-            failures.push(format!(
-                "{} should not re-export the moved CoreAudio backend",
-                rel_path(&root, &backend_mod)
-            ));
-        }
-        if let Ok(text) = fs::read_to_string(&backend_mod)
-            && text.contains("linux_pulse")
-        {
-            failures.push(format!(
-                "{} should not re-export the moved PulseAudio backend",
-                rel_path(&root, &backend_mod)
-            ));
-        }
-        if let Ok(text) = fs::read_to_string(&backend_mod)
-            && text.contains("linux_jack")
-        {
-            failures.push(format!(
-                "{} should not re-export the moved JACK backend",
-                rel_path(&root, &backend_mod)
-            ));
-        }
         for file in rust_files(&backend_dir) {
             let rel = rel_path(&root, &file);
-            if rel.ends_with("mod.rs") || rel.ends_with("telemetry.rs") {
+            if rel.ends_with("telemetry.rs") {
                 continue;
             }
             let text = fs::read_to_string(&file).expect("backend source file should be readable");
