@@ -1,11 +1,11 @@
+use crate::telemetry::{
+    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
+    report_audio_render_callback,
+};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
-};
-use deadsync_audio_backend_native::telemetry::{
-    note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
-    report_audio_render_callback,
 };
 use deadsync_platform::host_time::now_nanos;
 use libloading::Library;
@@ -89,7 +89,7 @@ struct PulseApi {
 
 static PULSE_API: OnceLock<Result<PulseApi, String>> = OnceLock::new();
 
-pub(crate) fn is_available() -> bool {
+pub fn is_available() -> bool {
     pulse_api().is_ok()
 }
 
@@ -150,7 +150,7 @@ unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> 
         })
 }
 
-pub(crate) struct PulseOutputPrep {
+pub struct PulseOutputPrep {
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
@@ -159,7 +159,7 @@ pub(crate) struct PulseOutputPrep {
 }
 
 impl PulseOutputPrep {
-    pub(crate) fn ready(&self) -> OutputBackendReady {
+    pub fn ready(&self) -> OutputBackendReady {
         OutputBackendReady {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
@@ -173,7 +173,7 @@ impl PulseOutputPrep {
     }
 }
 
-pub(crate) struct PulseOutputStream {
+pub struct PulseOutputStream {
     stop_flag: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -187,7 +187,7 @@ impl Drop for PulseOutputStream {
     }
 }
 
-pub(crate) fn prepare(
+pub fn prepare(
     requested_device_name: Option<String>,
     sample_rate_hz: u32,
     channels: usize,
@@ -211,7 +211,7 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn start(
+pub fn start(
     prep: PulseOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,

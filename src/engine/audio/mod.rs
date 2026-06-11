@@ -43,6 +43,9 @@ use deadsync_audio_backend_native::launch::SFX_QUEUE_CAP;
 use deadsync_audio_backend_native::launch::build_audio_launch;
 #[cfg(windows)]
 use deadsync_audio_backend_native::launch::start_wasapi_backend;
+#[cfg(target_os = "linux")]
+#[cfg(has_pulse_audio)]
+use deadsync_audio_backend_native::linux_pulse;
 #[cfg(target_os = "macos")]
 use deadsync_audio_backend_native::macos_coreaudio;
 #[cfg(windows)]
@@ -179,7 +182,7 @@ pub fn available_linux_backends() -> Vec<LinuxAudioBackend> {
     #[cfg(has_pipewire_audio)]
     backends.push(LinuxAudioBackend::PipeWire);
     #[cfg(has_pulse_audio)]
-    if backends::linux_pulse::is_available() {
+    if linux_pulse::is_available() {
         backends.push(LinuxAudioBackend::PulseAudio);
     }
     backends.push(LinuxAudioBackend::Alsa);
@@ -990,7 +993,7 @@ enum OutputBackend {
     PipeWire(backends::linux_pipewire::PipeWireOutputStream),
     #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
-    Pulse(backends::linux_pulse::PulseOutputStream),
+    Pulse(linux_pulse::PulseOutputStream),
     #[cfg(target_os = "macos")]
     CoreAudio(macos_coreaudio::CoreAudioOutputStream),
     #[cfg(target_os = "freebsd")]
@@ -1085,7 +1088,7 @@ fn start_linux_pulse_backend(
             name
         );
     }
-    let prep = backends::linux_pulse::prepare(
+    let prep = linux_pulse::prepare(
         pulse.requested_device_name.clone(),
         pulse.sample_rate_hz,
         pulse.channels,
@@ -1093,7 +1096,7 @@ fn start_linux_pulse_backend(
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
     let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
-    let stream = backends::linux_pulse::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
+    let stream = linux_pulse::start(prep, music_ring, sfx_receiver, audio_render_maps())?;
     Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
 }
 
@@ -1287,7 +1290,7 @@ fn start_output_backend(
                 }
             }
             #[cfg(has_pulse_audio)]
-            if backends::linux_pulse::is_available()
+            if linux_pulse::is_available()
                 && let Some(pulse) = pulse
             {
                 match start_linux_pulse_backend(pulse, music_ring.clone()) {

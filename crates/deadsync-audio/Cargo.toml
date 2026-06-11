@@ -6,6 +6,13 @@ license = "GPL-3.0"
 
 [dependencies]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    "cfg(has_jack_audio)",
+    "cfg(has_pipewire_audio)",
+    "cfg(has_pulse_audio)",
+] }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
