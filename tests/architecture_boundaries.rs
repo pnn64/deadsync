@@ -66,6 +66,26 @@ const LOGICAL_INPUT_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
+const NATIVE_INPUT_LAUNCH_SYMBOLS: &[&str] = &[
+    "run_pad_backend",
+    "run_linux_backend",
+    "run_freebsd_backend",
+    "run_macos_backend",
+    "run_windows_backend",
+    "set_raw_keyboard_window_focused",
+    "set_raw_keyboard_capture_enabled",
+    "unix_raw_keyboard_backend_active",
+];
+
+const NATIVE_INPUT_SCAN_DIRS: &[&str] = &[
+    "src/app",
+    "src/config",
+    "src/game",
+    "src/screens",
+    "src/test_support",
+    "tests",
+];
+
 const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "src/app",
     "src/assets",
@@ -1393,6 +1413,78 @@ fn logical_input_imports_do_not_use_engine_facade() {
     assert!(
         failures.is_empty(),
         "logical input should be imported from deadsync_input:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn native_input_launch_imports_do_not_use_engine_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    let backend_dir = root.join("src/engine/input/backends");
+    if backend_dir.exists() {
+        failures.push(
+            "src/engine/input/backends still exists; import deadsync_input_native directly"
+                .to_string(),
+        );
+    }
+
+    let input_mod_path = root.join("src/engine/input/mod.rs");
+    if let Ok(text) = fs::read_to_string(&input_mod_path) {
+        for token in ["mod backends;", "BackendHost", "InputThreadPolicy"] {
+            let count = count_token_refs(&text, token);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still references native input backend token {token} {count} times",
+                    rel_path(&root, &input_mod_path)
+                ));
+            }
+        }
+        for symbol in NATIVE_INPUT_LAUNCH_SYMBOLS {
+            let count = count_token_refs(&text, symbol);
+            if count != 0 {
+                failures.push(format!(
+                    "{} still defines native input launch symbol {symbol} {count} times",
+                    rel_path(&root, &input_mod_path)
+                ));
+            }
+        }
+    }
+
+    for dir in NATIVE_INPUT_SCAN_DIRS {
+        let path = root.join(dir);
+        if !path.exists() {
+            continue;
+        }
+        for file in rust_files(&path) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let rel = rel_path(&root, &file);
+            if rel == "tests/architecture_boundaries.rs" {
+                continue;
+            }
+            for token in ["use crate::engine::input;", "use deadsync::engine::input;"] {
+                let count = count_token_refs(&text, token);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} imports native input facade token {token} {count} times"
+                    ));
+                }
+            }
+            for symbol in NATIVE_INPUT_LAUNCH_SYMBOLS {
+                let count = count_engine_input_symbol_refs(&text, symbol);
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} imports native input launch symbol {symbol} from engine::input {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "native input launch should be imported from deadsync_input_native:\n{}",
         failures.join("\n")
     );
 }

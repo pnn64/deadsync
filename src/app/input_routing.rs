@@ -1,6 +1,5 @@
 use super::{App, CurrentScreen, TransitionState};
 use crate::config;
-use crate::engine::input;
 use deadsync_input as logical_input;
 use deadsync_input::InputEvent;
 use deadsync_input::RawKeyboardEvent;
@@ -175,12 +174,12 @@ impl App {
                 self.state.screens.current_screen,
                 &self.state.shell.transition,
             );
-        input::set_raw_keyboard_capture_enabled(capture_enabled);
+        deadsync_input_native::set_raw_keyboard_capture_enabled(capture_enabled);
     }
 
     #[inline(always)]
     pub(super) fn clear_gameplay_input_events(&self) {
-        input::set_raw_keyboard_capture_enabled(false);
+        deadsync_input_native::set_raw_keyboard_capture_enabled(false);
     }
 }
 

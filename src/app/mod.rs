@@ -4,6 +4,7 @@ use deadsync_score as score_data;
 mod commands;
 mod dynamic_media;
 mod graphics;
+mod input_backend;
 mod input_routing;
 pub(crate) mod media_cache;
 mod pad_config_sync;
@@ -19,7 +20,7 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::engine::input;
+use crate::engine::input::fsr as fsr_input;
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
@@ -3882,7 +3883,7 @@ pub struct App {
     backend: Option<renderer_backend::Backend>,
     backend_type: BackendType,
     _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor,
-    fsr_monitor: input::fsr::Monitor,
+    fsr_monitor: fsr_input::Monitor,
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
     fsr_pads_active: bool,
@@ -3954,7 +3955,7 @@ impl App {
         now: Instant,
         window: Option<&Arc<Window>>,
     ) {
-        input::set_raw_keyboard_window_focused(focused);
+        deadsync_input_native::set_raw_keyboard_window_focused(focused);
         if !self.state.shell.set_window_focus(focused, now) {
             return;
         }
@@ -5067,7 +5068,7 @@ impl App {
             backend: None,
             backend_type,
             _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor::acquire(),
-            fsr_monitor: input::fsr::Monitor::new(),
+            fsr_monitor: fsr_input::Monitor::new(),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
@@ -8159,7 +8160,7 @@ impl App {
         use winit::event::ElementState;
         use winit::keyboard::PhysicalKey;
 
-        if input::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
+        if deadsync_input_native::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
             return;
         }
         let PhysicalKey::Code(code) = key_event.physical_key else {
@@ -10096,8 +10097,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
+        let input_host = input_backend::host();
         std::thread::spawn(move || {
-            input::run_windows_backend(
+            deadsync_input_native::run_windows_backend(
                 win_pad_backend,
                 move |pe| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
@@ -10108,6 +10110,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 move |ev| {
                     let _ = proxy_key.send_event(UserEvent::Key(ev));
                 },
+                input_host,
             );
         });
     }
@@ -10116,8 +10119,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
+        let input_host = input_backend::host();
         std::thread::spawn(move || {
-            input::run_linux_backend(
+            deadsync_input_native::run_linux_backend(
                 move |pe| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
@@ -10127,6 +10131,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 move |ke| {
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
+                input_host,
             );
         });
     }
@@ -10135,8 +10140,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
+        let input_host = input_backend::host();
         std::thread::spawn(move || {
-            input::run_freebsd_backend(
+            deadsync_input_native::run_freebsd_backend(
                 move |pe| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
@@ -10146,6 +10152,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 move |ke| {
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
+                input_host,
             );
         });
     }
@@ -10154,8 +10161,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
+        let input_host = input_backend::host();
         std::thread::spawn(move || {
-            input::run_macos_backend(
+            deadsync_input_native::run_macos_backend(
                 move |pe| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
@@ -10165,6 +10173,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 move |ke| {
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
+                input_host,
             );
         });
     }

@@ -1,11 +1,13 @@
 use deadsync_input_native::{BackendHost, InputThreadPolicy};
 
+use crate::config;
+
 #[inline(always)]
 pub(super) fn host() -> BackendHost {
     BackendHost::new(
-        crate::config::pad_index_for_uuid,
+        config::pad_index_for_uuid,
         |vendor, product| {
-            deadsync_smx::native_smx_owns_device(vendor, product, crate::config::get().smx_input)
+            deadsync_smx::native_smx_owns_device(vendor, product, config::get().smx_input)
         },
         deadsync_platform::host_time::now_nanos,
         deadsync_platform::host_time::instant_nanos,
@@ -47,14 +49,3 @@ fn restore_input_thread(token: usize) {
 const fn boost_input_thread() -> InputThreadPolicy {
     InputThreadPolicy::none()
 }
-
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub(super) use deadsync_input_native::evdev;
-#[cfg(target_os = "freebsd")]
-pub(super) use deadsync_input_native::hidraw;
-#[cfg(target_os = "macos")]
-pub(super) use deadsync_input_native::iohid;
-#[cfg(windows)]
-pub(super) use deadsync_input_native::w32_raw_input;
-#[cfg(all(windows, not(target_vendor = "win7")))]
-pub(super) use deadsync_input_native::wgi;
