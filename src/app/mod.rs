@@ -4894,7 +4894,14 @@ impl App {
     /// happen when the (enabled, screen role, pack) triple changes, and the driver
     /// deduplicates the rest.
     fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName) {
-        let role = if enabled {
+        // The StepManiaX options page lights the pads blue/red to preview the
+        // player assignment (`drive_smx_options_lights`), writing the pad
+        // directly. Suppress the gif background there so the two don't fight
+        // over `set_lights`; the assignment preview wins.
+        let assignment_preview = self.state.screens.current_screen == CurrentScreen::Options
+            && config::get().smx_input
+            && options::is_smx_config_view(&self.state.screens.options_state);
+        let role = if enabled && !assignment_preview {
             smx_background_role(self.state.screens.current_screen)
         } else {
             None
