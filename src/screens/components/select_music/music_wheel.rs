@@ -754,6 +754,18 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     let wheel_charts: [Option<&ChartData>; profile_data::PLAYER_SLOTS] =
                         if is_selected_slot {
                             p.selected_charts
+                        } else if p.preferred_difficulty_index[0] == p.preferred_difficulty_index[1]
+                        {
+                            // Both sides request the same preferred difficulty,
+                            // so the per-side chart scan is identical. Resolve
+                            // once and reuse instead of scanning the chart list
+                            // twice. (&ChartData is Copy.)
+                            let chart = chart_for_preferred_or_nearest_standard(
+                                info,
+                                target_chart_type,
+                                p.preferred_difficulty_index[0],
+                            );
+                            [chart, chart]
                         } else {
                             [
                                 chart_for_preferred_or_nearest_standard(
