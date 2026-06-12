@@ -5,6 +5,7 @@ use deadsync::test_support::{
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
     gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
     pane_stats_bench, player_options_bench, visual_style_bg_bench,
+    evaluation_bench,
 };
 use deadsync_present::actors::Actor;
 use deadsync_present::compose;
@@ -526,6 +527,34 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
+            evaluation_bench::SCENARIO_NAME => {
+                let fixture = evaluation_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
+            evaluation_bench::SCENARIO_NAME_VERSUS => {
+                let fixture = evaluation_bench::fixture_versus();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
             player_options_bench::SCENARIO_NAME => {
                 let fixture = player_options_bench::fixture();
                 benchmark_actor_builder(
@@ -540,7 +569,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
-            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, visual-style-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
+            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, evaluation, evaluation-versus, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, visual-style-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
         },
         Phase::Compose => benchmark_compose(
             scenario.name,
