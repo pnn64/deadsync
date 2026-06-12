@@ -100,8 +100,8 @@ pub enum OverlayDrive {
     /// Freeze/roll sustain: loops in its loop region until `release_overlay`,
     /// which plays the outro if the GIF has one and clears otherwise. With
     /// `resume`, a fresh overlay starts at the loop region instead of the
-    /// intro (a freeze re-press within the grace period whose outro already
-    /// finished and cleared the overlay).
+    /// intro (a freeze/roll re-press within the grace period whose outro
+    /// already finished and cleared the overlay).
     Sustain { resume: bool },
 }
 
