@@ -1929,6 +1929,28 @@ fn eval_graph_shift(
     cycle[next_idx]
 }
 
+/// Cache key for a memoized per-player graph subtree (density + scatter + life).
+/// Captures every input the graph children depend on; when unchanged across frames
+/// the cached `Arc<[Actor]>` is cloned instead of rebuilt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct GraphCacheKey {
+    graph: EvalGraphPane,
+    versus: bool,
+    shade: bool,
+    panel_alpha_bits: u32,
+    tex_key_hash: u64,
+}
+
+#[inline]
+fn fnv1a_str(s: &str) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    for b in s.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -1970,6 +1992,9 @@ pub struct State {
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     test_input_state: test_input::State,
+    /// Memoized per-player graph subtree (cf. `GraphCacheKey`). Interior mutability so
+    /// it can be populated during `get_actors(&State, …)`.
+    graph_cache: [RefCell<Option<(GraphCacheKey, Arc<[Actor]>)>>; MAX_PLAYERS],
 }
 
 impl Clone for State {
@@ -2015,6 +2040,10 @@ impl Clone for State {
             menu_lr_undo: self.menu_lr_undo,
             favorite_code: self.favorite_code.clone(),
             test_input_state: self.test_input_state.clone(),
+            // Cloned State (e.g. stage summary pages) starts with an empty cache; it
+            // is repopulated lazily on first draw. Sharing Arcs across clones is safe
+            // but pointless, and an empty cache avoids any stale-key risk.
+            graph_cache: std::array::from_fn(|_| RefCell::new(None)),
         }
     }
 }
@@ -2608,6 +2637,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        graph_cache: std::array::from_fn(|_| RefCell::new(None)),
     }
 }
 
@@ -2760,6 +2790,7 @@ pub fn init_from_score_info(
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        graph_cache: std::array::from_fn(|_| RefCell::new(None)),
     }
 }
 
@@ -4656,33 +4687,46 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 1
             };
             let graph_mode = state.active_graph[graph_controller_idx];
-            let density_mesh = state.density_graph_mesh[player_idx].as_ref();
-            let scatter_mesh = match graph_mode {
-                EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
-                EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
-                EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
-                EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
-                EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+            let shade = crate::config::get().shade_scatterplot_judgments;
+            let graph_key = GraphCacheKey {
+                graph: graph_mode,
+                versus: play_style == profile_data::PlayStyle::Versus,
+                shade,
+                panel_alpha_bits: sl_panel_alpha.to_bits(),
+                tex_key_hash: fnv1a_str(&state.density_graph_texture_key),
             };
-            let scatter_bg_mesh = if crate::config::get().shade_scatterplot_judgments {
-                match graph_mode {
-                    EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
-                    EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
-                    EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
-                    EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
-                }
+            let cache_hit = {
+                let slot = state.graph_cache[player_idx].borrow();
+                slot.as_ref().is_some_and(|(k, _)| *k == graph_key)
+            };
+            // The graph subtree (density + scatter + life + baked-tween markers) reads
+            // no per-frame clock, so it is fully determined by `graph_key`. Memoize the
+            // built `Arc<[Actor]>` and clone it on subsequent frames instead of
+            // rebuilding hundreds of leaf actors.
+            let graph_children: Arc<[Actor]> = if cache_hit {
+                Arc::clone(&state.graph_cache[player_idx].borrow().as_ref().unwrap().1)
             } else {
-                None
-            };
-            let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
+                let density_mesh = state.density_graph_mesh[player_idx].as_ref();
+                let scatter_mesh = match graph_mode {
+                    EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
+                    EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
+                    EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
+                    EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
+                    EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+                };
+                let scatter_bg_mesh = if shade {
+                    match graph_mode {
+                        EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
+                        EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
+                        EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
+                        EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
+                    }
+                } else {
+                    None
+                };
+                let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
 
-            let graph_frame = Actor::Frame {
-                align: [0.5, 0.0],
-                offset: [frame_center_x, frame_center_y],
-                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
-                z: 101,
-                background: None,
-                children: vec![
+                let graph_children_vec: Vec<Actor> = vec![
                     act!(quad:
                         align(0.0, 0.0):
                         xy(0.0, 0.0):
@@ -5003,7 +5047,21 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             children: life_children,
                         }
                     },
-                ],
+                ];
+                let arc: Arc<[Actor]> = Arc::from(graph_children_vec);
+                *state.graph_cache[player_idx].borrow_mut() =
+                    Some((graph_key, Arc::clone(&arc)));
+                arc
+            };
+            let graph_frame = Actor::SharedFrame {
+                align: [0.5, 0.0],
+                offset: [frame_center_x, frame_center_y],
+                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                z: 101,
+                background: None,
+                children: graph_children,
+                tint: [1.0; 4],
+                blend: None,
             };
             actors.push(graph_frame);
         }
