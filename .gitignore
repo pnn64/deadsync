@@ -7,4 +7,5 @@ deadsync.ini
 prompt.txt
 AGENTS.md
 GEMINI.md
-.codex.DS_Store
+.codex
+.DS_Store
