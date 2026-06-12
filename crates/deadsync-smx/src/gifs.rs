@@ -72,10 +72,56 @@ pub struct FullPadAnim {
     /// Frame index playback returns to after the last frame.
     pub loop_frame: usize,
     /// Beat-locked playback: one loop spans this many beats (from the
-    /// `@<beats>B<bpm>` filename suffix; the bpm half documents the authored
-    /// reference tempo and playback follows the live beat). `None` means
-    /// realtime playback.
+    /// `@<beats>b<bpm>` filename suffix). Playback follows the live beat;
+    /// `None` means realtime playback.
     pub beats_per_loop: Option<f32>,
+}
+
+/// One background gif for a (pack, role, size), plus the reference BPM from its
+/// `@<beats>b<bpm>` suffix. A role can have several variants authored at
+/// different reference tempos; `select_variant` picks the best fit for a song's
+/// BPM (more frames at low tempo, fewer at high, to stay under the pad's 30fps
+/// without dropping frames). `None` reference BPM is an untagged/single gif.
+#[derive(Clone)]
+pub struct BackgroundVariant {
+    pub anim: Arc<FullPadAnim>,
+    pub ref_bpm: Option<f32>,
+}
+
+/// Pick the background variant that best fits `song_bpm`: the smallest
+/// reference BPM at or above the song's tempo (the densest gif that still plays
+/// at or under the pad's 30fps cap), falling back to the highest reference BPM
+/// when the song is faster than every variant (those half-time via the playback
+/// cap). With no song BPM or no tagged variants, the lowest-reference (or only)
+/// variant is used, deterministically regardless of load order.
+pub fn select_variant(variants: &[BackgroundVariant], song_bpm: Option<f32>) -> Option<Arc<FullPadAnim>> {
+    if let Some(bpm) = song_bpm.filter(|b| b.is_finite() && *b > 0.0) {
+        let at_or_above = variants
+            .iter()
+            .filter_map(|v| v.ref_bpm.map(|y| (y, v)))
+            .filter(|(y, _)| *y >= bpm)
+            .min_by(|(a, _), (b, _)| a.total_cmp(b));
+        let pick = at_or_above.or_else(|| {
+            variants
+                .iter()
+                .filter_map(|v| v.ref_bpm.map(|y| (y, v)))
+                .max_by(|(a, _), (b, _)| a.total_cmp(b))
+        });
+        if let Some((_, v)) = pick {
+            return Some(v.anim.clone());
+        }
+    }
+    // No BPM selection: the lowest-reference variant, or any untagged one.
+    variants
+        .iter()
+        .min_by(|a, b| ref_bpm_sort_key(a).total_cmp(&ref_bpm_sort_key(b)))
+        .map(|v| v.anim.clone())
+}
+
+/// Sort key making untagged variants (`ref_bpm` None) order after tagged ones,
+/// so the no-selection fallback prefers a real tempo when both are present.
+fn ref_bpm_sort_key(v: &BackgroundVariant) -> f32 {
+    v.ref_bpm.unwrap_or(f32::INFINITY)
 }
 
 /// A decoded per-panel judgement animation.
@@ -272,10 +318,18 @@ pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
 
 // Filename parsing
 
-/// Parse a GIF file stem like `song_select_25@1B120` into its base name, pad
-/// size, and optional beats-per-loop. Returns `None` for stems that don't
-/// follow the `<name>_<16|25>[@<beats>B<bpm>]` convention.
-fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<f32>)> {
+/// A parsed `@<beats>b<bpm>` beat-lock suffix: how many beats one loop spans,
+/// and the optional authored reference tempo used to pick among variants.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BeatSpec {
+    beats: f32,
+    ref_bpm: Option<f32>,
+}
+
+/// Parse a GIF file stem like `song_select_25@1b120` into its base name, pad
+/// size, and optional beat-lock spec. Returns `None` for stems that don't
+/// follow the `<name>_<16|25>[@<beats>b<bpm>]` convention.
+fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<BeatSpec>)> {
     let (base, beats) = match stem.split_once('@') {
         Some((base, tail)) => (base, Some(parse_beats(tail)?)),
         None => (stem, None),
@@ -289,25 +343,28 @@ fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<f32>)> {
     (!name.is_empty()).then_some((name, size, beats))
 }
 
-/// Parse the `<beats>B<bpm>` tail of a beat-lock suffix (e.g. `1B120` = one
-/// beat at 120bpm) into beats per loop. The bpm half is the authored
-/// reference tempo: it is validated but playback paces itself from the live
-/// beat, so only the beat count is returned. A bare `<N>b` (no bpm) is also
-/// accepted.
-fn parse_beats(tail: &str) -> Option<f32> {
+/// Parse the `<beats>b<bpm>` tail of a beat-lock suffix (e.g. `1b120` = one
+/// beat at a 120bpm reference). The bpm half is the authored reference tempo,
+/// used to select among several variants of the same role; playback still
+/// paces itself from the live beat. A bare `<N>b` (no bpm) is also accepted.
+fn parse_beats(tail: &str) -> Option<BeatSpec> {
     let (beats, bpm) = match tail.split_once(['B', 'b']) {
         Some((beats, "")) => (beats, None),
         Some((beats, bpm)) => (beats, Some(bpm)),
         None => return None,
     };
-    if let Some(bpm) = bpm {
-        let bpm: f32 = bpm.parse().ok()?;
-        if !bpm.is_finite() || bpm <= 0.0 {
-            return None;
+    let ref_bpm = match bpm {
+        Some(bpm) => {
+            let bpm: f32 = bpm.parse().ok()?;
+            if !bpm.is_finite() || bpm <= 0.0 {
+                return None;
+            }
+            Some(bpm)
         }
-    }
-    let n: f32 = beats.parse().ok()?;
-    (n.is_finite() && n > 0.0).then_some(n)
+        None => None,
+    };
+    let beats: f32 = beats.parse().ok()?;
+    (beats.is_finite() && beats > 0.0).then_some(BeatSpec { beats, ref_bpm })
 }
 
 // Registry
@@ -331,7 +388,9 @@ struct Key {
 /// lighting worker never touches the filesystem.
 #[derive(Default)]
 pub struct GifRegistry {
-    backgrounds: HashMap<Key, Arc<FullPadAnim>>,
+    /// A role can hold several BPM variants (see `BackgroundVariant`), so the
+    /// value is a list resolved per song; most roles have just one.
+    backgrounds: HashMap<Key, Vec<BackgroundVariant>>,
     judgements: HashMap<Key, Arc<PanelAnim>>,
 }
 
@@ -359,14 +418,16 @@ impl GifRegistry {
 
     /// Resolve a full-pad background by role (`default`, `song_select`,
     /// `gameplay`, ...). Falls back from the selected pack to the shipped
-    /// `basic` pack and from the requested size to the other one.
+    /// `basic` pack and from the requested size to the other one, then picks
+    /// the variant best fitting `song_bpm` (see `select_variant`).
     pub fn background(
         &self,
         pack: Option<&str>,
         role: &str,
         size: PadSize,
+        song_bpm: Option<f32>,
     ) -> Option<Arc<FullPadAnim>> {
-        resolve(&self.backgrounds, pack, role, size)
+        lookup(&self.backgrounds, pack, role, size).and_then(|v| select_variant(v, song_bpm))
     }
 
     /// Resolve a per-panel judgement by name (`bad`, `freeze`, ...), with
@@ -377,7 +438,7 @@ impl GifRegistry {
         name: &str,
         size: PadSize,
     ) -> Option<Arc<PanelAnim>> {
-        resolve(&self.judgements, pack, name, size)
+        lookup(&self.judgements, pack, name, size).cloned()
     }
 
     /// Sorted pack names (other than the default) that supply at least one
@@ -402,9 +463,14 @@ impl GifRegistry {
         };
         match decode_full_pad(&bytes) {
             Ok((mut anim, decoded_size)) if decoded_size == size => {
-                anim.beats_per_loop = beats;
+                anim.beats_per_loop = beats.map(|b| b.beats);
                 self.backgrounds
-                    .insert(key(pack, &name, size), Arc::new(anim));
+                    .entry(key(pack, &name, size))
+                    .or_default()
+                    .push(BackgroundVariant {
+                        anim: Arc::new(anim),
+                        ref_bpm: beats.and_then(|b| b.ref_bpm),
+                    });
             }
             Ok(_) => log::warn!(
                 "SMX gifs: {} dimensions don't match its _16/_25 suffix; skipped",
@@ -448,21 +514,22 @@ fn key(pack: &str, name: &str, size: PadSize) -> Key {
 
 /// Pack and size fallback: selected pack at the requested then other size,
 /// then the shipped `basic` pack at the requested then other size. `None`
-/// (no pack selected) goes straight to `basic`.
-fn resolve<T>(
-    map: &HashMap<Key, Arc<T>>,
+/// (no pack selected) goes straight to `basic`. Returns a reference to the
+/// stored value so callers clone or select from it as needed.
+fn lookup<'a, V>(
+    map: &'a HashMap<Key, V>,
     pack: Option<&str>,
     name: &str,
     size: PadSize,
-) -> Option<Arc<T>> {
-    let lookup = |p: &str, s: PadSize| map.get(&key(p, name, s)).cloned();
+) -> Option<&'a V> {
+    let get = |p: &str, s: PadSize| map.get(&key(p, name, s));
     if let Some(p) = pack
         && p != DEFAULT_PACK
-        && let Some(anim) = lookup(p, size).or_else(|| lookup(p, size.other()))
+        && let Some(v) = get(p, size).or_else(|| get(p, size.other()))
     {
-        return Some(anim);
+        return Some(v);
     }
-    lookup(DEFAULT_PACK, size).or_else(|| lookup(DEFAULT_PACK, size.other()))
+    get(DEFAULT_PACK, size).or_else(|| get(DEFAULT_PACK, size.other()))
 }
 
 fn named_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
@@ -475,27 +542,23 @@ fn named_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
     packs
 }
 
-/// A full-pad background loaded from a single file outside the global packs
-/// (a song or pack folder's `smx-pad-lights/` subfolder), with its decoded
-/// animation and beats-per-loop suffix.
-pub struct ScopedBackground {
-    pub anim: FullPadAnim,
-    pub beats_per_loop: Option<f32>,
-}
-
-/// Load a per-song / per-pack background for `role` at `size` from `dir` (a
-/// `smx-pad-lights/` subfolder of a song or pack folder), if present. Scans
-/// `dir` for a `<role>_<size>[@<beats>b<bpm>].gif` and decodes it, preferring
-/// the requested size and falling back to the other one. Returns `None` when
-/// the folder is absent or has no matching, decodable gif; malformed matches
-/// are logged and skipped. The app caches the result per (dir, role), so this
-/// touches the filesystem only the first time a folder is seen.
-pub fn load_scoped_background(dir: &Path, role: &str, size: PadSize) -> Option<ScopedBackground> {
-    let entries = fs::read_dir(dir).ok()?;
-    // Collect candidate (size, path) matches for the role, then pick the
-    // requested size if present, else the other size.
-    let mut requested: Option<PathBuf> = None;
-    let mut other: Option<PathBuf> = None;
+/// Load all per-song / per-pack background variants for `role` from `dir` (a
+/// `smx-pad-lights/` subfolder of a song or pack folder). Scans `dir` for
+/// `<role>_<size>[@<beats>b<bpm>].gif` files, preferring the requested `size`
+/// and falling back to the other only if no requested-size file exists, and
+/// decodes each into a `BackgroundVariant` (so several BPM variants resolve the
+/// same as the global packs). Returns an empty vec when the folder is absent or
+/// has no matching, decodable gif; malformed matches are logged and skipped.
+/// The app caches the result per (dir, role), so this touches the filesystem
+/// only the first time a folder is seen.
+pub fn load_scoped_background(dir: &Path, role: &str, size: PadSize) -> Vec<BackgroundVariant> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    // Group matching files by their pad size; use the requested size if any
+    // exist, else the other size. (A folder usually has just the one size.)
+    let mut requested: Vec<PathBuf> = Vec::new();
+    let mut other: Vec<PathBuf> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_file() {
@@ -511,42 +574,46 @@ pub fn load_scoped_background(dir: &Path, role: &str, size: PadSize) -> Option<S
             continue;
         }
         if stem_size == size {
-            requested = Some(path);
+            requested.push(path);
         } else {
-            other = Some(path);
+            other.push(path);
         }
     }
-    let path = requested.or(other)?;
-    let (bytes, _, parsed_size, beats) = read_named_gif(&path)?;
-    match decode_full_pad(&bytes) {
-        Ok((mut anim, decoded_size)) if decoded_size == parsed_size => {
-            anim.beats_per_loop = beats;
-            Some(ScopedBackground {
-                anim,
-                beats_per_loop: beats,
-            })
-        }
-        Ok(_) => {
-            log::warn!(
+    let paths = if requested.is_empty() {
+        other
+    } else {
+        requested
+    };
+    let mut variants = Vec::new();
+    for path in paths {
+        let Some((bytes, _, parsed_size, beats)) = read_named_gif(&path) else {
+            continue;
+        };
+        match decode_full_pad(&bytes) {
+            Ok((mut anim, decoded_size)) if decoded_size == parsed_size => {
+                anim.beats_per_loop = beats.map(|b| b.beats);
+                variants.push(BackgroundVariant {
+                    anim: Arc::new(anim),
+                    ref_bpm: beats.and_then(|b| b.ref_bpm),
+                });
+            }
+            Ok(_) => log::warn!(
                 "SMX gifs: {} dimensions don't match its _16/_25 suffix; skipped",
                 path.display()
-            );
-            None
-        }
-        Err(e) => {
-            log::warn!("SMX gifs: {}: {e}; skipped", path.display());
-            None
+            ),
+            Err(e) => log::warn!("SMX gifs: {}: {e}; skipped", path.display()),
         }
     }
+    variants
 }
 
 /// Read a GIF file and parse its stem; logs and yields `None` on unreadable
 /// files or stems that don't follow the naming convention.
-fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<f32>)> {
+fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<BeatSpec>)> {
     let stem = path.file_stem()?.to_str()?;
     let Some((name, size, beats)) = parse_stem(stem) else {
         log::warn!(
-            "SMX gifs: {} doesn't match <name>_<16|25>[@<beats>B<bpm>].gif; skipped",
+            "SMX gifs: {} doesn't match <name>_<16|25>[@<beats>b<bpm>].gif; skipped",
             path.display()
         );
         return None;
@@ -670,19 +737,20 @@ mod tests {
 
     #[test]
     fn stem_parsing_extracts_name_size_and_beats() {
+        let spec = |beats, ref_bpm| BeatSpec { beats, ref_bpm };
         // The full form: beats at an authored reference bpm.
         assert_eq!(
             parse_stem("song_select_25@1B120"),
-            Some(("song_select", PadSize::Leds25, Some(1.0)))
+            Some(("song_select", PadSize::Leds25, Some(spec(1.0, Some(120.0)))))
         );
         assert_eq!(
             parse_stem("song_select_25@0.5B90"),
-            Some(("song_select", PadSize::Leds25, Some(0.5)))
+            Some(("song_select", PadSize::Leds25, Some(spec(0.5, Some(90.0)))))
         );
         // Bare beat counts (no bpm) are accepted too.
         assert_eq!(
             parse_stem("song_select_25@2b"),
-            Some(("song_select", PadSize::Leds25, Some(2.0)))
+            Some(("song_select", PadSize::Leds25, Some(spec(2.0, None))))
         );
         assert_eq!(parse_stem("bad_16"), Some(("bad", PadSize::Leds16, None)));
         assert_eq!(
@@ -855,6 +923,14 @@ mod tests {
         })
     }
 
+    /// A single untagged background variant (one gif, no BPM reference).
+    fn dummy_variants() -> Vec<BackgroundVariant> {
+        vec![BackgroundVariant {
+            anim: dummy_full_pad(),
+            ref_bpm: None,
+        }]
+    }
+
     #[test]
     fn resolution_prefers_pack_then_size_then_basic() {
         let mut reg = GifRegistry::default();
@@ -866,25 +942,29 @@ mod tests {
         ];
         for (pack, size) in entries {
             reg.backgrounds
-                .insert(key(pack, "default", size), dummy_full_pad());
+                .insert(key(pack, "default", size), dummy_variants());
         }
 
         // Full registry: the selected pack at the requested size wins.
-        let hit = |reg: &GifRegistry, pack, size| reg.background(pack, "default", size);
+        let hit = |reg: &GifRegistry, pack, size| reg.background(pack, "default", size, None);
         assert!(hit(&reg, Some("foo"), PadSize::Leds16).is_some());
 
         // Drop the pack's _16: falls back to the pack's _25.
         reg.backgrounds
             .remove(&key("foo", "default", PadSize::Leds16));
         let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
-        let pack_25 = reg.backgrounds[&key("foo", "default", PadSize::Leds25)].clone();
+        let pack_25 = reg.backgrounds[&key("foo", "default", PadSize::Leds25)][0]
+            .anim
+            .clone();
         assert!(Arc::ptr_eq(&got, &pack_25));
 
         // Drop the pack entirely: falls back to basic at the requested size.
         reg.backgrounds
             .remove(&key("foo", "default", PadSize::Leds25));
         let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
-        let basic_16 = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds16)].clone();
+        let basic_16 = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds16)][0]
+            .anim
+            .clone();
         assert!(Arc::ptr_eq(&got, &basic_16));
 
         // Drop basic _16 too: basic at the other size.
@@ -894,7 +974,7 @@ mod tests {
 
         // Unknown role: nothing.
         assert!(
-            reg.background(Some("foo"), "results", PadSize::Leds25)
+            reg.background(Some("foo"), "results", PadSize::Leds25, None)
                 .is_none()
         );
     }
@@ -903,17 +983,50 @@ mod tests {
     fn unknown_pack_falls_back_to_basic() {
         let mut reg = GifRegistry::default();
         reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_full_pad());
+            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
         assert!(
-            reg.background(Some("nope"), "default", PadSize::Leds25)
+            reg.background(Some("nope"), "default", PadSize::Leds25, None)
                 .is_some()
         );
-        assert!(reg.background(None, "default", PadSize::Leds25).is_some());
+        assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
         // Selecting basic by name is the same as selecting nothing.
         assert!(
-            reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25)
+            reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25, None)
                 .is_some()
         );
+    }
+
+    #[test]
+    fn variant_selection_picks_best_fit_by_bpm() {
+        // Two variants of one role: reference 113bpm and 225bpm.
+        let variants = vec![
+            BackgroundVariant {
+                anim: dummy_full_pad(),
+                ref_bpm: Some(113.0),
+            },
+            BackgroundVariant {
+                anim: dummy_full_pad(),
+                ref_bpm: Some(225.0),
+            },
+        ];
+        let v113 = variants[0].anim.clone();
+        let v225 = variants[1].anim.clone();
+        let pick = |bpm| select_variant(&variants, Some(bpm)).unwrap();
+        // At/under 113: the 113 variant (densest that stays under the cap).
+        assert!(Arc::ptr_eq(&pick(60.0), &v113));
+        assert!(Arc::ptr_eq(&pick(113.0), &v113));
+        // Between them: the smallest reference at or above the tempo (225).
+        assert!(Arc::ptr_eq(&pick(150.0), &v225));
+        assert!(Arc::ptr_eq(&pick(225.0), &v225));
+        // Faster than all variants: the highest reference (it half-times).
+        assert!(Arc::ptr_eq(&pick(300.0), &v225));
+        // No BPM given: the lowest reference, deterministically.
+        assert!(Arc::ptr_eq(
+            &select_variant(&variants, None).unwrap(),
+            &v113
+        ));
+        // Empty list resolves to nothing.
+        assert!(select_variant(&[], Some(120.0)).is_none());
     }
 
     // Registry load (end to end through the filesystem)
@@ -942,46 +1055,53 @@ mod tests {
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
 
-        assert!(reg.background(None, "default", PadSize::Leds25).is_some());
+        assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
         let song = reg
-            .background(Some("mypack"), "song_select", PadSize::Leds25)
+            .background(Some("mypack"), "song_select", PadSize::Leds25, None)
             .unwrap();
         assert_eq!(song.beats_per_loop, Some(1.0));
         assert!(reg.judgement(None, "bad", PadSize::Leds25).is_some());
         // The 16-LED request falls back to the only (_25) asset.
         assert!(reg.judgement(None, "bad", PadSize::Leds16).is_some());
 
-        assert!(reg.background(None, "broken", PadSize::Leds25).is_none());
+        assert!(reg.background(None, "broken", PadSize::Leds25, None).is_none());
         assert!(reg.judgement(None, "badname", PadSize::Leds25).is_none());
         assert_eq!(reg.background_packs(), vec!["mypack".to_owned()]);
         assert!(reg.judgement_packs().is_empty());
     }
 
     #[test]
-    fn scoped_background_loads_a_role_from_a_folder() {
+    fn scoped_background_loads_role_variants_from_a_folder() {
         let dir =
             std::env::temp_dir().join(format!("deadsync-smx-scoped-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let full_pad = encode_gif((23, 24), &[([0, 0, 255], 100)]);
         fs::write(dir.join("gameplay_25.gif"), &full_pad).unwrap();
-        fs::write(dir.join("song_select_25@2b.gif"), &full_pad).unwrap();
-        // A role with no file, and junk, both resolve to nothing.
+        // Two BPM variants of the same role.
+        fs::write(dir.join("song_select_25@1b113.gif"), &full_pad).unwrap();
+        fs::write(dir.join("song_select_25@1b225.gif"), &full_pad).unwrap();
+        // Junk is skipped.
         fs::write(dir.join("notes.txt"), b"not a gif").unwrap();
 
         let gameplay = load_scoped_background(&dir, "gameplay", PadSize::Leds25);
-        assert!(gameplay.is_some());
-        assert!(gameplay.unwrap().beats_per_loop.is_none());
+        assert_eq!(gameplay.len(), 1);
+        assert!(gameplay[0].ref_bpm.is_none());
 
-        // The beat suffix is parsed for a scoped background too.
-        let song_select = load_scoped_background(&dir, "song_select", PadSize::Leds25).unwrap();
-        assert_eq!(song_select.beats_per_loop, Some(2.0));
+        // Both song_select variants load, with their reference BPMs parsed.
+        let song_select = load_scoped_background(&dir, "song_select", PadSize::Leds25);
+        assert_eq!(song_select.len(), 2);
+        let mut bpms: Vec<f32> = song_select.iter().filter_map(|v| v.ref_bpm).collect();
+        bpms.sort_by(f32::total_cmp);
+        assert_eq!(bpms, vec![113.0, 225.0]);
 
-        // Missing role and missing folder both yield None.
-        assert!(load_scoped_background(&dir, "results", PadSize::Leds25).is_none());
-        assert!(load_scoped_background(&dir.join("nope"), "gameplay", PadSize::Leds25).is_none());
+        // Missing role and missing folder both yield an empty list.
+        assert!(load_scoped_background(&dir, "results", PadSize::Leds25).is_empty());
+        assert!(
+            load_scoped_background(&dir.join("nope"), "gameplay", PadSize::Leds25).is_empty()
+        );
 
         // A _25 file satisfies a _16 request (size fallback).
-        assert!(load_scoped_background(&dir, "gameplay", PadSize::Leds16).is_some());
+        assert!(!load_scoped_background(&dir, "gameplay", PadSize::Leds16).is_empty());
 
         fs::remove_dir_all(&dir).unwrap();
     }

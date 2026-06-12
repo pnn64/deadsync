@@ -4160,13 +4160,14 @@ pub struct App {
     /// highlighted (song select) or playing (gameplay) song changes. Reset on a
     /// song rescan, so a recycled pointer can't be mistaken for the same song.
     smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, Option<usize>)>,
-    /// Decoded per-song / per-pack pad backgrounds, keyed by their
-    /// `smx-pad-lights/` folder and role. `None` is a negative entry (folder
-    /// scanned, no matching gif) so a folder is touched only once. Cleared when
-    /// the song cache is rescanned. Only grows with folders actually visited.
+    /// Decoded per-song / per-pack pad background variants, keyed by their
+    /// `smx-pad-lights/` folder and role. An empty vec is the negative entry
+    /// (folder scanned, no matching gif) so a folder is touched only once; the
+    /// per-song BPM variant is selected from the list per resolution. Cleared
+    /// when the song cache is rescanned. Only grows with folders visited.
     smx_scoped_bg_cache: std::collections::HashMap<
         (PathBuf, &'static str),
-        Option<std::sync::Arc<deadsync_smx::gifs::FullPadAnim>>,
+        Vec<deadsync_smx::gifs::BackgroundVariant>,
     >,
     /// Song-cache generation the scoped cache was built against; a change means
     /// a rescan, so the scoped cache is dropped (files may have changed).
@@ -4952,6 +4953,13 @@ impl App {
             .as_ref()
             .and_then(|s| s.simfile_path.parent())
             .map(Path::to_path_buf);
+        // The song's tempo selects among BPM variants of a role (denser gif at
+        // low tempo, sparser at high). `max_bpm` is the conservative pick: the
+        // chosen variant stays under the pad's 30fps even at the song's fastest.
+        let song_bpm = song
+            .as_ref()
+            .map(|s| s.max_bpm as f32)
+            .filter(|b| b.is_finite() && *b > 0.0);
 
         let pack = (!pack.is_empty()).then_some(pack);
         let pack_str = pack.as_ref().map(|p| p.as_str());
@@ -4961,16 +4969,21 @@ impl App {
             // Resolution order: the song's own background, then its pack's, then
             // the global pack (selected -> basic), then the global `default`
             // role. `_25` is the baseline both pad layouts render; 16-LED pads
-            // show its outer ring.
+            // show its outer ring. Each tier picks the BPM-best variant.
             let scoped = song_dir
                 .as_deref()
-                .and_then(|dir| self.resolve_scoped_smx_background(dir, role));
+                .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
             scoped.or_else(|| {
                 let registry = self.smx_gif_registry();
                 registry
-                    .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
+                    .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25, song_bpm)
                     .or_else(|| {
-                        registry.background(pack_str, "default", deadsync_smx::gifs::PadSize::Leds25)
+                        registry.background(
+                            pack_str,
+                            "default",
+                            deadsync_smx::gifs::PadSize::Leds25,
+                            song_bpm,
+                        )
                     })
             })
         });
@@ -5019,17 +5032,19 @@ impl App {
 
     /// Resolve a per-song then per-pack background for `role` from the song
     /// folder's and pack folder's `smx-pad-lights/` subfolders, decoding once
-    /// and caching the result (including a negative "no gif here" entry) so a
-    /// folder is touched at most once per song-cache generation.
+    /// and caching the variant list (an empty list is the negative "no gif
+    /// here" entry) so a folder is touched at most once per song-cache
+    /// generation. Picks the BPM-best variant for `song_bpm`.
     fn resolve_scoped_smx_background(
         &mut self,
         song_dir: &Path,
         role: &'static str,
+        song_bpm: Option<f32>,
     ) -> Option<std::sync::Arc<deadsync_smx::gifs::FullPadAnim>> {
         let song_scope = song_dir.join("smx-pad-lights");
         let pack_scope = song_dir.parent().map(|p| p.join("smx-pad-lights"));
         for dir in std::iter::once(song_scope).chain(pack_scope) {
-            let cached = self
+            let variants = self
                 .smx_scoped_bg_cache
                 .entry((dir.clone(), role))
                 .or_insert_with(|| {
@@ -5038,10 +5053,9 @@ impl App {
                         role,
                         deadsync_smx::gifs::PadSize::Leds25,
                     )
-                    .map(|scoped| std::sync::Arc::new(scoped.anim))
                 });
-            if let Some(anim) = cached {
-                return Some(anim.clone());
+            if let Some(anim) = deadsync_smx::gifs::select_variant(variants, song_bpm) {
+                return Some(anim);
             }
         }
         None
