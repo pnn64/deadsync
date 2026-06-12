@@ -492,17 +492,19 @@ pub fn is_itl_song_folder_unlocked_for_side(
 }
 
 /// True when `pack_dir` matches the SL-style pattern `ITL Online <year> Unlocks`
-/// (case-insensitive, any 4-digit year).
+/// (case-insensitive, any 4-digit year). Allocation-free.
 pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
-    let trimmed = pack_dir.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let Some(rest) = lower.strip_prefix("itl online ") else {
+    const PREFIX: &[u8] = b"itl online ";
+    const SUFFIX: &[u8] = b" unlocks";
+    let bytes = pack_dir.trim().as_bytes();
+    if bytes.len() != PREFIX.len() + 4 + SUFFIX.len() {
         return false;
-    };
-    let Some(year_part) = rest.strip_suffix(" unlocks") else {
-        return false;
-    };
-    year_part.len() == 4 && year_part.chars().all(|c| c.is_ascii_digit())
+    }
+    let (prefix, rest) = bytes.split_at(PREFIX.len());
+    let (year, suffix) = rest.split_at(4);
+    prefix.eq_ignore_ascii_case(PREFIX)
+        && suffix.eq_ignore_ascii_case(SUFFIX)
+        && year.iter().all(u8::is_ascii_digit)
 }
 
 pub fn get_cached_itl_tournament_rank_for_side(
@@ -1800,6 +1802,22 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TMP_ID: AtomicU64 = AtomicU64::new(1);
+
+    #[test]
+    fn is_itl_unlocks_pack_matches_expected_patterns() {
+        assert!(is_itl_unlocks_pack("ITL Online 2023 Unlocks"));
+        assert!(is_itl_unlocks_pack("itl online 2024 unlocks"));
+        assert!(is_itl_unlocks_pack("ITL ONLINE 2022 UNLOCKS"));
+        assert!(is_itl_unlocks_pack("  ITL Online 2025 Unlocks  "));
+
+        assert!(!is_itl_unlocks_pack("ITL Online 23 Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 20XX Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023 Locks"));
+        assert!(!is_itl_unlocks_pack("ITL Offline 2023 Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023  Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023 Unlocks Extra"));
+        assert!(!is_itl_unlocks_pack(""));
+    }
 
     fn sample_chart(chart_type: &str) -> ChartData {
         ChartData {
