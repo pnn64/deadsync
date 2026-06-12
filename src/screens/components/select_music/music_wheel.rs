@@ -42,6 +42,13 @@ const NUM_WHEEL_ITEMS_TO_DRAW: usize = 17;
 const NUM_VISIBLE_WHEEL_ITEMS: usize = NUM_WHEEL_ITEMS_TO_DRAW - 2; // 17 -> 15 visible on-screen
 const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
+// Upper bound on actors emitted per wheel slot with every feature enabled and
+// both player sides joined (box + art + title + BG art, plus per-side grades,
+// lamps, ITL rank, ITL wheel score and favorite heart). A single joined side
+// measures ~6 actors/slot, so 16 leaves headroom for two sides and avoids any
+// mid-build Vec reallocation regardless of config.
+const MAX_ACTORS_PER_WHEEL_SLOT: usize = 16;
+const WHEEL_ACTOR_CAPACITY: usize = NUM_WHEEL_SLOTS * MAX_ACTORS_PER_WHEEL_SLOT + 1;
 const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
@@ -445,7 +452,7 @@ pub struct MusicWheelParams<'a> {
 }
 
 pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
-    actors.reserve(NUM_WHEEL_SLOTS * 9 + 1);
+    actors.reserve(WHEEL_ACTOR_CAPACITY);
     let cfg = config::get();
     let translated_titles = cfg.translated_titles;
     let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
@@ -1252,7 +1259,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 9 + 1);
+    let mut actors = Vec::with_capacity(WHEEL_ACTOR_CAPACITY);
     push(&mut actors, p);
     actors
 }
