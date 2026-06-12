@@ -117,10 +117,17 @@ pub fn fixture() -> MusicWheelBenchFixture {
 /// art). Joins P1 in Single style so those blocks actually execute, and turns
 /// on every per-slot feature so the relevant per-frame work is measured.
 pub fn loaded_fixture() -> MusicWheelBenchFixture {
-    use deadsync_profile::PlayStyle;
+    use deadsync_profile::{PlayStyle, PlayerSide};
+
+    const BENCH_ITL_API_KEY: &str = "bench-itl-api-key";
 
     crate::game::profile::set_session_play_style(PlayStyle::Single);
     crate::game::profile::set_session_joined(true, false);
+    crate::game::profile::set_groovestats_credentials_for_side(
+        PlayerSide::P1,
+        BENCH_ITL_API_KEY,
+        "BenchPlayer",
+    );
 
     let mut entries = Vec::with_capacity(36);
     let mut song_text_color_overrides = HashMap::with_capacity(10);
@@ -131,7 +138,10 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         entries.push(MusicWheelEntry::PackHeader {
             name: (*pack_name).to_string(),
             original_index: pack_idx,
-            banner_path: Some(PathBuf::from(format!("songs/Bench/P{}/banner.png", pack_idx + 1))),
+            banner_path: Some(PathBuf::from(format!(
+                "songs/Bench/P{}/banner.png",
+                pack_idx + 1
+            ))),
             song_count: 7,
         });
 
@@ -147,6 +157,23 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                     && chart.difficulty.eq_ignore_ascii_case("edit")
             }) {
                 song_has_edit_ptrs.insert(song_ptr);
+            }
+            // Seed an ITL self-score + tournament rank for every chart hash so
+            // that whichever chart the wheel resolves per slot renders the ITL
+            // rank (Header font) and wheel-score (Numbers font) text actors.
+            for (chart_idx, chart) in song.charts.iter().enumerate() {
+                let ex_hundredths = 8800 + ((song_idx * 5 + chart_idx) as u32 * 53) % 1200;
+                let rank = 1 + ((pack_idx * 7 + song_idx) as u32 * 11 + chart_idx as u32) % 750;
+                crate::game::scores::seed_session_online_itl_self_score(
+                    BENCH_ITL_API_KEY,
+                    chart.short_hash.as_str(),
+                    ex_hundredths,
+                );
+                crate::game::scores::seed_session_online_itl_self_rank(
+                    BENCH_ITL_API_KEY,
+                    chart.short_hash.as_str(),
+                    rank,
+                );
             }
             entries.push(MusicWheelEntry::Song(song));
         }
@@ -274,6 +301,9 @@ fn bench_charts_loaded(base: &str, has_edit: bool) -> Vec<ChartData> {
     charts.push(bench_chart(base, "challenge", 13));
     if has_edit {
         charts.push(bench_chart(base, "edit", 14));
+    }
+    for chart in &mut charts {
+        chart.chart_name = String::from("7500 (P) + 12000 (S)");
     }
     charts
 }

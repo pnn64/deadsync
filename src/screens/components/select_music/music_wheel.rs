@@ -567,6 +567,23 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         None
     };
 
+    let header_font = current_machine_font_key(FontRole::Header);
+    let numbers_font = current_machine_font_key(FontRole::Numbers);
+    let screen_eval_font = current_machine_font_key(FontRole::ScreenEval);
+
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let itl_lookups_active = !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None)
+        || !matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off);
+    let itl_ctx_p1 = (itl_lookups_active && p1_joined)
+        .then(|| scores::ItlWheelSideContext::for_side(profile_data::PlayerSide::P1));
+    let itl_ctx_p2 = (itl_lookups_active && p2_joined)
+        .then(|| scores::ItlWheelSideContext::for_side(profile_data::PlayerSide::P2));
+    let itl_ctx_for_side = |side: profile_data::PlayerSide| match side {
+        profile_data::PlayerSide::P1 => itl_ctx_p1.as_ref(),
+        profile_data::PlayerSide::P2 => itl_ctx_p2.as_ref(),
+    };
+
     let num_entries = p.entries.len();
 
     if num_entries > 0 {
@@ -910,7 +927,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                     let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
                                     let judge_col = lamp_judge_count_color(lamp_index);
                                     actors.push(act!(text:
-                                        font(current_machine_font_key(FontRole::ScreenEval)):
+                                        font(screen_eval_font):
                                         settext(digit_text(count)):
                                         align(0.5, 0.5):
                                         horizalign(center):
@@ -933,7 +950,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             (profile_data::PlayerSide::P1, grade_x_p2),
                             (profile_data::PlayerSide::P2, grade_x_p1),
                         ] {
-                            if !side_joined(side) {
+                            let side_joined = match side {
+                                profile_data::PlayerSide::P1 => p1_joined,
+                                profile_data::PlayerSide::P2 => p2_joined,
+                            };
+                            if !side_joined {
                                 continue;
                             }
                             let Some(side_chart) = wheel_chart_for_side(side) else {
@@ -948,9 +969,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                             chart_hash, side,
                                         )
                                     } else {
-                                        scores::get_cached_itl_tournament_rank_for_side(
-                                            chart_hash, side,
-                                        )
+                                        itl_ctx_for_side(side)
+                                            .and_then(|ctx| ctx.cached_tournament_rank(chart_hash))
                                     }
                                 }
                                 SelectMusicItlRankMode::Overall => match side {
@@ -969,7 +989,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::Header)):
+                                font(header_font):
                                 settext(cached_itl_rank_text(rank)):
                                 align(0.5, 0.5):
                                 horizalign(center):
@@ -985,17 +1005,17 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
                         }
-                        if !side_joined(side) {
+                        let Some(itl_ctx) = itl_ctx_for_side(side) else {
                             continue;
-                        }
+                        };
                         let side_chart = wheel_chart_for_side(side);
                         let side_chart_hash = side_chart.map(|chart| chart.short_hash.as_str());
-                        let local_itl = scores::get_cached_itl_score_for_song(info, side);
+                        let local_itl = itl_ctx.cached_local_itl_score(info);
                         let online_ex_hundredths = side_chart_hash.and_then(|chart_hash| {
                             if should_fetch_online_itl {
                                 scores::get_or_fetch_itl_self_score_for_side(chart_hash, side)
                             } else {
-                                scores::get_cached_itl_self_score_for_side(chart_hash, side)
+                                itl_ctx.cached_self_ex_score(chart_hash)
                             }
                         });
                         let online_points = online_ex_hundredths.and_then(|online_ex| {
@@ -1011,7 +1031,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -1024,7 +1044,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             SelectMusicItlWheelMode::PointsAndScore => {
                                 let Some(points) = points else {
                                     actors.push(act!(text:
-                                        font(current_machine_font_key(FontRole::Numbers)):
+                                        font(numbers_font):
                                         settext(cached_itl_ex_text(ex_hundredths)):
                                         align(1.0, 0.5):
                                         horizalign(right):
@@ -1037,7 +1057,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -1052,7 +1072,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                     z(53)
                                 ));
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):

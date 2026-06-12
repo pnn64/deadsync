@@ -40,10 +40,26 @@ struct OnlineItlSelfScoreKey {
     api_key: String,
 }
 
+/// Borrowed view of [`OnlineItlSelfScoreKey`] for allocation-free cache probes.
+/// Hashes identically to the owned key (str and String hash the same), so it can
+/// look up entries in the `hashbrown` caches without building an owned key —
+/// the song wheel does these lookups for every visible slot each frame.
+#[derive(Hash)]
+struct OnlineItlSelfScoreKeyRef<'a> {
+    chart_hash: &'a str,
+    api_key: &'a str,
+}
+
+impl hashbrown::Equivalent<OnlineItlSelfScoreKey> for OnlineItlSelfScoreKeyRef<'_> {
+    fn equivalent(&self, key: &OnlineItlSelfScoreKey) -> bool {
+        self.chart_hash == key.chart_hash && self.api_key == key.api_key
+    }
+}
+
 #[derive(Default)]
 struct OnlineItlSelfScoreCacheState {
-    session_by_key: HashMap<OnlineItlSelfScoreKey, u32>,
-    loaded_profiles: HashMap<String, HashMap<OnlineItlSelfScoreKey, u32>>,
+    session_by_key: hashbrown::HashMap<OnlineItlSelfScoreKey, u32>,
+    loaded_profiles: HashMap<String, hashbrown::HashMap<OnlineItlSelfScoreKey, u32>>,
 }
 
 static ONLINE_ITL_SELF_SCORE_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfScoreCacheState>> =
@@ -52,8 +68,8 @@ static ONLINE_ITL_SELF_SCORE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 struct OnlineItlSelfRankCacheState {
-    session_by_key: HashMap<OnlineItlSelfScoreKey, u32>,
-    loaded_profiles: HashMap<String, HashMap<OnlineItlSelfScoreKey, u32>>,
+    session_by_key: hashbrown::HashMap<OnlineItlSelfScoreKey, u32>,
+    loaded_profiles: HashMap<String, hashbrown::HashMap<OnlineItlSelfScoreKey, u32>>,
 }
 
 static ONLINE_ITL_SELF_RANK_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfRankCacheState>> =
@@ -185,25 +201,6 @@ struct ItlPointTotals {
     total_points: u32,
 }
 
-fn online_itl_self_score_key_for_side(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) -> Option<OnlineItlSelfScoreKey> {
-    let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
-        return None;
-    }
-    let side_profile = profile::get_for_side(side);
-    let api_key = side_profile.groovestats_api_key.trim();
-    if api_key.is_empty() {
-        return None;
-    }
-    Some(OnlineItlSelfScoreKey {
-        chart_hash: chart_hash.to_string(),
-        api_key: api_key.to_string(),
-    })
-}
-
 fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
     dirs::app_dirs()
         .profiles_root()
@@ -232,7 +229,10 @@ fn load_online_itl_self_score_index(path: &Path) -> Option<HashMap<OnlineItlSelf
     Some(by_key)
 }
 
-fn save_online_itl_self_score_index(path: &Path, by_key: &HashMap<OnlineItlSelfScoreKey, u32>) {
+fn save_online_itl_self_score_index(
+    path: &Path,
+    by_key: &hashbrown::HashMap<OnlineItlSelfScoreKey, u32>,
+) {
     let Some(parent) = path.parent() else {
         return;
     };
@@ -240,7 +240,10 @@ fn save_online_itl_self_score_index(path: &Path, by_key: &HashMap<OnlineItlSelfS
         warn!("Failed to create ITL self-score cache dir {parent:?}: {error}");
         return;
     }
-    let Ok(buf) = bincode::encode_to_vec(by_key, bincode::config::standard()) else {
+    // bincode encodes the std map; convert from the in-memory hashbrown cache.
+    let std_by_key: HashMap<OnlineItlSelfScoreKey, u32> =
+        by_key.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let Ok(buf) = bincode::encode_to_vec(&std_by_key, bincode::config::standard()) else {
         warn!("Failed to encode ITL self-score cache at {path:?}");
         return;
     };
@@ -259,7 +262,10 @@ fn load_online_itl_self_rank_index(path: &Path) -> Option<HashMap<OnlineItlSelfS
     load_online_itl_self_score_index(path)
 }
 
-fn save_online_itl_self_rank_index(path: &Path, by_key: &HashMap<OnlineItlSelfScoreKey, u32>) {
+fn save_online_itl_self_rank_index(
+    path: &Path,
+    by_key: &hashbrown::HashMap<OnlineItlSelfScoreKey, u32>,
+) {
     save_online_itl_self_score_index(path, by_key);
 }
 
@@ -302,7 +308,7 @@ fn ensure_online_itl_self_score_cache_loaded_for_profile(profile_id: &str) {
         .unwrap()
         .loaded_profiles
         .entry(profile_id.to_string())
-        .or_insert(by_key);
+        .or_insert_with(|| by_key.into_iter().collect());
 }
 
 fn ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id: &str) {
@@ -322,7 +328,7 @@ fn ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id: &str) {
         .unwrap()
         .loaded_profiles
         .entry(profile_id.to_string())
-        .or_insert(by_key);
+        .or_insert_with(|| by_key.into_iter().collect());
 }
 
 pub(super) fn set_cached_online_self_score(
@@ -438,6 +444,21 @@ pub(super) fn set_cached_online_self_rank(
     }
 }
 
+/// Test/bench helper: seed the *session* online ITL self-score cache directly,
+/// keyed by `(chart_hash, api_key)`, without any network fetch or profile file
+/// on disk. Lets benchmarks exercise the ITL wheel-score render path. The
+/// matching side must be joined and carry a non-empty GrooveStats API key for
+/// the wheel lookups to resolve this entry.
+pub fn seed_session_online_itl_self_score(api_key: &str, chart_hash: &str, ex_hundredths: u32) {
+    set_cached_online_self_score(None, api_key, chart_hash, Some(ex_hundredths));
+}
+
+/// Test/bench helper: seed the *session* online ITL self-rank cache directly.
+/// See [`seed_session_online_itl_self_score`] for the resolution requirements.
+pub fn seed_session_online_itl_self_rank(api_key: &str, chart_hash: &str, rank: u32) {
+    set_cached_online_self_rank(None, api_key, chart_hash, Some(rank));
+}
+
 pub fn get_cached_itl_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -457,13 +478,24 @@ pub fn get_cached_itl_score_for_song(
     song: &deadsync_chart::SongData,
     side: profile_data::PlayerSide,
 ) -> Option<CachedItlScore> {
-    let profile_id = profile::active_local_profile_id_for_side(side)?;
-    ensure_itl_score_cache_loaded(&profile_id);
+    let profile_id = profile::active_local_profile_id_for_side(side);
+    get_cached_itl_score_for_song_with_profile(song, profile_id.as_deref())
+}
+
+/// Like [`get_cached_itl_score_for_song`] but takes a precomputed profile id so
+/// callers iterating many songs in one frame (the song wheel) resolve the
+/// active profile once instead of per lookup.
+pub fn get_cached_itl_score_for_song_with_profile(
+    song: &deadsync_chart::SongData,
+    profile_id: Option<&str>,
+) -> Option<CachedItlScore> {
+    let profile_id = profile_id?;
+    ensure_itl_score_cache_loaded(profile_id);
     ITL_SCORE_CACHE
         .lock()
         .unwrap()
         .loaded_profiles
-        .get(&profile_id)
+        .get(profile_id)
         .and_then(|data| itl_score_for_song(song, data))
 }
 
@@ -519,17 +551,36 @@ fn get_cached_online_self_rank_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<u32> {
-    let key = online_itl_self_score_key_for_side(chart_hash, side)?;
+    if !profile::is_session_side_joined(side) {
+        return None;
+    }
+    let api_key = profile::groovestats_api_key_for_side(side);
     let profile_id = profile::active_local_profile_id_for_side(side);
-    if let Some(profile_id) = profile_id.as_deref() {
+    get_cached_online_itl_self_rank_for_key(chart_hash, profile_id.as_deref(), &api_key)
+}
+
+/// Cached online ITL self-rank lookup that takes a precomputed profile id and
+/// API key instead of re-reading global profile state. Lets the song wheel
+/// resolve those frame-invariant values once and reuse them across every slot.
+pub fn get_cached_online_itl_self_rank_for_key(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return None;
+    }
+    if let Some(profile_id) = profile_id {
         ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
     }
+    let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
     let cache = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
     profile_id
-        .as_deref()
         .and_then(|profile_id| cache.loaded_profiles.get(profile_id))
-        .and_then(|ranks| ranks.get(&key).copied())
-        .or_else(|| cache.session_by_key.get(&key).copied())
+        .and_then(|ranks| ranks.get(&kref).copied())
+        .or_else(|| cache.session_by_key.get(&kref).copied())
 }
 
 fn online_itl_overall_rank_cache_key_for_side(
@@ -585,7 +636,7 @@ fn cached_online_itl_scores_by_chart_for_side(
     let loaded_count = profile_id
         .as_deref()
         .and_then(|profile_id| cache.loaded_profiles.get(profile_id))
-        .map_or(0, HashMap::len);
+        .map_or(0, |scores| scores.len());
     let mut by_chart = HashMap::with_capacity(loaded_count + cache.session_by_key.len());
     if let Some(profile_id) = profile_id.as_deref()
         && let Some(scores) = cache.loaded_profiles.get(profile_id)
@@ -1754,17 +1805,36 @@ pub fn get_cached_itl_self_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<u32> {
-    let key = online_itl_self_score_key_for_side(chart_hash, side)?;
+    if !profile::is_session_side_joined(side) {
+        return None;
+    }
+    let api_key = profile::groovestats_api_key_for_side(side);
     let profile_id = profile::active_local_profile_id_for_side(side);
-    if let Some(profile_id) = profile_id.as_deref() {
+    get_cached_itl_self_score_for_key(chart_hash, profile_id.as_deref(), &api_key)
+}
+
+/// Cached online ITL self-score lookup that takes a precomputed profile id and
+/// API key instead of re-reading global profile state. Lets the song wheel
+/// resolve those frame-invariant values once and reuse them across every slot.
+pub fn get_cached_itl_self_score_for_key(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return None;
+    }
+    if let Some(profile_id) = profile_id {
         ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
     }
+    let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
     let cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
     profile_id
-        .as_deref()
         .and_then(|profile_id| cache.loaded_profiles.get(profile_id))
-        .and_then(|scores| scores.get(&key).copied())
-        .or_else(|| cache.session_by_key.get(&key).copied())
+        .and_then(|scores| scores.get(&kref).copied())
+        .or_else(|| cache.session_by_key.get(&kref).copied())
 }
 
 pub fn get_or_fetch_itl_self_score_for_side(
@@ -1986,7 +2056,9 @@ mod tests {
         let mut expected = HashMap::new();
         expected.insert(key, 9912);
 
-        save_online_itl_self_score_index(&path, &expected);
+        let in_memory: hashbrown::HashMap<OnlineItlSelfScoreKey, u32> =
+            expected.clone().into_iter().collect();
+        save_online_itl_self_score_index(&path, &in_memory);
 
         assert_eq!(load_online_itl_self_score_index(&path), Some(expected));
 

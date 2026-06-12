@@ -1228,6 +1228,25 @@ pub fn get_for_side(side: PlayerSide) -> Profile {
     lock_profiles()[side_ix(side)].clone()
 }
 
+pub fn groovestats_api_key_for_side(side: PlayerSide) -> String {
+    lock_profiles()[side_ix(side)]
+        .groovestats_api_key
+        .trim()
+        .to_string()
+}
+
+pub fn scorebox_fields_for_side(side: PlayerSide) -> (bool, bool, String, String, String) {
+    let profiles = lock_profiles();
+    let p = &profiles[side_ix(side)];
+    (
+        p.display_scorebox,
+        p.show_ex_score,
+        p.groovestats_api_key.clone(),
+        p.arrowcloud_api_key.clone(),
+        p.groovestats_username.clone(),
+    )
+}
+
 pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
     let (play_style, player_side, joined_mask, p1_guest, p2_guest) = {
         let session = lock_session();
