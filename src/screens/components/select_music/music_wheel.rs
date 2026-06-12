@@ -584,6 +584,18 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         profile_data::PlayerSide::P2 => itl_ctx_p2.as_ref(),
     };
 
+    let score_lookups_active = p.show_music_wheel_grades || p.show_music_wheel_lamps;
+    let score_profile_p1 = (score_lookups_active && p1_joined)
+        .then(|| profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1))
+        .flatten();
+    let score_profile_p2 = (score_lookups_active && p2_joined)
+        .then(|| profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2))
+        .flatten();
+    let score_profile_for_side = |side: profile_data::PlayerSide| match side {
+        profile_data::PlayerSide::P1 => score_profile_p1.as_deref(),
+        profile_data::PlayerSide::P2 => score_profile_p2.as_deref(),
+    };
+
     let num_entries = p.entries.len();
 
     if num_entries > 0 {
@@ -858,8 +870,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             let Some(chart) = wheel_chart_for_side(side) else {
                                 continue;
                             };
+                            let Some(profile_id) = score_profile_for_side(side) else {
+                                continue;
+                            };
                             let Some(cached_score) =
-                                scores::get_cached_score_for_side(&chart.short_hash, side)
+                                scores::get_cached_score_with_profile(&chart.short_hash, profile_id)
                             else {
                                 continue;
                             };

@@ -854,9 +854,18 @@ pub fn get_cached_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<CachedScore> {
-    let local = get_cached_local_score_for_side(chart_hash, side);
-    let gs = get_cached_gs_score_for_side(chart_hash, side);
-    let ac = get_cached_ac_scores_for_side(chart_hash, side)
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    get_cached_score_with_profile(chart_hash, &profile_id)
+}
+
+/// Like [`get_cached_score_for_side`] but takes a precomputed profile id so the
+/// song wheel can resolve the active profile once per side per frame instead of
+/// three times per slot (local + gs + ac each re-resolved the active id and
+/// allocated a `String`).
+pub fn get_cached_score_with_profile(chart_hash: &str, profile_id: &str) -> Option<CachedScore> {
+    let local = get_cached_local_score_for_profile(profile_id, chart_hash);
+    let gs = get_cached_gs_score_for_profile(profile_id, chart_hash);
+    let ac = get_cached_ac_scores_for_profile(profile_id, chart_hash)
         .and_then(|s| s.itg)
         .map(|ac| ac.to_cached_score());
     // Merge by picking the "best ITG" entry; failed scores win when their
