@@ -519,6 +519,20 @@ pub fn init() -> State {
         SubRowId::SmxDefaultPadConfig,
         cfg.smx_default_pad_config.index(),
     );
+    // Single-pad P1/P2 picker: reflect whether the lone connected pad is currently
+    // pinned to P2 (index 1) versus P1/unassigned (index 0).
+    let single_pad_is_p2 = {
+        let (_, p2_serial) = config::smx_pad_assignment();
+        let serials = deadsync_smx::connected_serials();
+        let lone = serials[0].clone().or_else(|| serials[1].clone());
+        lone.is_some() && lone == p2_serial
+    };
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxSinglePadPlayer,
+        usize::from(single_pad_is_p2),
+    );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,

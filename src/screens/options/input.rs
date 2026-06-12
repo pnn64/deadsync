@@ -377,6 +377,19 @@ pub(super) fn apply_submenu_choice_delta(
                 new_index,
             ));
         }
+        if row.id == SubRowId::SmxSinglePadPlayer {
+            // Pin the lone connected pad's serial to the chosen side (index 0 = P1,
+            // 1 = P2). The SDK then relocates it to that slot. Row is only shown
+            // with exactly one pad connected, so just take whichever slot has one.
+            let serials = deadsync_smx::connected_serials();
+            if let Some(serial) = serials[0].clone().or_else(|| serials[1].clone()) {
+                if new_index == 1 {
+                    config::update_smx_pad_assignment(None, Some(serial));
+                } else {
+                    config::update_smx_pad_assignment(Some(serial), None);
+                }
+            }
+        }
     } else if matches!(kind, SubmenuKind::Lights) {
         let row = &rows[row_index];
         if row.id == SubRowId::LightsDriver {
