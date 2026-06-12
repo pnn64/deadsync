@@ -772,6 +772,30 @@ fn selected_submenu_row_has_choices(state: &State, kind: SubmenuKind) -> Option<
     Some(!row_choices(state, kind, rows, row_idx).is_empty())
 }
 
+/// Whether Left/Right on the focused submenu row should fall through to
+/// vertical navigation (like the main menu) instead of cycling a value: true
+/// for rows with nothing to cycle, i.e. pure link/action rows (a single
+/// localized "Open" choice), rows with no choices, and the Exit row. Value
+/// rows keep Left/Right, including ones whose single choice is a placeholder
+/// for a numeric Left/Right adjustment (e.g. the volume sliders).
+fn selected_row_lr_navigates(state: &State) -> bool {
+    let OptionsView::Submenu(kind) = state.view else {
+        return false;
+    };
+    let rows = submenu_rows(kind);
+    let Some(row_idx) = submenu_visible_row_to_actual(state, kind, state.sub_selected) else {
+        return true; // Exit row: nothing to cycle.
+    };
+    let Some(row) = rows.get(row_idx) else {
+        return false;
+    };
+    let open_link = matches!(
+        row.choices,
+        [Choice::Localized(key)] if key.section == "Common" && key.key == "Open"
+    );
+    open_link || row_choices(state, kind, rows, row_idx).is_empty()
+}
+
 fn handle_dedicated_three_key_start_nav(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -1133,6 +1157,21 @@ pub(super) fn activate_current_selection(
                     audio::play_sfx("assets/sounds/start.ogg");
                     deadsync_updater::action::request_check_now();
                 }
+                ItemId::DownloadVideoSupport => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    // Probe ffmpeg/ffprobe on a worker thread — the lookup
+                    // spawns subprocesses and would stutter the UI thread.
+                    if let Some(generation) =
+                        deadsync_updater::ffmpeg::begin_availability_check()
+                    {
+                        std::thread::spawn(move || {
+                            let available = deadsync_video::ffmpeg_available();
+                            deadsync_updater::ffmpeg::resolve_availability_check(
+                                generation, available,
+                            );
+                        });
+                    }
+                }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::NavigateNoFade(Screen::Credits);
@@ -1448,11 +1487,18 @@ pub fn handle_input(
     asset_manager: &AssetManager,
     ev: &InputEvent,
 ) -> ScreenAction {
-    use crate::screens::components::shared::update_overlay;
+    use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
     let overlay_phase = deadsync_updater::action::current();
     if !matches!(overlay_phase, deadsync_updater::action::ActionPhase::Idle)
         && update_overlay::handle_input(&overlay_phase, ev)
+            == update_overlay::InputOutcome::Consumed
+    {
+        return ScreenAction::None;
+    }
+    let ffmpeg_phase = deadsync_updater::ffmpeg::current();
+    if !matches!(ffmpeg_phase, deadsync_updater::ffmpeg::FfmpegPhase::Idle)
+        && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev)
             == update_overlay::InputOutcome::Consumed
     {
         return ScreenAction::None;
@@ -1821,14 +1867,16 @@ pub fn handle_input(
         | VirtualAction::p1_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if matches!(state.view, OptionsView::Main) {
-                if ev.pressed {
-                    move_options_selection_vertical(state, asset_manager, NavDirection::Up);
-                    on_nav_press(state, NavDirection::Up);
-                } else {
-                    on_nav_release(state, NavDirection::Up);
-                }
-            } else if ev.pressed {
+            if !ev.pressed {
+                // The press may have armed either hold (nav on a link row,
+                // value-repeat on a choice row) and the cursor may have moved
+                // since; releasing both is a no-op for the one not armed.
+                on_nav_release(state, NavDirection::Up);
+                on_lr_release(state, -1);
+            } else if matches!(state.view, OptionsView::Main) || selected_row_lr_navigates(state) {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                on_nav_press(state, NavDirection::Up);
+            } else {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
                 {
@@ -1836,22 +1884,19 @@ pub fn handle_input(
                     return action;
                 }
                 on_lr_press(state, -1);
-            } else {
-                on_lr_release(state, -1);
             }
         }
         VirtualAction::p1_right
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if matches!(state.view, OptionsView::Main) {
-                if ev.pressed {
-                    move_options_selection_vertical(state, asset_manager, NavDirection::Down);
-                    on_nav_press(state, NavDirection::Down);
-                } else {
-                    on_nav_release(state, NavDirection::Down);
-                }
-            } else if ev.pressed {
+            if !ev.pressed {
+                on_nav_release(state, NavDirection::Down);
+                on_lr_release(state, 1);
+            } else if matches!(state.view, OptionsView::Main) || selected_row_lr_navigates(state) {
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
+                on_nav_press(state, NavDirection::Down);
+            } else {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
                 {
@@ -1859,8 +1904,6 @@ pub fn handle_input(
                     return action;
                 }
                 on_lr_press(state, 1);
-            } else {
-                on_lr_release(state, 1);
             }
         }
         VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {

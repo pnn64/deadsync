@@ -17,6 +17,7 @@ use std::time::Duration;
 pub mod action;
 pub mod cli;
 pub mod download;
+pub mod ffmpeg;
 pub mod state;
 
 #[cfg(windows)]

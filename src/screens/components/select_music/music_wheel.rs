@@ -42,6 +42,13 @@ const NUM_WHEEL_ITEMS_TO_DRAW: usize = 17;
 const NUM_VISIBLE_WHEEL_ITEMS: usize = NUM_WHEEL_ITEMS_TO_DRAW - 2; // 17 -> 15 visible on-screen
 const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
+// Upper bound on actors emitted per wheel slot with every feature enabled and
+// both player sides joined (box + art + title + BG art, plus per-side grades,
+// lamps, ITL rank, ITL wheel score and favorite heart). A single joined side
+// measures ~6 actors/slot, so 16 leaves headroom for two sides and avoids any
+// mid-build Vec reallocation regardless of config.
+const MAX_ACTORS_PER_WHEEL_SLOT: usize = 16;
+const WHEEL_ACTOR_CAPACITY: usize = NUM_WHEEL_SLOTS * MAX_ACTORS_PER_WHEEL_SLOT + 1;
 const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
@@ -70,11 +77,6 @@ const STR_REF_CACHE_LIMIT: usize = 4096;
 const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
-
-#[inline(always)]
-fn path_texture_key(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
 
 #[inline(always)]
 fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Option<&PathBuf> {
@@ -141,8 +143,11 @@ fn song_select_bg_sprite(
     alpha: f32,
     fade_left: f32,
 ) -> Actor {
-    let key = path_texture_key(path);
-    let mut actor = act!(sprite(key.clone()):
+    let key: Arc<str> = match path.to_string_lossy() {
+        std::borrow::Cow::Borrowed(s) => Arc::from(s),
+        std::borrow::Cow::Owned(s) => Arc::from(s),
+    };
+    let mut actor = act!(sprite(&key):
         align(0.5, 0.5):
         xy(center_x, center_y):
         setsize(width, height):
@@ -447,7 +452,7 @@ pub struct MusicWheelParams<'a> {
 }
 
 pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
-    actors.reserve(NUM_WHEEL_SLOTS * 9 + 1);
+    actors.reserve(WHEEL_ACTOR_CAPACITY);
     let cfg = config::get();
     let translated_titles = cfg.translated_titles;
     let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
@@ -465,6 +470,12 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     };
     let play_style = profile::get_session_play_style();
     let target_chart_type = play_style.chart_type();
+    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let side_joined = |side: profile_data::PlayerSide| match side {
+        profile_data::PlayerSide::P1 => p1_joined,
+        profile_data::PlayerSide::P2 => p2_joined,
+    };
     let mut song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
     song_box_color[3] *= song_bg_alpha;
     let default_song_text_color = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -517,13 +528,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
-    let joined_sides = usize::from(profile::is_session_side_joined(
-        profile_data::PlayerSide::P1,
-    )) + usize::from(profile::is_session_side_joined(
-        profile_data::PlayerSide::P2,
-    ));
+    let joined_sides = usize::from(p1_joined) + usize::from(p2_joined);
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
-    let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
+    let is_double_style = matches!(play_style, profile_data::PlayStyle::Double);
     let selected_chart_hash_for_side = |side: profile_data::PlayerSide| {
         let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
             return None;
@@ -533,7 +540,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     };
     if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
         for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            if !profile::is_session_side_joined(side) {
+            if !side_joined(side) {
                 continue;
             }
             if let Some(chart_hash) = selected_chart_hash_for_side(side) {
@@ -542,7 +549,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         }
     }
     let overall_itl_ranks_p1 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
-        && profile::is_session_side_joined(profile_data::PlayerSide::P1)
+        && p1_joined
     {
         Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
             profile_data::PlayerSide::P1,
@@ -551,7 +558,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         None
     };
     let overall_itl_ranks_p2 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
-        && profile::is_session_side_joined(profile_data::PlayerSide::P2)
+        && p2_joined
     {
         Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
             profile_data::PlayerSide::P2,
@@ -708,17 +715,25 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                         })
                     };
-                    let wheel_chart_for_side = |side: profile_data::PlayerSide| {
-                        let ix = profile_data::runtime_player_index(play_style, side);
+                    let wheel_charts: [Option<&ChartData>; profile_data::PLAYER_SLOTS] =
                         if is_selected_slot {
-                            p.selected_charts[ix]
+                            p.selected_charts
                         } else {
-                            chart_for_preferred_or_nearest_standard(
-                                info,
-                                target_chart_type,
-                                p.preferred_difficulty_index[ix],
-                            )
-                        }
+                            [
+                                chart_for_preferred_or_nearest_standard(
+                                    info,
+                                    target_chart_type,
+                                    p.preferred_difficulty_index[0],
+                                ),
+                                chart_for_preferred_or_nearest_standard(
+                                    info,
+                                    target_chart_type,
+                                    p.preferred_difficulty_index[1],
+                                ),
+                            ]
+                        };
+                    let wheel_chart_for_side = |side: profile_data::PlayerSide| {
+                        wheel_charts[profile_data::runtime_player_index(play_style, side)]
                     };
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = has_lua
@@ -733,7 +748,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 .iter()
                                 .copied()
                                 .any(|side| {
-                                    profile::is_session_side_joined(side)
+                                    side_joined(side)
                                         && wheel_chart_for_side(side).is_some_and(|chart| {
                                             score_data::lua_chart_submit_allowed(
                                                 chart.short_hash.as_str(),
@@ -837,7 +852,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             (profile_data::PlayerSide::P1, grade_x_p1),
                             (profile_data::PlayerSide::P2, grade_x_p2),
                         ] {
-                            if !profile::is_session_side_joined(side) {
+                            if !side_joined(side) {
                                 continue;
                             }
                             let Some(chart) = wheel_chart_for_side(side) else {
@@ -1072,10 +1087,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 
                     // Favorite heart icon
                     {
-                        let p1_joined =
-                            profile::is_session_side_joined(profile_data::PlayerSide::P1);
-                        let p2_joined =
-                            profile::is_session_side_joined(profile_data::PlayerSide::P2);
                         let p1_fav = p1_joined
                             && info.charts.iter().any(|c| {
                                 profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash)
@@ -1240,8 +1251,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let selected_is_favorite = if let Some(MusicWheelEntry::Song(info)) =
         p.entries.get(p.selected_index)
     {
-        let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-        let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
         info.charts.iter().any(|c| {
             (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
                 || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
@@ -1270,7 +1279,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 9 + 1);
+    let mut actors = Vec::with_capacity(WHEEL_ACTOR_CAPACITY);
     push(&mut actors, p);
     actors
 }
