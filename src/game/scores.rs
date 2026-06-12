@@ -68,7 +68,8 @@ pub use itl::{
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
     get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
     is_itl_unlocks_pack, itl_eval_state_from_gameplay, itl_points_for_chart,
-    save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
+    save_itl_data_from_gameplay, seed_session_online_itl_self_rank,
+    seed_session_online_itl_self_score, should_warn_cmod_for_itl_chart,
 };
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
@@ -1856,10 +1857,24 @@ fn spawn_player_leaderboard_fetch(
 fn player_leaderboard_profile_snapshot_for_side(
     side: profile_data::PlayerSide,
 ) -> GameplayScoreboxProfileSnapshot {
-    let side_profile = profile::get_for_side(side);
-    scorebox_profile_snapshot(
-        &side_profile,
+    let cfg = crate::config::get();
+    let (
+        display_scorebox,
+        show_ex_score,
+        groovestats_api_key,
+        arrowcloud_api_key,
+        groovestats_username,
+    ) = profile::scorebox_fields_for_side(side);
+    scorebox_snapshot(
+        display_scorebox,
+        show_ex_score,
         profile::is_session_side_joined(side),
+        cfg.enable_groovestats,
+        cfg.enable_arrowcloud,
+        cfg.auto_populate_gs_scores,
+        groovestats_api_key.as_str(),
+        arrowcloud_api_key.as_str(),
+        groovestats_username.as_str(),
         profile::active_local_profile_id_for_side(side),
     )
 }
@@ -1869,13 +1884,67 @@ fn get_cached_player_leaderboard_itl_self_rank_for_side(
     side: profile_data::PlayerSide,
 ) -> Option<u32> {
     let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
-    let key = player_leaderboard_cache_key(chart_hash, &profile_snapshot)?;
+    get_cached_player_leaderboard_itl_self_rank_with(chart_hash, &profile_snapshot)
+}
+
+fn get_cached_player_leaderboard_itl_self_rank_with(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
     let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
     let entry = cache.by_key.get(&key)?;
     let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
         return None;
     };
     data.itl_self_rank
+}
+
+pub struct ItlWheelSideContext {
+    profile_id: Option<String>,
+    api_key: String,
+    leaderboard_snapshot: GameplayScoreboxProfileSnapshot,
+}
+
+impl ItlWheelSideContext {
+    pub fn for_side(side: profile_data::PlayerSide) -> Self {
+        Self {
+            profile_id: profile::active_local_profile_id_for_side(side),
+            api_key: profile::groovestats_api_key_for_side(side),
+            leaderboard_snapshot: player_leaderboard_profile_snapshot_for_side(side),
+        }
+    }
+
+    /// Cached local ITL score for a song (reads the per-profile ITL file cache).
+    pub fn cached_local_itl_score(
+        &self,
+        song: &deadsync_chart::SongData,
+    ) -> Option<deadsync_score::CachedItlScore> {
+        itl::get_cached_itl_score_for_song_with_profile(song, self.profile_id.as_deref())
+    }
+
+    /// Cached online ITL self EX score for a chart hash, in integer hundredths
+    /// of a percent (e.g. `9912` = 99.12%).
+    pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
+        itl::get_cached_itl_self_score_for_key(
+            chart_hash,
+            self.profile_id.as_deref(),
+            &self.api_key,
+        )
+    }
+
+    /// Cached ITL tournament rank for a chart hash: prefers the player
+    /// leaderboard cache, falling back to the online self-rank cache.
+    pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
+        get_cached_player_leaderboard_itl_self_rank_with(chart_hash, &self.leaderboard_snapshot)
+            .or_else(|| {
+                itl::get_cached_online_itl_self_rank_for_key(
+                    chart_hash,
+                    self.profile_id.as_deref(),
+                    &self.api_key,
+                )
+            })
+    }
 }
 
 fn get_or_fetch_player_leaderboards_for_profile_inner(
