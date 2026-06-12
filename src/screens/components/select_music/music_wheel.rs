@@ -596,6 +596,21 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         profile_data::PlayerSide::P2 => score_profile_p2.as_deref(),
     };
 
+    let unlock_profile_p1: std::cell::OnceCell<Option<String>> = std::cell::OnceCell::new();
+    let unlock_profile_p2: std::cell::OnceCell<Option<String>> = std::cell::OnceCell::new();
+    let unlock_profile_for_side = |side: profile_data::PlayerSide| {
+        let (cell, joined) = match side {
+            profile_data::PlayerSide::P1 => (&unlock_profile_p1, p1_joined),
+            profile_data::PlayerSide::P2 => (&unlock_profile_p2, p2_joined),
+        };
+        cell.get_or_init(|| {
+            joined
+                .then(|| profile::active_local_profile_id_for_side(side))
+                .flatten()
+        })
+        .as_deref()
+    };
+
     if let Some(pid) = score_profile_p1.as_deref() {
         scores::ensure_score_caches_loaded(pid);
     }
@@ -1176,14 +1191,14 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             && scores::is_itl_unlocks_pack(pack_dir)
                         {
                             let p1_locked = p1_joined
-                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                && !scores::is_itl_song_folder_unlocked_with_profile(
                                     song_dir,
-                                    profile_data::PlayerSide::P1,
+                                    unlock_profile_for_side(profile_data::PlayerSide::P1),
                                 );
                             let p2_locked = p2_joined
-                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                && !scores::is_itl_song_folder_unlocked_with_profile(
                                     song_dir,
-                                    profile_data::PlayerSide::P2,
+                                    unlock_profile_for_side(profile_data::PlayerSide::P2),
                                 );
                             let lock_x = -12.0_f32;
                             if p1_locked {

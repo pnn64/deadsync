@@ -541,6 +541,28 @@ pub fn is_itl_song_folder_unlocked_for_side(
         .unwrap_or(false)
 }
 
+pub fn is_itl_song_folder_unlocked_with_profile(
+    song_folder: &str,
+    profile_id: Option<&str>,
+) -> bool {
+    let Some(profile_id) = profile_id else {
+        return false;
+    };
+    ensure_itl_score_cache_loaded(profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .map(|data| {
+            data.unlock_folders
+                .get(song_folder)
+                .copied()
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
 /// True when `pack_dir` matches the SL-style pattern `ITL Online <year> Unlocks`
 /// (case-insensitive, any 4-digit year). Allocation-free.
 pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
