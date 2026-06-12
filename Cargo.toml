@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.4.737"
+version.workspace = true
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -43,6 +43,13 @@ members = [
     "crates/deadsync-video",
 ]
 resolver = "3"
+
+# Single source of truth for the application version. The root `deadsync`
+# binary and the `deadsync-version` crate both inherit this via
+# `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
+# `deadsync_version::current()` always agree. Bump THIS line on release.
+[workspace.package]
+version = "0.4.737"
 
 [[bin]]
 name = "compose_bench"
