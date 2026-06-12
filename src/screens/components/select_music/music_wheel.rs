@@ -560,6 +560,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         None
     };
 
+    let header_font = current_machine_font_key(FontRole::Header);
+    let numbers_font = current_machine_font_key(FontRole::Numbers);
+    let screen_eval_font = current_machine_font_key(FontRole::ScreenEval);
+
     let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     let itl_lookups_active = !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None)
@@ -908,7 +912,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                     let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
                                     let judge_col = lamp_judge_count_color(lamp_index);
                                     actors.push(act!(text:
-                                        font(current_machine_font_key(FontRole::ScreenEval)):
+                                        font(screen_eval_font):
                                         settext(digit_text(count)):
                                         align(0.5, 0.5):
                                         horizalign(center):
@@ -970,7 +974,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
                             actors.push(act!(text:
-                                font(current_machine_font_key(FontRole::Header)):
+                                font(header_font):
                                 settext(cached_itl_rank_text(rank)):
                                 align(0.5, 0.5):
                                 horizalign(center):
@@ -1012,7 +1016,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -1025,7 +1029,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             SelectMusicItlWheelMode::PointsAndScore => {
                                 let Some(points) = points else {
                                     actors.push(act!(text:
-                                        font(current_machine_font_key(FontRole::Numbers)):
+                                        font(numbers_font):
                                         settext(cached_itl_ex_text(ex_hundredths)):
                                         align(1.0, 0.5):
                                         horizalign(right):
@@ -1038,7 +1042,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -1053,7 +1057,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                     z(53)
                                 ));
                                 actors.push(act!(text:
-                                    font(current_machine_font_key(FontRole::Numbers)):
+                                    font(numbers_font):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
