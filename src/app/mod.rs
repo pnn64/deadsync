@@ -3898,6 +3898,9 @@ pub struct App {
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     smx_panels: smx_panel_fx::SmxPanelDriver,
+    /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
+    /// cached so the resolve-and-push only fires when the value actually changes.
+    smx_light_brightness: [u8; 2],
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -4447,6 +4450,33 @@ impl App {
         }
     }
 
+    /// Resolve each pad slot's user brightness from the player on that side and push
+    /// it to the SMX crate, which scales every outgoing light frame by it. Cached so
+    /// the push only fires on change. Skipped on the gameplay hot path: brightness is
+    /// a per-player profile value that can't change mid-song, so the value resolved on
+    /// the last non-gameplay frame stays valid and the profile lock stays off the
+    /// gameplay loop. With SMX input off there are no light sends, so hold at full.
+    fn drive_smx_light_brightness(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            return;
+        }
+        let resolved = if config::get().smx_input {
+            [
+                profile::pad_light_brightness_for_pad(false),
+                profile::pad_light_brightness_for_pad(true),
+            ]
+        } else {
+            [100, 100]
+        };
+        if resolved != self.smx_light_brightness {
+            self.smx_light_brightness = resolved;
+            deadsync_smx::set_light_brightness(resolved);
+        }
+    }
+
     fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
         let config = config::get();
         self.lights
@@ -4709,6 +4739,7 @@ impl App {
         self.maybe_autoprompt_smx_assign();
         self.drive_smx_options_lights(delta_time);
         self.apply_smx_managed_preset();
+        self.drive_smx_light_brightness();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
         let mut upload_us: u32 = 0;
@@ -5147,6 +5178,7 @@ impl App {
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             smx_panels: smx_panel_fx::SmxPanelDriver::default(),
+            smx_light_brightness: [100, 100],
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting

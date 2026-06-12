@@ -122,6 +122,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SmxDefaultPadConfig",
         default.smx_default_pad_config.as_str(),
     );
+    push_line(
+        content,
+        "SmxDefaultLightBrightness",
+        default.smx_default_light_brightness,
+    );
     // No pad→player assignment by default (slots follow the hardware jumper).
     push_line(content, "SmxP1Serial", "");
     push_line(content, "SmxP2Serial", "");

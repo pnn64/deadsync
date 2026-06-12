@@ -211,6 +211,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())
         .unwrap_or(default.smx_default_pad_config);
+    cfg.smx_default_light_brightness = conf
+        .get("Options", "SmxDefaultLightBrightness")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.smx_default_light_brightness, |v| v.min(100));
     cfg.gfx_debug = conf
         .get("Options", "GfxDebug")
         .and_then(|v| v.parse::<u8>().ok())

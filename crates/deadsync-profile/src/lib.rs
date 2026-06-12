@@ -56,6 +56,17 @@ pub const LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT: u32 = 16;
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
+
+/// Fallback pad-light brightness (0..=100) when a profile has no saved value.
+/// New profiles are seeded from the StepManiaX machine default instead (see
+/// `game::profile`); this is only the in-crate default for a fresh struct.
+pub const PAD_LIGHT_BRIGHTNESS_DEFAULT: u8 = 100;
+
+/// Clamp a pad-light brightness to the valid 0..=100 percent range.
+#[inline(always)]
+pub const fn clamp_pad_light_brightness(percent: u8) -> u8 {
+    if percent > 100 { 100 } else { percent }
+}
 pub const TEXT_ERROR_BAR_THRESHOLD_MS_MIN: u32 = 1;
 pub const TEXT_ERROR_BAR_THRESHOLD_MS_MAX: u32 = 50;
 pub const TEXT_ERROR_BAR_THRESHOLD_MS_DEFAULT: u32 = 10;
@@ -3097,6 +3108,8 @@ pub struct PlayerOptionsData {
     pub score_display_mode: ScoreDisplayMode,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
+    /// Pad-light brightness 0..=100 (gamma-mapped on send; 0 = off, 100 = full).
+    pub pad_light_brightness: u8,
     pub judgment_tilt: bool,
     pub column_cues: bool,
     pub measure_cues: bool,
@@ -3222,6 +3235,7 @@ fn default_player_options() -> PlayerOptionsData {
         score_display_mode: ScoreDisplayMode::Normal,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
+        pad_light_brightness: PAD_LIGHT_BRIGHTNESS_DEFAULT,
         judgment_tilt: false,
         column_cues: false,
         measure_cues: false,
@@ -3448,6 +3462,10 @@ where
         .and_then(|s| s.parse::<u8>().ok())
         .map(clamp_custom_fantastic_window_ms)
         .unwrap_or(options.custom_fantastic_window_ms);
+    options.pad_light_brightness = get("PadLightBrightness")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(clamp_pad_light_brightness)
+        .unwrap_or(options.pad_light_brightness);
     options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
     options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
     options.measure_cues = load_u8_bool(&mut get, "MeasureCues", options.measure_cues);
@@ -3782,6 +3800,10 @@ pub fn append_player_options_section(
         options.custom_fantastic_window_ms
     ));
     content.push_str(&format!(
+        "PadLightBrightness={}\n",
+        options.pad_light_brightness
+    ));
+    content.push_str(&format!(
         "JudgmentTilt={}\n",
         i32::from(options.judgment_tilt)
     ));
@@ -4094,6 +4116,9 @@ pub struct Profile {
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
+    /// Pad-light brightness 0..=100. Seeded from the StepManiaX machine default
+    /// when the profile is created; the player adjusts it in Player Options.
+    pub pad_light_brightness: u8,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
@@ -4272,6 +4297,7 @@ impl Default for Profile {
             score_display_mode: player_options.score_display_mode,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
+            pad_light_brightness: player_options.pad_light_brightness,
             judgment_tilt: player_options.judgment_tilt,
             column_cues: player_options.column_cues,
             measure_cues: player_options.measure_cues,
@@ -4662,6 +4688,13 @@ impl Profile {
         )
     }
 
+    pub fn set_pad_light_brightness(&mut self, percent: u8) -> bool {
+        set_u8_if_changed(
+            &mut self.pad_light_brightness,
+            clamp_pad_light_brightness(percent),
+        )
+    }
+
     pub fn set_average_error_bar_intensity(&mut self, intensity: f32) -> bool {
         set_f32_if_changed(
             &mut self.average_error_bar_intensity,
@@ -4828,6 +4861,7 @@ impl Profile {
             score_display_mode: self.score_display_mode,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
+            pad_light_brightness: self.pad_light_brightness,
             judgment_tilt: self.judgment_tilt,
             column_cues: self.column_cues,
             measure_cues: self.measure_cues,
@@ -4955,6 +4989,7 @@ impl Profile {
         self.score_display_mode = options.score_display_mode;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
+        self.pad_light_brightness = options.pad_light_brightness;
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
         self.measure_cues = options.measure_cues;

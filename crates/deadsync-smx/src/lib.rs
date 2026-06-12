@@ -4,7 +4,7 @@
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -20,6 +20,57 @@ pub mod panels;
 
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
+
+// ─── Pad-light brightness ────────────────────────────────────────────────────
+//
+// A user-facing 0..=100 brightness, resolved per pad slot (slot 0 = P1, slot 1 =
+// P2; in Doubles both slots carry the one joined player's value) and applied as a
+// single multiplier to every RGB byte deadsync sends to the pad: panel judgement
+// effects, GIFs, and the player-indicator lights. Scaling all three channels by
+// the same factor preserves hue and saturation; only luminance changes.
+//
+// The slider is mapped through a mild gamma so equal steps feel more perceptually
+// even (LED output is ~linear in the byte value, but perceived brightness is
+// compressive). 100 is an exact identity (fast-pathed on send) and 0 is fully off.
+
+/// Perceptual curve for the brightness slider. `factor = (pct/100)^GAMMA`.
+const LIGHT_BRIGHTNESS_GAMMA: f32 = 1.8;
+
+/// Per-slot brightness percent (0..=100), default full. Read on every light send.
+static LIGHT_BRIGHTNESS: [AtomicU8; 2] = [AtomicU8::new(100), AtomicU8::new(100)];
+
+/// Set the per-slot pad-light brightness (`[p1_slot, p2_slot]`, each 0..=100).
+/// Pushed from deadsync whenever the resolved value changes; cheap and lock-free.
+pub fn set_light_brightness(per_slot: [u8; 2]) {
+    LIGHT_BRIGHTNESS[0].store(per_slot[0].min(100), Ordering::Relaxed);
+    LIGHT_BRIGHTNESS[1].store(per_slot[1].min(100), Ordering::Relaxed);
+}
+
+/// Current per-slot brightness percent.
+pub(crate) fn light_brightness() -> [u8; 2] {
+    [
+        LIGHT_BRIGHTNESS[0].load(Ordering::Relaxed),
+        LIGHT_BRIGHTNESS[1].load(Ordering::Relaxed),
+    ]
+}
+
+/// Gamma-mapped output factor (0.0..=1.0) for a slider percent.
+fn brightness_factor(pct: u8) -> f32 {
+    (f32::from(pct.min(100)) / 100.0).powf(LIGHT_BRIGHTNESS_GAMMA)
+}
+
+/// Scale a both-pads RGB frame in place by the per-slot brightness. The frame is
+/// laid out as `[slot0 .. | slot1 ..]`, so the first half scales by `pct[0]` and
+/// the second by `pct[1]`. Round-to-nearest keeps dim colours fading smoothly
+/// instead of snapping to black. Caller skips this entirely when both are 100.
+pub(crate) fn apply_brightness(frame: &mut [u8], pct: [u8; 2]) {
+    let half = frame.len() / 2;
+    let factor = [brightness_factor(pct[0]), brightness_factor(pct[1])];
+    for (i, b) in frame.iter_mut().enumerate() {
+        let f = factor[usize::from(i >= half)];
+        *b = (f32::from(*b) * f + 0.5) as u8;
+    }
+}
 
 /// Shared state accessible by both the input backend and FSR monitor.
 struct SmxShared {
@@ -656,6 +707,10 @@ pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
         for led in buf[base..base + BYTES_PER_PAD_25].chunks_exact_mut(3) {
             led.copy_from_slice(rgb);
         }
+    }
+    let brightness = light_brightness();
+    if brightness != [100, 100] {
+        apply_brightness(&mut buf, brightness);
     }
     s.manager.set_lights(&buf);
 }

@@ -505,6 +505,13 @@ fn machine_default_noteskin_value() -> NoteSkin {
     NoteSkin::new(&config::machine_default_noteskin())
 }
 
+/// Machine-default pad-light brightness used to seed a new profile, mirroring
+/// `machine_default_noteskin_value`. Players adjust their own value afterwards.
+#[inline(always)]
+fn machine_default_light_brightness() -> u8 {
+    config::get().smx_default_light_brightness
+}
+
 pub fn machine_default_noteskin() -> NoteSkin {
     machine_default_noteskin_value()
 }
@@ -533,6 +540,7 @@ fn make_guest_profile() -> Profile {
     guest.display_name = "[ GUEST ]".to_string();
     guest.scroll_speed = GUEST_SCROLL_SPEED;
     guest.noteskin = machine_default_noteskin_value();
+    guest.pad_light_brightness = machine_default_light_brightness();
     guest.avatar_path = None;
     guest.avatar_texture_key = None;
     guest.store_current_player_options_for_all_styles();
@@ -555,6 +563,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
     if !profile_ini.exists() {
         let mut default_profile = Profile::default();
         default_profile.noteskin = machine_default_noteskin_value();
+        default_profile.pad_light_brightness = machine_default_light_brightness();
         default_profile.store_current_player_options_for_all_styles();
         let mut content = String::new();
         append_player_options_section(
@@ -1052,6 +1061,7 @@ fn load_for_side(side: PlayerSide) {
         let profile = &mut profiles[side_ix(side)];
         let mut default_profile = Profile::default();
         default_profile.noteskin = machine_default_noteskin_value();
+        default_profile.pad_light_brightness = machine_default_light_brightness();
         default_profile.store_current_player_options_for_all_styles();
 
         // Load profile.ini
@@ -1315,6 +1325,21 @@ pub fn active_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
         PlayerSide::P1
     };
     active_local_profile_id_for_side(side)
+}
+
+/// Pad-light brightness (0..=100) for the player on a given physical pad slot,
+/// using the same side mapping as `active_local_profile_id_for_pad` (Doubles →
+/// the one joined player for both pads; otherwise the pad's own side). Reads the
+/// active profile's value (guest profiles are seeded from the machine default).
+pub fn pad_light_brightness_for_pad(is_p2_side: bool) -> u8 {
+    let side = if get_session_play_style() == PlayStyle::Double {
+        get_session_player_side()
+    } else if is_p2_side {
+        PlayerSide::P2
+    } else {
+        PlayerSide::P1
+    };
+    lock_profiles()[side_ix(side)].pad_light_brightness
 }
 
 pub fn known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
@@ -1586,6 +1611,7 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
 
     let mut default_profile = Profile::default();
     default_profile.noteskin = machine_default_noteskin_value();
+    default_profile.pad_light_brightness = machine_default_light_brightness();
     default_profile.store_current_player_options_for_all_styles();
     let initials = initials_from_name(name);
     let mut content = String::new();
