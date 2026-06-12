@@ -68,8 +68,9 @@ pub use itl::{
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
     get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
     is_itl_unlocks_pack, itl_eval_state_from_gameplay, itl_points_for_chart,
-    save_itl_data_from_gameplay, seed_session_online_itl_self_rank,
-    seed_session_online_itl_self_score, should_warn_cmod_for_itl_chart,
+    save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
+    seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
+    should_warn_cmod_for_itl_chart,
 };
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
@@ -864,6 +865,34 @@ pub fn get_cached_score_for_side(
     [local, gs, ac].into_iter().flatten().reduce(|a, b| {
         failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
     })
+}
+
+/// Test/bench helper: seed the in-memory local ITG score cache for a profile
+/// without touching disk. Lets benchmarks exercise the wheel grade/lamp render
+/// path deterministically.
+pub fn seed_session_local_itg_score(profile_id: &str, chart_hash: &str, score: CachedScore) {
+    ensure_local_score_cache_loaded(profile_id);
+    LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default()
+        .best_itg
+        .insert(chart_hash.to_string(), score);
+}
+
+/// Test/bench helper: seed the in-memory GrooveStats grade cache for a profile
+/// without touching disk. See [`seed_session_local_itg_score`].
+pub fn seed_session_gs_score(profile_id: &str, chart_hash: &str, score: CachedScore) {
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default()
+        .insert(chart_hash.to_string(), score);
 }
 
 fn get_cached_local_scalar_score_for_side(

@@ -459,6 +459,24 @@ pub fn seed_session_online_itl_self_rank(api_key: &str, chart_hash: &str, rank: 
     set_cached_online_self_rank(None, api_key, chart_hash, Some(rank));
 }
 
+/// Test/bench helper: mark song folders as ITL-unlocked for a profile in the
+/// in-memory cache without touching disk. Folders not seeded stay locked
+/// (matching SL semantics), letting benchmarks exercise the lock-icon path.
+pub fn seed_session_itl_unlock_folders(profile_id: &str, folders: &[&str]) {
+    ensure_itl_score_cache_loaded(profile_id);
+    let mut state = ITL_SCORE_CACHE.lock().unwrap();
+    let data = state
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default();
+    for folder in folders {
+        let folder = folder.trim();
+        if !folder.is_empty() {
+            data.unlock_folders.insert(folder.to_string(), true);
+        }
+    }
+}
+
 pub fn get_cached_itl_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,

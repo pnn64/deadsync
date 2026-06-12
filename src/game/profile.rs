@@ -1448,6 +1448,16 @@ pub fn is_favorite(side: PlayerSide, chart_hash: &str) -> bool {
     profiles[side_ix(side)].favorites.contains(chart_hash)
 }
 
+/// Test/bench helper: mark a chart hash as favorited for the given side in the
+/// in-memory profile only, without persisting to disk. Lets benchmarks exercise
+/// the favorites render path deterministically.
+pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
+    let mut profiles = lock_profiles();
+    profiles[side_ix(side)]
+        .favorites
+        .insert(chart_hash.to_string());
+}
+
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
     {
         let mut session = lock_session();
