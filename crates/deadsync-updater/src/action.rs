@@ -122,7 +122,7 @@ pub enum ActionErrorKind {
 }
 
 impl ActionErrorKind {
-    fn classify(err: &UpdaterError) -> Self {
+    pub fn classify(err: &UpdaterError) -> Self {
         match err {
             UpdaterError::Network(_) => Self::Network,
             UpdaterError::RateLimited => Self::RateLimited,

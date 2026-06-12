@@ -1,4 +1,5 @@
 pub mod banner;
+pub mod ffmpeg_overlay;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
 pub mod loading_bar;

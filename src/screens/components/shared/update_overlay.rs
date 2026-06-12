@@ -60,14 +60,29 @@ pub enum InputOutcome {
     Consumed,
 }
 
-/// Build the actor list for the overlay.  Returns an empty `Vec` when
-/// the phase is [`ActionPhase::Idle`], so callers can unconditionally
-/// `.extend(update_overlay::build(&action::current(), active_color_index))`.
-pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
-    if matches!(phase, ActionPhase::Idle) {
-        return Vec::new();
-    }
+/// Pre-computed text/layout content for one modal panel.  Decouples the
+/// phase-specific string selection (per overlay) from the shared panel
+/// rendering, so multiple overlays (self-update, ffmpeg install) can
+/// reuse the exact same geometry / styling via [`render_panel`].
+pub struct PanelContent {
+    /// Large heading at the top of the panel.
+    pub title: String,
+    /// Optional focal tag rendered BIG below the title (e.g. a version).
+    pub version_tag: Option<String>,
+    /// Centre-aligned body lines.
+    pub body_lines: Vec<String>,
+    /// Footer hint; a trailing "…" animates as a dot cycle.
+    pub footer: String,
+    /// Determinate progress fraction (0.0–1.0) for the loading bar, if any.
+    pub progress: Option<f32>,
+    /// Whether to render the animated spinner sprite.
+    pub show_spinner: bool,
+}
 
+/// Render a modal panel from pre-computed [`PanelContent`].  Always draws
+/// the dim backdrop, bordered panel, title/body/footer and (optionally) a
+/// progress bar and spinner.  Shared by the self-update and ffmpeg overlays.
+pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(8);
 
     // 1) full-screen dim
@@ -101,48 +116,39 @@ pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
     let title_y = cy - PANEL_H * 0.5 + 50.0;
     let footer_y = cy + PANEL_H * 0.5 - 40.0;
 
-    let (title, body_lines, footer, progress) = phase_strings(phase);
-    let (title_rgba, body_rgba) = phase_palette(phase);
-
+    let white = [1.0, 1.0, 1.0, 1.0];
     actors.push(panel_text_tinted(
-        &title,
+        &content.title,
         cx,
         title_y,
         TITLE_PX,
         TextAlign::Center,
-        title_rgba,
+        white,
     ));
 
-    // If the phase carries a version tag, render it BIG below the title
+    // If the content carries a version tag, render it BIG below the title
     // as the visual focal point of the modal.
     let mut next_y = title_y + TITLE_PX * 0.55 + 24.0;
-    if let Some(tag) = phase_version_tag(phase) {
+    if let Some(tag) = &content.version_tag {
         next_y += VERSION_PX * 0.5;
         actors.push(panel_text_tinted(
-            &tag,
+            tag,
             cx,
             next_y,
             VERSION_PX,
             TextAlign::Center,
-            [1.0, 1.0, 1.0, 1.0],
+            white,
         ));
         next_y += VERSION_PX * 0.5 + 28.0;
     }
 
     let line_gap = 36.0;
-    for (i, line) in body_lines.iter().enumerate() {
+    for (i, line) in content.body_lines.iter().enumerate() {
         let y = next_y + (i as f32) * line_gap;
-        actors.push(panel_text_tinted(
-            line,
-            cx,
-            y,
-            BODY_PX,
-            TextAlign::Center,
-            body_rgba,
-        ));
+        actors.push(panel_text_tinted(line, cx, y, BODY_PX, TextAlign::Center, white));
     }
 
-    if let Some(progress) = progress {
+    if let Some(progress) = content.progress {
         let bar_w = PANEL_W - 100.0;
         let bar_h = 32.0;
         let bar_x = cx - bar_w * 0.5;
@@ -164,7 +170,7 @@ pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
         }));
     }
 
-    let footer_display = animated_footer(&footer);
+    let footer_display = animated_footer(&content.footer);
     actors.push(panel_text(
         &footer_display,
         cx,
@@ -173,11 +179,30 @@ pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
         TextAlign::Center,
     ));
 
-    if matches!(phase, ActionPhase::Checking | ActionPhase::Applying { .. }) {
+    if content.show_spinner {
         actors.push(spinner_actor(cx, cy + 60.0));
     }
 
     actors
+}
+
+/// Build the actor list for the overlay.  Returns an empty `Vec` when
+/// the phase is [`ActionPhase::Idle`], so callers can unconditionally
+/// `.extend(update_overlay::build(&action::current(), active_color_index))`.
+pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
+    if matches!(phase, ActionPhase::Idle) {
+        return Vec::new();
+    }
+    let (title, body_lines, footer, progress) = phase_strings(phase);
+    let content = PanelContent {
+        title,
+        version_tag: phase_version_tag(phase),
+        body_lines,
+        footer,
+        progress,
+        show_spinner: matches!(phase, ActionPhase::Checking | ActionPhase::Applying { .. }),
+    };
+    render_panel(&content, active_color_index)
 }
 
 /// Animated spinner sprite, frame derived from wall-clock time so the
@@ -257,12 +282,6 @@ fn panel_text_tinted(
 /// for "good news" phases (update available, ready to install), white for
 /// neutral status (checking, up to date), and red for errors.
 /// All overlay text renders white; the panel background carries the
-/// state, not the text colour.
-fn phase_palette(_phase: &ActionPhase) -> ([f32; 4], [f32; 4]) {
-    let white = [1.0, 1.0, 1.0, 1.0];
-    (white, white)
-}
-
 /// The release tag (e.g. `"v0.3.875"`) the modal is talking about, when
 /// the phase carries one.  Used so the build can render the tag as a
 /// prominent focal point above the body text.
@@ -507,6 +526,11 @@ pub fn format_eta(secs: u64) -> String {
     } else {
         format!("{m}m{s}s")
     }
+}
+
+/// Render a transfer rate as a compact string such as `4.5 MiB/s`.
+pub fn format_speed(bytes_per_sec: u64) -> String {
+    format!("{}/s", format_size(bytes_per_sec))
 }
 
 fn progress_label(progress: f32) -> String {

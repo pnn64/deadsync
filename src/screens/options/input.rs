@@ -1157,6 +1157,21 @@ pub(super) fn activate_current_selection(
                     audio::play_sfx("assets/sounds/start.ogg");
                     deadsync_updater::action::request_check_now();
                 }
+                ItemId::DownloadVideoSupport => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    // Probe ffmpeg/ffprobe on a worker thread — the lookup
+                    // spawns subprocesses and would stutter the UI thread.
+                    if let Some(generation) =
+                        deadsync_updater::ffmpeg::begin_availability_check()
+                    {
+                        std::thread::spawn(move || {
+                            let available = deadsync_video::ffmpeg_available();
+                            deadsync_updater::ffmpeg::resolve_availability_check(
+                                generation, available,
+                            );
+                        });
+                    }
+                }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     return ScreenAction::NavigateNoFade(Screen::Credits);
@@ -1472,11 +1487,18 @@ pub fn handle_input(
     asset_manager: &AssetManager,
     ev: &InputEvent,
 ) -> ScreenAction {
-    use crate::screens::components::shared::update_overlay;
+    use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
     let overlay_phase = deadsync_updater::action::current();
     if !matches!(overlay_phase, deadsync_updater::action::ActionPhase::Idle)
         && update_overlay::handle_input(&overlay_phase, ev)
+            == update_overlay::InputOutcome::Consumed
+    {
+        return ScreenAction::None;
+    }
+    let ffmpeg_phase = deadsync_updater::ffmpeg::current();
+    if !matches!(ffmpeg_phase, deadsync_updater::ffmpeg::FfmpegPhase::Idle)
+        && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev)
             == update_overlay::InputOutcome::Consumed
     {
         return ScreenAction::None;
