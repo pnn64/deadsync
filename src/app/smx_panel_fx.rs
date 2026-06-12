@@ -165,6 +165,17 @@ fn sustain_anim(gifs: &JudgementGifs, kind: Option<NoteType>) -> Option<&Arc<Pan
     }
 }
 
+/// The worker drive for a sustained hold's overlay, by note kind: a freeze
+/// holds in its loop and plays the outro on release (`Sustain`), a roll runs
+/// forward into the outro to show its continuous drain and resets on each step
+/// (`Roll`). `resume` starts a re-triggered overlay at the loop region.
+fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
+    match kind {
+        Some(NoteType::Roll) => OverlayDrive::Roll { resume },
+        _ => OverlayDrive::Sustain { resume },
+    }
+}
+
 /// What `update` started on a column's panel for the current sustain, so the matching
 /// end call is sent when it disengages (an overlay and a colour hold end differently).
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
@@ -286,13 +297,13 @@ impl SmxPanelDriver {
                     let kind = state.active_hold(col).map(|h| h.note_type);
                     match sustain_anim(&self.judgement_gifs, kind) {
                         Some(anim) => {
-                            // A re-engage during the outro of the same animation (a
-                            // freeze/roll re-press) resumes its loop region worker-side.
+                            // First engage: play the intro, then loop (freeze) or
+                            // drain forward into the outro (roll).
                             self.lights.play_overlay(
                                 pad,
                                 p,
                                 anim.clone(),
-                                OverlayDrive::Sustain { resume: false },
+                                sustain_drive(kind, false),
                             );
                             self.prev_hold_fx[col] = HoldFx::Overlay;
                         }
@@ -313,30 +324,38 @@ impl SmxPanelDriver {
                 }
             }
 
-            // Grace periods: a freeze stays engaged for a short window after
-            // the panel lifts, and a roll stays engaged between hits while
-            // its life drains, so the engage edge above does not fire. Track
-            // the physical press instead: a lift snaps the sustain overlay to
-            // its outro (the visual for the draining window), and a re-press
-            // within it (a freeze re-hold or a roll re-hit) snaps it back
-            // into the loop region (never the intro).
+            // Sustained holds stay engaged while the engage edge is quiet, so
+            // drive their overlay from the physical press instead. A freeze and
+            // a roll differ: a freeze holds full life while pressed and only
+            // drains on a lift, so a lift plays the outro (the grace window) and
+            // a re-press snaps back to the loop. A roll's life drains
+            // continuously and only a step refills it, so the overlay drains
+            // forward on its own and each step (press edge) snaps it back to the
+            // loop start; a lift does nothing.
             if engage_edge.is_none()
                 && engaged
                 && self.prev_hold_fx[col] == HoldFx::Overlay
                 && let Some((pad, p)) = panel
             {
-                if released {
-                    self.lights.release_overlay(pad, p);
-                } else if press_edge == Some(true) {
-                    let kind = state.active_hold(col).map(|h| h.note_type);
-                    if let Some(anim) = sustain_anim(&self.judgement_gifs, kind) {
-                        self.lights.play_overlay(
-                            pad,
-                            p,
-                            anim.clone(),
-                            OverlayDrive::Sustain { resume: true },
-                        );
+                let kind = state.active_hold(col).map(|h| h.note_type);
+                if kind == Some(NoteType::Roll) {
+                    if press_edge == Some(true)
+                        && let Some(anim) = sustain_anim(&self.judgement_gifs, kind)
+                    {
+                        self.lights
+                            .play_overlay(pad, p, anim.clone(), OverlayDrive::Roll { resume: true });
                     }
+                } else if released {
+                    self.lights.release_overlay(pad, p);
+                } else if press_edge == Some(true)
+                    && let Some(anim) = sustain_anim(&self.judgement_gifs, kind)
+                {
+                    self.lights.play_overlay(
+                        pad,
+                        p,
+                        anim.clone(),
+                        OverlayDrive::Sustain { resume: true },
+                    );
                 }
             }
 

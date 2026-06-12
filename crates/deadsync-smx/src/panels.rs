@@ -97,12 +97,17 @@ pub enum OverlayDrive {
     /// segment and the panel is still pressed, it holds in its loop region
     /// until `release_overlay` lets the outro play.
     OneShot { pressed: bool },
-    /// Freeze/roll sustain: loops in its loop region until `release_overlay`,
-    /// which plays the outro if the GIF has one and clears otherwise. With
+    /// Freeze sustain: loops in its loop region while held, until
+    /// `release_overlay` plays the outro (the grace window) or clears it. With
     /// `resume`, a fresh overlay starts at the loop region instead of the
-    /// intro (a freeze/roll re-press within the grace period whose outro
-    /// already finished and cleared the overlay).
+    /// intro (a re-press whose outro already finished and cleared the overlay).
     Sustain { resume: bool },
+    /// Roll sustain: a roll's life drains continuously and only a fresh step
+    /// refills it, so playback runs forward through the loop into the outro
+    /// (no wrapping) to show the drain, and holds on the last frame. Each step
+    /// re-triggers this, snapping back to the loop start. With `resume`, a
+    /// fresh overlay starts at the loop region instead of the intro.
+    Roll { resume: bool },
 }
 
 /// A per-panel GIF animation playing over the background. See `OverlayDrive`
@@ -111,6 +116,10 @@ struct Overlay {
     anim: Arc<PanelAnim>,
     /// Sustain overlays loop until released even without an outro segment.
     sustain: bool,
+    /// Roll overlays run forward through the loop into the outro (never
+    /// wrapping) and hold on the last frame; each step resets them to the loop
+    /// start. Distinct from a freeze `sustain`, which wraps in the loop.
+    roll: bool,
     /// While engaged, playback wraps from `loop_end` back to `loop_frame`.
     /// Cleared by `release_overlay`; re-set when a sustain re-engages.
     engaged: bool,
@@ -202,10 +211,10 @@ impl PanelFx {
     }
 
     /// Start a GIF animation on a panel, over the background. Out-of-range
-    /// indices are ignored. A sustain re-playing the animation its panel is
-    /// already showing (a freeze/roll re-press during the release cooldown)
-    /// re-engages it, jumping from the outro back into the loop region
-    /// instead of restarting from the intro.
+    /// indices are ignored. Re-driving the animation a panel is already
+    /// showing re-triggers it in place instead of restarting from the intro:
+    /// a freeze sustain jumps from the outro back into the loop region, and a
+    /// roll snaps back to the loop start on every step.
     pub fn play_overlay(
         &mut self,
         pad: usize,
@@ -216,21 +225,34 @@ impl PanelFx {
         let Some(p) = self.panel_mut(pad, panel) else {
             return;
         };
-        if matches!(drive, OverlayDrive::Sustain { .. })
-            && let Some(o) = &mut p.overlay
-            && o.sustain
+        if let Some(o) = &mut p.overlay
             && Arc::ptr_eq(&o.anim, &anim)
         {
-            o.engaged = true;
-            if o.frame > o.anim.loop_end {
-                o.frame = o.anim.loop_frame.min(o.anim.loop_end);
-                o.time_in_frame = 0.0;
+            let loop_frame = o.anim.loop_frame.min(o.anim.loop_end);
+            match drive {
+                // Freeze re-press: re-engage, jumping back to the loop only if
+                // the outro had already started.
+                OverlayDrive::Sustain { .. } if o.sustain => {
+                    o.engaged = true;
+                    if o.frame > o.anim.loop_end {
+                        o.frame = loop_frame;
+                        o.time_in_frame = 0.0;
+                    }
+                    return;
+                }
+                // Roll step: always snap back to the loop start (life refilled).
+                OverlayDrive::Roll { .. } if o.roll => {
+                    o.frame = loop_frame;
+                    o.time_in_frame = 0.0;
+                    return;
+                }
+                _ => {}
             }
-            return;
         }
-        let (sustain, engaged, resume) = match drive {
-            OverlayDrive::OneShot { pressed } => (false, pressed, false),
-            OverlayDrive::Sustain { resume } => (true, true, resume),
+        let (sustain, roll, engaged, resume) = match drive {
+            OverlayDrive::OneShot { pressed } => (false, false, pressed, false),
+            OverlayDrive::Sustain { resume } => (true, false, true, resume),
+            OverlayDrive::Roll { resume } => (false, true, true, resume),
         };
         let frame = if resume {
             anim.loop_frame.min(anim.frames.len() - 1)
@@ -240,6 +262,7 @@ impl PanelFx {
         p.overlay = Some(Overlay {
             anim,
             sustain,
+            roll,
             engaged,
             frame,
             time_in_frame: 0.0,
@@ -405,24 +428,32 @@ fn beat_frame(anim: &FullPadAnim, beats_per_loop: f32, beat: f32, beat_rate: f32
 }
 
 /// Advance a panel overlay; one that plays past its last frame clears itself
-/// to reveal the layers under it.
+/// to reveal the layers under it, except a roll, which holds on the last frame
+/// (its drained state) until a step resets it or the note resolves.
 fn advance_overlay(overlay: &mut Option<Overlay>, dt: f32) {
     let Some(o) = overlay else { return };
     o.time_in_frame += dt;
     while o.time_in_frame >= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S) {
-        o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
         let last = o.anim.frames.len() - 1;
         let loop_end = o.anim.loop_end.min(last);
-        // An engaged overlay wraps at the loop end when there is an outro to
-        // hold back, and a sustain wraps there regardless; everything else
-        // runs through to the last frame and clears.
-        let wraps = o.engaged && (o.sustain || o.anim.has_outro());
+        // A freeze sustain wraps at the loop end while engaged, as does an
+        // engaged one-shot with an outro held back; a roll never wraps (it
+        // runs forward into the outro to show its drain).
+        let wraps = !o.roll && o.engaged && (o.sustain || o.anim.has_outro());
         if o.frame == loop_end && wraps {
+            o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
             o.frame = o.anim.loop_frame.min(loop_end);
         } else if o.frame >= last {
+            // A roll holds on its last (fully drained) frame; everything else
+            // clears to reveal the layers under it.
+            if o.roll {
+                o.time_in_frame = 0.0;
+                return;
+            }
             *overlay = None;
             return;
         } else {
+            o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
             o.frame += 1;
         }
     }
@@ -1118,6 +1149,29 @@ mod tests {
         // And it loops from there while engaged.
         assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+    }
+
+    #[test]
+    fn roll_runs_forward_into_the_outro_and_holds_resetting_on_each_step() {
+        let mut fx = PanelFx::new();
+        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        // Intro frame 1, loop region [1..=2] (values 2,3), outro 4,5.
+        let anim = panel_anim_outro(&[1, 2, 3, 4, 5], 1, 2);
+        // First step: intro, then it drains forward through the loop into the
+        // outro (no wrapping) rather than looping like a freeze.
+        fx.play_overlay(0, 3, anim.clone(), OverlayDrive::Roll { resume: false });
+        let mut seen = vec![led0(fx.tick(0.05), 0, 3)];
+        for _ in 0..5 {
+            seen.push(led0(fx.tick(0.1), 0, 3));
+        }
+        // Intro 1, loop 2,3, outro 4,5, then holds on the last (drained) frame.
+        assert_eq!(seen, vec![1, 2, 3, 4, 5, 5]);
+        // A step snaps back to the loop start (life refilled), never the intro.
+        fx.play_overlay(0, 3, anim, OverlayDrive::Roll { resume: true });
+        assert_eq!(led0(fx.tick(0.0), 0, 3), 2);
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 3);
+        // And it drains forward again from there.
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 4);
     }
 
     #[test]
