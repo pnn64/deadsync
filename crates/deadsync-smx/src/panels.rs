@@ -13,8 +13,10 @@
 //! another instead of one layer fully replacing the panel: for each LED the
 //! first non-black layer wins, top to bottom: GIF overlay (judgement/sustain),
 //! solid flash, solid hold, press-feedback overlay, the background, then black.
-//! A judgement gif that lights only some LEDs therefore lets the background (or
-//! press feedback) show through the rest.
+//! A judgement gif that lights only some LEDs therefore lets the background show
+//! through the rest. Press feedback is mutually exclusive with the game-event
+//! layers: while a judgement, freeze, or roll is active, the press overlay is
+//! suppressed (its black LEDs reveal the background, not the press feedback).
 
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -511,6 +513,11 @@ fn led_rgb(frame: &PanelFrame, led: usize) -> Rgb {
 /// treating black as transparent: the first layer whose LED is non-black wins,
 /// else black. Order: GIF overlay (judgement/sustain), solid flash, solid hold,
 /// press-feedback overlay, the background.
+///
+/// The press-feedback layer is mutually exclusive with the game-event layers: a
+/// judgement, freeze, or roll (whether a gif overlay or its solid flash/hold
+/// fallback) fully owns the panel, so press feedback never shows through its
+/// black LEDs; those fall straight through to the background.
 fn composite_led(
     p: &PanelState,
     background: &Option<Background>,
@@ -518,6 +525,7 @@ fn composite_led(
     panel: usize,
     led: usize,
 ) -> Rgb {
+    let game_event = p.overlay.is_some() || p.flash_remaining_s > 0.0 || p.hold.is_some();
     if let Some(o) = &p.overlay {
         let c = led_rgb(&o.anim.frames[o.frame], led);
         if c != BLACK {
@@ -532,7 +540,9 @@ fn composite_led(
     {
         return c;
     }
-    if let Some(o) = &p.press_overlay {
+    if !game_event
+        && let Some(o) = &p.press_overlay
+    {
         let c = led_rgb(&o.anim.frames[o.frame], led);
         if c != BLACK {
             return c;
@@ -1308,6 +1318,34 @@ mod tests {
         // LED 0 is black in the overlay, so the background shows through.
         assert_eq!(led_byte(frame, 0, 3, 0), 10);
         // LED 1 is lit in the overlay, so the overlay wins there.
+        assert_eq!(led_byte(frame, 0, 3, 1), 50);
+    }
+
+    #[test]
+    fn an_active_overlay_suppresses_press_even_through_its_black_leds() {
+        let mut fx = PanelFx::new();
+        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        // Press feedback fills the whole panel (would show 91 on its own).
+        fx.play_press_overlay(0, 3, panel_anim(&[91], 0), OverlayDrive::Sustain {
+            resume: false,
+        });
+        // A judgement overlay: LED 0 black, LED 1 lit (50).
+        let mut f = [0u8; PANEL_RGB_BYTES];
+        f[3] = 50;
+        f[4] = 50;
+        f[5] = 50;
+        let anim = Arc::new(PanelAnim {
+            frames: vec![f],
+            durations: vec![0.1],
+            loop_frame: 0,
+            loop_end: 0,
+        });
+        fx.play_overlay(0, 3, anim, OverlayDrive::OneShot { pressed: true });
+        let frame = fx.tick(0.0);
+        // LED 0: the overlay is black there, but a judgement is active, so press
+        // is suppressed and the background shows through (10), not the press (91).
+        assert_eq!(led_byte(frame, 0, 3, 0), 10);
+        // LED 1: the overlay is lit.
         assert_eq!(led_byte(frame, 0, 3, 1), 50);
     }
 
