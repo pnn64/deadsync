@@ -1456,6 +1456,12 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     }
 }
 
+/// The song currently highlighted on the music wheel, if the cursor is on a
+/// song (not a pack header). Used to resolve its per-song SMX pad background.
+pub fn highlighted_song(state: &State) -> Option<Arc<SongData>> {
+    selected_song_arc(state)
+}
+
 fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {
     entries
         .iter()

@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use image::codecs::gif::GifDecoder;
@@ -475,6 +475,71 @@ fn named_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
     packs
 }
 
+/// A full-pad background loaded from a single file outside the global packs
+/// (a song or pack folder's `smx-pad-lights/` subfolder), with its decoded
+/// animation and beats-per-loop suffix.
+pub struct ScopedBackground {
+    pub anim: FullPadAnim,
+    pub beats_per_loop: Option<f32>,
+}
+
+/// Load a per-song / per-pack background for `role` at `size` from `dir` (a
+/// `smx-pad-lights/` subfolder of a song or pack folder), if present. Scans
+/// `dir` for a `<role>_<size>[@<beats>b<bpm>].gif` and decodes it, preferring
+/// the requested size and falling back to the other one. Returns `None` when
+/// the folder is absent or has no matching, decodable gif; malformed matches
+/// are logged and skipped. The app caches the result per (dir, role), so this
+/// touches the filesystem only the first time a folder is seen.
+pub fn load_scoped_background(dir: &Path, role: &str, size: PadSize) -> Option<ScopedBackground> {
+    let entries = fs::read_dir(dir).ok()?;
+    // Collect candidate (size, path) matches for the role, then pick the
+    // requested size if present, else the other size.
+    let mut requested: Option<PathBuf> = None;
+    let mut other: Option<PathBuf> = None;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some((name, stem_size, _)) = parse_stem(stem) else {
+            continue;
+        };
+        if name != role {
+            continue;
+        }
+        if stem_size == size {
+            requested = Some(path);
+        } else {
+            other = Some(path);
+        }
+    }
+    let path = requested.or(other)?;
+    let (bytes, _, parsed_size, beats) = read_named_gif(&path)?;
+    match decode_full_pad(&bytes) {
+        Ok((mut anim, decoded_size)) if decoded_size == parsed_size => {
+            anim.beats_per_loop = beats;
+            Some(ScopedBackground {
+                anim,
+                beats_per_loop: beats,
+            })
+        }
+        Ok(_) => {
+            log::warn!(
+                "SMX gifs: {} dimensions don't match its _16/_25 suffix; skipped",
+                path.display()
+            );
+            None
+        }
+        Err(e) => {
+            log::warn!("SMX gifs: {}: {e}; skipped", path.display());
+            None
+        }
+    }
+}
+
 /// Read a GIF file and parse its stem; logs and yields `None` on unreadable
 /// files or stems that don't follow the naming convention.
 fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<f32>)> {
@@ -890,5 +955,34 @@ mod tests {
         assert!(reg.judgement(None, "badname", PadSize::Leds25).is_none());
         assert_eq!(reg.background_packs(), vec!["mypack".to_owned()]);
         assert!(reg.judgement_packs().is_empty());
+    }
+
+    #[test]
+    fn scoped_background_loads_a_role_from_a_folder() {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-smx-scoped-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let full_pad = encode_gif((23, 24), &[([0, 0, 255], 100)]);
+        fs::write(dir.join("gameplay_25.gif"), &full_pad).unwrap();
+        fs::write(dir.join("song_select_25@2b.gif"), &full_pad).unwrap();
+        // A role with no file, and junk, both resolve to nothing.
+        fs::write(dir.join("notes.txt"), b"not a gif").unwrap();
+
+        let gameplay = load_scoped_background(&dir, "gameplay", PadSize::Leds25);
+        assert!(gameplay.is_some());
+        assert!(gameplay.unwrap().beats_per_loop.is_none());
+
+        // The beat suffix is parsed for a scoped background too.
+        let song_select = load_scoped_background(&dir, "song_select", PadSize::Leds25).unwrap();
+        assert_eq!(song_select.beats_per_loop, Some(2.0));
+
+        // Missing role and missing folder both yield None.
+        assert!(load_scoped_background(&dir, "results", PadSize::Leds25).is_none());
+        assert!(load_scoped_background(&dir.join("nope"), "gameplay", PadSize::Leds25).is_none());
+
+        // A _25 file satisfies a _16 request (size fallback).
+        assert!(load_scoped_background(&dir, "gameplay", PadSize::Leds16).is_some());
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

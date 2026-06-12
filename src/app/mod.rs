@@ -4154,8 +4154,23 @@ pub struct App {
     /// option toggling on). `None` until then; never loaded on the gameplay path.
     smx_gifs: Option<std::sync::Arc<deadsync_smx::gifs::GifRegistry>>,
     /// Background state last pushed to `smx_panels`, so the per-frame sync only
-    /// does registry lookups when the screen, pack, or toggle changes.
-    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName)>,
+    /// does lookups when the toggle, screen role, pack, or current song change.
+    /// The song is identified by its `Arc` pointer (cheap to compute each frame,
+    /// no allocation) so a per-song/per-pack background is re-resolved when the
+    /// highlighted (song select) or playing (gameplay) song changes. Reset on a
+    /// song rescan, so a recycled pointer can't be mistaken for the same song.
+    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, Option<usize>)>,
+    /// Decoded per-song / per-pack pad backgrounds, keyed by their
+    /// `smx-pad-lights/` folder and role. `None` is a negative entry (folder
+    /// scanned, no matching gif) so a folder is touched only once. Cleared when
+    /// the song cache is rescanned. Only grows with folders actually visited.
+    smx_scoped_bg_cache: std::collections::HashMap<
+        (PathBuf, &'static str),
+        Option<std::sync::Arc<deadsync_smx::gifs::FullPadAnim>>,
+    >,
+    /// Song-cache generation the scoped cache was built against; a change means
+    /// a rescan, so the scoped cache is dropped (files may have changed).
+    smx_scoped_bg_generation: u64,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -4889,10 +4904,11 @@ impl App {
     }
 
     /// Keep the SMX pad GIF state in step with the options and the current screen:
-    /// the full-pad background follows the screen role, and the judgement animation
-    /// set follows the (enabled, pack) pair. Cheap per frame: registry lookups only
-    /// happen when the (enabled, screen role, pack) triple changes, and the driver
-    /// deduplicates the rest.
+    /// the full-pad background follows the screen role (and the current song's
+    /// per-song/per-pack override, if any), and the judgement animation set
+    /// follows the (enabled, pack) pair. Cheap per frame: lookups only happen
+    /// when the toggle, screen role, pack, or current song folder changes, and
+    /// the driver deduplicates the rest.
     fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName) {
         // The StepManiaX options page lights the pads blue/red to preview the
         // player assignment (`drive_smx_options_lights`), writing the pad
@@ -4906,41 +4922,69 @@ impl App {
         } else {
             None
         };
-        let synced = Some((enabled, role, pack));
+
+        // A song rescan may have changed per-song/per-pack files; drop the
+        // scoped cache and force a re-resolve (a recycled `Arc` pointer must not
+        // read as the same song).
+        let generation = crate::game::song::song_cache_generation();
+        if generation != self.smx_scoped_bg_generation {
+            self.smx_scoped_bg_generation = generation;
+            self.smx_scoped_bg_cache.clear();
+            self.smx_bg_synced = None;
+        }
+
+        // The song whose per-song/per-pack background applies here: the playing
+        // song in gameplay, the highlighted song on song select. Identified by
+        // `Arc` pointer so the per-frame dedup never allocates.
+        let song = role.and_then(|_| self.current_smx_song());
+        let song_id = song.as_ref().map(|s| std::sync::Arc::as_ptr(s) as usize);
+
+        let synced = Some((enabled, role, pack, song_id));
         if self.smx_bg_synced == synced {
             return;
         }
         let pack_changed = self
             .smx_bg_synced
-            .is_none_or(|(e, _, p)| e != enabled || p != pack);
+            .is_none_or(|(e, _, p, _)| e != enabled || p != pack);
         self.smx_bg_synced = synced;
+
+        let song_dir = song
+            .as_ref()
+            .and_then(|s| s.simfile_path.parent())
+            .map(Path::to_path_buf);
 
         let pack = (!pack.is_empty()).then_some(pack);
         let pack_str = pack.as_ref().map(|p| p.as_str());
 
         let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic;
-        let background = role.and_then(|role| {
-            // `_25` is the baseline that renders on both pad LED layouts; 16-LED
-            // pads simply show its outer ring. Only `default` is required of a
-            // pack; any missing screen role falls back to it.
-            let registry = self.smx_gif_registry();
-            registry
-                .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
-                .or_else(|| {
-                    registry.background(pack_str, "default", deadsync_smx::gifs::PadSize::Leds25)
-                })
-                .map(|anim| {
-                    // A beat-suffixed gif beat-locks on song select, the one screen
-                    // with a live beat source (the music preview); elsewhere it
-                    // plays realtime rather than freezing on a stale beat.
-                    let clock = match anim.beats_per_loop {
-                        Some(beats_per_loop) if on_select_music => {
-                            deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
-                        }
-                        _ => deadsync_smx::panels::Clock::Realtime,
-                    };
-                    (anim, clock)
-                })
+        let anim = role.and_then(|role| {
+            // Resolution order: the song's own background, then its pack's, then
+            // the global pack (selected -> basic), then the global `default`
+            // role. `_25` is the baseline both pad layouts render; 16-LED pads
+            // show its outer ring.
+            let scoped = song_dir
+                .as_deref()
+                .and_then(|dir| self.resolve_scoped_smx_background(dir, role));
+            scoped.or_else(|| {
+                let registry = self.smx_gif_registry();
+                registry
+                    .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
+                    .or_else(|| {
+                        registry.background(pack_str, "default", deadsync_smx::gifs::PadSize::Leds25)
+                    })
+            })
+        });
+        let background = anim.map(|anim| {
+            // A beat-suffixed gif beat-locks on song select, the one screen with
+            // a live beat source (the music preview); elsewhere it plays realtime
+            // rather than freezing on a stale beat.
+            let clock = match anim.beats_per_loop {
+                Some(beats_per_loop) if on_select_music => {
+                    deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
+                }
+                _ => deadsync_smx::panels::Clock::Realtime,
+            };
+            (anim, clock)
         });
         self.smx_panels.set_background(background);
 
@@ -4953,6 +4997,54 @@ impl App {
             };
             self.smx_panels.set_judgement_gifs(gifs);
         }
+    }
+
+    /// The song whose per-song/per-pack SMX background applies on the current
+    /// screen: the playing song in gameplay/practice, the highlighted song on
+    /// song select. `None` elsewhere or with no song. A cheap `Arc` clone.
+    fn current_smx_song(&self) -> Option<std::sync::Arc<deadsync_chart::SongData>> {
+        let screens = &self.state.screens;
+        match screens.current_screen {
+            CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|gs| gs.song.clone()),
+            CurrentScreen::Practice => screens
+                .practice_state
+                .as_ref()
+                .map(|ps| ps.gameplay.song.clone()),
+            CurrentScreen::SelectMusic => {
+                select_music::highlighted_song(&screens.select_music_state)
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve a per-song then per-pack background for `role` from the song
+    /// folder's and pack folder's `smx-pad-lights/` subfolders, decoding once
+    /// and caching the result (including a negative "no gif here" entry) so a
+    /// folder is touched at most once per song-cache generation.
+    fn resolve_scoped_smx_background(
+        &mut self,
+        song_dir: &Path,
+        role: &'static str,
+    ) -> Option<std::sync::Arc<deadsync_smx::gifs::FullPadAnim>> {
+        let song_scope = song_dir.join("smx-pad-lights");
+        let pack_scope = song_dir.parent().map(|p| p.join("smx-pad-lights"));
+        for dir in std::iter::once(song_scope).chain(pack_scope) {
+            let cached = self
+                .smx_scoped_bg_cache
+                .entry((dir.clone(), role))
+                .or_insert_with(|| {
+                    deadsync_smx::gifs::load_scoped_background(
+                        &dir,
+                        role,
+                        deadsync_smx::gifs::PadSize::Leds25,
+                    )
+                    .map(|scoped| std::sync::Arc::new(scoped.anim))
+                });
+            if let Some(anim) = cached {
+                return Some(anim.clone());
+            }
+        }
+        None
     }
 
     /// Decode the SMX GIF assets on first use. A cold path: runs when the pad-gifs
@@ -5587,6 +5679,8 @@ impl App {
             smx_light_brightness: [100, 100],
             smx_gifs: None,
             smx_bg_synced: None,
+            smx_scoped_bg_cache: std::collections::HashMap::new(),
+            smx_scoped_bg_generation: 0,
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting
