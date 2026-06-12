@@ -198,6 +198,7 @@ pub struct State {
     pub(super) sfx_volume_pct: i32,
     pub(super) assist_tick_volume_pct: i32,
     pub(super) music_volume_pct: i32,
+    pub(super) smx_default_light_brightness_pct: i32,
     pub(super) global_offset_ms: i32,
     pub(super) visual_delay_ms: i32,
     pub(super) input_debounce_ms: i32,
@@ -314,6 +315,7 @@ pub fn init() -> State {
         sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
         assist_tick_volume_pct: i32::from(cfg.assist_tick_volume.clamp(0, 100)),
         music_volume_pct: i32::from(cfg.music_volume.clamp(0, 100)),
+        smx_default_light_brightness_pct: i32::from(cfg.smx_default_light_brightness.min(100)),
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
             ms.clamp(GLOBAL_OFFSET_MIN_MS, GLOBAL_OFFSET_MAX_MS)

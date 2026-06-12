@@ -222,6 +222,8 @@ pub(super) fn submenu_display_choice_texts(
         choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
     } else if row.id == SubRowId::MusicVolume {
         choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
+    } else if row.id == SubRowId::SmxDefaultLightBrightness {
+        choice_texts[0] = Cow::Owned(format_percent(state.smx_default_light_brightness_pct));
     } else if row.id == SubRowId::VisualDelay {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     } else if row.id == SubRowId::Debounce {
