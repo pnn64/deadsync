@@ -1507,7 +1507,7 @@ struct PlayerLeaderboardCacheEntry {
 
 #[derive(Default)]
 struct PlayerLeaderboardCacheState {
-    by_key: HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
+    by_key: hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
     in_flight: HashMap<PlayerLeaderboardCacheKey, usize>,
     pending_refresh: HashMap<PlayerLeaderboardCacheKey, usize>,
     invalidated_after: HashMap<PlayerLeaderboardCacheKey, Instant>,
@@ -1887,13 +1887,55 @@ fn get_cached_player_leaderboard_itl_self_rank_for_side(
     get_cached_player_leaderboard_itl_self_rank_with(chart_hash, &profile_snapshot)
 }
 
+/// Borrowed view of [`PlayerLeaderboardCacheKey`] for allocation-free cache
+/// probes from the per-frame song-wheel rank lookup. Mirrors the field order
+/// and the gate of `player_leaderboard_cache_key` so it hashes and compares
+/// identically to the owned key without allocating the three key strings.
+#[derive(Hash)]
+struct PlayerLeaderboardCacheKeyRef<'a> {
+    chart_hash: &'a str,
+    api_key: &'a str,
+    arrowcloud_api_key: &'a str,
+    include_arrowcloud: bool,
+    show_ex_score: bool,
+}
+
+impl<'a> PlayerLeaderboardCacheKeyRef<'a> {
+    fn for_lookup(
+        chart_hash: &'a str,
+        snapshot: &'a GameplayScoreboxProfileSnapshot,
+    ) -> Option<Self> {
+        let chart_hash = chart_hash.trim();
+        if chart_hash.is_empty() || !snapshot.gs_active {
+            return None;
+        }
+        Some(Self {
+            chart_hash,
+            api_key: snapshot.api_key(),
+            arrowcloud_api_key: snapshot.arrowcloud_api_key(),
+            include_arrowcloud: snapshot.include_arrowcloud(),
+            show_ex_score: snapshot.show_ex_score,
+        })
+    }
+}
+
+impl hashbrown::Equivalent<PlayerLeaderboardCacheKey> for PlayerLeaderboardCacheKeyRef<'_> {
+    fn equivalent(&self, key: &PlayerLeaderboardCacheKey) -> bool {
+        self.chart_hash == key.chart_hash
+            && self.api_key == key.api_key
+            && self.arrowcloud_api_key == key.arrowcloud_api_key
+            && self.include_arrowcloud == key.include_arrowcloud
+            && self.show_ex_score == key.show_ex_score
+    }
+}
+
 fn get_cached_player_leaderboard_itl_self_rank_with(
     chart_hash: &str,
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
 ) -> Option<u32> {
-    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
+    let kref = PlayerLeaderboardCacheKeyRef::for_lookup(chart_hash, profile_snapshot)?;
     let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-    let entry = cache.by_key.get(&key)?;
+    let entry = cache.by_key.get(&kref)?;
     let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
         return None;
     };
