@@ -2036,15 +2036,18 @@ fn get_cached_player_leaderboard_itl_self_rank_with(
 }
 
 pub struct ItlWheelSideContext {
-    profile_id: Option<String>,
+    profile_id: Option<std::sync::Arc<str>>,
     api_key: String,
     leaderboard_snapshot: GameplayScoreboxProfileSnapshot,
 }
 
 impl ItlWheelSideContext {
-    pub fn for_side(side: profile_data::PlayerSide) -> Self {
+    pub fn for_side(
+        side: profile_data::PlayerSide,
+        profile_id: Option<std::sync::Arc<str>>,
+    ) -> Self {
         Self {
-            profile_id: profile::active_local_profile_id_for_side(side),
+            profile_id,
             api_key: profile::groovestats_api_key_for_side(side),
             leaderboard_snapshot: player_leaderboard_profile_snapshot_for_side(side),
         }
