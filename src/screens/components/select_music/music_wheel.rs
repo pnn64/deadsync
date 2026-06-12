@@ -523,7 +523,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         profile_data::PlayerSide::P2,
     ));
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
-    let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
+    let is_double_style = matches!(play_style, profile_data::PlayStyle::Double);
     let selected_chart_hash_for_side = |side: profile_data::PlayerSide| {
         let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
             return None;
