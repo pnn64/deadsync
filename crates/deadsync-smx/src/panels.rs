@@ -6,11 +6,15 @@
 //! keeps the colour math and timers out of the per-frame path. The app-side diff and
 //! palette live in `app::smx_panel_fx`.
 //!
-//! `PanelFx` composites two layers over black: an optional full-pad background
+//! `PanelFx` composites layers over black: an optional full-pad background
 //! animation (a preloaded GIF from `gifs::GifRegistry`, played realtime or locked
-//! to the song beat) and per-panel effects on top of it. Per panel, the priority
-//! is: GIF overlay (judgement animation), then solid flash, then solid hold, then
-//! the background, then black.
+//! to the song beat) and per-panel effects on top of it. Compositing is
+//! per-LED with black treated as transparent, so the layers blend through one
+//! another instead of one layer fully replacing the panel: for each LED the
+//! first non-black layer wins, top to bottom: GIF overlay (judgement/sustain),
+//! solid flash, solid hold, press-feedback overlay, the background, then black.
+//! A judgement gif that lights only some LEDs therefore lets the background (or
+//! press feedback) show through the rest.
 
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -289,20 +293,15 @@ impl PanelFx {
                 p.flash_remaining_s = (p.flash_remaining_s - dt).max(0.0);
                 advance_overlay(&mut p.overlay, dt);
                 advance_overlay(&mut p.press_overlay, dt);
-                // Layer priority: game-event overlay, flash, hold, then the
-                // generic press feedback, then the background, then black.
-                if let Some(o) = &p.overlay {
-                    put_panel_rgb(&mut self.frame, pad, panel, &o.anim.frames[o.frame]);
-                } else if p.flash_remaining_s > 0.0 {
-                    put_panel(&mut self.frame, pad, panel, p.flash_color);
-                } else if let Some(c) = p.hold {
-                    put_panel(&mut self.frame, pad, panel, c);
-                } else if let Some(o) = &p.press_overlay {
-                    put_panel_rgb(&mut self.frame, pad, panel, &o.anim.frames[o.frame]);
-                } else if let (Some(bg), Some(f)) = (&self.background, bg_frame) {
-                    put_panel_rgb(&mut self.frame, pad, panel, &bg.anim.panels[panel][f]);
-                } else {
-                    put_panel(&mut self.frame, pad, panel, BLACK);
+                // Per-LED composite with black as transparent: the first
+                // non-black layer wins (see `composite_led`), so a partly lit
+                // gif lets the layers under it show through its black LEDs.
+                let p = &*p;
+                let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
+                for led in 0..LEDS_PER_PANEL {
+                    let rgb = composite_led(p, &self.background, bg_frame, panel, led);
+                    let o = base + led * 3;
+                    self.frame[o..o + 3].copy_from_slice(&rgb);
                 }
             }
         }
@@ -499,6 +498,53 @@ fn advance_overlay(overlay: &mut Option<Overlay>, dt: f32) {
             o.frame += 1;
         }
     }
+}
+
+/// One LED's RGB out of a packed panel frame.
+#[inline]
+fn led_rgb(frame: &PanelFrame, led: usize) -> Rgb {
+    let o = led * 3;
+    [frame[o], frame[o + 1], frame[o + 2]]
+}
+
+/// Resolve one LED's colour by compositing the panel's layers top to bottom,
+/// treating black as transparent: the first layer whose LED is non-black wins,
+/// else black. Order: GIF overlay (judgement/sustain), solid flash, solid hold,
+/// press-feedback overlay, the background.
+fn composite_led(
+    p: &PanelState,
+    background: &Option<Background>,
+    bg_frame: Option<usize>,
+    panel: usize,
+    led: usize,
+) -> Rgb {
+    if let Some(o) = &p.overlay {
+        let c = led_rgb(&o.anim.frames[o.frame], led);
+        if c != BLACK {
+            return c;
+        }
+    }
+    if p.flash_remaining_s > 0.0 && p.flash_color != BLACK {
+        return p.flash_color;
+    }
+    if let Some(c) = p.hold
+        && c != BLACK
+    {
+        return c;
+    }
+    if let Some(o) = &p.press_overlay {
+        let c = led_rgb(&o.anim.frames[o.frame], led);
+        if c != BLACK {
+            return c;
+        }
+    }
+    if let (Some(bg), Some(f)) = (background, bg_frame) {
+        let c = led_rgb(&bg.anim.panels[panel][f], led);
+        if c != BLACK {
+            return c;
+        }
+    }
+    BLACK
 }
 
 /// Write a uniform colour into all LEDs of one panel in the frame buffer.
@@ -1015,6 +1061,11 @@ mod tests {
         frame[panel_base(pad, panel)]
     }
 
+    /// First byte of an arbitrary LED in a panel.
+    fn led_byte(frame: &[u8; FRAME_BYTES], pad: usize, panel: usize, led: usize) -> u8 {
+        frame[panel_base(pad, panel) + led * 3]
+    }
+
     #[test]
     fn background_plays_loops_and_fills_both_pads() {
         let mut fx = PanelFx::new();
@@ -1235,6 +1286,29 @@ mod tests {
         // And it loops from there while engaged.
         assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+    }
+
+    #[test]
+    fn black_overlay_leds_are_transparent_and_reveal_lower_layers() {
+        let mut fx = PanelFx::new();
+        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        // One overlay frame: LED 0 black (transparent), LED 1 lit (50).
+        let mut f = [0u8; PANEL_RGB_BYTES];
+        f[3] = 50;
+        f[4] = 50;
+        f[5] = 50;
+        let anim = Arc::new(PanelAnim {
+            frames: vec![f],
+            durations: vec![0.1],
+            loop_frame: 0,
+            loop_end: 0,
+        });
+        fx.play_overlay(0, 3, anim, OverlayDrive::OneShot { pressed: true });
+        let frame = fx.tick(0.0);
+        // LED 0 is black in the overlay, so the background shows through.
+        assert_eq!(led_byte(frame, 0, 3, 0), 10);
+        // LED 1 is lit in the overlay, so the overlay wins there.
+        assert_eq!(led_byte(frame, 0, 3, 1), 50);
     }
 
     #[test]
