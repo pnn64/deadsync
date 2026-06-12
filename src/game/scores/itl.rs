@@ -1439,8 +1439,8 @@ fn itl_entry_for_song<'a>(
     song: &deadsync_chart::SongData,
     data: &'a ItlFileData,
 ) -> Option<&'a ItlHashEntry> {
-    let song_dir = itl_song_dir(song)?;
-    let chart_hash = data.path_map.get(song_dir.as_str())?;
+    let song_dir = song.simfile_path.parent()?.to_string_lossy();
+    let chart_hash = data.path_map.get(song_dir.as_ref())?;
     data.hash_map.get(chart_hash)
 }
 
