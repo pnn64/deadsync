@@ -630,6 +630,17 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let held_score_caches = (score_lookups_active && (score_profile_p1.is_some() || score_profile_p2.is_some()))
         .then(scores::lock_score_caches);
 
+    if itl_ctx_p1.is_some()
+        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P1)
+    {
+        scores::ensure_itl_wheel_caches_loaded(&pid);
+    }
+    if itl_ctx_p2.is_some()
+        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P2)
+    {
+        scores::ensure_itl_wheel_caches_loaded(&pid);
+    }
+
     let num_entries = p.entries.len();
 
     if num_entries > 0 {

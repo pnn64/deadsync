@@ -68,6 +68,7 @@ pub use itl::{
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
     get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
     is_itl_song_folder_unlocked_with_profile, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
+    ensure_itl_wheel_caches_loaded,
     itl_points_for_chart,
     save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
     seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
@@ -2054,17 +2055,18 @@ impl ItlWheelSideContext {
     }
 
     /// Cached local ITL score for a song (reads the per-profile ITL file cache).
+    /// Assumes [`ensure_itl_wheel_caches_loaded`] ran for this side this frame.
     pub fn cached_local_itl_score(
         &self,
         song: &deadsync_chart::SongData,
     ) -> Option<deadsync_score::CachedItlScore> {
-        itl::get_cached_itl_score_for_song_with_profile(song, self.profile_id.as_deref())
+        itl::get_cached_itl_score_for_song_assume_loaded(song, self.profile_id.as_deref())
     }
 
     /// Cached online ITL self EX score for a chart hash, in integer hundredths
     /// of a percent (e.g. `9912` = 99.12%).
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
-        itl::get_cached_itl_self_score_for_key(
+        itl::get_cached_itl_self_score_for_key_assume_loaded(
             chart_hash,
             self.profile_id.as_deref(),
             &self.api_key,
@@ -2076,7 +2078,7 @@ impl ItlWheelSideContext {
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         get_cached_player_leaderboard_itl_self_rank_with(chart_hash, &self.leaderboard_snapshot)
             .or_else(|| {
-                itl::get_cached_online_itl_self_rank_for_key(
+                itl::get_cached_online_itl_self_rank_for_key_assume_loaded(
                     chart_hash,
                     self.profile_id.as_deref(),
                     &self.api_key,
