@@ -691,17 +691,25 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                         })
                     };
-                    let wheel_chart_for_side = |side: profile_data::PlayerSide| {
-                        let ix = profile_data::runtime_player_index(play_style, side);
+                    let wheel_charts: [Option<&ChartData>; profile_data::PLAYER_SLOTS] =
                         if is_selected_slot {
-                            p.selected_charts[ix]
+                            p.selected_charts
                         } else {
-                            chart_for_preferred_or_nearest_standard(
-                                info,
-                                target_chart_type,
-                                p.preferred_difficulty_index[ix],
-                            )
-                        }
+                            [
+                                chart_for_preferred_or_nearest_standard(
+                                    info,
+                                    target_chart_type,
+                                    p.preferred_difficulty_index[0],
+                                ),
+                                chart_for_preferred_or_nearest_standard(
+                                    info,
+                                    target_chart_type,
+                                    p.preferred_difficulty_index[1],
+                                ),
+                            ]
+                        };
+                    let wheel_chart_for_side = |side: profile_data::PlayerSide| {
+                        wheel_charts[profile_data::runtime_player_index(play_style, side)]
                     };
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = has_lua
