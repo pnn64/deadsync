@@ -4248,9 +4248,11 @@ impl App {
             config::update_smx_pad_assignment(Some(p1), Some(p2));
             return;
         }
-        // Single pad connected with no saved assignment: auto-promote to P1.
-        // With one stage the user virtually always wants P1; the rare P2-only
-        // case can be set manually via SmxP2Serial in deadsync.ini.
+        // Single pad connected with no saved assignment: pin it to its hardware
+        // jumper side (a P1-jumpered stage becomes P1, a P2-jumpered stage becomes
+        // P2). This makes the assignment explicit for profile resolution without
+        // overriding the jumper; the user can still flip it in the StepManiaX
+        // options Pad Player picker.
         let single = match (a.connected, b.connected) {
             (true, false) if a.has_serial_number && !a.serial.is_empty() => Some(&a),
             (false, true) if b.has_serial_number && !b.serial.is_empty() => Some(&b),
@@ -4258,11 +4260,16 @@ impl App {
         };
         if let Some(pad) = single {
             log::info!(
-                "SMX: single pad connected (jumper P{}), auto-promoting to P1 (serial={})",
+                "SMX: single pad connected, auto-assigning to its jumper side P{} (serial={})",
                 if pad.is_player2 { 2 } else { 1 },
                 pad.serial
             );
-            config::update_smx_pad_assignment(Some(pad.serial.clone()), None);
+            let serial = Some(pad.serial.clone());
+            if pad.is_player2 {
+                config::update_smx_pad_assignment(None, serial);
+            } else {
+                config::update_smx_pad_assignment(serial, None);
+            }
         }
     }
 
