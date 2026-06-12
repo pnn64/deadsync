@@ -3985,9 +3985,20 @@ impl App {
     #[inline(always)]
     fn sync_pad_config_fsr(&mut self) {
         use crate::screens::pad_config;
+        let screen = self.state.screens.current_screen;
+        // Fast path: the FSR monitor is only driven on the Configure Pads screen and the
+        // Song Select pad-config overlay. Everywhere else (gameplay included) there is
+        // nothing to do unless a previously-active monitor still needs releasing, so skip
+        // the config read and all the per-screen work entirely.
+        if !matches!(
+            screen,
+            CurrentScreen::ConfigurePads | CurrentScreen::SelectMusic
+        ) && !self.fsr_pads_active
+        {
+            return;
+        }
         let cfg = config::get();
         let use_fsrs = cfg.use_fsrs;
-        let screen = self.state.screens.current_screen;
         let on_screen = screen == CurrentScreen::ConfigurePads && use_fsrs;
         let on_overlay = screen == CurrentScreen::SelectMusic
             && self
@@ -4417,9 +4428,14 @@ impl App {
             }
         }
 
-        // Mirror the authoritative markers to the screen for display. Done every
-        // frame, so a screen rebuild can't lose them.
-        self.state.screens.select_music_state.smx_applied = self.pad_config_sync.snapshot();
+        // Mirror the authoritative markers to the screen for display. Checked every
+        // frame so a screen rebuild (which resets the mirror to None) can't lose them,
+        // but only cloned when they actually differ — the equality check is a couple of
+        // small string compares, whereas the clone heap-allocates the config name(s)
+        // every frame an SMX pad is connected. Steady state: compare, no allocation.
+        if self.state.screens.select_music_state.smx_applied != self.pad_config_sync.applied {
+            self.state.screens.select_music_state.smx_applied = self.pad_config_sync.snapshot();
+        }
     }
 
     fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
