@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "music-wheel";
+pub const SCENARIO_NAME_LOADED: &str = "music-wheel-loaded";
 
 pub struct MusicWheelBenchFixture {
     entries: Vec<MusicWheelEntry>,
@@ -18,6 +19,11 @@ pub struct MusicWheelBenchFixture {
     selection_animation_timer: f32,
     selection_animation_beat: f32,
     preferred_difficulty_index: usize,
+    show_grades: bool,
+    show_lamps: bool,
+    itl_rank_mode: crate::config::SelectMusicItlRankMode,
+    itl_wheel_mode: crate::config::SelectMusicItlWheelMode,
+    song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode,
 }
 
 impl MusicWheelBenchFixture {
@@ -37,11 +43,11 @@ impl MusicWheelBenchFixture {
                 song_text_color: Some([0.95, 0.96, 1.0, 1.0]),
                 song_text_color_overrides: Some(&self.song_text_color_overrides),
                 song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
-                show_music_wheel_grades: false,
-                show_music_wheel_lamps: false,
-                itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
-                itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
-                song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+                show_music_wheel_grades: self.show_grades,
+                show_music_wheel_lamps: self.show_lamps,
+                itl_rank_mode: self.itl_rank_mode,
+                itl_wheel_mode: self.itl_wheel_mode,
+                song_select_bg_mode: self.song_select_bg_mode,
                 expanded_pack_name: None,
                 allow_online_fetch: false,
                 new_pack_names: None,
@@ -98,6 +104,68 @@ pub fn fixture() -> MusicWheelBenchFixture {
         selection_animation_timer: 1.375,
         selection_animation_beat: 37.5,
         preferred_difficulty_index: 3,
+        show_grades: false,
+        show_lamps: false,
+        itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
+        itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+        song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+    }
+}
+
+/// Feature-rich fixture that exercises the side-gated render paths (per-side
+/// chart lookups, grade/lamp badges, ITL rank + wheel overlays, song-select BG
+/// art). Joins P1 in Single style so those blocks actually execute, and turns
+/// on every per-slot feature so the relevant per-frame work is measured.
+pub fn loaded_fixture() -> MusicWheelBenchFixture {
+    use deadsync_profile::PlayStyle;
+
+    crate::game::profile::set_session_play_style(PlayStyle::Single);
+    crate::game::profile::set_session_joined(true, false);
+
+    let mut entries = Vec::with_capacity(36);
+    let mut song_text_color_overrides = HashMap::with_capacity(10);
+    let mut song_has_edit_ptrs = HashSet::with_capacity(12);
+    let pack_names = ["Stamina Lab", "Tech Alley", "Groove Works", "Night Shift"];
+
+    for (pack_idx, pack_name) in pack_names.iter().enumerate() {
+        entries.push(MusicWheelEntry::PackHeader {
+            name: (*pack_name).to_string(),
+            original_index: pack_idx,
+            banner_path: Some(PathBuf::from(format!("songs/Bench/P{}/banner.png", pack_idx + 1))),
+            song_count: 7,
+        });
+
+        for song_idx in 0..7 {
+            let song = bench_song_loaded(pack_idx, song_idx);
+            let song_ptr = Arc::as_ptr(&song) as usize;
+            if song_idx % 2 == 0 {
+                song_text_color_overrides
+                    .insert(song_ptr, [0.86 + song_idx as f32 * 0.01, 0.94, 1.0, 1.0]);
+            }
+            if song.charts.iter().any(|chart| {
+                chart.chart_type.eq_ignore_ascii_case("dance-single")
+                    && chart.difficulty.eq_ignore_ascii_case("edit")
+            }) {
+                song_has_edit_ptrs.insert(song_ptr);
+            }
+            entries.push(MusicWheelEntry::Song(song));
+        }
+    }
+
+    MusicWheelBenchFixture {
+        entries,
+        song_text_color_overrides,
+        song_has_edit_ptrs,
+        selected_index: 11,
+        position_offset_from_selection: 0.35,
+        selection_animation_timer: 1.375,
+        selection_animation_beat: 37.5,
+        preferred_difficulty_index: 3,
+        show_grades: true,
+        show_lamps: true,
+        itl_rank_mode: crate::config::SelectMusicItlRankMode::Chart,
+        itl_wheel_mode: crate::config::SelectMusicItlWheelMode::PointsAndScore,
+        song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Banner,
     }
 }
 
@@ -146,6 +214,62 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
 
 fn bench_charts(base: &str, has_edit: bool) -> Vec<ChartData> {
     let mut charts = Vec::with_capacity(2 + usize::from(has_edit));
+    charts.push(bench_chart(base, "hard", 9));
+    charts.push(bench_chart(base, "challenge", 13));
+    if has_edit {
+        charts.push(bench_chart(base, "edit", 14));
+    }
+    charts
+}
+
+fn bench_song_loaded(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
+    let has_subtitle = !song_idx.is_multiple_of(3);
+    let has_edit = song_idx.is_multiple_of(3);
+    let base = format!("P{}-{:02}", pack_idx + 1, song_idx + 1);
+    let title = format!("Benchmark {base} Velocity");
+    let subtitle = if has_subtitle {
+        format!("Phase {}", (song_idx % 4) + 1)
+    } else {
+        String::new()
+    };
+    Arc::new(SongData {
+        simfile_path: PathBuf::from(format!("songs/Bench/{base}.ssc")),
+        title,
+        subtitle,
+        translit_title: String::new(),
+        translit_subtitle: String::new(),
+        artist: format!("Bench Artist {}", pack_idx + 1),
+        genre: String::new(),
+        banner_path: Some(PathBuf::from(format!("songs/Bench/{base}/banner.png"))),
+        background_path: Some(PathBuf::from(format!("songs/Bench/{base}/bg.png"))),
+        background_changes: Vec::new(),
+        background_layer2_changes: Vec::new(),
+        foreground_changes: Vec::new(),
+        background_lua_changes: Vec::new(),
+        foreground_lua_changes: Vec::new(),
+        has_lua: true,
+        cdtitle_path: None,
+        music_path: None,
+        display_bpm: String::from("160"),
+        offset: 0.0,
+        sample_start: None,
+        sample_length: None,
+        min_bpm: 160.0,
+        max_bpm: 160.0,
+        normalized_bpms: String::from("0.000=160.000"),
+        music_length_seconds: 92.0 + song_idx as f32,
+        first_second: 0.0,
+        total_length_seconds: 92 + song_idx as i32,
+        precise_last_second_seconds: 92.0 + song_idx as f32,
+        charts: bench_charts_loaded(&base, has_edit),
+    })
+}
+
+fn bench_charts_loaded(base: &str, has_edit: bool) -> Vec<ChartData> {
+    let mut charts = Vec::with_capacity(5 + usize::from(has_edit));
+    charts.push(bench_chart(base, "beginner", 2));
+    charts.push(bench_chart(base, "easy", 5));
+    charts.push(bench_chart(base, "medium", 7));
     charts.push(bench_chart(base, "hard", 9));
     charts.push(bench_chart(base, "challenge", 13));
     if has_edit {
