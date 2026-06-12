@@ -1941,6 +1941,15 @@ struct GraphCacheKey {
     tex_key_hash: u64,
 }
 
+/// Captures every input the clock-free center-column chrome (title/banner +
+/// song-features) frames depend on; unchanged ⇒ the cached `Arc<[Actor]>` is cloned.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ChromeCacheKey {
+    active_color_index: i32,
+    translated_titles: bool,
+    header_alpha_bits: u32,
+}
+
 #[inline]
 fn fnv1a_str(s: &str) -> u64 {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
@@ -1995,6 +2004,12 @@ pub struct State {
     /// Memoized per-player graph subtree (cf. `GraphCacheKey`). Interior mutability so
     /// it can be populated during `get_actors(&State, …)`.
     graph_cache: [RefCell<Option<(GraphCacheKey, Arc<[Actor]>)>>; MAX_PLAYERS],
+    /// Memoized center-column title/banner frame (cf. `ChromeCacheKey`). Single
+    /// instance (same in single + versus). Interior mutability so it can be populated
+    /// during `get_actors(&State, …)`.
+    chrome_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
+    /// Memoized center-column song-features frame (cf. `ChromeCacheKey`).
+    song_features_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
 }
 
 impl Clone for State {
@@ -2044,6 +2059,8 @@ impl Clone for State {
             // is repopulated lazily on first draw. Sharing Arcs across clones is safe
             // but pointless, and an empty cache avoids any stale-key risk.
             graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+            chrome_cache: RefCell::new(None),
+            song_features_cache: RefCell::new(None),
         }
     }
 }
@@ -2638,6 +2655,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+        chrome_cache: RefCell::new(None),
+        song_features_cache: RefCell::new(None),
     }
 }
 
@@ -2791,6 +2810,8 @@ pub fn init_from_score_info(
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
         graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+        chrome_cache: RefCell::new(None),
+        song_features_cache: RefCell::new(None),
     }
 }
 
@@ -3895,84 +3916,117 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
     // --- Title, Banner, and Song Features (Center Column) ---
     {
+        // Both center-column frames are clock-free, so cache their built children and
+        // emit `SharedFrame` (neutral tint/blend ⇒ identical compose to `Frame`),
+        // cloning the cached `Arc` on subsequent frames instead of rebuilding the
+        // leaf actors and reallocating the `banner_key` / `full_title` Strings.
+        let chrome_key = ChromeCacheKey {
+            active_color_index: state.active_color_index,
+            translated_titles: cfg.translated_titles,
+            header_alpha_bits: sl_header_alpha.to_bits(),
+        };
+
         // --- TitleAndBanner Group ---
-        let banner_key = score_info
-            .song
-            .banner_path
-            .as_ref()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| {
-                BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize].to_string()
-            });
-
-        let full_title = score_info.song.display_full_title(cfg.translated_titles);
-
-        let title_and_banner_frame = Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [screen_center_x(), 46.0],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: vec![
+        let title_hit = {
+            let slot = state.chrome_cache.borrow();
+            slot.as_ref().is_some_and(|(k, _)| *k == chrome_key)
+        };
+        let title_children: Arc<[Actor]> = if title_hit {
+            Arc::clone(&state.chrome_cache.borrow().as_ref().unwrap().1)
+        } else {
+            let banner_key = score_info
+                .song
+                .banner_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|| {
+                    BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize]
+                        .to_string()
+                });
+            let full_title = score_info.song.display_full_title(cfg.translated_titles);
+            let children: Arc<[Actor]> = Arc::from(vec![
                 shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
-            ],
-            background: None,
-            z: 50,
+            ]);
+            *state.chrome_cache.borrow_mut() = Some((chrome_key, Arc::clone(&children)));
+            children
         };
-        actors.push(title_and_banner_frame);
+        actors.push(Actor::SharedFrame {
+            align: [0.5, 0.5],
+            offset: [screen_center_x(), 46.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            z: 50,
+            background: None,
+            children: title_children,
+            tint: [1.0; 4],
+            blend: None,
+        });
 
         // --- SongFeatures Group ---
-        let (bpm_lo, bpm_hi) = score_info
-            .song
-            .chart_display_bpm_range(Some(&score_info.chart))
-            .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
-        let bpm_text = if matches!(
-            score_info.chart.display_bpm,
-            Some(deadsync_chart::ChartDisplayBpm::Random)
-        ) {
-            Arc::<str>::from("??? bpm")
+        let sf_hit = {
+            let slot = state.song_features_cache.borrow();
+            slot.as_ref().is_some_and(|(k, _)| *k == chrome_key)
+        };
+        let song_features_children: Arc<[Actor]> = if sf_hit {
+            Arc::clone(&state.song_features_cache.borrow().as_ref().unwrap().1)
         } else {
-            cached_bpm_text(bpm_lo, bpm_hi, score_info.music_rate)
-        };
-
-        let length_text = {
-            // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
-            // for this display, not the chart's last note time.
-            let base_seconds = if score_info.song.music_length_seconds.is_finite()
-                && score_info.song.music_length_seconds > 0.0
-            {
-                score_info.song.music_length_seconds
+            let (bpm_lo, bpm_hi) = score_info
+                .song
+                .chart_display_bpm_range(Some(&score_info.chart))
+                .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
+            let bpm_text = if matches!(
+                score_info.chart.display_bpm,
+                Some(deadsync_chart::ChartDisplayBpm::Random)
+            ) {
+                Arc::<str>::from("??? bpm")
             } else {
-                score_info.song.total_length_seconds.max(0) as f32
+                cached_bpm_text(bpm_lo, bpm_hi, score_info.music_rate)
             };
-            let rate = if score_info.music_rate.is_finite() && score_info.music_rate > 0.0 {
-                score_info.music_rate
-            } else {
-                1.0
-            };
-            let adjusted = base_seconds / rate;
-            let seconds = adjusted.round() as i32;
-            if seconds < 0 {
-                Arc::<str>::from("")
-            } else {
-                cached_song_length_text(seconds)
-            }
-        };
 
-        let song_features_frame = Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [screen_center_x(), 175.0],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: vec![
+            let length_text = {
+                // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
+                // for this display, not the chart's last note time.
+                let base_seconds = if score_info.song.music_length_seconds.is_finite()
+                    && score_info.song.music_length_seconds > 0.0
+                {
+                    score_info.song.music_length_seconds
+                } else {
+                    score_info.song.total_length_seconds.max(0) as f32
+                };
+                let rate = if score_info.music_rate.is_finite() && score_info.music_rate > 0.0 {
+                    score_info.music_rate
+                } else {
+                    1.0
+                };
+                let adjusted = base_seconds / rate;
+                let seconds = adjusted.round() as i32;
+                if seconds < 0 {
+                    Arc::<str>::from("")
+                } else {
+                    cached_song_length_text(seconds)
+                }
+            };
+
+            let children: Arc<[Actor]> = Arc::from(vec![
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 16.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(0) ),
                 act!(text: font("miso"): settext(score_info.song.artist.clone()): align(0.0, 0.5): xy(-145.0, 0.0): zoom(0.6): maxwidth(418.0 / 3.5): z(1) ),
                 act!(text: font("miso"): settext(bpm_text): align(0.5, 0.5): xy(0.0, 0.0): zoom(0.6): maxwidth(418.0 / 0.875): z(1) ),
                 act!(text: font("miso"): settext(length_text): align(1.0, 0.5): xy(145.0, 0.0): zoom(0.6): z(1) ),
-            ],
-            background: None,
-            z: 50,
+            ]);
+            *state.song_features_cache.borrow_mut() = Some((chrome_key, Arc::clone(&children)));
+            children
         };
-        actors.push(song_features_frame);
+        actors.push(Actor::SharedFrame {
+            align: [0.5, 0.5],
+            offset: [screen_center_x(), 175.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            z: 50,
+            background: None,
+            children: song_features_children,
+            tint: [1.0; 4],
+            blend: None,
+        });
     }
 
     // --- Upper Content (Simply Love PerPlayer/Upper) ---
