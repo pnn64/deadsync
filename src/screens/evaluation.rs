@@ -4787,7 +4787,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         }
                     },
                     {
-                        let mut life_children: Vec<Actor> = Vec::new();
+                        // Reserve the worst-case child count (≤2 quads per life-history
+                        // change point) so the segment quads never trigger reallocations.
+                        let mut life_children: Vec<Actor> =
+                            Vec::with_capacity(si.life_history.len() * 2 + 16);
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
                         let dur = (last - first).max(0.001_f32);
