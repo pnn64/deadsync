@@ -876,6 +876,60 @@ pub fn get_cached_score_with_profile(chart_hash: &str, profile_id: &str) -> Opti
     })
 }
 
+pub struct HeldScoreCaches {
+    local: std::sync::MutexGuard<'static, LocalScoreCacheState>,
+    gs: std::sync::MutexGuard<'static, GsScoreCacheState>,
+    ac: std::sync::MutexGuard<'static, AcScoreCacheState>,
+}
+
+impl HeldScoreCaches {
+    /// Resolve the merged "best ITG" score for `chart_hash` under `profile_id`,
+    /// reading the already-held cache maps. Identical merge semantics to
+    /// [`get_cached_score_with_profile`].
+    pub fn merged(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        if profile_id.trim().is_empty() {
+            return None;
+        }
+        let local = self
+            .local
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|idx| idx.best_itg.get(chart_hash).copied());
+        let gs = self
+            .gs
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied());
+        let ac = self
+            .ac
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied())
+            .and_then(|s| s.itg)
+            .map(|ac| ac.to_cached_score());
+        [local, gs, ac].into_iter().flatten().reduce(|a, b| {
+            failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+        })
+    }
+}
+
+pub fn ensure_score_caches_loaded(profile_id: &str) {
+    if profile_id.trim().is_empty() {
+        return;
+    }
+    ensure_local_score_cache_loaded(profile_id);
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+}
+
+pub fn lock_score_caches() -> HeldScoreCaches {
+    HeldScoreCaches {
+        local: LOCAL_SCORE_CACHE.lock().unwrap(),
+        gs: GS_SCORE_CACHE.lock().unwrap(),
+        ac: AC_SCORE_CACHE.lock().unwrap(),
+    }
+}
+
 /// Test/bench helper: seed the in-memory local ITG score cache for a profile
 /// without touching disk. Lets benchmarks exercise the wheel grade/lamp render
 /// path deterministically.

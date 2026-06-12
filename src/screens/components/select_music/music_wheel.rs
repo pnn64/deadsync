@@ -596,6 +596,15 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
         profile_data::PlayerSide::P2 => score_profile_p2.as_deref(),
     };
 
+    if let Some(pid) = score_profile_p1.as_deref() {
+        scores::ensure_score_caches_loaded(pid);
+    }
+    if let Some(pid) = score_profile_p2.as_deref() {
+        scores::ensure_score_caches_loaded(pid);
+    }
+    let held_score_caches = (score_lookups_active && (score_profile_p1.is_some() || score_profile_p2.is_some()))
+        .then(scores::lock_score_caches);
+
     let num_entries = p.entries.len();
 
     if num_entries > 0 {
@@ -873,8 +882,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             let Some(profile_id) = score_profile_for_side(side) else {
                                 continue;
                             };
-                            let Some(cached_score) =
-                                scores::get_cached_score_with_profile(&chart.short_hash, profile_id)
+                            let Some(held) = held_score_caches.as_ref() else {
+                                continue;
+                            };
+                            let Some(cached_score) = held.merged(profile_id, &chart.short_hash)
                             else {
                                 continue;
                             };
