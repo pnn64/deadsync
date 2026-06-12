@@ -60,8 +60,9 @@ FSRs** is on):
 | **DeadSync Manages Pad Config** | No / Yes | See [§3](#3-two-ways-to-configure-a-pad). When on, DeadSync writes a resolved config to each pad. |
 | **USB Polling** | 500–1000 µs (50 µs steps) | How often the SDK polls the pads over USB. Lower = more responsive, more CPU. Applied **live**. Default 1000 µs. |
 | **Default Pad Config** | Low / Medium / High | Built-in sensitivity preset (matches the official SMX tool's presets). Used as the fallback when DeadSync manages config and nothing else resolves. |
-| **Assign Pads to Players** | (opens screen) | Press-a-panel flow to choose which physical pad is P1 vs P2. See [§2a](#2a-which-pad-is-p1-vs-p2). Its help text shows the current mapping live. |
-| **Swap P1/P2 Pads** | (action) | One-tap swap of the two pads' player assignment. Both pads must be connected. |
+| **Pad Player** | Player 1 / Player 2 | Shown only when **one** pad is connected. Picks which player that lone pad is, overriding its jumper. See [§2a](#2a-which-pad-is-p1-vs-p2). |
+| **Assign Pads to Players** | (opens screen) | Shown only when **two** pads are connected. Press-a-panel flow to choose which physical pad is P1 vs P2. See [§2a](#2a-which-pad-is-p1-vs-p2). Its help text shows the current mapping live. |
+| **Swap P1/P2 Pads** | (action) | Shown only when **two** pads are connected. One-tap swap of the two pads' player assignment. |
 
 These persist to `deadsync.ini` under `[Options]` (`SmxInput`,
 `SmxManagesPadConfig`, `SmxUsbPollingUs`, `SmxDefaultPadConfig`, and the pad
@@ -93,12 +94,18 @@ are connected. The assignment is stored by serial in `deadsync.ini`
 (`SmxP1Serial` / `SmxP2Serial`) and pushed to the SDK on launch, so it survives
 reconnects and restarts.
 
-### Single-pad auto-promote
+### Single pad: which player?
 
-If you have only **one pad** connected and no serial assignment is saved,
-DeadSync automatically assigns it as **Player 1** regardless of its hardware
-jumper setting. This means a single-stage setup works out of the box even if the
-pad's internal jumper is set to P2.
+With only **one pad** connected and no serial assignment saved, the pad follows
+its hardware **P1/P2 jumper** (P1-jumper → Player 1, P2-jumper → Player 2), and
+DeadSync saves that side automatically. A single stage therefore works out of the
+box on whichever side its jumper selects.
+
+To play a lone pad as the other player, use the **Pad Player** row in the
+StepManiaX options (it appears only when one pad is connected). Pick Player 1 or
+Player 2 and DeadSync pins the pad's serial to that side, overriding the jumper.
+The picker reflects the pad's live player side, so it stays correct as pads
+connect, disconnect, or are swapped while the screen is open.
 
 If you later connect a second pad, clear or update the assignment through the
 Assign Pads to Players flow (or edit `deadsync.ini` directly — see below).
@@ -108,9 +115,9 @@ Assign Pads to Players flow (or edit `deadsync.ini` directly — see below).
 You can bypass the in-game flow and assign pads directly in `deadsync.ini`. This
 is useful if:
 
-- You want to force a single pad to **P2** (rare, e.g. a dedicated doubles
-  second stage).
-- You want to pre-configure assignments before first launch.
+- You want to pre-configure a single pad as **P1** or **P2** before first launch
+  (the in-game **Pad Player** option does the same once the pad is connected).
+- You want to pre-configure two-pad assignments before first launch.
 - The in-game assignment screen isn't cooperating.
 
 #### Finding your pad's serial
@@ -145,7 +152,7 @@ SmxP2Serial=
 Leave a field empty (or remove the line) to not pin that side — it will fall
 back to the hardware jumper for any pad not explicitly assigned.
 
-To assign a single pad as P2 only (overriding auto-promote), set its serial as
+To force a single pad to P2 (overriding its jumper), set its serial as
 `SmxP2Serial` and leave `SmxP1Serial` empty:
 
 ```ini
