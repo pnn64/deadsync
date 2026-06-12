@@ -2,9 +2,13 @@
 //!
 //! deadsync owns GIF decode for pad lighting (no SDK involvement): this module
 //! turns GIF bytes into per-panel LED frame sequences and preloads every GIF
-//! under `assets/smx/` into an immutable registry at startup or options time.
-//! The lighting worker only ever holds `Arc` handles into the registry, so no
-//! filesystem access or decoding can happen on the gameplay hot path.
+//! under `assets/smx-pad-lights/` (full-pad backgrounds) and
+//! `assets/smx-judge-lights/` (per-panel judgements) into an immutable
+//! registry at startup or options time. Each root holds pack directories
+//! under `common/` (shipped; `common/basic` is the default set) and `dance/`
+//! (user packs). The lighting worker only ever holds `Arc` handles into the
+//! registry, so no filesystem access or decoding can happen on the gameplay
+//! hot path.
 //!
 //! Formats (shared with the SDK and the stepmaniax-gif-maker tool):
 //! - Full-pad: 23x24 (25-LED pads) or 14x15 (16-LED pads). Each panel is a
@@ -67,8 +71,10 @@ pub struct FullPadAnim {
     pub durations: Vec<f32>,
     /// Frame index playback returns to after the last frame.
     pub loop_frame: usize,
-    /// Beat-locked playback: one loop spans this many beats (from the `@Nb`
-    /// filename suffix). `None` means realtime playback.
+    /// Beat-locked playback: one loop spans this many beats (from the
+    /// `@<beats>B<bpm>` filename suffix; the bpm half documents the authored
+    /// reference tempo and playback follows the live beat). `None` means
+    /// realtime playback.
     pub beats_per_loop: Option<f32>,
 }
 
@@ -266,9 +272,9 @@ pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
 
 // Filename parsing
 
-/// Parse a GIF file stem like `song_select_25@2b` into its base name, pad
+/// Parse a GIF file stem like `song_select_25@1B120` into its base name, pad
 /// size, and optional beats-per-loop. Returns `None` for stems that don't
-/// follow the `<name>_<16|25>[@<N>b]` convention.
+/// follow the `<name>_<16|25>[@<beats>B<bpm>]` convention.
 fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<f32>)> {
     let (base, beats) = match stem.split_once('@') {
         Some((base, tail)) => (base, Some(parse_beats(tail)?)),
@@ -283,19 +289,38 @@ fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<f32>)> {
     (!name.is_empty()).then_some((name, size, beats))
 }
 
-/// Parse the `<N>b` tail of a beat-lock suffix into beats per loop.
+/// Parse the `<beats>B<bpm>` tail of a beat-lock suffix (e.g. `1B120` = one
+/// beat at 120bpm) into beats per loop. The bpm half is the authored
+/// reference tempo: it is validated but playback paces itself from the live
+/// beat, so only the beat count is returned. A bare `<N>b` (no bpm) is also
+/// accepted.
 fn parse_beats(tail: &str) -> Option<f32> {
-    let n: f32 = tail.strip_suffix('b')?.parse().ok()?;
+    let (beats, bpm) = match tail.split_once(['B', 'b']) {
+        Some((beats, "")) => (beats, None),
+        Some((beats, bpm)) => (beats, Some(bpm)),
+        None => return None,
+    };
+    if let Some(bpm) = bpm {
+        let bpm: f32 = bpm.parse().ok()?;
+        if !bpm.is_finite() || bpm <= 0.0 {
+            return None;
+        }
+    }
+    let n: f32 = beats.parse().ok()?;
     (n.is_finite() && n > 0.0).then_some(n)
 }
 
 // Registry
 
-/// Identity of one GIF in the registry. `pack: None` is the built-in
-/// `common/` set; `Some` is a `user/<pack>/` directory.
+/// The shipped default pack (`common/basic`), the end of every fallback chain.
+pub const DEFAULT_PACK: &str = "basic";
+
+/// Identity of one GIF in the registry. Every GIF lives in a named pack
+/// directory under `common/` (shipped) or `dance/` (user); a user pack
+/// shadows a shipped pack of the same name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Key {
-    pack: Option<String>,
+    pack: String,
     name: String,
     size: PadSize,
 }
@@ -311,15 +336,16 @@ pub struct GifRegistry {
 }
 
 impl GifRegistry {
-    /// Scan and decode everything under `root` (the `assets/smx` directory).
-    /// Unreadable or malformed files are logged and skipped; missing
-    /// directories just yield an empty category.
+    /// Scan and decode everything under `root` (the `assets` directory):
+    /// full-pad backgrounds from `smx-pad-lights/` and per-panel judgements
+    /// from `smx-judge-lights/`. Unreadable or malformed files are logged and
+    /// skipped; missing directories just yield an empty category.
     pub fn load(root: &Path) -> Self {
         let mut reg = Self::default();
-        for_each_gif(&root.join("pad_animations"), |pack, path| {
+        for_each_gif(&root.join("smx-pad-lights"), |pack, path| {
             reg.load_background(pack, path);
         });
-        for_each_gif(&root.join("judgements"), |pack, path| {
+        for_each_gif(&root.join("smx-judge-lights"), |pack, path| {
             reg.load_judgement(pack, path);
         });
         log::info!(
@@ -332,8 +358,8 @@ impl GifRegistry {
     }
 
     /// Resolve a full-pad background by role (`default`, `song_select`,
-    /// `gameplay`, ...). Falls back from the selected pack to `common` and
-    /// from the requested size to the other one.
+    /// `gameplay`, ...). Falls back from the selected pack to the shipped
+    /// `basic` pack and from the requested size to the other one.
     pub fn background(
         &self,
         pack: Option<&str>,
@@ -343,7 +369,7 @@ impl GifRegistry {
         resolve(&self.backgrounds, pack, role, size)
     }
 
-    /// Resolve a per-panel judgement by name (`miss`, `freeze`, ...), with
+    /// Resolve a per-panel judgement by name (`bad`, `freeze`, ...), with
     /// the same pack and size fallback as `background`.
     pub fn judgement(
         &self,
@@ -354,21 +380,23 @@ impl GifRegistry {
         resolve(&self.judgements, pack, name, size)
     }
 
-    /// Sorted user pack names that supply at least one background.
+    /// Sorted pack names (other than the default) that supply at least one
+    /// background.
     pub fn background_packs(&self) -> Vec<String> {
-        user_packs(self.backgrounds.keys())
+        named_packs(self.backgrounds.keys())
     }
 
-    /// Sorted user pack names that supply at least one judgement.
+    /// Sorted pack names (other than the default) that supply at least one
+    /// judgement.
     pub fn judgement_packs(&self) -> Vec<String> {
-        user_packs(self.judgements.keys())
+        named_packs(self.judgements.keys())
     }
 
     pub fn is_empty(&self) -> bool {
         self.backgrounds.is_empty() && self.judgements.is_empty()
     }
 
-    fn load_background(&mut self, pack: Option<&str>, path: &Path) {
+    fn load_background(&mut self, pack: &str, path: &Path) {
         let Some((bytes, name, size, beats)) = read_named_gif(path) else {
             return;
         };
@@ -386,7 +414,7 @@ impl GifRegistry {
         }
     }
 
-    fn load_judgement(&mut self, pack: Option<&str>, path: &Path) {
+    fn load_judgement(&mut self, pack: &str, path: &Path) {
         let Some((bytes, name, size, beats)) = read_named_gif(path) else {
             return;
         };
@@ -410,33 +438,38 @@ impl GifRegistry {
     }
 }
 
-fn key(pack: Option<&str>, name: &str, size: PadSize) -> Key {
+fn key(pack: &str, name: &str, size: PadSize) -> Key {
     Key {
-        pack: pack.map(str::to_owned),
+        pack: pack.to_owned(),
         name: name.to_owned(),
         size,
     }
 }
 
 /// Pack and size fallback: selected pack at the requested then other size,
-/// then `common` at the requested then other size.
+/// then the shipped `basic` pack at the requested then other size. `None`
+/// (no pack selected) goes straight to `basic`.
 fn resolve<T>(
     map: &HashMap<Key, Arc<T>>,
     pack: Option<&str>,
     name: &str,
     size: PadSize,
 ) -> Option<Arc<T>> {
-    let lookup = |p: Option<&str>, s: PadSize| map.get(&key(p, name, s)).cloned();
+    let lookup = |p: &str, s: PadSize| map.get(&key(p, name, s)).cloned();
     if let Some(p) = pack
-        && let Some(anim) = lookup(Some(p), size).or_else(|| lookup(Some(p), size.other()))
+        && p != DEFAULT_PACK
+        && let Some(anim) = lookup(p, size).or_else(|| lookup(p, size.other()))
     {
         return Some(anim);
     }
-    lookup(None, size).or_else(|| lookup(None, size.other()))
+    lookup(DEFAULT_PACK, size).or_else(|| lookup(DEFAULT_PACK, size.other()))
 }
 
-fn user_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
-    let mut packs: Vec<String> = keys.filter_map(|k| k.pack.clone()).collect();
+fn named_packs<'a>(keys: impl Iterator<Item = &'a Key>) -> Vec<String> {
+    let mut packs: Vec<String> = keys
+        .filter(|k| k.pack != DEFAULT_PACK)
+        .map(|k| k.pack.clone())
+        .collect();
     packs.sort();
     packs.dedup();
     packs
@@ -448,7 +481,7 @@ fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<f32>)
     let stem = path.file_stem()?.to_str()?;
     let Some((name, size, beats)) = parse_stem(stem) else {
         log::warn!(
-            "SMX gifs: {} doesn't match <name>_<16|25>[@<N>b].gif; skipped",
+            "SMX gifs: {} doesn't match <name>_<16|25>[@<beats>B<bpm>].gif; skipped",
             path.display()
         );
         return None;
@@ -462,24 +495,28 @@ fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<f32>)
     }
 }
 
-/// Visit every `.gif` in `<dir>/common/` and `<dir>/user/<pack>/`.
-fn for_each_gif(dir: &Path, mut visit: impl FnMut(Option<&str>, &Path)) {
-    visit_pack(&dir.join("common"), None, &mut visit);
-    let Ok(entries) = fs::read_dir(dir.join("user")) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir()
-            && let Some(pack) = path.file_name().and_then(|n| n.to_str())
-        {
-            let pack = pack.to_owned();
-            visit_pack(&path, Some(&pack), &mut visit);
+/// Visit every `.gif` in `<dir>/common/<pack>/` and `<dir>/dance/<pack>/`.
+/// `common/` holds shipped packs (`basic` at minimum), `dance/` user packs;
+/// scanning `common` first lets a user pack shadow a shipped one of the same
+/// name.
+fn for_each_gif(dir: &Path, mut visit: impl FnMut(&str, &Path)) {
+    for group in ["common", "dance"] {
+        let Ok(entries) = fs::read_dir(dir.join(group)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir()
+                && let Some(pack) = path.file_name().and_then(|n| n.to_str())
+            {
+                let pack = pack.to_owned();
+                visit_pack(&path, &pack, &mut visit);
+            }
         }
     }
 }
 
-fn visit_pack(dir: &Path, pack: Option<&str>, visit: &mut impl FnMut(Option<&str>, &Path)) {
+fn visit_pack(dir: &Path, pack: &str, visit: &mut impl FnMut(&str, &Path)) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -568,15 +605,21 @@ mod tests {
 
     #[test]
     fn stem_parsing_extracts_name_size_and_beats() {
+        // The full form: beats at an authored reference bpm.
+        assert_eq!(
+            parse_stem("song_select_25@1B120"),
+            Some(("song_select", PadSize::Leds25, Some(1.0)))
+        );
+        assert_eq!(
+            parse_stem("song_select_25@0.5B90"),
+            Some(("song_select", PadSize::Leds25, Some(0.5)))
+        );
+        // Bare beat counts (no bpm) are accepted too.
         assert_eq!(
             parse_stem("song_select_25@2b"),
             Some(("song_select", PadSize::Leds25, Some(2.0)))
         );
-        assert_eq!(
-            parse_stem("song_select_25@0.5b"),
-            Some(("song_select", PadSize::Leds25, Some(0.5)))
-        );
-        assert_eq!(parse_stem("miss_16"), Some(("miss", PadSize::Leds16, None)));
+        assert_eq!(parse_stem("bad_16"), Some(("bad", PadSize::Leds16, None)));
         assert_eq!(
             parse_stem("fantastic_blue_25"),
             Some(("fantastic_blue", PadSize::Leds25, None))
@@ -589,10 +632,13 @@ mod tests {
             "default",       // no size suffix
             "default_24",    // unknown size
             "_25",           // empty name
-            "default_25@b",  // empty beat count
-            "default_25@2",  // missing 'b'
-            "default_25@0b", // beats must be positive
-            "default_25@-1b",
+            "default_25@b",      // empty beat count
+            "default_25@2",      // missing 'B'
+            "default_25@0B120",  // beats must be positive
+            "default_25@-1B120",
+            "default_25@1B0",    // bpm, when given, must be positive
+            "default_25@1B-120",
+            "default_25@1Bfast", // bpm must be numeric
         ] {
             assert_eq!(parse_stem(bad), None, "{bad:?} should be rejected");
         }
@@ -745,13 +791,13 @@ mod tests {
     }
 
     #[test]
-    fn resolution_prefers_pack_then_size_then_common() {
+    fn resolution_prefers_pack_then_size_then_basic() {
         let mut reg = GifRegistry::default();
         let entries = [
-            (Some("foo"), PadSize::Leds25),
-            (Some("foo"), PadSize::Leds16),
-            (None, PadSize::Leds25),
-            (None, PadSize::Leds16),
+            ("foo", PadSize::Leds25),
+            ("foo", PadSize::Leds16),
+            (DEFAULT_PACK, PadSize::Leds25),
+            (DEFAULT_PACK, PadSize::Leds16),
         ];
         for (pack, size) in entries {
             reg.backgrounds
@@ -764,21 +810,21 @@ mod tests {
 
         // Drop the pack's _16: falls back to the pack's _25.
         reg.backgrounds
-            .remove(&key(Some("foo"), "default", PadSize::Leds16));
+            .remove(&key("foo", "default", PadSize::Leds16));
         let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
-        let pack_25 = reg.backgrounds[&key(Some("foo"), "default", PadSize::Leds25)].clone();
+        let pack_25 = reg.backgrounds[&key("foo", "default", PadSize::Leds25)].clone();
         assert!(Arc::ptr_eq(&got, &pack_25));
 
-        // Drop the pack entirely: falls back to common at the requested size.
+        // Drop the pack entirely: falls back to basic at the requested size.
         reg.backgrounds
-            .remove(&key(Some("foo"), "default", PadSize::Leds25));
+            .remove(&key("foo", "default", PadSize::Leds25));
         let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
-        let common_16 = reg.backgrounds[&key(None, "default", PadSize::Leds16)].clone();
-        assert!(Arc::ptr_eq(&got, &common_16));
+        let basic_16 = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds16)].clone();
+        assert!(Arc::ptr_eq(&got, &basic_16));
 
-        // Drop common _16 too: common at the other size.
+        // Drop basic _16 too: basic at the other size.
         reg.backgrounds
-            .remove(&key(None, "default", PadSize::Leds16));
+            .remove(&key(DEFAULT_PACK, "default", PadSize::Leds16));
         assert!(hit(&reg, Some("foo"), PadSize::Leds16).is_some());
 
         // Unknown role: nothing.
@@ -789,39 +835,44 @@ mod tests {
     }
 
     #[test]
-    fn unknown_pack_falls_back_to_common() {
+    fn unknown_pack_falls_back_to_basic() {
         let mut reg = GifRegistry::default();
         reg.backgrounds
-            .insert(key(None, "default", PadSize::Leds25), dummy_full_pad());
+            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_full_pad());
         assert!(
             reg.background(Some("nope"), "default", PadSize::Leds25)
                 .is_some()
         );
         assert!(reg.background(None, "default", PadSize::Leds25).is_some());
+        // Selecting basic by name is the same as selecting nothing.
+        assert!(
+            reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25)
+                .is_some()
+        );
     }
 
     // Registry load (end to end through the filesystem)
 
     #[test]
-    fn load_scans_common_and_user_packs() {
+    fn load_scans_common_and_dance_packs() {
         let root =
             std::env::temp_dir().join(format!("deadsync-smx-gifs-test-{}", std::process::id()));
-        let bg_common = root.join("pad_animations/common");
-        let bg_user = root.join("pad_animations/user/mypack");
-        let j_common = root.join("judgements/common");
-        fs::create_dir_all(&bg_common).unwrap();
+        let bg_basic = root.join("smx-pad-lights/common/basic");
+        let bg_user = root.join("smx-pad-lights/dance/mypack");
+        let j_basic = root.join("smx-judge-lights/common/basic");
+        fs::create_dir_all(&bg_basic).unwrap();
         fs::create_dir_all(&bg_user).unwrap();
-        fs::create_dir_all(&j_common).unwrap();
+        fs::create_dir_all(&j_basic).unwrap();
 
         let full_pad = encode_gif((23, 24), &[([0, 0, 255], 100)]);
         let panel = encode_gif((7, 8), &[([255, 0, 0], 100)]);
-        fs::write(bg_common.join("default_25.gif"), &full_pad).unwrap();
-        fs::write(bg_user.join("song_select_25@2b.gif"), &full_pad).unwrap();
-        fs::write(j_common.join("miss_25.gif"), &panel).unwrap();
+        fs::write(bg_basic.join("default_25.gif"), &full_pad).unwrap();
+        fs::write(bg_user.join("song_select_25@1B120.gif"), &full_pad).unwrap();
+        fs::write(j_basic.join("bad_25.gif"), &panel).unwrap();
         // Junk that must be skipped without failing the load.
-        fs::write(bg_common.join("notes.txt"), b"not a gif").unwrap();
-        fs::write(bg_common.join("broken_25.gif"), b"garbage").unwrap();
-        fs::write(j_common.join("badname.gif"), &panel).unwrap();
+        fs::write(bg_basic.join("notes.txt"), b"not a gif").unwrap();
+        fs::write(bg_basic.join("broken_25.gif"), b"garbage").unwrap();
+        fs::write(j_basic.join("badname.gif"), &panel).unwrap();
 
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
@@ -830,10 +881,10 @@ mod tests {
         let song = reg
             .background(Some("mypack"), "song_select", PadSize::Leds25)
             .unwrap();
-        assert_eq!(song.beats_per_loop, Some(2.0));
-        assert!(reg.judgement(None, "miss", PadSize::Leds25).is_some());
+        assert_eq!(song.beats_per_loop, Some(1.0));
+        assert!(reg.judgement(None, "bad", PadSize::Leds25).is_some());
         // The 16-LED request falls back to the only (_25) asset.
-        assert!(reg.judgement(None, "miss", PadSize::Leds16).is_some());
+        assert!(reg.judgement(None, "bad", PadSize::Leds16).is_some());
 
         assert!(reg.background(None, "broken", PadSize::Leds25).is_none());
         assert!(reg.judgement(None, "badname", PadSize::Leds25).is_none());

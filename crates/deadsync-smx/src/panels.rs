@@ -135,6 +135,11 @@ pub struct PanelFx {
     background: Option<Background>,
     /// Latest song beat position, used by a `BeatLocked` background.
     beat: f32,
+    /// Beat position at the previous tick, for the tempo estimate.
+    prev_beat: f32,
+    /// Smoothed live tempo estimate in beats per second, used to cap a
+    /// beat-locked background's frame rate (see `beat_frame`).
+    beat_rate: f32,
     /// Reused output buffer. `tick` overwrites every byte each call, so it never needs
     /// clearing and we avoid re-zeroing 1350 bytes per frame.
     frame: [u8; FRAME_BYTES],
@@ -152,6 +157,8 @@ impl PanelFx {
             panels: std::array::from_fn(|_| std::array::from_fn(|_| PanelState::default())),
             background: None,
             beat: 0.0,
+            prev_beat: 0.0,
+            beat_rate: 0.0,
             frame: [0u8; FRAME_BYTES],
         }
     }
@@ -280,7 +287,8 @@ impl PanelFx {
     /// no clear.
     pub fn tick(&mut self, dt_s: f32) -> &[u8; FRAME_BYTES] {
         let dt = dt_s.max(0.0);
-        let bg_frame = advance_background(&mut self.background, self.beat, dt);
+        self.update_beat_rate(dt);
+        let bg_frame = advance_background(&mut self.background, self.beat, self.beat_rate, dt);
         for pad in 0..PADS {
             for panel in 0..PANELS {
                 let p = &mut self.panels[pad][panel];
@@ -306,6 +314,20 @@ impl PanelFx {
     fn panel_mut(&mut self, pad: usize, panel: usize) -> Option<&mut PanelState> {
         self.panels.get_mut(pad)?.get_mut(panel)
     }
+
+    /// Track a smoothed beats-per-second estimate from the beat positions fed
+    /// via `set_beat`. Backward jumps (a preview loop restart, a new song) and
+    /// absurd rates are ignored rather than folded into the estimate.
+    fn update_beat_rate(&mut self, dt: f32) {
+        if dt > 0.0 {
+            let inst = (self.beat - self.prev_beat) / dt;
+            // 40 beats/s = 2400bpm, beyond any real chart.
+            if (0.0..=40.0).contains(&inst) {
+                self.beat_rate += (inst - self.beat_rate) * 0.2;
+            }
+        }
+        self.prev_beat = self.beat;
+    }
 }
 
 /// Advance one frame counter through `durations`, wrapping to `loop_frame`
@@ -329,7 +351,12 @@ fn advance_looping(
 
 /// Advance the background and return the frame index to draw this tick
 /// (`None` when there is no background).
-fn advance_background(background: &mut Option<Background>, beat: f32, dt: f32) -> Option<usize> {
+fn advance_background(
+    background: &mut Option<Background>,
+    beat: f32,
+    beat_rate: f32,
+    dt: f32,
+) -> Option<usize> {
     let bg = background.as_mut()?;
     match bg.clock {
         Clock::Realtime => {
@@ -342,18 +369,38 @@ fn advance_background(background: &mut Option<Background>, beat: f32, dt: f32) -
             );
             Some(bg.frame)
         }
-        Clock::BeatLocked { beats_per_loop } => Some(beat_frame(&bg.anim, beats_per_loop, beat)),
+        Clock::BeatLocked { beats_per_loop } => {
+            Some(beat_frame(&bg.anim, beats_per_loop, beat, beat_rate))
+        }
     }
 }
+
+/// Frame rate ceiling for beat-locked playback. The pads top out at 30fps;
+/// the extra margin keeps a gif authored at exactly 30fps from flapping
+/// between spans on beat-rate estimation noise.
+const MAX_BEAT_FPS: f32 = 31.0;
 
 /// Map a song beat position to a background frame: one pass through the loop
 /// region (`loop_frame..end`) spans `beats_per_loop` beats. Negative beats
 /// (before the first beat) wrap, so the animation is always in phase.
-fn beat_frame(anim: &FullPadAnim, beats_per_loop: f32, beat: f32) -> usize {
+///
+/// `beat_rate` is the live tempo estimate in beats per second. When it would
+/// push the gif past `MAX_BEAT_FPS` (the pads cap at 30fps), the span doubles
+/// (one pass covers 2x, 4x, ... beats) until the frame rate fits: half-time
+/// playback that stays on the beat instead of silently dropping frames.
+fn beat_frame(anim: &FullPadAnim, beats_per_loop: f32, beat: f32, beat_rate: f32) -> usize {
     let len = anim.durations.len();
     let start = anim.loop_frame.min(len - 1);
     let region = len - start;
-    let phase = (beat / beats_per_loop.max(f32::EPSILON)).rem_euclid(1.0);
+    let mut span = beats_per_loop.max(f32::EPSILON);
+    if beat_rate.is_finite() && beat_rate > 0.0 {
+        let mut doublings = 0;
+        while region as f32 * beat_rate / span > MAX_BEAT_FPS && doublings < 6 {
+            span *= 2.0;
+            doublings += 1;
+        }
+    }
+    let phase = (beat / span).rem_euclid(1.0);
     start + ((phase * region as f32) as usize).min(region - 1)
 }
 
@@ -926,6 +973,21 @@ mod tests {
             fx.set_beat(beat);
             assert_eq!(led0(fx.tick(1.0), 0, 0), expected, "beat {beat}");
         }
+    }
+
+    #[test]
+    fn beat_locked_playback_halves_past_the_pad_frame_cap() {
+        // 16 frames over 1 beat at 4 beats/s (240bpm) wants 64fps; the span
+        // doubles twice to 4 beats (16fps, under the 30fps pad cap).
+        let values: Vec<u8> = (1..=16).collect();
+        let anim = bg_anim(&values, 0);
+        // No tempo estimate: beat 2 is phase 0 of a 1-beat loop.
+        assert_eq!(beat_frame(&anim, 1.0, 2.0, 0.0), 0);
+        // Live tempo says 64fps: one pass now spans 4 beats, so beat 2 is
+        // halfway through the frames.
+        assert_eq!(beat_frame(&anim, 1.0, 2.0, 4.0), 8);
+        // A tempo that fits keeps the authored span.
+        assert_eq!(beat_frame(&anim, 1.0, 2.0, 1.0), 0);
     }
 
     #[test]

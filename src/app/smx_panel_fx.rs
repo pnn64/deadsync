@@ -113,6 +113,8 @@ pub struct JudgementGifs {
     pub mine: Option<Arc<PanelAnim>>,
     /// Successful freeze/roll/lift release.
     pub ok: Option<Arc<PanelAnim>>,
+    /// Failed (dropped) freeze/roll/lift.
+    pub bad: Option<Arc<PanelAnim>>,
     /// Looping sustain while a freeze is engaged.
     pub freeze: Option<Arc<PanelAnim>>,
     /// Looping sustain while a roll is engaged.
@@ -134,6 +136,7 @@ impl JudgementGifs {
             miss: j("miss"),
             mine: j("mine"),
             ok: j("ok"),
+            bad: j("bad"),
             freeze: j("freeze"),
             roll: j("roll"),
         }
@@ -343,7 +346,7 @@ impl SmxPanelDriver {
             {
                 let (anim, color) = match result {
                     HoldResult::Held => (self.judgement_gifs.ok.as_ref(), HOLD_OK_RGB),
-                    _ => (self.judgement_gifs.miss.as_ref(), HOLD_DROP_RGB),
+                    _ => (self.judgement_gifs.bad.as_ref(), HOLD_DROP_RGB),
                 };
                 match anim {
                     Some(anim) => {

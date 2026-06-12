@@ -783,6 +783,10 @@ const fn smx_background_role(screen: CurrentScreen) -> Option<&'static str> {
         CurrentScreen::SmxAssignPads | CurrentScreen::TestLights | CurrentScreen::Init => None,
         CurrentScreen::Gameplay | CurrentScreen::Practice => Some("gameplay"),
         CurrentScreen::SelectMusic | CurrentScreen::SelectCourse => Some("song_select"),
+        CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+            Some("results")
+        }
+        CurrentScreen::Options => Some("options"),
         _ => Some("default"),
     }
 }
@@ -4910,13 +4914,18 @@ impl App {
         let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic;
         let background = role.and_then(|role| {
             // `_25` is the baseline that renders on both pad LED layouts; 16-LED
-            // pads simply show its outer ring.
-            self.smx_gif_registry()
+            // pads simply show its outer ring. Only `default` is required of a
+            // pack; any missing screen role falls back to it.
+            let registry = self.smx_gif_registry();
+            registry
                 .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25)
+                .or_else(|| {
+                    registry.background(pack_str, "default", deadsync_smx::gifs::PadSize::Leds25)
+                })
                 .map(|anim| {
-                    // An `@Nb` gif beat-locks on song select, the one screen with a
-                    // live beat source (the music preview); elsewhere it plays
-                    // realtime rather than freezing on a stale beat.
+                    // A beat-suffixed gif beat-locks on song select, the one screen
+                    // with a live beat source (the music preview); elsewhere it
+                    // plays realtime rather than freezing on a stale beat.
                     let clock = match anim.beats_per_loop {
                         Some(beats_per_loop) if on_select_music => {
                             deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
@@ -4943,7 +4952,7 @@ impl App {
     /// option first resolves a background, never per frame.
     fn smx_gif_registry(&mut self) -> &std::sync::Arc<deadsync_smx::gifs::GifRegistry> {
         self.smx_gifs.get_or_insert_with(|| {
-            let root = dirs::app_dirs().resolve_asset_path("assets/smx");
+            let root = dirs::app_dirs().resolve_asset_path("assets");
             std::sync::Arc::new(deadsync_smx::gifs::GifRegistry::load(&root))
         })
     }
