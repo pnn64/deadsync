@@ -4348,9 +4348,18 @@ impl App {
         }
 
         let cfg = config::get();
+        // Only query the SMX manager when the managed-config feature is actually on.
+        // With it off (or SMX input disabled) there is nothing to resolve or write, so
+        // skip the per-pad `get_info` lock entirely and just clear the cached signature.
+        // The marker mirror below still runs so a screen rebuild can't lose stale markers.
+        let managing = cfg.smx_input && cfg.smx_manages_pad_config;
         for pad in 0..2 {
+            if !managing {
+                self.pad_config_sync.signature[pad] = None;
+                continue;
+            }
             let info = deadsync_smx::get_info(pad);
-            if !cfg.smx_input || !cfg.smx_manages_pad_config || !info.connected {
+            if !info.connected {
                 self.pad_config_sync.signature[pad] = None;
                 continue;
             }
@@ -4428,7 +4437,13 @@ impl App {
             profile::is_session_side_joined(profile_data::PlayerSide::P2),
         ]);
         self.lights.set_hide_flags(self.current_light_hide_flags());
-        self.sync_gameplay_light_blinks(config.lights_simplify_bass, config.smx_panel_lights);
+        // Panel lights are a sub-feature of SMX input: without smx_input there is no
+        // SDK/manager to drive, so gate on both to keep the per-frame panel diff off the
+        // gameplay path when StepManiaX is disabled.
+        self.sync_gameplay_light_blinks(
+            config.lights_simplify_bass,
+            config.smx_input && config.smx_panel_lights,
+        );
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
