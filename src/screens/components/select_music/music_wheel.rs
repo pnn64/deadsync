@@ -72,11 +72,6 @@ const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
 
 #[inline(always)]
-fn path_texture_key(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
-
-#[inline(always)]
 fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Option<&PathBuf> {
     match mode {
         SelectMusicSongSelectBgMode::Off => None,
@@ -141,8 +136,11 @@ fn song_select_bg_sprite(
     alpha: f32,
     fade_left: f32,
 ) -> Actor {
-    let key = path_texture_key(path);
-    let mut actor = act!(sprite(key.clone()):
+    let key: Arc<str> = match path.to_string_lossy() {
+        std::borrow::Cow::Borrowed(s) => Arc::from(s),
+        std::borrow::Cow::Owned(s) => Arc::from(s),
+    };
+    let mut actor = act!(sprite(&key):
         align(0.5, 0.5):
         xy(center_x, center_y):
         setsize(width, height):
