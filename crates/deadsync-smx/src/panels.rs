@@ -232,9 +232,10 @@ impl PanelFx {
     }
 
     /// Release a panel's GIF overlay (panel lift / freeze-roll disengage): an
-    /// overlay with an outro segment plays it out and clears itself, a
-    /// sustain without one clears immediately (revealing the layers under
-    /// it), and a plain one-shot is unaffected.
+    /// overlay with an outro segment snaps from its loop region straight to
+    /// the outro (rather than finishing the current loop pass) and clears
+    /// itself when the outro ends, a sustain without one clears immediately
+    /// (revealing the layers under it), and a plain one-shot is unaffected.
     pub fn release_overlay(&mut self, pad: usize, panel: usize) {
         let Some(p) = self.panel_mut(pad, panel) else {
             return;
@@ -244,6 +245,10 @@ impl PanelFx {
         };
         if o.anim.has_outro() {
             o.engaged = false;
+            if o.frame >= o.anim.loop_frame && o.frame <= o.anim.loop_end {
+                o.frame = o.anim.loop_end + 1;
+                o.time_in_frame = 0.0;
+            }
         } else if o.sustain {
             p.overlay = None;
         }
@@ -964,9 +969,12 @@ mod tests {
         }
         // Intro once, then the loop region repeats while pressed.
         assert_eq!(seen, vec![1, 2, 3, 2, 3]);
-        // Release: the outro plays out, then the overlay clears itself.
+        // One more loop frame, leaving playback mid-loop (frame value 2).
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 2);
+        // Release mid-loop: playback snaps straight to the outro instead of
+        // finishing the loop pass, plays it out, then clears itself.
         fx.release_overlay(0, 3);
-        assert_eq!(led0(fx.tick(0.1), 0, 3), 4);
+        assert_eq!(led0(fx.tick(0.0), 0, 3), 4);
         assert_eq!(led0(fx.tick(0.1), 0, 3), 5);
         assert_eq!(led0(fx.tick(0.1), 0, 3), 0);
     }
@@ -1012,16 +1020,16 @@ mod tests {
         // Holds on the loop frame while engaged.
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
-        // Release: the outro starts.
+        // Release: snaps straight to the outro.
         fx.release_overlay(0, 5);
-        assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
+        assert_eq!(led0(fx.tick(0.0), 0, 5), 3);
         // Re-press during the outro (freeze/roll cooldown): back to the loop.
         fx.play_overlay(0, 5, anim.clone(), OverlayDrive::Sustain);
         assert_eq!(led0(fx.tick(0.0), 0, 5), 2);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
         // Release again: outro runs to the end and the overlay clears.
         fx.release_overlay(0, 5);
-        assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
+        assert_eq!(led0(fx.tick(0.0), 0, 5), 3);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 4);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 0);
         // A fresh engage after the overlay cleared restarts from the intro.
