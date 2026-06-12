@@ -237,12 +237,12 @@ impl SmxPanelDriver {
         let cols = cpp.saturating_mul(np).min(MAX_COLS);
         for col in 0..cols {
             // Resolve the panel once and translate the chart pad index to the physical SMX
-            // slot the player's pad sits on (a single P2 player packs at chart pad 0 but
-            // stands on slot 1). The trackers below still update even when a column maps to
-            // no panel, so events are consumed rather than replayed later.
+            // slot the player's pad sits on. The trackers below still update even when a
+            // column maps to no panel, so events are consumed rather than replayed later.
             let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
             let pressed = state.lane_is_pressed(col);
-            let released = hold_edge(pressed, &mut self.prev_pressed[col]) == Some(false);
+            let press_edge = hold_edge(pressed, &mut self.prev_pressed[col]);
+            let released = press_edge == Some(false);
 
             // Panel lift: let a tap overlay holding in its loop region play its outro.
             // Sustains are governed by the engage/disengage edges below instead; a lift
@@ -275,7 +275,8 @@ impl SmxPanelDriver {
             }
 
             let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
-            if let Some(now_engaged) = hold_edge(engaged, &mut self.prev_engaged[col])
+            let engage_edge = hold_edge(engaged, &mut self.prev_engaged[col]);
+            if let Some(now_engaged) = engage_edge
                 && let Some((pad, p)) = panel
             {
                 if now_engaged {
@@ -284,8 +285,12 @@ impl SmxPanelDriver {
                         Some(anim) => {
                             // A re-engage during the outro of the same animation (a
                             // freeze/roll re-press) resumes its loop region worker-side.
-                            self.lights
-                                .play_overlay(pad, p, anim.clone(), OverlayDrive::Sustain);
+                            self.lights.play_overlay(
+                                pad,
+                                p,
+                                anim.clone(),
+                                OverlayDrive::Sustain { resume: false },
+                            );
                             self.prev_hold_fx[col] = HoldFx::Overlay;
                         }
                         None => {
@@ -302,6 +307,32 @@ impl SmxPanelDriver {
                         HoldFx::None => {}
                     }
                     self.prev_hold_fx[col] = HoldFx::None;
+                }
+            }
+
+            // Freeze grace period: a freeze stays engaged for a short window
+            // after the panel lifts, so the engage edge above does not fire.
+            // Track the physical press instead: a lift snaps the sustain
+            // overlay to its outro, and a re-press within the window snaps it
+            // back into the loop region (never the intro). Rolls are excluded;
+            // they stay engaged between hits and their lifts must not release.
+            if engage_edge.is_none()
+                && engaged
+                && self.prev_hold_fx[col] == HoldFx::Overlay
+                && state.active_hold(col).map(|h| h.note_type) == Some(NoteType::Hold)
+                && let Some((pad, p)) = panel
+            {
+                if released {
+                    self.lights.release_overlay(pad, p);
+                } else if press_edge == Some(true)
+                    && let Some(anim) = sustain_anim(&self.judgement_gifs, Some(NoteType::Hold))
+                {
+                    self.lights.play_overlay(
+                        pad,
+                        p,
+                        anim.clone(),
+                        OverlayDrive::Sustain { resume: true },
+                    );
                 }
             }
 
