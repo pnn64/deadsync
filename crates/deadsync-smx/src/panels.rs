@@ -127,14 +127,18 @@ struct Overlay {
     time_in_frame: f32,
 }
 
-/// One panel's effect state: an optional GIF overlay, a sustained colour, and
-/// a decaying flash.
+/// One panel's effect state: an optional GIF overlay, a sustained colour, a
+/// decaying flash, and a low-priority press-feedback overlay drawn only when
+/// nothing else claims the panel.
 #[derive(Default)]
 struct PanelState {
     overlay: Option<Overlay>,
     hold: Option<Rgb>,
     flash_color: Rgb,
     flash_remaining_s: f32,
+    /// Generic "panel pressed" feedback, below the game-event layers. Driven by
+    /// the physical press so a press that hits no note still lights the panel.
+    press_overlay: Option<Overlay>,
 }
 
 /// Per-pad, per-panel effect state plus the shared background layer. Builds
@@ -222,51 +226,23 @@ impl PanelFx {
         anim: Arc<PanelAnim>,
         drive: OverlayDrive,
     ) {
-        let Some(p) = self.panel_mut(pad, panel) else {
-            return;
-        };
-        if let Some(o) = &mut p.overlay
-            && Arc::ptr_eq(&o.anim, &anim)
-        {
-            let loop_frame = o.anim.loop_frame.min(o.anim.loop_end);
-            match drive {
-                // Freeze re-press: re-engage, jumping back to the loop only if
-                // the outro had already started.
-                OverlayDrive::Sustain { .. } if o.sustain => {
-                    o.engaged = true;
-                    if o.frame > o.anim.loop_end {
-                        o.frame = loop_frame;
-                        o.time_in_frame = 0.0;
-                    }
-                    return;
-                }
-                // Roll step: always snap back to the loop start (life refilled).
-                OverlayDrive::Roll { .. } if o.roll => {
-                    o.frame = loop_frame;
-                    o.time_in_frame = 0.0;
-                    return;
-                }
-                _ => {}
-            }
+        if let Some(p) = self.panel_mut(pad, panel) {
+            start_overlay(&mut p.overlay, anim, drive);
         }
-        let (sustain, roll, engaged, resume) = match drive {
-            OverlayDrive::OneShot { pressed } => (false, false, pressed, false),
-            OverlayDrive::Sustain { resume } => (true, false, true, resume),
-            OverlayDrive::Roll { resume } => (false, true, true, resume),
-        };
-        let frame = if resume {
-            anim.loop_frame.min(anim.frames.len() - 1)
-        } else {
-            0
-        };
-        p.overlay = Some(Overlay {
-            anim,
-            sustain,
-            roll,
-            engaged,
-            frame,
-            time_in_frame: 0.0,
-        });
+    }
+
+    /// Like `play_overlay`, but on the panel's low-priority press-feedback
+    /// layer (drawn only when no game-event effect is showing).
+    pub fn play_press_overlay(
+        &mut self,
+        pad: usize,
+        panel: usize,
+        anim: Arc<PanelAnim>,
+        drive: OverlayDrive,
+    ) {
+        if let Some(p) = self.panel_mut(pad, panel) {
+            start_overlay(&mut p.press_overlay, anim, drive);
+        }
     }
 
     /// Release a panel's GIF overlay (panel lift / freeze-roll disengage): an
@@ -275,20 +251,15 @@ impl PanelFx {
     /// itself when the outro ends, a sustain without one clears immediately
     /// (revealing the layers under it), and a plain one-shot is unaffected.
     pub fn release_overlay(&mut self, pad: usize, panel: usize) {
-        let Some(p) = self.panel_mut(pad, panel) else {
-            return;
-        };
-        let Some(o) = &mut p.overlay else {
-            return;
-        };
-        if o.anim.has_outro() {
-            o.engaged = false;
-            if o.frame >= o.anim.loop_frame && o.frame <= o.anim.loop_end {
-                o.frame = o.anim.loop_end + 1;
-                o.time_in_frame = 0.0;
-            }
-        } else if o.sustain {
-            p.overlay = None;
+        if let Some(p) = self.panel_mut(pad, panel) {
+            end_overlay(&mut p.overlay);
+        }
+    }
+
+    /// Release a panel's press-feedback overlay (panel lift).
+    pub fn release_press_overlay(&mut self, pad: usize, panel: usize) {
+        if let Some(p) = self.panel_mut(pad, panel) {
+            end_overlay(&mut p.press_overlay);
         }
     }
 
@@ -317,13 +288,17 @@ impl PanelFx {
                 let p = &mut self.panels[pad][panel];
                 p.flash_remaining_s = (p.flash_remaining_s - dt).max(0.0);
                 advance_overlay(&mut p.overlay, dt);
-                // Layer priority: overlay, flash, hold, background, black.
+                advance_overlay(&mut p.press_overlay, dt);
+                // Layer priority: game-event overlay, flash, hold, then the
+                // generic press feedback, then the background, then black.
                 if let Some(o) = &p.overlay {
                     put_panel_rgb(&mut self.frame, pad, panel, &o.anim.frames[o.frame]);
                 } else if p.flash_remaining_s > 0.0 {
                     put_panel(&mut self.frame, pad, panel, p.flash_color);
                 } else if let Some(c) = p.hold {
                     put_panel(&mut self.frame, pad, panel, c);
+                } else if let Some(o) = &p.press_overlay {
+                    put_panel_rgb(&mut self.frame, pad, panel, &o.anim.frames[o.frame]);
                 } else if let (Some(bg), Some(f)) = (&self.background, bg_frame) {
                     put_panel_rgb(&mut self.frame, pad, panel, &bg.anim.panels[panel][f]);
                 } else {
@@ -427,6 +402,73 @@ fn beat_frame(anim: &FullPadAnim, beats_per_loop: f32, beat: f32, beat_rate: f32
     start + ((phase * region as f32) as usize).min(region - 1)
 }
 
+/// Start (or re-trigger) an overlay in `slot`. Re-driving the animation the
+/// slot is already showing re-triggers it in place instead of restarting from
+/// the intro: a freeze sustain jumps from the outro back into the loop region,
+/// and a roll snaps back to the loop start on every step.
+fn start_overlay(slot: &mut Option<Overlay>, anim: Arc<PanelAnim>, drive: OverlayDrive) {
+    if let Some(o) = slot
+        && Arc::ptr_eq(&o.anim, &anim)
+    {
+        let loop_frame = o.anim.loop_frame.min(o.anim.loop_end);
+        match drive {
+            // Freeze re-press: re-engage, jumping back to the loop only if the
+            // outro had already started.
+            OverlayDrive::Sustain { .. } if o.sustain => {
+                o.engaged = true;
+                if o.frame > o.anim.loop_end {
+                    o.frame = loop_frame;
+                    o.time_in_frame = 0.0;
+                }
+                return;
+            }
+            // Roll step: always snap back to the loop start (life refilled).
+            OverlayDrive::Roll { .. } if o.roll => {
+                o.frame = loop_frame;
+                o.time_in_frame = 0.0;
+                return;
+            }
+            _ => {}
+        }
+    }
+    let (sustain, roll, engaged, resume) = match drive {
+        OverlayDrive::OneShot { pressed } => (false, false, pressed, false),
+        OverlayDrive::Sustain { resume } => (true, false, true, resume),
+        OverlayDrive::Roll { resume } => (false, true, true, resume),
+    };
+    let frame = if resume {
+        anim.loop_frame.min(anim.frames.len() - 1)
+    } else {
+        0
+    };
+    *slot = Some(Overlay {
+        anim,
+        sustain,
+        roll,
+        engaged,
+        frame,
+        time_in_frame: 0.0,
+    });
+}
+
+/// End an overlay in `slot`: one with an outro snaps from its loop region
+/// straight to the outro (then clears when it finishes), a sustain without one
+/// clears immediately, and a plain one-shot is unaffected.
+fn end_overlay(slot: &mut Option<Overlay>) {
+    let Some(o) = slot else {
+        return;
+    };
+    if o.anim.has_outro() {
+        o.engaged = false;
+        if o.frame >= o.anim.loop_frame && o.frame <= o.anim.loop_end {
+            o.frame = o.anim.loop_end + 1;
+            o.time_in_frame = 0.0;
+        }
+    } else if o.sustain {
+        *slot = None;
+    }
+}
+
 /// Advance a panel overlay; one that plays past its last frame clears itself
 /// to reveal the layers under it, except a roll, which holds on the last frame
 /// (its drained state) until a step resets it or the note resolves.
@@ -523,6 +565,18 @@ enum Ev {
         pad: u8,
         panel: u8,
     },
+    /// Play a GIF on a panel's low-priority press-feedback layer.
+    PressOverlay {
+        pad: u8,
+        panel: u8,
+        anim: Arc<PanelAnim>,
+        drive: OverlayDrive,
+    },
+    /// Release a panel's press-feedback overlay (panel lift).
+    PressRelease {
+        pad: u8,
+        panel: u8,
+    },
     /// Enter (true) or leave (false) active panel effect ownership. Leaving hands the pad
     /// back to its firmware idle lighting.
     Active(bool),
@@ -613,6 +667,31 @@ impl SmxPanelLights {
     /// Release a panel's GIF overlay (panel lift / freeze-roll disengage).
     pub fn release_overlay(&self, pad: usize, panel: usize) {
         self.send(Ev::OverlayRelease {
+            pad: pad as u8,
+            panel: panel as u8,
+        });
+    }
+
+    /// Play a GIF on a panel's low-priority press-feedback layer (generic
+    /// "panel pressed" feedback shown when no game event claims the panel).
+    pub fn play_press_overlay(
+        &self,
+        pad: usize,
+        panel: usize,
+        anim: Arc<PanelAnim>,
+        drive: OverlayDrive,
+    ) {
+        self.send(Ev::PressOverlay {
+            pad: pad as u8,
+            panel: panel as u8,
+            anim,
+            drive,
+        });
+    }
+
+    /// Release a panel's press-feedback overlay (panel lift).
+    pub fn release_press_overlay(&self, pad: usize, panel: usize) {
+        self.send(Ev::PressRelease {
             pad: pad as u8,
             panel: panel as u8,
         });
@@ -718,6 +797,13 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
             drive,
         } => fx.play_overlay(pad.into(), panel.into(), anim, drive),
         Ev::OverlayRelease { pad, panel } => fx.release_overlay(pad.into(), panel.into()),
+        Ev::PressOverlay {
+            pad,
+            panel,
+            anim,
+            drive,
+        } => fx.play_press_overlay(pad.into(), panel.into(), anim, drive),
+        Ev::PressRelease { pad, panel } => fx.release_press_overlay(pad.into(), panel.into()),
         Ev::Active(a) => {
             *active = a;
             if a {
@@ -1149,6 +1235,28 @@ mod tests {
         // And it loops from there while engaged.
         assert_eq!(led0(fx.tick(0.1), 0, 5), 3);
         assert_eq!(led0(fx.tick(0.1), 0, 5), 2);
+    }
+
+    #[test]
+    fn press_overlay_sits_below_the_game_event_layers() {
+        let mut fx = PanelFx::new();
+        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        // A press with no note lights the panel over the background.
+        fx.play_press_overlay(0, 3, panel_anim(&[91, 92], 0), OverlayDrive::Sustain {
+            resume: false,
+        });
+        assert_eq!(led0(fx.tick(0.05), 0, 3), 91);
+        // A judgement overlay (a real hit) on the same panel draws over it.
+        fx.play_overlay(0, 3, panel_anim(&[80], 0), OverlayDrive::OneShot { pressed: false });
+        assert_eq!(led0(fx.tick(0.0), 0, 3), 80);
+        // The one-shot clears; the still-held press feedback shows again.
+        assert_eq!(led0(fx.tick(0.1), 0, 3), 92);
+        // A solid flash also outranks the press layer.
+        fx.flash(0, 3, [70, 70, 70], 1.0);
+        assert_eq!(led0(fx.tick(0.0), 0, 3), 70);
+        // Release: the press feedback clears (no outro), revealing the background.
+        fx.release_press_overlay(0, 3);
+        assert_eq!(led0(fx.tick(1.0), 0, 3), 10);
     }
 
     #[test]

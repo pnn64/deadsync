@@ -119,6 +119,9 @@ pub struct JudgementGifs {
     pub freeze: Option<Arc<PanelAnim>>,
     /// Looping sustain while a roll is engaged.
     pub roll: Option<Arc<PanelAnim>>,
+    /// Generic press feedback: a panel pressed with no note of its own. Drawn
+    /// below the judgement and sustain layers, so a real hit overrides it.
+    pub press: Option<Arc<PanelAnim>>,
 }
 
 impl JudgementGifs {
@@ -139,6 +142,7 @@ impl JudgementGifs {
             bad: j("bad"),
             freeze: j("freeze"),
             roll: j("roll"),
+            press: j("press"),
         }
     }
 
@@ -394,6 +398,28 @@ impl SmxPanelDriver {
                         );
                     }
                     None => self.lights.flash(pad, p, MINE_RGB, MINE_FLASH_SECONDS),
+                }
+            }
+
+            // Generic press feedback (SMX-style "you touched the panel"): a
+            // physical press with no note of its own. Driven on its own low
+            // layer so a real hit's judgement/sustain draws over it. Skipped
+            // while a freeze/roll is engaged, since that owns the panel through
+            // its own overlay. Gif-only: a pack without a `press` gif gets no
+            // feedback here (the game events still flash as before).
+            if let Some(press_anim) = self.judgement_gifs.press.clone()
+                && !engaged
+                && let Some((pad, p)) = panel
+            {
+                if press_edge == Some(true) {
+                    self.lights.play_press_overlay(
+                        pad,
+                        p,
+                        press_anim,
+                        OverlayDrive::Sustain { resume: false },
+                    );
+                } else if released {
+                    self.lights.release_press_overlay(pad, p);
                 }
             }
         }
