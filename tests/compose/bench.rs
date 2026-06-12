@@ -329,6 +329,20 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     |actors| fixture.push(actors),
                 )
             }
+            music_wheel_bench::SCENARIO_NAME_LOADED => {
+                let fixture = music_wheel_bench::loaded_fixture();
+                benchmark_actor_pusher(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    |actors| fixture.push(actors),
+                )
+            }
             density_graph_bench::SCENARIO_NAME => {
                 let fixture = density_graph_bench::fixture();
                 benchmark_actor_builder(

@@ -22,7 +22,7 @@ use deadsync_render::{BlendMode, MeshVertex, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 27] = [
+const SCENARIO_NAMES: [&str; 28] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
@@ -46,6 +46,7 @@ const SCENARIO_NAMES: [&str; 27] = [
     "perf-texture-lookup",
     menu_bench::SCENARIO_NAME,
     music_wheel_bench::SCENARIO_NAME,
+    music_wheel_bench::SCENARIO_NAME_LOADED,
     notefield_bench::SCENARIO_NAME,
     options_bench::SCENARIO_NAME,
     pane_stats_bench::SCENARIO_NAME,
@@ -135,6 +136,9 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "perf-texture-lookup" => Some(perf_texture_lookup_scenario(metrics, fonts)),
         menu_bench::SCENARIO_NAME => Some(menu_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
+        music_wheel_bench::SCENARIO_NAME_LOADED => {
+            Some(music_wheel_loaded_scenario(metrics, fonts))
+        }
         notefield_bench::SCENARIO_NAME => Some(notefield_scenario(metrics, fonts)),
         options_bench::SCENARIO_NAME => Some(options_scenario(metrics, fonts)),
         pane_stats_bench::SCENARIO_NAME => Some(pane_stats_scenario(metrics, fonts)),
@@ -948,6 +952,21 @@ fn music_wheel_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) ->
     let fixture = music_wheel_bench::fixture();
     ComposeScenario {
         name: music_wheel_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.02, 0.03, 0.05, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 18.0,
+    }
+}
+
+fn music_wheel_loaded_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let fixture = music_wheel_bench::loaded_fixture();
+    ComposeScenario {
+        name: music_wheel_bench::SCENARIO_NAME_LOADED,
         actors: fixture.build(),
         clear_color: [0.02, 0.03, 0.05, 1.0],
         metrics,
