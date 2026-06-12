@@ -428,6 +428,36 @@ fn read_frame(stdout: &mut ChildStdout, buf: &mut [u8]) -> io::Result<bool> {
     Ok(true)
 }
 
+/// Absolute path of the runtime `bin/` directory the video tools load
+/// from (`<current_dir>/bin`), where the in-app downloader installs them.
+/// `None` only when the working directory can't be determined.
+pub fn runtime_bin_dir() -> Option<PathBuf> {
+    std::env::current_dir().ok().map(|dir| dir.join("bin"))
+}
+
+/// True when both `ffmpeg` and `ffprobe` resolve, i.e. video playback
+/// will work.
+pub fn ffmpeg_available() -> bool {
+    tool_is_available("ffmpeg") && tool_is_available("ffprobe")
+}
+
+/// True when `name` resolves in the runtime `bin/` or on `PATH`. The
+/// `PATH` case is probed by spawning, since `resolve_tool_path` only
+/// checks `bin/`.
+fn tool_is_available(name: &str) -> bool {
+    if resolve_tool_path(name).is_some() {
+        return true;
+    }
+    Command::new(name)
+        .arg("-version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 fn tool_command(name: &str) -> Command {
     resolve_tool_path(name)
         .map(Command::new)

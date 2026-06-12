@@ -1306,6 +1306,10 @@ pub fn push_actors(
         &deadsync_updater::action::current(),
         state.active_color_index,
     ));
+    actors.extend(crate::screens::components::shared::ffmpeg_overlay::build(
+        &deadsync_updater::ffmpeg::current(),
+        state.active_color_index,
+    ));
 }
 
 pub fn get_actors(
