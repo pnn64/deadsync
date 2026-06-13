@@ -161,6 +161,7 @@ pub fn update_rate_mod_preserves_pitch(enabled: bool) {
         }
         cfg.rate_mod_preserves_pitch = enabled;
     }
+    deadsync_audio_stream::set_preserve_pitch_enabled(enabled);
     save_without_keymaps();
 }
 

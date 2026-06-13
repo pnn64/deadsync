@@ -66,6 +66,7 @@ fn publish_config(cfg: Config) {
         *current = cfg;
         sync_audio_mix_levels_from_config(&current);
         deadsync_audio_stream::set_replaygain_enabled(current.enable_replaygain);
+        deadsync_audio_stream::set_preserve_pitch_enabled(current.rate_mod_preserves_pitch);
         deadsync_present::space::set_overscan(
             current.center_image_translate_x,
             current.center_image_translate_y,
@@ -91,6 +92,7 @@ fn load_defaults_after_error() {
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
     deadsync_audio_stream::set_replaygain_enabled(Config::default().enable_replaygain);
+    deadsync_audio_stream::set_preserve_pitch_enabled(Config::default().rate_mod_preserves_pitch);
     pad_order::reset();
 }
 
