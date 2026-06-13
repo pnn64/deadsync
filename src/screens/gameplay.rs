@@ -7910,12 +7910,8 @@ pub fn push_actors(
         {
             push_smx_sensor_display(&mut actors, state);
         }
-        if cfg.smx_input
-            && (state.player_profiles[0].smx_pad_input_display
-                || state.player_profiles[1].smx_pad_input_display)
-        {
-            push_smx_pad_input_display(&mut actors, state);
-        }
+        // The input-driven pad display is positioned relative to the notefield
+        // (see below, once per-player field geometry has been computed).
     }
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
@@ -8405,6 +8401,21 @@ pub fn push_actors(
                     z(86)
                 ));
             }
+        }
+
+        // SMX input-driven pad display: sit just to the right of the rightmost
+        // notefield (mirrors the FSR display on the left, which hugs the left
+        // margin), keeping it clear of the lanes and the side density graph.
+        if cfg.smx_input
+            && (state.player_profiles[0].smx_pad_input_display
+                || state.player_profiles[1].smx_pad_input_display)
+        {
+            let mut field_right_edge = f32::NEG_INFINITY;
+            for &(player_idx, _, field_x, _, _, _) in &players[..player_count] {
+                field_right_edge =
+                    field_right_edge.max(field_x + notefield_width(player_idx) * 0.5);
+            }
+            push_smx_pad_input_display(&mut actors, state, field_right_edge);
         }
 
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
@@ -9284,11 +9295,19 @@ const SMX_SENSOR_PAD_GAP: f32 = 10.0;
 const SMX_SENSOR_MARGIN: f32 = 10.0;
 // Lift the whole group above the bottom screen-bar footer (BAR_H = 32 in
 // screen_bar) and its player avatar so the bars never sit on top of them.
-const SMX_SENSOR_FOOTER_CLEAR: f32 = 32.0;
-// Panel-letter labels (L/D/U/R) sit just above each bar.
-const SMX_SENSOR_LABEL_H: f32 = 9.0;
-const SMX_SENSOR_LABEL_GAP: f32 = 2.0;
+// Kept low enough that the top numeric row clears the vertical life bar.
+const SMX_SENSOR_FOOTER_CLEAR: f32 = 26.0;
+// Live numeric pressure value sits just above each bar.
+const SMX_SENSOR_VALUE_H: f32 = 9.0;
+const SMX_SENSOR_VALUE_GAP: f32 = 2.0;
+const SMX_SENSOR_VALUE_ZOOM: f32 = 0.28;
+// Panel letter (L/D/U/R) drawn on the bar itself, near the bottom.
 const SMX_SENSOR_LABEL_ZOOM: f32 = 0.32;
+const SMX_SENSOR_LETTER_INSET: f32 = 2.0;
+// Drop shadow keeps the letter legible over both the dark track and bright fill.
+const SMX_SENSOR_LETTER_SHADOW: [f32; 4] = [0.0, 0.0, 0.0, 0.9];
+const SMX_SENSOR_VALUE_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const SMX_SENSOR_VALUE_IDLE_COLOR: [f32; 4] = [0.7, 0.7, 0.75, 0.6];
 // FSR calibrated values are right-shifted by 2, so 0-1000 raw => 0-250 after calibration.
 const SMX_SENSOR_VALUE_SCALE: f32 = 250.0;
 const SMX_SENSOR_Z: f32 = 2102.0;
@@ -9303,8 +9322,8 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
     let mut pad_x = SMX_SENSOR_MARGIN;
     let bar_y =
         screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
-    // Top of the label row that sits above the bars (used for the bg + labels).
-    let group_top = bar_y - SMX_SENSOR_LABEL_GAP - SMX_SENSOR_LABEL_H;
+    // Top of the numeric value row that sits above the bars (used for bg + values).
+    let group_top = bar_y - SMX_SENSOR_VALUE_GAP - SMX_SENSOR_VALUE_H;
     let pad_group_w = 4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP;
 
     for pad in 0..2usize {
@@ -9334,7 +9353,7 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
         for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
             let x = pad_x + slot as f32 * (SMX_SENSOR_BAR_W + SMX_SENSOR_BAR_GAP);
 
-            let (value_norm, active) = if let Some(data) = sensor_data {
+            let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
                 if data.have_data_from_panel[panel] {
                     let max_val = if fsr {
                         data.sensor_level[panel]
@@ -9361,12 +9380,12 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
                     } else {
                         u16::from(config.panel_settings[panel].load_cell_high_threshold)
                     };
-                    (norm, max_val >= threshold && threshold > 0)
+                    (norm, max_val >= threshold && threshold > 0, Some(max_val))
                 } else {
-                    (0.0, false)
+                    (0.0, false, None)
                 }
             } else {
-                (0.0, false)
+                (0.0, false, None)
             };
 
             let threshold_norm = if fsr {
@@ -9397,13 +9416,36 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
             let threshold_y = bar_y + (1.0 - threshold_norm) * SMX_SENSOR_BAR_H - threshold_h * 0.5;
             push_smx_quad(actors, x, threshold_y, SMX_SENSOR_BAR_W, threshold_h, SMX_SENSOR_THRESHOLD, SMX_SENSOR_Z + 2.0);
 
-            // Panel letter (L/D/U/R) centered above the bar.
+            // Live pressure value centered above the bar (replaces the old letter
+            // row); "--" when no sample has arrived for this panel yet.
+            let (value_text, value_color) = match raw_value {
+                Some(v) => (v.to_string(), SMX_SENSOR_VALUE_COLOR),
+                None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
+            };
+            actors.push(act!(text:
+                font(current_machine_font_key(FontRole::Normal)): settext(value_text):
+                align(0.5, 0.0): xy(x + SMX_SENSOR_BAR_W * 0.5, group_top):
+                zoom(SMX_SENSOR_VALUE_ZOOM):
+                diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
+                z(SMX_SENSOR_Z + 2.0)
+            ));
+
+            // Panel letter (L/D/U/R) drawn on the bar near its bottom; the drop
+            // shadow keeps it legible over both the dark track and bright fill.
             actors.push(act!(text:
                 font(current_machine_font_key(FontRole::Normal)): settext(label):
-                align(0.5, 0.0): xy(x + SMX_SENSOR_BAR_W * 0.5, group_top):
+                align(0.5, 1.0):
+                xy(x + SMX_SENSOR_BAR_W * 0.5, bar_y + SMX_SENSOR_BAR_H - SMX_SENSOR_LETTER_INSET):
                 zoom(SMX_SENSOR_LABEL_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 0.9):
-                z(SMX_SENSOR_Z + 2.0)
+                shadowlength(1.0):
+                shadowcolor(
+                    SMX_SENSOR_LETTER_SHADOW[0],
+                    SMX_SENSOR_LETTER_SHADOW[1],
+                    SMX_SENSOR_LETTER_SHADOW[2],
+                    SMX_SENSOR_LETTER_SHADOW[3]
+                ):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(SMX_SENSOR_Z + 3.0)
             ));
         }
 
@@ -9426,6 +9468,8 @@ const SMX_PAD_INPUT_CELL: f32 = 9.0;
 const SMX_PAD_INPUT_GAP: f32 = 1.5;
 const SMX_PAD_INPUT_PAD_GAP: f32 = 10.0;
 const SMX_PAD_INPUT_MARGIN: f32 = 10.0;
+// Gap between the notefield's right edge and the start of the mini-pad row.
+const SMX_PAD_INPUT_FIELD_GAP: f32 = 14.0;
 // One 4-panel pad as a 3x3 grid: (column offset, grid-x cell, grid-y cell) for
 // Left/Down/Up/Right. Column order within a pad is L, D, U, R.
 const SMX_PAD_INPUT_PANELS: [(usize, f32, f32); 4] =
@@ -9434,7 +9478,7 @@ const SMX_PAD_INPUT_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 const SMX_PAD_INPUT_CELL_IDLE: [f32; 4] = [0.25, 0.25, 0.30, 0.7];
 const SMX_PAD_INPUT_CELL_LIT: [f32; 4] = [1.0, 1.0, 1.0, 0.95];
 
-fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State) {
+fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State, field_right_edge: f32) {
     let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
     // Active pad slots (0 = P1, 1 = P2), each owning a 4-column block; gated on
     // the owning player's toggle and the columns actually existing.
@@ -9446,11 +9490,17 @@ fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State) {
     if active.is_empty() {
         return;
     }
-    // Right-align the row of mini-pads along the bottom, lifted above the footer
-    // so it clears the avatar (mirrors the FSR display on the left).
+    // Sit the row of mini-pads just right of the notefield (mirroring the FSR
+    // display on the left), lifted above the footer so it clears the avatar.
+    // Never let it run past the right screen edge.
     let group_w = active.len() as f32 * mini_w
         + active.len().saturating_sub(1) as f32 * SMX_PAD_INPUT_PAD_GAP;
-    let mut x0 = screen_width() - SMX_PAD_INPUT_MARGIN - group_w;
+    let max_x0 = screen_width() - SMX_PAD_INPUT_MARGIN - group_w;
+    let mut x0 = if field_right_edge.is_finite() {
+        (field_right_edge + SMX_PAD_INPUT_FIELD_GAP).min(max_x0)
+    } else {
+        max_x0
+    };
     let y0 = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_PAD_INPUT_MARGIN - mini_w;
 
     for &slot in &active {
