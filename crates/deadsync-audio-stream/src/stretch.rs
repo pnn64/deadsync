@@ -274,7 +274,8 @@ impl SolaStretcher {
 
     /// Returns false if the search buffer doesn't yet have enough data to
     /// compute the next window. In that case the caller must push more source
-    /// before calling `pull` again.
+    /// before calling `pull` again — and crucially, no state is mutated, so the
+    /// call is fully retryable.
     fn step(&mut self) -> bool {
         // First step after reset / EOF flush: we have data but no window yet.
         // The initial correlated_pos is 0 for every channel (matches
@@ -285,25 +286,54 @@ impl SolaStretcher {
             return false;
         }
 
-        // Advance correlated_pos by m_iPos and reset pos.
-        if self.pos > 0 {
+        // Compute the positions the advance *would* move us to, without
+        // committing. The data-sufficiency check must be retryable: if there
+        // isn't enough buffered source for the upcoming search we return false
+        // having mutated nothing, so the decoder can push another packet and
+        // call us again.
+        //
+        // This ordering matters. An earlier version advanced `uncorrelated_pos`
+        // and `correlated_pos` *before* the data check and returned false after.
+        // Under the real decoder feed (small packets, capped pull buffer) the
+        // search then never had enough lookahead, so `uncorrelated_pos` ran
+        // away while the read cursor walked the buffer 1:1 — collapsing the
+        // stretcher into a passthrough that produced `input` frames instead of
+        // `input / ratio`, i.e. no time-stretch at all.
+        let advancing = self.pos > 0;
+        let advance = self.window_frames as f32 * self.trailing_speed_ratio + self.error_frames;
+        let rounded = advance.round();
+        let prospective_uncorrelated = if advancing {
+            let int_advance = rounded as isize;
+            if int_advance >= 0 {
+                self.uncorrelated_pos.saturating_add(int_advance as usize)
+            } else {
+                self.uncorrelated_pos.saturating_sub((-int_advance) as usize)
+            }
+        } else {
+            self.uncorrelated_pos
+        };
+
+        // `max_needed > data_avail` is invariant under the later `erase_front`
+        // (both sides shift down by the same `earliest`), so we can evaluate it
+        // here against the prospective, pre-erase positions and cache the
+        // boolean for reuse after the commit.
+        let mut max_needed = prospective_uncorrelated + self.tolerance_frames + self.window_frames;
+        for ch in &self.state {
+            max_needed = max_needed.max(ch.correlated_pos + self.pos + self.window_frames);
+        }
+        let insufficient = max_needed > self.data_avail_frames;
+        if insufficient && !self.finishing {
+            // Retryable: nothing mutated. Caller must push more source.
+            return false;
+        }
+
+        // Commit the advance.
+        if advancing {
             for ch in &mut self.state {
                 ch.correlated_pos = ch.correlated_pos.saturating_add(self.pos);
-                debug_assert!(ch.correlated_pos <= self.data_avail_frames);
             }
-            // Advance uncorrelated_pos by window * trailing_speed_ratio
-            // (fractional, with error accumulator).
-            let advance = self.window_frames as f32 * self.trailing_speed_ratio + self.error_frames;
-            let int_advance = advance.round();
-            self.error_frames = advance - int_advance;
-            let int_advance = int_advance as isize;
-            if int_advance >= 0 {
-                self.uncorrelated_pos =
-                    self.uncorrelated_pos.saturating_add(int_advance as usize);
-            } else {
-                self.uncorrelated_pos =
-                    self.uncorrelated_pos.saturating_sub((-int_advance) as usize);
-            }
+            self.error_frames = advance - rounded;
+            self.uncorrelated_pos = prospective_uncorrelated;
             self.pos = 0;
         }
 
@@ -319,30 +349,16 @@ impl SolaStretcher {
             self.erase_front(earliest);
         }
 
-        // Ensure we have enough data for search + window.
-        let max_needed = {
-            let mut m = self.uncorrelated_pos + self.tolerance_frames + self.window_frames;
-            for ch in &self.state {
-                m = m.max(ch.correlated_pos + self.window_frames);
-            }
-            m
-        };
-        if max_needed > self.data_avail_frames {
-            if self.finishing {
-                // EOF flush (mirrors RageSoundReader_SpeedChange::Step's EOF
-                // path): there isn't enough buffered source left for another
-                // search, so emit straight from the current correlated position
-                // for as long as data lasts instead of dropping the tail. No
-                // new search means `last_correlated_pos` is left as-is; the
-                // `last_correlated`-aware `cursor_avail` keeps the crossfade
-                // read in bounds. Returns false once nothing remains, ending
-                // the pull cleanly.
-                self.uncorrelated_pos = self.state.first().map_or(0, |c| c.correlated_pos);
-                return self.cursor_avail() > 0;
-            }
-            // Not enough buffered source; caller must push more. We
-            // intentionally do NOT update positions, so this is fully retryable.
-            return false;
+        if insufficient {
+            // Only reachable when `finishing`: EOF flush (mirrors
+            // RageSoundReader_SpeedChange::Step's EOF path). There isn't enough
+            // buffered source left for another search, so emit straight from the
+            // current correlated position for as long as data lasts instead of
+            // dropping the tail. No new search means `last_correlated_pos` is
+            // left as-is; the `last_correlated`-aware `cursor_avail` keeps the
+            // crossfade read in bounds. Returns false once nothing remains.
+            self.uncorrelated_pos = self.state.first().map_or(0, |c| c.correlated_pos);
+            return self.cursor_avail() > 0;
         }
 
         // Per-channel correlation search.
@@ -532,6 +548,87 @@ mod tests {
             assert!(
                 (produced - expected).abs() < slack,
                 "ratio={ratio}: produced {produced}, expected ~{expected} (slack {slack})"
+            );
+        }
+    }
+
+    /// Reproduces the *decoder's* feed pattern: push one small packet, then
+    /// drain into a capped planar accumulator (like `in_planar`), with a
+    /// consumer (the resampler) periodically pulling fixed-size chunks out of
+    /// that accumulator. This is the path that actually runs in gameplay, and
+    /// it must still compress the stream to `input / ratio` frames. The
+    /// existing `output_length_tracks_speed_ratio` test pushes the whole buffer
+    /// at once and so would not catch a regression specific to incremental
+    /// feeding under a capped buffer.
+    #[test]
+    fn incremental_capped_feed_tracks_speed_ratio() {
+        const CAP: usize = 4096;
+        const PACKET: usize = 1152; // typical decoder packet
+        const NEED: usize = 1024; // resampler input_frames_next-ish
+        let sr = 48_000u32;
+        let in_frames = (sr as usize) * 4;
+        let sine = make_sine(440.0, sr, in_frames);
+        for &ratio in &[0.75f32, 1.5f32] {
+            let mut s = SolaStretcher::new(1, sr);
+            s.set_speed_ratio(ratio);
+
+            // Stand-in for PlanarAccum: a growing buffer with a consume cursor.
+            let mut accum: Vec<f32> = Vec::new();
+            let mut start = 0usize;
+            let mut total_out = 0usize;
+            let avail = |accum: &Vec<f32>, start: usize| accum.len() - start;
+
+            let mut consume = |accum: &mut Vec<f32>, start: &mut usize| {
+                while accum.len() - *start >= NEED {
+                    *start += NEED;
+                }
+                if *start > 0 {
+                    accum.drain(..*start);
+                    *start = 0;
+                }
+            };
+
+            for packet in sine.chunks(PACKET) {
+                s.push_interleaved_i16(packet);
+                loop {
+                    let pull_cap = CAP.saturating_sub(avail(&accum, start));
+                    if pull_cap == 0 {
+                        break;
+                    }
+                    let mut out = [std::mem::take(&mut accum)];
+                    let n = s.pull(&mut out, pull_cap.min(2048));
+                    accum = out.into_iter().next().unwrap();
+                    if n == 0 {
+                        break;
+                    }
+                    total_out += n;
+                }
+                consume(&mut accum, &mut start);
+            }
+            // Final flush, matching the decoder's EOF drain.
+            s.finish();
+            loop {
+                let pull_cap = CAP.saturating_sub(avail(&accum, start));
+                if pull_cap == 0 {
+                    consume(&mut accum, &mut start);
+                    continue;
+                }
+                let mut out = [std::mem::take(&mut accum)];
+                let n = s.pull(&mut out, pull_cap.min(2048));
+                accum = out.into_iter().next().unwrap();
+                if n == 0 {
+                    break;
+                }
+                total_out += n;
+            }
+
+            let produced = total_out as f32;
+            let expected = in_frames as f32 / ratio;
+            // Allow generous slack (a few windows) for transients/EOF.
+            let slack = 6.0 * s.window_frames() as f32;
+            assert!(
+                (produced - expected).abs() < slack,
+                "ratio={ratio}: incremental feed produced {produced}, expected ~{expected} (slack {slack})"
             );
         }
     }
