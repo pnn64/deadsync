@@ -17,6 +17,7 @@ use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
+use deadsync_smx::{self, SensorTestMode};
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
 };
@@ -231,6 +232,8 @@ pub struct State {
     pub(crate) gameplay: gameplay_core::State,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
+    smx_sensor_data: [Option<deadsync_smx::SensorTestData>; 2],
+    smx_sensor_config: [Option<deadsync_smx::SmxConfig>; 2],
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -269,6 +272,8 @@ impl State {
             gameplay,
             density_graph,
             step_stats_extra_resolved,
+            smx_sensor_data: [None, None],
+            smx_sensor_config: [None, None],
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
@@ -779,6 +784,17 @@ pub fn on_enter(state: &mut State) {
     state.lobby_music_started = false;
     set_all_local_lobby_players_ready(state, false);
     clear_lobby_disconnect_holds(state);
+
+    let cfg = crate::config::get();
+    if cfg.smx_input {
+        for pad in 0..2usize {
+            if state.player_profiles[pad].smx_fsr_display {
+                deadsync_smx::set_test_mode(pad, SensorTestMode::CalibratedValues);
+                state.smx_sensor_config[pad] = deadsync_smx::get_config(pad);
+            }
+        }
+    }
+
     if gameplay_requires_lobby_wait() {
         return;
     }
@@ -786,6 +802,18 @@ pub fn on_enter(state: &mut State) {
     set_all_local_lobby_players_ready(state, true);
     crate::game::gameplay::start_stage_music(state);
     state.lobby_music_started = true;
+}
+
+pub fn on_exit(state: &mut State) {
+    // Always clear test mode for both pads, even ones we never cached a config
+    // for on enter (e.g. get_config returned None). A pad left in test mode keeps
+    // streaming sensor data over the wire on later screens like the song wheel.
+    // set_test_mode is a no-op when SMX is uninitialized or the pad is absent.
+    for pad in 0..2usize {
+        deadsync_smx::set_test_mode(pad, SensorTestMode::Off);
+    }
+    state.smx_sensor_data = [None, None];
+    state.smx_sensor_config = [None, None];
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
@@ -811,6 +839,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.lobby_music_started = true;
     }
     update_lobby_machine_state(state);
+    refresh_smx_sensor_data(state);
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time);
     play_song_lua_sound_events(
@@ -874,6 +903,22 @@ fn play_song_lua_sound_events_for(
                     deadsync_audio_stream::play_preloaded_sfx(key.as_ref());
                 }
             }
+        }
+    }
+}
+
+fn refresh_smx_sensor_data(state: &mut State) {
+    let cfg = crate::config::get();
+    if !cfg.smx_input {
+        return;
+    }
+    for pad in 0..2usize {
+        if !state.player_profiles[pad].smx_fsr_display {
+            continue;
+        }
+        state.smx_sensor_data[pad] = deadsync_smx::get_test_data(pad);
+        if state.smx_sensor_config[pad].is_none() {
+            state.smx_sensor_config[pad] = deadsync_smx::get_config(pad);
         }
     }
 }
@@ -7758,6 +7803,20 @@ pub fn push_actors(
         song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
     }
 
+    // SMX live sensor pressure display + input-driven pad display (independent
+    // per-player toggles).
+    if !hide_gameplay_hud {
+        let cfg = crate::config::get();
+        if cfg.smx_input
+            && (state.player_profiles[0].smx_fsr_display
+                || state.player_profiles[1].smx_fsr_display)
+        {
+            push_smx_sensor_display(&mut actors, state);
+        }
+        // The input-driven pad display is positioned relative to the notefield
+        // (see below, once per-player field geometry has been computed).
+    }
+
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
     if let Some(exit) = &state.exit_transition {
@@ -8245,6 +8304,21 @@ pub fn push_actors(
                     z(86)
                 ));
             }
+        }
+
+        // SMX input-driven pad display: sit just to the right of the rightmost
+        // notefield (mirrors the FSR display on the left, which hugs the left
+        // margin), keeping it clear of the lanes and the side density graph.
+        if cfg.smx_input
+            && (state.player_profiles[0].smx_pad_input_display
+                || state.player_profiles[1].smx_pad_input_display)
+        {
+            let mut field_right_edge = f32::NEG_INFINITY;
+            for &(player_idx, _, field_x, _, _, _) in &players[..player_count] {
+                field_right_edge =
+                    field_right_edge.max(field_x + notefield_width(player_idx) * 0.5);
+            }
+            push_smx_pad_input_display(&mut actors, state, field_right_edge);
         }
 
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
@@ -9111,6 +9185,260 @@ pub fn push_actors(
     state.notefield_actor_scratch = notefield_actor_scratch;
     state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
     state.player_actor_scratch = player_actor_scratch;
+}
+
+// ─── SMX sensor display ────────────────────────────────────────────────────────
+
+// Gameplay panels in display order (L, D, U, R) matching pad layout.
+const SMX_SENSOR_DISP_PANELS: [(usize, &str); 4] = [(3, "L"), (7, "D"), (1, "U"), (5, "R")];
+const SMX_SENSOR_BAR_W: f32 = 8.0;
+const SMX_SENSOR_BAR_H: f32 = 40.0;
+const SMX_SENSOR_BAR_GAP: f32 = 3.0;
+const SMX_SENSOR_PAD_GAP: f32 = 10.0;
+const SMX_SENSOR_MARGIN: f32 = 10.0;
+// Lift the whole group above the bottom screen-bar footer (BAR_H = 32 in
+// screen_bar) and its player avatar so the bars never sit on top of them.
+// Kept low enough that the top numeric row clears the vertical life bar.
+const SMX_SENSOR_FOOTER_CLEAR: f32 = 26.0;
+// Live numeric pressure value sits just above each bar.
+const SMX_SENSOR_VALUE_H: f32 = 9.0;
+const SMX_SENSOR_VALUE_GAP: f32 = 2.0;
+const SMX_SENSOR_VALUE_ZOOM: f32 = 0.28;
+// Panel letter (L/D/U/R) drawn on the bar itself, near the bottom.
+const SMX_SENSOR_LABEL_ZOOM: f32 = 0.32;
+const SMX_SENSOR_LETTER_INSET: f32 = 2.0;
+// Drop shadow keeps the letter legible over both the dark track and bright fill.
+const SMX_SENSOR_LETTER_SHADOW: [f32; 4] = [0.0, 0.0, 0.0, 0.9];
+const SMX_SENSOR_VALUE_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const SMX_SENSOR_VALUE_IDLE_COLOR: [f32; 4] = [0.7, 0.7, 0.75, 0.6];
+// FSR calibrated values are right-shifted by 2, so 0-1000 raw => 0-250 after calibration.
+const SMX_SENSOR_VALUE_SCALE: f32 = 250.0;
+const SMX_SENSOR_Z: f32 = 2102.0;
+
+const SMX_SENSOR_TRACK: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+const SMX_SENSOR_FILL_IDLE: [f32; 4] = [0.25, 0.75, 0.25, 0.8];
+const SMX_SENSOR_FILL_ACTIVE: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+const SMX_SENSOR_THRESHOLD: [f32; 4] = [1.0, 0.45, 0.0, 1.0];
+const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+
+fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
+    let mut pad_x = SMX_SENSOR_MARGIN;
+    let bar_y =
+        screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
+    // Top of the numeric value row that sits above the bars (used for bg + values).
+    let group_top = bar_y - SMX_SENSOR_VALUE_GAP - SMX_SENSOR_VALUE_H;
+    let pad_group_w = 4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP;
+
+    for pad in 0..2usize {
+        if !state.player_profiles[pad].smx_fsr_display {
+            pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
+            continue;
+        }
+        let Some(config) = state.smx_sensor_config[pad].as_ref() else {
+            pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
+            continue;
+        };
+        let sensor_data = state.smx_sensor_data[pad].as_ref();
+        let fsr = deadsync_smx::is_fsr(config);
+
+        // Background behind this pad's label + bar group.
+        let bg_pad = 3.0;
+        push_smx_quad(
+            actors,
+            pad_x - bg_pad,
+            group_top - bg_pad,
+            pad_group_w + bg_pad * 2.0,
+            (bar_y + SMX_SENSOR_BAR_H) - group_top + bg_pad * 2.0,
+            SMX_SENSOR_BG,
+            SMX_SENSOR_Z - 1.0,
+        );
+
+        for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
+            let x = pad_x + slot as f32 * (SMX_SENSOR_BAR_W + SMX_SENSOR_BAR_GAP);
+
+            let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
+                if data.have_data_from_panel[panel] {
+                    let max_val = if fsr {
+                        data.sensor_level[panel]
+                            .iter()
+                            .map(|&v| if v <= 0 { 0u16 } else { (v >> 2) as u16 })
+                            .max()
+                            .unwrap_or(0)
+                    } else {
+                        // Load-cell: no >>2 shift, clamp to 0-500 then scale to 250.
+                        data.sensor_level[panel]
+                            .iter()
+                            .map(|&v| v.max(0).min(500) as u16)
+                            .max()
+                            .unwrap_or(0)
+                    };
+                    let norm = (max_val as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
+                    let threshold = if fsr {
+                        config.panel_settings[panel]
+                            .fsr_high_threshold
+                            .iter()
+                            .map(|&t| u16::from(t))
+                            .max()
+                            .unwrap_or(0)
+                    } else {
+                        u16::from(config.panel_settings[panel].load_cell_high_threshold)
+                    };
+                    (norm, max_val >= threshold && threshold > 0, Some(max_val))
+                } else {
+                    (0.0, false, None)
+                }
+            } else {
+                (0.0, false, None)
+            };
+
+            let threshold_norm = if fsr {
+                let t = config.panel_settings[panel]
+                    .fsr_high_threshold
+                    .iter()
+                    .map(|&t| u16::from(t))
+                    .max()
+                    .unwrap_or(0);
+                (t as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0)
+            } else {
+                let t = u16::from(config.panel_settings[panel].load_cell_high_threshold);
+                (t as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0)
+            };
+
+            // Track background.
+            push_smx_quad(actors, x, bar_y, SMX_SENSOR_BAR_W, SMX_SENSOR_BAR_H, SMX_SENSOR_TRACK, SMX_SENSOR_Z);
+
+            // Pressure fill from bottom.
+            let fill_h = value_norm * SMX_SENSOR_BAR_H;
+            if fill_h > 0.0 {
+                let fill = if active { SMX_SENSOR_FILL_ACTIVE } else { SMX_SENSOR_FILL_IDLE };
+                push_smx_quad(actors, x, bar_y + SMX_SENSOR_BAR_H - fill_h, SMX_SENSOR_BAR_W, fill_h, fill, SMX_SENSOR_Z + 1.0);
+            }
+
+            // Threshold line.
+            let threshold_h = 2.0_f32;
+            let threshold_y = bar_y + (1.0 - threshold_norm) * SMX_SENSOR_BAR_H - threshold_h * 0.5;
+            push_smx_quad(actors, x, threshold_y, SMX_SENSOR_BAR_W, threshold_h, SMX_SENSOR_THRESHOLD, SMX_SENSOR_Z + 2.0);
+
+            // Live pressure value centered above the bar (replaces the old letter
+            // row); "--" when no sample has arrived for this panel yet.
+            let (value_text, value_color) = match raw_value {
+                Some(v) => (v.to_string(), SMX_SENSOR_VALUE_COLOR),
+                None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
+            };
+            actors.push(act!(text:
+                font(current_machine_font_key(FontRole::Normal)): settext(value_text):
+                align(0.5, 0.0): xy(x + SMX_SENSOR_BAR_W * 0.5, group_top):
+                zoom(SMX_SENSOR_VALUE_ZOOM):
+                diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
+                z(SMX_SENSOR_Z + 2.0)
+            ));
+
+            // Panel letter (L/D/U/R) drawn on the bar near its bottom; the drop
+            // shadow keeps it legible over both the dark track and bright fill.
+            actors.push(act!(text:
+                font(current_machine_font_key(FontRole::Normal)): settext(label):
+                align(0.5, 1.0):
+                xy(x + SMX_SENSOR_BAR_W * 0.5, bar_y + SMX_SENSOR_BAR_H - SMX_SENSOR_LETTER_INSET):
+                zoom(SMX_SENSOR_LABEL_ZOOM):
+                shadowlength(1.0):
+                shadowcolor(
+                    SMX_SENSOR_LETTER_SHADOW[0],
+                    SMX_SENSOR_LETTER_SHADOW[1],
+                    SMX_SENSOR_LETTER_SHADOW[2],
+                    SMX_SENSOR_LETTER_SHADOW[3]
+                ):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(SMX_SENSOR_Z + 3.0)
+            ));
+        }
+
+        pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
+    }
+}
+
+fn push_smx_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, c: [f32; 4], z: f32) {
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(x, y): zoomto(w, h):
+        diffuse(c[0], c[1], c[2], c[3]): z(z)
+    ));
+}
+
+// ─── SMX pad-input display ──────────────────────────────────────────────────
+// A tiny per-pad layout whose panels light up straight from the live inputs we
+// receive (like the input tester), independent of the FSR sensor display.
+
+const SMX_PAD_INPUT_CELL: f32 = 9.0;
+const SMX_PAD_INPUT_GAP: f32 = 1.5;
+const SMX_PAD_INPUT_PAD_GAP: f32 = 10.0;
+const SMX_PAD_INPUT_MARGIN: f32 = 10.0;
+// Gap between the notefield's right edge and the start of the mini-pad row.
+const SMX_PAD_INPUT_FIELD_GAP: f32 = 14.0;
+// One 4-panel pad as a 3x3 grid: (column offset, grid-x cell, grid-y cell) for
+// Left/Down/Up/Right. Column order within a pad is L, D, U, R.
+const SMX_PAD_INPUT_PANELS: [(usize, f32, f32); 4] =
+    [(0, 0.0, 1.0), (1, 1.0, 2.0), (2, 1.0, 0.0), (3, 2.0, 1.0)];
+const SMX_PAD_INPUT_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+const SMX_PAD_INPUT_CELL_IDLE: [f32; 4] = [0.25, 0.25, 0.30, 0.7];
+const SMX_PAD_INPUT_CELL_LIT: [f32; 4] = [1.0, 1.0, 1.0, 0.95];
+
+fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State, field_right_edge: f32) {
+    let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
+    // Active pad slots (0 = P1, 1 = P2), each owning a 4-column block; gated on
+    // the owning player's toggle and the columns actually existing.
+    let active: Vec<usize> = (0..2usize)
+        .filter(|&slot| {
+            slot * 4 < state.num_cols && state.player_profiles[slot].smx_pad_input_display
+        })
+        .collect();
+    if active.is_empty() {
+        return;
+    }
+    // Sit the row of mini-pads just right of the notefield (mirroring the FSR
+    // display on the left), lifted above the footer so it clears the avatar.
+    // Never let it run past the right screen edge.
+    let group_w = active.len() as f32 * mini_w
+        + active.len().saturating_sub(1) as f32 * SMX_PAD_INPUT_PAD_GAP;
+    let max_x0 = screen_width() - SMX_PAD_INPUT_MARGIN - group_w;
+    let mut x0 = if field_right_edge.is_finite() {
+        (field_right_edge + SMX_PAD_INPUT_FIELD_GAP).min(max_x0)
+    } else {
+        max_x0
+    };
+    let y0 = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_PAD_INPUT_MARGIN - mini_w;
+
+    for &slot in &active {
+        let base = slot * 4;
+        let bg_pad = 3.0;
+        push_smx_quad(
+            actors,
+            x0 - bg_pad,
+            y0 - bg_pad,
+            mini_w + bg_pad * 2.0,
+            mini_w + bg_pad * 2.0,
+            SMX_PAD_INPUT_BG,
+            SMX_SENSOR_Z - 1.0,
+        );
+        for &(col_off, gx, gy) in SMX_PAD_INPUT_PANELS.iter() {
+            let cx = x0 + gx * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+            let cy = y0 + gy * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+            let pressed = crate::game::gameplay::lane_pressed(state, base + col_off);
+            let color = if pressed {
+                SMX_PAD_INPUT_CELL_LIT
+            } else {
+                SMX_PAD_INPUT_CELL_IDLE
+            };
+            push_smx_quad(
+                actors,
+                cx,
+                cy,
+                SMX_PAD_INPUT_CELL,
+                SMX_PAD_INPUT_CELL,
+                color,
+                SMX_SENSOR_Z,
+            );
+        }
+        x0 += mini_w + SMX_PAD_INPUT_PAD_GAP;
+    }
 }
 
 #[cfg(test)]

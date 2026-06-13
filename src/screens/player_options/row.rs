@@ -95,6 +95,8 @@ pub enum RowId {
     FAPlusWindowOptions,
     CustomBlueFantasticWindow,
     CustomBlueFantasticWindowMs,
+    SmxFsrDisplay,
+    SmxPadInputDisplay,
     // Uncommon pane
     Insert,
     Remove,

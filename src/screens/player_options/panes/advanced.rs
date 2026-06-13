@@ -310,6 +310,26 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const SMX_FSR_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.smx_fsr_display = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_smx_fsr_display_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.smx_fsr_display { 1 } else { 0 },
+    }),
+};
+const SMX_PAD_INPUT_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.smx_pad_input_display = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_smx_pad_input_display_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.smx_pad_input_display { 1 } else { 0 },
+    }),
+};
 const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.carry_combo_between_songs = v;
@@ -1984,6 +2004,28 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         CUSTOM_BLUE_FANTASTIC_WINDOW_MS,
         custom_fantastic_window_choices(),
     ));
+    b.push(Row::cycle(
+        RowId::SmxFsrDisplay,
+        lookup_key("PlayerOptions", "SmxFsrDisplay"),
+        lookup_key("PlayerOptionsHelp", "SmxFsrDisplayHelp"),
+        CycleBinding::Bool(SMX_FSR_DISPLAY),
+        vec![
+            tr("Common", "No").to_string(),
+            tr("Common", "Yes").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::SmxPadInputDisplay,
+        lookup_key("PlayerOptions", "SmxPadInputDisplay"),
+        lookup_key("PlayerOptionsHelp", "SmxPadInputDisplayHelp"),
+        CycleBinding::Bool(SMX_PAD_INPUT_DISPLAY),
+        vec![
+            tr("Common", "No").to_string(),
+            tr("Common", "Yes").to_string(),
+        ],
+    ));
+    // "What Comes Next" dictates the screen after this one and must always be
+    // the last selectable option, just before Exit.
     b.push(
         Row::custom(
             RowId::WhatComesNext,
