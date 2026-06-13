@@ -4760,6 +4760,13 @@ pub fn danger_overlay_rgba(state: &State, player: usize) -> Option<[f32; 4]> {
     if rgba[3] > 0.0 { Some(rgba) } else { None }
 }
 
+/// Whether a lane is physically pressed right now (live input state). Exposed
+/// for the gameplay HUD's optional SMX pad-input display, which mirrors the
+/// input tester by lighting panels straight from the inputs we receive.
+pub fn lane_pressed(state: &State, col: usize) -> bool {
+    col < state.num_cols && lane_is_pressed(state, col)
+}
+
 #[inline(always)]
 fn player_for_col(state: &State, col: usize) -> usize {
     if state.num_players <= 1 || state.cols_per_player == 0 {

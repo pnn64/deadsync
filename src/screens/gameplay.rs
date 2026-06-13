@@ -805,10 +805,12 @@ pub fn on_enter(state: &mut State) {
 }
 
 pub fn on_exit(state: &mut State) {
+    // Always clear test mode for both pads, even ones we never cached a config
+    // for on enter (e.g. get_config returned None). A pad left in test mode keeps
+    // streaming sensor data over the wire on later screens like the song wheel.
+    // set_test_mode is a no-op when SMX is uninitialized or the pad is absent.
     for pad in 0..2usize {
-        if state.smx_sensor_config[pad].is_some() {
-            deadsync_smx::set_test_mode(pad, SensorTestMode::Off);
-        }
+        deadsync_smx::set_test_mode(pad, SensorTestMode::Off);
     }
     state.smx_sensor_data = [None, None];
     state.smx_sensor_config = [None, None];
@@ -7801,7 +7803,8 @@ pub fn push_actors(
         song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
     }
 
-    // SMX live sensor pressure display.
+    // SMX live sensor pressure display + input-driven pad display (independent
+    // per-player toggles).
     if !hide_gameplay_hud {
         let cfg = crate::config::get();
         if cfg.smx_input
@@ -7809,6 +7812,12 @@ pub fn push_actors(
                 || state.player_profiles[1].smx_fsr_display)
         {
             push_smx_sensor_display(&mut actors, state);
+        }
+        if cfg.smx_input
+            && (state.player_profiles[0].smx_pad_input_display
+                || state.player_profiles[1].smx_pad_input_display)
+        {
+            push_smx_pad_input_display(&mut actors, state);
         }
     }
 
@@ -9176,6 +9185,13 @@ const SMX_SENSOR_BAR_H: f32 = 40.0;
 const SMX_SENSOR_BAR_GAP: f32 = 3.0;
 const SMX_SENSOR_PAD_GAP: f32 = 10.0;
 const SMX_SENSOR_MARGIN: f32 = 10.0;
+// Lift the whole group above the bottom screen-bar footer (BAR_H = 32 in
+// screen_bar) and its player avatar so the bars never sit on top of them.
+const SMX_SENSOR_FOOTER_CLEAR: f32 = 32.0;
+// Panel-letter labels (L/D/U/R) sit just above each bar.
+const SMX_SENSOR_LABEL_H: f32 = 9.0;
+const SMX_SENSOR_LABEL_GAP: f32 = 2.0;
+const SMX_SENSOR_LABEL_ZOOM: f32 = 0.32;
 // FSR calibrated values are right-shifted by 2, so 0-1000 raw => 0-250 after calibration.
 const SMX_SENSOR_VALUE_SCALE: f32 = 250.0;
 const SMX_SENSOR_Z: f32 = 2102.0;
@@ -9188,7 +9204,10 @@ const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 
 fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
     let mut pad_x = SMX_SENSOR_MARGIN;
-    let bar_y = screen_height() - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
+    let bar_y =
+        screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
+    // Top of the label row that sits above the bars (used for the bg + labels).
+    let group_top = bar_y - SMX_SENSOR_LABEL_GAP - SMX_SENSOR_LABEL_H;
     let pad_group_w = 4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP;
 
     for pad in 0..2usize {
@@ -9203,19 +9222,19 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
         let sensor_data = state.smx_sensor_data[pad].as_ref();
         let fsr = deadsync_smx::is_fsr(config);
 
-        // Background behind this pad's bar group.
+        // Background behind this pad's label + bar group.
         let bg_pad = 3.0;
         push_smx_quad(
             actors,
             pad_x - bg_pad,
-            bar_y - bg_pad,
+            group_top - bg_pad,
             pad_group_w + bg_pad * 2.0,
-            SMX_SENSOR_BAR_H + bg_pad * 2.0,
+            (bar_y + SMX_SENSOR_BAR_H) - group_top + bg_pad * 2.0,
             SMX_SENSOR_BG,
             SMX_SENSOR_Z - 1.0,
         );
 
-        for (slot, &(panel, _label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
+        for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
             let x = pad_x + slot as f32 * (SMX_SENSOR_BAR_W + SMX_SENSOR_BAR_GAP);
 
             let (value_norm, active) = if let Some(data) = sensor_data {
@@ -9280,6 +9299,15 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
             let threshold_h = 2.0_f32;
             let threshold_y = bar_y + (1.0 - threshold_norm) * SMX_SENSOR_BAR_H - threshold_h * 0.5;
             push_smx_quad(actors, x, threshold_y, SMX_SENSOR_BAR_W, threshold_h, SMX_SENSOR_THRESHOLD, SMX_SENSOR_Z + 2.0);
+
+            // Panel letter (L/D/U/R) centered above the bar.
+            actors.push(act!(text:
+                font(current_machine_font_key(FontRole::Normal)): settext(label):
+                align(0.5, 0.0): xy(x + SMX_SENSOR_BAR_W * 0.5, group_top):
+                zoom(SMX_SENSOR_LABEL_ZOOM):
+                diffuse(1.0, 1.0, 1.0, 0.9):
+                z(SMX_SENSOR_Z + 2.0)
+            ));
         }
 
         pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
@@ -9291,6 +9319,76 @@ fn push_smx_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, c: [f3
         align(0.0, 0.0): xy(x, y): zoomto(w, h):
         diffuse(c[0], c[1], c[2], c[3]): z(z)
     ));
+}
+
+// ─── SMX pad-input display ──────────────────────────────────────────────────
+// A tiny per-pad layout whose panels light up straight from the live inputs we
+// receive (like the input tester), independent of the FSR sensor display.
+
+const SMX_PAD_INPUT_CELL: f32 = 9.0;
+const SMX_PAD_INPUT_GAP: f32 = 1.5;
+const SMX_PAD_INPUT_PAD_GAP: f32 = 10.0;
+const SMX_PAD_INPUT_MARGIN: f32 = 10.0;
+// One 4-panel pad as a 3x3 grid: (column offset, grid-x cell, grid-y cell) for
+// Left/Down/Up/Right. Column order within a pad is L, D, U, R.
+const SMX_PAD_INPUT_PANELS: [(usize, f32, f32); 4] =
+    [(0, 0.0, 1.0), (1, 1.0, 2.0), (2, 1.0, 0.0), (3, 2.0, 1.0)];
+const SMX_PAD_INPUT_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+const SMX_PAD_INPUT_CELL_IDLE: [f32; 4] = [0.25, 0.25, 0.30, 0.7];
+const SMX_PAD_INPUT_CELL_LIT: [f32; 4] = [1.0, 1.0, 1.0, 0.95];
+
+fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State) {
+    let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
+    // Active pad slots (0 = P1, 1 = P2), each owning a 4-column block; gated on
+    // the owning player's toggle and the columns actually existing.
+    let active: Vec<usize> = (0..2usize)
+        .filter(|&slot| {
+            slot * 4 < state.num_cols && state.player_profiles[slot].smx_pad_input_display
+        })
+        .collect();
+    if active.is_empty() {
+        return;
+    }
+    // Right-align the row of mini-pads along the bottom, lifted above the footer
+    // so it clears the avatar (mirrors the FSR display on the left).
+    let group_w = active.len() as f32 * mini_w
+        + active.len().saturating_sub(1) as f32 * SMX_PAD_INPUT_PAD_GAP;
+    let mut x0 = screen_width() - SMX_PAD_INPUT_MARGIN - group_w;
+    let y0 = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_PAD_INPUT_MARGIN - mini_w;
+
+    for &slot in &active {
+        let base = slot * 4;
+        let bg_pad = 3.0;
+        push_smx_quad(
+            actors,
+            x0 - bg_pad,
+            y0 - bg_pad,
+            mini_w + bg_pad * 2.0,
+            mini_w + bg_pad * 2.0,
+            SMX_PAD_INPUT_BG,
+            SMX_SENSOR_Z - 1.0,
+        );
+        for &(col_off, gx, gy) in SMX_PAD_INPUT_PANELS.iter() {
+            let cx = x0 + gx * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+            let cy = y0 + gy * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+            let pressed = crate::game::gameplay::lane_pressed(state, base + col_off);
+            let color = if pressed {
+                SMX_PAD_INPUT_CELL_LIT
+            } else {
+                SMX_PAD_INPUT_CELL_IDLE
+            };
+            push_smx_quad(
+                actors,
+                cx,
+                cy,
+                SMX_PAD_INPUT_CELL,
+                SMX_PAD_INPUT_CELL,
+                color,
+                SMX_SENSOR_Z,
+            );
+        }
+        x0 += mini_w + SMX_PAD_INPUT_PAD_GAP;
+    }
 }
 
 #[cfg(test)]

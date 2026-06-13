@@ -279,6 +279,10 @@ fn load_player_options(
         .get(section, "SmxFsrDisplay")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.smx_fsr_display, |v| v != 0);
+    options.smx_pad_input_display = profile_conf
+        .get(section, "SmxPadInputDisplay")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.smx_pad_input_display, |v| v != 0);
     options.mini_indicator = profile_conf
         .get(section, "MiniIndicator")
         .and_then(|s| MiniIndicator::from_str(&s).ok())
