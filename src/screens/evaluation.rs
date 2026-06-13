@@ -966,7 +966,7 @@ fn course_graph_stripe_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
+        CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
         compute_column_judgments, course_graph_stage_spans, course_graph_stripe_actors,
         eval_grade_for_result, eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate,
         stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
@@ -979,6 +979,29 @@ mod tests {
     use deadsync_rules::note::Note;
     use deadsync_score as score_data;
     use std::sync::Arc;
+
+    #[test]
+    fn nice69_buf_matches_string_contains_semantics() {
+        // The allocation-free Nice69Buf must agree with the old
+        // `format!(...).contains("69")` / `to_string().contains("69")` logic.
+        let mut buf = Nice69Buf::new();
+
+        // Integer decimal renderings.
+        assert!(buf.has_display(69u32));
+        assert!(buf.has_display(169u32));
+        assert!(buf.has_display(690u32));
+        assert!(buf.has_display(1692u32));
+        assert!(!buf.has_display(96u32)); // reversed digits must NOT match
+        assert!(!buf.has_display(609u32)); // dot/zero break adjacency
+        assert!(!buf.has_display(0u32));
+        assert!(buf.has_display(-69i32)); // sign does not affect the "69" run
+
+        // Two-decimal float rendering, mirroring `{:.2}`.
+        assert!(buf.has_fixed2(69.00)); // "69.00"
+        assert!(buf.has_fixed2(12.69)); // ".69" fractional
+        assert!(!buf.has_fixed2(6.90)); // "6.90" — dot breaks 6|9 adjacency
+        assert!(!buf.has_fixed2(12.34));
+    }
 
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
         CourseGraphStage {
@@ -2891,15 +2914,61 @@ fn sync_submit_record_sfx(state: &mut State) {
 /// (e.g. `98.69`), every tap-note judgment count (Fantastic..Miss), the radar
 /// actual + possible counts for Holds / Rolls / Mines / Hands, the chart
 /// difficulty meter, and the song title.
+/// Stack-only check for whether a value's decimal rendering contains "69" — the
+/// Simply Love "Nice" easter egg. Replaces per-frame `format!`/`to_string` heap
+/// allocations (this predicate runs every frame in both `get_actors` and `update`).
+struct Nice69Buf {
+    bytes: [u8; 48],
+    len: usize,
+}
+
+impl Nice69Buf {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 48],
+            len: 0,
+        }
+    }
+    fn reset(&mut self) {
+        self.len = 0;
+    }
+    fn contains_69(&self) -> bool {
+        self.bytes[..self.len].windows(2).any(|w| w == b"69")
+    }
+    fn has_display<T: std::fmt::Display>(&mut self, value: T) -> bool {
+        use std::fmt::Write as _;
+        self.reset();
+        let _ = write!(self, "{value}");
+        self.contains_69()
+    }
+    fn has_fixed2(&mut self, value: f64) -> bool {
+        use std::fmt::Write as _;
+        self.reset();
+        let _ = write!(self, "{value:.2}");
+        self.contains_69()
+    }
+}
+
+impl std::fmt::Write for Nice69Buf {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        let b = s.as_bytes();
+        let end = self.len + b.len();
+        if end > self.bytes.len() {
+            return Err(std::fmt::Error);
+        }
+        self.bytes[self.len..end].copy_from_slice(b);
+        self.len = end;
+        Ok(())
+    }
+}
+
 fn score_info_is_nice(si: &ScoreInfo) -> bool {
-    if format!("{:.2}", si.score_percent * 100.0).contains("69") {
+    let mut buf = Nice69Buf::new();
+
+    if buf.has_fixed2(si.score_percent * 100.0) {
         return true;
     }
-    if si
-        .judgment_counts
-        .iter()
-        .any(|count| count.to_string().contains("69"))
-    {
+    if si.judgment_counts.iter().any(|count| buf.has_display(count)) {
         return true;
     }
     let radar_values = [
@@ -2913,16 +2982,13 @@ fn score_info_is_nice(si: &ScoreInfo) -> bool {
         si.hands_achieved,
         si.hands_total,
     ];
-    if radar_values.iter().any(|v| v.to_string().contains("69")) {
+    if radar_values.iter().any(|value| buf.has_display(value)) {
         return true;
     }
-    if si.chart.meter.to_string().contains("69") {
+    if buf.has_display(si.chart.meter) {
         return true;
     }
-    if si.song.title.contains("69") {
-        return true;
-    }
-    false
+    si.song.title.contains("69")
 }
 
 /// Fires a one-shot "Nice" SFX (Simply Love parity) the first time the
@@ -5363,14 +5429,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
 
-    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
+    let (p1_avatar_key, p1_display_name) =
+        profile::footer_fields_for_side(profile_data::PlayerSide::P1);
+    let (p2_avatar_key, p2_display_name) =
+        profile::footer_fields_for_side(profile_data::PlayerSide::P2);
+    let p1_avatar = p1_avatar_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
+    let p2_avatar = p2_avatar_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
@@ -5386,7 +5452,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             Some(if p1_guest {
                 insert_card.as_ref()
             } else {
-                p1_profile.display_name.as_str()
+                p1_display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
@@ -5398,7 +5464,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             Some(if p2_guest {
                 insert_card.as_ref()
             } else {
-                p2_profile.display_name.as_str()
+                p2_display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
