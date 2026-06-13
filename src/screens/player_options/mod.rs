@@ -325,14 +325,25 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS] {
     let pane = state.pane();
     let active = session_active_players();
-    std::array::from_fn(|idx| {
+    let mut preview: [Option<u8>; PLAYER_SLOTS] = std::array::from_fn(|idx| {
         if !active[idx] {
             return None;
         }
         let row = pane.row_map.get_at(pane.selected_row[idx])?;
         (row.id == RowId::PadLightBrightness)
             .then(|| row.selected_choice_index[idx].min(100) as u8)
-    })
+    });
+    // In Doubles a single player owns BOTH pads, so the brightness value applies
+    // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
+    // preview onto the other pad so both light up while the value is being tuned.
+    if matches!(
+        crate::game::profile::get_session_play_style(),
+        profile_data::PlayStyle::Double
+    ) && let Some(pct) = preview.iter().flatten().copied().next()
+    {
+        preview = [Some(pct); PLAYER_SLOTS];
+    }
+    preview
 }
 
 #[inline(always)]
