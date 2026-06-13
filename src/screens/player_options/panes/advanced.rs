@@ -310,6 +310,16 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const SMX_FSR_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.smx_fsr_display = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_smx_fsr_display_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.smx_fsr_display { 1 } else { 0 },
+    }),
+};
 const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.carry_combo_between_songs = v;
@@ -1994,6 +2004,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         )
         .with_mirror_across_players(),
     );
+    b.push(Row::cycle(
+        RowId::SmxFsrDisplay,
+        lookup_key("PlayerOptions", "SmxFsrDisplay"),
+        lookup_key("PlayerOptionsHelp", "SmxFsrDisplayHelp"),
+        CycleBinding::Bool(SMX_FSR_DISPLAY),
+        vec![
+            tr("Common", "No").to_string(),
+            tr("Common", "Yes").to_string(),
+        ],
+    ));
     b.push(Row::exit());
     b.finish()
 }
