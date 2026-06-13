@@ -307,6 +307,12 @@ pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: b
     });
 }
 
+pub fn update_smx_fsr_display_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.smx_fsr_display, enabled)
+    });
+}
+
 pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.mini_indicator, setting)

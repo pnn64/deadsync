@@ -29,6 +29,7 @@ pub(super) struct RowVisibility {
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
+    pub(super) show_smx_fsr_display: bool,
 }
 
 #[inline(always)]
@@ -132,6 +133,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::TapExplosionOptions {
         return visibility.show_tap_explosion_options;
+    }
+    if id == RowId::SmxFsrDisplay {
+        return visibility.show_smx_fsr_display;
     }
     true
 }
@@ -683,6 +687,7 @@ pub(super) fn row_visibility(
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
+        show_smx_fsr_display: crate::config::get().smx_input,
     }
 }
 
