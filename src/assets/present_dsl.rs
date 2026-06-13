@@ -22,6 +22,13 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    pub fn static_texture(tex: &'static str) -> Self {
+        Self {
+            inner: present_dsl::SpriteBuilder::static_texture(tex),
+        }
+    }
+
+    #[inline(always)]
     pub fn static_texture_cached(
         tex: &'static str,
         cached_handle: &'static AtomicU64,
@@ -93,6 +100,12 @@ macro_rules! act {
         ::deadsync_present::__act_from_builder!(
             ($($tail)+)
             $crate::assets::present_dsl::SpriteBuilder::texture($tex)
+        )
+    }};
+    (sprite_static($tex:expr): $($tail:tt)+) => {{
+        ::deadsync_present::__act_from_builder!(
+            ($($tail)+)
+            $crate::assets::present_dsl::SpriteBuilder::static_texture($tex)
         )
     }};
     (quad: $($tail:tt)+) => {{
