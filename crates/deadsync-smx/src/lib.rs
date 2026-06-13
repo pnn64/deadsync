@@ -695,8 +695,11 @@ pub fn conflict_warning_active() -> bool {
 }
 
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
-/// P2 slot; `None` turns that pad off). One-shot, so re-send to hold the colour.
-pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+/// P2 slot; `None` turns that pad off), scaling by an explicit per-slot
+/// brightness instead of the globally configured value. Used by the options
+/// pages to preview a brightness the user is editing live. One-shot, so re-send
+/// to hold the colour.
+pub fn set_player_lights_with_brightness(colors: [Option<[u8; 3]>; 2], brightness: [u8; 2]) {
     let Some(s) = SHARED.get() else { return };
     // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED
     // pads ignores the inner-ring bytes, so one buffer size covers both.
@@ -708,11 +711,17 @@ pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
             led.copy_from_slice(rgb);
         }
     }
-    let brightness = light_brightness();
     if brightness != [100, 100] {
         apply_brightness(&mut buf, brightness);
     }
     s.manager.set_lights(&buf);
+}
+
+/// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
+/// P2 slot; `None` turns that pad off), scaled by the globally configured
+/// per-slot brightness. One-shot, so re-send to hold the colour.
+pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+    set_player_lights_with_brightness(colors, light_brightness());
 }
 
 /// Re-enable the pads' built-in automatic lighting (call when leaving a screen

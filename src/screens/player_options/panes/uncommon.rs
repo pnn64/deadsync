@@ -20,19 +20,6 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     gp::update_hide_light_type_for_side,
     false
 );
-const PAD_LIGHT_BRIGHTNESS: NumericBinding = NumericBinding {
-    parse: parse_i32_percent,
-    apply: |p, v| {
-        p.set_pad_light_brightness(v.clamp(0, 100) as u8);
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_pad_light_brightness_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| i32::from(p.pad_light_brightness),
-        format: |v| format!("{v}%"),
-    }),
-};
-
 const INSERT: BitmaskBinding = simple_bitmask_binding!(
     mask = InsertMask,
     bits = u8,
@@ -195,16 +182,6 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "HideLightTypeHideBassLights").to_string(),
         ],
     ));
-    b.push(
-        Row::numeric(
-            RowId::PadLightBrightness,
-            lookup_key("PlayerOptions", "PadLightBrightness"),
-            lookup_key("PlayerOptionsHelp", "PadLightBrightnessHelp"),
-            PAD_LIGHT_BRIGHTNESS,
-            (0..=100).map(|v| format!("{v}%")).collect(),
-        )
-        .with_initial_choice_index(deadsync_profile::PAD_LIGHT_BRIGHTNESS_DEFAULT as usize),
-    );
     // `WhatComesNext` here uses two distinct lookup keys for its two help
     // lines (not a single `\n`-split key), so the standard `help: LookupKey`
     // constructor parameter cannot express it. Keep the help vec as a
