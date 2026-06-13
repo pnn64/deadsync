@@ -9501,7 +9501,12 @@ fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State, field_righ
     } else {
         max_x0
     };
-    let y0 = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_PAD_INPUT_MARGIN - mini_w;
+    // Vertically center the mini-pad on the FSR sensor display group, so if the
+    // two sat side by side this would be dead-center against it (regardless of
+    // whether the FSR display is actually shown).
+    let fsr_bottom = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN;
+    let fsr_group_h = SMX_SENSOR_BAR_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_VALUE_H;
+    let y0 = fsr_bottom - fsr_group_h * 0.5 - mini_w * 0.5;
 
     for &slot in &active {
         let base = slot * 4;
