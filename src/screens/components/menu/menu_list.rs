@@ -26,6 +26,13 @@ pub struct MenuParams<'a> {
 /// Build a vertical, center-aligned menu with focus-based sizing and color.
 pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
     let mut out = Vec::with_capacity(p.options.len());
+    push_vertical_menu(&mut out, p);
+    out
+}
+
+/// Append a vertical, center-aligned menu directly into `out`.
+pub fn push_vertical_menu(out: &mut Vec<Actor>, p: MenuParams) {
+    out.reserve(p.options.len());
     let center_x = screen_center_x();
 
     for (i, label) in p.options.iter().enumerate() {
@@ -57,5 +64,4 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
             horizalign(center)
         ));
     }
-    out
 }
