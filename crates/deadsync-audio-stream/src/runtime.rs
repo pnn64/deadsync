@@ -25,6 +25,7 @@ static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
 static ENGINE: std::sync::LazyLock<AudioEngine> =
     std::sync::LazyLock::new(|| init_engine_and_thread(engine_init_cfg()));
 static REPLAYGAIN_ENABLED: AtomicBool = AtomicBool::new(false);
+static PRESERVE_PITCH_ENABLED: AtomicBool = AtomicBool::new(false);
 
 struct AudioEngine {
     command_sender: Sender<StreamCommand>,
@@ -116,6 +117,27 @@ pub fn set_replaygain_enabled(enabled: bool) {
 #[inline(always)]
 pub fn replaygain_enabled() -> bool {
     REPLAYGAIN_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Sets the user's global `RateModPreservesPitch` preference. `play_music` reads
+/// this when starting a track to decide whether to run the SOLA time-stretcher.
+/// If a track is already playing, the change is pushed to it live so toggling
+/// the option takes effect without a restart (mirrors the ITGMania behaviour).
+pub fn set_preserve_pitch_enabled(enabled: bool) {
+    PRESERVE_PITCH_ENABLED.store(enabled, Ordering::Relaxed);
+    // Only touch the engine if it has actually been initialised; this is also
+    // called during config load before the audio engine exists, and forcing
+    // the LazyLock there would open the output device too early.
+    if is_initialized() {
+        let _ = ENGINE
+            .command_sender
+            .send(StreamCommand::SetPreservePitch(enabled));
+    }
+}
+
+#[inline(always)]
+pub fn preserve_pitch_enabled() -> bool {
+    PRESERVE_PITCH_ENABLED.load(Ordering::Relaxed)
 }
 
 pub fn play_sfx(path: &str) {
@@ -238,6 +260,7 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
         cut,
         looping,
         rate,
+        preserve_pitch: preserve_pitch_enabled(),
     });
 }
 

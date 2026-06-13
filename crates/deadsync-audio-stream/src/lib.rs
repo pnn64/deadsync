@@ -3,6 +3,7 @@ mod music_map;
 mod runtime;
 mod sfx_cache;
 mod stream_runtime;
+mod stretch;
 
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
@@ -35,18 +36,27 @@ pub use runtime::{
     assist_sfx_generation, collect_stutter_diag_events, get_music_stream_clock_snapshot,
     get_music_stream_position_seconds, get_output_timing_snapshot, init, is_initialized,
     play_assist_tick, play_music, play_preloaded_assist_tick, play_preloaded_sfx,
-    play_scheduled_assist_tick, play_screen_sfx, play_sfx, preload_sfx, replaygain_enabled,
-    set_music_rate, set_replaygain_enabled, startup_output_devices, stop_music, stop_screen_sfx,
-    stutter_diag_trigger_seq, timing_diag_last_callback_gap_ns,
+    play_scheduled_assist_tick, play_screen_sfx, play_sfx, preload_sfx, preserve_pitch_enabled,
+    replaygain_enabled, set_music_rate, set_preserve_pitch_enabled, set_replaygain_enabled,
+    startup_output_devices, stop_music, stop_screen_sfx, stutter_diag_trigger_seq,
+    timing_diag_last_callback_gap_ns,
 };
 pub use sfx_cache::SfxCache;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand, new_music_sample_ring};
+use stretch::SolaStretcher;
 
 const SILENCE_CHUNK_FRAMES: usize = 2048;
 const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
+/// Threshold used everywhere to decide whether a music `rate` value is
+/// "effectively 1.0". Picked to be smaller than any musically meaningful
+/// rate change but well above the noise of `f32` round-tripping through
+/// atomic storage. Used to gate SOLA activation, direct-audio passthrough,
+/// and resampler/SOLA rebuilds, so all three stay in agreement (otherwise
+/// a rate like 1.0001 could activate SOLA without triggering rebuild).
+const RATE_EPS: f32 = 0.0005;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OutputFormat {
@@ -65,6 +75,7 @@ pub struct MusicStream {
     pub thread: thread::JoinHandle<()>,
     pub stop_signal: Arc<AtomicBool>,
     pub rate_bits: Arc<AtomicU32>,
+    pub preserve_pitch: Arc<AtomicBool>,
 }
 
 pub fn snap_music_start_sec(path: &Path, start_sec: f64) -> f64 {
@@ -166,12 +177,14 @@ pub fn spawn_music_decoder_thread(
     cut: Cut,
     looping: bool,
     rate_bits: Arc<AtomicU32>,
+    preserve_pitch: Arc<AtomicBool>,
     ring: Arc<internal::SpscRingI16>,
     context: MusicDecodeContext,
 ) -> MusicStream {
     let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = stop_signal.clone();
     let rate_bits_clone = rate_bits.clone();
+    let preserve_pitch_clone = preserve_pitch.clone();
 
     let thread = thread::spawn(move || {
         #[cfg(windows)]
@@ -181,6 +194,7 @@ pub fn spawn_music_decoder_thread(
             cut,
             looping,
             rate_bits_clone,
+            preserve_pitch_clone,
             ring,
             stop_signal_clone,
             context,
@@ -193,6 +207,7 @@ pub fn spawn_music_decoder_thread(
         thread,
         stop_signal,
         rate_bits,
+        preserve_pitch,
     }
 }
 
@@ -247,11 +262,13 @@ mod tests {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn music_decoder_thread_loop(
     path: PathBuf,
     cut: Cut,
     looping: bool,
     rate_bits: Arc<AtomicU32>,
+    preserve_pitch: Arc<AtomicBool>,
     ring: Arc<internal::SpscRingI16>,
     stop: Arc<AtomicBool>,
     context: MusicDecodeContext,
@@ -267,13 +284,14 @@ fn music_decoder_thread_loop(
     let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
-        "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}).",
+        "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}, preserve_pitch={}).",
         path,
         in_ch,
         in_hz,
         out_ch,
         out_hz,
-        f32::from_bits(rate_bits.load(Ordering::Relaxed))
+        f32::from_bits(rate_bits.load(Ordering::Relaxed)),
+        preserve_pitch.load(Ordering::Relaxed),
     );
 
     if cut.start_sec < 0.0 {
@@ -294,37 +312,61 @@ fn music_decoder_thread_loop(
 
     let mut resampler: Option<SincFixedOut<f32>> = None;
     let mut resampler_rate = f32::NAN;
+    let mut resampler_pp = false;
     let mut resample_out: Option<Vec<Vec<f32>>> = None;
     let mut resample_in: Option<Vec<Vec<f32>>> = None;
     let mut in_planar: Option<PlanarAccum> = None;
+    let mut sola: Option<SolaStretcher> = None;
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
 
     'main_loop: loop {
-        let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
+        // Read `rate_bits` (Acquire) before `preserve_pitch` (Acquire), paired
+        // with the manager thread's `Release` stores. Rate and preserve-pitch
+        // are written by two independent commands, so their relative order is
+        // not guaranteed and a transient mixed view (e.g. new pitch flag with
+        // the old rate) is still possible for one packet. That is harmless: the
+        // next loop iteration reconciles the mode and `SetPreservePitch` clears
+        // the ring, so any briefly-wrong SOLA mode is never heard. The ordered
+        // Acquire/Release pair simply keeps that window to a single packet
+        // rather than letting a stale value linger.
+        let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Acquire));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
         } else {
             current_rate_f32 = current_rate_f32.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
         }
-        let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON;
-        let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
+        let mut current_pp = preserve_pitch.load(Ordering::Acquire)
+            && (current_rate_f32 - 1.0).abs() > RATE_EPS;
+        let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= RATE_EPS;
+        let mut ratio = if current_pp {
+            f64::from(out_hz) / f64::from(in_hz)
+        } else {
+            (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32)
+        };
         if direct_audio {
             resampler = None;
             resampler_rate = f32::NAN;
+            resampler_pp = false;
             resample_in = None;
             resample_out = None;
             in_planar = None;
+            sola = None;
         } else if resampler.is_some()
             && resample_in.is_some()
             && resample_out.is_some()
             && in_planar.is_some()
             && resampler_rate == current_rate_f32
+            && resampler_pp == current_pp
         {
             let resampler = resampler.as_mut().expect("resampler exists");
             resampler.reset();
             resampler.set_resample_ratio(ratio, false)?;
             in_planar.as_mut().expect("planar input exists").clear();
+            if let Some(s) = sola.as_mut() {
+                s.set_speed_ratio(current_rate_f32);
+                s.reset();
+            }
         } else {
             let new_resampler = SincFixedOut::<f32>::new(
                 ratio,
@@ -338,6 +380,14 @@ fn music_decoder_thread_loop(
             in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
             resampler = Some(new_resampler);
             resampler_rate = current_rate_f32;
+            resampler_pp = current_pp;
+            sola = if current_pp {
+                let mut s = SolaStretcher::new(in_ch, in_hz);
+                s.set_speed_ratio(current_rate_f32);
+                Some(s)
+            } else {
+                None
+            };
         }
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
@@ -450,25 +500,40 @@ fn music_decoder_thread_loop(
                 slice = &pkt_buf[drop_samples..];
                 to_drop_in = 0;
             }
-            let desired_rate = f32::from_bits(rate_bits.load(Ordering::Relaxed));
+            // Load rate first, then preserve_pitch — see note above.
+            let desired_rate = f32::from_bits(rate_bits.load(Ordering::Acquire));
             let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
                 desired_rate
             } else {
                 1.0
             };
-            if (desired_rate - current_rate_f32).abs() > 0.0005 {
+            let desired_pp_raw = preserve_pitch.load(Ordering::Acquire);
+            let desired_pp_active = desired_pp_raw && (desired_rate - 1.0).abs() > RATE_EPS;
+            let rate_changed = (desired_rate - current_rate_f32).abs() > RATE_EPS;
+            let pp_changed = desired_pp_active != current_pp;
+            if rate_changed || pp_changed {
                 desired_rate = desired_rate.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
                 current_rate_f32 = desired_rate;
-                ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-                if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON {
+                current_pp = desired_pp_raw && (desired_rate - 1.0).abs() > RATE_EPS;
+                ratio = if current_pp {
+                    f64::from(out_hz) / f64::from(in_hz)
+                } else {
+                    (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32)
+                };
+                if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= RATE_EPS {
                     resampler = None;
                     resampler_rate = f32::NAN;
+                    resampler_pp = false;
                     resample_in = None;
                     resample_out = None;
                     in_planar = None;
+                    sola = None;
                 } else {
+                    let need_rebuild = pp_changed || resampler.is_none();
                     let mut reuse_resampler = false;
-                    if let Some(existing) = &mut resampler {
+                    if !need_rebuild
+                        && let Some(existing) = &mut resampler
+                    {
                         existing.reset();
                         reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
                     }
@@ -485,8 +550,22 @@ fn music_decoder_thread_loop(
                         resampler = Some(new_resampler);
                     }
                     resampler_rate = current_rate_f32;
-                    if in_planar.is_none() {
-                        in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+                    resampler_pp = current_pp;
+                    match in_planar.as_mut() {
+                        None => {
+                            in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+                        }
+                        Some(p) if pp_changed => p.clear(),
+                        _ => {}
+                    }
+                    if current_pp {
+                        let s = sola.get_or_insert_with(|| SolaStretcher::new(in_ch, in_hz));
+                        s.set_speed_ratio(current_rate_f32);
+                        if pp_changed {
+                            s.reset();
+                        }
+                    } else {
+                        sola = None;
                     }
                 }
             }
@@ -566,7 +645,23 @@ fn music_decoder_thread_loop(
             let resample_out = resample_out
                 .as_mut()
                 .expect("resampler mode must keep output buffer");
-            in_planar.push_i16_interleaved(slice, in_ch);
+            if let Some(sola) = sola.as_mut() {
+                sola.push_interleaved_i16(slice);
+                loop {
+                    let pull_cap =
+                        PLANAR_INPUT_CAP_FRAMES.saturating_sub(in_planar.available_frames());
+                    if pull_cap == 0 {
+                        break;
+                    }
+                    // `pull` appends planar f32 directly into in_planar's backing
+                    // buffers, so the stretched audio is written once (no scratch copy).
+                    if sola.pull(&mut in_planar.channels, pull_cap.min(2048)) == 0 {
+                        break;
+                    }
+                }
+            } else {
+                in_planar.push_i16_interleaved(slice, in_ch);
+            }
             loop {
                 let need = resampler.input_frames_next();
                 if in_planar.available_frames() < need {
@@ -589,8 +684,11 @@ fn music_decoder_thread_loop(
                 if produced_frames == 0 {
                     break;
                 }
-                let music_sec_per_frame =
-                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64;
+                let music_sec_per_frame = if current_pp {
+                    f64::from(current_rate_f32) / f64::from(out_hz.max(1))
+                } else {
+                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
+                };
                 if preroll_out_frames > 0 {
                     let drop_frames = (preroll_out_frames as usize).min(produced_frames);
                     let drop_samples = drop_frames * out_ch;
@@ -636,6 +734,26 @@ fn music_decoder_thread_loop(
             let resample_out = resample_out
                 .as_mut()
                 .expect("resampler mode must keep output buffer");
+            // Drain any residual stretched output from SOLA into in_planar.
+            if let Some(sola) = sola.as_mut() {
+                // On the final pass (no loop restart coming) tell SOLA to flush
+                // its last partial window instead of holding it back for a
+                // search that will never have enough lookahead. A looping
+                // decoder keeps feeding across the seam, so it must NOT flush.
+                if !looping || stop.load(Ordering::Relaxed) {
+                    sola.finish();
+                }
+                loop {
+                    let pull_cap =
+                        PLANAR_INPUT_CAP_FRAMES.saturating_sub(in_planar.available_frames());
+                    if pull_cap == 0 {
+                        break;
+                    }
+                    if sola.pull(&mut in_planar.channels, pull_cap.min(2048)) == 0 {
+                        break;
+                    }
+                }
+            }
             if !in_planar.is_empty() {
                 let remain = in_planar.available_frames();
                 let need = resampler.input_frames_next();
@@ -655,6 +773,8 @@ fn music_decoder_thread_loop(
                         write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
                     let music_sec_per_frame = if produced_frames == 0 {
                         0.0
+                    } else if current_pp {
+                        f64::from(current_rate_f32) / f64::from(out_hz.max(1))
                     } else {
                         (remain as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
                     };
