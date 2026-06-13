@@ -75,6 +75,8 @@ path = "scripts/replaygain_bench.rs"
 
 [features]
 pipewire-audio = ["deadsync-audio-backend-native/pipewire-audio"]
+dhat-heap = ["dep:dhat"]
+dhat = ["dep:dhat"]
 
 [dependencies]
 deadsync-audio = { path = "crates/deadsync-audio" }
@@ -144,6 +146,7 @@ sys-locale = "0.3.2"
 semver = "1.0.28"
 tokio = { version = "1.52.3", features = ["rt"] }
 bitflags = "2.13.0"
+dhat = { version = "0.3.3", optional = true }
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]

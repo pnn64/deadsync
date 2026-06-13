@@ -18,7 +18,19 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+#[cfg(not(feature = "dhat-heap"))]
 #[global_allocator]
+static ALLOC: CountingAlloc = CountingAlloc::new();
+
+// When profiling allocations, DHAT must be THE global allocator. `ALLOC` stays as a
+// (non-global) static so the existing `ALLOC.begin_measurement()`/`.snapshot()` call
+// sites keep compiling; their counters just read zero in this mode (we don't print
+// the deterministic alloc block when DHAT is active).
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static DHAT_ALLOC: dhat::Alloc = dhat::Alloc;
+
+#[cfg(feature = "dhat-heap")]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
 struct CountingAlloc {
@@ -269,6 +281,12 @@ fn update_peak(slot: &AtomicU64, value: u64) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Profiles every allocation from here to program exit; writes dhat-heap.json on
+    // drop. Setup/fixture allocs land under distinct backtraces from the per-iter
+    // actor path, so the hot sites still rank by total bytes/blocks.
+    #[cfg(feature = "dhat-heap")]
+    let _dhat_profiler = dhat::Profiler::new_heap();
+
     deadsync::assets::i18n::init("en");
     let args = parse_args()?;
     if args.case_path.is_none()
