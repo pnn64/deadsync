@@ -1265,7 +1265,7 @@ fn run_device_login_session_with<S, P, F, W>(
 
     let req = DeviceLoginStartReq {
         machine_label: None,
-        client_version: Some(format!("deadsync {}", env!("CARGO_PKG_VERSION"))),
+        client_version: Some(format!("deadsync {}", deadsync_version::current())),
         theme_version: None,
     };
     let start = match start_fn(&req) {
