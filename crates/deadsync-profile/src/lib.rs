@@ -3169,6 +3169,7 @@ pub struct PlayerOptionsData {
     pub nps_graph_at_top: bool,
     pub transparent_density_graph_bg: bool,
     pub smx_fsr_display: bool,
+    pub smx_pad_input_display: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
@@ -3296,6 +3297,7 @@ fn default_player_options() -> PlayerOptionsData {
         nps_graph_at_top: false,
         transparent_density_graph_bg: false,
         smx_fsr_display: false,
+        smx_pad_input_display: false,
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
         mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay::Percent,
@@ -3733,6 +3735,10 @@ pub fn append_player_options_section(
     content.push_str(&format!(
         "SmxFsrDisplay={}\n",
         i32::from(options.smx_fsr_display)
+    ));
+    content.push_str(&format!(
+        "SmxPadInputDisplay={}\n",
+        i32::from(options.smx_pad_input_display)
     ));
     content.push_str(&format!("MiniIndicator={}\n", options.mini_indicator));
     content.push_str(&format!(
@@ -4195,6 +4201,7 @@ pub struct Profile {
     pub nps_graph_at_top: bool,
     pub transparent_density_graph_bg: bool,
     pub smx_fsr_display: bool,
+    pub smx_pad_input_display: bool,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
@@ -4364,6 +4371,7 @@ impl Default for Profile {
             nps_graph_at_top: player_options.nps_graph_at_top,
             transparent_density_graph_bg: player_options.transparent_density_graph_bg,
             smx_fsr_display: player_options.smx_fsr_display,
+            smx_pad_input_display: player_options.smx_pad_input_display,
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
             mini_indicator_subtractive_display: player_options.mini_indicator_subtractive_display,
@@ -4929,6 +4937,7 @@ impl Profile {
             nps_graph_at_top: self.nps_graph_at_top,
             transparent_density_graph_bg: self.transparent_density_graph_bg,
             smx_fsr_display: self.smx_fsr_display,
+            smx_pad_input_display: self.smx_pad_input_display,
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
             mini_indicator_subtractive_display: self.mini_indicator_subtractive_display,
@@ -5058,6 +5067,7 @@ impl Profile {
         self.nps_graph_at_top = options.nps_graph_at_top;
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.smx_fsr_display = options.smx_fsr_display;
+        self.smx_pad_input_display = options.smx_pad_input_display;
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;

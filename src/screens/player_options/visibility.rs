@@ -31,6 +31,7 @@ pub(super) struct RowVisibility {
     pub(super) show_tap_explosion_options: bool,
     pub(super) show_pad_light_brightness: bool,
     pub(super) show_smx_fsr_display: bool,
+    pub(super) show_smx_pad_input_display: bool,
 }
 
 #[inline(always)]
@@ -140,6 +141,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::SmxFsrDisplay {
         return visibility.show_smx_fsr_display;
+    }
+    if id == RowId::SmxPadInputDisplay {
+        return visibility.show_smx_pad_input_display;
     }
     true
 }
@@ -699,6 +703,7 @@ pub(super) fn row_visibility(
             cfg.smx_input && cfg.smx_panel_lights
         },
         show_smx_fsr_display: crate::config::get().smx_input,
+        show_smx_pad_input_display: crate::config::get().smx_input,
     }
 }
 
