@@ -36,6 +36,7 @@ pub enum SubRowId {
     AssistTickVolume,
     MusicVolume,
     MineSounds,
+    EvalPreviewMusic,
     GlobalOffset,
     RateModPreservesPitch,
     ReplayGain,

@@ -618,7 +618,7 @@ fn default_preview_start(song: &SongData, total_len: f64) -> f64 {
     sec_at_beat(song, i_beat)
 }
 
-fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
+pub(crate) fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
     let path = song.music_path.clone()?;
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;

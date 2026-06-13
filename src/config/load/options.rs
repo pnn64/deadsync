@@ -305,6 +305,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "MenuMusic")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.menu_music, |v| v != 0);
+    cfg.eval_preview_music = conf
+        .get("Options", "EvalPreviewMusic")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.eval_preview_music, |v| v != 0);
     cfg.custom_sounds_enabled = conf
         .get("Options", "CustomSoundsEnabled")
         .and_then(|v| v.parse::<u8>().ok())

@@ -903,6 +903,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
+        SubRowId::EvalPreviewMusic,
+        usize::from(cfg.eval_preview_music),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
+        SOUND_OPTIONS_ROWS,
         SubRowId::RateModPreservesPitch,
         usize::from(cfg.rate_mod_preserves_pitch),
     );

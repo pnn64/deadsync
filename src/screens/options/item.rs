@@ -131,6 +131,7 @@ pub enum ItemId {
     SndAssistTickVolume,
     SndMusicVolume,
     SndMineSounds,
+    SndEvalPreviewMusic,
     SndGlobalOffset,
     SndRateModPitch,
     SndReplayGain,

@@ -221,6 +221,7 @@ fn push_saved_options(
     push_line(content, "VisualDelaySeconds", cfg.visual_delay_seconds);
     push_line(content, "MasterVolume", cfg.master_volume);
     push_bool(content, "MenuMusic", cfg.menu_music);
+    push_bool(content, "EvalPreviewMusic", cfg.eval_preview_music);
     push_bool(content, "CustomSoundsEnabled", cfg.custom_sounds_enabled);
     push_bool(content, "MineHitSound", cfg.mine_hit_sound);
     push_line(content, "MusicVolume", cfg.music_volume);
