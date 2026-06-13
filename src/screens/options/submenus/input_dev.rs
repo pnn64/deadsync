@@ -298,6 +298,17 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        // Shown only when a single pad is connected (the assign/swap rows replace
+        // it when two are connected). Picks which player that lone pad is.
+        id: SubRowId::SmxSinglePadPlayer,
+        label: lookup_key("OptionsInput", "SmxSinglePadPlayer"),
+        choices: &[
+            localized_choice("OptionsInput", "SmxSinglePadPlayerP1"),
+            localized_choice("OptionsInput", "SmxSinglePadPlayerP2"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxAssignPads,
         label: lookup_key("OptionsInput", "SmxAssignPads"),
         choices: &[localized_choice("Common", "Open")],
@@ -362,6 +373,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
             "OptionsInputHelp",
             "DefaultPadConfigHelp",
         ))],
+    },
+    Item {
+        id: ItemId::InpSmxSinglePadPlayer,
+        name: lookup_key("OptionsInput", "SmxSinglePadPlayer"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxSinglePadPlayerHelp")),
+            HelpEntry::Dynamic(smx_assignment_status),
+        ],
     },
     Item {
         id: ItemId::InpSmxAssignPads,

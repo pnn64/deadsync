@@ -246,6 +246,16 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 
     sync_i18n_cache(state);
 
+    // Pads can connect, disconnect, or be swapped while this screen is open, so keep
+    // the single-pad Pad Player picker tracking the live SDK slot (slot 1 = P2)
+    // rather than only the value captured at screen entry.
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxSinglePadPlayer,
+        usize::from(deadsync_smx::get_info(1).connected),
+    );
+
     let mut pending_action: Option<ScreenAction> = None;
     // ------------------------- local submenu fade ------------------------- //
     match state.submenu_transition {

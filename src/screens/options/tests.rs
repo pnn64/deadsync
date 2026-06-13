@@ -128,6 +128,10 @@ fn smx_config_items_match_rows() {
             SubRowId::SmxDefaultPadConfig,
             ItemId::InpSmxDefaultPadConfig,
         ),
+        (
+            SubRowId::SmxSinglePadPlayer,
+            ItemId::InpSmxSinglePadPlayer,
+        ),
         (SubRowId::SmxAssignPads, ItemId::InpSmxAssignPads),
         (SubRowId::SmxSwapPads, ItemId::InpSmxSwapPads),
         (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),

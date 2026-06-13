@@ -256,6 +256,22 @@ pub(super) fn submenu_visible_row_indices(
                 }
             })
             .collect(),
+        SubmenuKind::SmxConfig => {
+            // Pad-assignment rows depend on how many StepManiaX pads are connected:
+            // one pad gets a simple P1/P2 picker; two pads get the assign + swap
+            // rows (which can separate same-jumper pads). With none connected, show
+            // neither.
+            let pad_count = usize::from(deadsync_smx::get_info(0).connected)
+                + usize::from(deadsync_smx::get_info(1).connected);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| match row.id {
+                    SubRowId::SmxSinglePadPlayer if pad_count != 1 => None,
+                    SubRowId::SmxAssignPads | SubRowId::SmxSwapPads if pad_count != 2 => None,
+                    _ => Some(idx),
+                })
+                .collect()
+        }
         _ => (0..rows.len()).collect(),
     }
 }

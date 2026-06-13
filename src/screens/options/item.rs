@@ -69,6 +69,7 @@ pub enum ItemId {
     InpSmxPanelLights,
     InpSmxUsbPolling,
     InpSmxDefaultPadConfig,
+    InpSmxSinglePadPlayer,
     InpSmxAssignPads,
     InpSmxSwapPads,
     InpMenuNavigation,
