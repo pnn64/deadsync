@@ -1238,6 +1238,7 @@ dependencies = [
  "glam",
  "image",
  "log",
+ "rustc-hash 2.1.2",
  "smallvec",
  "twox-hash",
 ]
