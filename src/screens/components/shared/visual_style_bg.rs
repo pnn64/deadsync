@@ -134,7 +134,7 @@ impl State {
 }
 
 fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32; 4]) {
-    out.push(act!(sprite(visual_styles::shared_background_texture_key()):
+    out.push(act!(sprite_static(visual_styles::shared_background_texture_key()):
         xy(x, y):
         zoom(SHARED_BG_ZOOM):
         customtexturerect(uv[0], uv[1], uv[2], uv[3]):

@@ -49,7 +49,7 @@ pub fn fixture() -> PaneStatsBenchFixture {
     }
 }
 
-fn bench_score_info() -> ScoreInfo {
+pub fn bench_score_info() -> ScoreInfo {
     let song = Arc::new(bench_song());
     let chart = Arc::new(song.charts[0].clone());
     let judgment_counts = [28_904, 2_318, 481, 53, 7, 1];

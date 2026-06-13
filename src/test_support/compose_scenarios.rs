@@ -1,6 +1,7 @@
 use crate::assets;
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
+use crate::test_support::evaluation_bench;
 use crate::test_support::gameplay_bench;
 use crate::test_support::gameplay_stats_bench;
 use crate::test_support::gameplay_stats_double_bench;
@@ -22,9 +23,11 @@ use deadsync_render::{BlendMode, MeshVertex, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 28] = [
+const SCENARIO_NAMES: [&str; 30] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
+    evaluation_bench::SCENARIO_NAME,
+    evaluation_bench::SCENARIO_NAME_VERSUS,
     gameplay_bench::SCENARIO_NAME,
     gameplay_stats_bench::SCENARIO_NAME,
     gameplay_stats_double_bench::SCENARIO_NAME,
@@ -105,6 +108,8 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         density_graph_life_bench::SCENARIO_NAME => {
             Some(density_graph_life_scenario(metrics, fonts))
         }
+        evaluation_bench::SCENARIO_NAME => Some(evaluation_scenario(metrics, fonts)),
+        evaluation_bench::SCENARIO_NAME_VERSUS => Some(evaluation_versus_scenario(metrics, fonts)),
         gameplay_bench::SCENARIO_NAME => Some(gameplay_scenario(metrics, fonts)),
         gameplay_stats_bench::SCENARIO_NAME => Some(gameplay_stats_scenario(metrics, fonts)),
         gameplay_stats_double_bench::SCENARIO_NAME => {
@@ -489,6 +494,33 @@ fn pane_stats_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> 
         name: pane_stats_bench::SCENARIO_NAME,
         actors: fixture.build(),
         clear_color: [0.03, 0.04, 0.05, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.41,
+    }
+}
+
+fn evaluation_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = evaluation_bench::fixture();
+    ComposeScenario {
+        name: evaluation_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.41,
+    }
+}
+
+fn evaluation_versus_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let fixture = evaluation_bench::fixture_versus();
+    ComposeScenario {
+        name: evaluation_bench::SCENARIO_NAME_VERSUS,
+        actors: fixture.build(),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
         metrics,
         fonts,
         total_elapsed: 0.41,

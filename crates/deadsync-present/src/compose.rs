@@ -7,9 +7,8 @@ use smallvec::SmallVec;
 use space::Metrics;
 use std::cell::OnceCell;
 use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
-use twox_hash::XxHash64;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -486,7 +485,7 @@ struct SharedLayoutEntry {
     last_used: u64,
 }
 
-type TextLayoutHasher = BuildHasherDefault<XxHash64>;
+type TextLayoutHasher = rustc_hash::FxBuildHasher;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
 
@@ -528,7 +527,7 @@ impl TextureLookupCache {
 
     #[inline(always)]
     fn key_fingerprint(key: &str) -> u64 {
-        let mut hasher = XxHash64::default();
+        let mut hasher = rustc_hash::FxHasher::default();
         key.hash(&mut hasher);
         hasher.finish()
     }
@@ -948,7 +947,7 @@ fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) 
 
 #[inline(always)]
 fn text_layout_mesh_seed(key: TextLayoutKey, text: &str) -> u64 {
-    let mut hasher = XxHash64::default();
+    let mut hasher = rustc_hash::FxHasher::default();
     key.hash(&mut hasher);
     text.hash(&mut hasher);
     let seed = hasher.finish();
@@ -966,7 +965,7 @@ fn text_batch_cache_key(
     stroke: bool,
     align: actors::TextAlign,
 ) -> u64 {
-    let mut hasher = XxHash64::default();
+    let mut hasher = rustc_hash::FxHasher::default();
     layout_seed.hash(&mut hasher);
     (texture_key as *const () as usize).hash(&mut hasher);
     stroke.hash(&mut hasher);

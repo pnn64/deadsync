@@ -5,6 +5,7 @@ use deadsync::test_support::{
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
     gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
     pane_stats_bench, player_options_bench, visual_style_bg_bench,
+    evaluation_bench,
 };
 use deadsync_present::actors::Actor;
 use deadsync_present::compose;
@@ -17,7 +18,19 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+#[cfg(not(feature = "dhat-heap"))]
 #[global_allocator]
+static ALLOC: CountingAlloc = CountingAlloc::new();
+
+// When profiling allocations, DHAT must be THE global allocator. `ALLOC` stays as a
+// (non-global) static so the existing `ALLOC.begin_measurement()`/`.snapshot()` call
+// sites keep compiling; their counters just read zero in this mode (we don't print
+// the deterministic alloc block when DHAT is active).
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static DHAT_ALLOC: dhat::Alloc = dhat::Alloc;
+
+#[cfg(feature = "dhat-heap")]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
 struct CountingAlloc {
@@ -268,6 +281,12 @@ fn update_peak(slot: &AtomicU64, value: u64) {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Profiles every allocation from here to program exit; writes dhat-heap.json on
+    // drop. Setup/fixture allocs land under distinct backtraces from the per-iter
+    // actor path, so the hot sites still rank by total bytes/blocks.
+    #[cfg(feature = "dhat-heap")]
+    let _dhat_profiler = dhat::Profiler::new_heap();
+
     deadsync::assets::i18n::init("en");
     let args = parse_args()?;
     if args.case_path.is_none()
@@ -526,6 +545,34 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
+            evaluation_bench::SCENARIO_NAME => {
+                let fixture = evaluation_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
+            evaluation_bench::SCENARIO_NAME_VERSUS => {
+                let fixture = evaluation_bench::fixture_versus();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
             player_options_bench::SCENARIO_NAME => {
                 let fixture = player_options_bench::fixture();
                 benchmark_actor_builder(
@@ -540,7 +587,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
-            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, visual-style-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
+            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, evaluation, evaluation-versus, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, visual-style-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
         },
         Phase::Compose => benchmark_compose(
             scenario.name,

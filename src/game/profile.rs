@@ -1228,6 +1228,12 @@ pub fn get_for_side(side: PlayerSide) -> Profile {
     lock_profiles()[side_ix(side)].clone()
 }
 
+pub fn footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
+    let profiles = lock_profiles();
+    let p = &profiles[side_ix(side)];
+    (p.avatar_texture_key.clone(), p.display_name.clone())
+}
+
 pub fn groovestats_api_key_for_side(side: PlayerSide) -> String {
     lock_profiles()[side_ix(side)]
         .groovestats_api_key

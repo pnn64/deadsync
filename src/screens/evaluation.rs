@@ -966,7 +966,7 @@ fn course_graph_stripe_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, CourseGraphStage, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
+        CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
         compute_column_judgments, course_graph_stage_spans, course_graph_stripe_actors,
         eval_grade_for_result, eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate,
         stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
@@ -979,6 +979,29 @@ mod tests {
     use deadsync_rules::note::Note;
     use deadsync_score as score_data;
     use std::sync::Arc;
+
+    #[test]
+    fn nice69_buf_matches_string_contains_semantics() {
+        // The allocation-free Nice69Buf must agree with the old
+        // `format!(...).contains("69")` / `to_string().contains("69")` logic.
+        let mut buf = Nice69Buf::new();
+
+        // Integer decimal renderings.
+        assert!(buf.has_display(69u32));
+        assert!(buf.has_display(169u32));
+        assert!(buf.has_display(690u32));
+        assert!(buf.has_display(1692u32));
+        assert!(!buf.has_display(96u32)); // reversed digits must NOT match
+        assert!(!buf.has_display(609u32)); // dot/zero break adjacency
+        assert!(!buf.has_display(0u32));
+        assert!(buf.has_display(-69i32)); // sign does not affect the "69" run
+
+        // Two-decimal float rendering, mirroring `{:.2}`.
+        assert!(buf.has_fixed2(69.00)); // "69.00"
+        assert!(buf.has_fixed2(12.69)); // ".69" fractional
+        assert!(!buf.has_fixed2(6.90)); // "6.90" — dot breaks 6|9 adjacency
+        assert!(!buf.has_fixed2(12.34));
+    }
 
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
         CourseGraphStage {
@@ -1929,6 +1952,37 @@ fn eval_graph_shift(
     cycle[next_idx]
 }
 
+/// Cache key for a memoized per-player graph subtree (density + scatter + life).
+/// Captures every input the graph children depend on; when unchanged across frames
+/// the cached `Arc<[Actor]>` is cloned instead of rebuilt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct GraphCacheKey {
+    graph: EvalGraphPane,
+    versus: bool,
+    shade: bool,
+    panel_alpha_bits: u32,
+    tex_key_hash: u64,
+}
+
+/// Captures every input the clock-free center-column chrome (title/banner +
+/// song-features) frames depend on; unchanged ⇒ the cached `Arc<[Actor]>` is cloned.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ChromeCacheKey {
+    active_color_index: i32,
+    translated_titles: bool,
+    header_alpha_bits: u32,
+}
+
+#[inline]
+fn fnv1a_str(s: &str) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    for b in s.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -1970,6 +2024,15 @@ pub struct State {
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     test_input_state: test_input::State,
+    /// Memoized per-player graph subtree (cf. `GraphCacheKey`). Interior mutability so
+    /// it can be populated during `get_actors(&State, …)`.
+    graph_cache: [RefCell<Option<(GraphCacheKey, Arc<[Actor]>)>>; MAX_PLAYERS],
+    /// Memoized center-column title/banner frame (cf. `ChromeCacheKey`). Single
+    /// instance (same in single + versus). Interior mutability so it can be populated
+    /// during `get_actors(&State, …)`.
+    chrome_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
+    /// Memoized center-column song-features frame (cf. `ChromeCacheKey`).
+    song_features_cache: RefCell<Option<(ChromeCacheKey, Arc<[Actor]>)>>,
 }
 
 impl Clone for State {
@@ -2015,6 +2078,12 @@ impl Clone for State {
             menu_lr_undo: self.menu_lr_undo,
             favorite_code: self.favorite_code.clone(),
             test_input_state: self.test_input_state.clone(),
+            // Cloned State (e.g. stage summary pages) starts with an empty cache; it
+            // is repopulated lazily on first draw. Sharing Arcs across clones is safe
+            // but pointless, and an empty cache avoids any stale-key risk.
+            graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+            chrome_cache: RefCell::new(None),
+            song_features_cache: RefCell::new(None),
         }
     }
 }
@@ -2608,6 +2677,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+        chrome_cache: RefCell::new(None),
+        song_features_cache: RefCell::new(None),
     }
 }
 
@@ -2760,6 +2832,9 @@ pub fn init_from_score_info(
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
         test_input_state: test_input::State::default(),
+        graph_cache: std::array::from_fn(|_| RefCell::new(None)),
+        chrome_cache: RefCell::new(None),
+        song_features_cache: RefCell::new(None),
     }
 }
 
@@ -2839,15 +2914,61 @@ fn sync_submit_record_sfx(state: &mut State) {
 /// (e.g. `98.69`), every tap-note judgment count (Fantastic..Miss), the radar
 /// actual + possible counts for Holds / Rolls / Mines / Hands, the chart
 /// difficulty meter, and the song title.
+/// Stack-only check for whether a value's decimal rendering contains "69" — the
+/// Simply Love "Nice" easter egg. Replaces per-frame `format!`/`to_string` heap
+/// allocations (this predicate runs every frame in both `get_actors` and `update`).
+struct Nice69Buf {
+    bytes: [u8; 48],
+    len: usize,
+}
+
+impl Nice69Buf {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 48],
+            len: 0,
+        }
+    }
+    fn reset(&mut self) {
+        self.len = 0;
+    }
+    fn contains_69(&self) -> bool {
+        self.bytes[..self.len].windows(2).any(|w| w == b"69")
+    }
+    fn has_display<T: std::fmt::Display>(&mut self, value: T) -> bool {
+        use std::fmt::Write as _;
+        self.reset();
+        let _ = write!(self, "{value}");
+        self.contains_69()
+    }
+    fn has_fixed2(&mut self, value: f64) -> bool {
+        use std::fmt::Write as _;
+        self.reset();
+        let _ = write!(self, "{value:.2}");
+        self.contains_69()
+    }
+}
+
+impl std::fmt::Write for Nice69Buf {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        let b = s.as_bytes();
+        let end = self.len + b.len();
+        if end > self.bytes.len() {
+            return Err(std::fmt::Error);
+        }
+        self.bytes[self.len..end].copy_from_slice(b);
+        self.len = end;
+        Ok(())
+    }
+}
+
 fn score_info_is_nice(si: &ScoreInfo) -> bool {
-    if format!("{:.2}", si.score_percent * 100.0).contains("69") {
+    let mut buf = Nice69Buf::new();
+
+    if buf.has_fixed2(si.score_percent * 100.0) {
         return true;
     }
-    if si
-        .judgment_counts
-        .iter()
-        .any(|count| count.to_string().contains("69"))
-    {
+    if si.judgment_counts.iter().any(|count| buf.has_display(count)) {
         return true;
     }
     let radar_values = [
@@ -2861,16 +2982,13 @@ fn score_info_is_nice(si: &ScoreInfo) -> bool {
         si.hands_achieved,
         si.hands_total,
     ];
-    if radar_values.iter().any(|v| v.to_string().contains("69")) {
+    if radar_values.iter().any(|value| buf.has_display(value)) {
         return true;
     }
-    if si.chart.meter.to_string().contains("69") {
+    if buf.has_display(si.chart.meter) {
         return true;
     }
-    if si.song.title.contains("69") {
-        return true;
-    }
-    false
+    si.song.title.contains("69")
 }
 
 /// Fires a one-shot "Nice" SFX (Simply Love parity) the first time the
@@ -3864,84 +3982,117 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
     // --- Title, Banner, and Song Features (Center Column) ---
     {
+        // Both center-column frames are clock-free, so cache their built children and
+        // emit `SharedFrame` (neutral tint/blend ⇒ identical compose to `Frame`),
+        // cloning the cached `Arc` on subsequent frames instead of rebuilding the
+        // leaf actors and reallocating the `banner_key` / `full_title` Strings.
+        let chrome_key = ChromeCacheKey {
+            active_color_index: state.active_color_index,
+            translated_titles: cfg.translated_titles,
+            header_alpha_bits: sl_header_alpha.to_bits(),
+        };
+
         // --- TitleAndBanner Group ---
-        let banner_key = score_info
-            .song
-            .banner_path
-            .as_ref()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| {
-                BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize].to_string()
-            });
-
-        let full_title = score_info.song.display_full_title(cfg.translated_titles);
-
-        let title_and_banner_frame = Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [screen_center_x(), 46.0],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: vec![
+        let title_hit = {
+            let slot = state.chrome_cache.borrow();
+            slot.as_ref().is_some_and(|(k, _)| *k == chrome_key)
+        };
+        let title_children: Arc<[Actor]> = if title_hit {
+            Arc::clone(&state.chrome_cache.borrow().as_ref().unwrap().1)
+        } else {
+            let banner_key = score_info
+                .song
+                .banner_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|| {
+                    BANNER_FALLBACK_KEYS[state.active_color_index.rem_euclid(12) as usize]
+                        .to_string()
+                });
+            let full_title = score_info.song.display_full_title(cfg.translated_titles);
+            let children: Arc<[Actor]> = Arc::from(vec![
                 shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
-            ],
-            background: None,
-            z: 50,
+            ]);
+            *state.chrome_cache.borrow_mut() = Some((chrome_key, Arc::clone(&children)));
+            children
         };
-        actors.push(title_and_banner_frame);
+        actors.push(Actor::SharedFrame {
+            align: [0.5, 0.5],
+            offset: [screen_center_x(), 46.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            z: 50,
+            background: None,
+            children: title_children,
+            tint: [1.0; 4],
+            blend: None,
+        });
 
         // --- SongFeatures Group ---
-        let (bpm_lo, bpm_hi) = score_info
-            .song
-            .chart_display_bpm_range(Some(&score_info.chart))
-            .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
-        let bpm_text = if matches!(
-            score_info.chart.display_bpm,
-            Some(deadsync_chart::ChartDisplayBpm::Random)
-        ) {
-            Arc::<str>::from("??? bpm")
+        let sf_hit = {
+            let slot = state.song_features_cache.borrow();
+            slot.as_ref().is_some_and(|(k, _)| *k == chrome_key)
+        };
+        let song_features_children: Arc<[Actor]> = if sf_hit {
+            Arc::clone(&state.song_features_cache.borrow().as_ref().unwrap().1)
         } else {
-            cached_bpm_text(bpm_lo, bpm_hi, score_info.music_rate)
-        };
-
-        let length_text = {
-            // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
-            // for this display, not the chart's last note time.
-            let base_seconds = if score_info.song.music_length_seconds.is_finite()
-                && score_info.song.music_length_seconds > 0.0
-            {
-                score_info.song.music_length_seconds
+            let (bpm_lo, bpm_hi) = score_info
+                .song
+                .chart_display_bpm_range(Some(&score_info.chart))
+                .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
+            let bpm_text = if matches!(
+                score_info.chart.display_bpm,
+                Some(deadsync_chart::ChartDisplayBpm::Random)
+            ) {
+                Arc::<str>::from("??? bpm")
             } else {
-                score_info.song.total_length_seconds.max(0) as f32
+                cached_bpm_text(bpm_lo, bpm_hi, score_info.music_rate)
             };
-            let rate = if score_info.music_rate.is_finite() && score_info.music_rate > 0.0 {
-                score_info.music_rate
-            } else {
-                1.0
-            };
-            let adjusted = base_seconds / rate;
-            let seconds = adjusted.round() as i32;
-            if seconds < 0 {
-                Arc::<str>::from("")
-            } else {
-                cached_song_length_text(seconds)
-            }
-        };
 
-        let song_features_frame = Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [screen_center_x(), 175.0],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: vec![
+            let length_text = {
+                // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
+                // for this display, not the chart's last note time.
+                let base_seconds = if score_info.song.music_length_seconds.is_finite()
+                    && score_info.song.music_length_seconds > 0.0
+                {
+                    score_info.song.music_length_seconds
+                } else {
+                    score_info.song.total_length_seconds.max(0) as f32
+                };
+                let rate = if score_info.music_rate.is_finite() && score_info.music_rate > 0.0 {
+                    score_info.music_rate
+                } else {
+                    1.0
+                };
+                let adjusted = base_seconds / rate;
+                let seconds = adjusted.round() as i32;
+                if seconds < 0 {
+                    Arc::<str>::from("")
+                } else {
+                    cached_song_length_text(seconds)
+                }
+            };
+
+            let children: Arc<[Actor]> = Arc::from(vec![
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 16.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, sl_header_alpha): z(0) ),
                 act!(text: font("miso"): settext(score_info.song.artist.clone()): align(0.0, 0.5): xy(-145.0, 0.0): zoom(0.6): maxwidth(418.0 / 3.5): z(1) ),
                 act!(text: font("miso"): settext(bpm_text): align(0.5, 0.5): xy(0.0, 0.0): zoom(0.6): maxwidth(418.0 / 0.875): z(1) ),
                 act!(text: font("miso"): settext(length_text): align(1.0, 0.5): xy(145.0, 0.0): zoom(0.6): z(1) ),
-            ],
-            background: None,
-            z: 50,
+            ]);
+            *state.song_features_cache.borrow_mut() = Some((chrome_key, Arc::clone(&children)));
+            children
         };
-        actors.push(song_features_frame);
+        actors.push(Actor::SharedFrame {
+            align: [0.5, 0.5],
+            offset: [screen_center_x(), 175.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            z: 50,
+            background: None,
+            children: song_features_children,
+            tint: [1.0; 4],
+            blend: None,
+        });
     }
 
     // --- Upper Content (Simply Love PerPlayer/Upper) ---
@@ -4656,33 +4807,46 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 1
             };
             let graph_mode = state.active_graph[graph_controller_idx];
-            let density_mesh = state.density_graph_mesh[player_idx].as_ref();
-            let scatter_mesh = match graph_mode {
-                EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
-                EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
-                EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
-                EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
-                EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+            let shade = crate::config::get().shade_scatterplot_judgments;
+            let graph_key = GraphCacheKey {
+                graph: graph_mode,
+                versus: play_style == profile_data::PlayStyle::Versus,
+                shade,
+                panel_alpha_bits: sl_panel_alpha.to_bits(),
+                tex_key_hash: fnv1a_str(&state.density_graph_texture_key),
             };
-            let scatter_bg_mesh = if crate::config::get().shade_scatterplot_judgments {
-                match graph_mode {
-                    EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
-                    EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
-                    EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
-                    EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
-                }
+            let cache_hit = {
+                let slot = state.graph_cache[player_idx].borrow();
+                slot.as_ref().is_some_and(|(k, _)| *k == graph_key)
+            };
+            // The graph subtree (density + scatter + life + baked-tween markers) reads
+            // no per-frame clock, so it is fully determined by `graph_key`. Memoize the
+            // built `Arc<[Actor]>` and clone it on subsequent frames instead of
+            // rebuilding hundreds of leaf actors.
+            let graph_children: Arc<[Actor]> = if cache_hit {
+                Arc::clone(&state.graph_cache[player_idx].borrow().as_ref().unwrap().1)
             } else {
-                None
-            };
-            let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
+                let density_mesh = state.density_graph_mesh[player_idx].as_ref();
+                let scatter_mesh = match graph_mode {
+                    EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
+                    EvalGraphPane::Ex => state.scatter_mesh_ex[player_idx].as_ref(),
+                    EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
+                    EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
+                    EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+                };
+                let scatter_bg_mesh = if shade {
+                    match graph_mode {
+                        EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
+                        EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
+                        EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
+                        EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
+                    }
+                } else {
+                    None
+                };
+                let show_feet_overlay = graph_mode == EvalGraphPane::Foot;
 
-            let graph_frame = Actor::Frame {
-                align: [0.5, 0.0],
-                offset: [frame_center_x, frame_center_y],
-                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
-                z: 101,
-                background: None,
-                children: vec![
+                let graph_children_vec: Vec<Actor> = vec![
                     act!(quad:
                         align(0.0, 0.0):
                         xy(0.0, 0.0):
@@ -4787,7 +4951,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                         }
                     },
                     {
-                        let mut life_children: Vec<Actor> = Vec::new();
+                        // Reserve the worst-case child count (≤2 quads per life-history
+                        // change point) so the segment quads never trigger reallocations.
+                        let mut life_children: Vec<Actor> =
+                            Vec::with_capacity(si.life_history.len() * 2 + 16);
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
                         let dur = (last - first).max(0.001_f32);
@@ -5000,7 +5167,21 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             children: life_children,
                         }
                     },
-                ],
+                ];
+                let arc: Arc<[Actor]> = Arc::from(graph_children_vec);
+                *state.graph_cache[player_idx].borrow_mut() =
+                    Some((graph_key, Arc::clone(&arc)));
+                arc
+            };
+            let graph_frame = Actor::SharedFrame {
+                align: [0.5, 0.0],
+                offset: [frame_center_x, frame_center_y],
+                size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
+                z: 101,
+                background: None,
+                children: graph_children,
+                tint: [1.0; 4],
+                blend: None,
             };
             actors.push(graph_frame);
         }
@@ -5248,14 +5429,14 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
 
-    let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
+    let (p1_avatar_key, p1_display_name) =
+        profile::footer_fields_for_side(profile_data::PlayerSide::P1);
+    let (p2_avatar_key, p2_display_name) =
+        profile::footer_fields_for_side(profile_data::PlayerSide::P2);
+    let p1_avatar = p1_avatar_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
+    let p2_avatar = p2_avatar_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
@@ -5271,7 +5452,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             Some(if p1_guest {
                 insert_card.as_ref()
             } else {
-                p1_profile.display_name.as_str()
+                p1_display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
@@ -5283,7 +5464,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             Some(if p2_guest {
                 insert_card.as_ref()
             } else {
-                p2_profile.display_name.as_str()
+                p2_display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
