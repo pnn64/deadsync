@@ -3,6 +3,7 @@ use crate::screens::select_music::MusicWheelEntry;
 use deadsync_chart::SongData;
 use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
 use deadsync_present::actors::Actor;
+use deadsync_score::{CachedScore, Grade};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -113,9 +114,12 @@ pub fn fixture() -> MusicWheelBenchFixture {
 }
 
 /// Feature-rich fixture that exercises the side-gated render paths (per-side
-/// chart lookups, grade/lamp badges, ITL rank + wheel overlays, song-select BG
-/// art). Joins P1 in Single style so those blocks actually execute, and turns
-/// on every per-slot feature so the relevant per-frame work is measured.
+/// chart lookups, grade/lamp badges, ITL rank + wheel overlays, favorites,
+/// ITL-unlock lock icons, song-select BG art). Joins P1 in Single style so
+/// those blocks actually execute, and turns on every per-slot feature so the
+/// relevant per-frame work is measured. Seeds local + GrooveStats grades,
+/// favorites, ITL self-scores/ranks, and an "ITL Online <year> Unlocks" pack
+/// so the grade/lamp, favorites, and lock-icon paths all render real actors.
 pub fn loaded_fixture() -> MusicWheelBenchFixture {
     use deadsync_profile::{PlayStyle, PlayerSide};
 
@@ -128,11 +132,21 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         BENCH_ITL_API_KEY,
         "BenchPlayer",
     );
+    let profile_id = crate::game::profile::active_local_profile_id_for_side(PlayerSide::P1)
+        .unwrap_or_default();
 
-    let mut entries = Vec::with_capacity(36);
-    let mut song_text_color_overrides = HashMap::with_capacity(10);
+    let mut entries = Vec::with_capacity(48);
+    let mut song_text_color_overrides = HashMap::with_capacity(12);
     let mut song_has_edit_ptrs = HashSet::with_capacity(12);
-    let pack_names = ["Stamina Lab", "Tech Alley", "Groove Works", "Night Shift"];
+    // The ITL-unlock pack is placed first so its songs fall inside the visible
+    // wheel window around the selected index, exercising the lock-icon path.
+    let pack_names = [
+        "ITL Online 2026 Unlocks",
+        "Stamina Lab",
+        "Tech Alley",
+        "Groove Works",
+        "Night Shift",
+    ];
 
     for (pack_idx, pack_name) in pack_names.iter().enumerate() {
         entries.push(MusicWheelEntry::PackHeader {
@@ -146,7 +160,7 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         });
 
         for song_idx in 0..7 {
-            let song = bench_song_loaded(pack_idx, song_idx);
+            let song = bench_song_loaded(pack_name, pack_idx, song_idx);
             let song_ptr = Arc::as_ptr(&song) as usize;
             if song_idx % 2 == 0 {
                 song_text_color_overrides
@@ -158,10 +172,26 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
             }) {
                 song_has_edit_ptrs.insert(song_ptr);
             }
-            // Seed an ITL self-score + tournament rank for every chart hash so
-            // that whichever chart the wheel resolves per slot renders the ITL
-            // rank (Header font) and wheel-score (Numbers font) text actors.
             for (chart_idx, chart) in song.charts.iter().enumerate() {
+                let seed = pack_idx * 37 + song_idx * 5 + chart_idx;
+                // Seed local + GrooveStats grades/lamps so the per-slot grade
+                // badge + lamp quad actors render (and the merge in
+                // get_cached_score_for_side picks a real entry).
+                crate::game::scores::seed_session_local_itg_score(
+                    &profile_id,
+                    chart.short_hash.as_str(),
+                    bench_cached_score(seed),
+                );
+                if chart_idx % 2 == 1 {
+                    crate::game::scores::seed_session_gs_score(
+                        &profile_id,
+                        chart.short_hash.as_str(),
+                        bench_cached_score(seed + 3),
+                    );
+                }
+                // Seed an ITL self-score + tournament rank for every chart hash
+                // so whichever chart the wheel resolves per slot renders the ITL
+                // rank (Header font) and wheel-score (Numbers font) text actors.
                 let ex_hundredths = 8800 + ((song_idx * 5 + chart_idx) as u32 * 53) % 1200;
                 let rank = 1 + ((pack_idx * 7 + song_idx) as u32 * 11 + chart_idx as u32) % 750;
                 crate::game::scores::seed_session_online_itl_self_score(
@@ -174,10 +204,28 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                     chart.short_hash.as_str(),
                     rank,
                 );
+                // Favorite roughly half the songs (P1) so the heart icon path
+                // runs with both hits and misses.
+                if song_idx % 2 == 0 {
+                    crate::game::profile::seed_session_favorite(
+                        PlayerSide::P1,
+                        chart.short_hash.as_str(),
+                    );
+                }
             }
             entries.push(MusicWheelEntry::Song(song));
         }
     }
+
+    // Mark a subset of the ITL-unlock pack's song folders as unlocked so the
+    // lock-icon path exercises both the locked (icon emitted) and unlocked
+    // (skipped) branches.
+    let unlock_song_dirs: Vec<String> = (0..7)
+        .filter(|song_idx| song_idx % 3 == 0)
+        .map(|song_idx| song_base(0, song_idx))
+        .collect();
+    let unlock_refs: Vec<&str> = unlock_song_dirs.iter().map(String::as_str).collect();
+    crate::game::scores::seed_session_itl_unlock_folders(&profile_id, &unlock_refs);
 
     MusicWheelBenchFixture {
         entries,
@@ -193,6 +241,37 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         itl_rank_mode: crate::config::SelectMusicItlRankMode::Chart,
         itl_wheel_mode: crate::config::SelectMusicItlWheelMode::PointsAndScore,
         song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Banner,
+    }
+}
+
+/// Deterministic per-chart cached score with varied grade/lamp/judge fields so
+/// the grade-badge and lamp-quad render branches are all exercised.
+fn bench_cached_score(seed: usize) -> CachedScore {
+    let grade = match seed % 6 {
+        0 => Grade::Quint,
+        1 => Grade::Tier01,
+        2 => Grade::Tier02,
+        3 => Grade::Tier04,
+        4 => Grade::Tier07,
+        _ => Grade::Tier11,
+    };
+    let lamp_index = match seed % 5 {
+        0 => Some(0u8),
+        1 => Some(2u8),
+        2 => Some(4u8),
+        3 => Some(7u8),
+        _ => None,
+    };
+    let lamp_judge_count = match seed % 4 {
+        0 => Some(1u8),
+        1 => Some(6u8),
+        _ => None,
+    };
+    CachedScore {
+        grade,
+        score_percent: 0.50 + (seed % 50) as f64 / 100.0,
+        lamp_index,
+        lamp_judge_count,
     }
 }
 
@@ -249,18 +328,25 @@ fn bench_charts(base: &str, has_edit: bool) -> Vec<ChartData> {
     charts
 }
 
-fn bench_song_loaded(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
+fn song_base(pack_idx: usize, song_idx: usize) -> String {
+    format!("P{}-{:02}", pack_idx + 1, song_idx + 1)
+}
+
+fn bench_song_loaded(pack_name: &str, pack_idx: usize, song_idx: usize) -> Arc<SongData> {
     let has_subtitle = !song_idx.is_multiple_of(3);
     let has_edit = song_idx.is_multiple_of(3);
-    let base = format!("P{}-{:02}", pack_idx + 1, song_idx + 1);
+    let base = song_base(pack_idx, song_idx);
     let title = format!("Benchmark {base} Velocity");
     let subtitle = if has_subtitle {
         format!("Phase {}", (song_idx % 4) + 1)
     } else {
         String::new()
     };
+    // Three-level path (`songs/<pack>/<song>/<file>.ssc`) so that
+    // `song_pack_and_dir_name` resolves the real pack + song folder, letting the
+    // ITL-unlock lock-icon path activate for the unlock pack.
     Arc::new(SongData {
-        simfile_path: PathBuf::from(format!("songs/Bench/{base}.ssc")),
+        simfile_path: PathBuf::from(format!("songs/{pack_name}/{base}/{base}.ssc")),
         title,
         subtitle,
         translit_title: String::new(),

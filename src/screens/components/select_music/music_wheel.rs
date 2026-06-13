@@ -575,14 +575,71 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     let itl_lookups_active = !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None)
         || !matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off);
-    let itl_ctx_p1 = (itl_lookups_active && p1_joined)
-        .then(|| scores::ItlWheelSideContext::for_side(profile_data::PlayerSide::P1));
-    let itl_ctx_p2 = (itl_lookups_active && p2_joined)
-        .then(|| scores::ItlWheelSideContext::for_side(profile_data::PlayerSide::P2));
+    let score_lookups_active = p.show_music_wheel_grades || p.show_music_wheel_lamps;
+
+    let local_profile_p1: std::cell::OnceCell<Option<Arc<str>>> = std::cell::OnceCell::new();
+    let local_profile_p2: std::cell::OnceCell<Option<Arc<str>>> = std::cell::OnceCell::new();
+    let local_profile_id = |side: profile_data::PlayerSide| -> Option<Arc<str>> {
+        let (cell, joined) = match side {
+            profile_data::PlayerSide::P1 => (&local_profile_p1, p1_joined),
+            profile_data::PlayerSide::P2 => (&local_profile_p2, p2_joined),
+        };
+        cell.get_or_init(|| {
+            joined
+                .then(|| profile::active_local_profile_id_for_side(side))
+                .flatten()
+                .map(Arc::from)
+        })
+        .clone()
+    };
+
+    let itl_ctx_p1 = (itl_lookups_active && p1_joined).then(|| {
+        scores::ItlWheelSideContext::for_side(
+            profile_data::PlayerSide::P1,
+            local_profile_id(profile_data::PlayerSide::P1),
+        )
+    });
+    let itl_ctx_p2 = (itl_lookups_active && p2_joined).then(|| {
+        scores::ItlWheelSideContext::for_side(
+            profile_data::PlayerSide::P2,
+            local_profile_id(profile_data::PlayerSide::P2),
+        )
+    });
     let itl_ctx_for_side = |side: profile_data::PlayerSide| match side {
         profile_data::PlayerSide::P1 => itl_ctx_p1.as_ref(),
         profile_data::PlayerSide::P2 => itl_ctx_p2.as_ref(),
     };
+
+    let score_profile_p1: Option<Arc<str>> = score_lookups_active
+        .then(|| local_profile_id(profile_data::PlayerSide::P1))
+        .flatten();
+    let score_profile_p2: Option<Arc<str>> = score_lookups_active
+        .then(|| local_profile_id(profile_data::PlayerSide::P2))
+        .flatten();
+    let score_profile_for_side = |side: profile_data::PlayerSide| match side {
+        profile_data::PlayerSide::P1 => score_profile_p1.as_deref(),
+        profile_data::PlayerSide::P2 => score_profile_p2.as_deref(),
+    };
+
+    if let Some(pid) = score_profile_p1.as_deref() {
+        scores::ensure_score_caches_loaded(pid);
+    }
+    if let Some(pid) = score_profile_p2.as_deref() {
+        scores::ensure_score_caches_loaded(pid);
+    }
+    let held_score_caches = (score_lookups_active && (score_profile_p1.is_some() || score_profile_p2.is_some()))
+        .then(scores::lock_score_caches);
+
+    if itl_ctx_p1.is_some()
+        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P1)
+    {
+        scores::ensure_itl_wheel_caches_loaded(&pid);
+    }
+    if itl_ctx_p2.is_some()
+        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P2)
+    {
+        scores::ensure_itl_wheel_caches_loaded(&pid);
+    }
 
     let num_entries = p.entries.len();
 
@@ -718,6 +775,18 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     let wheel_charts: [Option<&ChartData>; profile_data::PLAYER_SLOTS] =
                         if is_selected_slot {
                             p.selected_charts
+                        } else if p.preferred_difficulty_index[0] == p.preferred_difficulty_index[1]
+                        {
+                            // Both sides request the same preferred difficulty,
+                            // so the per-side chart scan is identical. Resolve
+                            // once and reuse instead of scanning the chart list
+                            // twice. (&ChartData is Copy.)
+                            let chart = chart_for_preferred_or_nearest_standard(
+                                info,
+                                target_chart_type,
+                                p.preferred_difficulty_index[0],
+                            );
+                            [chart, chart]
                         } else {
                             [
                                 chart_for_preferred_or_nearest_standard(
@@ -858,8 +927,13 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             let Some(chart) = wheel_chart_for_side(side) else {
                                 continue;
                             };
-                            let Some(cached_score) =
-                                scores::get_cached_score_for_side(&chart.short_hash, side)
+                            let Some(profile_id) = score_profile_for_side(side) else {
+                                continue;
+                            };
+                            let Some(held) = held_score_caches.as_ref() else {
+                                continue;
+                            };
+                            let Some(cached_score) = held.merged(profile_id, &chart.short_hash)
                             else {
                                 continue;
                             };
@@ -1149,15 +1223,17 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 crate::screens::select_music::song_pack_and_dir_name(info.as_ref())
                             && scores::is_itl_unlocks_pack(pack_dir)
                         {
+                            let p1_id = local_profile_id(profile_data::PlayerSide::P1);
+                            let p2_id = local_profile_id(profile_data::PlayerSide::P2);
                             let p1_locked = p1_joined
-                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                && !scores::is_itl_song_folder_unlocked_with_profile(
                                     song_dir,
-                                    profile_data::PlayerSide::P1,
+                                    p1_id.as_deref(),
                                 );
                             let p2_locked = p2_joined
-                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                && !scores::is_itl_song_folder_unlocked_with_profile(
                                     song_dir,
-                                    profile_data::PlayerSide::P2,
+                                    p2_id.as_deref(),
                                 );
                             let lock_x = -12.0_f32;
                             if p1_locked {

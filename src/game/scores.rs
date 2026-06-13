@@ -67,9 +67,12 @@ pub use itl::{
     get_cached_itl_self_score_for_side, get_cached_itl_tournament_overall_ranks_for_side,
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
     get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
-    is_itl_unlocks_pack, itl_eval_state_from_gameplay, itl_points_for_chart,
-    save_itl_data_from_gameplay, seed_session_online_itl_self_rank,
-    seed_session_online_itl_self_score, should_warn_cmod_for_itl_chart,
+    is_itl_song_folder_unlocked_with_profile, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
+    ensure_itl_wheel_caches_loaded,
+    itl_points_for_chart,
+    save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
+    seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
+    should_warn_cmod_for_itl_chart,
 };
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
@@ -853,9 +856,18 @@ pub fn get_cached_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<CachedScore> {
-    let local = get_cached_local_score_for_side(chart_hash, side);
-    let gs = get_cached_gs_score_for_side(chart_hash, side);
-    let ac = get_cached_ac_scores_for_side(chart_hash, side)
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    get_cached_score_with_profile(chart_hash, &profile_id)
+}
+
+/// Like [`get_cached_score_for_side`] but takes a precomputed profile id so the
+/// song wheel can resolve the active profile once per side per frame instead of
+/// three times per slot (local + gs + ac each re-resolved the active id and
+/// allocated a `String`).
+pub fn get_cached_score_with_profile(chart_hash: &str, profile_id: &str) -> Option<CachedScore> {
+    let local = get_cached_local_score_for_profile(profile_id, chart_hash);
+    let gs = get_cached_gs_score_for_profile(profile_id, chart_hash);
+    let ac = get_cached_ac_scores_for_profile(profile_id, chart_hash)
         .and_then(|s| s.itg)
         .map(|ac| ac.to_cached_score());
     // Merge by picking the "best ITG" entry; failed scores win when their
@@ -864,6 +876,88 @@ pub fn get_cached_score_for_side(
     [local, gs, ac].into_iter().flatten().reduce(|a, b| {
         failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
     })
+}
+
+pub struct HeldScoreCaches {
+    local: std::sync::MutexGuard<'static, LocalScoreCacheState>,
+    gs: std::sync::MutexGuard<'static, GsScoreCacheState>,
+    ac: std::sync::MutexGuard<'static, AcScoreCacheState>,
+}
+
+impl HeldScoreCaches {
+    /// Resolve the merged "best ITG" score for `chart_hash` under `profile_id`,
+    /// reading the already-held cache maps. Identical merge semantics to
+    /// [`get_cached_score_with_profile`].
+    pub fn merged(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        if profile_id.trim().is_empty() {
+            return None;
+        }
+        let local = self
+            .local
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|idx| idx.best_itg.get(chart_hash).copied());
+        let gs = self
+            .gs
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied());
+        let ac = self
+            .ac
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied())
+            .and_then(|s| s.itg)
+            .map(|ac| ac.to_cached_score());
+        [local, gs, ac].into_iter().flatten().reduce(|a, b| {
+            failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+        })
+    }
+}
+
+pub fn ensure_score_caches_loaded(profile_id: &str) {
+    if profile_id.trim().is_empty() {
+        return;
+    }
+    ensure_local_score_cache_loaded(profile_id);
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+}
+
+pub fn lock_score_caches() -> HeldScoreCaches {
+    HeldScoreCaches {
+        local: LOCAL_SCORE_CACHE.lock().unwrap(),
+        gs: GS_SCORE_CACHE.lock().unwrap(),
+        ac: AC_SCORE_CACHE.lock().unwrap(),
+    }
+}
+
+/// Test/bench helper: seed the in-memory local ITG score cache for a profile
+/// without touching disk. Lets benchmarks exercise the wheel grade/lamp render
+/// path deterministically.
+pub fn seed_session_local_itg_score(profile_id: &str, chart_hash: &str, score: CachedScore) {
+    ensure_local_score_cache_loaded(profile_id);
+    LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default()
+        .best_itg
+        .insert(chart_hash.to_string(), score);
+}
+
+/// Test/bench helper: seed the in-memory GrooveStats grade cache for a profile
+/// without touching disk. See [`seed_session_local_itg_score`].
+pub fn seed_session_gs_score(profile_id: &str, chart_hash: &str, score: CachedScore) {
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default()
+        .insert(chart_hash.to_string(), score);
 }
 
 fn get_cached_local_scalar_score_for_side(
@@ -1943,32 +2037,36 @@ fn get_cached_player_leaderboard_itl_self_rank_with(
 }
 
 pub struct ItlWheelSideContext {
-    profile_id: Option<String>,
+    profile_id: Option<std::sync::Arc<str>>,
     api_key: String,
     leaderboard_snapshot: GameplayScoreboxProfileSnapshot,
 }
 
 impl ItlWheelSideContext {
-    pub fn for_side(side: profile_data::PlayerSide) -> Self {
+    pub fn for_side(
+        side: profile_data::PlayerSide,
+        profile_id: Option<std::sync::Arc<str>>,
+    ) -> Self {
         Self {
-            profile_id: profile::active_local_profile_id_for_side(side),
+            profile_id,
             api_key: profile::groovestats_api_key_for_side(side),
             leaderboard_snapshot: player_leaderboard_profile_snapshot_for_side(side),
         }
     }
 
     /// Cached local ITL score for a song (reads the per-profile ITL file cache).
+    /// Assumes [`ensure_itl_wheel_caches_loaded`] ran for this side this frame.
     pub fn cached_local_itl_score(
         &self,
         song: &deadsync_chart::SongData,
     ) -> Option<deadsync_score::CachedItlScore> {
-        itl::get_cached_itl_score_for_song_with_profile(song, self.profile_id.as_deref())
+        itl::get_cached_itl_score_for_song_assume_loaded(song, self.profile_id.as_deref())
     }
 
     /// Cached online ITL self EX score for a chart hash, in integer hundredths
     /// of a percent (e.g. `9912` = 99.12%).
     pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
-        itl::get_cached_itl_self_score_for_key(
+        itl::get_cached_itl_self_score_for_key_assume_loaded(
             chart_hash,
             self.profile_id.as_deref(),
             &self.api_key,
@@ -1980,7 +2078,7 @@ impl ItlWheelSideContext {
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
         get_cached_player_leaderboard_itl_self_rank_with(chart_hash, &self.leaderboard_snapshot)
             .or_else(|| {
-                itl::get_cached_online_itl_self_rank_for_key(
+                itl::get_cached_online_itl_self_rank_for_key_assume_loaded(
                     chart_hash,
                     self.profile_id.as_deref(),
                     &self.api_key,

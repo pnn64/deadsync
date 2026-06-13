@@ -459,6 +459,24 @@ pub fn seed_session_online_itl_self_rank(api_key: &str, chart_hash: &str, rank: 
     set_cached_online_self_rank(None, api_key, chart_hash, Some(rank));
 }
 
+/// Test/bench helper: mark song folders as ITL-unlocked for a profile in the
+/// in-memory cache without touching disk. Folders not seeded stay locked
+/// (matching SL semantics), letting benchmarks exercise the lock-icon path.
+pub fn seed_session_itl_unlock_folders(profile_id: &str, folders: &[&str]) {
+    ensure_itl_score_cache_loaded(profile_id);
+    let mut state = ITL_SCORE_CACHE.lock().unwrap();
+    let data = state
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_default();
+    for folder in folders {
+        let folder = folder.trim();
+        if !folder.is_empty() {
+            data.unlock_folders.insert(folder.to_string(), true);
+        }
+    }
+}
+
 pub fn get_cached_itl_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -491,12 +509,41 @@ pub fn get_cached_itl_score_for_song_with_profile(
 ) -> Option<CachedItlScore> {
     let profile_id = profile_id?;
     ensure_itl_score_cache_loaded(profile_id);
+    itl_score_for_song_in_cache(song, profile_id)
+}
+
+/// Like [`get_cached_itl_score_for_song_with_profile`] but assumes the profile's
+/// ITL score cache was already loaded this frame (see
+/// [`ensure_itl_wheel_caches_loaded`]), skipping the per-call ensure-probe lock.
+pub fn get_cached_itl_score_for_song_assume_loaded(
+    song: &deadsync_chart::SongData,
+    profile_id: Option<&str>,
+) -> Option<CachedItlScore> {
+    let profile_id = profile_id?;
+    itl_score_for_song_in_cache(song, profile_id)
+}
+
+fn itl_score_for_song_in_cache(
+    song: &deadsync_chart::SongData,
+    profile_id: &str,
+) -> Option<CachedItlScore> {
     ITL_SCORE_CACHE
         .lock()
         .unwrap()
         .loaded_profiles
         .get(profile_id)
         .and_then(|data| itl_score_for_song(song, data))
+}
+
+/// Load every per-profile ITL cache the song-wheel overlay reads
+/// (`ITL_SCORE_CACHE`, `ONLINE_ITL_SELF_SCORE_CACHE`, `ONLINE_ITL_SELF_RANK_CACHE`)
+/// once for `profile_id`. Call this once per joined side per frame *before* the
+/// per-slot loop so the `*_assume_loaded` accessors can skip their redundant
+/// ensure-probe locks.
+pub fn ensure_itl_wheel_caches_loaded(profile_id: &str) {
+    ensure_itl_score_cache_loaded(profile_id);
+    ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
+    ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
 }
 
 /// Returns true if the song folder is unlocked for this player's ITL profile.
@@ -514,6 +561,28 @@ pub fn is_itl_song_folder_unlocked_for_side(
         .unwrap()
         .loaded_profiles
         .get(&profile_id)
+        .map(|data| {
+            data.unlock_folders
+                .get(song_folder)
+                .copied()
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+pub fn is_itl_song_folder_unlocked_with_profile(
+    song_folder: &str,
+    profile_id: Option<&str>,
+) -> bool {
+    let Some(profile_id) = profile_id else {
+        return false;
+    };
+    ensure_itl_score_cache_loaded(profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
         .map(|data| {
             data.unlock_folders
                 .get(song_folder)
@@ -567,13 +636,32 @@ pub fn get_cached_online_itl_self_rank_for_key(
     profile_id: Option<&str>,
     api_key: &str,
 ) -> Option<u32> {
+    if let Some(profile_id) = profile_id {
+        ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
+    }
+    online_itl_self_rank_in_cache(chart_hash, profile_id, api_key)
+}
+
+/// Like [`get_cached_online_itl_self_rank_for_key`] but assumes the profile's
+/// rank cache was already loaded this frame (see [`ensure_itl_wheel_caches_loaded`]),
+/// skipping the per-call ensure-probe lock.
+pub fn get_cached_online_itl_self_rank_for_key_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    online_itl_self_rank_in_cache(chart_hash, profile_id, api_key)
+}
+
+fn online_itl_self_rank_in_cache(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
     let chart_hash = chart_hash.trim();
     let api_key = api_key.trim();
     if chart_hash.is_empty() || api_key.is_empty() {
         return None;
-    }
-    if let Some(profile_id) = profile_id {
-        ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
     }
     let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
     let cache = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
@@ -1421,8 +1509,8 @@ fn itl_entry_for_song<'a>(
     song: &deadsync_chart::SongData,
     data: &'a ItlFileData,
 ) -> Option<&'a ItlHashEntry> {
-    let song_dir = itl_song_dir(song)?;
-    let chart_hash = data.path_map.get(song_dir.as_str())?;
+    let song_dir = song.simfile_path.parent()?.to_string_lossy();
+    let chart_hash = data.path_map.get(song_dir.as_ref())?;
     data.hash_map.get(chart_hash)
 }
 
@@ -1821,13 +1909,32 @@ pub fn get_cached_itl_self_score_for_key(
     profile_id: Option<&str>,
     api_key: &str,
 ) -> Option<u32> {
+    if let Some(profile_id) = profile_id {
+        ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
+    }
+    online_itl_self_score_in_cache(chart_hash, profile_id, api_key)
+}
+
+/// Like [`get_cached_itl_self_score_for_key`] but assumes the profile's online
+/// self-score cache was already loaded this frame (see
+/// [`ensure_itl_wheel_caches_loaded`]), skipping the per-call ensure-probe lock.
+pub fn get_cached_itl_self_score_for_key_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    online_itl_self_score_in_cache(chart_hash, profile_id, api_key)
+}
+
+fn online_itl_self_score_in_cache(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
     let chart_hash = chart_hash.trim();
     let api_key = api_key.trim();
     if chart_hash.is_empty() || api_key.is_empty() {
         return None;
-    }
-    if let Some(profile_id) = profile_id {
-        ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
     }
     let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
     let cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
