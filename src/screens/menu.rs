@@ -108,8 +108,40 @@ pub struct State {
     info_text_cache: RefCell<Option<(Option<String>, Arc<str>)>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
+    label_cache: RefCell<Option<MenuLabelCache>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
+}
+
+// Translated, frame-invariant menu/footer strings. These only change when the
+// active language changes, so they are cached and invalidated alongside the
+// other render caches via the i18n revision check.
+#[derive(Clone)]
+struct MenuLabelCache {
+    menu_labels: [Arc<str>; OPTION_COUNT],
+    event_mode: Arc<str>,
+    press_start: Arc<str>,
+}
+
+fn build_menu_label_cache() -> MenuLabelCache {
+    MenuLabelCache {
+        menu_labels: [
+            tr("Menu", "Gameplay"),
+            tr("Menu", "Options"),
+            tr("Menu", "Exit"),
+        ],
+        event_mode: tr("Common", "EventMode"),
+        press_start: tr("Common", "PressStart"),
+    }
+}
+
+fn menu_labels(state: &State) -> MenuLabelCache {
+    if let Some(cache) = state.label_cache.borrow().as_ref() {
+        return cache.clone();
+    }
+    let cache = build_menu_label_cache();
+    *state.label_cache.borrow_mut() = Some(cache.clone());
+    cache
 }
 
 pub fn init() -> State {
@@ -123,6 +155,7 @@ pub fn init() -> State {
         info_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
         arrowcloud_text_cache: RefCell::new(None),
+        label_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
     }
@@ -163,6 +196,7 @@ pub fn clear_render_cache(state: &State) {
     *state.info_text_cache.borrow_mut() = None;
     *state.groovestats_text_cache.borrow_mut() = None;
     *state.arrowcloud_text_cache.borrow_mut() = None;
+    *state.label_cache.borrow_mut() = None;
 }
 
 fn sync_i18n_cache(state: &State) {
@@ -414,13 +448,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
     let info2_y_tl = lp.top_margin - INFO_MARGIN_ABOVE - INFO_PX;
     let info1_y_tl = info2_y_tl - INFO_PX - INFO_GAP;
 
-    let logo_actors = logo::build_logo_default();
-    for mut actor in logo_actors {
-        if let Actor::Sprite { tint, .. } = &mut actor {
-            tint[3] *= alpha_multiplier;
-        }
-        actors.push(actor);
-    }
+    logo::push_logo_default(actors, alpha_multiplier);
 
     let mut info_color = [1.0, 1.0, 1.0, 1.0];
     info_color[3] *= alpha_multiplier;
@@ -438,15 +466,11 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
     selected[3] *= alpha_multiplier;
     normal[3] *= alpha_multiplier;
 
-    let menu_labels = [
-        tr("Menu", "Gameplay"),
-        tr("Menu", "Options"),
-        tr("Menu", "Exit"),
-    ];
+    let labels = menu_labels(state);
 
     // --- UPDATED PARAMS FOR THE NEW MENU LIST BUILDER ---
     let params = menu_list::MenuParams {
-        options: &menu_labels,
+        options: &labels.menu_labels,
         selected_index: state.selected_index,
         start_center_y: base_y,
         row_spacing: MENU_ROW_SPACING,
@@ -454,22 +478,20 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         normal_color: normal,
         font: current_machine_font_key(FontRole::Bold),
     };
-    actors.extend(menu_list::build_vertical_menu(params));
+    menu_list::push_vertical_menu(actors, params);
 
     // --- footer bar ---
     let mut footer_fg = [1.0, 1.0, 1.0, 1.0];
     footer_fg[3] *= alpha_multiplier;
-    let event_mode = tr("Common", "EventMode");
-    let press_start = tr("Common", "PressStart");
 
     actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
-        title: event_mode.as_ref(),
+        title: labels.event_mode.as_ref(),
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,
         transparent: true,
-        left_text: Some(press_start.as_ref()),
+        left_text: Some(labels.press_start.as_ref()),
         center_text: None,
-        right_text: Some(press_start.as_ref()),
+        right_text: Some(labels.press_start.as_ref()),
         left_avatar: None,
         right_avatar: None,
         fg_color: footer_fg,
