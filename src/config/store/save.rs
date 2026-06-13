@@ -195,6 +195,11 @@ fn push_saved_options(
         "SmxDefaultPadConfig",
         cfg.smx_default_pad_config.as_str(),
     );
+    push_line(
+        content,
+        "SmxDefaultLightBrightness",
+        cfg.smx_default_light_brightness,
+    );
     push_line(content, "SmxP1Serial", smx_p1_serial);
     push_line(content, "SmxP2Serial", smx_p2_serial);
     for backend in crate::config::pad_order::all_backends() {

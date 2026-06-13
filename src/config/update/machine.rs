@@ -151,6 +151,22 @@ pub fn update_smx_usb_polling(micros: u16) {
     save_without_keymaps();
 }
 
+/// Persist the machine-default pad-light brightness (0..=100). This seeds new
+/// player profiles; it does not retroactively change existing profiles, so there
+/// is nothing to push to the SDK here (the per-slot live value is resolved from
+/// the active profiles by `App::sync_smx_light_brightness`).
+pub fn update_smx_default_light_brightness(percent: u8) {
+    let percent = percent.min(100);
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_default_light_brightness == percent {
+            return;
+        }
+        cfg.smx_default_light_brightness = percent;
+    }
+    save_without_keymaps();
+}
+
 /// Persist the SMX pad → player serial assignment and push it live to the SDK,
 /// which re-orders the device slots so slot 0 = P1, slot 1 = P2. A `None` clears
 /// that side (falling back to the hardware jumper). No-op if unchanged.

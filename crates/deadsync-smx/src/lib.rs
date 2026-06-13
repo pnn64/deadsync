@@ -4,7 +4,7 @@
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -20,6 +20,74 @@ pub mod panels;
 
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
+
+// ─── Pad-light brightness ────────────────────────────────────────────────────
+//
+// A user-facing 0..=100 brightness, resolved per pad slot (slot 0 = P1, slot 1 =
+// P2; in Doubles both slots carry the one joined player's value) and applied as a
+// single multiplier to every RGB byte deadsync sends to the pad: panel judgement
+// effects, GIFs, and the player-indicator lights. Scaling all three channels by
+// the same factor preserves hue and saturation; only luminance changes.
+//
+// The slider is mapped through a mild gamma so equal steps feel more perceptually
+// even (LED output is ~linear in the byte value, but perceived brightness is
+// compressive). 100 is an exact identity (fast-pathed on send) and 0 is fully off.
+//
+// The raw gamma curve rounds the brightest channel to a byte the LEDs can't show
+// (0 or 1) across the bottom of the slider, so 1..=5% looked black. We lift any
+// non-zero percent onto a minimum-visible floor so 1% already lights the pad,
+// while 100% stays an exact identity.
+
+/// Perceptual curve for the brightness slider. `factor = (pct/100)^GAMMA`.
+const LIGHT_BRIGHTNESS_GAMMA: f32 = 1.8;
+
+/// Smallest output factor for a non-zero slider value. A full 0xFF channel scales
+/// to `255 * 0.012 ≈ 3`, comfortably above the LEDs' visible threshold (byte 1
+/// reads as black on the pads), so the slider never has a dead low end.
+const LIGHT_BRIGHTNESS_MIN_FACTOR: f32 = 0.012;
+
+/// Per-slot brightness percent (0..=100), default full. Read on every light send.
+static LIGHT_BRIGHTNESS: [AtomicU8; 2] = [AtomicU8::new(100), AtomicU8::new(100)];
+
+/// Set the per-slot pad-light brightness (`[p1_slot, p2_slot]`, each 0..=100).
+/// Pushed from deadsync whenever the resolved value changes; cheap and lock-free.
+pub fn set_light_brightness(per_slot: [u8; 2]) {
+    LIGHT_BRIGHTNESS[0].store(per_slot[0].min(100), Ordering::Relaxed);
+    LIGHT_BRIGHTNESS[1].store(per_slot[1].min(100), Ordering::Relaxed);
+}
+
+/// Current per-slot brightness percent.
+pub(crate) fn light_brightness() -> [u8; 2] {
+    [
+        LIGHT_BRIGHTNESS[0].load(Ordering::Relaxed),
+        LIGHT_BRIGHTNESS[1].load(Ordering::Relaxed),
+    ]
+}
+
+/// Gamma-mapped output factor (0.0..=1.0) for a slider percent. 0 is fully off;
+/// any non-zero percent is lifted onto `LIGHT_BRIGHTNESS_MIN_FACTOR..=1.0` so it
+/// is always visible, with 100 mapping to an exact 1.0.
+fn brightness_factor(pct: u8) -> f32 {
+    let pct = pct.min(100);
+    if pct == 0 {
+        return 0.0;
+    }
+    let curve = (f32::from(pct) / 100.0).powf(LIGHT_BRIGHTNESS_GAMMA);
+    LIGHT_BRIGHTNESS_MIN_FACTOR + (1.0 - LIGHT_BRIGHTNESS_MIN_FACTOR) * curve
+}
+
+/// Scale a both-pads RGB frame in place by the per-slot brightness. The frame is
+/// laid out as `[slot0 .. | slot1 ..]`, so the first half scales by `pct[0]` and
+/// the second by `pct[1]`. Round-to-nearest keeps dim colours fading smoothly
+/// instead of snapping to black. Caller skips this entirely when both are 100.
+pub(crate) fn apply_brightness(frame: &mut [u8], pct: [u8; 2]) {
+    let half = frame.len() / 2;
+    let factor = [brightness_factor(pct[0]), brightness_factor(pct[1])];
+    for (i, b) in frame.iter_mut().enumerate() {
+        let f = factor[usize::from(i >= half)];
+        *b = (f32::from(*b) * f + 0.5) as u8;
+    }
+}
 
 /// Shared state accessible by both the input backend and FSR monitor.
 struct SmxShared {
@@ -644,8 +712,11 @@ pub fn conflict_warning_active() -> bool {
 }
 
 /// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
-/// P2 slot; `None` turns that pad off). One-shot, so re-send to hold the colour.
-pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+/// P2 slot; `None` turns that pad off), scaling by an explicit per-slot
+/// brightness instead of the globally configured value. Used by the options
+/// pages to preview a brightness the user is editing live. One-shot, so re-send
+/// to hold the colour.
+pub fn set_player_lights_with_brightness(colors: [Option<[u8; 3]>; 2], brightness: [u8; 2]) {
     let Some(s) = SHARED.get() else { return };
     // A full 25-LED-per-pad frame (9 panels × 25 LEDs × 3); firmware on 16-LED
     // pads ignores the inner-ring bytes, so one buffer size covers both.
@@ -657,7 +728,17 @@ pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
             led.copy_from_slice(rgb);
         }
     }
+    if brightness != [100, 100] {
+        apply_brightness(&mut buf, brightness);
+    }
     s.manager.set_lights(&buf);
+}
+
+/// Light each pad a solid colour by slot (`colors[0]` = P1 slot, `colors[1]` =
+/// P2 slot; `None` turns that pad off), scaled by the globally configured
+/// per-slot brightness. One-shot, so re-send to hold the colour.
+pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
+    set_player_lights_with_brightness(colors, light_brightness());
 }
 
 /// Re-enable the pads' built-in automatic lighting (call when leaving a screen
@@ -869,10 +950,28 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 mod tests {
     use super::{
         PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
-        SmxPadPreset, conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
-        mock_spec_enabled, preset_thresholds,
+        SmxPadPreset, apply_brightness, brightness_factor, conflict_unresolved, indicator_color,
+        jumper_derived_pair, jumpers_conflict, mock_spec_enabled, preset_thresholds,
     };
     use rustmaniax_sdk::SmxInfo;
+
+    #[test]
+    fn brightness_floor_keeps_low_percents_visible() {
+        // 0% is fully off; 100% is an exact identity (fast-pathed on send).
+        assert_eq!(brightness_factor(0), 0.0);
+        assert_eq!(brightness_factor(100), 1.0);
+        // Every non-zero percent lights the brightest channel above the LEDs'
+        // visible threshold (byte 1 reads as black), so the slider has no dead
+        // low end, and the curve stays monotonic.
+        let mut prev = 0u8;
+        for pct in 1..=100u8 {
+            let mut frame = [255u8; 6];
+            apply_brightness(&mut frame, [pct, pct]);
+            assert!(frame[0] >= 2, "{pct}% scaled 0xFF to {} (too dim)", frame[0]);
+            assert!(frame[0] >= prev, "brightness must not decrease with percent");
+            prev = frame[0];
+        }
+    }
 
     #[test]
     fn mock_spec_falsey_values_leave_the_mock_off() {

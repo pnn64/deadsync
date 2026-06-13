@@ -20,7 +20,6 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     gp::update_hide_light_type_for_side,
     false
 );
-
 const INSERT: BitmaskBinding = simple_bitmask_binding!(
     mask = InsertMask,
     bits = u8,

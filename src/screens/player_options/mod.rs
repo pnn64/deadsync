@@ -317,6 +317,35 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
+/// Per-side live state for the Pad Light Brightness preview, indexed by player
+/// slot (0 = P1, 1 = P2): `Some(percent)` for an active player whose cursor is
+/// currently on the Pad Light Brightness row, else `None`. The app loop drives a
+/// rainbow preview on that side's pad while the value is being tuned. The row's
+/// choices are `0..=100%`, so the selected choice index is the percent.
+pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS] {
+    let pane = state.pane();
+    let active = session_active_players();
+    let mut preview: [Option<u8>; PLAYER_SLOTS] = std::array::from_fn(|idx| {
+        if !active[idx] {
+            return None;
+        }
+        let row = pane.row_map.get_at(pane.selected_row[idx])?;
+        (row.id == RowId::PadLightBrightness)
+            .then(|| row.selected_choice_index[idx].min(100) as u8)
+    });
+    // In Doubles a single player owns BOTH pads, so the brightness value applies
+    // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
+    // preview onto the other pad so both light up while the value is being tuned.
+    if matches!(
+        crate::game::profile::get_session_play_style(),
+        profile_data::PlayStyle::Double
+    ) && let Some(pct) = preview.iter().flatten().copied().next()
+    {
+        preview = [Some(pct); PLAYER_SLOTS];
+    }
+    preview
+}
+
 #[inline(always)]
 fn session_active_players() -> [bool; PLAYER_SLOTS] {
     let play_style = crate::game::profile::get_session_play_style();

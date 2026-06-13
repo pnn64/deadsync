@@ -139,6 +139,25 @@ pub(super) fn apply_submenu_choice_delta(
             }
             return None;
         }
+        if matches!(kind, SubmenuKind::SmxConfig)
+            && row.id == SubRowId::SmxDefaultLightBrightness
+        {
+            // Numeric placeholder row: adjust the percent directly (like the volume
+            // rows) instead of cycling a choice list.
+            if adjust_ms_value(
+                &mut state.smx_default_light_brightness_pct,
+                delta,
+                VOLUME_MIN_PERCENT,
+                VOLUME_MAX_PERCENT,
+            ) {
+                config::update_smx_default_light_brightness(
+                    state.smx_default_light_brightness_pct as u8,
+                );
+                audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
+            }
+            return None;
+        }
         if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::MaxFpsValue {
             if adjust_max_fps_value_choice(state, delta, wrap) {
                 audio::play_sfx("assets/sounds/change_value.ogg");

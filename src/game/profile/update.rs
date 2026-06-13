@@ -497,6 +497,12 @@ pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
     update_profile_ini(side, |profile| profile.set_custom_fantastic_window_ms(ms));
 }
 
+pub fn update_pad_light_brightness_for_side(side: PlayerSide, value: i32) {
+    update_profile_ini(side, |profile| {
+        profile.set_pad_light_brightness(value.clamp(0, 100) as u8)
+    });
+}
+
 pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.judgment_tilt, enabled)
