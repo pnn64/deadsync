@@ -799,6 +799,8 @@ const PAD_LIGHT_BRIGHTNESS: NumericBinding = NumericBinding {
 };
 
 fn push_pad_light_brightness_row(b: &mut RowBuilder) {
+    // Always built; shown only when deadsync drives the SMX pad LEDs (see
+    // `show_pad_light_brightness` in visibility.rs). Mirrors GlobalOffsetShift.
     b.push(
         Row::numeric(
             RowId::PadLightBrightness,

@@ -29,6 +29,7 @@ pub(super) struct RowVisibility {
     pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
+    pub(super) show_pad_light_brightness: bool,
 }
 
 #[inline(always)]
@@ -132,6 +133,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::TapExplosionOptions {
         return visibility.show_tap_explosion_options;
+    }
+    if id == RowId::PadLightBrightness {
+        return visibility.show_pad_light_brightness;
     }
     true
 }
@@ -683,6 +687,13 @@ pub(super) fn row_visibility(
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
+        // Pad-light brightness only matters when deadsync is actually driving the
+        // SMX pad LEDs: native StepManiaX input on, and Panel Lights on (off
+        // leaves the pad's own lighting alone, so the control would do nothing).
+        show_pad_light_brightness: {
+            let cfg = crate::config::get();
+            cfg.smx_input && cfg.smx_panel_lights
+        },
     }
 }
 

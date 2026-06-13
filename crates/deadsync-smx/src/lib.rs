@@ -32,9 +32,19 @@ pub const PANEL_COUNT: usize = NUM_PANELS;
 // The slider is mapped through a mild gamma so equal steps feel more perceptually
 // even (LED output is ~linear in the byte value, but perceived brightness is
 // compressive). 100 is an exact identity (fast-pathed on send) and 0 is fully off.
+//
+// The raw gamma curve rounds the brightest channel to a byte the LEDs can't show
+// (0 or 1) across the bottom of the slider, so 1..=5% looked black. We lift any
+// non-zero percent onto a minimum-visible floor so 1% already lights the pad,
+// while 100% stays an exact identity.
 
 /// Perceptual curve for the brightness slider. `factor = (pct/100)^GAMMA`.
 const LIGHT_BRIGHTNESS_GAMMA: f32 = 1.8;
+
+/// Smallest output factor for a non-zero slider value. A full 0xFF channel scales
+/// to `255 * 0.012 ≈ 3`, comfortably above the LEDs' visible threshold (byte 1
+/// reads as black on the pads), so the slider never has a dead low end.
+const LIGHT_BRIGHTNESS_MIN_FACTOR: f32 = 0.012;
 
 /// Per-slot brightness percent (0..=100), default full. Read on every light send.
 static LIGHT_BRIGHTNESS: [AtomicU8; 2] = [AtomicU8::new(100), AtomicU8::new(100)];
@@ -54,9 +64,16 @@ pub(crate) fn light_brightness() -> [u8; 2] {
     ]
 }
 
-/// Gamma-mapped output factor (0.0..=1.0) for a slider percent.
+/// Gamma-mapped output factor (0.0..=1.0) for a slider percent. 0 is fully off;
+/// any non-zero percent is lifted onto `LIGHT_BRIGHTNESS_MIN_FACTOR..=1.0` so it
+/// is always visible, with 100 mapping to an exact 1.0.
 fn brightness_factor(pct: u8) -> f32 {
-    (f32::from(pct.min(100)) / 100.0).powf(LIGHT_BRIGHTNESS_GAMMA)
+    let pct = pct.min(100);
+    if pct == 0 {
+        return 0.0;
+    }
+    let curve = (f32::from(pct) / 100.0).powf(LIGHT_BRIGHTNESS_GAMMA);
+    LIGHT_BRIGHTNESS_MIN_FACTOR + (1.0 - LIGHT_BRIGHTNESS_MIN_FACTOR) * curve
 }
 
 /// Scale a both-pads RGB frame in place by the per-slot brightness. The frame is
@@ -933,10 +950,28 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
 mod tests {
     use super::{
         PLAYER_UNCONFIGURED_LIGHT, PLAYER1_LIGHT, PLAYER2_LIGHT, PadConfigData, PanelThresholds,
-        SmxPadPreset, conflict_unresolved, indicator_color, jumper_derived_pair, jumpers_conflict,
-        mock_spec_enabled, preset_thresholds,
+        SmxPadPreset, apply_brightness, brightness_factor, conflict_unresolved, indicator_color,
+        jumper_derived_pair, jumpers_conflict, mock_spec_enabled, preset_thresholds,
     };
     use rustmaniax_sdk::SmxInfo;
+
+    #[test]
+    fn brightness_floor_keeps_low_percents_visible() {
+        // 0% is fully off; 100% is an exact identity (fast-pathed on send).
+        assert_eq!(brightness_factor(0), 0.0);
+        assert_eq!(brightness_factor(100), 1.0);
+        // Every non-zero percent lights the brightest channel above the LEDs'
+        // visible threshold (byte 1 reads as black), so the slider has no dead
+        // low end, and the curve stays monotonic.
+        let mut prev = 0u8;
+        for pct in 1..=100u8 {
+            let mut frame = [255u8; 6];
+            apply_brightness(&mut frame, [pct, pct]);
+            assert!(frame[0] >= 2, "{pct}% scaled 0xFF to {} (too dim)", frame[0]);
+            assert!(frame[0] >= prev, "brightness must not decrease with percent");
+            prev = frame[0];
+        }
+    }
 
     #[test]
     fn mock_spec_falsey_values_leave_the_mock_off() {
