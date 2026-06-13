@@ -283,7 +283,7 @@ fn build_records_pane(
     }
 
     let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    children.push(act!(sprite(kind.logo()):
+    children.push(act!(sprite_static(kind.logo()):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
         zoom(kind.logo_zoom(pane_zoom)):

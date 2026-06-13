@@ -498,7 +498,7 @@ fn base_star_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Actor {
         [1.0, 1.0, 1.0, 1.0]
     };
 
-    act!(sprite(STAR_TEX):
+    act!(sprite_static(STAR_TEX):
         align(0.5, 0.5):
         xy(st.x, st.y):
         zoomx(st.sx):
@@ -540,7 +540,7 @@ fn affluent_actor(st: StarTransform, p: EvalGradeParams, seed: u32) -> Option<Ac
 fn raw_affluent_actor(st: StarTransform, z: i16, alpha: f32, face_rot: f32) -> Actor {
     let rot = st.rot + face_rot;
     let (x, y) = child_xy(st, 0.0, AFFLUENT_OFFSET_Y);
-    act!(sprite(AFFLUENT_TEX):
+    act!(sprite_static(AFFLUENT_TEX):
         align(0.5, 0.5):
         xy(x, y):
         zoomx(st.sx * AFFLUENT_ZOOM):
@@ -741,7 +741,7 @@ pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
     }
 
     let tex = letter_tex(grade);
-    vec![act!(sprite(tex):
+    vec![act!(sprite_static(tex):
         align(0.5, 0.5):
         xy(p.x, p.y):
         zoom(p.zoom * LETTER_ZOOM):
