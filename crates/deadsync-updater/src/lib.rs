@@ -54,7 +54,7 @@ pub fn release_url() -> String {
 pub fn user_agent() -> String {
     format!(
         "deadsync/{} (+https://github.com/pnn64/deadsync)",
-        env!("CARGO_PKG_VERSION")
+        deadsync_version::current()
     )
 }
 
@@ -525,7 +525,7 @@ mod tests {
     fn user_agent_includes_version() {
         let ua = user_agent();
         assert!(ua.starts_with("deadsync/"));
-        assert!(ua.contains(env!("CARGO_PKG_VERSION")));
+        assert!(ua.contains(&deadsync_version::current().to_string()));
     }
 
     fn fixture_assets() -> Vec<ReleaseAsset> {

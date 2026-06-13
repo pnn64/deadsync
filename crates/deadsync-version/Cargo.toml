@@ -1,6 +1,6 @@
 [package]
 name = "deadsync-version"
-version = "0.4.667"
+version.workspace = true
 edition = "2024"
 license = "GPL-3.0"
 
