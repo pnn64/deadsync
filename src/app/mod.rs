@@ -456,11 +456,13 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
         return None;
     }
 
-    const UNLOCKS_SUFFIX: &str = " unlocks";
-    let name = if lower.ends_with(UNLOCKS_SUFFIX) {
-        &name[..name.len().saturating_sub(UNLOCKS_SUFFIX.len())]
-    } else {
-        name
+    // Personal ITL unlock packs are named "ITL Online <year> Unlocks - <username>".
+    // Cut everything from the " Unlocks" marker onward (including any trailing
+    // "- <username>") so the footer shows just the event name, e.g. "ITL Online 2026".
+    const UNLOCKS_MARKER: &str = " unlocks";
+    let name = match lower.find(UNLOCKS_MARKER) {
+        Some(idx) => &name[..idx],
+        None => name,
     };
     Some(name.trim().to_string())
 }
@@ -10501,6 +10503,17 @@ mod tests {
     fn gameplay_event_intro_strips_itl_unlocks_suffix() {
         let song = test_song(
             "Songs/ITL Online 2026 Unlocks/Example/song.ssc",
+            0.0,
+            ["hard", "medium"],
+        );
+
+        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+    }
+
+    #[test]
+    fn gameplay_event_intro_strips_itl_unlocks_username_suffix() {
+        let song = test_song(
+            "Songs/ITL Online 2026 Unlocks - iamchris4life/Example/song.ssc",
             0.0,
             ["hard", "medium"],
         );
