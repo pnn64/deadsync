@@ -7900,19 +7900,9 @@ pub fn push_actors(
         song_lua_capture_new_actors(&mut overlay_proxy_source, &mut actors, overlay_start);
     }
 
-    // SMX live sensor pressure display + input-driven pad display (independent
-    // per-player toggles).
-    if !hide_gameplay_hud {
-        let cfg = crate::config::get();
-        if cfg.smx_input
-            && (state.player_profiles[0].smx_fsr_display
-                || state.player_profiles[1].smx_fsr_display)
-        {
-            push_smx_sensor_display(&mut actors, state);
-        }
-        // The input-driven pad display is positioned relative to the notefield
-        // (see below, once per-player field geometry has been computed).
-    }
+    // The SMX live sensor display and input-driven pad display are positioned
+    // relative to each player's notefield (see below, once per-player field
+    // geometry has been computed).
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
@@ -8403,19 +8393,29 @@ pub fn push_actors(
             }
         }
 
-        // SMX input-driven pad display: sit just to the right of the rightmost
-        // notefield (mirrors the FSR display on the left, which hugs the left
-        // margin), keeping it clear of the lanes and the side density graph.
-        if cfg.smx_input
-            && (state.player_profiles[0].smx_pad_input_display
-                || state.player_profiles[1].smx_pad_input_display)
-        {
-            let mut field_right_edge = f32::NEG_INFINITY;
-            for &(player_idx, _, field_x, _, _, _) in &players[..player_count] {
-                field_right_edge =
-                    field_right_edge.max(field_x + notefield_width(player_idx) * 0.5);
+        // SMX overlays are placed relative to each player's notefield, mirrored
+        // by side: the FSR sensor display sits just outside the notefield's outer
+        // edge (P1: left, P2: right) and the input mini-pad just outside the inner
+        // edge (P1: right, P2: left). Build per-slot geometry (side + edges) here,
+        // where the notefield layout is known.
+        if cfg.smx_input {
+            let mut field_geom: [Option<(profile_data::PlayerSide, f32, f32)>; 2] = [None, None];
+            for &(player_idx, player_side, field_x, ..) in &players[..player_count] {
+                if player_idx < 2 {
+                    let half_w = notefield_width(player_idx) * 0.5;
+                    field_geom[player_idx] = Some((player_side, field_x - half_w, field_x + half_w));
+                }
             }
-            push_smx_pad_input_display(&mut actors, state, field_right_edge);
+            if state.player_profiles[0].smx_fsr_display
+                || state.player_profiles[1].smx_fsr_display
+            {
+                push_smx_sensor_display(&mut actors, state, &field_geom);
+            }
+            if state.player_profiles[0].smx_pad_input_display
+                || state.player_profiles[1].smx_pad_input_display
+            {
+                push_smx_pad_input_display(&mut actors, state, &field_geom);
+            }
         }
 
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
@@ -9291,7 +9291,6 @@ const SMX_SENSOR_DISP_PANELS: [(usize, &str); 4] = [(3, "L"), (7, "D"), (1, "U")
 const SMX_SENSOR_BAR_W: f32 = 8.0;
 const SMX_SENSOR_BAR_H: f32 = 40.0;
 const SMX_SENSOR_BAR_GAP: f32 = 3.0;
-const SMX_SENSOR_PAD_GAP: f32 = 10.0;
 const SMX_SENSOR_MARGIN: f32 = 10.0;
 // Lift the whole group above the bottom screen-bar footer (BAR_H = 32 in
 // screen_bar) and its player avatar so the bars never sit on top of them.
@@ -9317,9 +9316,36 @@ const SMX_SENSOR_FILL_IDLE: [f32; 4] = [0.25, 0.75, 0.25, 0.8];
 const SMX_SENSOR_FILL_ACTIVE: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 const SMX_SENSOR_THRESHOLD: [f32; 4] = [1.0, 0.45, 0.0, 1.0];
 const SMX_SENSOR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+// Gap between a player's notefield edge and an SMX overlay placed beside it.
+const SMX_OVERLAY_FIELD_GAP: f32 = 14.0;
 
-fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
-    let mut pad_x = SMX_SENSOR_MARGIN;
+/// X for an SMX overlay of width `w` placed just outside a player's notefield.
+/// `outer` = away from screen center (FSR sensor display); otherwise toward
+/// center (input mini-pad). Mirrors by player side and clamps to stay on-screen.
+fn smx_overlay_x(
+    side: profile_data::PlayerSide,
+    field_left: f32,
+    field_right: f32,
+    w: f32,
+    outer: bool,
+) -> f32 {
+    let on_left = matches!(
+        (side, outer),
+        (profile_data::PlayerSide::P1, true) | (profile_data::PlayerSide::P2, false)
+    );
+    let x = if on_left {
+        field_left - SMX_OVERLAY_FIELD_GAP - w
+    } else {
+        field_right + SMX_OVERLAY_FIELD_GAP
+    };
+    x.clamp(SMX_SENSOR_MARGIN, screen_width() - SMX_SENSOR_MARGIN - w)
+}
+
+fn push_smx_sensor_display(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    field_geom: &[Option<(profile_data::PlayerSide, f32, f32)>; 2],
+) {
     let bar_y =
         screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
     // Top of the numeric value row that sits above the bars (used for bg + values).
@@ -9328,13 +9354,16 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
 
     for pad in 0..2usize {
         if !state.player_profiles[pad].smx_fsr_display {
-            pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
             continue;
         }
         let Some(config) = state.smx_sensor_config[pad].as_ref() else {
-            pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
             continue;
         };
+        // Place this pad's group just outside the outer edge of its notefield.
+        let Some((side, field_left, field_right)) = field_geom[pad] else {
+            continue;
+        };
+        let group_x = smx_overlay_x(side, field_left, field_right, pad_group_w, true);
         let sensor_data = state.smx_sensor_data[pad].as_ref();
         let fsr = deadsync_smx::is_fsr(config);
 
@@ -9342,7 +9371,7 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
         let bg_pad = 3.0;
         push_smx_quad(
             actors,
-            pad_x - bg_pad,
+            group_x - bg_pad,
             group_top - bg_pad,
             pad_group_w + bg_pad * 2.0,
             (bar_y + SMX_SENSOR_BAR_H) - group_top + bg_pad * 2.0,
@@ -9351,7 +9380,7 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
         );
 
         for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
-            let x = pad_x + slot as f32 * (SMX_SENSOR_BAR_W + SMX_SENSOR_BAR_GAP);
+            let x = group_x + slot as f32 * (SMX_SENSOR_BAR_W + SMX_SENSOR_BAR_GAP);
 
             let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
                 if data.have_data_from_panel[panel] {
@@ -9448,8 +9477,6 @@ fn push_smx_sensor_display(actors: &mut Vec<Actor>, state: &State) {
                 z(SMX_SENSOR_Z + 3.0)
             ));
         }
-
-        pad_x += pad_group_w + SMX_SENSOR_PAD_GAP;
     }
 }
 
@@ -9466,10 +9493,6 @@ fn push_smx_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, c: [f3
 
 const SMX_PAD_INPUT_CELL: f32 = 9.0;
 const SMX_PAD_INPUT_GAP: f32 = 1.5;
-const SMX_PAD_INPUT_PAD_GAP: f32 = 10.0;
-const SMX_PAD_INPUT_MARGIN: f32 = 10.0;
-// Gap between the notefield's right edge and the start of the mini-pad row.
-const SMX_PAD_INPUT_FIELD_GAP: f32 = 14.0;
 // One 4-panel pad as a 3x3 grid: (column offset, grid-x cell, grid-y cell) for
 // Left/Down/Up/Right. Column order within a pad is L, D, U, R.
 const SMX_PAD_INPUT_PANELS: [(usize, f32, f32); 4] =
@@ -9478,37 +9501,31 @@ const SMX_PAD_INPUT_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
 const SMX_PAD_INPUT_CELL_IDLE: [f32; 4] = [0.25, 0.25, 0.30, 0.7];
 const SMX_PAD_INPUT_CELL_LIT: [f32; 4] = [1.0, 1.0, 1.0, 0.95];
 
-fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State, field_right_edge: f32) {
+fn push_smx_pad_input_display(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    field_geom: &[Option<(profile_data::PlayerSide, f32, f32)>; 2],
+) {
     let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
-    // Active pad slots (0 = P1, 1 = P2), each owning a 4-column block; gated on
-    // the owning player's toggle and the columns actually existing.
-    let active: Vec<usize> = (0..2usize)
-        .filter(|&slot| {
-            slot * 4 < state.num_cols && state.player_profiles[slot].smx_pad_input_display
-        })
-        .collect();
-    if active.is_empty() {
-        return;
-    }
-    // Sit the row of mini-pads just right of the notefield (mirroring the FSR
-    // display on the left), lifted above the footer so it clears the avatar.
-    // Never let it run past the right screen edge.
-    let group_w = active.len() as f32 * mini_w
-        + active.len().saturating_sub(1) as f32 * SMX_PAD_INPUT_PAD_GAP;
-    let max_x0 = screen_width() - SMX_PAD_INPUT_MARGIN - group_w;
-    let mut x0 = if field_right_edge.is_finite() {
-        (field_right_edge + SMX_PAD_INPUT_FIELD_GAP).min(max_x0)
-    } else {
-        max_x0
-    };
-    // Vertically center the mini-pad on the FSR sensor display group, so if the
-    // two sat side by side this would be dead-center against it (regardless of
-    // whether the FSR display is actually shown).
+    // Vertically center the mini-pad on the FSR sensor display group, so the two
+    // read as aligned when shown together (regardless of whether the FSR display
+    // is actually shown). Lifted above the footer so it clears the avatar.
     let fsr_bottom = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN;
     let fsr_group_h = SMX_SENSOR_BAR_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_VALUE_H;
     let y0 = fsr_bottom - fsr_group_h * 0.5 - mini_w * 0.5;
 
-    for &slot in &active {
+    // Each active pad slot (0 = P1, 1 = P2) owns a 4-column block; gated on the
+    // owning player's toggle and the columns actually existing. Placed just
+    // outside the inner edge of that player's notefield (mirrors the FSR display
+    // on the outer edge).
+    for slot in 0..2usize {
+        if slot * 4 >= state.num_cols || !state.player_profiles[slot].smx_pad_input_display {
+            continue;
+        }
+        let Some((side, field_left, field_right)) = field_geom[slot] else {
+            continue;
+        };
+        let x0 = smx_overlay_x(side, field_left, field_right, mini_w, false);
         let base = slot * 4;
         let bg_pad = 3.0;
         push_smx_quad(
@@ -9539,7 +9556,6 @@ fn push_smx_pad_input_display(actors: &mut Vec<Actor>, state: &State, field_righ
                 SMX_SENSOR_Z,
             );
         }
-        x0 += mini_w + SMX_PAD_INPUT_PAD_GAP;
     }
 }
 
