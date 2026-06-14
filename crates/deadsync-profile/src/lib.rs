@@ -36,7 +36,7 @@ pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
 pub const TILT_MIN_THRESHOLD_DEFAULT_MS: u32 = 0;
 pub const TILT_MAX_THRESHOLD_DEFAULT_MS: u32 = 50;
 pub const LONG_ERROR_BAR_INTENSITY_MIN: f32 = 1.0;
-pub const LONG_ERROR_BAR_INTENSITY_MAX: f32 = 2.0;
+pub const LONG_ERROR_BAR_INTENSITY_MAX: f32 = 4.0;
 pub const LONG_ERROR_BAR_INTENSITY_STEP: f32 = 0.25;
 pub const LONG_ERROR_BAR_INTENSITY_DEFAULT: f32 = 2.0;
 pub const AVERAGE_ERROR_BAR_INTENSITY_MIN: f32 = 1.0;
@@ -6113,7 +6113,7 @@ mod tests {
             / LONG_ERROR_BAR_INTENSITY_STEP)
             .round() as usize
             + 1;
-        assert_eq!(count, 5);
+        assert_eq!(count, 13);
     }
 
     #[test]
