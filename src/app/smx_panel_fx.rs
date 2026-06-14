@@ -6,15 +6,39 @@
 //! decisions are pure helpers (`tap_flash`, `hold_edge`, `hold_outcome_flash`, `mine_flash`)
 //! so they can be unit-tested without constructing a whole gameplay `State`.
 
+use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_side};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
-use deadsync_smx::panels::{Rgb, SmxPanelLights, smx_panel_for_col};
+use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::gameplay::{
     ColumnTapJudgment, HoldJudgmentRenderInfo, State, active_hold_is_engaged,
 };
+use crate::game::profile;
 
 const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
+
+/// Translate the chart-layout pad index from `smx_panel_for_col` (0 = first side,
+/// 1 = second side) to the physical SMX slot the player's pad occupies.
+///
+/// A single player is always packed at chart pad 0 (`runtime_player_index`), but
+/// may have joined as P2 - and a lone pad assigned to P2 sits at SDK slot 1 - so we
+/// route by the runtime side, the same basis input uses (keymaps bind `P2_*` to
+/// slot 1). Without this, a single P2 player's judgements would light frame pad 0
+/// (slot 0, no pad) while the pad they stand on stays dark. Doubles drives both
+/// pads (left = slot 0, right = slot 1), so it stays identity.
+fn physical_slot(
+    play_style: PlayStyle,
+    session_side: PlayerSide,
+    doubles: bool,
+    chart_pad: usize,
+) -> usize {
+    if doubles {
+        chart_pad
+    } else {
+        player_side_index(runtime_player_side(play_style, session_side, chart_pad))
+    }
+}
 
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
@@ -81,6 +105,9 @@ pub struct SmxPanelDriver {
     lights: SmxPanelLights,
     active: bool,
     notes_ptr: usize,
+    /// Chart pad index -> physical SMX slot, resolved once per activation from the
+    /// session play style and side so the per-frame loop stays branch-free.
+    slot_for_pad: [usize; PADS],
     prev_flash: [f32; MAX_COLS],
     prev_engaged: [bool; MAX_COLS],
     prev_hold_judged: [f32; MAX_COLS],
@@ -93,6 +120,7 @@ impl Default for SmxPanelDriver {
             lights: SmxPanelLights::new(),
             active: false,
             notes_ptr: 0,
+            slot_for_pad: std::array::from_fn(|pad| pad),
             prev_flash: [NO_EVENT; MAX_COLS],
             prev_engaged: [false; MAX_COLS],
             prev_hold_judged: [NO_EVENT; MAX_COLS],
@@ -109,16 +137,19 @@ impl SmxPanelDriver {
         // a new song), so stale `*_at_screen_s` values do not swallow the first event.
         let notes_ptr = state.notes.as_ptr() as usize;
         if !self.active || notes_ptr != self.notes_ptr {
-            self.activate(notes_ptr);
+            self.activate(state);
         }
 
         let cpp = state.cols_per_player;
         let np = state.num_players;
         let cols = cpp.saturating_mul(np).min(MAX_COLS);
         for col in 0..cols {
-            // Resolve the pad/panel once. The trackers below still update even when a column
-            // maps to no panel, so events are consumed rather than replayed later.
-            let panel = smx_panel_for_col(cpp, np, col);
+            // Resolve the panel once and translate the chart pad index to the physical SMX
+            // slot the player's pad sits on (a single P2 player packs at chart pad 0 but
+            // stands on slot 1). The trackers below still update even when a column maps to
+            // no panel, so events are consumed rather than replayed later.
+            let panel =
+                smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
 
             if let Some((color, dur)) =
                 tap_flash(state.last_tap_judgments[col], &mut self.prev_flash[col])
@@ -169,9 +200,16 @@ impl SmxPanelDriver {
         }
     }
 
-    fn activate(&mut self, notes_ptr: usize) {
+    fn activate(&mut self, state: &State) {
         self.active = true;
-        self.notes_ptr = notes_ptr;
+        self.notes_ptr = state.notes.as_ptr() as usize;
+        // Resolve the chart-pad -> physical-slot map once per song (the session play style
+        // and side are fixed for the run), keeping the per-frame loop off the session lock.
+        let play_style = profile::get_session_play_style();
+        let session_side = profile::get_session_player_side();
+        let doubles = state.cols_per_player >= 8 && state.num_players == 1;
+        self.slot_for_pad =
+            std::array::from_fn(|pad| physical_slot(play_style, session_side, doubles, pad));
         self.prev_flash = [NO_EVENT; MAX_COLS];
         self.prev_engaged = [false; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
@@ -263,6 +301,22 @@ mod tests {
             result,
             started_at_screen_s: at,
         }
+    }
+
+    #[test]
+    fn physical_slot_routes_single_p2_to_slot_1() {
+        use PlayStyle::*;
+        use PlayerSide::*;
+        // Single player on either side packs at chart pad 0, but the slot follows the
+        // side they joined: P1 -> slot 0, P2 -> slot 1 (the lone pad relocated to slot 1).
+        assert_eq!(physical_slot(Single, P1, false, 0), 0);
+        assert_eq!(physical_slot(Single, P2, false, 0), 1);
+        // Versus: chart pad already equals the slot (P1 left pad, P2 right pad), unchanged.
+        assert_eq!(physical_slot(Versus, P1, false, 0), 0);
+        assert_eq!(physical_slot(Versus, P1, false, 1), 1);
+        // Doubles owns both pads regardless of side, so left/right stay slot 0/1.
+        assert_eq!(physical_slot(Double, P2, true, 0), 0);
+        assert_eq!(physical_slot(Double, P2, true, 1), 1);
     }
 
     #[test]
