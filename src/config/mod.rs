@@ -152,6 +152,10 @@ pub struct Config {
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
+    /// Machine-default pad-light brightness (0..=100). Seeds each new player
+    /// profile's `pad_light_brightness`; players then adjust their own value in
+    /// Player Options. Applied to every RGB byte deadsync sends to the pad.
+    pub smx_default_light_brightness: u8,
     // When using the Software video renderer:
     // 0 = Auto (use all logical cores)
     // 1 = Single-threaded
@@ -394,6 +398,7 @@ impl Default for Config {
             smx_usb_polling_us: 1000,
             smx_panel_lights: false,
             smx_default_pad_config: SmxPadPreset::Low,
+            smx_default_light_brightness: 100,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX

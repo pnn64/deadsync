@@ -439,6 +439,25 @@ fn offset_key_us(seconds: f32) -> i32 {
     }
 }
 
+/// Full-saturation, full-value rainbow colour for a hue phase in `0.0..1.0`
+/// (wraps). Used for the Player Options pad-light brightness preview; luminance
+/// is applied separately via the per-slot brightness scale.
+fn rainbow_rgb(phase: f32) -> [u8; 3] {
+    let h = phase.rem_euclid(1.0) * 6.0;
+    let sector = h as u32 % 6;
+    let f = h - h.floor();
+    let up = (f * 255.0 + 0.5) as u8;
+    let down = ((1.0 - f) * 255.0 + 0.5) as u8;
+    match sector {
+        0 => [255, up, 0],
+        1 => [down, 255, 0],
+        2 => [0, 255, up],
+        3 => [0, down, 255],
+        4 => [up, 0, 255],
+        _ => [255, 0, down],
+    }
+}
+
 fn song_pack_group(song: &deadsync_chart::SongData) -> Option<&str> {
     song.simfile_path
         .parent()
@@ -1636,8 +1655,16 @@ pub struct ScreensState {
     /// Last indicator colours pushed to the pads on the options page, so the
     /// lights are only re-sent on change or to hold them, not every frame.
     smx_options_last_lights: [Option<[u8; 3]>; 2],
+    /// Last machine-default brightness previewed on the options page, so an edit
+    /// re-sends the lights immediately (the colour itself doesn't change).
+    smx_options_last_brightness: u8,
     /// Time since the last options-page light send, for the periodic hold.
     smx_options_light_timer: f32,
+    /// Latched while the Player Options page is driving a pad's lights for the
+    /// Pad Light Brightness preview, so auto-lighting is restored on leaving.
+    smx_po_lights_active: bool,
+    /// Rainbow hue phase (0..1) for the Player Options brightness preview.
+    smx_po_light_phase: f32,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -3632,7 +3659,10 @@ impl ScreensState {
             smx_autoprompt_latched: false,
             smx_options_lights_active: false,
             smx_options_last_lights: [None, None],
+            smx_options_last_brightness: 100,
             smx_options_light_timer: 0.0,
+            smx_po_lights_active: false,
+            smx_po_light_phase: 0.0,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -3898,6 +3928,9 @@ pub struct App {
     lights: lights::Manager,
     gameplay_lights: GameplayLightTracker,
     smx_panels: smx_panel_fx::SmxPanelDriver,
+    /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
+    /// cached so the resolve-and-push only fires when the value actually changes.
+    smx_light_brightness: [u8; 2],
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -4323,12 +4356,18 @@ impl App {
             && options::is_smx_config_view(&self.state.screens.options_state);
         if active {
             let colors = deadsync_smx::player_indicator_colors();
+            // Preview the machine-default light brightness the user is editing on
+            // this page: scale both indicator pads by it so changes show live.
+            // (config is updated on each adjust, so this tracks the edit.)
+            let brightness = config::get().smx_default_light_brightness;
             self.state.screens.smx_options_light_timer += dt;
             if colors != self.state.screens.smx_options_last_lights
+                || brightness != self.state.screens.smx_options_last_brightness
                 || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
             {
-                deadsync_smx::set_player_lights(colors);
+                deadsync_smx::set_player_lights_with_brightness(colors, [brightness, brightness]);
                 self.state.screens.smx_options_last_lights = colors;
+                self.state.screens.smx_options_last_brightness = brightness;
                 self.state.screens.smx_options_light_timer = 0.0;
             }
             self.state.screens.smx_options_lights_active = true;
@@ -4336,12 +4375,61 @@ impl App {
             self.state.screens.smx_options_lights_active = false;
             self.state.screens.smx_options_light_timer = 0.0;
             self.state.screens.smx_options_last_lights = [None, None];
+            self.state.screens.smx_options_last_brightness = 100;
             // The assignment screen drives the pad lights itself, so don't restore
             // auto-lighting when handing off to it (avoids a one-frame flicker).
             if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
                 deadsync_smx::reenable_auto_lights();
             }
         }
+    }
+
+    /// While a side's cursor is on the Player Options "Pad Light Brightness" row,
+    /// drive that side's pad with a slow rainbow scaled by the live percent, so
+    /// the user previews the brightness they're picking. Restores auto-lighting
+    /// once no side is previewing (or on leaving the page). Sent every frame; the
+    /// SDK coalesces light writes to the pad's refresh rate.
+    fn drive_smx_player_options_lights(&mut self, dt: f32) {
+        // Seconds per full hue cycle. Slow enough to read the colour, not strobe.
+        const HUE_PERIOD_S: f32 = 5.0;
+
+        let preview = (self.state.screens.current_screen == CurrentScreen::PlayerOptions
+            && config::get().smx_input)
+            .then(|| {
+                self.state
+                    .screens
+                    .player_options_state
+                    .as_ref()
+                    .map(player_options::pad_light_brightness_preview)
+            })
+            .flatten()
+            .filter(|p| p.iter().any(Option::is_some));
+
+        let Some(preview) = preview else {
+            // No side previewing: release the lights if we were holding them.
+            if self.state.screens.smx_po_lights_active {
+                self.state.screens.smx_po_lights_active = false;
+                self.state.screens.smx_po_light_phase = 0.0;
+                // Gameplay drives its own lights, so don't restore auto-lighting
+                // when handing off to it (avoids a one-frame flicker).
+                if !matches!(
+                    self.state.screens.current_screen,
+                    CurrentScreen::Gameplay | CurrentScreen::Practice
+                ) {
+                    deadsync_smx::reenable_auto_lights();
+                }
+            }
+            return;
+        };
+
+        self.state.screens.smx_po_light_phase =
+            (self.state.screens.smx_po_light_phase + dt / HUE_PERIOD_S).fract();
+        let rgb = rainbow_rgb(self.state.screens.smx_po_light_phase);
+        // Same hue on both pads; each scaled by its own side's live percent.
+        let colors: [Option<[u8; 3]>; 2] = std::array::from_fn(|slot| preview[slot].map(|_| rgb));
+        let brightness: [u8; 2] = std::array::from_fn(|slot| preview[slot].unwrap_or(0));
+        deadsync_smx::set_player_lights_with_brightness(colors, brightness);
+        self.state.screens.smx_po_lights_active = true;
     }
 
     fn apply_smx_managed_preset(&mut self) {
@@ -4444,6 +4532,33 @@ impl App {
         // every frame an SMX pad is connected. Steady state: compare, no allocation.
         if self.state.screens.select_music_state.smx_applied != self.pad_config_sync.applied {
             self.state.screens.select_music_state.smx_applied = self.pad_config_sync.snapshot();
+        }
+    }
+
+    /// Resolve each pad slot's user brightness from the player on that side and push
+    /// it to the SMX crate, which scales every outgoing light frame by it. Cached so
+    /// the push only fires on change. Skipped on the gameplay hot path: brightness is
+    /// a per-player profile value that can't change mid-song, so the value resolved on
+    /// the last non-gameplay frame stays valid and the profile lock stays off the
+    /// gameplay loop. With SMX input off there are no light sends, so hold at full.
+    fn drive_smx_light_brightness(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            return;
+        }
+        let resolved = if config::get().smx_input {
+            [
+                profile::pad_light_brightness_for_pad(false),
+                profile::pad_light_brightness_for_pad(true),
+            ]
+        } else {
+            [100, 100]
+        };
+        if resolved != self.smx_light_brightness {
+            self.smx_light_brightness = resolved;
+            deadsync_smx::set_light_brightness(resolved);
         }
     }
 
@@ -4708,7 +4823,9 @@ impl App {
         self.reconcile_smx_assignment();
         self.maybe_autoprompt_smx_assign();
         self.drive_smx_options_lights(delta_time);
+        self.drive_smx_player_options_lights(delta_time);
         self.apply_smx_managed_preset();
+        self.drive_smx_light_brightness();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
         let mut upload_us: u32 = 0;
@@ -5147,6 +5264,7 @@ impl App {
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
             gameplay_lights: GameplayLightTracker::default(),
             smx_panels: smx_panel_fx::SmxPanelDriver::default(),
+            smx_light_brightness: [100, 100],
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting

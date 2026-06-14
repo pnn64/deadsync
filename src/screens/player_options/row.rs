@@ -104,6 +104,7 @@ pub enum RowId {
     Appearance,
     Attacks,
     HideLightType,
+    PadLightBrightness,
     GameplayExtrasMore,
 }
 

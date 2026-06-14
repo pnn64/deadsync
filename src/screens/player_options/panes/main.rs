@@ -785,6 +785,34 @@ fn push_background_filter_row(b: &mut RowBuilder) {
     );
 }
 
+const PAD_LIGHT_BRIGHTNESS: NumericBinding = NumericBinding {
+    parse: parse_i32_percent,
+    apply: |p, v| {
+        p.set_pad_light_brightness(v.clamp(0, 100) as u8);
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_pad_light_brightness_for_side,
+    init: Some(NumericInit {
+        from_profile: |p| i32::from(p.pad_light_brightness),
+        format: |v| format!("{v}%"),
+    }),
+};
+
+fn push_pad_light_brightness_row(b: &mut RowBuilder) {
+    // Always built; shown only when deadsync drives the SMX pad LEDs (see
+    // `show_pad_light_brightness` in visibility.rs). Mirrors GlobalOffsetShift.
+    b.push(
+        Row::numeric(
+            RowId::PadLightBrightness,
+            lookup_key("PlayerOptions", "PadLightBrightness"),
+            lookup_key("PlayerOptionsHelp", "PadLightBrightnessHelp"),
+            PAD_LIGHT_BRIGHTNESS,
+            (0..=100).map(|v| format!("{v}%")).collect(),
+        )
+        .with_initial_choice_index(deadsync_profile::PAD_LIGHT_BRIGHTNESS_DEFAULT as usize),
+    );
+}
+
 fn push_notefield_offset_rows(b: &mut RowBuilder) {
     b.push(Row::numeric(
         RowId::NoteFieldOffsetX,
@@ -822,6 +850,7 @@ pub(super) fn push_display_modifier_rows(b: &mut RowBuilder, noteskin_names: &[S
     push_hold_judgment_row(b);
     push_held_graphic_row(b);
     push_background_filter_row(b);
+    push_pad_light_brightness_row(b);
     push_notefield_offset_rows(b);
 }
 

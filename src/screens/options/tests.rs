@@ -132,6 +132,10 @@ fn smx_config_items_match_rows() {
             SubRowId::SmxSinglePadPlayer,
             ItemId::InpSmxSinglePadPlayer,
         ),
+        (
+            SubRowId::SmxDefaultLightBrightness,
+            ItemId::InpSmxDefaultLightBrightness,
+        ),
         (SubRowId::SmxAssignPads, ItemId::InpSmxAssignPads),
         (SubRowId::SmxSwapPads, ItemId::InpSmxSwapPads),
         (SubRowId::SmxUsbPolling, ItemId::InpSmxUsbPolling),

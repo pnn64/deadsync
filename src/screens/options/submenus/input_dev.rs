@@ -309,6 +309,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        // Numeric placeholder: the "100%" text is replaced live by the current
+        // machine-default brightness in the options layout (like the volume rows).
+        id: SubRowId::SmxDefaultLightBrightness,
+        label: lookup_key("OptionsInput", "SmxDefaultLightBrightness"),
+        choices: &[literal_choice("100%")],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::SmxAssignPads,
         label: lookup_key("OptionsInput", "SmxAssignPads"),
         choices: &[localized_choice("Common", "Open")],
@@ -381,6 +389,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxSinglePadPlayerHelp")),
             HelpEntry::Dynamic(smx_assignment_status),
         ],
+    },
+    Item {
+        id: ItemId::InpSmxDefaultLightBrightness,
+        name: lookup_key("OptionsInput", "SmxDefaultLightBrightness"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxDefaultLightBrightnessHelp",
+        ))],
     },
     Item {
         id: ItemId::InpSmxAssignPads,

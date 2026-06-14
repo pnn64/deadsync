@@ -351,9 +351,20 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
 }
 
 fn send_lights(frame: &[u8]) {
-    if let Some(m) = crate::manager() {
+    let Some(m) = crate::manager() else { return };
+    // Apply the user brightness as a final per-slot scale. 100/100 is an exact
+    // identity, so skip the copy on the common full-brightness path. Otherwise scale
+    // into a stack buffer (no heap on the 30Hz worker) and send that.
+    let brightness = crate::light_brightness();
+    if brightness == [100, 100] || frame.len() > FRAME_BYTES {
         m.set_lights(frame);
+        return;
     }
+    let mut buf = [0u8; FRAME_BYTES];
+    let n = frame.len();
+    buf[..n].copy_from_slice(frame);
+    crate::apply_brightness(&mut buf[..n], brightness);
+    m.set_lights(&buf[..n]);
 }
 
 fn reenable_auto() {
