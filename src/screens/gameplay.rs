@@ -879,11 +879,20 @@ pub fn on_enter(state: &mut State) {
 
     let cfg = crate::config::get();
     if cfg.smx_input {
-        for pad in 0..2usize {
-            if state.player_profiles[pad].smx_fsr_display {
-                deadsync_smx::set_test_mode(pad, SensorTestMode::CalibratedValues);
-                state.smx_sensor_config[pad] = deadsync_smx::get_config(pad);
+        // Enable sensor test mode on the SDK pad for each FSR-display player's
+        // SIDE (P1 -> pad 0, P2 -> pad 1), not the profile-array index: a single
+        // P2 player is profile 0 but plays pad 1. Store the config under the
+        // profile index so the display (also keyed by profile index) lines up.
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            let Some(pidx) = gameplay_player_index_for_side(state, side) else {
+                continue;
+            };
+            if !state.player_profiles[pidx].smx_fsr_display {
+                continue;
             }
+            let sdk_pad = profile_data::player_side_index(side);
+            deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
+            state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
         }
     }
 
@@ -1007,13 +1016,20 @@ fn refresh_smx_sensor_data(state: &mut State) {
     if !cfg.smx_input {
         return;
     }
-    for pad in 0..2usize {
-        if !state.player_profiles[pad].smx_fsr_display {
+    // Read each FSR-display player's SDK pad by SIDE (P1 -> 0, P2 -> 1) and store
+    // under the profile index so the display lines up. A single P2 player is
+    // profile 0 but reads pad 1 (otherwise it shows the P1 pad's values).
+    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+        let Some(pidx) = gameplay_player_index_for_side(state, side) else {
+            continue;
+        };
+        if !state.player_profiles[pidx].smx_fsr_display {
             continue;
         }
-        state.smx_sensor_data[pad] = deadsync_smx::get_test_data(pad);
-        if state.smx_sensor_config[pad].is_none() {
-            state.smx_sensor_config[pad] = deadsync_smx::get_config(pad);
+        let sdk_pad = profile_data::player_side_index(side);
+        state.smx_sensor_data[pidx] = deadsync_smx::get_test_data(sdk_pad);
+        if state.smx_sensor_config[pidx].is_none() {
+            state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
         }
     }
 }
