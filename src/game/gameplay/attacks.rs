@@ -5385,15 +5385,15 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
     if player_idx >= state.num_players {
         return 0.0;
     }
-    state.active_attack_mini_percent[player_idx]
-        .filter(|v| v.is_finite())
-        .unwrap_or_else(|| {
-            if player_attack_base_cleared(state, player_idx) {
-                0.0
-            } else {
-                state.player_profiles[player_idx].mini_percent as f32
-            }
-        })
+    let profile_mini = if player_attack_base_cleared(state, player_idx) {
+        0.0
+    } else {
+        state.player_profiles[player_idx].mini_percent as f32
+    };
+    profile_mini
+        + state.active_attack_mini_percent[player_idx]
+            .filter(|v| v.is_finite())
+            .unwrap_or(0.0)
 }
 
 /// Multiplier applied to the noteskin's per-column lateral offsets to
