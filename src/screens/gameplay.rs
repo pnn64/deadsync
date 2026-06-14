@@ -879,20 +879,32 @@ pub fn on_enter(state: &mut State) {
 
     let cfg = crate::config::get();
     if cfg.smx_input {
-        // Enable sensor test mode on the SDK pad for each FSR-display player's
-        // SIDE (P1 -> pad 0, P2 -> pad 1), not the profile-array index: a single
-        // P2 player is profile 0 but plays pad 1. Store the config under the
-        // profile index so the display (also keyed by profile index) lines up.
-        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            let Some(pidx) = gameplay_player_index_for_side(state, side) else {
-                continue;
-            };
-            if !state.player_profiles[pidx].smx_fsr_display {
-                continue;
+        if profile::get_session_play_style() == profile_data::PlayStyle::Double {
+            // Doubles: one player drives both pads. Enable both if the player
+            // wants the FSR display; sensor arrays are keyed by SDK pad here.
+            if state.player_profiles[0].smx_fsr_display {
+                for sdk_pad in 0..2usize {
+                    deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
+                    state.smx_sensor_config[sdk_pad] = deadsync_smx::get_config(sdk_pad);
+                }
             }
-            let sdk_pad = profile_data::player_side_index(side);
-            deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
-            state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
+        } else {
+            // Enable sensor test mode on the SDK pad for each FSR-display player's
+            // SIDE (P1 -> pad 0, P2 -> pad 1), not the profile-array index: a
+            // single P2 player is profile 0 but plays pad 1. Store the config
+            // under the profile index so the display (also keyed by profile
+            // index) lines up.
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+                let Some(pidx) = gameplay_player_index_for_side(state, side) else {
+                    continue;
+                };
+                if !state.player_profiles[pidx].smx_fsr_display {
+                    continue;
+                }
+                let sdk_pad = profile_data::player_side_index(side);
+                deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
+                state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
+            }
         }
     }
 
@@ -1014,6 +1026,18 @@ fn play_song_lua_sound_events_for(
 fn refresh_smx_sensor_data(state: &mut State) {
     let cfg = crate::config::get();
     if !cfg.smx_input {
+        return;
+    }
+    if profile::get_session_play_style() == profile_data::PlayStyle::Double {
+        // Doubles: one player on both pads; read both, keyed by SDK pad.
+        if state.player_profiles[0].smx_fsr_display {
+            for sdk_pad in 0..2usize {
+                state.smx_sensor_data[sdk_pad] = deadsync_smx::get_test_data(sdk_pad);
+                if state.smx_sensor_config[sdk_pad].is_none() {
+                    state.smx_sensor_config[sdk_pad] = deadsync_smx::get_config(sdk_pad);
+                }
+            }
+        }
         return;
     }
     // Read each FSR-display player's SDK pad by SIDE (P1 -> 0, P2 -> 1) and store
@@ -8415,6 +8439,7 @@ pub fn push_actors(
         // edge (P1: right, P2: left). Build per-slot geometry (side + edges) here,
         // where the notefield layout is known.
         if cfg.smx_input {
+            let is_doubles = play_style == profile_data::PlayStyle::Double;
             let mut field_geom: [Option<(profile_data::PlayerSide, f32, f32)>; 2] = [None, None];
             for &(player_idx, player_side, field_x, ..) in &players[..player_count] {
                 if player_idx < 2 {
@@ -8425,12 +8450,12 @@ pub fn push_actors(
             if state.player_profiles[0].smx_fsr_display
                 || state.player_profiles[1].smx_fsr_display
             {
-                push_smx_sensor_display(&mut actors, state, &field_geom);
+                push_smx_sensor_display(&mut actors, state, &field_geom, is_doubles);
             }
             if state.player_profiles[0].smx_pad_input_display
                 || state.player_profiles[1].smx_pad_input_display
             {
-                push_smx_pad_input_display(&mut actors, state, &field_geom);
+                push_smx_pad_input_display(&mut actors, state, &field_geom, is_doubles);
             }
         }
 
@@ -9357,34 +9382,76 @@ fn smx_overlay_x(
     x.clamp(SMX_SENSOR_MARGIN, screen_width() - SMX_SENSOR_MARGIN - w)
 }
 
+// Width of one pad's 4-bar FSR group.
+fn smx_fsr_group_w() -> f32 {
+    4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP
+}
+
 fn push_smx_sensor_display(
     actors: &mut Vec<Actor>,
     state: &State,
     field_geom: &[Option<(profile_data::PlayerSide, f32, f32)>; 2],
+    is_doubles: bool,
 ) {
     let bar_y =
         screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
     // Top of the numeric value row that sits above the bars (used for bg + values).
     let group_top = bar_y - SMX_SENSOR_VALUE_GAP - SMX_SENSOR_VALUE_H;
-    let pad_group_w = 4.0 * SMX_SENSOR_BAR_W + 3.0 * SMX_SENSOR_BAR_GAP;
+    let pad_group_w = smx_fsr_group_w();
+
+    if is_doubles {
+        // One player drives both pads. Show both pad groups (pad 0 left, pad 1
+        // right) beside each other, just outside the left edge of the wide
+        // centered notefield. Gated on the doubles player's toggle (profile 0);
+        // sensor arrays are keyed by SDK pad here (see on_enter).
+        if !state.player_profiles[0].smx_fsr_display {
+            return;
+        }
+        let Some((_, field_left, _)) = field_geom[0] else {
+            return;
+        };
+        let group_gap = SMX_SENSOR_BAR_GAP * 2.0;
+        let total_w = pad_group_w * 2.0 + group_gap;
+        let start_x = (field_left - SMX_OVERLAY_FIELD_GAP - total_w).max(SMX_SENSOR_MARGIN);
+        for sdk_pad in 0..2usize {
+            let gx = start_x + sdk_pad as f32 * (pad_group_w + group_gap);
+            draw_smx_fsr_group(actors, state, sdk_pad, gx, bar_y, group_top, pad_group_w);
+        }
+        return;
+    }
 
     for pad in 0..2usize {
         if !state.player_profiles[pad].smx_fsr_display {
             continue;
         }
-        let Some(config) = state.smx_sensor_config[pad].as_ref() else {
-            continue;
-        };
         // Place this pad's group just outside the outer edge of its notefield.
         let Some((side, field_left, field_right)) = field_geom[pad] else {
             continue;
         };
         let group_x = smx_overlay_x(side, field_left, field_right, pad_group_w, true);
-        let sensor_data = state.smx_sensor_data[pad].as_ref();
-        let fsr = deadsync_smx::is_fsr(config);
+        draw_smx_fsr_group(actors, state, pad, group_x, bar_y, group_top, pad_group_w);
+    }
+}
 
-        // Background behind this pad's label + bar group.
-        let bg_pad = 3.0;
+/// Draws one pad's FSR bar group at `group_x`. `idx` indexes the sensor arrays
+/// (profile index in non-Doubles modes, SDK pad in Doubles). No-op if no config.
+fn draw_smx_fsr_group(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    idx: usize,
+    group_x: f32,
+    bar_y: f32,
+    group_top: f32,
+    pad_group_w: f32,
+) {
+    let Some(config) = state.smx_sensor_config[idx].as_ref() else {
+        return;
+    };
+    let sensor_data = state.smx_sensor_data[idx].as_ref();
+    let fsr = deadsync_smx::is_fsr(config);
+
+    // Background behind this pad's label + bar group.
+    let bg_pad = 3.0;
         push_smx_quad(
             actors,
             group_x - bg_pad,
@@ -9493,7 +9560,6 @@ fn push_smx_sensor_display(
                 z(SMX_SENSOR_Z + 3.0)
             ));
         }
-    }
 }
 
 fn push_smx_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, c: [f32; 4], z: f32) {
@@ -9521,6 +9587,7 @@ fn push_smx_pad_input_display(
     actors: &mut Vec<Actor>,
     state: &State,
     field_geom: &[Option<(profile_data::PlayerSide, f32, f32)>; 2],
+    is_doubles: bool,
 ) {
     let mini_w = 3.0 * SMX_PAD_INPUT_CELL + 2.0 * SMX_PAD_INPUT_GAP;
     // Vertically center the mini-pad on the FSR sensor display group, so the two
@@ -9529,6 +9596,27 @@ fn push_smx_pad_input_display(
     let fsr_bottom = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN;
     let fsr_group_h = SMX_SENSOR_BAR_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_VALUE_H;
     let y0 = fsr_bottom - fsr_group_h * 0.5 - mini_w * 0.5;
+
+    if is_doubles {
+        // One player drives both pads. Show both mini-pads (pad 0 left, pad 1
+        // right) beside each other, just outside the right edge of the wide
+        // centered notefield. Gated on the doubles player's toggle (profile 0).
+        if !state.player_profiles[0].smx_pad_input_display {
+            return;
+        }
+        let Some((_, _, field_right)) = field_geom[0] else {
+            return;
+        };
+        let group_gap = SMX_PAD_INPUT_GAP * 2.0;
+        let total_w = mini_w * 2.0 + group_gap;
+        let start_x = (field_right + SMX_OVERLAY_FIELD_GAP)
+            .min(screen_width() - SMX_SENSOR_MARGIN - total_w);
+        for half in 0..2usize {
+            let x0 = start_x + half as f32 * (mini_w + group_gap);
+            draw_smx_mini_pad(actors, state, half * 4, x0, y0, mini_w);
+        }
+        return;
+    }
 
     // Each active pad slot (0 = P1, 1 = P2) owns a 4-column block; gated on the
     // owning player's toggle and the columns actually existing. Placed just
@@ -9542,36 +9630,41 @@ fn push_smx_pad_input_display(
             continue;
         };
         let x0 = smx_overlay_x(side, field_left, field_right, mini_w, false);
-        let base = slot * 4;
-        let bg_pad = 3.0;
+        draw_smx_mini_pad(actors, state, slot * 4, x0, y0, mini_w);
+    }
+}
+
+/// Draws one input-driven mini-pad (4 panels lit from columns `base..base+4`)
+/// at `x0, y0`.
+fn draw_smx_mini_pad(actors: &mut Vec<Actor>, state: &State, base: usize, x0: f32, y0: f32, mini_w: f32) {
+    let bg_pad = 3.0;
+    push_smx_quad(
+        actors,
+        x0 - bg_pad,
+        y0 - bg_pad,
+        mini_w + bg_pad * 2.0,
+        mini_w + bg_pad * 2.0,
+        SMX_PAD_INPUT_BG,
+        SMX_SENSOR_Z - 1.0,
+    );
+    for &(col_off, gx, gy) in SMX_PAD_INPUT_PANELS.iter() {
+        let cx = x0 + gx * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+        let cy = y0 + gy * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
+        let pressed = crate::game::gameplay::lane_pressed(state, base + col_off);
+        let color = if pressed {
+            SMX_PAD_INPUT_CELL_LIT
+        } else {
+            SMX_PAD_INPUT_CELL_IDLE
+        };
         push_smx_quad(
             actors,
-            x0 - bg_pad,
-            y0 - bg_pad,
-            mini_w + bg_pad * 2.0,
-            mini_w + bg_pad * 2.0,
-            SMX_PAD_INPUT_BG,
-            SMX_SENSOR_Z - 1.0,
+            cx,
+            cy,
+            SMX_PAD_INPUT_CELL,
+            SMX_PAD_INPUT_CELL,
+            color,
+            SMX_SENSOR_Z,
         );
-        for &(col_off, gx, gy) in SMX_PAD_INPUT_PANELS.iter() {
-            let cx = x0 + gx * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
-            let cy = y0 + gy * (SMX_PAD_INPUT_CELL + SMX_PAD_INPUT_GAP);
-            let pressed = crate::game::gameplay::lane_pressed(state, base + col_off);
-            let color = if pressed {
-                SMX_PAD_INPUT_CELL_LIT
-            } else {
-                SMX_PAD_INPUT_CELL_IDLE
-            };
-            push_smx_quad(
-                actors,
-                cx,
-                cy,
-                SMX_PAD_INPUT_CELL,
-                SMX_PAD_INPUT_CELL,
-                color,
-                SMX_SENSOR_Z,
-            );
-        }
     }
 }
 
