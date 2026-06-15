@@ -19,7 +19,7 @@ use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
-use deadsync_smx::{self, SensorTestMode};
+use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
     SyncPref,
@@ -41,6 +41,7 @@ use deadsync_present::space::{
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_smx::{self, SensorTestMode};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::RefCell;
@@ -388,6 +389,22 @@ pub struct State {
     pub(crate) noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
+    pub pack_group: Arc<str>,
+    pub pack_banner_path: Option<PathBuf>,
+    pub(crate) song_banner_key: Option<Arc<str>>,
+    pub(crate) pack_banner_key: Option<Arc<str>>,
+    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
+    pub background_path_dirty: bool,
+    pub background_changes: Vec<SongBackgroundChange>,
+    pub next_background_change_ix: usize,
+    pub current_background_path: Option<PathBuf>,
+    pub current_background_key: Option<Arc<str>>,
+    pub background_allow_video: bool,
+    pub background_texture_key: Arc<str>,
+    pub previous_background_texture_key: Option<Arc<str>>,
+    pub background_transition: String,
+    pub background_transition_start_time: f32,
+    pub song_lua_sound_paths: Vec<PathBuf>,
     smx_sensor_data: [Option<deadsync_smx::SensorTestData>; 2],
     smx_sensor_config: [Option<deadsync_smx::SmxConfig>; 2],
     song_lua_overlay_order: SongLuaOverlayOrderCache,
@@ -465,6 +482,22 @@ impl State {
             noteskin_assets,
             density_graph,
             step_stats_extra_resolved,
+            pack_group,
+            pack_banner_path,
+            song_banner_key,
+            pack_banner_key,
+            notefield_model_cache,
+            background_path_dirty: true,
+            background_changes,
+            next_background_change_ix,
+            current_background_path: None,
+            current_background_key: None,
+            background_allow_video: false,
+            background_texture_key: Arc::from("__black"),
+            previous_background_texture_key: None,
+            background_transition: String::new(),
+            background_transition_start_time,
+            song_lua_sound_paths,
             smx_sensor_data: [None, None],
             smx_sensor_config: [None, None],
             song_lua_overlay_order,
@@ -9147,18 +9180,30 @@ pub fn push_actors(
             for &(player_idx, player_side, field_x, ..) in &players[..player_count] {
                 if player_idx < 2 {
                     let half_w = notefield_width(player_idx) * 0.5;
-                    field_geom[player_idx] = Some((player_side, field_x - half_w, field_x + half_w));
+                    field_geom[player_idx] =
+                        Some((player_side, field_x - half_w, field_x + half_w));
                 }
             }
-            if state.player_profiles[0].smx_fsr_display
-                || state.player_profiles[1].smx_fsr_display
+            if state.player_profiles[0].smx_fsr_display || state.player_profiles[1].smx_fsr_display
             {
-                push_smx_sensor_display(&mut actors, state, &field_geom, is_doubles, is_centered_single);
+                push_smx_sensor_display(
+                    &mut actors,
+                    state,
+                    &field_geom,
+                    is_doubles,
+                    is_centered_single,
+                );
             }
             if state.player_profiles[0].smx_pad_input_display
                 || state.player_profiles[1].smx_pad_input_display
             {
-                push_smx_pad_input_display(&mut actors, state, &field_geom, is_doubles, is_centered_single);
+                push_smx_pad_input_display(
+                    &mut actors,
+                    state,
+                    &field_geom,
+                    is_doubles,
+                    is_centered_single,
+                );
             }
         }
 
@@ -10153,8 +10198,7 @@ fn push_smx_sensor_display(
     is_doubles: bool,
     is_centered_single: bool,
 ) {
-    let bar_y =
-        screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
+    let bar_y = screen_height() - SMX_SENSOR_FOOTER_CLEAR - SMX_SENSOR_MARGIN - SMX_SENSOR_BAR_H;
     // Top of the numeric value row that sits above the bars (used for bg + values).
     let group_top = bar_y - SMX_SENSOR_VALUE_GAP - SMX_SENSOR_VALUE_H;
     let pad_group_w = smx_fsr_group_w();
@@ -10207,11 +10251,17 @@ fn push_smx_sensor_display(
         let Some((side, field_left, field_right)) = field_geom[pad] else {
             continue;
         };
-        let mut group_x =
-            smx_overlay_x(side, field_left, field_right, pad_group_w, true, SMX_OVERLAY_FIELD_GAP);
+        let mut group_x = smx_overlay_x(
+            side,
+            field_left,
+            field_right,
+            pad_group_w,
+            true,
+            SMX_OVERLAY_FIELD_GAP,
+        );
         if side == profile_data::PlayerSide::P2 {
-            group_x = (group_x + SMX_FSR_P2_NUDGE)
-                .min(screen_width() - SMX_SENSOR_MARGIN - pad_group_w);
+            group_x =
+                (group_x + SMX_FSR_P2_NUDGE).min(screen_width() - SMX_SENSOR_MARGIN - pad_group_w);
         }
         draw_smx_fsr_group(actors, state, pad, group_x, group_top, 1.0);
     }
@@ -10242,105 +10292,133 @@ fn draw_smx_fsr_group(
 
     // Background behind this pad's label + bar group.
     let bg_pad = 3.0 * scale;
-        push_smx_quad(
-            actors,
-            group_x - bg_pad,
-            group_top - bg_pad,
-            pad_group_w + bg_pad * 2.0,
-            (bar_y + bar_h) - group_top + bg_pad * 2.0,
-            SMX_SENSOR_BG,
-            SMX_SENSOR_Z - 1.0,
-        );
+    push_smx_quad(
+        actors,
+        group_x - bg_pad,
+        group_top - bg_pad,
+        pad_group_w + bg_pad * 2.0,
+        (bar_y + bar_h) - group_top + bg_pad * 2.0,
+        SMX_SENSOR_BG,
+        SMX_SENSOR_Z - 1.0,
+    );
 
-        for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
-            let x = group_x + slot as f32 * (bar_w + bar_gap);
+    for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
+        let x = group_x + slot as f32 * (bar_w + bar_gap);
 
-            // Panel high threshold (max across sensors for FSR), computed once and
-            // used for both the active check and the threshold line.
-            let threshold = if fsr {
-                config.panel_settings[panel]
-                    .fsr_high_threshold
-                    .iter()
-                    .map(|&t| u16::from(t))
-                    .max()
-                    .unwrap_or(0)
-            } else {
-                u16::from(config.panel_settings[panel].load_cell_high_threshold)
-            };
-            let threshold_norm = (threshold as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
+        // Panel high threshold (max across sensors for FSR), computed once and
+        // used for both the active check and the threshold line.
+        let threshold = if fsr {
+            config.panel_settings[panel]
+                .fsr_high_threshold
+                .iter()
+                .map(|&t| u16::from(t))
+                .max()
+                .unwrap_or(0)
+        } else {
+            u16::from(config.panel_settings[panel].load_cell_high_threshold)
+        };
+        let threshold_norm = (threshold as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
 
-            let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
-                if data.have_data_from_panel[panel] {
-                    let max_val = if fsr {
-                        data.sensor_level[panel]
-                            .iter()
-                            .map(|&v| if v <= 0 { 0u16 } else { (v >> 2) as u16 })
-                            .max()
-                            .unwrap_or(0)
-                    } else {
-                        // Load-cell: no >>2 shift, clamp to 0-500 then scale to 250.
-                        data.sensor_level[panel]
-                            .iter()
-                            .map(|&v| v.max(0).min(500) as u16)
-                            .max()
-                            .unwrap_or(0)
-                    };
-                    let norm = (max_val as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
-                    (norm, max_val >= threshold && threshold > 0, Some(max_val))
+        let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
+            if data.have_data_from_panel[panel] {
+                let max_val = if fsr {
+                    data.sensor_level[panel]
+                        .iter()
+                        .map(|&v| if v <= 0 { 0u16 } else { (v >> 2) as u16 })
+                        .max()
+                        .unwrap_or(0)
                 } else {
-                    (0.0, false, None)
-                }
+                    // Load-cell: no >>2 shift, clamp to 0-500 then scale to 250.
+                    data.sensor_level[panel]
+                        .iter()
+                        .map(|&v| v.max(0).min(500) as u16)
+                        .max()
+                        .unwrap_or(0)
+                };
+                let norm = (max_val as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
+                (norm, max_val >= threshold && threshold > 0, Some(max_val))
             } else {
                 (0.0, false, None)
-            };
-
-            // Track background.
-            push_smx_quad(actors, x, bar_y, bar_w, bar_h, SMX_SENSOR_TRACK, SMX_SENSOR_Z);
-
-            // Pressure fill from bottom.
-            let fill_h = value_norm * bar_h;
-            if fill_h > 0.0 {
-                let fill = if active { SMX_SENSOR_FILL_ACTIVE } else { SMX_SENSOR_FILL_IDLE };
-                push_smx_quad(actors, x, bar_y + bar_h - fill_h, bar_w, fill_h, fill, SMX_SENSOR_Z + 1.0);
             }
+        } else {
+            (0.0, false, None)
+        };
 
-            // Threshold line.
-            let threshold_h = 2.0_f32 * scale;
-            let threshold_y = bar_y + (1.0 - threshold_norm) * bar_h - threshold_h * 0.5;
-            push_smx_quad(actors, x, threshold_y, bar_w, threshold_h, SMX_SENSOR_THRESHOLD, SMX_SENSOR_Z + 2.0);
+        // Track background.
+        push_smx_quad(
+            actors,
+            x,
+            bar_y,
+            bar_w,
+            bar_h,
+            SMX_SENSOR_TRACK,
+            SMX_SENSOR_Z,
+        );
 
-            // Live pressure value centered above the bar (replaces the old letter
-            // row); "--" when no sample has arrived for this panel yet.
-            let (value_text, value_color) = match raw_value {
-                Some(v) => (v.to_string(), SMX_SENSOR_VALUE_COLOR),
-                None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
+        // Pressure fill from bottom.
+        let fill_h = value_norm * bar_h;
+        if fill_h > 0.0 {
+            let fill = if active {
+                SMX_SENSOR_FILL_ACTIVE
+            } else {
+                SMX_SENSOR_FILL_IDLE
             };
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Normal)): settext(value_text):
-                align(0.5, 0.0): xy(x + bar_w * 0.5, group_top):
-                zoom(SMX_SENSOR_VALUE_ZOOM * scale):
-                diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
-                z(SMX_SENSOR_Z + 2.0)
-            ));
-
-            // Panel letter (L/D/U/R) drawn on the bar near its bottom; the drop
-            // shadow keeps it legible over both the dark track and bright fill.
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Normal)): settext(label):
-                align(0.5, 1.0):
-                xy(x + bar_w * 0.5, bar_y + bar_h - SMX_SENSOR_LETTER_INSET * scale):
-                zoom(SMX_SENSOR_LABEL_ZOOM * scale):
-                shadowlength(1.0):
-                shadowcolor(
-                    SMX_SENSOR_LETTER_SHADOW[0],
-                    SMX_SENSOR_LETTER_SHADOW[1],
-                    SMX_SENSOR_LETTER_SHADOW[2],
-                    SMX_SENSOR_LETTER_SHADOW[3]
-                ):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(SMX_SENSOR_Z + 3.0)
-            ));
+            push_smx_quad(
+                actors,
+                x,
+                bar_y + bar_h - fill_h,
+                bar_w,
+                fill_h,
+                fill,
+                SMX_SENSOR_Z + 1.0,
+            );
         }
+
+        // Threshold line.
+        let threshold_h = 2.0_f32 * scale;
+        let threshold_y = bar_y + (1.0 - threshold_norm) * bar_h - threshold_h * 0.5;
+        push_smx_quad(
+            actors,
+            x,
+            threshold_y,
+            bar_w,
+            threshold_h,
+            SMX_SENSOR_THRESHOLD,
+            SMX_SENSOR_Z + 2.0,
+        );
+
+        // Live pressure value centered above the bar (replaces the old letter
+        // row); "--" when no sample has arrived for this panel yet.
+        let (value_text, value_color) = match raw_value {
+            Some(v) => (v.to_string(), SMX_SENSOR_VALUE_COLOR),
+            None => ("--".to_string(), SMX_SENSOR_VALUE_IDLE_COLOR),
+        };
+        actors.push(act!(text:
+            font(current_machine_font_key(FontRole::Normal)): settext(value_text):
+            align(0.5, 0.0): xy(x + bar_w * 0.5, group_top):
+            zoom(SMX_SENSOR_VALUE_ZOOM * scale):
+            diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
+            z(SMX_SENSOR_Z + 2.0)
+        ));
+
+        // Panel letter (L/D/U/R) drawn on the bar near its bottom; the drop
+        // shadow keeps it legible over both the dark track and bright fill.
+        actors.push(act!(text:
+            font(current_machine_font_key(FontRole::Normal)): settext(label):
+            align(0.5, 1.0):
+            xy(x + bar_w * 0.5, bar_y + bar_h - SMX_SENSOR_LETTER_INSET * scale):
+            zoom(SMX_SENSOR_LABEL_ZOOM * scale):
+            shadowlength(1.0):
+            shadowcolor(
+                SMX_SENSOR_LETTER_SHADOW[0],
+                SMX_SENSOR_LETTER_SHADOW[1],
+                SMX_SENSOR_LETTER_SHADOW[2],
+                SMX_SENSOR_LETTER_SHADOW[3]
+            ):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(SMX_SENSOR_Z + 3.0)
+        ));
+    }
 }
 
 fn push_smx_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, c: [f32; 4], z: f32) {
@@ -10411,9 +10489,8 @@ fn push_smx_pad_input_display(
         let start_x = center_x - total_w * 0.5;
         // Below the FSR pair (which starts SMX_DOUBLES_STACK_TOP_FRAC down).
         let fsr_group_h = SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_BAR_H;
-        let mini_top = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC
-            + fsr_group_h
-            + SMX_DOUBLES_STACK_GAP;
+        let mini_top =
+            screen_height() * SMX_DOUBLES_STACK_TOP_FRAC + fsr_group_h + SMX_DOUBLES_STACK_GAP;
         // When the FSR pair is also shown, center each mini under its FSR group
         // above it; otherwise use the natural (tighter) mini-pair spacing so a
         // mini-only display doesn't look oddly spread out.
@@ -10422,9 +10499,8 @@ fn push_smx_pad_input_display(
         let fsr_start_x = center_x - (fsr_group_w * 2.0 + group_gap) * 0.5;
         for half in 0..2usize {
             let x0 = if fsr_active {
-                let fsr_center = fsr_start_x
-                    + half as f32 * (fsr_group_w + group_gap)
-                    + fsr_group_w * 0.5;
+                let fsr_center =
+                    fsr_start_x + half as f32 * (fsr_group_w + group_gap) + fsr_group_w * 0.5;
                 fsr_center - mini_w * 0.5
             } else {
                 start_x + half as f32 * (mini_w + group_gap)
@@ -10459,7 +10535,14 @@ fn push_smx_pad_input_display(
 
 /// Draws one input-driven mini-pad (4 panels lit from columns `base..base+4`)
 /// at `x0, y0`, scaled by `scale`.
-fn draw_smx_mini_pad(actors: &mut Vec<Actor>, state: &State, base: usize, x0: f32, y0: f32, scale: f32) {
+fn draw_smx_mini_pad(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    base: usize,
+    x0: f32,
+    y0: f32,
+    scale: f32,
+) {
     let cell = SMX_PAD_INPUT_CELL * scale;
     let gap = SMX_PAD_INPUT_GAP * scale;
     let mini_w = 3.0 * cell + 2.0 * gap;
@@ -10482,15 +10565,7 @@ fn draw_smx_mini_pad(actors: &mut Vec<Actor>, state: &State, base: usize, x0: f3
         } else {
             SMX_PAD_INPUT_CELL_IDLE
         };
-        push_smx_quad(
-            actors,
-            cx,
-            cy,
-            cell,
-            cell,
-            color,
-            SMX_SENSOR_Z,
-        );
+        push_smx_quad(actors, cx, cy, cell, cell, color, SMX_SENSOR_Z);
     }
 }
 

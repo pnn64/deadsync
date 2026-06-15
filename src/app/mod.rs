@@ -9203,9 +9203,7 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(course_display_timing_for_run);
-            if prev == CurrentScreen::Gameplay
-                && self.state.session.course_run.is_some()
-            {
+            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::screens::gameplay::on_exit(gs);
                 }
