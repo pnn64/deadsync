@@ -10,13 +10,16 @@ use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 pub use deadsync_gameplay::{
     ActiveColumnFlash, ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion,
     AutosyncMode, ColumnCue, ColumnCueColumn, ColumnTapJudgment, ComboMilestoneKind, ErrorBarText,
-    ErrorBarTick, ExitTransition, ExitTransitionKind, GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction,
-    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayFailType,
-    GameplayMiniIndicatorData, GameplayMusicCut, GameplayStreamClockSnapshot, GameplayViewport,
-    HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, JudgmentRenderInfo, LeadInTiming,
-    MineJudgmentRenderInfo, NoteCountStat, OffsetIndicatorText, RecordedLaneEdge, ReplayInputEdge,
-    ReplayOffsetSnapshot, active_hold_is_engaged, exit_total_seconds, exit_transition_alpha,
-    gameplay_exit_for_kind, hold_to_exit_seconds,
+    ErrorBarTick, ExitTransition, ExitTransitionKind, GAMEPLAY_INPUT_BACKLOG_WARN,
+    GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction, GameplayAudioSnapshot, GameplayConfig,
+    GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayStreamClockSnapshot, GameplayViewport, HeldMissRenderInfo, HoldJudgmentRenderInfo,
+    HoldToExitKey, JudgmentRenderInfo, LeadInTiming, MineJudgmentRenderInfo, NoteCountStat,
+    OffsetIndicatorText, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
+    ReplayOffsetSnapshot, active_hold_counts_as_pressed, active_hold_is_engaged,
+    exit_total_seconds, exit_transition_alpha, gameplay_exit_for_kind, hold_to_exit_seconds,
+    input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+    lane_release_finished, replay_edge_cap,
 };
 use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
@@ -148,20 +151,16 @@ use self::holds::{
     handle_hold_let_go, handle_hold_success, integrate_active_hold_to_time,
     refresh_roll_life_on_step,
 };
-#[cfg(test)]
-use self::input::{
-    active_hold_counts_as_pressed, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-    lane_release_finished, trigger_receptor_step_pulse, update_lane_input_slot,
-};
 pub use self::input::{
     handle_input, queue_input_edge, receptor_glow_visual_for_col, replay_capture_enabled,
     set_replay_capture_enabled,
 };
 use self::input::{
-    input_queue_cap, lane_is_pressed, process_input_edges, replay_edge_cap,
-    sync_active_hold_pressed_state, tick_visual_effects, trigger_receptor_glow_pulse,
-    trigger_receptor_score_pulse,
+    lane_is_pressed, process_input_edges, sync_active_hold_pressed_state, tick_visual_effects,
+    trigger_receptor_glow_pulse, trigger_receptor_score_pulse,
 };
+#[cfg(test)]
+use self::input::{trigger_receptor_step_pulse, update_lane_input_slot};
 use self::judging::{
     PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
     effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
@@ -710,10 +709,7 @@ const RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS: f32 = 1.0;
 const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
-const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
-const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
-const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
     "0.5x",

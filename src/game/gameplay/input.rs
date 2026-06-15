@@ -11,13 +11,13 @@ use super::{
     GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
     GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
     HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS,
-    MAX_ACTIVE_INPUT_SLOTS, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
-    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
-    abort_hold_to_exit, add_elapsed_us, begin_exit_transition, column_flash_duration,
-    current_music_time_s, elapsed_us_between, gameplay_input_log_enabled,
-    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
-    music_time_ns_from_song_clock, queue_preloaded_assist_tick, record_step_calories,
-    refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
+    MAX_ACTIVE_INPUT_SLOTS, RECEPTOR_GLOW_DURATION, RecordedLaneEdge, SongClockSnapshot,
+    SongTimeNs, State, TickMode, abort_hold_to_exit, active_hold_counts_as_pressed, add_elapsed_us,
+    begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
+    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
+    lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+    live_autoplay_enabled, music_time_ns_from_song_clock, queue_preloaded_assist_tick,
+    record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -33,47 +33,6 @@ fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
         LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
     }
     should_warn
-}
-
-#[inline(always)]
-pub(super) const fn input_queue_cap(num_cols: usize) -> usize {
-    // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
-    // does not grow the queue before crossing its first pressure threshold.
-    let fields = if num_cols <= 4 {
-        1
-    } else {
-        num_cols.div_ceil(4)
-    };
-    GAMEPLAY_INPUT_BACKLOG_WARN * fields
-}
-
-#[inline(always)]
-pub(super) fn replay_edge_cap(
-    num_cols: usize,
-    replay_cells: usize,
-    replay_mode: bool,
-    song_seconds: f32,
-) -> usize {
-    if replay_mode {
-        return 0;
-    }
-    // Live recording stores physical press/release edges, so reserve two edges
-    // per playable note cell, keep a small per-lane floor for early misses, and
-    // add a duration budget so a whole-song run does not grow on dense mashing.
-    let chart_cap = replay_cells.saturating_mul(2);
-    let floor_cap = num_cols.saturating_mul(REPLAY_EDGE_FLOOR_PER_LANE);
-    let seconds_cap = replay_seconds_cap(num_cols, song_seconds);
-    chart_cap.max(floor_cap).max(seconds_cap)
-}
-
-#[inline(always)]
-fn replay_seconds_cap(num_cols: usize, song_seconds: f32) -> usize {
-    if !song_seconds.is_finite() || song_seconds <= 0.0 {
-        return 0;
-    }
-    (song_seconds.ceil() as usize)
-        .saturating_mul(num_cols)
-        .saturating_mul(REPLAY_EDGE_RATE_PER_SEC)
 }
 
 #[inline(always)]
@@ -242,26 +201,6 @@ pub(super) fn update_lane_input_slot(
 }
 
 #[inline(always)]
-pub(super) const fn lane_press_started(pressed: bool, was_down: bool, is_down: bool) -> bool {
-    pressed && !was_down && is_down
-}
-
-#[inline(always)]
-pub(super) const fn lane_release_finished(pressed: bool, was_down: bool, is_down: bool) -> bool {
-    !pressed && was_down && !is_down
-}
-
-#[inline(always)]
-pub(super) const fn lane_edge_judges_tap(pressed: bool, slot_was_down: bool) -> bool {
-    pressed && !slot_was_down
-}
-
-#[inline(always)]
-pub(super) const fn lane_edge_judges_lift(pressed: bool, slot_was_down: bool) -> bool {
-    !pressed && slot_was_down
-}
-
-#[inline(always)]
 pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     state.receptor_glow_press_timers[col] = 0.0;
@@ -340,11 +279,6 @@ pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f
         ));
     }
     None
-}
-
-#[inline(always)]
-pub(super) const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
-    live_autoplay || lane_pressed
 }
 
 #[inline(always)]

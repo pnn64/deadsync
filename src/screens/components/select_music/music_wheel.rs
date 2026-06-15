@@ -926,9 +926,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             let Some(profile_id) = score_profile_for_side(side) else {
                                 continue;
                             };
-                            let Some(cached_score) =
-                                scores::get_cached_score_with_profile(&chart.short_hash, profile_id)
-                            else {
+                            let Some(cached_score) = scores::get_cached_score_with_profile(
+                                &chart.short_hash,
+                                profile_id,
+                            ) else {
                                 continue;
                             };
                             let has_score = cached_score.grade != score_data::Grade::Failed

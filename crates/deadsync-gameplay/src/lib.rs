@@ -20,6 +20,9 @@ const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
 // Simply Love: _fade out normal.lua (sleep 0.1, linear 0.4).
 const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
 const BACK_OUT_FADE_SECONDS: f32 = 0.4;
+pub const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
+const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
+pub const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayViewport {
@@ -315,6 +318,72 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
 }
 
+#[inline(always)]
+pub const fn input_queue_cap(num_cols: usize) -> usize {
+    // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
+    // does not grow the queue before crossing its first pressure threshold.
+    let fields = if num_cols <= 4 {
+        1
+    } else {
+        num_cols.div_ceil(4)
+    };
+    GAMEPLAY_INPUT_BACKLOG_WARN * fields
+}
+
+#[inline(always)]
+pub fn replay_edge_cap(
+    num_cols: usize,
+    replay_cells: usize,
+    replay_mode: bool,
+    song_seconds: f32,
+) -> usize {
+    if replay_mode {
+        return 0;
+    }
+    // Live recording stores physical press/release edges, so reserve two edges
+    // per playable note cell, keep a small per-lane floor for early misses, and
+    // add a duration budget so a whole-song run does not grow on dense mashing.
+    let chart_cap = replay_cells.saturating_mul(2);
+    let floor_cap = num_cols.saturating_mul(REPLAY_EDGE_FLOOR_PER_LANE);
+    let seconds_cap = replay_seconds_cap(num_cols, song_seconds);
+    chart_cap.max(floor_cap).max(seconds_cap)
+}
+
+#[inline(always)]
+fn replay_seconds_cap(num_cols: usize, song_seconds: f32) -> usize {
+    if !song_seconds.is_finite() || song_seconds <= 0.0 {
+        return 0;
+    }
+    (song_seconds.ceil() as usize)
+        .saturating_mul(num_cols)
+        .saturating_mul(REPLAY_EDGE_RATE_PER_SEC)
+}
+
+#[inline(always)]
+pub const fn lane_press_started(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    pressed && !was_down && is_down
+}
+
+#[inline(always)]
+pub const fn lane_release_finished(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    !pressed && was_down && !is_down
+}
+
+#[inline(always)]
+pub const fn lane_edge_judges_tap(pressed: bool, slot_was_down: bool) -> bool {
+    pressed && !slot_was_down
+}
+
+#[inline(always)]
+pub const fn lane_edge_judges_lift(pressed: bool, slot_was_down: bool) -> bool {
+    !pressed && slot_was_down
+}
+
+#[inline(always)]
+pub const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
+    live_autoplay || lane_pressed
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct RecordedLaneEdge {
     pub lane_index: u8,
@@ -484,5 +553,53 @@ mod tests {
             exit_transition_alpha_elapsed(ExitTransitionKind::Cancel, 9.0),
             1.0,
         );
+    }
+
+    #[test]
+    fn input_queue_capacity_scales_by_field_count() {
+        assert_eq!(input_queue_cap(0), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(4), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(5), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+        assert_eq!(input_queue_cap(8), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+    }
+
+    #[test]
+    fn replay_capacity_uses_recording_budget() {
+        assert_eq!(replay_edge_cap(4, 0, true, 120.0), 0);
+        assert_eq!(replay_edge_cap(4, 0, false, 0.0), 4 * 64);
+        assert_eq!(
+            replay_edge_cap(4, 0, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(
+            replay_edge_cap(4, 120, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(replay_edge_cap(4, 4000, false, 2.0), 8000);
+        assert_eq!(
+            replay_edge_cap(8, 1000, false, 1.0),
+            8 * REPLAY_EDGE_RATE_PER_SEC
+        );
+    }
+
+    #[test]
+    fn lane_edges_classify_press_and_release() {
+        assert!(lane_press_started(true, false, true));
+        assert!(!lane_press_started(true, true, true));
+        assert!(lane_release_finished(false, true, false));
+        assert!(!lane_release_finished(false, true, true));
+
+        assert!(lane_edge_judges_tap(true, false));
+        assert!(!lane_edge_judges_tap(true, true));
+        assert!(lane_edge_judges_lift(false, true));
+        assert!(!lane_edge_judges_lift(false, false));
+    }
+
+    #[test]
+    fn autoplay_keeps_active_holds_pressed() {
+        assert!(active_hold_counts_as_pressed(true, false));
+        assert!(active_hold_counts_as_pressed(true, true));
+        assert!(active_hold_counts_as_pressed(false, true));
+        assert!(!active_hold_counts_as_pressed(false, false));
     }
 }
