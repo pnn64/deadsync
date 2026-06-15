@@ -3274,4 +3274,95 @@ mod tests {
             Instant::now(),
         ));
     }
+
+    #[test]
+    fn wheel_score_read_does_not_deadlock_with_leaderboard_worker() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
+
+        let profile_id = "test-deadlock-wheel-profile";
+        let chart_hash = "feedface";
+        let seeded = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 0.9123,
+            lamp_index: Some(2),
+            lamp_judge_count: Some(7),
+        };
+        // Seed every cache the read path consults so it never hits disk and the
+        // `ensure_*_loaded` helpers become no-ops during the run.
+        seed_session_local_itg_score(profile_id, chart_hash, seeded);
+        seed_session_gs_score(profile_id, chart_hash, seeded);
+        ensure_ac_score_cache_loaded_for_profile(profile_id);
+
+        let stop = Arc::new(AtomicBool::new(false));
+
+        // Worker: reproduce the pre-fix lock order
+        // (`PLAYER_LEADERBOARD_CACHE -> LOCAL -> GS -> AC`). If the wheel read
+        // ever again held a score cache across the leaderboard lock, this
+        // ordering would close the cycle and deadlock.
+        let worker_stop = Arc::clone(&stop);
+        let worker = std::thread::spawn(move || {
+            while !worker_stop.load(Ordering::Relaxed) {
+                let lb = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+                let local = LOCAL_SCORE_CACHE.lock().unwrap();
+                let gs = GS_SCORE_CACHE.lock().unwrap();
+                let ac = AC_SCORE_CACHE.lock().unwrap();
+                drop((ac, gs, local, lb));
+            }
+        });
+
+        // Wheel: the fixed read path, hammered on a watchdog-guarded thread.
+        const ITERS: usize = 20_000;
+        let (done_tx, done_rx) = mpsc::channel();
+        let wheel_profile = profile_id.to_string();
+        let wheel_chart = chart_hash.to_string();
+        let wheel = std::thread::spawn(move || {
+            let mut last = None;
+            for _ in 0..ITERS {
+                last = get_cached_score_with_profile(&wheel_chart, &wheel_profile);
+            }
+            let _ = done_tx.send(last);
+        });
+
+        let result = done_rx.recv_timeout(std::time::Duration::from_secs(30));
+        stop.store(true, Ordering::Relaxed);
+
+        match result {
+            Ok(last) => {
+                wheel.join().expect("wheel thread panicked");
+                worker.join().expect("worker thread panicked");
+                assert_eq!(
+                    last,
+                    Some(seeded),
+                    "wheel read returned an unexpected merged score"
+                );
+            }
+            Err(_) => {
+                // The wheel thread is blocked on a lock; joining would hang, so
+                // we deliberately leak it and fail loudly. This is the deadlock.
+                panic!(
+                    "song-wheel score read deadlocked against the leaderboard worker \
+                     no progress within 30s"
+                );
+            }
+        }
+
+        // Leave the shared caches clean for other tests in this process.
+        LOCAL_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
+        GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
+        AC_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
+    }
 }
