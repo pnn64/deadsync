@@ -9,6 +9,17 @@ use std::time::Instant;
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
+// Simply Love: ScreenGameplay GiveUpSeconds=0.33.
+pub const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
+// Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).
+pub const GIVE_UP_ABORT_TEXT_SECONDS: f32 = 0.5;
+pub const BACK_OUT_HOLD_SECONDS: f32 = 1.0;
+// Simply Love: ScreenGameplay out.lua (sleep 0.5, linear 1.0).
+const GIVE_UP_OUT_FADE_DELAY_SECONDS: f32 = 0.5;
+const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
+// Simply Love: _fade out normal.lua (sleep 0.1, linear 0.4).
+const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
+const BACK_OUT_FADE_SECONDS: f32 = 0.4;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayViewport {
@@ -378,4 +389,100 @@ pub enum GameplayAction {
 pub struct ExitTransition {
     pub kind: ExitTransitionKind,
     pub started_at: Instant,
+}
+
+#[inline(always)]
+pub const fn hold_to_exit_seconds(key: HoldToExitKey) -> f32 {
+    match key {
+        HoldToExitKey::Start => GIVE_UP_HOLD_SECONDS,
+        HoldToExitKey::Back => BACK_OUT_HOLD_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub const fn exit_total_seconds(kind: ExitTransitionKind) -> f32 {
+    match kind {
+        ExitTransitionKind::Out => GIVE_UP_OUT_FADE_DELAY_SECONDS + GIVE_UP_OUT_FADE_SECONDS,
+        ExitTransitionKind::Cancel => BACK_OUT_FADE_DELAY_SECONDS + BACK_OUT_FADE_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub fn exit_transition_alpha_elapsed(kind: ExitTransitionKind, elapsed_s: f32) -> f32 {
+    let (delay, fade) = match kind {
+        ExitTransitionKind::Out => (GIVE_UP_OUT_FADE_DELAY_SECONDS, GIVE_UP_OUT_FADE_SECONDS),
+        ExitTransitionKind::Cancel => (BACK_OUT_FADE_DELAY_SECONDS, BACK_OUT_FADE_SECONDS),
+    };
+    if fade <= 0.0 {
+        return 1.0;
+    }
+    let alpha = if elapsed_s <= delay {
+        0.0
+    } else {
+        (elapsed_s - delay) / fade
+    };
+    alpha.clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+pub fn exit_transition_alpha(exit: &ExitTransition) -> f32 {
+    exit_transition_alpha_elapsed(exit.kind, exit.started_at.elapsed().as_secs_f32())
+}
+
+#[inline(always)]
+pub const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
+    match kind {
+        ExitTransitionKind::Out => GameplayExit::Complete,
+        ExitTransitionKind::Cancel => GameplayExit::Cancel,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_near(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() <= 0.000_001,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn exit_timing_matches_screen_policy() {
+        assert_eq!(hold_to_exit_seconds(HoldToExitKey::Start), 0.33);
+        assert_eq!(hold_to_exit_seconds(HoldToExitKey::Back), 1.0);
+
+        assert_eq!(exit_total_seconds(ExitTransitionKind::Out), 1.5);
+        assert_eq!(exit_total_seconds(ExitTransitionKind::Cancel), 0.5);
+
+        assert_eq!(
+            gameplay_exit_for_kind(ExitTransitionKind::Out),
+            GameplayExit::Complete
+        );
+        assert_eq!(
+            gameplay_exit_for_kind(ExitTransitionKind::Cancel),
+            GameplayExit::Cancel
+        );
+    }
+
+    #[test]
+    fn exit_alpha_respects_delay_and_fade() {
+        assert_near(
+            exit_transition_alpha_elapsed(ExitTransitionKind::Out, 0.5),
+            0.0,
+        );
+        assert_near(
+            exit_transition_alpha_elapsed(ExitTransitionKind::Out, 1.0),
+            0.5,
+        );
+        assert_near(
+            exit_transition_alpha_elapsed(ExitTransitionKind::Cancel, 0.3),
+            0.5,
+        );
+        assert_near(
+            exit_transition_alpha_elapsed(ExitTransitionKind::Cancel, 9.0),
+            1.0,
+        );
+    }
 }

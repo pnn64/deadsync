@@ -10,12 +10,13 @@ use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 pub use deadsync_gameplay::{
     ActiveColumnFlash, ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion,
     AutosyncMode, ColumnCue, ColumnCueColumn, ColumnTapJudgment, ComboMilestoneKind, ErrorBarText,
-    ErrorBarTick, ExitTransition, ExitTransitionKind, GameplayAction, GameplayAudioSnapshot,
-    GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
-    GameplayStreamClockSnapshot, GameplayViewport, HeldMissRenderInfo, HoldJudgmentRenderInfo,
-    HoldToExitKey, JudgmentRenderInfo, LeadInTiming, MineJudgmentRenderInfo, NoteCountStat,
-    OffsetIndicatorText, RecordedLaneEdge, ReplayInputEdge, ReplayOffsetSnapshot,
-    active_hold_is_engaged,
+    ErrorBarTick, ExitTransition, ExitTransitionKind, GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction,
+    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayFailType,
+    GameplayMiniIndicatorData, GameplayMusicCut, GameplayStreamClockSnapshot, GameplayViewport,
+    HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, JudgmentRenderInfo, LeadInTiming,
+    MineJudgmentRenderInfo, NoteCountStat, OffsetIndicatorText, RecordedLaneEdge, ReplayInputEdge,
+    ReplayOffsetSnapshot, active_hold_is_engaged, exit_total_seconds, exit_transition_alpha,
+    gameplay_exit_for_kind, hold_to_exit_seconds,
 };
 use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
@@ -699,19 +700,6 @@ const STEP_SEARCH_DISTANCE_SECONDS: f32 = 1.0;
 // ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
 const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 
-// Simply Love: ScreenGameplay GiveUpSeconds=0.33
-const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
-// Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).
-const GIVE_UP_ABORT_TEXT_SECONDS: f32 = 0.5;
-const BACK_OUT_HOLD_SECONDS: f32 = 1.0;
-// Simply Love: ScreenGameplay out.lua (sleep 0.5, linear 1.0).
-const GIVE_UP_OUT_TOTAL_SECONDS: f32 = GIVE_UP_OUT_FADE_DELAY_SECONDS + GIVE_UP_OUT_FADE_SECONDS;
-const GIVE_UP_OUT_FADE_DELAY_SECONDS: f32 = 0.5;
-const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
-// Simply Love: _fade out normal.lua (sleep 0.1, linear 0.4).
-const BACK_OUT_TOTAL_SECONDS: f32 = BACK_OUT_FADE_DELAY_SECONDS + BACK_OUT_FADE_SECONDS;
-const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
-const BACK_OUT_FADE_SECONDS: f32 = 0.4;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
@@ -4773,41 +4761,11 @@ fn live_autoplay_judgment_offset_music_ns(
 }
 
 #[inline(always)]
-const fn exit_total_seconds(kind: ExitTransitionKind) -> f32 {
-    match kind {
-        ExitTransitionKind::Out => GIVE_UP_OUT_TOTAL_SECONDS,
-        ExitTransitionKind::Cancel => BACK_OUT_TOTAL_SECONDS,
-    }
-}
-
-#[inline(always)]
-pub fn exit_transition_alpha(exit: &ExitTransition) -> f32 {
-    let t = exit.started_at.elapsed().as_secs_f32();
-    let (delay, fade) = match exit.kind {
-        ExitTransitionKind::Out => (GIVE_UP_OUT_FADE_DELAY_SECONDS, GIVE_UP_OUT_FADE_SECONDS),
-        ExitTransitionKind::Cancel => (BACK_OUT_FADE_DELAY_SECONDS, BACK_OUT_FADE_SECONDS),
-    };
-    if fade <= 0.0 {
-        return 1.0;
-    }
-    let a = if t <= delay { 0.0 } else { (t - delay) / fade };
-    a.clamp(0.0, 1.0)
-}
-
-#[inline(always)]
 fn abort_hold_to_exit(state: &mut State, at: Instant) {
     if state.hold_to_exit_start.is_some() {
         state.hold_to_exit_key = None;
         state.hold_to_exit_start = None;
         state.hold_to_exit_aborted_at = Some(at);
-    }
-}
-
-#[inline(always)]
-const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
-    match kind {
-        ExitTransitionKind::Out => GameplayExit::Complete,
-        ExitTransitionKind::Cancel => GameplayExit::Cancel,
     }
 }
 
@@ -8526,10 +8484,7 @@ pub fn update(
     state.current_music_time_display = song_time_ns_to_seconds(display_music_time_ns);
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
-        let hold_s = match key {
-            HoldToExitKey::Start => GIVE_UP_HOLD_SECONDS,
-            HoldToExitKey::Back => BACK_OUT_HOLD_SECONDS,
-        };
+        let hold_s = hold_to_exit_seconds(key);
         if start_time.elapsed().as_secs_f32() >= hold_s {
             if key == HoldToExitKey::Start && music_time_ns >= state.notes_end_time_ns {
                 state.song_completed_naturally = true;
@@ -9405,9 +9360,6 @@ mod tests {
             None,
             None,
             None,
-            Arc::from("TEST"),
-            None,
-            None,
             None,
             None,
             None,
@@ -9618,9 +9570,6 @@ return Def.ActorFrame{}
                                 scroll_speed,
                                 player_profiles,
                                 None,
-                                None,
-                                None,
-                                Arc::from("TEST"),
                                 None,
                                 None,
                                 None,
