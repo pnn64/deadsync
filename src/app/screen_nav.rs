@@ -157,6 +157,18 @@ impl App {
         if prev != target && target == CurrentScreen::Menu {
             crate::game::online::lobbies::leave_lobby();
         }
+        // Leaving gameplay by ANY path (bail-out to the song wheel, fail, give up,
+        // course abort, results, etc.) must stop SMX sensor test mode, or it keeps
+        // streaming on later screens. This is the one chokepoint every transition
+        // routes through, so handle it here rather than per exit path. on_exit is
+        // idempotent; skip gameplay->gameplay (restart / next course stage) since
+        // on_enter re-establishes the mode anyway.
+        if prev == CurrentScreen::Gameplay
+            && target != CurrentScreen::Gameplay
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            crate::screens::gameplay::on_exit(gs);
+        }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
         write_current_screen_file(target);

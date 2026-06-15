@@ -9205,6 +9205,13 @@ impl App {
                 .map(course_display_timing_for_run);
             if prev == CurrentScreen::Gameplay
                 && self.state.session.course_run.is_some()
+            {
+                if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                    crate::screens::gameplay::on_exit(gs);
+                }
+            }
+            if prev == CurrentScreen::Gameplay
+                && self.state.session.course_run.is_some()
                 && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
             {
                 self.update_combo_carry_from_gameplay(&gameplay_results);
@@ -9636,6 +9643,9 @@ impl App {
         }
 
         if target == CurrentScreen::Evaluation {
+            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                crate::screens::gameplay::on_exit(gs);
+            }
             let gameplay_results = self.state.screens.gameplay_state.take();
             if let Some(gs) = gameplay_results.as_ref() {
                 self.update_combo_carry_from_gameplay(gs);
