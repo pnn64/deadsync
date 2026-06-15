@@ -1,8 +1,10 @@
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
 };
+use crate::game::parsing::noteskin::{ModelMeshCache, ModelMeshCacheStats};
 use crate::game::profile;
 use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
+use crate::screens::gameplay as gameplay_screen;
 use deadsync_chart::SongData;
 use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
@@ -14,6 +16,7 @@ use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{TimingData, TimingSegments};
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,6 +27,8 @@ const WINDOW_BEATS_AFTER: f32 = 24.0;
 
 pub struct NotefieldBenchFixture {
     state: gameplay::State,
+    noteskin_assets: gameplay_screen::GameplayNoteskinAssets,
+    notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     profile: profile_data::Profile,
 }
 
@@ -40,13 +45,41 @@ impl NotefieldBenchFixture {
         &self.profile
     }
 
-    pub fn into_parts(self) -> (gameplay::State, profile_data::Profile) {
-        (self.state, self.profile)
+    pub fn reset_notefield_model_cache_stats(&self) {
+        for cache in &self.notefield_model_cache {
+            cache.borrow_mut().reset_stats();
+        }
+    }
+
+    pub fn notefield_model_cache_stats(&self) -> [ModelMeshCacheStats; MAX_PLAYERS] {
+        std::array::from_fn(|player| self.notefield_model_cache[player].borrow().stats())
+    }
+
+    pub fn summed_notefield_model_cache_stats(&self) -> ModelMeshCacheStats {
+        self.notefield_model_cache_stats().into_iter().fold(
+            ModelMeshCacheStats::default(),
+            |mut acc, stats| {
+                acc.hits = acc.hits.saturating_add(stats.hits);
+                acc.misses = acc.misses.saturating_add(stats.misses);
+                acc.saturated_misses = acc.saturated_misses.saturating_add(stats.saturated_misses);
+                acc
+            },
+        )
+    }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        gameplay::State,
+        gameplay_screen::GameplayNoteskinAssets,
+        profile_data::Profile,
+    ) {
+        (self.state, self.noteskin_assets, self.profile)
     }
 
     pub fn build(&self, retained: bool) -> Vec<Actor> {
         if !retained {
-            for cache in &self.state.notefield_model_cache {
+            for cache in &self.notefield_model_cache {
                 cache.borrow_mut().clear();
             }
         }
@@ -54,6 +87,8 @@ impl NotefieldBenchFixture {
         let mut hud_actors = Vec::new();
         notefield::build_bundles(
             &self.state,
+            &self.noteskin_assets,
+            &self.notefield_model_cache,
             &self.profile,
             FieldPlacement::P1,
             profile_data::PlayStyle::Single,
@@ -94,13 +129,30 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].error_bar_text = true;
     player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 
+    let session = gameplay::GameplaySession::default();
+    let runtime_profiles = gameplay_screen::gameplay_runtime_profiles(&player_profiles, &session);
+    let noteskin_assets = gameplay_screen::gameplay_noteskin_assets(
+        profile_data::PlayStyle::Single.cols_per_player(),
+        profile_data::PlayStyle::Single.player_count(),
+        &runtime_profiles,
+    );
+    let noteskin_data = noteskin_assets.gameplay_data(
+        profile_data::PlayStyle::Single.cols_per_player(),
+        profile_data::PlayStyle::Single.player_count(),
+        &runtime_profiles,
+    );
+
     let mut state = gameplay::init(
         song,
         charts,
         gameplay_charts,
         gameplay::GameplayViewport::default(),
-        gameplay::GameplaySession::default(),
+        session,
         gameplay::GameplayConfig::default(),
+        deadsync_chart::SyncPref::Default,
+        gameplay::GameplayScoreData::default(),
+        noteskin_data,
+        gameplay::GameplaySongLuaData::default(),
         0,
         1.0,
         [
@@ -121,9 +173,13 @@ pub fn fixture() -> NotefieldBenchFixture {
     );
 
     prime_visible_window(&mut state);
+    let notefield_model_cache =
+        gameplay_screen::notefield_model_cache_from_assets(&noteskin_assets, state.num_players);
 
     NotefieldBenchFixture {
         state,
+        noteskin_assets,
+        notefield_model_cache,
         profile: player_profiles[0].clone(),
     }
 }
@@ -195,6 +251,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         window: "W1",
         bright: false,
         elapsed: 0.08,
+        duration: 0.6,
         start_beat: beat,
     });
     state.column_cues[0] = vec![ColumnCue {

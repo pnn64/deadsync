@@ -36,6 +36,13 @@ use self::textures::{
     register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
 };
 
+pub fn media_path_key(path: &Path) -> Arc<str> {
+    match path.to_string_lossy() {
+        std::borrow::Cow::Borrowed(key) => Arc::from(key),
+        std::borrow::Cow::Owned(key) => Arc::from(key),
+    }
+}
+
 #[derive(Debug)]
 pub enum AssetError {
     FontParse(FontParseError),

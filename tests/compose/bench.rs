@@ -1098,12 +1098,12 @@ fn benchmark_notefield_actor_builder(
     drop(sample_render);
     drop(sample_actors);
 
-    fixture.state().reset_notefield_model_cache_stats();
+    fixture.reset_notefield_model_cache_stats();
     for _ in 0..warmup {
         let actors = build_actors(fixture);
         black_box(actor_count(&actors));
     }
-    fixture.state().reset_notefield_model_cache_stats();
+    fixture.reset_notefield_model_cache_stats();
 
     let start_alloc = ALLOC.begin_measurement();
     let started = Instant::now();
@@ -1116,8 +1116,8 @@ fn benchmark_notefield_actor_builder(
             .wrapping_add(actors.len() as u64);
         black_box(checksum);
     }
-    let model_cache_stats = fixture.state().notefield_model_cache_stats();
-    let model_cache_total = fixture.state().summed_notefield_model_cache_stats();
+    let model_cache_stats = fixture.notefield_model_cache_stats();
+    let model_cache_total = fixture.summed_notefield_model_cache_stats();
 
     let final_actors = build_actors(fixture);
     let actual_actor_hash =

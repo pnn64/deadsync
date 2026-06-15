@@ -25,7 +25,8 @@ use crate::game::{
     scores,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
-use deadsync_core::input::MAX_COLS;
+use crate::screens::gameplay::GameplayNoteskinAssets;
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
@@ -4380,8 +4381,10 @@ const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
     mine_result.is_some()
 }
 
-pub fn build_bundles(
+pub(crate) fn build_bundles(
     state: &State,
+    noteskin_assets: &GameplayNoteskinAssets,
+    model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     profile: &profile_data::Profile,
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
@@ -4475,7 +4478,7 @@ pub fn build_bundles(
     actors.reserve(actor_cap);
     hud_actors.reserve(hud_cap);
     let p = &state.players[player_idx];
-    let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
+    let mut model_cache = model_caches[player_idx].borrow_mut();
 
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
     // apply the player-side sign flip used by Simply Love (P1=-, P2=+).
@@ -4648,15 +4651,19 @@ pub fn build_bundles(
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
 
-    if let Some(ns) = &state.noteskin[player_idx] {
-        let mine_ns = state.mine_noteskin[player_idx].as_deref().unwrap_or(ns);
-        let receptor_ns = state.receptor_noteskin[player_idx].as_deref().unwrap_or(ns);
+    if let Some(ns) = &noteskin_assets.noteskin[player_idx] {
+        let mine_ns = noteskin_assets.mine_noteskin[player_idx]
+            .as_deref()
+            .unwrap_or(ns);
+        let receptor_ns = noteskin_assets.receptor_noteskin[player_idx]
+            .as_deref()
+            .unwrap_or(ns);
         let tap_explosion_ns = if profile.tap_explosion_noteskin_hidden() {
             None
         } else {
-            state.tap_explosion_noteskin[player_idx]
+            noteskin_assets.tap_explosion_noteskin[player_idx]
                 .as_deref()
-                .or_else(|| state.noteskin[player_idx].as_deref())
+                .or_else(|| noteskin_assets.noteskin[player_idx].as_deref())
         };
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
@@ -9421,7 +9428,7 @@ pub fn build_bundles(
     let mut indicator_col_offsets = [0.0_f32; MAX_COLS];
     fill_lane_col_offsets(
         &mut indicator_col_offsets,
-        state.noteskin[player_idx]
+        noteskin_assets.noteskin[player_idx]
             .as_ref()
             .map(|ns| ns.column_xs.as_slice()),
         num_cols,
