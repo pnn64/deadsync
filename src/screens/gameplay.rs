@@ -9408,6 +9408,8 @@ const SMX_DOUBLES_PAIR_GAP: f32 = 10.0;
 // so negative-Mini notes don't overlap). Tunable.
 const SMX_DOUBLES_STACK_TOP_FRAC: f32 = 0.6;
 const SMX_DOUBLES_STACK_GAP: f32 = 12.0;
+// Extra downward nudge for the Doubles FSR pair only (mini stays put). Tunable.
+const SMX_DOUBLES_FSR_Y_OFFSET: f32 = 5.0;
 fn smx_centered_layout(
     side: profile_data::PlayerSide,
     field_left: f32,
@@ -9477,7 +9479,7 @@ fn push_smx_sensor_display(
         let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = pad_group_w * 2.0 + group_gap;
         let start_x = center_x - total_w * 0.5;
-        let top_y = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC;
+        let top_y = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC + SMX_DOUBLES_FSR_Y_OFFSET;
         for sdk_pad in 0..2usize {
             let gx = start_x + sdk_pad as f32 * (pad_group_w + group_gap);
             draw_smx_fsr_group(actors, state, sdk_pad, gx, top_y, 1.0);
