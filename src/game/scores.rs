@@ -1820,6 +1820,8 @@ fn spawn_player_leaderboard_fetch(
         let mut queued_gs_username = None;
         let mut queued_persistent_profile_id = None;
         let mut queued_auto_profile_id = None;
+        let mut fetched_itl_self = None;
+        let mut fetched_imported_score = None;
 
         {
             let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
@@ -1842,28 +1844,10 @@ fn spawn_player_leaderboard_fetch(
                                 itl_self_found,
                             } = fetched;
                             if itl_self_found {
-                                itl::set_cached_online_self_score(
-                                    persistent_profile_id.as_deref(),
-                                    key.api_key.as_str(),
-                                    key.chart_hash.as_str(),
-                                    data.itl_self_score,
-                                );
-                                itl::set_cached_online_self_rank(
-                                    persistent_profile_id.as_deref(),
-                                    key.api_key.as_str(),
-                                    key.chart_hash.as_str(),
-                                    data.itl_self_rank,
-                                );
+                                fetched_itl_self = Some((data.itl_self_score, data.itl_self_rank));
                             }
-                            if should_auto_populate
-                                && let Some(profile_id) = auto_profile_id.as_deref()
-                            {
-                                cache_gs_score_from_leaderboard(
-                                    profile_id,
-                                    gs_username.as_str(),
-                                    key.chart_hash.as_str(),
-                                    imported_score,
-                                );
+                            if should_auto_populate && auto_profile_id.is_some() {
+                                fetched_imported_score = imported_score;
                             }
                             cache.by_key.insert(
                                 key.clone(),
@@ -1920,6 +1904,33 @@ fn spawn_player_leaderboard_fetch(
                 queued_persistent_profile_id = Some(persistent_profile_id.clone());
                 queued_auto_profile_id = Some(auto_profile_id.clone());
             }
+        }
+
+        // Keep score/ITL cache writes outside PLAYER_LEADERBOARD_CACHE. The wheel
+        // can hold score-cache guards while probing leaderboard rank state.
+        if let Some((itl_self_score, itl_self_rank)) = fetched_itl_self {
+            itl::set_cached_online_self_score(
+                persistent_profile_id.as_deref(),
+                key.api_key.as_str(),
+                key.chart_hash.as_str(),
+                itl_self_score,
+            );
+            itl::set_cached_online_self_rank(
+                persistent_profile_id.as_deref(),
+                key.api_key.as_str(),
+                key.chart_hash.as_str(),
+                itl_self_rank,
+            );
+        }
+        if let Some(imported_score) = fetched_imported_score
+            && let Some(profile_id) = auto_profile_id.as_deref()
+        {
+            cache_gs_score_from_leaderboard(
+                profile_id,
+                gs_username.as_str(),
+                key.chart_hash.as_str(),
+                Some(imported_score),
+            );
         }
 
         if let (
