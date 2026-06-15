@@ -8684,6 +8684,16 @@ pub fn push_actors(
                 let life_percent = life_for_render * 100.0;
                 let life_percent_text = cached_life_percent_text(life_percent);
 
+                let lifebar_center_shift = if centered_single_notefield {
+                    let clamped_width = screen_width().clamp(640.0, 854.0);
+                    match side {
+                        profile_data::PlayerSide::P1 => clamped_width * 0.25,
+                        profile_data::PlayerSide::P2 => -clamped_width * 0.25,
+                    }
+                } else {
+                    0.0
+                };
+
                 match state.player_profiles[player_idx].lifemeter_type {
                     profile_data::LifeMeterType::Standard => {
                         let w = 136.0;
@@ -8831,7 +8841,7 @@ pub fn push_actors(
                             profile_data::PlayerSide::P1 => {
                                 actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
-                                zoomto(w, h):
+                                zoomto(w + lifebar_center_shift, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 faderight(0.8):
                                 croptop(croptop):
@@ -8841,7 +8851,7 @@ pub fn push_actors(
                             profile_data::PlayerSide::P2 => {
                                 actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
-                                zoomto(w, h):
+                                zoomto(w - lifebar_center_shift, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
                                 fadeleft(0.8):
                                 croptop(croptop):
@@ -8872,7 +8882,7 @@ pub fn push_actors(
                                     };
                             }
 
-                            x
+                            x + lifebar_center_shift
                         };
 
                         let cy = bar_h + 10.0;
