@@ -112,6 +112,7 @@ const DISPLAY_MODS_OPTION_SPACE: char = '\u{00A0}';
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
 const ERROR_BAR_LONG_AVG_TICK_EXTRA_H: f32 = 65.0;
+const ERROR_BAR_LONG_AVG_TICK_WIDTH: f32 = 1.0; // SL Average.lua: LongAvgTick zoomto(1, ...)
 const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
 const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
 const ERROR_BAR_TEXT_10MS_FAST_RGBA: [f32; 4] = color::rgba_hex("#0051db");
@@ -2370,6 +2371,11 @@ fn combo_actor_zoom(mini: f32) -> f32 {
     // ActorFrame's mini scale is inherited by both the combo display and
     // the front judgment actor in Simply Love.
     0.5_f32.powf(mini).min(1.0)
+}
+
+#[inline(always)]
+fn average_error_bar_mini_scale(mini: f32) -> f32 {
+    (1.1 - 0.545 * mini).max(0.0)
 }
 
 #[inline(always)]
@@ -8584,6 +8590,7 @@ pub fn build_bundles(
     if num_cols > 0 {
         average_bar_y /= num_cols as f32;
     }
+    let avg_error_bar_mini_scale = average_error_bar_mini_scale(mini);
     let judgment_z = if profile.judgment_back {
         Z_JUDGMENT_BACK
     } else {
@@ -8992,7 +8999,7 @@ pub fn build_bundles(
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
                     let max_offset_s = state.timing_profile.windows_s[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                        (ERROR_BAR_WIDTH_AVERAGE * 0.5) / max_offset_s
+                        (ERROR_BAR_WIDTH_AVERAGE * 0.5 * avg_error_bar_mini_scale) / max_offset_s
                     } else {
                         0.0
                     };
@@ -9008,8 +9015,10 @@ pub fn build_bundles(
                         && wscale.is_finite()
                         && wscale > 0.0
                     {
-                        let tick_h =
-                            ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H;
+                        let tick_h = (ERROR_BAR_HEIGHT_AVERAGE
+                            + 4.0
+                            + ERROR_BAR_AVERAGE_TICK_EXTRA_H)
+                            * avg_error_bar_mini_scale;
 
                         if profile.center_tick {
                             hud_actors.push(act!(quad:
@@ -9044,7 +9053,7 @@ pub fn build_bundles(
                             }
                             hud_actors.push(act!(quad:
                             align(0.5, 0.5): xy(error_bar_x + x, average_bar_y):
-                            zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
+                            zoomto(ERROR_BAR_TICK_WIDTH * avg_error_bar_mini_scale, tick_h):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(Z_ERROR_BAR_AVERAGE)
                         ));
@@ -9069,8 +9078,13 @@ pub fn build_bundles(
             } else {
                 ERROR_BAR_WIDTH_MONOCHROME
             };
+            let long_mini_scale = if show_error_bar_average {
+                avg_error_bar_mini_scale
+            } else {
+                1.0
+            };
             let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                (bar_width * 0.5) / max_offset_s
+                (bar_width * 0.5 * long_mini_scale) / max_offset_s
             } else {
                 0.0
             };
@@ -9099,11 +9113,13 @@ pub fn build_bundles(
                     } else {
                         error_bar_line_z
                     };
-                    let long_tick_h =
-                        ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_LONG_AVG_TICK_EXTRA_H;
+                    let long_tick_h = (ERROR_BAR_HEIGHT_AVERAGE
+                        + 4.0
+                        + ERROR_BAR_LONG_AVG_TICK_EXTRA_H)
+                        * long_mini_scale;
                     hud_actors.push(act!(quad:
                         align(0.5, 0.5): xy(error_bar_x + x, long_tick_y):
-                        zoomto(ERROR_BAR_TICK_WIDTH, long_tick_h):
+                        zoomto(ERROR_BAR_LONG_AVG_TICK_WIDTH, long_tick_h):
                         diffuse(ERROR_BAR_LONG_AVG_TICK_RGBA[0], ERROR_BAR_LONG_AVG_TICK_RGBA[1], ERROR_BAR_LONG_AVG_TICK_RGBA[2], alpha):
                         z(long_tick_z)
                     ));
