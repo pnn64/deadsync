@@ -3,6 +3,7 @@ use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
 use crate::game::scores;
+use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
 use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
@@ -34,7 +35,7 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
+    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs, TimingSegments,
 };
 use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
@@ -3788,6 +3789,21 @@ pub struct GameplayConfig {
     pub delayed_back: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameplayPackInfo {
+    pub banner_path: Option<PathBuf>,
+    pub sync_pref: SyncPref,
+}
+
+impl Default for GameplayPackInfo {
+    fn default() -> Self {
+        Self {
+            banner_path: None,
+            sync_pref: SyncPref::Default,
+        }
+    }
+}
+
 impl Default for GameplayConfig {
     fn default() -> Self {
         Self {
@@ -4254,6 +4270,41 @@ pub fn media_path_key(path: &Path) -> Arc<str> {
         Cow::Borrowed(key) => Arc::from(key),
         Cow::Owned(key) => Arc::from(key),
     }
+}
+
+pub fn song_pack_group(song: &SongData) -> Arc<str> {
+    Arc::from(
+        song.simfile_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_owned(),
+    )
+}
+
+fn build_background_changes(
+    song: &SongData,
+    timing: &TimingData,
+    timing_segments: &TimingSegments,
+    random_movie_paths: Vec<PathBuf>,
+) -> Vec<SongBackgroundChange> {
+    if random_movie_paths.is_empty() {
+        return song.background_changes.clone();
+    }
+    let seed_text = song
+        .simfile_path
+        .parent()
+        .map(|path| path.to_string_lossy())
+        .unwrap_or_else(|| song.simfile_path.to_string_lossy());
+    expand_random_background_changes(
+        song,
+        timing,
+        timing_segments,
+        random_movie_paths,
+        seed_text.as_ref(),
+    )
 }
 
 impl GameplayUpdateTraceState {
@@ -5609,6 +5660,8 @@ pub fn init(
     viewport: GameplayViewport,
     session: GameplaySession,
     config: GameplayConfig,
+    random_movie_paths: Vec<PathBuf>,
+    pack_info: GameplayPackInfo,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -5727,25 +5780,17 @@ pub fn init(
     });
 
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
-    let mut pack_group: Arc<str> = Arc::from(
-        song.simfile_path
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_owned(),
-    );
-    let (mut pack_banner_path, pack_sync_pref): (Option<PathBuf>, SyncPref) =
-        if pack_group.is_empty() {
-            (None, SyncPref::Default)
-        } else {
-            crate::game::song::get_song_cache()
-                .iter()
-                .find(|p| p.group_name == pack_group.as_ref())
-                .map(|p| (p.banner_path.clone(), p.sync_pref))
-                .unwrap_or((None, SyncPref::Default))
-        };
+    let mut pack_group = song_pack_group(&song);
+    let mut pack_banner_path = if pack_group.is_empty() {
+        None
+    } else {
+        pack_info.banner_path
+    };
+    let pack_sync_pref = if pack_group.is_empty() {
+        SyncPref::Default
+    } else {
+        pack_info.sync_pref
+    };
     if let Some(course_info) = course_display_info.as_ref() {
         pack_group = course_info.name.clone();
         pack_banner_path.clone_from(&course_info.banner_path);
@@ -6582,11 +6627,11 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
-    let background_changes = crate::game::random_movies::build_background_changes(
+    let background_changes = build_background_changes(
         &song,
         &timing,
         &gameplay_charts[0].timing_segments,
-        config.random_background_mode == GameplayBackgroundMode::RandomMovies,
+        random_movie_paths,
     );
     let next_background_change_ix = background_changes
         .iter()
@@ -9634,6 +9679,8 @@ mod tests {
             super::GameplayViewport::default(),
             super::GameplaySession::default(),
             super::GameplayConfig::default(),
+            Vec::new(),
+            super::GameplayPackInfo::default(),
             5,
             1.0,
             [
@@ -9797,6 +9844,8 @@ return Def.ActorFrame{}
                                 super::GameplayViewport::default(),
                                 super::GameplaySession::default(),
                                 super::GameplayConfig::default(),
+                                Vec::new(),
+                                super::GameplayPackInfo::default(),
                                 5,
                                 1.0,
                                 [

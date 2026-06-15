@@ -101,6 +101,8 @@ pub fn fixture() -> NotefieldBenchFixture {
         gameplay::GameplayViewport::default(),
         gameplay::GameplaySession::default(),
         gameplay::GameplayConfig::default(),
+        Vec::new(),
+        gameplay::GameplayPackInfo::default(),
         0,
         1.0,
         [

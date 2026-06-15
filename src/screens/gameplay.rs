@@ -64,13 +64,13 @@ pub struct ActorViewOverride {
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
     CourseDisplayTotals, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayConfig, GameplayExit, GameplayMusicCut, GameplaySession, GameplaySessionCommand,
-    GameplayStreamClockSnapshot, GameplayViewport, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
-    TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
-    handle_input as gameplay_handle_input, scroll_receptor_y, timing_tick_status_line,
-    toggle_flash_text, update as gameplay_update,
+    GameplayBackgroundMode, GameplayConfig, GameplayExit, GameplayMusicCut, GameplayPackInfo,
+    GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, GameplayViewport,
+    LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    ReplayInputEdge, ReplayOffsetSnapshot, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
+    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
+    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
+    scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -302,6 +302,21 @@ impl DerefMut for State {
     }
 }
 
+fn gameplay_pack_info(song: &SongData) -> GameplayPackInfo {
+    let pack_group = gameplay_core::song_pack_group(song);
+    if pack_group.is_empty() {
+        return GameplayPackInfo::default();
+    }
+    crate::game::song::get_song_cache()
+        .iter()
+        .find(|pack| pack.group_name == pack_group.as_ref())
+        .map(|pack| GameplayPackInfo {
+            banner_path: pack.banner_path.clone(),
+            sync_pref: pack.sync_pref,
+        })
+        .unwrap_or_default()
+}
+
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -324,6 +339,11 @@ pub fn init(
     course_display_info: Option<CourseDisplayInfo>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
+    let random_movie_paths = crate::game::random_movies::random_movie_paths(
+        &song,
+        config.random_background_mode == GameplayBackgroundMode::RandomMovies,
+    );
+    let pack_info = gameplay_pack_info(&song);
     State::from_gameplay(gameplay_core::init(
         song,
         charts,
@@ -331,6 +351,8 @@ pub fn init(
         viewport,
         session,
         config,
+        random_movie_paths,
+        pack_info,
         active_color_index,
         music_rate,
         scroll_speed,
