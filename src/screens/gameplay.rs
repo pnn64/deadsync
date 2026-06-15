@@ -9403,6 +9403,11 @@ const SMX_CENTERED_SCALE: f32 = 2.0;
 const SMX_CENTERED_STACK_GAP: f32 = 16.0;
 // Gap between the two pads' groups in a Doubles pair.
 const SMX_DOUBLES_PAIR_GAP: f32 = 10.0;
+// Doubles stacks the FSR pair over the mini pair, centered on the playfield, with
+// the top of the stack this fraction down the screen (clear of the side gutters
+// so negative-Mini notes don't overlap). Tunable.
+const SMX_DOUBLES_STACK_TOP_FRAC: f32 = 0.6;
+const SMX_DOUBLES_STACK_GAP: f32 = 12.0;
 fn smx_centered_layout(
     side: profile_data::PlayerSide,
     field_left: f32,
@@ -9457,21 +9462,24 @@ fn push_smx_sensor_display(
 
     if is_doubles {
         // One player drives both pads. Show both pad groups (pad 0 left, pad 1
-        // right) beside each other, just outside the left edge of the wide
-        // centered notefield. Gated on the doubles player's toggle (profile 0);
-        // sensor arrays are keyed by SDK pad here (see on_enter).
+        // right) beside each other, centered on the playfield with the stack top
+        // 3/5 down the screen (under the judgement), clear of the gutters. Gated
+        // on the doubles player's toggle (profile 0); sensor arrays are keyed by
+        // SDK pad here (see on_enter).
         if !state.player_profiles[0].smx_fsr_display {
             return;
         }
-        let Some((_, field_left, _)) = field_geom[0] else {
+        let Some((_, field_left, field_right)) = field_geom[0] else {
             return;
         };
+        let field_x = (field_left + field_right) * 0.5;
         let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = pad_group_w * 2.0 + group_gap;
-        let start_x = (field_left - SMX_OVERLAY_FIELD_GAP - total_w).max(SMX_SENSOR_MARGIN);
+        let start_x = field_x - total_w * 0.5;
+        let top_y = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC;
         for sdk_pad in 0..2usize {
             let gx = start_x + sdk_pad as f32 * (pad_group_w + group_gap);
-            draw_smx_fsr_group(actors, state, sdk_pad, gx, group_top, 1.0);
+            draw_smx_fsr_group(actors, state, sdk_pad, gx, top_y, 1.0);
         }
         return;
     }
@@ -9682,21 +9690,26 @@ fn push_smx_pad_input_display(
 
     if is_doubles {
         // One player drives both pads. Show both mini-pads (pad 0 left, pad 1
-        // right) beside each other, just outside the right edge of the wide
-        // centered notefield. Gated on the doubles player's toggle (profile 0).
+        // right) beside each other, centered on the playfield directly under the
+        // FSR pair. Gated on the doubles player's toggle (profile 0).
         if !state.player_profiles[0].smx_pad_input_display {
             return;
         }
-        let Some((_, _, field_right)) = field_geom[0] else {
+        let Some((_, field_left, field_right)) = field_geom[0] else {
             return;
         };
+        let field_x = (field_left + field_right) * 0.5;
         let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = mini_w * 2.0 + group_gap;
-        let start_x = (field_right + SMX_OVERLAY_FIELD_GAP)
-            .min(screen_width() - SMX_SENSOR_MARGIN - total_w);
+        let start_x = field_x - total_w * 0.5;
+        // Below the FSR pair (which starts SMX_DOUBLES_STACK_TOP_FRAC down).
+        let fsr_group_h = SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_BAR_H;
+        let mini_top = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC
+            + fsr_group_h
+            + SMX_DOUBLES_STACK_GAP;
         for half in 0..2usize {
             let x0 = start_x + half as f32 * (mini_w + group_gap);
-            draw_smx_mini_pad(actors, state, half * 4, x0, y0, 1.0);
+            draw_smx_mini_pad(actors, state, half * 4, x0, mini_top, 1.0);
         }
         return;
     }
