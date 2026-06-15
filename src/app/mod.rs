@@ -73,7 +73,7 @@ use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
-use deadsync_gameplay::{GameplayConfig, GameplayFailType, GameplayViewport};
+use deadsync_gameplay::{GameplayConfig, GameplayFailType, GameplayViewport, LeadInTiming};
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
@@ -9101,7 +9101,7 @@ impl App {
                     None,
                     Some(Arc::from("Practice Mode")),
                     Arc::from("PRACTICE MODE"),
-                    Some(crate::game::gameplay::LeadInTiming {
+                    Some(LeadInTiming {
                         min_seconds_to_step: 0.0,
                         min_seconds_to_music: 0.0,
                     }),
@@ -9484,7 +9484,7 @@ impl App {
 
                 let color_index = po_state.active_color_index;
                 let lead_in_timing = self.state.session.course_run.as_ref().and_then(|course| {
-                    (course.next_stage_index > 0).then_some(crate::game::gameplay::LeadInTiming {
+                    (course.next_stage_index > 0).then_some(LeadInTiming {
                         min_seconds_to_step: COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG,
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })

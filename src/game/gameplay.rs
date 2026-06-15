@@ -8,7 +8,14 @@ use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 pub use deadsync_gameplay::{
-    GameplayConfig, GameplayFailType, GameplayMiniIndicatorData, GameplayViewport,
+    ActiveColumnFlash, ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion,
+    AutosyncMode, ColumnCue, ColumnCueColumn, ColumnTapJudgment, ComboMilestoneKind, ErrorBarText,
+    ErrorBarTick, ExitTransition, ExitTransitionKind, GameplayAction, GameplayAudioSnapshot,
+    GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayStreamClockSnapshot, GameplayViewport, HeldMissRenderInfo, HoldJudgmentRenderInfo,
+    HoldToExitKey, JudgmentRenderInfo, LeadInTiming, MineJudgmentRenderInfo, NoteCountStat,
+    OffsetIndicatorText, RecordedLaneEdge, ReplayInputEdge, ReplayOffsetSnapshot,
+    active_hold_is_engaged,
 };
 use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
@@ -641,10 +648,6 @@ impl PerspectiveOverrides {
     }
 }
 
-// These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
-// Simply Love scales them by MusicRate, so we apply that in init().
-const MIN_SECONDS_TO_STEP: f32 = 6.0;
-const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 pub const SCOREBOX_NUM_ENTRIES: usize = 5;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
@@ -809,34 +812,6 @@ fn player_draw_scale_with_visual_mask(
 fn player_draw_scale(profile: &profile_data::Profile) -> f32 {
     let visual_mask = profile.visual_effects_active_mask.bits();
     player_draw_scale_with_visual_mask(profile, visual_mask, 0.0)
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct LeadInTiming {
-    pub min_seconds_to_step: f32,
-    pub min_seconds_to_music: f32,
-}
-
-impl Default for LeadInTiming {
-    fn default() -> Self {
-        Self {
-            min_seconds_to_step: MIN_SECONDS_TO_STEP,
-            min_seconds_to_music: MIN_SECONDS_TO_MUSIC,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HoldToExitKey {
-    Start,
-    Back,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AutosyncMode {
-    Off,
-    Song,
-    Machine,
 }
 
 #[inline(always)]
@@ -2838,108 +2813,6 @@ impl RowEntry {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ColumnCueColumn {
-    pub column: usize,
-    pub is_mine: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct ColumnCue {
-    pub start_time: f32,
-    pub duration: f32,
-    pub columns: Vec<ColumnCueColumn>,
-}
-
-#[derive(Clone, Debug)]
-pub struct JudgmentRenderInfo {
-    pub judgment: Judgment,
-    pub started_at_screen_s: f32,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct MineJudgmentRenderInfo {
-    pub result: MineResult,
-    pub column: usize,
-    pub started_at_screen_s: f32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct HoldJudgmentRenderInfo {
-    pub result: HoldResult,
-    pub started_at_screen_s: f32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct HeldMissRenderInfo {
-    pub started_at_screen_s: f32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct ActiveTapExplosion {
-    pub window: &'static str,
-    pub bright: bool,
-    pub elapsed: f32,
-    pub duration: f32,
-    pub start_beat: f32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct ActiveColumnFlash {
-    pub grade: JudgeGrade,
-    pub blue_fantastic: bool,
-    pub started_at_screen_s: f32,
-}
-
-/// Most recent tap judgement on a column, recorded unconditionally (independent of the
-/// column-flash and tap-explosion visual masks) for feedback consumers such as SMX panel
-/// lighting. Set in `trigger_column_flash`, which every tap grade (hits and misses) reaches.
-#[derive(Copy, Clone, Debug)]
-pub struct ColumnTapJudgment {
-    pub grade: JudgeGrade,
-    pub blue_fantastic: bool,
-    pub at_screen_s: f32,
-}
-
-#[derive(Clone, Debug)]
-pub struct ActiveMineExplosion {
-    pub elapsed: f32,
-    pub duration: f32,
-    /// Screen time when the mine was hit. Lets ungated feedback consumers (SMX panel
-    /// lighting) tell consecutive hits on the same column apart, like the other
-    /// `*_at_screen_s` markers.
-    pub started_at_screen_s: f32,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ComboMilestoneKind {
-    Hundred,
-    Thousand,
-}
-
-#[derive(Clone, Debug)]
-pub struct ActiveComboMilestone {
-    pub kind: ComboMilestoneKind,
-    pub elapsed: f32,
-}
-
-#[derive(Clone, Debug)]
-pub struct ActiveHold {
-    pub note_index: usize,
-    pub start_time_ns: SongTimeNs,
-    pub end_time_ns: SongTimeNs,
-    pub note_type: NoteType,
-    pub let_go: bool,
-    pub is_pressed: bool,
-    pub life: f32,
-    pub last_update_time_ns: SongTimeNs,
-}
-
-#[inline(always)]
-pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
-    !active.let_go && active.life > 0.0
-}
-
 #[inline(always)]
 const fn column_cue_is_mine(note: &Note) -> Option<bool> {
     if note.is_fake {
@@ -3064,29 +2937,6 @@ fn compute_column_scroll_dirs(
         }
     }
     dirs
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ErrorBarTick {
-    pub started_at: f32,
-    pub offset_s: f32,
-    pub window: TimingWindow,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ErrorBarText {
-    pub started_at: f32,
-    pub early: bool,
-    pub offset_ms: f32,
-    pub scaled: bool,
-    pub scale_start_ms: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct OffsetIndicatorText {
-    pub started_at: f32,
-    pub offset_ms: f32,
-    pub window: TimingWindow,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -3440,22 +3290,6 @@ fn apply_course_combo_carry(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct RecordedLaneEdge {
-    pub lane_index: u8,
-    pub pressed: bool,
-    pub source: InputSource,
-    pub event_music_time_ns: SongTimeNs,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ReplayInputEdge {
-    pub lane_index: u8,
-    pub pressed: bool,
-    pub source: InputSource,
-    pub event_music_time_ns: SongTimeNs,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ActiveInputSlot {
     source: InputSource,
@@ -3468,11 +3302,6 @@ const EMPTY_ACTIVE_INPUT_SLOT: ActiveInputSlot = ActiveInputSlot {
     input_slot: 0,
     lane_mask: 0,
 };
-
-#[derive(Clone, Copy, Debug)]
-pub struct ReplayOffsetSnapshot {
-    pub beat0_time_ns: SongTimeNs,
-}
 
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayUpdatePhaseTimings {
@@ -3590,13 +3419,6 @@ impl Default for GameplayUpdateTraceState {
             density_life_capacity: [0; MAX_PLAYERS],
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct NoteCountStat {
-    pub beat: f32,
-    pub notes_lower: usize,
-    pub notes_upper: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3960,57 +3782,6 @@ impl Default for GameplayNoteskinData {
     fn default() -> Self {
         Self {
             effects: GameplayNoteskinEffects::default(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct GameplayStreamClockSnapshot {
-    pub stream_seconds: f32,
-    pub music_nanos: SongTimeNs,
-    pub music_seconds_per_second: f32,
-    pub has_music_mapping: bool,
-    pub valid_at: Instant,
-    pub valid_at_host_nanos: u64,
-}
-
-impl Default for GameplayStreamClockSnapshot {
-    fn default() -> Self {
-        Self {
-            stream_seconds: 0.0,
-            music_nanos: 0,
-            music_seconds_per_second: 1.0,
-            has_music_mapping: false,
-            valid_at: Instant::now(),
-            valid_at_host_nanos: 0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct GameplayAudioSnapshot {
-    pub stream_clock: GameplayStreamClockSnapshot,
-    pub assist_sfx_generation: u64,
-    pub output_delay_seconds: f32,
-    pub timing_diag_enabled: bool,
-    pub timing_diag_callback_gap_ns: u64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GameplayMusicCut {
-    pub start_sec: f64,
-    pub length_sec: f64,
-    pub fade_in_sec: f64,
-    pub fade_out_sec: f64,
-}
-
-impl Default for GameplayMusicCut {
-    fn default() -> Self {
-        Self {
-            start_sec: 0.0,
-            length_sec: f64::INFINITY,
-            fade_in_sec: 0.0,
-            fade_out_sec: 0.0,
         }
     }
 }
@@ -4999,31 +4770,6 @@ fn live_autoplay_judgment_offset_music_ns(
         TimingProfileNs::from_profile_scaled(&state.timing_profile, state.music_rate)
     };
     autoplay_random_offset_music_ns_for_window(&mut state.autoplay_rng, timing_profile, window)
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExitTransitionKind {
-    Out,
-    Cancel,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameplayExit {
-    Complete,
-    Cancel,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameplayAction {
-    None,
-    Navigate(GameplayExit),
-    NavigateNoFade(GameplayExit),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ExitTransition {
-    pub kind: ExitTransitionKind,
-    pub started_at: Instant,
 }
 
 #[inline(always)]

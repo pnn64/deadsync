@@ -7,6 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-rules = { path = "../deadsync-rules" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

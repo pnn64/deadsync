@@ -1,5 +1,14 @@
 use deadsync_chart::SyncPref;
-use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::input::{InputSource, MAX_PLAYERS};
+use deadsync_core::note::NoteType;
+use deadsync_core::song_time::SongTimeNs;
+use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
+use deadsync_rules::note::{HoldResult, MineResult};
+use std::time::Instant;
+
+// ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
+const MIN_SECONDS_TO_STEP: f32 = 6.0;
+const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayViewport {
@@ -74,6 +83,19 @@ impl Default for GameplayFailType {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldToExitKey {
+    Start,
+    Back,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutosyncMode {
+    Off,
+    Song,
+    Machine,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayConfig {
     pub mine_hit_sound: bool,
@@ -118,4 +140,242 @@ impl Default for GameplayMiniIndicatorData {
             machine_best_percent: [None; MAX_PLAYERS],
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct LeadInTiming {
+    pub min_seconds_to_step: f32,
+    pub min_seconds_to_music: f32,
+}
+
+impl Default for LeadInTiming {
+    fn default() -> Self {
+        Self {
+            min_seconds_to_step: MIN_SECONDS_TO_STEP,
+            min_seconds_to_music: MIN_SECONDS_TO_MUSIC,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayStreamClockSnapshot {
+    pub stream_seconds: f32,
+    pub music_nanos: SongTimeNs,
+    pub music_seconds_per_second: f32,
+    pub has_music_mapping: bool,
+    pub valid_at: Instant,
+    pub valid_at_host_nanos: u64,
+}
+
+impl Default for GameplayStreamClockSnapshot {
+    fn default() -> Self {
+        Self {
+            stream_seconds: 0.0,
+            music_nanos: 0,
+            music_seconds_per_second: 1.0,
+            has_music_mapping: false,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayAudioSnapshot {
+    pub stream_clock: GameplayStreamClockSnapshot,
+    pub assist_sfx_generation: u64,
+    pub output_delay_seconds: f32,
+    pub timing_diag_enabled: bool,
+    pub timing_diag_callback_gap_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayMusicCut {
+    pub start_sec: f64,
+    pub length_sec: f64,
+    pub fade_in_sec: f64,
+    pub fade_out_sec: f64,
+}
+
+impl Default for GameplayMusicCut {
+    fn default() -> Self {
+        Self {
+            start_sec: 0.0,
+            length_sec: f64::INFINITY,
+            fade_in_sec: 0.0,
+            fade_out_sec: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ColumnCueColumn {
+    pub column: usize,
+    pub is_mine: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ColumnCue {
+    pub start_time: f32,
+    pub duration: f32,
+    pub columns: Vec<ColumnCueColumn>,
+}
+
+#[derive(Clone, Debug)]
+pub struct JudgmentRenderInfo {
+    pub judgment: Judgment,
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct MineJudgmentRenderInfo {
+    pub result: MineResult,
+    pub column: usize,
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct HoldJudgmentRenderInfo {
+    pub result: HoldResult,
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct HeldMissRenderInfo {
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ActiveTapExplosion {
+    pub window: &'static str,
+    pub bright: bool,
+    pub elapsed: f32,
+    pub duration: f32,
+    pub start_beat: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ActiveColumnFlash {
+    pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ColumnTapJudgment {
+    pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
+    pub at_screen_s: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActiveMineExplosion {
+    pub elapsed: f32,
+    pub duration: f32,
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ComboMilestoneKind {
+    Hundred,
+    Thousand,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActiveComboMilestone {
+    pub kind: ComboMilestoneKind,
+    pub elapsed: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActiveHold {
+    pub note_index: usize,
+    pub start_time_ns: SongTimeNs,
+    pub end_time_ns: SongTimeNs,
+    pub note_type: NoteType,
+    pub let_go: bool,
+    pub is_pressed: bool,
+    pub life: f32,
+    pub last_update_time_ns: SongTimeNs,
+}
+
+#[inline(always)]
+pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
+    !active.let_go && active.life > 0.0
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RecordedLaneEdge {
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+    pub event_music_time_ns: SongTimeNs,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ReplayInputEdge {
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+    pub event_music_time_ns: SongTimeNs,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ReplayOffsetSnapshot {
+    pub beat0_time_ns: SongTimeNs,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ErrorBarTick {
+    pub started_at: f32,
+    pub offset_s: f32,
+    pub window: TimingWindow,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ErrorBarText {
+    pub started_at: f32,
+    pub early: bool,
+    pub offset_ms: f32,
+    pub scaled: bool,
+    pub scale_start_ms: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct OffsetIndicatorText {
+    pub started_at: f32,
+    pub offset_ms: f32,
+    pub window: TimingWindow,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NoteCountStat {
+    pub beat: f32,
+    pub notes_lower: usize,
+    pub notes_upper: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitTransitionKind {
+    Out,
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayExit {
+    Complete,
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayAction {
+    None,
+    Navigate(GameplayExit),
+    NavigateNoFade(GameplayExit),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ExitTransition {
+    pub kind: ExitTransitionKind,
+    pub started_at: Instant,
 }
