@@ -1,4 +1,3 @@
-use crate::config::RandomBackgroundMode;
 use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_platform::dirs;
@@ -12,9 +11,9 @@ pub fn build_background_changes(
     song: &SongData,
     timing: &TimingData,
     timing_segments: &TimingSegments,
-    mode: RandomBackgroundMode,
+    random_movies: bool,
 ) -> Vec<SongBackgroundChange> {
-    if mode != RandomBackgroundMode::RandomMovies {
+    if !random_movies {
         return song.background_changes.clone();
     }
     let roots = random_movie_roots();

@@ -1,4 +1,3 @@
-use crate::game::profile;
 use deadsync_profile::TimingTickMode as TickMode;
 use log::debug;
 use std::time::Instant;
@@ -9,14 +8,9 @@ use super::offset::{
     start_offset_adjust_hold,
 };
 use super::{
-    AutosyncMode, MAX_COLS, State, assist_clap_cursor_for_row, assist_row_no_offset,
-    player_note_range, song_time_ns_to_seconds,
+    AutosyncMode, GameplaySessionCommand, MAX_COLS, State, assist_clap_cursor_for_row,
+    assist_row_no_offset, player_note_range, queue_session_command,
 };
-
-#[inline(always)]
-fn current_music_time_from_stream(state: &State) -> f32 {
-    song_time_ns_to_seconds(super::clock::current_song_clock_snapshot(state).song_time_ns)
-}
 
 #[inline(always)]
 pub(super) const fn next_tick_mode(mode: TickMode) -> TickMode {
@@ -55,7 +49,7 @@ fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
         return;
     }
     state.tick_mode = mode;
-    profile::set_session_timing_tick_mode(mode);
+    queue_session_command(state, GameplaySessionCommand::SetTimingTickMode(mode));
 
     let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;
@@ -139,6 +133,7 @@ pub fn handle_queued_raw_key(
     code: KeyCode,
     pressed: bool,
     timestamp: Instant,
+    now_music_time: f32,
     allow_commands: bool,
 ) -> RawKeyAction {
     update_raw_modifier_state(state, code, pressed);
@@ -158,13 +153,11 @@ pub fn handle_queued_raw_key(
     }
 
     if code == KeyCode::F7 {
-        let now_music_time = current_music_time_from_stream(state);
         set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
         return RawKeyAction::None;
     }
 
     if code == KeyCode::F8 {
-        let now_music_time = current_music_time_from_stream(state);
         set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
         return RawKeyAction::None;
     }

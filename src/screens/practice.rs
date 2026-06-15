@@ -424,7 +424,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     };
 
-    let action = gameplay_core::update(&mut state.gameplay, delta_time);
+    let action = gameplay_core::update(
+        &mut state.gameplay,
+        delta_time,
+        gameplay_screen::audio_snapshot(),
+    );
+    gameplay_screen::drain_core_commands(&mut state.gameplay);
     let current_time = gameplay_core::current_music_time_seconds(&state.gameplay);
     let stop_time = gameplay_core::music_time_for_beat(&state.gameplay, stop_beat);
     if current_time >= stop_time + LOOP_AFTER_SECONDS
@@ -952,7 +957,7 @@ fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
     let start_time = gameplay_core::music_time_for_beat(&state.gameplay, start_beat);
     let playback_time = snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS);
     gameplay_core::start_practice_music_at(&mut state.gameplay, playback_time, start_time);
-    crate::screens::gameplay::drain_core_audio_commands(&mut state.gameplay);
+    crate::screens::gameplay::drain_core_commands(&mut state.gameplay);
     state.mode = Mode::Playing {
         start_beat,
         stop_beat,

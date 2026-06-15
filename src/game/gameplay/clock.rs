@@ -1,11 +1,10 @@
-use deadsync_audio_stream as audio;
 use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use super::{
-    SongTimeNs, State, clamp_song_time_ns, normalized_song_rate, scaled_song_delta_ns,
-    scaled_song_time_ns, song_time_ns_from_seconds, song_time_ns_invalid,
+    GameplayAudioSnapshot, SongTimeNs, State, clamp_song_time_ns, normalized_song_rate,
+    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_from_seconds, song_time_ns_invalid,
     song_time_ns_span_seconds, song_time_ns_to_seconds, stream_pos_to_music_time,
 };
 
@@ -16,6 +15,8 @@ pub(crate) struct SongClockSnapshot {
     pub(crate) mapped_audio: bool,
     pub(crate) valid_at: Instant,
     pub(crate) valid_at_host_nanos: u64,
+    pub(crate) timing_diag_enabled: bool,
+    pub(crate) timing_diag_callback_gap_ns: u64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -188,8 +189,11 @@ pub fn collect_display_clock_stutter_diag_events(
 }
 
 #[inline(always)]
-pub(crate) fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
-    let stream_clock = audio::get_music_stream_clock_snapshot();
+pub(crate) fn current_song_clock_snapshot(
+    state: &State,
+    audio_snapshot: GameplayAudioSnapshot,
+) -> SongClockSnapshot {
+    let stream_clock = audio_snapshot.stream_clock;
     let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -208,6 +212,8 @@ pub(crate) fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
             mapped_audio: true,
             valid_at: stream_clock.valid_at,
             valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
         }
     } else {
         let song_time = stream_pos_to_music_time(state, stream_clock.stream_seconds);
@@ -217,6 +223,8 @@ pub(crate) fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
             mapped_audio: false,
             valid_at: stream_clock.valid_at,
             valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
         }
     }
 }
@@ -230,11 +238,11 @@ pub(crate) fn music_time_ns_from_song_clock(
     let snapshot_song_time = song_time_ns_to_seconds(snapshot.song_time_ns);
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
         let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
-        if audio::timing_diag_enabled() {
+        if snapshot.timing_diag_enabled {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 dt_nanos as f64 * 1e-6,
-                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
                 snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
@@ -247,11 +255,11 @@ pub(crate) fn music_time_ns_from_song_clock(
     }
     let delta_host_nanos = if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at)
     {
-        if audio::timing_diag_enabled() {
+        if snapshot.timing_diag_enabled {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 -(age.as_secs_f64() * 1000.0),
-                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
                 snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
@@ -260,11 +268,11 @@ pub(crate) fn music_time_ns_from_song_clock(
         }
         -(age.as_nanos() as i128)
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
-        if audio::timing_diag_enabled() {
+        if snapshot.timing_diag_enabled {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 lead.as_secs_f64() * 1000.0,
-                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
                 snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
@@ -273,10 +281,10 @@ pub(crate) fn music_time_ns_from_song_clock(
         }
         lead.as_nanos() as i128
     } else {
-        if audio::timing_diag_enabled() {
+        if snapshot.timing_diag_enabled {
             debug!(
                 "AUDIO_DIAG snap_age_ms=0.000 path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
-                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
                 snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,

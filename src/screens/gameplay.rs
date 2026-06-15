@@ -63,13 +63,14 @@ pub struct ActorViewOverride {
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
-    CourseDisplayTotals, GameplayAction, GameplayAudioCommand, GameplayConfig, GameplayExit,
-    GameplayMusicCut, GameplaySession, GameplayViewport, LeadInTiming,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge,
-    ReplayOffsetSnapshot, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
-    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
-    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
-    scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
+    CourseDisplayTotals, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
+    GameplayConfig, GameplayExit, GameplayMusicCut, GameplaySession, GameplaySessionCommand,
+    GameplayStreamClockSnapshot, GameplayViewport, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
+    TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
+    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
+    handle_input as gameplay_handle_input, scroll_receptor_y, timing_tick_status_line,
+    toggle_flash_text, update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -792,6 +793,25 @@ fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
     }
 }
 
+pub fn audio_snapshot() -> GameplayAudioSnapshot {
+    let stream_clock = deadsync_audio_stream::get_music_stream_clock_snapshot();
+    let output_timing = deadsync_audio_stream::get_output_timing_snapshot();
+    GameplayAudioSnapshot {
+        stream_clock: GameplayStreamClockSnapshot {
+            stream_seconds: stream_clock.stream_seconds,
+            music_nanos: stream_clock.music_nanos,
+            music_seconds_per_second: stream_clock.music_seconds_per_second,
+            has_music_mapping: stream_clock.has_music_mapping,
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        },
+        assist_sfx_generation: deadsync_audio_stream::assist_sfx_generation(),
+        output_delay_seconds: output_timing.estimated_output_delay_ns as f32 * 1e-9,
+        timing_diag_enabled: deadsync_audio_stream::timing_diag_enabled(),
+        timing_diag_callback_gap_ns: deadsync_audio_stream::timing_diag_last_callback_gap_ns(),
+    }
+}
+
 pub fn drain_core_audio_commands(state: &mut gameplay_core::State) {
     for command in gameplay_core::drain_audio_commands(state) {
         match command {
@@ -812,16 +832,39 @@ pub fn drain_core_audio_commands(state: &mut gameplay_core::State) {
             GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
                 deadsync_audio_stream::play_preloaded_assist_tick(path);
             }
-            GameplayAudioCommand::PlayScheduledAssistTick {
+            GameplayAudioCommand::PlayAssistTickAtMusicTime {
                 path,
-                target_stream_frame,
-            } => deadsync_audio_stream::play_scheduled_assist_tick(path, target_stream_frame),
+                music_seconds,
+            } => {
+                if let Some(frame) =
+                    deadsync_audio_stream::assist_tick_stream_frame_for_music_seconds(music_seconds)
+                {
+                    deadsync_audio_stream::play_scheduled_assist_tick(path, frame);
+                } else {
+                    deadsync_audio_stream::play_preloaded_assist_tick(path);
+                }
+            }
         }
     }
 }
 
+pub fn drain_core_session_commands(state: &mut gameplay_core::State) {
+    for command in gameplay_core::drain_session_commands(state) {
+        match command {
+            GameplaySessionCommand::SetTimingTickMode(mode) => {
+                crate::game::profile::set_session_timing_tick_mode(mode);
+            }
+        }
+    }
+}
+
+pub fn drain_core_commands(state: &mut gameplay_core::State) {
+    drain_core_audio_commands(state);
+    drain_core_session_commands(state);
+}
+
 pub fn drain_audio_commands(state: &mut State) {
-    drain_core_audio_commands(&mut state.gameplay);
+    drain_core_commands(&mut state.gameplay);
 }
 
 pub fn on_enter(state: &mut State) {
@@ -863,7 +906,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     update_lobby_machine_state(state);
     let previous_song_lua_time = state.current_music_time_display;
-    let action = gameplay_update(state, delta_time);
+    let action = gameplay_update(state, delta_time, audio_snapshot());
     drain_audio_commands(state);
     play_song_lua_sound_events(
         state,

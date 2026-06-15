@@ -1,10 +1,8 @@
-use crate::config::{DefaultFailType, RandomBackgroundMode};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
 use crate::game::scores;
-use deadsync_audio_stream as audio;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
 use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
@@ -3756,10 +3754,29 @@ impl Default for GameplaySession {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GameplayFailType {
+    Immediate,
+    ImmediateContinue,
+}
+
+impl Default for GameplayFailType {
+    fn default() -> Self {
+        Self::ImmediateContinue
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GameplayBackgroundMode {
+    #[default]
+    Off,
+    RandomMovies,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayConfig {
     pub translated_titles: bool,
     pub mine_hit_sound: bool,
-    pub default_fail_type: DefaultFailType,
+    pub default_fail_type: GameplayFailType,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
     pub machine_pack_ini_offsets: bool,
@@ -3767,7 +3784,7 @@ pub struct GameplayConfig {
     pub machine_allow_per_player_global_offsets: bool,
     pub machine_enable_replays: bool,
     pub center_1player_notefield: bool,
-    pub random_background_mode: RandomBackgroundMode,
+    pub random_background_mode: GameplayBackgroundMode,
     pub delayed_back: bool,
 }
 
@@ -3776,7 +3793,7 @@ impl Default for GameplayConfig {
         Self {
             translated_titles: false,
             mine_hit_sound: true,
-            default_fail_type: DefaultFailType::ImmediateContinue,
+            default_fail_type: GameplayFailType::ImmediateContinue,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
             machine_pack_ini_offsets: false,
@@ -3784,10 +3801,42 @@ impl Default for GameplayConfig {
             machine_allow_per_player_global_offsets: false,
             machine_enable_replays: true,
             center_1player_notefield: false,
-            random_background_mode: RandomBackgroundMode::Off,
+            random_background_mode: GameplayBackgroundMode::Off,
             delayed_back: true,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayStreamClockSnapshot {
+    pub stream_seconds: f32,
+    pub music_nanos: SongTimeNs,
+    pub music_seconds_per_second: f32,
+    pub has_music_mapping: bool,
+    pub valid_at: Instant,
+    pub valid_at_host_nanos: u64,
+}
+
+impl Default for GameplayStreamClockSnapshot {
+    fn default() -> Self {
+        Self {
+            stream_seconds: 0.0,
+            music_nanos: 0,
+            music_seconds_per_second: 1.0,
+            has_music_mapping: false,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayAudioSnapshot {
+    pub stream_clock: GameplayStreamClockSnapshot,
+    pub assist_sfx_generation: u64,
+    pub output_delay_seconds: f32,
+    pub timing_diag_enabled: bool,
+    pub timing_diag_callback_gap_ns: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3820,10 +3869,15 @@ pub enum GameplayAudioCommand {
     },
     PlayPreloadedSfx(&'static str),
     PlayPreloadedAssistTick(&'static str),
-    PlayScheduledAssistTick {
+    PlayAssistTickAtMusicTime {
         path: &'static str,
-        target_stream_frame: u64,
+        music_seconds: f64,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplaySessionCommand {
+    SetTimingTickMode(TickMode),
 }
 
 pub struct State {
@@ -3855,6 +3909,7 @@ pub struct State {
     pub session: GameplaySession,
     pub config: GameplayConfig,
     audio_commands: Vec<GameplayAudioCommand>,
+    session_commands: Vec<GameplaySessionCommand>,
     pub timing: Arc<TimingData>,
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
@@ -3864,6 +3919,8 @@ pub struct State {
     pub note_ranges: [(usize, usize); MAX_PLAYERS],
     pub note_count_stats: [Vec<NoteCountStat>; MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
+    pub audio_stream_position_seconds: f32,
+    pub audio_output_delay_seconds: f32,
     pub current_beat: f32,
     pub current_music_time_ns: SongTimeNs,
     pub current_beat_display: f32,
@@ -3884,7 +3941,7 @@ pub struct State {
     audio_end_time_ns: SongTimeNs,
     pub music_rate: f32,
     pub play_mine_sounds: bool,
-    pub default_fail_type: DefaultFailType,
+    pub default_fail_type: GameplayFailType,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
     pub player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
@@ -4144,6 +4201,16 @@ pub(super) fn queue_audio_command(state: &mut State, command: GameplayAudioComma
 }
 
 #[inline(always)]
+pub fn drain_session_commands(state: &mut State) -> std::vec::Drain<'_, GameplaySessionCommand> {
+    state.session_commands.drain(..)
+}
+
+#[inline(always)]
+pub(super) fn queue_session_command(state: &mut State, command: GameplaySessionCommand) {
+    state.session_commands.push(command);
+}
+
+#[inline(always)]
 fn queue_stop_music(state: &mut State) {
     queue_audio_command(state, GameplayAudioCommand::StopMusic);
 }
@@ -4172,12 +4239,12 @@ pub(super) fn queue_preloaded_assist_tick(state: &mut State, path: &'static str)
 }
 
 #[inline(always)]
-fn queue_scheduled_assist_tick(state: &mut State, path: &'static str, target_stream_frame: u64) {
+fn queue_assist_tick_at_music_time(state: &mut State, path: &'static str, music_seconds: f64) {
     queue_audio_command(
         state,
-        GameplayAudioCommand::PlayScheduledAssistTick {
+        GameplayAudioCommand::PlayAssistTickAtMusicTime {
             path,
-            target_stream_frame,
+            music_seconds,
         },
     );
 }
@@ -5257,6 +5324,11 @@ pub fn beat_for_music_time(state: &State, music_time: f32) -> f32 {
 #[inline(always)]
 pub fn current_music_time_seconds(state: &State) -> f32 {
     song_time_ns_to_seconds(state.current_music_time_ns)
+}
+
+#[inline(always)]
+pub fn music_time_from_audio_snapshot(state: &State, audio_snapshot: GameplayAudioSnapshot) -> f32 {
+    song_time_ns_to_seconds(current_song_clock_snapshot(state, audio_snapshot).song_time_ns)
 }
 
 pub fn seek_practice_display(state: &mut State, music_time: f32) {
@@ -6514,7 +6586,7 @@ pub fn init(
         &song,
         &timing,
         &gameplay_charts[0].timing_segments,
-        config.random_background_mode,
+        config.random_background_mode == GameplayBackgroundMode::RandomMovies,
     );
     let next_background_change_ix = background_changes
         .iter()
@@ -6558,6 +6630,7 @@ pub fn init(
         session,
         config,
         audio_commands: Vec::with_capacity(8),
+        session_commands: Vec::with_capacity(2),
         timing,
         timing_players,
         beat_info_cache,
@@ -6567,6 +6640,8 @@ pub fn init(
         note_ranges,
         note_count_stats,
         audio_lead_in_seconds: start_delay,
+        audio_stream_position_seconds: 0.0,
+        audio_output_delay_seconds: 0.0,
         current_beat: init_beat,
         current_music_time_ns: song_time_ns_from_seconds(init_music_time),
         current_beat_display: init_beat,
@@ -6766,7 +6841,7 @@ pub fn init(
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
-        assist_sfx_gen_seen: audio::assist_sfx_generation(),
+        assist_sfx_gen_seen: 0,
         toggle_flash_text: None,
         toggle_flash_timer: 0.0,
         replay_input,
@@ -7771,7 +7846,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
                 state.song_offset_seconds,
                 effective_player_global_offset_seconds(state, player),
                 state.audio_lead_in_seconds.max(0.0),
-                audio::get_music_stream_position_seconds(),
+                state.audio_stream_position_seconds,
             )
         } else {
             (0.0, 0.0, 0.0, 0.0)
@@ -8160,7 +8235,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
             state.song_offset_seconds,
             effective_player_global_offset_seconds(state, player),
             state.audio_lead_in_seconds.max(0.0),
-            audio::get_music_stream_position_seconds(),
+            state.audio_stream_position_seconds,
         )
     } else {
         (0.0, 0.0, 0.0, 0.0)
@@ -8272,16 +8347,21 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
 }
 
 #[inline(always)]
-fn run_assist_clap(state: &mut State, current_row: i32, music_time_ns: SongTimeNs, slope: f32) {
+fn run_assist_clap(
+    state: &mut State,
+    current_row: i32,
+    music_time_ns: SongTimeNs,
+    slope: f32,
+    assist_sfx_generation: u64,
+) {
     let song_row = current_row.max(0);
 
     // Detect an audio timeline reset (stop / seek / track change). On reset the
     // mixer drops every scheduled tick from the old timeline, so the scheduling
     // cursor must re-anchor to the new audible position.
-    let sfx_gen = audio::assist_sfx_generation();
-    let timeline_reset = sfx_gen != state.assist_sfx_gen_seen;
+    let timeline_reset = assist_sfx_generation != state.assist_sfx_gen_seen;
     if timeline_reset {
-        state.assist_sfx_gen_seen = sfx_gen;
+        state.assist_sfx_gen_seen = assist_sfx_generation;
     }
 
     if state.tick_mode != TickMode::Assist {
@@ -8342,8 +8422,8 @@ fn assist_lookahead_future_row(
     slope: f32,
     song_row: i32,
 ) -> i32 {
-    let delay_seconds = audio::get_output_timing_snapshot().estimated_output_delay_ns as f32 * 1e-9;
-    let music_horizon = assist_lookahead_music_horizon_seconds(delay_seconds, slope);
+    let music_horizon =
+        assist_lookahead_music_horizon_seconds(state.audio_output_delay_seconds, slope);
     let future_time = song_time_ns_add_seconds(music_time_ns, music_horizon);
     assist_row_no_offset_ns(state, future_time).max(song_row)
 }
@@ -8359,10 +8439,7 @@ fn schedule_assist_clap_row(state: &mut State, clap_row: usize) {
     };
     let row_time_ns = state.timing.get_time_for_beat_no_offset_ns(beat);
     let music_seconds = row_time_ns as f64 * 1e-9;
-    match audio::assist_tick_stream_frame_for_music_seconds(music_seconds) {
-        Some(frame) => queue_scheduled_assist_tick(state, ASSIST_TICK_SFX_PATH, frame),
-        None => queue_preloaded_assist_tick(state, ASSIST_TICK_SFX_PATH),
-    }
+    queue_assist_tick_at_music_time(state, ASSIST_TICK_SFX_PATH, music_seconds);
 }
 
 #[inline(always)]
@@ -8698,7 +8775,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                     let song_offset_s = state.song_offset_seconds;
                     let global_offset_s = effective_player_global_offset_seconds(state, player);
                     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
-                    let stream_pos_s = audio::get_music_stream_position_seconds();
+                    let stream_pos_s = state.audio_stream_position_seconds;
                     let expected_stream_for_note_s =
                         note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
                     let expected_stream_for_miss_s =
@@ -8757,7 +8834,11 @@ fn settle_completion_rows(state: &mut State) -> bool {
     score_rows_finalized(state)
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
+pub fn update(
+    state: &mut State,
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+) -> GameplayAction {
     if let Some(exit) = state.exit_transition {
         state.total_elapsed_in_screen += delta_time;
         if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
@@ -8774,6 +8855,8 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         None
     };
     let mut phase_timings = GameplayUpdatePhaseTimings::default();
+    state.audio_stream_position_seconds = audio_snapshot.stream_clock.stream_seconds;
+    state.audio_output_delay_seconds = audio_snapshot.output_delay_seconds.max(0.0);
 
     if let Some(at) = state.hold_to_exit_aborted_at
         && at.elapsed().as_secs_f32() >= GIVE_UP_ABORT_TEXT_SECONDS
@@ -8783,7 +8866,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
-    let song_clock = current_song_clock_snapshot(state);
+    let song_clock = current_song_clock_snapshot(state, audio_snapshot);
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time_ns = state.current_music_time_ns;
     let mut music_time_ns = song_clock.song_time_ns;
@@ -8868,6 +8951,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
             song_row,
             music_time_ns,
             song_clock.seconds_per_second,
+            audio_snapshot.assist_sfx_generation,
         );
 
         for player in 0..state.num_players {
@@ -9053,7 +9137,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
-    if matches!(state.default_fail_type, DefaultFailType::Immediate)
+    if matches!(state.default_fail_type, GameplayFailType::Immediate)
         && all_joined_players_failed(state)
     {
         debug!("All joined players failed. Transitioning to evaluation.");
@@ -9177,43 +9261,43 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
         FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        GameplayAudioCommand, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo,
-        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
-        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng, active_hold_counts_as_pressed,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
-        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
-        apply_time_based_tap_misses, assist_lookahead_music_horizon_seconds,
-        autoplay_random_offset_music_ns_for_window, begin_outro_attack_clear,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
-        collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
-        drain_audio_commands, effective_appearance_effects_for_player,
-        effective_mini_percent_for_player, effective_player_global_offset_seconds,
-        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
-        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
-        error_bar_average_offset_s, error_bar_long_term_offset_s, error_bar_register_tap,
-        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time_ns, grade_to_window, handle_input, handle_queued_raw_key,
-        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
-        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        render_provisional_early_rescore_feedback, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        set_final_note_result, settle_completion_rows, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
-        step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        GameplayAudioCommand, GameplaySessionCommand, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo,
+        HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
+        OFFSET_ADJUST_STEP_SECONDS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng,
+        active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
+        advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
+        apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
+        apply_time_based_mine_avoidance, apply_time_based_tap_misses,
+        assist_lookahead_music_horizon_seconds, autoplay_random_offset_music_ns_for_window,
+        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        crossed_mine_held_start_time, drain_audio_commands, drain_session_commands,
+        effective_appearance_effects_for_player, effective_mini_percent_for_player,
+        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
+        effective_visibility_effects_for_player, effective_visual_effects_for_player,
+        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
+        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
+        handle_input, handle_queued_raw_key, hit_mine, input_queue_cap,
+        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
+        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
+        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
+        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -10198,7 +10282,7 @@ return Def.ActorFrame{}
         let global_before = state.global_offset_seconds;
 
         sync_queued_raw_modifiers(&mut state, true, false);
-        let _ = handle_queued_raw_key(&mut state, KeyCode::F12, true, Instant::now(), true);
+        let _ = handle_queued_raw_key(&mut state, KeyCode::F12, true, Instant::now(), 0.0, true);
 
         assert!((state.song_offset_seconds - song_before).abs() <= 1e-6);
         assert!(
@@ -10300,6 +10384,25 @@ return Def.ActorFrame{}
         assert_eq!(mode, TickMode::Assist);
         assert_eq!(next_tick_mode(mode), TickMode::Hit);
         assert_eq!(next_tick_mode(TickMode::Hit), TickMode::Off);
+    }
+
+    #[test]
+    fn timing_tick_key_queues_session_command() {
+        let profiles = [
+            profile_data::Profile::default(),
+            profile_data::Profile::default(),
+        ];
+        let mut state = regression_state(profiles);
+
+        let action =
+            handle_queued_raw_key(&mut state, KeyCode::F7, true, Instant::now(), 0.0, true);
+
+        assert!(matches!(action, super::RawKeyAction::None));
+        assert_eq!(super::timing_tick_status_line(&state), Some("Assist Tick"));
+        assert_eq!(
+            drain_session_commands(&mut state).collect::<Vec<_>>(),
+            vec![GameplaySessionCommand::SetTimingTickMode(TickMode::Assist)]
+        );
     }
 
     #[test]
@@ -10606,6 +10709,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: now,
             valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
         process_input_edges(&mut state, false, &mut phase_timings, clock);
@@ -10638,6 +10743,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: captured_at,
             valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
         process_input_edges(&mut state, false, &mut phase_timings, clock);
@@ -10664,6 +10771,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: now,
             valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
         process_input_edges(&mut state, false, &mut phase_timings, clock);
@@ -11948,6 +12057,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: base + Duration::from_millis(24),
             valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(snapshot, base, 0));
         assert!((edge_time - 119.964).abs() < 0.000_5);
@@ -11962,6 +12073,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: base,
             valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(
             snapshot,
@@ -11979,6 +12092,8 @@ return Def.ActorFrame{}
             mapped_audio: true,
             valid_at: Instant::now(),
             valid_at_host_nanos: 2_000_000_000,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
         };
         let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(
             snapshot,

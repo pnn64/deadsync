@@ -153,12 +153,34 @@ fn gameplay_session() -> crate::game::gameplay::GameplaySession {
     }
 }
 
+fn gameplay_fail_type(
+    fail_type: config::DefaultFailType,
+) -> crate::game::gameplay::GameplayFailType {
+    match fail_type {
+        config::DefaultFailType::Immediate => crate::game::gameplay::GameplayFailType::Immediate,
+        config::DefaultFailType::ImmediateContinue => {
+            crate::game::gameplay::GameplayFailType::ImmediateContinue
+        }
+    }
+}
+
+fn gameplay_background_mode(
+    mode: config::RandomBackgroundMode,
+) -> crate::game::gameplay::GameplayBackgroundMode {
+    match mode {
+        config::RandomBackgroundMode::Off => crate::game::gameplay::GameplayBackgroundMode::Off,
+        config::RandomBackgroundMode::RandomMovies => {
+            crate::game::gameplay::GameplayBackgroundMode::RandomMovies
+        }
+    }
+}
+
 fn gameplay_config() -> crate::game::gameplay::GameplayConfig {
     let cfg = config::get();
     crate::game::gameplay::GameplayConfig {
         translated_titles: cfg.translated_titles,
         mine_hit_sound: cfg.mine_hit_sound,
-        default_fail_type: cfg.default_fail_type,
+        default_fail_type: gameplay_fail_type(cfg.default_fail_type),
         global_offset_seconds: cfg.global_offset_seconds,
         visual_delay_seconds: cfg.visual_delay_seconds,
         machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
@@ -166,7 +188,7 @@ fn gameplay_config() -> crate::game::gameplay::GameplayConfig {
         machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
         machine_enable_replays: cfg.machine_enable_replays,
         center_1player_notefield: cfg.center_1player_notefield,
-        random_background_mode: cfg.random_background_mode,
+        random_background_mode: gameplay_background_mode(cfg.random_background_mode),
         delayed_back: cfg.delayed_back,
     }
 }

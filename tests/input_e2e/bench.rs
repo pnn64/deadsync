@@ -340,7 +340,11 @@ fn step_gameplay(
     checksum: u64,
     measured: bool,
 ) -> u64 {
-    let action = gameplay::update(state, delta_time);
+    let action = gameplay::update(
+        state,
+        delta_time,
+        gameplay::GameplayAudioSnapshot::default(),
+    );
     let mut checksum = mix_checksum(checksum, checksum_state(state, action));
     if measured {
         checksum = mix_checksum(

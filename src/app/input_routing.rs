@@ -149,13 +149,19 @@ impl App {
             self.state.shell.shift_held,
             self.state.shell.ctrl_held,
         );
+        let now_music_time = crate::game::gameplay::music_time_from_audio_snapshot(
+            gs,
+            crate::screens::gameplay::audio_snapshot(),
+        );
         let action = crate::game::gameplay::handle_queued_raw_key(
             gs,
             ev.code,
             ev.pressed,
             ev.timestamp,
+            now_music_time,
             allow_commands,
         );
+        crate::screens::gameplay::drain_audio_commands(gs);
         if matches!(action, crate::game::gameplay::RawKeyAction::Restart)
             && config::get().keyboard_features
             && self.state.session.course_run.is_none()
