@@ -877,35 +877,9 @@ pub fn on_enter(state: &mut State) {
     set_all_local_lobby_players_ready(state, false);
     clear_lobby_disconnect_holds(state);
 
-    let cfg = crate::config::get();
-    if cfg.smx_input {
-        if profile::get_session_play_style() == profile_data::PlayStyle::Double {
-            // Doubles: one player drives both pads. Enable both if the player
-            // wants the FSR display; sensor arrays are keyed by SDK pad here.
-            if state.player_profiles[0].smx_fsr_display {
-                for sdk_pad in 0..2usize {
-                    deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
-                    state.smx_sensor_config[sdk_pad] = deadsync_smx::get_config(sdk_pad);
-                }
-            }
-        } else {
-            // Enable sensor test mode on the SDK pad for each FSR-display player's
-            // SIDE (P1 -> pad 0, P2 -> pad 1), not the profile-array index: a
-            // single P2 player is profile 0 but plays pad 1. Store the config
-            // under the profile index so the display (also keyed by profile
-            // index) lines up.
-            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                let Some(pidx) = gameplay_player_index_for_side(state, side) else {
-                    continue;
-                };
-                if !state.player_profiles[pidx].smx_fsr_display {
-                    continue;
-                }
-                let sdk_pad = profile_data::player_side_index(side);
-                deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
-                state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
-            }
-        }
+    for (store_idx, sdk_pad) in smx_fsr_display_pads(state).into_iter().flatten() {
+        deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
+        state.smx_sensor_config[store_idx] = deadsync_smx::get_config(sdk_pad);
     }
 
     if gameplay_requires_lobby_wait() {
@@ -1023,26 +997,30 @@ fn play_song_lua_sound_events_for(
     }
 }
 
-fn refresh_smx_sensor_data(state: &mut State) {
-    let cfg = crate::config::get();
-    if !cfg.smx_input {
-        return;
+/// The pads to drive for the FSR sensor display, as `(store_index, sdk_pad)`:
+/// `store_index` is how the sensor arrays are keyed (profile index normally, SDK
+/// pad in Doubles) and `sdk_pad` is the SDK pad to enable/read. `None` slots are
+/// skipped. Returns all-`None` cheaply (before any config/session lookup) when no
+/// player wants the display or SMX input is off, so the per-frame caller does no
+/// further work.
+fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
+    let mut out = [None, None];
+    if !state.player_profiles[0].smx_fsr_display && !state.player_profiles[1].smx_fsr_display {
+        return out;
+    }
+    if !crate::config::get().smx_input {
+        return out;
     }
     if profile::get_session_play_style() == profile_data::PlayStyle::Double {
-        // Doubles: one player on both pads; read both, keyed by SDK pad.
+        // One player drives both pads; key the sensor arrays by SDK pad.
         if state.player_profiles[0].smx_fsr_display {
-            for sdk_pad in 0..2usize {
-                state.smx_sensor_data[sdk_pad] = deadsync_smx::get_test_data(sdk_pad);
-                if state.smx_sensor_config[sdk_pad].is_none() {
-                    state.smx_sensor_config[sdk_pad] = deadsync_smx::get_config(sdk_pad);
-                }
-            }
+            out = [Some((0, 0)), Some((1, 1))];
         }
-        return;
+        return out;
     }
-    // Read each FSR-display player's SDK pad by SIDE (P1 -> 0, P2 -> 1) and store
-    // under the profile index so the display lines up. A single P2 player is
-    // profile 0 but reads pad 1 (otherwise it shows the P1 pad's values).
+    // Each FSR-display player keys by profile index but reads its SIDE's SDK pad
+    // (P1 -> 0, P2 -> 1); a single P2 player is profile 0 but plays pad 1.
+    let mut n = 0;
     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
         let Some(pidx) = gameplay_player_index_for_side(state, side) else {
             continue;
@@ -1050,10 +1028,17 @@ fn refresh_smx_sensor_data(state: &mut State) {
         if !state.player_profiles[pidx].smx_fsr_display {
             continue;
         }
-        let sdk_pad = profile_data::player_side_index(side);
-        state.smx_sensor_data[pidx] = deadsync_smx::get_test_data(sdk_pad);
-        if state.smx_sensor_config[pidx].is_none() {
-            state.smx_sensor_config[pidx] = deadsync_smx::get_config(sdk_pad);
+        out[n] = Some((pidx, profile_data::player_side_index(side)));
+        n += 1;
+    }
+    out
+}
+
+fn refresh_smx_sensor_data(state: &mut State) {
+    for (store_idx, sdk_pad) in smx_fsr_display_pads(state).into_iter().flatten() {
+        state.smx_sensor_data[store_idx] = deadsync_smx::get_test_data(sdk_pad);
+        if state.smx_sensor_config[store_idx].is_none() {
+            state.smx_sensor_config[store_idx] = deadsync_smx::get_config(sdk_pad);
         }
     }
 }
@@ -9543,6 +9528,20 @@ fn draw_smx_fsr_group(
         for (slot, &(panel, label)) in SMX_SENSOR_DISP_PANELS.iter().enumerate() {
             let x = group_x + slot as f32 * (bar_w + bar_gap);
 
+            // Panel high threshold (max across sensors for FSR), computed once and
+            // used for both the active check and the threshold line.
+            let threshold = if fsr {
+                config.panel_settings[panel]
+                    .fsr_high_threshold
+                    .iter()
+                    .map(|&t| u16::from(t))
+                    .max()
+                    .unwrap_or(0)
+            } else {
+                u16::from(config.panel_settings[panel].load_cell_high_threshold)
+            };
+            let threshold_norm = (threshold as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
+
             let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
                 if data.have_data_from_panel[panel] {
                     let max_val = if fsr {
@@ -9560,35 +9559,12 @@ fn draw_smx_fsr_group(
                             .unwrap_or(0)
                     };
                     let norm = (max_val as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
-                    let threshold = if fsr {
-                        config.panel_settings[panel]
-                            .fsr_high_threshold
-                            .iter()
-                            .map(|&t| u16::from(t))
-                            .max()
-                            .unwrap_or(0)
-                    } else {
-                        u16::from(config.panel_settings[panel].load_cell_high_threshold)
-                    };
                     (norm, max_val >= threshold && threshold > 0, Some(max_val))
                 } else {
                     (0.0, false, None)
                 }
             } else {
                 (0.0, false, None)
-            };
-
-            let threshold_norm = if fsr {
-                let t = config.panel_settings[panel]
-                    .fsr_high_threshold
-                    .iter()
-                    .map(|&t| u16::from(t))
-                    .max()
-                    .unwrap_or(0);
-                (t as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0)
-            } else {
-                let t = u16::from(config.panel_settings[panel].load_cell_high_threshold);
-                (t as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0)
             };
 
             // Track background.
