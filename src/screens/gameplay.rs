@@ -9709,8 +9709,21 @@ fn push_smx_pad_input_display(
         let mini_top = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC
             + fsr_group_h
             + SMX_DOUBLES_STACK_GAP;
+        // When the FSR pair is also shown, center each mini under its FSR group
+        // above it; otherwise use the natural (tighter) mini-pair spacing so a
+        // mini-only display doesn't look oddly spread out.
+        let fsr_active = state.player_profiles[0].smx_fsr_display;
+        let fsr_group_w = smx_fsr_group_w();
+        let fsr_start_x = center_x - (fsr_group_w * 2.0 + group_gap) * 0.5;
         for half in 0..2usize {
-            let x0 = start_x + half as f32 * (mini_w + group_gap);
+            let x0 = if fsr_active {
+                let fsr_center = fsr_start_x
+                    + half as f32 * (fsr_group_w + group_gap)
+                    + fsr_group_w * 0.5;
+                fsr_center - mini_w * 0.5
+            } else {
+                start_x + half as f32 * (mini_w + group_gap)
+            };
             draw_smx_mini_pad(actors, state, half * 4, x0, mini_top, 1.0);
         }
         return;
