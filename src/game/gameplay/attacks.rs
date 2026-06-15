@@ -5,7 +5,6 @@ use crate::game::parsing::song_lua::{
     SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
     compile_song_lua,
 };
-use crate::game::profile;
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
 use deadsync_core::timing::ROWS_PER_BEAT;
@@ -22,7 +21,7 @@ use std::time::Instant;
 
 use super::{
     AccelEffects, AccelOverrides, AppearanceEffects, AppearanceOverrides, ChartAttackEffects,
-    GameplayViewport, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+    GameplaySession, GameplayViewport, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
     HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG,
     INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
     INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS,
@@ -2734,12 +2733,13 @@ fn build_song_lua_compile_context(
     music_rate: f32,
     machine_global_offset_seconds: f32,
     viewport: GameplayViewport,
+    session: &GameplaySession,
+    center_1player_notefield: bool,
 ) -> SongLuaCompileContext {
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
+    let play_style = session.play_style;
+    let player_side = session.player_side;
     let screen_width = viewport.width();
     let screen_height = viewport.height();
-    let center_1player_notefield = crate::config::get().center_1player_notefield;
     let mut context = SongLuaCompileContext::new(
         song.simfile_path
             .parent()
@@ -2902,6 +2902,8 @@ pub(super) fn build_song_lua_runtime_windows(
     music_rate: f32,
     machine_global_offset_seconds: f32,
     viewport: GameplayViewport,
+    session: &GameplaySession,
+    center_1player_notefield: bool,
     player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
@@ -2933,9 +2935,8 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut overlay_events = Vec::new();
     let mut background_visual_layers = Vec::new();
     let mut foreground_visual_layers = Vec::new();
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
-    let center_1player_notefield = crate::config::get().center_1player_notefield;
+    let play_style = session.play_style;
+    let player_side = session.player_side;
     // Default player actor x/y must match StepMania's (SCREEN_CENTER_X, SCREEN_CENTER_Y)
     // origin so that, when no song.lua override is present, the gameplay player
     // transform path produces a zero translation. Without this, every non-lua song
@@ -3016,6 +3017,8 @@ pub(super) fn build_song_lua_runtime_windows(
         music_rate,
         machine_global_offset_seconds,
         viewport,
+        session,
+        center_1player_notefield,
     );
 
     let mut out_screen_width = screen_width;

@@ -99,6 +99,8 @@ pub fn fixture() -> NotefieldBenchFixture {
         charts,
         gameplay_charts,
         gameplay::GameplayViewport::default(),
+        gameplay::GameplaySession::default(),
+        gameplay::GameplayConfig::default(),
         0,
         1.0,
         [

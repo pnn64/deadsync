@@ -139,6 +139,38 @@ fn gameplay_viewport(metrics: Metrics) -> crate::game::gameplay::GameplayViewpor
     )
 }
 
+fn gameplay_session() -> crate::game::gameplay::GameplaySession {
+    crate::game::gameplay::GameplaySession {
+        play_style: profile::get_session_play_style(),
+        player_side: profile::get_session_player_side(),
+        joined_sides: std::array::from_fn(|idx| {
+            profile::is_session_side_joined(profile_data::player_side_for_index(idx))
+        }),
+        active_profile_ids: std::array::from_fn(|idx| {
+            profile::active_local_profile_id_for_side(profile_data::player_side_for_index(idx))
+        }),
+        tick_mode: profile::get_session_timing_tick_mode(),
+    }
+}
+
+fn gameplay_config() -> crate::game::gameplay::GameplayConfig {
+    let cfg = config::get();
+    crate::game::gameplay::GameplayConfig {
+        translated_titles: cfg.translated_titles,
+        mine_hit_sound: cfg.mine_hit_sound,
+        default_fail_type: cfg.default_fail_type,
+        global_offset_seconds: cfg.global_offset_seconds,
+        visual_delay_seconds: cfg.visual_delay_seconds,
+        machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
+        machine_default_sync_pref: cfg.machine_default_sync_offset.sync_pref(),
+        machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
+        machine_enable_replays: cfg.machine_enable_replays,
+        center_1player_notefield: cfg.center_1player_notefield,
+        random_background_mode: cfg.random_background_mode,
+        delayed_back: cfg.delayed_back,
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct GameplayLightTracker {
     pad_notes_ptr: usize,
@@ -6205,6 +6237,7 @@ impl App {
         {
             let already_exiting = gs.exit_transition.is_some();
             crate::game::gameplay::begin_restart_exit(gs);
+            crate::screens::gameplay::drain_audio_commands(gs);
             if !already_exiting && gs.exit_transition.is_some() {
                 self.state.session.gameplay_restart_count = restart_count;
                 self.state.session.restart_pending = true;
@@ -9050,6 +9083,8 @@ impl App {
                     charts,
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
+                    gameplay_session(),
+                    gameplay_config(),
                     po_state.active_color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -9468,6 +9503,8 @@ impl App {
                     charts,
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
+                    gameplay_session(),
+                    gameplay_config(),
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,

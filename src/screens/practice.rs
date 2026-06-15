@@ -939,15 +939,20 @@ fn start_selection_like_itg(state: &mut State) {
     );
 }
 
+fn snapped_playback_music_time(state: &State, playback_music_time: f32) -> f32 {
+    let Some(music_path) = state.gameplay.charts[0].music_path.as_ref() else {
+        return playback_music_time;
+    };
+    audio::snap_music_start_sec(music_path, f64::from(playback_music_time)) as f32
+}
+
 fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
     let start_time = gameplay_core::music_time_for_beat(&state.gameplay, start_beat);
-    gameplay_core::start_practice_music(
-        &mut state.gameplay,
-        start_time - LEAD_IN_SECONDS,
-        start_time,
-    );
+    let playback_time = snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS);
+    gameplay_core::start_practice_music_at(&mut state.gameplay, playback_time, start_time);
+    crate::screens::gameplay::drain_core_audio_commands(&mut state.gameplay);
     state.mode = Mode::Playing {
         start_beat,
         stop_beat,

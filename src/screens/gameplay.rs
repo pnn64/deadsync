@@ -63,7 +63,8 @@ pub struct ActorViewOverride {
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
-    CourseDisplayTotals, GameplayAction, GameplayExit, GameplayViewport, LeadInTiming,
+    CourseDisplayTotals, GameplayAction, GameplayAudioCommand, GameplayConfig, GameplayExit,
+    GameplayMusicCut, GameplaySession, GameplayViewport, LeadInTiming,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge,
     ReplayOffsetSnapshot, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
     TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
@@ -305,6 +306,8 @@ pub fn init(
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     viewport: GameplayViewport,
+    session: GameplaySession,
+    config: GameplayConfig,
     active_color_index: i32,
     music_rate: f32,
     scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -325,6 +328,8 @@ pub fn init(
         charts,
         gameplay_charts,
         viewport,
+        session,
+        config,
         active_color_index,
         music_rate,
         scroll_speed,
@@ -777,6 +782,48 @@ fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
     Some(text)
 }
 
+#[inline(always)]
+fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
+    deadsync_audio_stream::Cut {
+        start_sec: cut.start_sec,
+        length_sec: cut.length_sec,
+        fade_in_sec: cut.fade_in_sec,
+        fade_out_sec: cut.fade_out_sec,
+    }
+}
+
+pub fn drain_core_audio_commands(state: &mut gameplay_core::State) {
+    for command in gameplay_core::drain_audio_commands(state) {
+        match command {
+            GameplayAudioCommand::StopMusic => {
+                if deadsync_audio_stream::is_initialized() {
+                    deadsync_audio_stream::stop_music();
+                }
+            }
+            GameplayAudioCommand::PlayMusic {
+                path,
+                cut,
+                looping,
+                rate,
+            } => deadsync_audio_stream::play_music(path, audio_cut(cut), looping, rate),
+            GameplayAudioCommand::PlayPreloadedSfx(path) => {
+                deadsync_audio_stream::play_preloaded_sfx(path);
+            }
+            GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
+                deadsync_audio_stream::play_preloaded_assist_tick(path);
+            }
+            GameplayAudioCommand::PlayScheduledAssistTick {
+                path,
+                target_stream_frame,
+            } => deadsync_audio_stream::play_scheduled_assist_tick(path, target_stream_frame),
+        }
+    }
+}
+
+pub fn drain_audio_commands(state: &mut State) {
+    drain_core_audio_commands(&mut state.gameplay);
+}
+
 pub fn on_enter(state: &mut State) {
     state.lobby_music_started = false;
     set_all_local_lobby_players_ready(state, false);
@@ -787,6 +834,7 @@ pub fn on_enter(state: &mut State) {
 
     set_all_local_lobby_players_ready(state, true);
     crate::game::gameplay::start_stage_music(state);
+    drain_audio_commands(state);
     state.lobby_music_started = true;
 }
 
@@ -810,11 +858,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         clear_lobby_disconnect_holds(state);
         set_all_local_lobby_players_ready(state, true);
         crate::game::gameplay::start_stage_music(state);
+        drain_audio_commands(state);
         state.lobby_music_started = true;
     }
     update_lobby_machine_state(state);
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time);
+    drain_audio_commands(state);
     play_song_lua_sound_events(
         state,
         previous_song_lua_time,
@@ -911,7 +961,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         return ScreenAction::None;
     }
-    map_gameplay_action(gameplay_handle_input(state, ev))
+    let action = gameplay_handle_input(state, ev);
+    drain_audio_commands(state);
+    map_gameplay_action(action)
 }
 
 thread_local! {

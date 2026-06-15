@@ -1,7 +1,4 @@
-use crate::config;
 use crate::game::parsing::noteskin::{self, Noteskin};
-use crate::game::profile;
-use deadsync_audio_stream as audio;
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action};
 use deadsync_profile as profile_data;
@@ -19,8 +16,8 @@ use super::{
     SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us,
     begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
     gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
-    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
-    refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
+    live_autoplay_enabled, music_time_ns_from_song_clock, queue_preloaded_assist_tick,
+    record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -395,9 +392,7 @@ pub fn queue_input_edge(
     if state.autoplay_enabled {
         return;
     }
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
-    let lane = match (play_style, player_side, lane) {
+    let lane = match (state.session.play_style, state.session.player_side, lane) {
         // Single-player: reject the "other side" entirely so only one set of bindings can play.
         (
             profile_data::PlayStyle::Single,
@@ -541,10 +536,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         );
         return GameplayAction::None;
     }
-    let p2_runtime_player = profile_data::runtime_player_is_p2(
-        profile::get_session_play_style(),
-        profile::get_session_player_side(),
-    );
+    let p2_runtime_player = state.session.p2_runtime_player();
     let p1_menu_active = state.num_players > 1 || !p2_runtime_player;
     let p2_menu_active = state.num_players > 1 || p2_runtime_player;
     match ev.action {
@@ -568,7 +560,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         }
         VirtualAction::p1_back if p1_menu_active => {
             if ev.pressed {
-                if !config::get().delayed_back {
+                if !state.config.delayed_back {
                     begin_exit_transition(state, ExitTransitionKind::Cancel);
                 } else {
                     state.hold_to_exit_key = Some(HoldToExitKey::Back);
@@ -581,7 +573,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         }
         VirtualAction::p2_back if p2_menu_active => {
             if ev.pressed {
-                if !config::get().delayed_back {
+                if !state.config.delayed_back {
                     begin_exit_transition(state, ExitTransitionKind::Cancel);
                 } else {
                     state.hold_to_exit_key = Some(HoldToExitKey::Back);
@@ -812,7 +804,7 @@ pub(super) fn process_input_edges(
             }
             if hit_note {
                 if state.tick_mode == TickMode::Hit {
-                    audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
+                    queue_preloaded_assist_tick(state, ASSIST_TICK_SFX_PATH);
                 }
             } else {
                 trigger_receptor_step_pulse(state, lane_idx);
@@ -820,7 +812,7 @@ pub(super) fn process_input_edges(
         } else if edge_judges_lift {
             let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
-                audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
+                queue_preloaded_assist_tick(state, ASSIST_TICK_SFX_PATH);
             }
         }
     }

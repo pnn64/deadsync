@@ -1,9 +1,8 @@
-use crate::config::DefaultFailType;
+use crate::config::{DefaultFailType, RandomBackgroundMode};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
-use crate::game::profile;
 use crate::game::scores;
 use deadsync_audio_stream as audio;
 use deadsync_chart::song::sync_pref_offset;
@@ -3714,6 +3713,119 @@ impl Default for GameplayViewport {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameplaySession {
+    pub play_style: profile_data::PlayStyle,
+    pub player_side: profile_data::PlayerSide,
+    pub joined_sides: [bool; MAX_PLAYERS],
+    pub active_profile_ids: [Option<String>; MAX_PLAYERS],
+    pub tick_mode: TickMode,
+}
+
+impl GameplaySession {
+    pub fn active_profile_id_for_side(&self, side: profile_data::PlayerSide) -> Option<String> {
+        self.active_profile_ids[profile_data::player_side_index(side)].clone()
+    }
+
+    #[inline(always)]
+    pub const fn side_joined(&self, side: profile_data::PlayerSide) -> bool {
+        self.joined_sides[profile_data::player_side_index(side)]
+    }
+
+    #[inline(always)]
+    pub const fn p2_runtime_player(&self) -> bool {
+        profile_data::runtime_player_is_p2(self.play_style, self.player_side)
+    }
+
+    #[inline(always)]
+    pub const fn runtime_player_side(&self, player_idx: usize) -> profile_data::PlayerSide {
+        profile_data::runtime_player_side(self.play_style, self.player_side, player_idx)
+    }
+}
+
+impl Default for GameplaySession {
+    fn default() -> Self {
+        Self {
+            play_style: profile_data::PlayStyle::Single,
+            player_side: profile_data::PlayerSide::P1,
+            joined_sides: [true, false],
+            active_profile_ids: [None, None],
+            tick_mode: TickMode::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayConfig {
+    pub translated_titles: bool,
+    pub mine_hit_sound: bool,
+    pub default_fail_type: DefaultFailType,
+    pub global_offset_seconds: f32,
+    pub visual_delay_seconds: f32,
+    pub machine_pack_ini_offsets: bool,
+    pub machine_default_sync_pref: SyncPref,
+    pub machine_allow_per_player_global_offsets: bool,
+    pub machine_enable_replays: bool,
+    pub center_1player_notefield: bool,
+    pub random_background_mode: RandomBackgroundMode,
+    pub delayed_back: bool,
+}
+
+impl Default for GameplayConfig {
+    fn default() -> Self {
+        Self {
+            translated_titles: false,
+            mine_hit_sound: true,
+            default_fail_type: DefaultFailType::ImmediateContinue,
+            global_offset_seconds: -0.008,
+            visual_delay_seconds: 0.0,
+            machine_pack_ini_offsets: false,
+            machine_default_sync_pref: SyncPref::Null,
+            machine_allow_per_player_global_offsets: false,
+            machine_enable_replays: true,
+            center_1player_notefield: false,
+            random_background_mode: RandomBackgroundMode::Off,
+            delayed_back: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayMusicCut {
+    pub start_sec: f64,
+    pub length_sec: f64,
+    pub fade_in_sec: f64,
+    pub fade_out_sec: f64,
+}
+
+impl Default for GameplayMusicCut {
+    fn default() -> Self {
+        Self {
+            start_sec: 0.0,
+            length_sec: f64::INFINITY,
+            fade_in_sec: 0.0,
+            fade_out_sec: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum GameplayAudioCommand {
+    StopMusic,
+    PlayMusic {
+        path: PathBuf,
+        cut: GameplayMusicCut,
+        looping: bool,
+        rate: f32,
+    },
+    PlayPreloadedSfx(&'static str),
+    PlayPreloadedAssistTick(&'static str),
+    PlayScheduledAssistTick {
+        path: &'static str,
+        target_stream_frame: u64,
+    },
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -3740,6 +3852,9 @@ pub struct State {
     pub cols_per_player: usize,
     pub num_players: usize,
     pub viewport: GameplayViewport,
+    pub session: GameplaySession,
+    pub config: GameplayConfig,
+    audio_commands: Vec<GameplayAudioCommand>,
     pub timing: Arc<TimingData>,
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
@@ -4016,6 +4131,55 @@ impl State {
             },
         )
     }
+}
+
+#[inline(always)]
+pub fn drain_audio_commands(state: &mut State) -> std::vec::Drain<'_, GameplayAudioCommand> {
+    state.audio_commands.drain(..)
+}
+
+#[inline(always)]
+pub(super) fn queue_audio_command(state: &mut State, command: GameplayAudioCommand) {
+    state.audio_commands.push(command);
+}
+
+#[inline(always)]
+fn queue_stop_music(state: &mut State) {
+    queue_audio_command(state, GameplayAudioCommand::StopMusic);
+}
+
+#[inline(always)]
+fn queue_play_music(state: &mut State, path: PathBuf, cut: GameplayMusicCut, rate: f32) {
+    queue_audio_command(
+        state,
+        GameplayAudioCommand::PlayMusic {
+            path,
+            cut,
+            looping: false,
+            rate,
+        },
+    );
+}
+
+#[inline(always)]
+pub(super) fn queue_preloaded_sfx(state: &mut State, path: &'static str) {
+    queue_audio_command(state, GameplayAudioCommand::PlayPreloadedSfx(path));
+}
+
+#[inline(always)]
+pub(super) fn queue_preloaded_assist_tick(state: &mut State, path: &'static str) {
+    queue_audio_command(state, GameplayAudioCommand::PlayPreloadedAssistTick(path));
+}
+
+#[inline(always)]
+fn queue_scheduled_assist_tick(state: &mut State, path: &'static str, target_stream_frame: u64) {
+    queue_audio_command(
+        state,
+        GameplayAudioCommand::PlayScheduledAssistTick {
+            path,
+            target_stream_frame,
+        },
+    );
 }
 
 pub fn media_path_key(path: &Path) -> Arc<str> {
@@ -4797,9 +4961,7 @@ fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind) {
         kind,
         started_at: Instant::now(),
     });
-    if audio::is_initialized() {
-        audio::stop_music();
-    }
+    queue_stop_music(state);
 }
 
 /// SL/zmod parity: trigger the fast Cancel exit fade (~0.5s) used by BACK,
@@ -5012,8 +5174,8 @@ fn stream_pos_to_music_time(state: &State, stream_pos: f32) -> f32 {
 }
 
 #[inline(always)]
-fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
-    audio::Cut {
+fn stage_music_cut(lead_in_seconds: f32) -> GameplayMusicCut {
+    GameplayMusicCut {
         start_sec: f64::from(-lead_in_seconds.max(0.0)),
         length_sec: f64::INFINITY,
         ..Default::default()
@@ -5061,8 +5223,8 @@ fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
     refresh_live_notefield_options(state, current_bpm);
 }
 
-fn start_stage_music_audio(state: &State) {
-    let Some(music_path) = state.charts[0].music_path.as_ref() else {
+fn start_stage_music_audio(state: &mut State) {
+    let Some(music_path) = state.charts[0].music_path.clone() else {
         return;
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
@@ -5072,7 +5234,7 @@ fn start_stage_music_audio(state: &State) {
         1.0
     };
     debug!("Starting music with a preroll delay of {lead_in:.2}s");
-    audio::play_music(music_path.clone(), stage_music_cut(lead_in), false, rate);
+    queue_play_music(state, music_path, stage_music_cut(lead_in), rate);
 }
 
 pub fn start_stage_music(state: &mut State) {
@@ -5251,7 +5413,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.total_elapsed_in_screen = 0.0;
 }
 
-pub fn start_practice_music(
+pub fn start_practice_music_at(
     state: &mut State,
     playback_music_time: f32,
     judge_start_music_time: f32,
@@ -5263,24 +5425,22 @@ pub fn start_practice_music(
         set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
         return;
     };
-    let playback_music_time =
-        audio::snap_music_start_sec(&music_path, f64::from(playback_music_time));
     state.audio_lead_in_seconds = (-playback_music_time).max(0.0) as f32;
-    set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time as f32));
+    set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
 
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
-    audio::play_music(
+    queue_play_music(
+        state,
         music_path,
-        audio::Cut {
+        GameplayMusicCut {
             start_sec: f64::from(playback_music_time),
             length_sec: f64::INFINITY,
             ..Default::default()
         },
-        false,
         rate,
     );
 }
@@ -5375,6 +5535,8 @@ pub fn init(
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     viewport: GameplayViewport,
+    session: GameplaySession,
+    config: GameplayConfig,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -5398,9 +5560,8 @@ pub fn init(
         1.0
     };
 
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
-    let p2_runtime_player = profile_data::runtime_player_is_p2(play_style, player_side);
+    let play_style = session.play_style;
+    let p2_runtime_player = session.p2_runtime_player();
     let cols_per_player = play_style.cols_per_player();
     let num_players = play_style.player_count();
     let num_cols = play_style.total_cols();
@@ -5493,7 +5654,6 @@ pub fn init(
         z
     });
 
-    let config = crate::config::get();
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
     let mut pack_group: Arc<str> = Arc::from(
         song.simfile_path
@@ -5526,10 +5686,7 @@ pub fn init(
         .map(|change| media_path_key(&change.path))
         .collect();
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
-        sync_pref_offset(
-            pack_sync_pref,
-            config.machine_default_sync_offset.sync_pref(),
-        )
+        sync_pref_offset(pack_sync_pref, config.machine_default_sync_pref)
     } else {
         0.0
     };
@@ -6100,6 +6257,8 @@ pub fn init(
         rate,
         config.global_offset_seconds,
         viewport,
+        &session,
+        config.center_1player_notefield,
         &player_global_offset_shift_seconds,
     );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -6180,7 +6339,7 @@ pub fn init(
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
-        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let side = session.runtime_player_side(p);
         let chart_hash = charts[p].short_hash.as_str();
         let score_type = player_profiles[p].mini_indicator_score_type;
         let personal_best = mini_indicator_personal_best_percent(chart_hash, side, score_type);
@@ -6202,19 +6361,19 @@ pub fn init(
     let mut scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
         std::array::from_fn(|_| score_data::GameplayScoreboxProfileSnapshot::default());
     for p in 0..num_players {
-        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let side = session.runtime_player_side(p);
         scorebox_profile_snapshot[profile_data::player_side_index(side)] =
             scores::scorebox_profile_snapshot(
                 &player_profiles[p],
-                profile::is_session_side_joined(side),
-                profile::active_local_profile_id_for_side(side),
+                session.side_joined(side),
+                session.active_profile_id_for_side(side),
             );
     }
 
     let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for p in 0..num_players {
-        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let side = session.runtime_player_side(p);
         let profile_snapshot = &scorebox_profile_snapshot[profile_data::player_side_index(side)];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
@@ -6368,6 +6527,7 @@ pub fn init(
             AppearanceEffects::default()
         }
     });
+    let tick_mode = session.tick_mode;
 
     let mut state = State {
         song,
@@ -6395,6 +6555,9 @@ pub fn init(
         cols_per_player,
         num_players,
         viewport,
+        session,
+        config,
+        audio_commands: Vec::with_capacity(8),
         timing,
         timing_players,
         beat_info_cache,
@@ -6599,7 +6762,7 @@ pub fn init(
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA17F_0FF5_EED5_1EED),
         autoplay_cursor: note_range_start,
-        tick_mode: profile::get_session_timing_tick_mode(),
+        tick_mode,
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
@@ -6907,7 +7070,7 @@ fn trigger_mine_explosion(state: &mut State, column: usize) {
         started_at_screen_s: state.total_elapsed_in_screen,
     });
     if state.play_mine_sounds {
-        audio::play_preloaded_sfx("assets/sounds/boom.ogg");
+        queue_preloaded_sfx(state, "assets/sounds/boom.ogg");
     }
 }
 
@@ -8189,16 +8352,16 @@ fn assist_lookahead_future_row(
 /// can place the onset sample-accurately. Falls back to immediate playback when
 /// the row has no usable stream-frame mapping (e.g. during lead-in).
 #[inline(always)]
-fn schedule_assist_clap_row(state: &State, clap_row: usize) {
+fn schedule_assist_clap_row(state: &mut State, clap_row: usize) {
     let Some(beat) = state.timing.get_beat_for_row(clap_row) else {
-        audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
+        queue_preloaded_assist_tick(state, ASSIST_TICK_SFX_PATH);
         return;
     };
     let row_time_ns = state.timing.get_time_for_beat_no_offset_ns(beat);
     let music_seconds = row_time_ns as f64 * 1e-9;
     match audio::assist_tick_stream_frame_for_music_seconds(music_seconds) {
-        Some(frame) => audio::play_scheduled_assist_tick(ASSIST_TICK_SFX_PATH, frame),
-        None => audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH),
+        Some(frame) => queue_scheduled_assist_tick(state, ASSIST_TICK_SFX_PATH, frame),
+        None => queue_preloaded_assist_tick(state, ASSIST_TICK_SFX_PATH),
     }
 }
 
@@ -8895,7 +9058,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     {
         debug!("All joined players failed. Transitioning to evaluation.");
         state.song_completed_naturally = false;
-        audio::stop_music();
+        queue_stop_music(state);
         finalize_update_trace(
             state,
             delta_time,
@@ -8922,10 +9085,8 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
 /// loading when gameplay started. Once the background fetch completes, the
 /// snapshot is replaced so the scorebox shows the real scores mid-song.
 fn refresh_scorebox_snapshots(state: &mut State) {
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
     for p in 0..state.num_players {
-        let side = profile_data::runtime_player_side(play_style, player_side, p);
+        let side = state.session.runtime_player_side(p);
         let idx = profile_data::player_side_index(side);
         let profile_snapshot = &state.scorebox_profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
@@ -9016,8 +9177,8 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
         FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
-        INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
+        GameplayAudioCommand, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo,
+        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng, active_hold_counts_as_pressed,
         advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
@@ -9030,28 +9191,29 @@ mod tests {
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
         count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
-        effective_appearance_effects_for_player, effective_mini_percent_for_player,
-        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
-        effective_visibility_effects_for_player, effective_visual_effects_for_player,
-        enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
-        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
-        handle_input, handle_queued_raw_key, hit_mine, input_queue_cap,
-        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
-        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
-        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
-        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
-        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_stats_density_graph_width,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        drain_audio_commands, effective_appearance_effects_for_player,
+        effective_mini_percent_for_player, effective_player_global_offset_seconds,
+        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
+        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
+        error_bar_average_offset_s, error_bar_long_term_offset_s, error_bar_register_tap,
+        finalize_completed_mines, finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, grade_to_window, handle_input, handle_queued_raw_key,
+        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
+        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
+        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        render_provisional_early_rescore_feedback, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        set_final_note_result, settle_completion_rows, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
+        step_stats_density_graph_width, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -9386,6 +9548,8 @@ mod tests {
             charts,
             gameplay_charts,
             super::GameplayViewport::default(),
+            super::GameplaySession::default(),
+            super::GameplayConfig::default(),
             5,
             1.0,
             [
@@ -9547,6 +9711,8 @@ return Def.ActorFrame{}
                                 [chart.clone(), chart],
                                 [gameplay_chart.clone(), gameplay_chart],
                                 super::GameplayViewport::default(),
+                                super::GameplaySession::default(),
+                                super::GameplayConfig::default(),
                                 5,
                                 1.0,
                                 [
@@ -9853,21 +10019,17 @@ return Def.ActorFrame{}
             true,
             false,
             || {
-                let prev = crate::config::get().delayed_back;
-                crate::config::update_delayed_back(false);
-
                 let state_profiles = [
                     profile_data::Profile::default(),
                     profile_data::Profile::default(),
                 ];
                 let mut state = regression_state(state_profiles);
+                state.config.delayed_back = false;
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
 
                 let exit = state.exit_transition;
                 let hold_key = state.hold_to_exit_key;
-
-                crate::config::update_delayed_back(prev);
 
                 assert!(
                     exit.is_some(),
@@ -9894,22 +10056,18 @@ return Def.ActorFrame{}
             true,
             false,
             || {
-                let prev = crate::config::get().delayed_back;
-                crate::config::update_delayed_back(true);
-
                 let state_profiles = [
                     profile_data::Profile::default(),
                     profile_data::Profile::default(),
                 ];
                 let mut state = regression_state(state_profiles);
+                state.config.delayed_back = true;
 
                 handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
 
                 let hold_key = state.hold_to_exit_key;
                 let hold_start = state.hold_to_exit_start;
                 let exit = state.exit_transition;
-
-                crate::config::update_delayed_back(prev);
 
                 assert_eq!(hold_key, Some(HoldToExitKey::Back));
                 assert!(hold_start.is_some());
@@ -9939,6 +10097,10 @@ return Def.ActorFrame{}
             exit.kind,
             ExitTransitionKind::Cancel,
             "restart should reuse the fast Cancel out-fade for SL/zmod parity"
+        );
+        assert_eq!(
+            drain_audio_commands(&mut state).collect::<Vec<_>>(),
+            vec![GameplayAudioCommand::StopMusic]
         );
     }
 
