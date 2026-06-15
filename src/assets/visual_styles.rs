@@ -319,6 +319,24 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
     deadsync_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
 }
 
+/// Background-music tracks bundled with the game: the per-style menu loops plus
+/// the course-select and credits loops. Each relative asset key is resolved
+/// through the normal overlay so the returned paths match what actually plays.
+/// Used to pre-warm the ReplayGain cache at startup so a fresh install (or a
+/// cleared cache) doesn't audibly adjust loudness the first time a menu track
+/// plays.
+pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
+    use std::collections::BTreeSet;
+    let mut rels: BTreeSet<&'static str> = ASSETS.iter().map(|assets| assets.menu_music).collect();
+    rels.insert("assets/music/select_course (loop).ogg");
+    rels.insert("assets/music/credits.ogg");
+
+    let dirs = deadsync_platform::dirs::app_dirs();
+    rels.into_iter()
+        .map(|rel| dirs.resolve_asset_path(rel))
+        .collect()
+}
+
 #[inline(always)]
 pub fn select_color_aspect(style: VisualStyle) -> f32 {
     let size = for_style(style).select_color_size;

@@ -209,6 +209,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Startup audio devices",
             &audio_device_lines(&deadsync_audio_stream::startup_output_devices()),
         );
+
+        // Pre-warm ReplayGain for the bundled menu/background music so the
+        // first time one plays (fresh install, or after the cache was cleared)
+        // it doesn't audibly adjust loudness a few seconds in. Background
+        // priority keeps the foreground song preview ahead of this; already
+        // cached tracks are a cheap disk hit, so this is a no-op once warmed.
+        // Gated on the audio runtime initializing, since that is what sets up
+        // the ReplayGain subsystem the prewarm workers depend on.
+        if cfg.enable_replaygain {
+            deadsync_audio_replaygain::prewarm_paths(
+                assets::visual_styles::bundled_music_paths(),
+                deadsync_audio_replaygain::Priority::Background,
+            );
+        }
     }
+
     app::run()
 }
