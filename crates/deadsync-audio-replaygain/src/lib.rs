@@ -21,9 +21,8 @@
 //!   thread debounces writes by [`FLUSH_DEBOUNCE`] and rewrites the file
 //!   atomically via tmp + rename). Each entry stores the source file's mtime
 //!   and an xxhash64 of its raw bytes: the mtime is the fast-path validator,
-//!   and the content hash lets an unchanged file whose timestamp moved (e.g. a
-//!   self-update that rewrites bundled assets) keep its cached gain instead of
-//!   being needlessly re-analyzed.
+//!   and the content hash lets an unchanged file whose timestamp moved keep its
+//!   cached gain instead of being needlessly re-analyzed.
 //! - Linear gain is derived as `10^((TARGET_LUFS - lufs) / 20)`, clamped so
 //!   that `gain * true_peak <= 1.0` (prevent clipping) and never exceeds
 //!   +12 dB.
@@ -515,8 +514,8 @@ fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
     match replaygain_cache_check(entry, song_path) {
         CacheFreshness::Fresh(info) => Some(info),
         CacheFreshness::Refreshed(updated) => {
-            // The gain is still valid but its mtime/content hash moved (e.g. a
-            // self-update rewrote a bundled track with identical bytes, or a
+            // The gain is still valid but its mtime/content hash moved (the
+            // file's timestamp changed without its bytes changing, or a
             // migrated v1 entry just learned its content hash). Persist the
             // corrected entry so we don't re-validate against disk every play.
             let cache = disk_cache();

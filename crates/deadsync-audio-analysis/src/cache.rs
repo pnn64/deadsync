@@ -25,9 +25,9 @@ pub struct ReplayGainCacheEntry {
     pub path_hash: u64,
     pub mtime_unix_nanos: u64,
     /// xxhash64 of the raw source-file bytes. Lets us tell "same audio, new
-    /// timestamp" (e.g. after a self-update rewrites bundled assets) from a
-    /// genuinely edited file, so a timestamp-only change doesn't force a
-    /// re-analysis. `CONTENT_HASH_UNKNOWN` for entries migrated from v1.
+    /// timestamp" from a genuinely edited file, so a timestamp-only change
+    /// doesn't force a re-analysis. `CONTENT_HASH_UNKNOWN` for entries migrated
+    /// from v1.
     pub content_hash: u64,
     pub lufs: f32,
     pub true_peak_linear: f32,
@@ -233,9 +233,8 @@ pub fn replaygain_cache_entry_for_path(path: &Path, info: ReplayGainInfo) -> Rep
 ///
 /// Fast path: when the stored mtime still matches, the entry is reused without
 /// touching the file (unless its content hash is unknown, in which case it is
-/// backfilled). When the mtime moved — e.g. a self-update rewrote a bundled
-/// asset with identical bytes — the file is hashed and the gain is reused if the
-/// content is unchanged, refreshing the stored mtime so the hash is only
+/// backfilled). When the mtime moved, the file is hashed and the gain is reused
+/// if the content is unchanged, refreshing the stored mtime so the hash is only
 /// computed once. A differing hash (or unreadable file) is reported [`Stale`].
 ///
 /// [`Stale`]: CacheFreshness::Stale
@@ -427,8 +426,8 @@ mod tests {
         ));
 
         std::thread::sleep(Duration::from_millis(1100));
-        // Rewrite identical bytes: this is what a self-update does to a bundled
-        // asset — same content, new mtime.
+        // Rewrite identical bytes so the content is unchanged but the mtime
+        // moves.
         fs::write(&path, b"loop-track-bytes").expect("rewrite file");
         let new_mtime = replaygain_source_mtime_unix_nanos(&path).expect("new mtime");
         if new_mtime == entry.mtime_unix_nanos {
