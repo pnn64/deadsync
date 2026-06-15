@@ -3,28 +3,88 @@ use bincode::{Decode, Encode};
 use std::collections::HashMap;
 use std::fs;
 use std::hash::Hasher;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 use twox_hash::XxHash64;
 
 const CACHE_MAGIC: u64 = 0x44535952_47414946; // "DSYRGAIF" - file cache.
-const CACHE_VERSION: u32 = 1;
+/// Current on-disk cache layout. Version 2 added the per-entry
+/// `content_hash`; version 1 files are still decoded and migrated (see
+/// [`decode_replaygain_cache`]) so an upgrade never discards existing gains.
+const CACHE_VERSION: u32 = 2;
+const CACHE_VERSION_V1: u32 = 1;
+
+/// Sentinel stored in `content_hash` when the hash is not yet known — i.e. an
+/// entry migrated from a v1 cache file. Such entries are validated by mtime
+/// only until the hash is backfilled on the first fresh check.
+pub const CONTENT_HASH_UNKNOWN: u64 = 0;
 
 #[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
 pub struct ReplayGainCacheEntry {
     pub path_hash: u64,
     pub mtime_unix_nanos: u64,
+    /// xxhash64 of the raw source-file bytes. Lets us tell "same audio, new
+    /// timestamp" (e.g. after a self-update rewrites bundled assets) from a
+    /// genuinely edited file, so a timestamp-only change doesn't force a
+    /// re-analysis. `CONTENT_HASH_UNKNOWN` for entries migrated from v1.
+    pub content_hash: u64,
     pub lufs: f32,
     pub true_peak_linear: f32,
 }
 
+/// Legacy v1 cache entry (no `content_hash`). Only used to decode and migrate
+/// pre-existing cache files written by older builds.
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq)]
+struct ReplayGainCacheEntryV1 {
+    path_hash: u64,
+    mtime_unix_nanos: u64,
+    lufs: f32,
+    true_peak_linear: f32,
+}
+
+#[derive(Encode, Decode, Default, Clone, Debug, PartialEq)]
+struct ReplayGainCacheFileV1 {
+    entries: Vec<ReplayGainCacheEntryV1>,
+}
+
+impl From<ReplayGainCacheEntryV1> for ReplayGainCacheEntry {
+    fn from(v1: ReplayGainCacheEntryV1) -> Self {
+        Self {
+            path_hash: v1.path_hash,
+            mtime_unix_nanos: v1.mtime_unix_nanos,
+            content_hash: CONTENT_HASH_UNKNOWN,
+            lufs: v1.lufs,
+            true_peak_linear: v1.true_peak_linear,
+        }
+    }
+}
+
+/// Result of checking a cache entry against the current file on disk.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CacheFreshness {
+    /// Entry is valid as-is (mtime matched and the content hash is known).
+    Fresh(ReplayGainInfo),
+    /// Entry's gain is still valid but its bookkeeping was updated — either the
+    /// mtime moved while the content hash matched, or a migrated v1 entry had
+    /// its hash backfilled. The caller should persist the returned entry.
+    Refreshed(ReplayGainCacheEntry),
+    /// File content changed (or is unreadable); the entry must be re-analyzed.
+    Stale,
+}
+
 impl ReplayGainCacheEntry {
     #[inline]
-    pub fn new(path_hash: u64, mtime_unix_nanos: u64, info: ReplayGainInfo) -> Self {
+    pub fn new(
+        path_hash: u64,
+        mtime_unix_nanos: u64,
+        content_hash: u64,
+        info: ReplayGainInfo,
+    ) -> Self {
         Self {
             path_hash,
             mtime_unix_nanos,
+            content_hash,
             lufs: info.lufs,
             true_peak_linear: info.true_peak_linear,
         }
@@ -105,15 +165,24 @@ pub fn decode_replaygain_cache(bytes: &[u8]) -> Option<ReplayGainCacheFile> {
         return None;
     }
     let version = u32::from_le_bytes(bytes[8..12].try_into().ok()?);
-    if version != CACHE_VERSION {
-        return None;
+    let config = bincode::config::standard();
+    match version {
+        CACHE_VERSION => {
+            let (payload, _) =
+                bincode::decode_from_slice::<ReplayGainCacheFile, _>(&bytes[12..], config).ok()?;
+            Some(payload)
+        }
+        CACHE_VERSION_V1 => {
+            // Migrate legacy entries: keep their gains, mark the content hash
+            // unknown so the first fresh check backfills it.
+            let (legacy, _) =
+                bincode::decode_from_slice::<ReplayGainCacheFileV1, _>(&bytes[12..], config).ok()?;
+            Some(ReplayGainCacheFile {
+                entries: legacy.entries.into_iter().map(Into::into).collect(),
+            })
+        }
+        _ => None,
     }
-    let (payload, _) = bincode::decode_from_slice::<ReplayGainCacheFile, _>(
-        &bytes[12..],
-        bincode::config::standard(),
-    )
-    .ok()?;
-    Some(payload)
 }
 
 #[inline]
@@ -134,23 +203,84 @@ pub fn replaygain_source_mtime_unix_nanos(path: &Path) -> Option<u64> {
     )
 }
 
+/// xxhash64 of the raw bytes of the source file, streamed in chunks so large
+/// songs are not buffered whole. `None` if the file can't be read. This is the
+/// content fingerprint used to validate a cache entry when the mtime changed.
+pub fn replaygain_content_hash(path: &Path) -> Option<u64> {
+    let mut file = fs::File::open(path).ok()?;
+    let mut hasher = XxHash64::with_seed(0);
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buf).ok()?;
+        if read == 0 {
+            break;
+        }
+        hasher.write(&buf[..read]);
+    }
+    Some(hasher.finish())
+}
+
 pub fn replaygain_cache_entry_for_path(path: &Path, info: ReplayGainInfo) -> ReplayGainCacheEntry {
     ReplayGainCacheEntry::new(
         replaygain_path_hash(path),
         replaygain_source_mtime_unix_nanos(path).unwrap_or(0),
+        replaygain_content_hash(path).unwrap_or(CONTENT_HASH_UNKNOWN),
         info,
     )
 }
 
+/// Validate a cache entry against the file currently on disk.
+///
+/// Fast path: when the stored mtime still matches, the entry is reused without
+/// touching the file (unless its content hash is unknown, in which case it is
+/// backfilled). When the mtime moved — e.g. a self-update rewrote a bundled
+/// asset with identical bytes — the file is hashed and the gain is reused if the
+/// content is unchanged, refreshing the stored mtime so the hash is only
+/// computed once. A differing hash (or unreadable file) is reported [`Stale`].
+///
+/// [`Stale`]: CacheFreshness::Stale
+pub fn replaygain_cache_check(entry: ReplayGainCacheEntry, path: &Path) -> CacheFreshness {
+    let Some(current_mtime) = replaygain_source_mtime_unix_nanos(path) else {
+        return CacheFreshness::Stale;
+    };
+    if entry.mtime_unix_nanos == current_mtime {
+        if entry.content_hash != CONTENT_HASH_UNKNOWN {
+            return CacheFreshness::Fresh(entry.info());
+        }
+        // Migrated v1 entry whose mtime still matches: backfill the content
+        // hash so a later timestamp-only change can be validated.
+        return match replaygain_content_hash(path) {
+            Some(hash) => CacheFreshness::Refreshed(ReplayGainCacheEntry {
+                content_hash: hash,
+                ..entry
+            }),
+            None => CacheFreshness::Fresh(entry.info()),
+        };
+    }
+
+    let Some(current_hash) = replaygain_content_hash(path) else {
+        return CacheFreshness::Stale;
+    };
+    if entry.content_hash != CONTENT_HASH_UNKNOWN && entry.content_hash == current_hash {
+        CacheFreshness::Refreshed(ReplayGainCacheEntry {
+            mtime_unix_nanos: current_mtime,
+            ..entry
+        })
+    } else {
+        CacheFreshness::Stale
+    }
+}
+
+/// Convenience wrapper over [`replaygain_cache_check`] that collapses the
+/// freshness result to the gain info (discarding the "needs persist" signal).
 pub fn replaygain_cache_info_if_fresh(
     entry: ReplayGainCacheEntry,
     path: &Path,
 ) -> Option<ReplayGainInfo> {
-    let current_mtime = replaygain_source_mtime_unix_nanos(path)?;
-    if entry.mtime_unix_nanos == current_mtime {
-        Some(entry.info())
-    } else {
-        None
+    match replaygain_cache_check(entry, path) {
+        CacheFreshness::Fresh(info) => Some(info),
+        CacheFreshness::Refreshed(refreshed) => Some(refreshed.info()),
+        CacheFreshness::Stale => None,
     }
 }
 
@@ -165,12 +295,14 @@ mod tests {
             ReplayGainCacheEntry {
                 path_hash: 0x1111_1111_1111_1111,
                 mtime_unix_nanos: 123_456_789_000,
+                content_hash: 0xabcd_0000_0000_0001,
                 lufs: -22.5,
                 true_peak_linear: 0.83,
             },
             ReplayGainCacheEntry {
                 path_hash: 0xfeed_face_dead_beef,
                 mtime_unix_nanos: 987_654_321_000,
+                content_hash: 0xabcd_0000_0000_0002,
                 lufs: -9.7,
                 true_peak_linear: 1.12,
             },
@@ -225,11 +357,12 @@ mod tests {
             lufs: -18.25,
             true_peak_linear: 0.92,
         };
-        let entry = ReplayGainCacheEntry::new(123, 456, info);
+        let entry = ReplayGainCacheEntry::new(123, 456, 789, info);
 
         assert_eq!(entry.info(), info);
         assert_eq!(entry.path_hash, 123);
         assert_eq!(entry.mtime_unix_nanos, 456);
+        assert_eq!(entry.content_hash, 789);
     }
 
     fn unique_temp_file(tag: &str) -> std::path::PathBuf {
@@ -277,5 +410,101 @@ mod tests {
         assert_eq!(map.len(), 2);
         assert_eq!(map[&file.entries[0].path_hash], file.entries[0]);
         assert_eq!(map[&file.entries[1].path_hash], file.entries[1]);
+    }
+
+    #[test]
+    fn cache_reused_when_content_unchanged_after_mtime_change() {
+        let path = unique_temp_file("samecontent");
+        fs::write(&path, b"loop-track-bytes").expect("write file");
+        let info = ReplayGainInfo {
+            lufs: -12.0,
+            true_peak_linear: 0.7,
+        };
+        let entry = replaygain_cache_entry_for_path(&path, info);
+        assert!(matches!(
+            replaygain_cache_check(entry, &path),
+            CacheFreshness::Fresh(_)
+        ));
+
+        std::thread::sleep(Duration::from_millis(1100));
+        // Rewrite identical bytes: this is what a self-update does to a bundled
+        // asset — same content, new mtime.
+        fs::write(&path, b"loop-track-bytes").expect("rewrite file");
+        let new_mtime = replaygain_source_mtime_unix_nanos(&path).expect("new mtime");
+        if new_mtime == entry.mtime_unix_nanos {
+            let _ = fs::remove_file(&path);
+            return;
+        }
+
+        match replaygain_cache_check(entry, &path) {
+            CacheFreshness::Refreshed(updated) => {
+                assert_eq!(updated.mtime_unix_nanos, new_mtime);
+                assert_eq!(updated.content_hash, entry.content_hash);
+                assert_eq!(updated.info(), info);
+            }
+            other => panic!("expected Refreshed, got {other:?}"),
+        }
+        assert!(replaygain_cache_info_if_fresh(entry, &path).is_some());
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn v1_entry_backfills_content_hash_when_mtime_matches() {
+        let path = unique_temp_file("backfill");
+        fs::write(&path, b"abc").expect("write file");
+        let mtime = replaygain_source_mtime_unix_nanos(&path).expect("mtime");
+        let entry = ReplayGainCacheEntry {
+            path_hash: replaygain_path_hash(&path),
+            mtime_unix_nanos: mtime,
+            content_hash: CONTENT_HASH_UNKNOWN,
+            lufs: -10.0,
+            true_peak_linear: 0.4,
+        };
+
+        match replaygain_cache_check(entry, &path) {
+            CacheFreshness::Refreshed(updated) => {
+                assert_ne!(updated.content_hash, CONTENT_HASH_UNKNOWN);
+                assert_eq!(
+                    updated.content_hash,
+                    replaygain_content_hash(&path).expect("hash")
+                );
+            }
+            other => panic!("expected Refreshed, got {other:?}"),
+        }
+
+        let _ = fs::remove_file(&path);
+    }
+
+    fn encode_v1_cache(file: &ReplayGainCacheFileV1) -> Vec<u8> {
+        let body =
+            bincode::encode_to_vec(file, bincode::config::standard()).expect("encode v1 body");
+        let mut out = Vec::with_capacity(12 + body.len());
+        out.extend_from_slice(&CACHE_MAGIC.to_le_bytes());
+        out.extend_from_slice(&CACHE_VERSION_V1.to_le_bytes());
+        out.extend_from_slice(&body);
+        out
+    }
+
+    #[test]
+    fn decode_migrates_v1_entries() {
+        let v1 = ReplayGainCacheFileV1 {
+            entries: vec![ReplayGainCacheEntryV1 {
+                path_hash: 7,
+                mtime_unix_nanos: 11,
+                lufs: -14.0,
+                true_peak_linear: 0.5,
+            }],
+        };
+        let bytes = encode_v1_cache(&v1);
+
+        let decoded = decode_replaygain_cache(&bytes).expect("decode v1");
+        assert_eq!(decoded.entries.len(), 1);
+        let entry = decoded.entries[0];
+        assert_eq!(entry.path_hash, 7);
+        assert_eq!(entry.mtime_unix_nanos, 11);
+        assert_eq!(entry.content_hash, CONTENT_HASH_UNKNOWN);
+        assert_eq!(entry.lufs, -14.0);
+        assert_eq!(entry.true_peak_linear, 0.5);
     }
 }
