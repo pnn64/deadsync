@@ -477,8 +477,7 @@ pub fn push_actors(
 
     // inactive bg = #071016 @ 0.8 alpha
     const BASE_INACTIVE: [f32; 4] = color::rgba_hex("#071016");
-    const COL_INACTIVE_BG: [f32; 4] =
-        [BASE_INACTIVE[0], BASE_INACTIVE[1], BASE_INACTIVE[2], 0.8];
+    const COL_INACTIVE_BG: [f32; 4] = [BASE_INACTIVE[0], BASE_INACTIVE[1], BASE_INACTIVE[2], 0.8];
     let col_active_bg = COL_ACTIVE_BG;
     let col_inactive_bg = COL_INACTIVE_BG;
 

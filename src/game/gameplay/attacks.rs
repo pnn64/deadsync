@@ -9,7 +9,6 @@ use crate::game::profile;
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
 use deadsync_core::timing::ROWS_PER_BEAT;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -23,12 +22,12 @@ use std::time::Instant;
 
 use super::{
     AccelEffects, AccelOverrides, AppearanceEffects, AppearanceOverrides, ChartAttackEffects,
-    HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS,
-    HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE,
-    INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY,
-    INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, PerspectiveEffects,
-    PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL,
-    RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
+    GameplayViewport, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+    HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG,
+    INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
+    INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS,
+    PerspectiveEffects, PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS,
+    RANDOM_ATTACK_MOD_POOL, RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
     RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
     REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
     REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
@@ -2690,11 +2689,12 @@ fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,
     profile: &profile_data::Profile,
+    viewport: GameplayViewport,
     play_style: profile_data::PlayStyle,
     player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
-    let clamped_width = screen_width().clamp(640.0, 854.0);
+    let clamped_width = viewport.width().clamp(640.0, 854.0);
     let centered_one_side = num_players == 1
         && play_style == profile_data::PlayStyle::Single
         && center_1player_notefield;
@@ -2706,19 +2706,19 @@ fn song_lua_compile_player_screen_x(
     };
     let base_center_x = if num_players == 2 {
         if p2_side {
-            screen_center_x() + (clamped_width * 0.25)
+            viewport.center_x() + (clamped_width * 0.25)
         } else {
-            screen_center_x() - (clamped_width * 0.25)
+            viewport.center_x() - (clamped_width * 0.25)
         }
     } else if centered_both_sides || centered_one_side {
-        screen_center_x()
+        viewport.center_x()
     } else if p2_side {
-        screen_center_x() + (clamped_width * 0.25)
+        viewport.center_x() + (clamped_width * 0.25)
     } else {
-        screen_center_x() - (clamped_width * 0.25)
+        viewport.center_x() - (clamped_width * 0.25)
     };
     if num_players == 1 && (centered_both_sides || centered_one_side) {
-        screen_center_x()
+        viewport.center_x()
     } else {
         let offset_sign = if p2_side { 1.0 } else { -1.0 };
         base_center_x + offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32)
@@ -2733,11 +2733,12 @@ fn build_song_lua_compile_context(
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
+    viewport: GameplayViewport,
 ) -> SongLuaCompileContext {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
-    let screen_width = screen_width();
-    let screen_height = screen_height();
+    let screen_width = viewport.width();
+    let screen_height = viewport.height();
     let center_1player_notefield = crate::config::get().center_1player_notefield;
     let mut context = SongLuaCompileContext::new(
         song.simfile_path
@@ -2793,14 +2794,15 @@ fn build_song_lua_compile_context(
                 num_players,
                 player,
                 &player_profiles[player],
+                viewport,
                 play_style,
                 player_side,
                 center_1player_notefield,
             )
         } else {
-            screen_center_x()
+            viewport.center_x()
         },
-        screen_y: screen_center_y(),
+        screen_y: viewport.center_y(),
     });
     context
 }
@@ -2899,6 +2901,7 @@ pub(super) fn build_song_lua_runtime_windows(
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
+    viewport: GameplayViewport,
     player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
@@ -2945,14 +2948,15 @@ pub(super) fn build_song_lua_runtime_windows(
                     num_players,
                     player_index,
                     &player_profiles[player_index],
+                    viewport,
                     play_style,
                     player_side,
                     center_1player_notefield,
                 )
             } else {
-                screen_center_x()
+                viewport.center_x()
             },
-            y: screen_center_y(),
+            y: viewport.center_y(),
             ..SongLuaOverlayState::default()
         },
         message_commands: Vec::new(),
@@ -2969,8 +2973,8 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut sound_paths = Vec::new();
-    let screen_width = screen_width();
-    let screen_height = screen_height();
+    let screen_width = viewport.width();
+    let screen_height = viewport.height();
 
     let primary_entry = song
         .foreground_lua_changes
@@ -3011,6 +3015,7 @@ pub(super) fn build_song_lua_runtime_windows(
         scroll_speed,
         music_rate,
         machine_global_offset_seconds,
+        viewport,
     );
 
     let mut out_screen_width = screen_width;

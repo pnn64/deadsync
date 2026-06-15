@@ -94,9 +94,7 @@ fn panel_content(phase: &FfmpegPhase) -> PanelContent {
                 );
             }
             if let Some(bps) = speed_bps {
-                body.push(
-                    tr("FfmpegInstall", "BodySpeed").replace("{speed}", &format_speed(*bps)),
-                );
+                body.push(tr("FfmpegInstall", "BodySpeed").replace("{speed}", &format_speed(*bps)));
             }
             let progress = total.and_then(|t| (t > 0).then_some(*written as f32 / t as f32));
             PanelContent {

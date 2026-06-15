@@ -176,7 +176,8 @@ pub fn decode_replaygain_cache(bytes: &[u8]) -> Option<ReplayGainCacheFile> {
             // Migrate legacy entries: keep their gains, mark the content hash
             // unknown so the first fresh check backfills it.
             let (legacy, _) =
-                bincode::decode_from_slice::<ReplayGainCacheFileV1, _>(&bytes[12..], config).ok()?;
+                bincode::decode_from_slice::<ReplayGainCacheFileV1, _>(&bytes[12..], config)
+                    .ok()?;
             Some(ReplayGainCacheFile {
                 entries: legacy.entries.into_iter().map(Into::into).collect(),
             })

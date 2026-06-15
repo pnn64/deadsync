@@ -63,14 +63,12 @@ pub use groovestats::{
     tick_groovestats_auto_retries,
 };
 pub use itl::{
-    get_cached_itl_score_for_side, get_cached_itl_score_for_song,
+    ensure_itl_wheel_caches_loaded, get_cached_itl_score_for_side, get_cached_itl_score_for_song,
     get_cached_itl_self_score_for_side, get_cached_itl_tournament_overall_ranks_for_side,
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
     get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
     is_itl_song_folder_unlocked_with_profile, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
-    ensure_itl_wheel_caches_loaded,
-    itl_points_for_chart,
-    save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
+    itl_points_for_chart, save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
     seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
     should_warn_cmod_for_itl_chart,
 };
@@ -910,7 +908,8 @@ impl HeldScoreCaches {
             .and_then(|s| s.itg)
             .map(|ac| ac.to_cached_score());
         [local, gs, ac].into_iter().flatten().reduce(|a, b| {
-            failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+            failed_score_override(&a, &b)
+                .unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
         })
     }
 }

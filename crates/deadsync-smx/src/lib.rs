@@ -967,8 +967,15 @@ mod tests {
         for pct in 1..=100u8 {
             let mut frame = [255u8; 6];
             apply_brightness(&mut frame, [pct, pct]);
-            assert!(frame[0] >= 2, "{pct}% scaled 0xFF to {} (too dim)", frame[0]);
-            assert!(frame[0] >= prev, "brightness must not decrease with percent");
+            assert!(
+                frame[0] >= 2,
+                "{pct}% scaled 0xFF to {} (too dim)",
+                frame[0]
+            );
+            assert!(
+                frame[0] >= prev,
+                "brightness must not decrease with percent"
+            );
             prev = frame[0];
         }
     }

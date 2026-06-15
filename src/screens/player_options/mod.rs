@@ -330,8 +330,7 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
             return None;
         }
         let row = pane.row_map.get_at(pane.selected_row[idx])?;
-        (row.id == RowId::PadLightBrightness)
-            .then(|| row.selected_choice_index[idx].min(100) as u8)
+        (row.id == RowId::PadLightBrightness).then(|| row.selected_choice_index[idx].min(100) as u8)
     });
     // In Doubles a single player owns BOTH pads, so the brightness value applies
     // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's

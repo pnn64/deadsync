@@ -9015,10 +9015,9 @@ pub fn build_bundles(
                         && wscale.is_finite()
                         && wscale > 0.0
                     {
-                        let tick_h = (ERROR_BAR_HEIGHT_AVERAGE
-                            + 4.0
-                            + ERROR_BAR_AVERAGE_TICK_EXTRA_H)
-                            * avg_error_bar_mini_scale;
+                        let tick_h =
+                            (ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H)
+                                * avg_error_bar_mini_scale;
 
                         if profile.center_tick {
                             hud_actors.push(act!(quad:
@@ -9113,10 +9112,9 @@ pub fn build_bundles(
                     } else {
                         error_bar_line_z
                     };
-                    let long_tick_h = (ERROR_BAR_HEIGHT_AVERAGE
-                        + 4.0
-                        + ERROR_BAR_LONG_AVG_TICK_EXTRA_H)
-                        * long_mini_scale;
+                    let long_tick_h =
+                        (ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_LONG_AVG_TICK_EXTRA_H)
+                            * long_mini_scale;
                     hud_actors.push(act!(quad:
                         align(0.5, 0.5): xy(error_bar_x + x, long_tick_y):
                         zoomto(ERROR_BAR_LONG_AVG_TICK_WIDTH, long_tick_h):

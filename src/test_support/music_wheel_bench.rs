@@ -132,8 +132,8 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         BENCH_ITL_API_KEY,
         "BenchPlayer",
     );
-    let profile_id = crate::game::profile::active_local_profile_id_for_side(PlayerSide::P1)
-        .unwrap_or_default();
+    let profile_id =
+        crate::game::profile::active_local_profile_id_for_side(PlayerSide::P1).unwrap_or_default();
 
     let mut entries = Vec::with_capacity(48);
     let mut song_text_color_overrides = HashMap::with_capacity(12);

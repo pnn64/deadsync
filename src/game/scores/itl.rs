@@ -663,7 +663,10 @@ fn online_itl_self_rank_in_cache(
     if chart_hash.is_empty() || api_key.is_empty() {
         return None;
     }
-    let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
+    let kref = OnlineItlSelfScoreKeyRef {
+        chart_hash,
+        api_key,
+    };
     let cache = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
     profile_id
         .and_then(|profile_id| cache.loaded_profiles.get(profile_id))
@@ -1936,7 +1939,10 @@ fn online_itl_self_score_in_cache(
     if chart_hash.is_empty() || api_key.is_empty() {
         return None;
     }
-    let kref = OnlineItlSelfScoreKeyRef { chart_hash, api_key };
+    let kref = OnlineItlSelfScoreKeyRef {
+        chart_hash,
+        api_key,
+    };
     let cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
     profile_id
         .and_then(|profile_id| cache.loaded_profiles.get(profile_id))

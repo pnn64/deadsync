@@ -63,12 +63,12 @@ pub struct ActorViewOverride {
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
-    CourseDisplayTotals, GameplayAction, GameplayExit, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
-    TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
-    handle_input as gameplay_handle_input, scroll_receptor_y, timing_tick_status_line,
-    toggle_flash_text, update as gameplay_update,
+    CourseDisplayTotals, GameplayAction, GameplayExit, GameplayViewport, LeadInTiming,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge,
+    ReplayOffsetSnapshot, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
+    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
+    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
+    scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -304,6 +304,7 @@ pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    viewport: GameplayViewport,
     active_color_index: i32,
     music_rate: f32,
     scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -323,6 +324,7 @@ pub fn init(
         song,
         charts,
         gameplay_charts,
+        viewport,
         active_color_index,
         music_rate,
         scroll_speed,

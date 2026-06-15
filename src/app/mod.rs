@@ -132,6 +132,13 @@ const LIGHTS_MARQUEE_DIFFICULTY_INDEX: usize = 3; // Hard
 const LIGHTS_BASS_DIFFICULTY_INDEX: usize = 2; // Medium
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
+fn gameplay_viewport(metrics: Metrics) -> crate::game::gameplay::GameplayViewport {
+    crate::game::gameplay::GameplayViewport::new(
+        metrics.right - metrics.left,
+        metrics.top - metrics.bottom,
+    )
+}
+
 #[derive(Clone, Debug, Default)]
 struct GameplayLightTracker {
     pad_notes_ptr: usize,
@@ -9042,6 +9049,7 @@ impl App {
                     song_arc,
                     charts,
                     gameplay_charts,
+                    gameplay_viewport(self.state.shell.metrics),
                     po_state.active_color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -9459,6 +9467,7 @@ impl App {
                     song_arc,
                     charts,
                     gameplay_charts,
+                    gameplay_viewport(self.state.shell.metrics),
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,

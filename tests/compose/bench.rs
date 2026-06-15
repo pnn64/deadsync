@@ -1,11 +1,10 @@
 use deadsync::assets::AssetManager;
 use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
 use deadsync::test_support::{
-    compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
-    gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
-    gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
-    pane_stats_bench, player_options_bench, visual_style_bg_bench,
-    evaluation_bench,
+    compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench,
+    evaluation_bench, gameplay_bench, gameplay_stats_bench, gameplay_stats_double_bench,
+    gameplay_stats_versus_bench, gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench,
+    notefield_bench, options_bench, pane_stats_bench, player_options_bench, visual_style_bg_bench,
 };
 use deadsync_present::actors::Actor;
 use deadsync_present::compose;

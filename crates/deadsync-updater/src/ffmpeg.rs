@@ -162,7 +162,11 @@ static MR_MACOS_ARM64: FfmpegSource = FfmpegSource {
 /// no maintained static build for (Win7 32-bit, FreeBSD, etc.), which
 /// keep relying on an `ffmpeg`/`ffprobe` already on `PATH`.
 pub fn host_ffmpeg_source() -> Option<&'static FfmpegSource> {
-    if cfg!(all(target_os = "windows", target_arch = "x86_64", target_vendor = "win7")) {
+    if cfg!(all(
+        target_os = "windows",
+        target_arch = "x86_64",
+        target_vendor = "win7"
+    )) {
         Some(&DEADSYNC_WIN7_X64)
     } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         Some(&GYAN_WIN_X64)
@@ -539,8 +543,7 @@ fn run_install(source: &'static FfmpegSource, generation: u64) {
 /// Extract `ffmpeg`/`ffprobe` from each downloaded archive into
 /// `install_dir`, then require that both tools ended up installed.
 fn install_tools(archives: &[PathBuf], install_dir: &Path) -> Result<(), UpdaterError> {
-    fs::create_dir_all(install_dir)
-        .map_err(|err| io_err_at("create_dir_all", install_dir, err))?;
+    fs::create_dir_all(install_dir).map_err(|err| io_err_at("create_dir_all", install_dir, err))?;
 
     let mut installed: Vec<&'static str> = Vec::new();
     for archive in archives {
@@ -602,10 +605,7 @@ fn extract_tools_from_zip(
 /// Match a zip-entry path against [`TOOLS`] by basename, tolerating a
 /// trailing `.exe` and any directory prefix.
 fn match_tool(entry_path: &str) -> Option<&'static str> {
-    let base = entry_path
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(entry_path);
+    let base = entry_path.rsplit(['/', '\\']).next().unwrap_or(entry_path);
     let stem = if base.len() >= 4 && base[base.len() - 4..].eq_ignore_ascii_case(".exe") {
         &base[..base.len() - 4]
     } else {
@@ -696,9 +696,8 @@ impl ProgressThrottle {
         total: Option<u64>,
         eta_secs: Option<u64>,
     ) -> bool {
-        let pct = total.and_then(|t| {
-            (t != 0).then(|| ((written.min(t) as u128 * 100) / t as u128) as u32)
-        });
+        let pct = total
+            .and_then(|t| (t != 0).then(|| ((written.min(t) as u128 * 100) / t as u128) as u32));
         let is_final = matches!(total, Some(t) if written >= t);
         let publish = is_final
             || self.last_published.is_none()

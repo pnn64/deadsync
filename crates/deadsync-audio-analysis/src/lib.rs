@@ -5,7 +5,7 @@ use ebur128::{EbuR128, Mode};
 use std::path::Path;
 
 pub use cache::{
-    CacheFreshness, CONTENT_HASH_UNKNOWN, ReplayGainCacheEntry, ReplayGainCacheFile,
+    CONTENT_HASH_UNKNOWN, CacheFreshness, ReplayGainCacheEntry, ReplayGainCacheFile,
     decode_replaygain_cache, encode_replaygain_cache, read_replaygain_cache_file,
     replaygain_cache_check, replaygain_cache_entry_for_path, replaygain_cache_info_if_fresh,
     replaygain_content_hash, replaygain_path_hash, replaygain_source_mtime_unix_nanos,

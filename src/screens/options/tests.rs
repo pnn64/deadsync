@@ -128,10 +128,7 @@ fn smx_config_items_match_rows() {
             SubRowId::SmxDefaultPadConfig,
             ItemId::InpSmxDefaultPadConfig,
         ),
-        (
-            SubRowId::SmxSinglePadPlayer,
-            ItemId::InpSmxSinglePadPlayer,
-        ),
+        (SubRowId::SmxSinglePadPlayer, ItemId::InpSmxSinglePadPlayer),
         (
             SubRowId::SmxDefaultLightBrightness,
             ItemId::InpSmxDefaultLightBrightness,

@@ -139,9 +139,7 @@ pub(super) fn apply_submenu_choice_delta(
             }
             return None;
         }
-        if matches!(kind, SubmenuKind::SmxConfig)
-            && row.id == SubRowId::SmxDefaultLightBrightness
-        {
+        if matches!(kind, SubmenuKind::SmxConfig) && row.id == SubRowId::SmxDefaultLightBrightness {
             // Numeric placeholder row: adjust the percent directly (like the volume
             // rows) instead of cycling a choice list.
             if adjust_ms_value(
@@ -1193,9 +1191,7 @@ pub(super) fn activate_current_selection(
                     audio::play_sfx("assets/sounds/start.ogg");
                     // Probe ffmpeg/ffprobe on a worker thread — the lookup
                     // spawns subprocesses and would stutter the UI thread.
-                    if let Some(generation) =
-                        deadsync_updater::ffmpeg::begin_availability_check()
-                    {
+                    if let Some(generation) = deadsync_updater::ffmpeg::begin_availability_check() {
                         std::thread::spawn(move || {
                             let available = deadsync_video::ffmpeg_available();
                             deadsync_updater::ffmpeg::resolve_availability_check(
@@ -1530,8 +1526,7 @@ pub fn handle_input(
     }
     let ffmpeg_phase = deadsync_updater::ffmpeg::current();
     if !matches!(ffmpeg_phase, deadsync_updater::ffmpeg::FfmpegPhase::Idle)
-        && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev)
-            == update_overlay::InputOutcome::Consumed
+        && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev) == update_overlay::InputOutcome::Consumed
     {
         return ScreenAction::None;
     }

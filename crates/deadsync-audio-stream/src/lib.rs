@@ -336,8 +336,8 @@ fn music_decoder_thread_loop(
         } else {
             current_rate_f32 = current_rate_f32.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
         }
-        let mut current_pp = preserve_pitch.load(Ordering::Acquire)
-            && (current_rate_f32 - 1.0).abs() > RATE_EPS;
+        let mut current_pp =
+            preserve_pitch.load(Ordering::Acquire) && (current_rate_f32 - 1.0).abs() > RATE_EPS;
         let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= RATE_EPS;
         let mut ratio = if current_pp {
             f64::from(out_hz) / f64::from(in_hz)
@@ -531,9 +531,7 @@ fn music_decoder_thread_loop(
                 } else {
                     let need_rebuild = pp_changed || resampler.is_none();
                     let mut reuse_resampler = false;
-                    if !need_rebuild
-                        && let Some(existing) = &mut resampler
-                    {
+                    if !need_rebuild && let Some(existing) = &mut resampler {
                         existing.reset();
                         reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
                     }

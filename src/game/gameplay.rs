@@ -13,7 +13,6 @@ use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 use deadsync_input::InputEdge;
-use deadsync_present::space::{is_wide, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{
@@ -3654,6 +3653,67 @@ pub struct NoteCountStat {
     pub notes_upper: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayViewport {
+    width: f32,
+    height: f32,
+}
+
+impl GameplayViewport {
+    pub const fn design() -> Self {
+        Self {
+            width: 854.0,
+            height: 480.0,
+        }
+    }
+
+    pub fn new(width: f32, height: f32) -> Self {
+        Self {
+            width: if width.is_finite() && width > 0.0 {
+                width
+            } else {
+                Self::design().width
+            },
+            height: if height.is_finite() && height > 0.0 {
+                height
+            } else {
+                Self::design().height
+            },
+        }
+    }
+
+    #[inline(always)]
+    pub const fn width(self) -> f32 {
+        self.width
+    }
+
+    #[inline(always)]
+    pub const fn height(self) -> f32 {
+        self.height
+    }
+
+    #[inline(always)]
+    pub const fn center_x(self) -> f32 {
+        self.width * 0.5
+    }
+
+    #[inline(always)]
+    pub const fn center_y(self) -> f32 {
+        self.height * 0.5
+    }
+
+    #[inline(always)]
+    pub fn is_wide(self) -> bool {
+        self.width / self.height >= 1.6
+    }
+}
+
+impl Default for GameplayViewport {
+    fn default() -> Self {
+        Self::design()
+    }
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -3679,6 +3739,7 @@ pub struct State {
     pub num_cols: usize,
     pub cols_per_player: usize,
     pub num_players: usize,
+    pub viewport: GameplayViewport,
     pub timing: Arc<TimingData>,
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
@@ -4565,10 +4626,10 @@ fn refresh_live_notefield_options(state: &mut State, current_bpm: f32) {
             mini_percent,
         );
         state.draw_distance_before_targets[player] =
-            screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
+            state.viewport.height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
         state.draw_distance_after_targets[player] = lerp(
             DRAW_DISTANCE_AFTER_TARGETS * draw_scale,
-            screen_height() * 0.6 * draw_scale,
+            state.viewport.height() * 0.6 * draw_scale,
             scroll.centered.clamp(0.0, 1.0),
         );
 
@@ -5313,6 +5374,7 @@ pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    viewport: GameplayViewport,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -5861,10 +5923,10 @@ pub fn init(
     });
     let draw_distance_before_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
-            return screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
+            return viewport.height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER;
         }
         let draw_scale = player_draw_scale(&player_profiles[player]);
-        screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale
+        viewport.height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale
     });
     let draw_distance_after_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -5875,7 +5937,7 @@ pub fn init(
             .scroll_option
             .contains(profile_data::ScrollOption::Centered)
         {
-            screen_height() * 0.6 * draw_scale
+            viewport.height() * 0.6 * draw_scale
         } else {
             DRAW_DISTANCE_AFTER_TARGETS * draw_scale
         }
@@ -6037,6 +6099,7 @@ pub fn init(
         &scroll_speed,
         rate,
         config.global_offset_seconds,
+        viewport,
         &player_global_offset_shift_seconds,
     );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -6174,10 +6237,10 @@ pub fn init(
         p.step_statistics
             .contains(profile_data::StepStatisticsMask::DENSITY_GRAPH)
     });
-    let wide = is_wide();
+    let wide = viewport.is_wide();
     let density_graph_enabled = wide && wants_density_graph;
-    let sw = screen_width();
-    let sh = screen_height().max(1.0_f32);
+    let sw = viewport.width();
+    let sh = viewport.height().max(1.0_f32);
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {
@@ -6331,6 +6394,7 @@ pub fn init(
         num_cols,
         cols_per_player,
         num_players,
+        viewport,
         timing,
         timing_players,
         beat_info_cache,
@@ -9321,6 +9385,7 @@ mod tests {
             song,
             charts,
             gameplay_charts,
+            super::GameplayViewport::default(),
             5,
             1.0,
             [
@@ -9481,6 +9546,7 @@ return Def.ActorFrame{}
                                 song,
                                 [chart.clone(), chart],
                                 [gameplay_chart.clone(), gameplay_chart],
+                                super::GameplayViewport::default(),
                                 5,
                                 1.0,
                                 [

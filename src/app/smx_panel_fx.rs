@@ -148,8 +148,7 @@ impl SmxPanelDriver {
             // slot the player's pad sits on (a single P2 player packs at chart pad 0 but
             // stands on slot 1). The trackers below still update even when a column maps to
             // no panel, so events are consumed rather than replayed later.
-            let panel =
-                smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
+            let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
 
             if let Some((color, dur)) =
                 tap_flash(state.last_tap_judgments[col], &mut self.prev_flash[col])

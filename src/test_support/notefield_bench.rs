@@ -98,6 +98,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         song,
         charts,
         gameplay_charts,
+        gameplay::GameplayViewport::default(),
         0,
         1.0,
         [

@@ -548,24 +548,22 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
             }
         }
     }
-    let overall_itl_ranks_p1 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
-        && p1_joined
-    {
-        Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
-            profile_data::PlayerSide::P1,
-        ))
-    } else {
-        None
-    };
-    let overall_itl_ranks_p2 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
-        && p2_joined
-    {
-        Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
-            profile_data::PlayerSide::P2,
-        ))
-    } else {
-        None
-    };
+    let overall_itl_ranks_p1 =
+        if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p1_joined {
+            Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
+                profile_data::PlayerSide::P1,
+            ))
+        } else {
+            None
+        };
+    let overall_itl_ranks_p2 =
+        if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p2_joined {
+            Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
+                profile_data::PlayerSide::P2,
+            ))
+        } else {
+            None
+        };
 
     let header_font = current_machine_font_key(FontRole::Header);
     let numbers_font = current_machine_font_key(FontRole::Numbers);
@@ -627,8 +625,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     if let Some(pid) = score_profile_p2.as_deref() {
         scores::ensure_score_caches_loaded(pid);
     }
-    let held_score_caches = (score_lookups_active && (score_profile_p1.is_some() || score_profile_p2.is_some()))
-        .then(scores::lock_score_caches);
+    let held_score_caches = (score_lookups_active
+        && (score_profile_p1.is_some() || score_profile_p2.is_some()))
+    .then(scores::lock_score_caches);
 
     if itl_ctx_p1.is_some()
         && let Some(pid) = local_profile_id(profile_data::PlayerSide::P1)

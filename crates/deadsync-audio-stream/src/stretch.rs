@@ -77,8 +77,7 @@ impl SolaStretcher {
     pub(super) fn new(channels: usize, sample_rate: u32) -> Self {
         debug_assert!(channels > 0);
         debug_assert!(sample_rate > 0);
-        let window_frames =
-            ((WINDOW_SIZE_MS as usize) * (sample_rate as usize) / 1000).max(64);
+        let window_frames = ((WINDOW_SIZE_MS as usize) * (sample_rate as usize) / 1000).max(64);
         let tolerance_frames = window_frames / 4;
         // Reclaim the erased prefix only after it grows to several windows, so
         // the compaction memmove is amortized across many `erase_front` calls
@@ -307,7 +306,8 @@ impl SolaStretcher {
             if int_advance >= 0 {
                 self.uncorrelated_pos.saturating_add(int_advance as usize)
             } else {
-                self.uncorrelated_pos.saturating_sub((-int_advance) as usize)
+                self.uncorrelated_pos
+                    .saturating_sub((-int_advance) as usize)
             }
         } else {
             self.uncorrelated_pos
@@ -709,10 +709,7 @@ mod tests {
         let last = buffer.len() - pattern.len();
         buffer[last..].copy_from_slice(&pattern);
         let found = find_closest_match(&buffer, &pattern);
-        assert_eq!(
-            found, last,
-            "L1 search must check the final valid offset"
-        );
+        assert_eq!(found, last, "L1 search must check the final valid offset");
     }
 
     /// At `rate=1.0` SOLA should not stall waiting for the full search

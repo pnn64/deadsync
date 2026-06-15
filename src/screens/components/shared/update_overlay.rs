@@ -145,7 +145,14 @@ pub fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Acto
     let line_gap = 36.0;
     for (i, line) in content.body_lines.iter().enumerate() {
         let y = next_y + (i as f32) * line_gap;
-        actors.push(panel_text_tinted(line, cx, y, BODY_PX, TextAlign::Center, white));
+        actors.push(panel_text_tinted(
+            line,
+            cx,
+            y,
+            BODY_PX,
+            TextAlign::Center,
+            white,
+        ));
     }
 
     if let Some(progress) = content.progress {
