@@ -9399,8 +9399,10 @@ fn smx_fsr_group_w() -> f32 {
 // Enlarged, vertically-stacked layout for a centered single player: a big FSR
 // group over a big mini-pad, centered in the open side gutter (P1 left, P2
 // right). Returns (scale, fsr_x, fsr_top, mini_x, mini_y).
-const SMX_CENTERED_SCALE: f32 = 3.0;
+const SMX_CENTERED_SCALE: f32 = 2.0;
 const SMX_CENTERED_STACK_GAP: f32 = 16.0;
+// Gap between the two pads' groups in a Doubles pair.
+const SMX_DOUBLES_PAIR_GAP: f32 = 10.0;
 fn smx_centered_layout(
     side: profile_data::PlayerSide,
     field_left: f32,
@@ -9464,7 +9466,7 @@ fn push_smx_sensor_display(
         let Some((_, field_left, _)) = field_geom[0] else {
             return;
         };
-        let group_gap = SMX_SENSOR_BAR_GAP * 2.0;
+        let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = pad_group_w * 2.0 + group_gap;
         let start_x = (field_left - SMX_OVERLAY_FIELD_GAP - total_w).max(SMX_SENSOR_MARGIN);
         for sdk_pad in 0..2usize {
@@ -9688,7 +9690,7 @@ fn push_smx_pad_input_display(
         let Some((_, _, field_right)) = field_geom[0] else {
             return;
         };
-        let group_gap = SMX_PAD_INPUT_GAP * 2.0;
+        let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = mini_w * 2.0 + group_gap;
         let start_x = (field_right + SMX_OVERLAY_FIELD_GAP)
             .min(screen_width() - SMX_SENSOR_MARGIN - total_w);
@@ -9710,7 +9712,14 @@ fn push_smx_pad_input_display(
         let Some((side, field_left, field_right)) = field_geom[slot] else {
             continue;
         };
-        let x0 = smx_overlay_x(side, field_left, field_right, mini_w, false, SMX_OVERLAY_INNER_GAP);
+        // P1 wants a tight 5px inner gap; P2 looked right at the original 14px
+        // (versus notefields are not symmetric about center).
+        let inner_gap = if side == profile_data::PlayerSide::P2 {
+            SMX_OVERLAY_FIELD_GAP
+        } else {
+            SMX_OVERLAY_INNER_GAP
+        };
+        let x0 = smx_overlay_x(side, field_left, field_right, mini_w, false, inner_gap);
         draw_smx_mini_pad(actors, state, slot * 4, x0, y0, 1.0);
     }
 }
