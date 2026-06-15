@@ -19,8 +19,10 @@
 //!   `cache_dir/replaygain.bin` (an in-memory `HashMap` keyed by
 //!   xxhash64(canonical_path) is the source of truth; a dedicated flush
 //!   thread debounces writes by [`FLUSH_DEBOUNCE`] and rewrites the file
-//!   atomically via tmp + rename). Per-entry mtime is stored so changed
-//!   files are automatically re-analyzed.
+//!   atomically via tmp + rename). Each entry stores the source file's mtime
+//!   and an xxhash64 of its raw bytes: the mtime is the fast-path validator,
+//!   and the content hash lets an unchanged file whose timestamp moved keep its
+//!   cached gain instead of being needlessly re-analyzed.
 //! - Linear gain is derived as `10^((TARGET_LUFS - lufs) / 20)`, clamped so
 //!   that `gain * true_peak <= 1.0` (prevent clipping) and never exceeds
 //!   +12 dB.
@@ -30,9 +32,9 @@
 //! shell can apply it retroactively to the currently playing stream.
 
 use deadsync_audio_analysis::{
-    ReplayGainCacheEntry, ReplayGainCacheFile, ReplayGainInfo, UNITY_GAIN, compute_loudness,
-    gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_entry_for_path,
-    replaygain_cache_info_if_fresh, replaygain_path_hash, write_replaygain_cache_file,
+    CacheFreshness, ReplayGainCacheEntry, ReplayGainCacheFile, ReplayGainInfo, UNITY_GAIN,
+    compute_loudness, gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_check,
+    replaygain_cache_entry_for_path, replaygain_path_hash, write_replaygain_cache_file,
 };
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
@@ -509,7 +511,27 @@ fn load_disk_cache(song_path: &Path) -> Option<ReplayGainInfo> {
         let map = disk_cache().entries.lock().unwrap();
         map.get(&key).copied()
     }?;
-    replaygain_cache_info_if_fresh(entry, song_path)
+    match replaygain_cache_check(entry, song_path) {
+        CacheFreshness::Fresh(info) => Some(info),
+        CacheFreshness::Refreshed(updated) => {
+            // The gain is still valid but its mtime/content hash moved (the
+            // file's timestamp changed without its bytes changing, or a
+            // migrated v1 entry just learned its content hash). Persist the
+            // corrected entry so we don't re-validate against disk every play.
+            let cache = disk_cache();
+            {
+                let mut map = cache.entries.lock().unwrap();
+                map.insert(updated.path_hash, updated);
+            }
+            {
+                let mut state = cache.flush_state.lock().unwrap();
+                state.dirty = true;
+            }
+            cache.flush_cv.notify_one();
+            Some(updated.info())
+        }
+        CacheFreshness::Stale => None,
+    }
 }
 
 fn write_disk_cache(song_path: &Path, info: ReplayGainInfo) {
