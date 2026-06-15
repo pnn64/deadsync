@@ -9469,13 +9469,14 @@ fn push_smx_sensor_display(
         if !state.player_profiles[0].smx_fsr_display {
             return;
         }
-        let Some((_, field_left, field_right)) = field_geom[0] else {
+        let Some((_, field_left, _)) = field_geom[0] else {
             return;
         };
-        let field_x = (field_left + field_right) * 0.5;
+        // Centered in the left gutter (to the left of the wide notefield).
+        let center_x = field_left * 0.5;
         let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = pad_group_w * 2.0 + group_gap;
-        let start_x = field_x - total_w * 0.5;
+        let start_x = center_x - total_w * 0.5;
         let top_y = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC;
         for sdk_pad in 0..2usize {
             let gx = start_x + sdk_pad as f32 * (pad_group_w + group_gap);
@@ -9695,13 +9696,14 @@ fn push_smx_pad_input_display(
         if !state.player_profiles[0].smx_pad_input_display {
             return;
         }
-        let Some((_, field_left, field_right)) = field_geom[0] else {
+        let Some((_, field_left, _)) = field_geom[0] else {
             return;
         };
-        let field_x = (field_left + field_right) * 0.5;
+        // Centered in the left gutter, aligned under the FSR pair.
+        let center_x = field_left * 0.5;
         let group_gap = SMX_DOUBLES_PAIR_GAP;
         let total_w = mini_w * 2.0 + group_gap;
-        let start_x = field_x - total_w * 0.5;
+        let start_x = center_x - total_w * 0.5;
         // Below the FSR pair (which starts SMX_DOUBLES_STACK_TOP_FRAC down).
         let fsr_group_h = SMX_SENSOR_VALUE_H + SMX_SENSOR_VALUE_GAP + SMX_SENSOR_BAR_H;
         let mini_top = screen_height() * SMX_DOUBLES_STACK_TOP_FRAC
