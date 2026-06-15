@@ -43,6 +43,12 @@ struct ChartAttackWindow {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(super) enum AttackMiniMode {
+    Absolute,
+    Delta,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(super) struct AttackMaskWindow {
     pub(super) start_second: f32,
     pub(super) end_second: f32,
@@ -61,6 +67,7 @@ pub(super) struct AttackMaskWindow {
     pub(super) perspective: PerspectiveOverrides,
     pub(super) scroll_speed: Option<ScrollSpeedSetting>,
     pub(super) mini_percent: Option<f32>,
+    pub(super) mini_mode: AttackMiniMode,
     pub(super) mini_speed: Option<f32>,
 }
 
@@ -966,6 +973,7 @@ pub(super) fn build_attack_mask_windows_for_player(
             perspective: mods.perspective,
             scroll_speed: mods.scroll_speed,
             mini_percent: mods.mini_percent,
+            mini_mode: AttackMiniMode::Absolute,
             mini_speed: mods.mini_speed,
         });
     }
@@ -1103,6 +1111,7 @@ fn build_song_lua_constant_window(
         perspective: mods.perspective,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
+        mini_mode: AttackMiniMode::Delta,
         mini_speed: mods.mini_speed,
     })
 }
@@ -4476,6 +4485,23 @@ fn approach_mini_percent_to_target(
 }
 
 #[inline(always)]
+fn attack_mini_base_percent(state: &State, player: usize, clear_all: bool) -> f32 {
+    if clear_all {
+        0.0
+    } else {
+        state.player_profiles[player].mini_percent as f32
+    }
+}
+
+#[inline(always)]
+fn attack_mini_target_percent(value: f32, mode: AttackMiniMode, base: f32) -> f32 {
+    match mode {
+        AttackMiniMode::Absolute => value,
+        AttackMiniMode::Delta => base + value,
+    }
+}
+
+#[inline(always)]
 fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
     VisualEffects::from_mask(profile.visual_effects_active_mask.bits())
 }
@@ -5031,7 +5057,11 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(mini) = window.mini_percent.filter(|v| v.is_finite())
                     && persisted_mini_allowed(persisted, active_targets)
                 {
-                    mini_percent = Some(mini.clamp(-100.0, 150.0));
+                    let base = attack_mini_base_percent(state, player, clear_all);
+                    mini_percent = Some(
+                        attack_mini_target_percent(mini, window.mini_mode, base)
+                            .clamp(-100.0, 150.0),
+                    );
                     mini_speed = window.mini_speed;
                 }
             }
@@ -5131,11 +5161,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         );
         scroll = scroll_current;
 
-        let base_mini_percent = if clear_all {
-            0.0
-        } else {
-            state.player_profiles[player].mini_percent as f32
-        };
+        let base_mini_percent = attack_mini_base_percent(state, player, clear_all);
         let mut mini_current = state.active_attack_mini_percent[player];
         approach_mini_percent_to_target(
             &mut mini_current,
@@ -5148,6 +5174,11 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
 
         for window in &state.song_lua_ease_windows[player] {
             if let Some(value) = song_lua_ease_window_value(window, now) {
+                let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
+                    base_mini_percent + value
+                } else {
+                    value
+                };
                 song_lua_apply_eased_target(
                     window.target,
                     value,
@@ -5393,7 +5424,7 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
     if player_idx >= state.num_players {
         return 0.0;
     }
-    state.active_attack_mini_percent[player_idx]
+    let mini = state.active_attack_mini_percent[player_idx]
         .filter(|v| v.is_finite())
         .unwrap_or_else(|| {
             if player_attack_base_cleared(state, player_idx) {
@@ -5401,7 +5432,8 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
             } else {
                 state.player_profiles[player_idx].mini_percent as f32
             }
-        })
+        });
+    mini.clamp(-100.0, 150.0)
 }
 
 /// Multiplier applied to the noteskin's per-column lateral offsets to

@@ -13594,6 +13594,102 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn song_lua_constant_mini_layers_on_profile_mini() {
+        let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+        profiles[0].mini_percent = 50;
+        let mut state = regression_state(profiles);
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            beat_mods: vec![crate::game::parsing::song_lua::SongLuaModWindow {
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 3.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                mods: "*10 -100% mini".to_string(),
+                player: Some(1),
+            }],
+            ..Default::default()
+        };
+        state.attack_mask_windows[0] =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        state.current_music_time_visible[0] = 0.016;
+        refresh_active_attack_masks(&mut state, 0.016);
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!((mini - 34.0).abs() <= 0.000_1);
+
+        state.current_music_time_visible[0] = 1.016;
+        refresh_active_attack_masks(&mut state, 1.0);
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!((mini + 50.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_eased_mini_layers_on_profile_mini() {
+        let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+        profiles[0].mini_percent = 50;
+        let mut state = regression_state(profiles);
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![crate::game::parsing::song_lua::SongLuaEaseWindow {
+                player: Some(1),
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 4.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod("mini".to_string()),
+                from: 0.0,
+                to: -100.0,
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            ..Default::default()
+        };
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        assert_eq!(unsupported, 0);
+        state.song_lua_ease_windows[0] = windows;
+
+        state.current_music_time_visible[0] = 2.0;
+        refresh_active_attack_masks(&mut state, 0.0);
+
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!(mini.abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn chart_attack_mini_overrides_profile_mini() {
+        let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+        profiles[0].mini_percent = 50;
+        let mut state = regression_state(profiles);
+        state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
+            Some("TIME=0.000:LEN=3.000:MODS=*1000 25% mini"),
+            profile_data::AttackMode::On,
+            0,
+            0x1234,
+            10.0,
+        );
+
+        state.current_music_time_visible[0] = 1.0;
+        refresh_active_attack_masks(&mut state, 1.0);
+
+        let mini = effective_mini_percent_for_player(&state, 0);
+        assert!((mini - 25.0).abs() <= 0.000_1);
+    }
+
+    #[test]
     fn song_lua_active_reset_overrides_ended_constant_mods() {
         let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         let timing_segments = TimingSegments {
