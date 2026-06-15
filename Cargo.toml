@@ -19,6 +19,7 @@ members = [
     "crates/deadsync-audio-stream",
     "crates/deadsync-chart",
     "crates/deadsync-core",
+    "crates/deadsync-gameplay",
     "crates/deadsync-input",
     "crates/deadsync-input-fsr",
     "crates/deadsync-input-native",
@@ -49,7 +50,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.773"
+version = "0.4.778"
 
 [[bin]]
 name = "compose_bench"
@@ -94,6 +95,7 @@ deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
+deadsync-gameplay = { path = "crates/deadsync-gameplay" }
 deadsync-input = { path = "crates/deadsync-input" }
 deadsync-input-fsr = { path = "crates/deadsync-input-fsr" }
 deadsync-input-native = { path = "crates/deadsync-input-native" }

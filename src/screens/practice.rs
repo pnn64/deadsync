@@ -430,7 +430,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         gameplay_screen::audio_snapshot(),
     );
     if matches!(action, gameplay_core::GameplayAction::None) {
-        gameplay_screen::refresh_core_scorebox_snapshots(&mut state.gameplay);
+        gameplay_screen::refresh_scorebox_snapshots(&mut state.gameplay);
     }
     gameplay_screen::drain_core_commands(&mut state.gameplay);
     let current_time = gameplay_core::current_music_time_seconds(&state.gameplay);

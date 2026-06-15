@@ -6,7 +6,7 @@ use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
-use crate::screens::gameplay::State;
+use crate::screens::gameplay::{self as gameplay_screen, State};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_present::actors::{Actor, SizeSpec};
 use deadsync_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -1744,8 +1744,8 @@ pub fn push_double_step_stats(
         let frame_cy = pane_cy + (-115.0 * banner_data_zoom);
         let frame_zoom = banner_data_zoom;
         let side = profile::get_session_player_side();
-        let snapshot = gameplay::scorebox_snapshot_for_side(state, side);
-        let profile_snapshot = gameplay::scorebox_profile_for_side(state, side);
+        let snapshot = gameplay_screen::scorebox_snapshot_for_side(state, side);
+        let profile_snapshot = gameplay_screen::scorebox_profile_for_side(state, side);
         actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
             snapshot,
             profile_snapshot,
@@ -2350,8 +2350,8 @@ fn build_scorebox_pane(
     let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
 
     actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
-        gameplay::scorebox_snapshot_for_side(state, player_side),
-        gameplay::scorebox_profile_for_side(state, player_side),
+        gameplay_screen::scorebox_snapshot_for_side(state, player_side),
+        gameplay_screen::scorebox_profile_for_side(state, player_side),
         frame_cx,
         frame_cy,
         layout.banner_data_zoom,

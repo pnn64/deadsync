@@ -960,6 +960,80 @@ fn game_layer_does_not_import_transport_crates() {
 }
 
 #[test]
+fn deterministic_gameplay_crate_stays_runtime_independent() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = root.join("crates/deadsync-gameplay");
+    let mut failures = Vec::new();
+
+    if !crate_dir.exists() {
+        failures.push("crates/deadsync-gameplay is missing".to_string());
+    }
+
+    if let Ok(manifest) = fs::read_to_string(crate_dir.join("Cargo.toml")) {
+        for token in [
+            "deadsync-audio",
+            "deadsync-audio-stream",
+            "deadsync-config",
+            "deadsync-input-native",
+            "deadsync-online",
+            "deadsync-present",
+            "deadsync-profile",
+            "deadsync-render",
+            "deadsync-renderer",
+            "deadsync-score",
+            "deadsync-video",
+        ] {
+            let count = manifest.match_indices(token).count();
+            if count != 0 {
+                failures.push(format!(
+                    "crates/deadsync-gameplay/Cargo.toml references runtime dependency {token} {count} times"
+                ));
+            }
+        }
+    }
+
+    let src_dir = crate_dir.join("src");
+    if src_dir.exists() {
+        for file in rust_files(&src_dir) {
+            let rel = rel_path(&root, &file);
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            for token in [
+                "crate::app",
+                "crate::assets",
+                "crate::config",
+                "crate::game",
+                "crate::screens",
+                "deadsync_audio",
+                "deadsync_audio_stream",
+                "deadsync_input_native",
+                "deadsync_online",
+                "deadsync_present",
+                "deadsync_profile",
+                "deadsync_render",
+                "deadsync_renderer",
+                "deadsync_score",
+                "deadsync_video",
+                "std::fs",
+                "std::io",
+            ] {
+                let count = text.match_indices(token).count();
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references runtime dependency token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "deterministic gameplay crate should stay free of runtime dependencies:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn audio_core_lives_in_audio_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();

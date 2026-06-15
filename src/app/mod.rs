@@ -73,6 +73,7 @@ use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
+use deadsync_gameplay::{GameplayConfig, GameplayFailType, GameplayViewport};
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
@@ -132,11 +133,8 @@ const LIGHTS_MARQUEE_DIFFICULTY_INDEX: usize = 3; // Hard
 const LIGHTS_BASS_DIFFICULTY_INDEX: usize = 2; // Medium
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
-fn gameplay_viewport(metrics: Metrics) -> crate::game::gameplay::GameplayViewport {
-    crate::game::gameplay::GameplayViewport::new(
-        metrics.right - metrics.left,
-        metrics.top - metrics.bottom,
-    )
+fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
+    GameplayViewport::new(metrics.right - metrics.left, metrics.top - metrics.bottom)
 }
 
 fn gameplay_session() -> crate::game::gameplay::GameplaySession {
@@ -153,32 +151,16 @@ fn gameplay_session() -> crate::game::gameplay::GameplaySession {
     }
 }
 
-fn gameplay_fail_type(
-    fail_type: config::DefaultFailType,
-) -> crate::game::gameplay::GameplayFailType {
+fn gameplay_fail_type(fail_type: config::DefaultFailType) -> GameplayFailType {
     match fail_type {
-        config::DefaultFailType::Immediate => crate::game::gameplay::GameplayFailType::Immediate,
-        config::DefaultFailType::ImmediateContinue => {
-            crate::game::gameplay::GameplayFailType::ImmediateContinue
-        }
+        config::DefaultFailType::Immediate => GameplayFailType::Immediate,
+        config::DefaultFailType::ImmediateContinue => GameplayFailType::ImmediateContinue,
     }
 }
 
-fn gameplay_background_mode(
-    mode: config::RandomBackgroundMode,
-) -> crate::game::gameplay::GameplayBackgroundMode {
-    match mode {
-        config::RandomBackgroundMode::Off => crate::game::gameplay::GameplayBackgroundMode::Off,
-        config::RandomBackgroundMode::RandomMovies => {
-            crate::game::gameplay::GameplayBackgroundMode::RandomMovies
-        }
-    }
-}
-
-fn gameplay_config() -> crate::game::gameplay::GameplayConfig {
+fn gameplay_config() -> GameplayConfig {
     let cfg = config::get();
-    crate::game::gameplay::GameplayConfig {
-        translated_titles: cfg.translated_titles,
+    GameplayConfig {
         mine_hit_sound: cfg.mine_hit_sound,
         default_fail_type: gameplay_fail_type(cfg.default_fail_type),
         global_offset_seconds: cfg.global_offset_seconds,
@@ -188,7 +170,6 @@ fn gameplay_config() -> crate::game::gameplay::GameplayConfig {
         machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
         machine_enable_replays: cfg.machine_enable_replays,
         center_1player_notefield: cfg.center_1player_notefield,
-        random_background_mode: gameplay_background_mode(cfg.random_background_mode),
         delayed_back: cfg.delayed_back,
     }
 }
@@ -9128,6 +9109,7 @@ impl App {
                     None,
                     None,
                     None,
+                    None,
                     [0; MAX_PLAYERS],
                 );
                 crate::game::gameplay::disable_score_for_practice(&mut gs);
@@ -9507,12 +9489,19 @@ impl App {
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })
                 });
-                let course_display_info = self.state.session.course_run.as_ref().map(|course| {
-                    crate::game::gameplay::CourseDisplayInfo {
-                        name: Arc::from(course.name.as_str()),
-                        banner_path: course.banner_path.clone(),
-                    }
-                });
+                let (course_display_info, course_banner_path) = self
+                    .state
+                    .session
+                    .course_run
+                    .as_ref()
+                    .map_or((None, None), |course| {
+                        (
+                            Some(gameplay::CourseDisplayInfo {
+                                name: Arc::from(course.name.as_str()),
+                            }),
+                            course.banner_path.clone(),
+                        )
+                    });
                 let stage_intro_text: Arc<str> =
                     if let Some(course) = self.state.session.course_run.as_ref() {
                         let stage_num = course.next_stage_index.saturating_add(1);
@@ -9550,6 +9539,7 @@ impl App {
                     course_display_totals,
                     course_display_timing,
                     course_display_info,
+                    course_banner_path,
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;

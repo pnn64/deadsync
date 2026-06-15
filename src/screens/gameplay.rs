@@ -25,6 +25,7 @@ use deadsync_chart::{
     SyncPref,
 };
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::{GameplayConfig, GameplayMiniIndicatorData, GameplayViewport};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
@@ -41,6 +42,7 @@ use deadsync_present::space::{
 use deadsync_profile as profile_data;
 use deadsync_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_score as score_data;
 use deadsync_smx::{self, SensorTestMode};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
@@ -66,14 +68,35 @@ pub struct ActorViewOverride {
     pub hide_gameplay_hud: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct CourseDisplayInfo {
+    pub name: Arc<str>,
+}
+
+#[derive(Clone, Debug)]
+struct GameplayScoreboxData {
+    profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+}
+
+impl Default for GameplayScoreboxData {
+    fn default() -> Self {
+        Self {
+            profile_snapshot: std::array::from_fn(|_| {
+                score_data::GameplayScoreboxProfileSnapshot::default()
+            }),
+            side_snapshot: std::array::from_fn(|_| None),
+        }
+    }
+}
+
 use crate::game::gameplay::{
-    self as gameplay_core, CourseDisplayCarry, CourseDisplayInfo, CourseDisplayTiming,
-    CourseDisplayTotals, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayBackgroundMode, GameplayCompiledSongLua, GameplayConfig, GameplayExit,
-    GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplayScoreData, GameplaySession, GameplaySessionCommand,
-    GameplaySongLuaData, GameplaySongLuaLayer, GameplayStreamClockSnapshot, GameplayTween,
-    GameplayViewport, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
+    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayCompiledSongLua,
+    GameplayExit, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
+    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplaySession,
+    GameplaySessionCommand, GameplaySongLuaData, GameplaySongLuaLayer, GameplayStreamClockSnapshot,
+    GameplayTween, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     SCOREBOX_NUM_ENTRIES, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
     TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
@@ -389,8 +412,19 @@ pub struct State {
     pub(crate) noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
+    pub song_full_title: Arc<str>,
+    pub stage_intro_text: Arc<str>,
+    pub replay_status_text: Option<Arc<str>>,
+    pub course_display_info: Option<CourseDisplayInfo>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
+    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    pub lobby_music_started: bool,
+    pub lobby_ready_p1: bool,
+    pub lobby_ready_p2: bool,
+    pub lobby_disconnect_hold_p1: Option<Instant>,
+    pub lobby_disconnect_hold_p2: Option<Instant>,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
@@ -432,8 +466,12 @@ impl State {
             noteskin_assets,
             Vec::new(),
             Vec::new(),
+            Arc::from("EVENT"),
+            None,
+            None,
             Arc::from(""),
             None,
+            GameplayScoreboxData::default(),
         )
     }
 
@@ -442,12 +480,21 @@ impl State {
         noteskin_assets: GameplayNoteskinAssets,
         song_lua_sound_paths: Vec<PathBuf>,
         background_changes: Vec<SongBackgroundChange>,
+        stage_intro_text: Arc<str>,
+        replay_status_text: Option<Arc<str>>,
+        course_display_info: Option<CourseDisplayInfo>,
         pack_group: Arc<str>,
         pack_banner_path: Option<PathBuf>,
+        scorebox_data: GameplayScoreboxData,
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&gameplay.player_profiles);
+        let song_full_title: Arc<str> = Arc::from(
+            gameplay
+                .song
+                .display_full_title(crate::config::get().translated_titles),
+        );
         let song_banner_key = gameplay
             .song
             .banner_path
@@ -482,8 +529,19 @@ impl State {
             noteskin_assets,
             density_graph,
             step_stats_extra_resolved,
+            song_full_title,
+            stage_intro_text,
+            replay_status_text,
+            course_display_info,
             pack_group,
             pack_banner_path,
+            scorebox_profile_snapshot: scorebox_data.profile_snapshot,
+            scorebox_side_snapshot: scorebox_data.side_snapshot,
+            lobby_music_started: false,
+            lobby_ready_p1: false,
+            lobby_ready_p2: false,
+            lobby_disconnect_hold_p1: None,
+            lobby_disconnect_hold_p2: None,
             song_banner_key,
             pack_banner_key,
             notefield_model_cache,
@@ -580,6 +638,7 @@ fn song_pack_group(song: &SongData) -> Arc<str> {
 fn gameplay_pack_data(
     song: &SongData,
     course_display_info: Option<&CourseDisplayInfo>,
+    course_banner_path: Option<&PathBuf>,
 ) -> (Arc<str>, Option<PathBuf>, SyncPref) {
     let pack_group = song_pack_group(song);
     let mut pack_banner_path = None;
@@ -595,7 +654,7 @@ fn gameplay_pack_data(
     if let Some(course_info) = course_display_info {
         return (
             course_info.name.clone(),
-            course_info.banner_path.clone(),
+            course_banner_path.cloned(),
             sync_pref,
         );
     }
@@ -636,12 +695,12 @@ fn mini_indicator_machine_best_percent(
     }
 }
 
-fn gameplay_score_data(
+fn gameplay_mini_indicator_data(
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     session: &GameplaySession,
-) -> GameplayScoreData {
-    let mut data = GameplayScoreData::default();
+) -> GameplayMiniIndicatorData {
+    let mut data = GameplayMiniIndicatorData::default();
     let num_players = session.play_style.player_count();
     for p in 0..num_players {
         let side = session.runtime_player_side(p);
@@ -651,10 +710,19 @@ fn gameplay_score_data(
             mini_indicator_personal_best_percent(chart_hash, side, score_type);
         data.machine_best_percent[p] = mini_indicator_machine_best_percent(chart_hash, score_type);
     }
+    data
+}
 
+fn gameplay_scorebox_data(
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    session: &GameplaySession,
+) -> GameplayScoreboxData {
+    let mut data = GameplayScoreboxData::default();
+    let num_players = session.play_style.player_count();
     for p in 0..num_players {
         let side = session.runtime_player_side(p);
-        data.scorebox_profile_snapshot[profile_data::player_side_index(side)] =
+        data.profile_snapshot[profile_data::player_side_index(side)] =
             scores::scorebox_profile_snapshot(
                 &player_profiles[p],
                 session.side_joined(side),
@@ -665,7 +733,7 @@ fn gameplay_score_data(
     for p in 0..num_players {
         let side = session.runtime_player_side(p);
         let idx = profile_data::player_side_index(side);
-        let profile_snapshot = &data.scorebox_profile_snapshot[idx];
+        let profile_snapshot = &data.profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
         }
@@ -673,7 +741,7 @@ fn gameplay_score_data(
         if chart_hash.is_empty() {
             continue;
         }
-        data.scorebox_side_snapshot[idx] = scores::get_or_fetch_player_leaderboards_for_profile(
+        data.side_snapshot[idx] = scores::get_or_fetch_player_leaderboards_for_profile(
             chart_hash,
             profile_snapshot,
             SCOREBOX_NUM_ENTRIES,
@@ -974,6 +1042,13 @@ fn build_background_changes(
     )
 }
 
+fn random_background_movies_enabled() -> bool {
+    matches!(
+        crate::config::get().random_background_mode,
+        crate::config::RandomBackgroundMode::RandomMovies
+    )
+}
+
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -994,12 +1069,11 @@ pub fn init(
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
     course_display_info: Option<CourseDisplayInfo>,
+    course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
-    let random_movie_paths = crate::game::random_movies::random_movie_paths(
-        &song,
-        config.random_background_mode == GameplayBackgroundMode::RandomMovies,
-    );
+    let random_movie_paths =
+        crate::game::random_movies::random_movie_paths(&song, random_background_movies_enabled());
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
@@ -1023,9 +1097,13 @@ pub fn init(
         &gameplay_charts[0]
     };
     let background_changes = build_background_changes(&song, background_chart, random_movie_paths);
-    let (pack_group, pack_banner_path, pack_sync_pref) =
-        gameplay_pack_data(&song, course_display_info.as_ref());
-    let score_data = gameplay_score_data(&charts, &player_profiles, &session);
+    let (pack_group, pack_banner_path, pack_sync_pref) = gameplay_pack_data(
+        &song,
+        course_display_info.as_ref(),
+        course_banner_path.as_ref(),
+    );
+    let mini_indicator_data = gameplay_mini_indicator_data(&charts, &player_profiles, &session);
+    let scorebox_data = gameplay_scorebox_data(&charts, &player_profiles, &session);
     State::from_gameplay_with_screen_data(
         gameplay_core::init(
             song,
@@ -1035,7 +1113,7 @@ pub fn init(
             session,
             config,
             pack_sync_pref,
-            score_data,
+            mini_indicator_data,
             noteskin_data,
             song_lua_data,
             active_color_index,
@@ -1044,20 +1122,21 @@ pub fn init(
             player_profiles,
             replay_edges,
             replay_offsets,
-            replay_status_text,
-            stage_intro_text,
             lead_in_timing,
             course_display_carry,
             course_display_totals,
             course_display_timing,
-            course_display_info,
             combo_carry,
         ),
         noteskin_assets,
         song_lua_sound_paths,
         background_changes,
+        stage_intro_text,
+        replay_status_text,
+        course_display_info,
         pack_group,
         pack_banner_path,
+        scorebox_data,
     )
 }
 
@@ -1571,7 +1650,23 @@ pub fn drain_core_session_commands(state: &mut gameplay_core::State) {
     }
 }
 
-pub fn refresh_core_scorebox_snapshots(state: &mut gameplay_core::State) {
+#[inline(always)]
+pub fn scorebox_snapshot_for_side(
+    state: &State,
+    side: profile_data::PlayerSide,
+) -> Option<&score_data::CachedPlayerLeaderboardData> {
+    state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
+}
+
+#[inline(always)]
+pub fn scorebox_profile_for_side(
+    state: &State,
+    side: profile_data::PlayerSide,
+) -> &score_data::GameplayScoreboxProfileSnapshot {
+    &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
+}
+
+pub fn refresh_scorebox_snapshots(state: &mut State) {
     for p in 0..state.num_players {
         let side = state.session.runtime_player_side(p);
         let idx = profile_data::player_side_index(side);
@@ -1670,7 +1765,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time, audio_snapshot());
     if matches!(action, GameplayAction::None) {
-        refresh_core_scorebox_snapshots(&mut state.gameplay);
+        refresh_scorebox_snapshots(state);
     }
     drain_audio_commands(state);
     play_song_lua_sound_events(
@@ -1929,10 +2024,53 @@ fn cached_meter_text(meter: u32) -> Arc<str> {
     })
 }
 
+#[inline(always)]
+fn quantize_offset_seconds(v: f32) -> f32 {
+    let step = 0.001_f32;
+    (v / step).round() * step
+}
+
+#[inline(always)]
+fn quantized_offset_change_line(label: &str, start: f32, new: f32) -> Option<String> {
+    let start_q = quantize_offset_seconds(start);
+    let new_q = quantize_offset_seconds(new);
+    let delta_q = new_q - start_q;
+    if delta_q.abs() < 0.000_1_f32 {
+        return None;
+    }
+    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
+    Some(format!(
+        "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
+    ))
+}
+
+fn sync_offset_overlay_message(state: &State) -> Option<String> {
+    let mut message = String::new();
+    if let Some(global_line) = quantized_offset_change_line(
+        "Global Offset",
+        state.initial_global_offset_seconds,
+        state.global_offset_seconds,
+    ) {
+        message.push_str(&global_line);
+    }
+    if let Some(song_line) = quantized_offset_change_line(
+        "Song offset",
+        state.initial_song_offset_seconds,
+        state.song_offset_seconds,
+    ) {
+        if !message.is_empty() {
+            message.push('\n');
+        }
+        message.push_str(&song_line);
+    }
+    (!message.is_empty()).then_some(message)
+}
+
 fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     let mut lines = [""; 4];
     let mut line_count = 0usize;
     let mut total_len = 0usize;
+    let sync_message = sync_offset_overlay_message(state);
     if state.autoplay_enabled {
         let line = state.replay_status_text.as_deref().unwrap_or("AutoPlay");
         lines[line_count] = line;
@@ -1949,7 +2087,7 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         line_count += 1;
         total_len += line.len();
     }
-    if let Some(line) = state.sync_overlay_message.as_deref() {
+    if let Some(line) = sync_message.as_deref() {
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
@@ -1957,9 +2095,8 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     if line_count == 0 {
         return None;
     }
-    // Do not cache this string by pointer identity. `sync_overlay_message` is rebuilt
-    // during live offset tweaks, and allocator address reuse can otherwise return a
-    // stale overlay line with the wrong numbers.
+    // Offset overlay text changes during live tweaks, so build this combined
+    // string from current state instead of caching by pointer identity.
     let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
     out.push_str(lines[0]);
     for line in &lines[1..line_count] {
@@ -2060,7 +2197,7 @@ pub fn prewarm_text_layout(
     if let Some(text) = state.replay_status_text.as_ref() {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
-    if let Some(text) = state.sync_overlay_message.as_ref() {
+    if let Some(text) = sync_offset_overlay_message(state) {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
     if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {

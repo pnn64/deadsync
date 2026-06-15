@@ -7,6 +7,9 @@ use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+pub use deadsync_gameplay::{
+    GameplayConfig, GameplayFailType, GameplayMiniIndicatorData, GameplayViewport,
+};
 use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
@@ -34,7 +37,6 @@ use deadsync_rules::stream::{
 use deadsync_rules::timing::{
     BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
 };
-use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
 use std::collections::VecDeque;
 use std::hash::Hasher;
@@ -835,12 +837,6 @@ pub enum AutosyncMode {
     Off,
     Song,
     Machine,
-}
-
-#[inline(always)]
-fn quantize_offset_seconds(v: f32) -> f32 {
-    let step = 0.001_f32;
-    (v / step).round() * step
 }
 
 #[inline(always)]
@@ -3070,22 +3066,6 @@ fn compute_column_scroll_dirs(
     dirs
 }
 
-#[inline(always)]
-pub fn scorebox_snapshot_for_side(
-    state: &State,
-    side: profile_data::PlayerSide,
-) -> Option<&score_data::CachedPlayerLeaderboardData> {
-    state.scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
-}
-
-#[inline(always)]
-pub fn scorebox_profile_for_side(
-    state: &State,
-    side: profile_data::PlayerSide,
-) -> &score_data::GameplayScoreboxProfileSnapshot {
-    &state.scorebox_profile_snapshot[profile_data::player_side_index(side)]
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct ErrorBarTick {
     pub started_at: f32,
@@ -3370,12 +3350,6 @@ pub struct CourseDisplayTiming {
     pub total_seconds: f32,
 }
 
-#[derive(Clone, Debug)]
-pub struct CourseDisplayInfo {
-    pub name: Arc<str>,
-    pub banner_path: Option<PathBuf>,
-}
-
 fn init_player_runtime() -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
@@ -3625,67 +3599,6 @@ pub struct NoteCountStat {
     pub notes_upper: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GameplayViewport {
-    width: f32,
-    height: f32,
-}
-
-impl GameplayViewport {
-    pub const fn design() -> Self {
-        Self {
-            width: 854.0,
-            height: 480.0,
-        }
-    }
-
-    pub fn new(width: f32, height: f32) -> Self {
-        Self {
-            width: if width.is_finite() && width > 0.0 {
-                width
-            } else {
-                Self::design().width
-            },
-            height: if height.is_finite() && height > 0.0 {
-                height
-            } else {
-                Self::design().height
-            },
-        }
-    }
-
-    #[inline(always)]
-    pub const fn width(self) -> f32 {
-        self.width
-    }
-
-    #[inline(always)]
-    pub const fn height(self) -> f32 {
-        self.height
-    }
-
-    #[inline(always)]
-    pub const fn center_x(self) -> f32 {
-        self.width * 0.5
-    }
-
-    #[inline(always)]
-    pub const fn center_y(self) -> f32 {
-        self.height * 0.5
-    }
-
-    #[inline(always)]
-    pub fn is_wide(self) -> bool {
-        self.width / self.height >= 1.6
-    }
-}
-
-impl Default for GameplayViewport {
-    fn default() -> Self {
-        Self::design()
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameplaySession {
     pub play_style: profile_data::PlayStyle,
@@ -3724,62 +3637,6 @@ impl Default for GameplaySession {
             joined_sides: [true, false],
             active_profile_ids: [None, None],
             tick_mode: TickMode::default(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum GameplayFailType {
-    Immediate,
-    ImmediateContinue,
-}
-
-impl Default for GameplayFailType {
-    fn default() -> Self {
-        Self::ImmediateContinue
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum GameplayBackgroundMode {
-    #[default]
-    Off,
-    RandomMovies,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GameplayConfig {
-    pub translated_titles: bool,
-    pub mine_hit_sound: bool,
-    pub default_fail_type: GameplayFailType,
-    pub global_offset_seconds: f32,
-    pub visual_delay_seconds: f32,
-    pub machine_pack_ini_offsets: bool,
-    pub machine_default_sync_pref: SyncPref,
-    pub machine_allow_per_player_global_offsets: bool,
-    pub machine_enable_replays: bool,
-    pub center_1player_notefield: bool,
-    pub random_background_mode: GameplayBackgroundMode,
-    pub delayed_back: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct GameplayScoreData {
-    pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
-    pub machine_best_percent: [Option<f64>; MAX_PLAYERS],
-    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-    pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-}
-
-impl Default for GameplayScoreData {
-    fn default() -> Self {
-        Self {
-            personal_best_percent: [None; MAX_PLAYERS],
-            machine_best_percent: [None; MAX_PLAYERS],
-            scorebox_profile_snapshot: std::array::from_fn(|_| {
-                score_data::GameplayScoreboxProfileSnapshot::default()
-            }),
-            scorebox_side_snapshot: std::array::from_fn(|_| None),
         }
     }
 }
@@ -4107,25 +3964,6 @@ impl Default for GameplayNoteskinData {
     }
 }
 
-impl Default for GameplayConfig {
-    fn default() -> Self {
-        Self {
-            translated_titles: false,
-            mine_hit_sound: true,
-            default_fail_type: GameplayFailType::ImmediateContinue,
-            global_offset_seconds: -0.008,
-            visual_delay_seconds: 0.0,
-            machine_pack_ini_offsets: false,
-            machine_default_sync_pref: SyncPref::Null,
-            machine_allow_per_player_global_offsets: false,
-            machine_enable_replays: true,
-            center_1player_notefield: false,
-            random_background_mode: GameplayBackgroundMode::Off,
-            delayed_back: true,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct GameplayStreamClockSnapshot {
     pub stream_seconds: f32,
@@ -4201,9 +4039,6 @@ pub enum GameplaySessionCommand {
 
 pub struct State {
     pub song: Arc<SongData>,
-    pub song_full_title: Arc<str>,
-    pub stage_intro_text: Arc<str>,
-    pub course_display_info: Option<CourseDisplayInfo>,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -4309,8 +4144,6 @@ pub struct State {
     pub live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile_data::Profile; MAX_PLAYERS],
-    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-    pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     pub song_lua_overlays: Vec<SongLuaOverlayActor>,
@@ -4390,13 +4223,6 @@ pub struct State {
 
     pub total_elapsed_in_screen: f32,
 
-    pub lobby_music_started: bool,
-    pub lobby_ready_p1: bool,
-    pub lobby_ready_p2: bool,
-    pub lobby_disconnect_hold_p1: Option<Instant>,
-    pub lobby_disconnect_hold_p2: Option<Instant>,
-    pub sync_overlay_message: Option<Arc<str>>,
-    pub replay_status_text: Option<Arc<str>>,
     danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
@@ -5560,7 +5386,6 @@ pub fn disable_score_for_practice(state: &mut State) {
     state.score_valid.fill(false);
     state.replay_capture_enabled = false;
     state.replay_mode = false;
-    state.replay_status_text = Some(Arc::from("Practice Mode"));
 }
 
 /// Updates the music rate on a live gameplay state, rebuilding the
@@ -5831,7 +5656,7 @@ pub fn init(
     session: GameplaySession,
     config: GameplayConfig,
     pack_sync_pref: SyncPref,
-    score_data: GameplayScoreData,
+    mini_indicator_data: GameplayMiniIndicatorData,
     noteskin_data: GameplayNoteskinData,
     song_lua_data: GameplaySongLuaData,
     active_color_index: i32,
@@ -5840,13 +5665,10 @@ pub fn init(
     mut player_profiles: [profile_data::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
-    replay_status_text: Option<Arc<str>>,
-    stage_intro_text: Arc<str>,
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
-    course_display_info: Option<CourseDisplayInfo>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
@@ -5894,7 +5716,6 @@ pub fn init(
         z
     });
 
-    let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
         sync_pref_offset(pack_sync_pref, config.machine_default_sync_pref)
     } else {
@@ -6546,8 +6367,8 @@ pub fn init(
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
-        let personal_best = score_data.personal_best_percent[p];
-        let machine_best = score_data.machine_best_percent[p];
+        let personal_best = mini_indicator_data.personal_best_percent[p];
+        let machine_best = mini_indicator_data.machine_best_percent[p];
 
         let target = match player_profiles[p].target_score {
             profile_data::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
@@ -6562,8 +6383,6 @@ pub fn init(
             .max(personal_best.unwrap_or(0.0));
     }
 
-    let scorebox_profile_snapshot = score_data.scorebox_profile_snapshot;
-    let scorebox_side_snapshot = score_data.scorebox_side_snapshot;
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let graph_prep_started = Instant::now();
@@ -6696,9 +6515,6 @@ pub fn init(
 
     let mut state = State {
         song,
-        song_full_title,
-        stage_intro_text,
-        course_display_info,
         charts,
         gameplay_charts,
         num_cols,
@@ -6796,8 +6612,6 @@ pub fn init(
         live_window_counts_display_blue: [deadsync_rules::timing::WindowCounts::default();
             MAX_PLAYERS],
         player_profiles,
-        scorebox_profile_snapshot,
-        scorebox_side_snapshot,
         attack_mask_windows,
         song_lua_ease_windows,
         song_lua_overlays,
@@ -6871,13 +6685,6 @@ pub fn init(
         total_steps,
         hands_total,
         total_elapsed_in_screen: 0.0,
-        lobby_music_started: false,
-        lobby_ready_p1: false,
-        lobby_ready_p2: false,
-        lobby_disconnect_hold_p1: None,
-        lobby_disconnect_hold_p2: None,
-        sync_overlay_message: None,
-        replay_status_text,
         danger_fx: std::array::from_fn(|_| DangerFx::default()),
         density_graph_first_second,
         density_graph_last_second,
@@ -9839,7 +9646,7 @@ mod tests {
             session,
             super::GameplayConfig::default(),
             deadsync_chart::SyncPref::Default,
-            super::GameplayScoreData::default(),
+            super::GameplayMiniIndicatorData::default(),
             noteskin_data,
             super::GameplaySongLuaData::default(),
             5,
@@ -10057,7 +9864,7 @@ return Def.ActorFrame{}
                                 session,
                                 super::GameplayConfig::default(),
                                 deadsync_chart::SyncPref::Default,
-                                super::GameplayScoreData::default(),
+                                super::GameplayMiniIndicatorData::default(),
                                 noteskin_data,
                                 song_lua_data,
                                 5,

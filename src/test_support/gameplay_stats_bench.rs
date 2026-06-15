@@ -39,11 +39,11 @@ impl GameplayStatsBenchFixture {
 
 pub fn fixture() -> GameplayStatsBenchFixture {
     let mut base = notefield_bench::fixture();
+    let scorebox_side_snapshot;
     {
         let state = base.state_mut();
         let song = Arc::make_mut(&mut state.song);
         song.banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.song_full_title = Arc::from("Gameplay Stats Benchmark");
         state.total_elapsed_in_screen = 9.6;
         state.current_music_time_display = 64.25;
         state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
@@ -71,7 +71,7 @@ pub fn fixture() -> GameplayStatsBenchFixture {
             miss: 3,
         };
         state.live_window_counts_display_blue[0] = state.live_window_counts_10ms_blue[0];
-        state.scorebox_side_snapshot[0] = Some(CachedPlayerLeaderboardData {
+        scorebox_side_snapshot = Some(CachedPlayerLeaderboardData {
             loading: false,
             error: None,
             data: Some(PlayerLeaderboardData {
@@ -112,6 +112,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
     }
     let (state, noteskin_assets, bench_profile) = base.into_parts();
     let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
+    state.song_full_title = Arc::from("Gameplay Stats Benchmark");
+    state.scorebox_side_snapshot[0] = scorebox_side_snapshot;
     state.set_pack_display(
         Arc::from("Bench Pack"),
         Some(PathBuf::from("bench/banner.png")),

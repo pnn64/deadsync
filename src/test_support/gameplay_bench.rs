@@ -40,11 +40,7 @@ pub fn fixture() -> GameplayBenchFixture {
     let mut base = notefield_bench::fixture();
     {
         let state = base.state_mut();
-        state.song_full_title = Arc::from("Gameplay Screen Benchmark");
-        state.stage_intro_text = Arc::from("STAGE 1");
         state.autoplay_enabled = true;
-        state.replay_status_text = Some(Arc::from("REPLAY BENCH"));
-        state.sync_overlay_message = Some(Arc::from("Clock drift stable"));
         state.autosync_mode = gameplay::AutosyncMode::Machine;
         state.initial_global_offset_seconds = -0.021;
         state.global_offset_seconds = -0.012;
@@ -71,6 +67,9 @@ pub fn fixture() -> GameplayBenchFixture {
     }
     let (state, noteskin_assets, _) = base.into_parts();
     let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
+    state.song_full_title = Arc::from("Gameplay Screen Benchmark");
+    state.stage_intro_text = Arc::from("STAGE 1");
+    state.replay_status_text = Some(Arc::from("REPLAY BENCH"));
     state.background_texture_key = Arc::from("bench/gameplay_bg.png");
     state.density_graph.top_mesh[0] = Some(top_graph_mesh());
 
