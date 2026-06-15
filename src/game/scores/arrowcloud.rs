@@ -425,6 +425,7 @@ fn arrowcloud_submit_stats(
 fn arrowcloud_payload_for_player(
     gs: &gameplay::State,
     player_idx: usize,
+    pack_group: &str,
 ) -> Option<ArrowCloudPayload> {
     if player_idx >= gs.num_players {
         return None;
@@ -434,7 +435,7 @@ fn arrowcloud_payload_for_player(
     let player = &gs.players[player_idx];
     let fail_time_ns = player.fail_time.map(gameplay::song_time_ns_from_seconds);
     let submit_stats = arrowcloud_submit_stats(gs, player_idx, fail_time_ns);
-    let pack = gs.pack_group.trim().to_string();
+    let pack = pack_group.trim().to_string();
     let song_name = gs.song.display_full_title(true);
     let music_rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
         gs.music_rate as f64
@@ -571,7 +572,7 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
     });
 }
 
-pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
+pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group: &str) {
     for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
@@ -636,7 +637,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             );
             continue;
         }
-        let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
+        let Some(payload) = arrowcloud_payload_for_player(gs, player_idx, pack_group) else {
             arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };

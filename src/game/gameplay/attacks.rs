@@ -3,7 +3,6 @@ use crate::game::parsing::song_lua::{
     SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
     SongLuaNoteHideWindow, SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
     SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
-    compile_song_lua,
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
@@ -14,7 +13,6 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -130,12 +128,23 @@ pub struct SongLuaVisualLayerRuntime {
     pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
 }
 
-fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
-    for path in paths {
-        if !out.contains(path) {
-            out.push(path.clone());
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct GameplayCompiledSongLua {
+    pub compiled: CompiledSongLua,
+    pub compile_ms: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplaySongLuaLayer {
+    pub start_beat: f32,
+    pub compiled: CompiledSongLua,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GameplaySongLuaData {
+    pub primary: Option<GameplayCompiledSongLua>,
+    pub background_layers: Vec<GameplaySongLuaLayer>,
+    pub foreground_layers: Vec<GameplaySongLuaLayer>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2733,7 +2742,7 @@ fn song_lua_compile_player_screen_x(
     }
 }
 
-fn build_song_lua_compile_context(
+pub(crate) fn song_lua_compile_context(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     num_players: usize,
@@ -2903,17 +2912,15 @@ fn build_song_lua_visual_layer_runtime(
 
 pub(super) fn build_song_lua_runtime_windows(
     song: &SongData,
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     num_players: usize,
     player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
-    music_rate: f32,
     machine_global_offset_seconds: f32,
     viewport: GameplayViewport,
     session: &GameplaySession,
     center_1player_notefield: bool,
     player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
+    song_lua_data: GameplaySongLuaData,
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
@@ -2930,7 +2937,6 @@ pub(super) fn build_song_lua_runtime_windows(
     [bool; MAX_PLAYERS],
     [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
     [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
-    Vec<PathBuf>,
     f32,
     f32,
 ) {
@@ -2982,18 +2988,12 @@ pub(super) fn build_song_lua_runtime_windows(
         std::array::from_fn(|_| Vec::new());
     let mut column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
-    let mut sound_paths = Vec::new();
     let screen_width = viewport.width();
     let screen_height = viewport.height();
 
-    let primary_entry = song
-        .foreground_lua_changes
-        .iter()
-        .find(|change| change.start_beat <= 0.0 && change.path.is_file());
-
-    if primary_entry.is_none()
-        && song.background_lua_changes.is_empty()
-        && song.foreground_lua_changes.is_empty()
+    if song_lua_data.primary.is_none()
+        && song_lua_data.background_layers.is_empty()
+        && song_lua_data.foreground_layers.is_empty()
     {
         return (
             constant_windows,
@@ -3011,64 +3011,18 @@ pub(super) fn build_song_lua_runtime_windows(
             hidden_players,
             note_hides,
             column_offsets,
-            sound_paths,
             screen_width,
             screen_height,
         );
     }
 
-    let context = build_song_lua_compile_context(
-        song,
-        charts,
-        num_players,
-        player_profiles,
-        scroll_speed,
-        music_rate,
-        machine_global_offset_seconds,
-        viewport,
-        session,
-        center_1player_notefield,
-    );
-
     let mut out_screen_width = screen_width;
     let mut out_screen_height = screen_height;
 
-    if let Some(entry) = primary_entry {
-        let compile_started = Instant::now();
-        let compiled = match compile_song_lua(&entry.path, &context) {
-            Ok(compiled) => compiled,
-            Err(err) => {
-                warn!(
-                    "Failed to compile gameplay lua for '{}' from '{}': {}",
-                    song.title,
-                    entry.path.display(),
-                    err,
-                );
-                return (
-                    constant_windows,
-                    ease_windows,
-                    overlays,
-                    overlay_eases,
-                    overlay_ease_ranges,
-                    overlay_events,
-                    background_visual_layers,
-                    foreground_visual_layers,
-                    player_actors,
-                    player_events,
-                    song_foreground,
-                    song_foreground_events,
-                    hidden_players,
-                    note_hides,
-                    column_offsets,
-                    sound_paths,
-                    screen_width,
-                    screen_height,
-                );
-            }
-        };
-        let compile_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
+    if let Some(primary) = song_lua_data.primary.as_ref() {
+        let compiled = &primary.compiled;
+        let compile_ms = primary.compile_ms;
         let runtime_started = Instant::now();
-        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         overlays = compiled.overlays.clone();
         let message_seconds = song_lua_message_seconds(
             &compiled.messages,
@@ -3186,24 +3140,12 @@ pub(super) fn build_song_lua_runtime_windows(
         out_screen_height = compiled.screen_height;
     }
 
-    for change in &song.background_lua_changes {
-        let compiled = match compile_song_lua(&change.path, &context) {
-            Ok(compiled) => compiled,
-            Err(err) => {
-                warn!(
-                    "Failed to compile background lua layer for '{}' from '{}': {}",
-                    song.title,
-                    change.path.display(),
-                    err,
-                );
-                continue;
-            }
-        };
-        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
+    for layer_data in &song_lua_data.background_layers {
+        let compiled = &layer_data.compiled;
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
-            change.start_beat,
-            &compiled,
+            layer_data.start_beat,
+            compiled,
             timing_players[0].as_ref(),
             machine_global_offset_seconds,
         ) {
@@ -3211,30 +3153,12 @@ pub(super) fn build_song_lua_runtime_windows(
         }
     }
 
-    for change in song.foreground_lua_changes.iter().filter(|change| {
-        change.path.is_file()
-            && !primary_entry.is_some_and(|primary| {
-                change.start_beat.to_bits() == primary.start_beat.to_bits()
-                    && change.path == primary.path
-            })
-    }) {
-        let compiled = match compile_song_lua(&change.path, &context) {
-            Ok(compiled) => compiled,
-            Err(err) => {
-                warn!(
-                    "Failed to compile foreground lua layer for '{}' from '{}': {}",
-                    song.title,
-                    change.path.display(),
-                    err,
-                );
-                continue;
-            }
-        };
-        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
+    for layer_data in &song_lua_data.foreground_layers {
+        let compiled = &layer_data.compiled;
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
-            change.start_beat,
-            &compiled,
+            layer_data.start_beat,
+            compiled,
             timing_players[0].as_ref(),
             machine_global_offset_seconds,
         ) {
@@ -3258,7 +3182,6 @@ pub(super) fn build_song_lua_runtime_windows(
         hidden_players,
         note_hides,
         column_offsets,
-        sound_paths,
         out_screen_width,
         out_screen_height,
     )

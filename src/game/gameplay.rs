@@ -1,11 +1,8 @@
-use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
-use crate::game::scores;
-use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::song::sync_pref_offset;
-use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData, SyncPref};
+use deadsync_chart::{ChartData, GameplayChartData, SongData, SyncPref};
 use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
@@ -35,15 +32,13 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs, TimingSegments,
+    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
 };
 use deadsync_score as score_data;
 use log::{debug, info, trace, warn};
-use std::borrow::Cow;
-use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::hash::Hasher;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
@@ -79,6 +74,7 @@ mod stats;
 #[path = "gameplay/time.rs"]
 mod time;
 
+pub(crate) use self::attacks::song_lua_compile_context;
 pub(crate) use self::attacks::song_lua_ease_factor;
 #[cfg(test)]
 use self::attacks::song_lua_ease_window_value;
@@ -89,6 +85,7 @@ use self::attacks::{
     refresh_active_attack_masks,
 };
 pub use self::attacks::{
+    GameplayCompiledSongLua, GameplaySongLuaData, GameplaySongLuaLayer,
     SongLuaColumnOffsetWindowRuntime, SongLuaOverlayEaseWindowRuntime,
     SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
     active_chart_attack_effects_for_player, effective_accel_effects_for_player,
@@ -152,8 +149,8 @@ pub use self::input::{
 };
 use self::input::{
     input_queue_cap, lane_is_pressed, process_input_edges, replay_edge_cap,
-    sync_active_hold_pressed_state, tap_explosion_noteskin_for_player, tick_visual_effects,
-    trigger_receptor_glow_pulse, trigger_receptor_score_pulse,
+    sync_active_hold_pressed_state, tick_visual_effects, trigger_receptor_glow_pulse,
+    trigger_receptor_score_pulse,
 };
 use self::judging::{
     PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
@@ -250,6 +247,15 @@ const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
 const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
 const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
 const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
+const QUANT_4TH: u8 = 0;
+const QUANT_8TH: u8 = 1;
+const QUANT_12TH: u8 = 2;
+const QUANT_16TH: u8 = 3;
+const QUANT_24TH: u8 = 4;
+const QUANT_32ND: u8 = 5;
+const QUANT_48TH: u8 = 6;
+const QUANT_64TH: u8 = 7;
+const QUANT_192ND: u8 = 8;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AccelEffects {
@@ -638,7 +644,7 @@ impl PerspectiveOverrides {
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
-const SCOREBOX_NUM_ENTRIES: usize = 5;
+pub const SCOREBOX_NUM_ENTRIES: usize = 5;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
 pub const RECEPTOR_Y_OFFSET_FROM_CENTER: f32 = -125.0;
@@ -1233,23 +1239,23 @@ fn quantization_index_from_beat(beat: f32) -> u8 {
     // then classify by measure-subdivision divisibility.
     let row = (beat * 48.0).round() as i32;
     if row.rem_euclid(48) == 0 {
-        noteskin::Quantization::Q4th as u8
+        QUANT_4TH
     } else if row.rem_euclid(24) == 0 {
-        noteskin::Quantization::Q8th as u8
+        QUANT_8TH
     } else if row.rem_euclid(16) == 0 {
-        noteskin::Quantization::Q12th as u8
+        QUANT_12TH
     } else if row.rem_euclid(12) == 0 {
-        noteskin::Quantization::Q16th as u8
+        QUANT_16TH
     } else if row.rem_euclid(8) == 0 {
-        noteskin::Quantization::Q24th as u8
+        QUANT_24TH
     } else if row.rem_euclid(6) == 0 {
-        noteskin::Quantization::Q32nd as u8
+        QUANT_32ND
     } else if row.rem_euclid(4) == 0 {
-        noteskin::Quantization::Q48th as u8
+        QUANT_48TH
     } else if row.rem_euclid(3) == 0 {
-        noteskin::Quantization::Q64th as u8
+        QUANT_64TH
     } else {
-        noteskin::Quantization::Q192nd as u8
+        QUANT_192ND
     }
 }
 
@@ -2878,6 +2884,7 @@ pub struct ActiveTapExplosion {
     pub window: &'static str,
     pub bright: bool,
     pub elapsed: f32,
+    pub duration: f32,
     pub start_beat: f32,
 }
 
@@ -2901,6 +2908,7 @@ pub struct ColumnTapJudgment {
 #[derive(Clone, Debug)]
 pub struct ActiveMineExplosion {
     pub elapsed: f32,
+    pub duration: f32,
     /// Screen time when the mine was hit. Lets ungated feedback consumers (SMX panel
     /// lighting) tell consecutive hits on the same column apart, like the other
     /// `*_at_screen_s` markers.
@@ -3060,40 +3068,6 @@ fn compute_column_scroll_dirs(
         }
     }
     dirs
-}
-
-fn mini_indicator_personal_best_percent(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => {
-            scores::get_cached_score_for_side(chart_hash, side)
-                .map(|s| (s.score_percent * 100.0).clamp(0.0, 100.0))
-        }
-        profile_data::MiniIndicatorScoreType::Ex => {
-            scores::get_cached_local_ex_score_for_side(chart_hash, side)
-                .map(|s| s.percent.clamp(0.0, 100.0))
-        }
-        profile_data::MiniIndicatorScoreType::HardEx => {
-            scores::get_cached_local_hard_ex_score_for_side(chart_hash, side)
-                .map(|s| s.percent.clamp(0.0, 100.0))
-        }
-    }
-}
-
-fn mini_indicator_machine_best_percent(
-    chart_hash: &str,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => scores::get_machine_record_local(chart_hash)
-            .map(|(_, s)| (s.score_percent * 100.0).clamp(0.0, 100.0)),
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            None
-        }
-    }
 }
 
 #[inline(always)]
@@ -3789,17 +3763,346 @@ pub struct GameplayConfig {
     pub delayed_back: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GameplayPackInfo {
-    pub banner_path: Option<PathBuf>,
-    pub sync_pref: SyncPref,
+#[derive(Clone, Debug)]
+pub struct GameplayScoreData {
+    pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
+    pub machine_best_percent: [Option<f64>; MAX_PLAYERS],
+    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
 }
 
-impl Default for GameplayPackInfo {
+impl Default for GameplayScoreData {
     fn default() -> Self {
         Self {
-            banner_path: None,
-            sync_pref: SyncPref::Default,
+            personal_best_percent: [None; MAX_PLAYERS],
+            machine_best_percent: [None; MAX_PLAYERS],
+            scorebox_profile_snapshot: std::array::from_fn(|_| {
+                score_data::GameplayScoreboxProfileSnapshot::default()
+            }),
+            scorebox_side_snapshot: std::array::from_fn(|_| None),
+        }
+    }
+}
+
+const RECEPTOR_STEP_WINDOW_COUNT: usize = 7;
+pub(crate) const RECEPTOR_STEP_WINDOWS: [Option<&str>; RECEPTOR_STEP_WINDOW_COUNT] = [
+    None,
+    Some("W1"),
+    Some("W2"),
+    Some("W3"),
+    Some("W4"),
+    Some("W5"),
+    Some("Miss"),
+];
+const TAP_EXPLOSION_WINDOW_COUNT: usize = 7;
+pub(crate) const TAP_EXPLOSION_WINDOWS: [&str; TAP_EXPLOSION_WINDOW_COUNT] =
+    ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
+
+#[derive(Debug, Clone, Copy)]
+pub enum GameplayTween {
+    Linear,
+    Accelerate,
+    Decelerate,
+}
+
+impl GameplayTween {
+    #[inline(always)]
+    pub fn ease(self, progress: f32) -> f32 {
+        let t = progress.clamp(0.0, 1.0);
+        match self {
+            Self::Linear => t,
+            Self::Accelerate => t * t,
+            Self::Decelerate => 1.0 - (1.0 - t) * (1.0 - t),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GameplayReceptorGlowBehavior {
+    pub press_duration: f32,
+    pub press_alpha_start: f32,
+    pub press_alpha_end: f32,
+    pub press_zoom_start: f32,
+    pub press_zoom_end: f32,
+    pub press_tween: GameplayTween,
+    pub duration: f32,
+    pub alpha_start: f32,
+    pub alpha_end: f32,
+    pub zoom_start: f32,
+    pub zoom_end: f32,
+    pub tween: GameplayTween,
+    pub blend_add: bool,
+}
+
+impl GameplayReceptorGlowBehavior {
+    #[inline(always)]
+    pub fn sample_press(self, timer_remaining: f32) -> (f32, f32) {
+        let duration = self.press_duration.max(0.0);
+        if duration <= f32::EPSILON {
+            return (
+                self.press_alpha_end.clamp(0.0, 1.0),
+                self.press_zoom_end.max(0.0),
+            );
+        }
+        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
+        let progress = elapsed / duration;
+        let eased = self.press_tween.ease(progress);
+        let alpha =
+            (self.press_alpha_end - self.press_alpha_start).mul_add(eased, self.press_alpha_start);
+        let zoom =
+            (self.press_zoom_end - self.press_zoom_start).mul_add(eased, self.press_zoom_start);
+        (alpha.clamp(0.0, 1.0), zoom.max(0.0))
+    }
+
+    #[inline(always)]
+    pub fn sample_lift(
+        self,
+        timer_remaining: f32,
+        start_alpha: f32,
+        start_zoom: f32,
+    ) -> (f32, f32) {
+        let duration = self.duration.max(0.0);
+        if duration <= f32::EPSILON {
+            return (self.alpha_end.clamp(0.0, 1.0), self.zoom_end.max(0.0));
+        }
+        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
+        let progress = elapsed / duration;
+        let eased = self.tween.ease(progress);
+        let alpha = (self.alpha_end - start_alpha).mul_add(eased, start_alpha);
+        let zoom = (self.zoom_end - start_zoom).mul_add(eased, start_zoom);
+        (alpha.clamp(0.0, 1.0), zoom.max(0.0))
+    }
+}
+
+impl Default for GameplayReceptorGlowBehavior {
+    fn default() -> Self {
+        Self {
+            press_duration: 0.0,
+            press_alpha_start: 1.0,
+            press_alpha_end: 1.0,
+            press_zoom_start: 1.0,
+            press_zoom_end: 1.0,
+            press_tween: GameplayTween::Linear,
+            duration: 0.2,
+            alpha_start: 1.0,
+            alpha_end: 0.0,
+            zoom_start: 1.0,
+            zoom_end: 1.0,
+            tween: GameplayTween::Decelerate,
+            blend_add: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GameplayReceptorStepBehavior {
+    pub duration: f32,
+    pub zoom_start: f32,
+    pub zoom_end: f32,
+    pub tween: GameplayTween,
+    pub interrupts: bool,
+}
+
+impl GameplayReceptorStepBehavior {
+    pub const fn identity() -> Self {
+        Self {
+            duration: 0.0,
+            zoom_start: 1.0,
+            zoom_end: 1.0,
+            tween: GameplayTween::Linear,
+            interrupts: false,
+        }
+    }
+
+    #[inline(always)]
+    pub fn sample_zoom(self, timer_remaining: f32) -> f32 {
+        let duration = self.duration.max(0.0);
+        if duration <= f32::EPSILON {
+            return self.zoom_end.max(0.0);
+        }
+        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
+        let progress = elapsed / duration;
+        let eased = self.tween.ease(progress);
+        (self.zoom_end - self.zoom_start)
+            .mul_add(eased, self.zoom_start)
+            .max(0.0)
+    }
+}
+
+impl Default for GameplayReceptorStepBehavior {
+    fn default() -> Self {
+        Self {
+            duration: 0.11,
+            zoom_start: 0.75,
+            zoom_end: 1.0,
+            tween: GameplayTween::Linear,
+            interrupts: true,
+        }
+    }
+}
+
+#[inline(always)]
+fn default_receptor_step_behavior_for_window(window: Option<&str>) -> GameplayReceptorStepBehavior {
+    match window {
+        Some("W1" | "W2" | "W3" | "W4" | "W5" | "Miss") => GameplayReceptorStepBehavior::identity(),
+        _ => GameplayReceptorStepBehavior::default(),
+    }
+}
+
+#[inline(always)]
+fn receptor_step_window_index(window: Option<&str>) -> usize {
+    match window {
+        Some("W1") => 1,
+        Some("W2") => 2,
+        Some("W3") => 3,
+        Some("W4") => 4,
+        Some("W5") => 5,
+        Some("Miss") => 6,
+        _ => 0,
+    }
+}
+
+#[inline(always)]
+fn tap_explosion_window_index(window: &str) -> Option<usize> {
+    match window {
+        "W1" => Some(0),
+        "W2" => Some(1),
+        "W3" => Some(2),
+        "W4" => Some(3),
+        "W5" => Some(4),
+        "Miss" => Some(5),
+        "Held" => Some(6),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayNoteskinEffects {
+    receptor_glow_behavior: [GameplayReceptorGlowBehavior; MAX_PLAYERS],
+    receptor_step_behaviors:
+        [[[GameplayReceptorStepBehavior; RECEPTOR_STEP_WINDOW_COUNT]; MAX_COLS]; MAX_PLAYERS],
+    tap_explosion_durations:
+        [[[[Option<f32>; 2]; TAP_EXPLOSION_WINDOW_COUNT]; MAX_COLS]; MAX_PLAYERS],
+    mine_explosion_duration: [f32; MAX_PLAYERS],
+}
+
+impl GameplayNoteskinEffects {
+    #[inline(always)]
+    pub(crate) fn set_receptor_glow_behavior(
+        &mut self,
+        player: usize,
+        behavior: GameplayReceptorGlowBehavior,
+    ) {
+        if player < MAX_PLAYERS {
+            self.receptor_glow_behavior[player] = behavior;
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_receptor_step_behavior(
+        &mut self,
+        player: usize,
+        local_col: usize,
+        window: Option<&str>,
+        behavior: GameplayReceptorStepBehavior,
+    ) {
+        if player < MAX_PLAYERS && local_col < MAX_COLS {
+            self.receptor_step_behaviors[player][local_col][receptor_step_window_index(window)] =
+                behavior;
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_tap_explosion_duration(
+        &mut self,
+        player: usize,
+        local_col: usize,
+        window: &str,
+        bright: bool,
+        duration: Option<f32>,
+    ) {
+        if player < MAX_PLAYERS
+            && local_col < MAX_COLS
+            && let Some(window_idx) = tap_explosion_window_index(window)
+        {
+            self.tap_explosion_durations[player][local_col][window_idx][usize::from(bright)] =
+                duration;
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_mine_explosion_duration(&mut self, player: usize, duration: f32) {
+        if player < MAX_PLAYERS {
+            self.mine_explosion_duration[player] = duration;
+        }
+    }
+
+    #[inline(always)]
+    fn receptor_glow_behavior_for_player(&self, player: usize) -> GameplayReceptorGlowBehavior {
+        self.receptor_glow_behavior[player.min(MAX_PLAYERS - 1)]
+    }
+
+    #[inline(always)]
+    fn receptor_step_behavior_for_col(
+        &self,
+        player: usize,
+        local_col: usize,
+        window: Option<&str>,
+    ) -> GameplayReceptorStepBehavior {
+        self.receptor_step_behaviors[player.min(MAX_PLAYERS - 1)][local_col.min(MAX_COLS - 1)]
+            [receptor_step_window_index(window)]
+    }
+
+    #[inline(always)]
+    fn tap_explosion_duration(
+        &self,
+        player: usize,
+        local_col: usize,
+        window: &str,
+        bright: bool,
+    ) -> Option<f32> {
+        tap_explosion_window_index(window).and_then(|window_idx| {
+            self.tap_explosion_durations[player.min(MAX_PLAYERS - 1)][local_col.min(MAX_COLS - 1)]
+                [window_idx][usize::from(bright)]
+        })
+    }
+
+    #[inline(always)]
+    fn mine_explosion_duration(&self, player: usize) -> f32 {
+        self.mine_explosion_duration[player.min(MAX_PLAYERS - 1)]
+    }
+}
+
+impl Default for GameplayNoteskinEffects {
+    fn default() -> Self {
+        let receptor_step_behaviors = std::array::from_fn(|_| {
+            std::array::from_fn(|_| {
+                std::array::from_fn(|idx| {
+                    default_receptor_step_behavior_for_window(RECEPTOR_STEP_WINDOWS[idx])
+                })
+            })
+        });
+        Self {
+            receptor_glow_behavior: std::array::from_fn(|_| {
+                GameplayReceptorGlowBehavior::default()
+            }),
+            receptor_step_behaviors,
+            tap_explosion_durations: std::array::from_fn(|_| {
+                std::array::from_fn(|_| std::array::from_fn(|_| [None, None]))
+            }),
+            mine_explosion_duration: [MINE_EXPLOSION_DURATION; MAX_PLAYERS],
+        }
+    }
+}
+
+pub struct GameplayNoteskinData {
+    pub effects: GameplayNoteskinEffects,
+}
+
+impl Default for GameplayNoteskinData {
+    fn default() -> Self {
+        Self {
+            effects: GameplayNoteskinEffects::default(),
         }
     }
 }
@@ -3901,21 +4204,6 @@ pub struct State {
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
     pub course_display_info: Option<CourseDisplayInfo>,
-    pub pack_group: Arc<str>,
-    pub pack_banner_path: Option<PathBuf>,
-    pub song_banner_key: Option<Arc<str>>,
-    pub pack_banner_key: Option<Arc<str>>,
-    pub current_background_path: Option<PathBuf>,
-    pub current_background_key: Option<Arc<str>>,
-    pub background_path_dirty: bool,
-    pub background_allow_video: bool,
-    pub background_changes: Vec<SongBackgroundChange>,
-    pub next_background_change_ix: usize,
-    pub background_texture_key: Arc<str>,
-    pub previous_background_texture_key: Option<Arc<str>>,
-    pub background_transition: String,
-    pub background_transition_start_time: f32,
-    pub foreground_texture_keys: Vec<Arc<str>>,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -4040,7 +4328,6 @@ pub struct State {
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
     pub song_lua_column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
-    pub song_lua_sound_paths: Vec<PathBuf>,
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
     pub song_lua_player_x: [Option<f32>; MAX_PLAYERS],
@@ -4070,16 +4357,12 @@ pub struct State {
     active_attack_perspective: [PerspectiveOverrides; MAX_PLAYERS],
     active_attack_scroll_speed: [Option<ScrollSpeedSetting>; MAX_PLAYERS],
     active_attack_mini_percent: [Option<f32>; MAX_PLAYERS],
-    pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
-    pub mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
-    pub receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
-    pub tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
+    pub noteskin_effects: GameplayNoteskinEffects,
     pub active_color_index: i32,
     pub player_color_index: i32,
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: [f32; MAX_PLAYERS],
-    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: [f32; MAX_PLAYERS],
@@ -4091,7 +4374,7 @@ pub struct State {
     receptor_glow_lift_start_alpha: [f32; MAX_COLS],
     receptor_glow_lift_start_zoom: [f32; MAX_COLS],
     pub receptor_bop_timers: [f32; MAX_COLS],
-    pub receptor_bop_behaviors: [noteskin::ReceptorStepBehavior; MAX_COLS],
+    pub receptor_bop_behaviors: [GameplayReceptorStepBehavior; MAX_COLS],
     pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
     pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     /// Ungated per-column tap judgement (see `ColumnTapJudgment`), for pad/panel lighting.
@@ -4162,50 +4445,6 @@ pub struct State {
     update_trace: GameplayUpdateTraceState,
 }
 
-impl State {
-    pub fn active_foreground_media(&self, beat: f32) -> Option<(&Path, Arc<str>)> {
-        debug_assert_eq!(
-            self.foreground_texture_keys.len(),
-            self.song.foreground_changes.len()
-        );
-        let mut active_ix = None;
-        for (ix, change) in self.song.foreground_changes.iter().enumerate() {
-            if change.start_beat > beat {
-                break;
-            }
-            active_ix = Some(ix);
-        }
-        let ix = active_ix?;
-        let path = self.song.foreground_changes.get(ix)?.path.as_path();
-        if !path.is_file() {
-            return None;
-        }
-        Some((path, self.foreground_texture_keys.get(ix)?.clone()))
-    }
-
-    pub fn reset_notefield_model_cache_stats(&self) {
-        for cache in &self.notefield_model_cache {
-            cache.borrow_mut().reset_stats();
-        }
-    }
-
-    pub fn notefield_model_cache_stats(&self) -> [ModelMeshCacheStats; MAX_PLAYERS] {
-        std::array::from_fn(|player| self.notefield_model_cache[player].borrow().stats())
-    }
-
-    pub fn summed_notefield_model_cache_stats(&self) -> ModelMeshCacheStats {
-        self.notefield_model_cache_stats().into_iter().fold(
-            ModelMeshCacheStats::default(),
-            |mut acc, stats| {
-                acc.hits = acc.hits.saturating_add(stats.hits);
-                acc.misses = acc.misses.saturating_add(stats.misses);
-                acc.saturated_misses = acc.saturated_misses.saturating_add(stats.saturated_misses);
-                acc
-            },
-        )
-    }
-}
-
 #[inline(always)]
 pub fn drain_audio_commands(state: &mut State) -> std::vec::Drain<'_, GameplayAudioCommand> {
     state.audio_commands.drain(..)
@@ -4265,48 +4504,6 @@ fn queue_assist_tick_at_music_time(state: &mut State, path: &'static str, music_
     );
 }
 
-pub fn media_path_key(path: &Path) -> Arc<str> {
-    match path.to_string_lossy() {
-        Cow::Borrowed(key) => Arc::from(key),
-        Cow::Owned(key) => Arc::from(key),
-    }
-}
-
-pub fn song_pack_group(song: &SongData) -> Arc<str> {
-    Arc::from(
-        song.simfile_path
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_owned(),
-    )
-}
-
-fn build_background_changes(
-    song: &SongData,
-    timing: &TimingData,
-    timing_segments: &TimingSegments,
-    random_movie_paths: Vec<PathBuf>,
-) -> Vec<SongBackgroundChange> {
-    if random_movie_paths.is_empty() {
-        return song.background_changes.clone();
-    }
-    let seed_text = song
-        .simfile_path
-        .parent()
-        .map(|path| path.to_string_lossy())
-        .unwrap_or_else(|| song.simfile_path.to_string_lossy());
-    expand_random_background_changes(
-        song,
-        timing,
-        timing_segments,
-        random_movie_paths,
-        seed_text.as_ref(),
-    )
-}
-
 impl GameplayUpdateTraceState {
     #[inline(always)]
     fn from_state(state: &State) -> Self {
@@ -4342,31 +4539,6 @@ fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
         u32::MAX
     } else {
         elapsed as u32
-    }
-}
-
-fn prewarm_notefield_model_cache(
-    noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
-    mine_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
-    receptor_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
-    tap_explosion_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
-    notefield_model_cache: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
-    num_players: usize,
-) {
-    for player in 0..num_players.min(MAX_PLAYERS) {
-        let mut cache = notefield_model_cache[player].borrow_mut();
-        for skin in [
-            noteskin[player].as_ref(),
-            mine_noteskin[player].as_ref(),
-            receptor_noteskin[player].as_ref(),
-            tap_explosion_noteskin[player].as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            skin.for_each_model_slot(|slot| cache.prewarm_slot(slot));
-        }
-        cache.reset_stats();
     }
 }
 
@@ -5327,15 +5499,6 @@ fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
             state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
     }
 
-    let next_background_change_ix = state
-        .background_changes
-        .iter()
-        .take_while(|change| change.start_beat <= state.current_beat)
-        .count();
-    if state.next_background_change_ix != next_background_change_ix {
-        state.next_background_change_ix = next_background_change_ix;
-        state.background_path_dirty = true;
-    }
     refresh_active_attack_masks(state, 0.0);
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     refresh_live_notefield_options(state, current_bpm);
@@ -5486,7 +5649,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.receptor_bop_timers.fill(0.0);
     state
         .receptor_bop_behaviors
-        .fill(noteskin::ReceptorStepBehavior::identity());
+        .fill(GameplayReceptorStepBehavior::identity());
     state.decaying_hold_indices.clear();
     state.hold_decay_active.fill(false);
     state.tap_miss_held_window.fill(false);
@@ -5660,8 +5823,10 @@ pub fn init(
     viewport: GameplayViewport,
     session: GameplaySession,
     config: GameplayConfig,
-    random_movie_paths: Vec<PathBuf>,
-    pack_info: GameplayPackInfo,
+    pack_sync_pref: SyncPref,
+    score_data: GameplayScoreData,
+    noteskin_data: GameplayNoteskinData,
+    song_lua_data: GameplaySongLuaData,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -5706,66 +5871,9 @@ pub fn init(
         active_color_index
     };
 
-    let style = Style {
-        num_cols: cols_per_player,
-        num_players: 1,
-    };
-
-    let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return None;
-        }
-        let skin = player_profiles[player].noteskin.to_string();
-        noteskin::load_itg_skin_cached(&style, &skin).ok()
-    });
-    let mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return None;
-        }
-        let skin = player_profiles[player].resolved_mine_noteskin().to_string();
-        noteskin::load_itg_skin_cached(&style, &skin)
-            .ok()
-            .or_else(|| noteskin[player].clone())
-    });
-    let receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return None;
-        }
-        let skin = player_profiles[player]
-            .resolved_receptor_noteskin()
-            .to_string();
-        noteskin::load_itg_skin_cached(&style, &skin)
-            .ok()
-            .or_else(|| noteskin[player].clone())
-    });
-    let tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
-        std::array::from_fn(|player| {
-            if player >= num_players {
-                return None;
-            }
-            let Some(skin) = player_profiles[player].resolved_tap_explosion_noteskin() else {
-                return None;
-            };
-            noteskin::load_itg_skin_cached(&style, skin.as_str())
-                .ok()
-                .or_else(|| noteskin[player].clone())
-        });
-    let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
-        std::array::from_fn(|player| {
-            RefCell::new(if player < num_players {
-                ModelMeshCache::with_capacity(96)
-            } else {
-                ModelMeshCache::default()
-            })
-        });
-    prewarm_notefield_model_cache(
-        &noteskin,
-        &mine_noteskin,
-        &receptor_noteskin,
-        &tap_explosion_noteskin,
-        &notefield_model_cache,
-        num_players,
-    );
+    let GameplayNoteskinData {
+        effects: noteskin_effects,
+    } = noteskin_data;
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -5780,28 +5888,6 @@ pub fn init(
     });
 
     let song_full_title: Arc<str> = Arc::from(song.display_full_title(config.translated_titles));
-    let mut pack_group = song_pack_group(&song);
-    let mut pack_banner_path = if pack_group.is_empty() {
-        None
-    } else {
-        pack_info.banner_path
-    };
-    let pack_sync_pref = if pack_group.is_empty() {
-        SyncPref::Default
-    } else {
-        pack_info.sync_pref
-    };
-    if let Some(course_info) = course_display_info.as_ref() {
-        pack_group = course_info.name.clone();
-        pack_banner_path.clone_from(&course_info.banner_path);
-    }
-    let song_banner_key = song.banner_path.as_deref().map(media_path_key);
-    let pack_banner_key = pack_banner_path.as_deref().map(media_path_key);
-    let foreground_texture_keys = song
-        .foreground_changes
-        .iter()
-        .map(|change| media_path_key(&change.path))
-        .collect();
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
         sync_pref_offset(pack_sync_pref, config.machine_default_sync_pref)
     } else {
@@ -6361,22 +6447,19 @@ pub fn init(
         song_lua_hidden_players,
         song_lua_note_hides,
         song_lua_column_offsets,
-        song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
     ) = build_song_lua_runtime_windows(
         &song,
-        &charts,
         &timing_players,
         num_players,
         &player_profiles,
-        &scroll_speed,
-        rate,
         config.global_offset_seconds,
         viewport,
         &session,
         config.center_1player_notefield,
         &player_global_offset_shift_seconds,
+        song_lua_data,
     );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -6456,11 +6539,8 @@ pub fn init(
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
-        let side = session.runtime_player_side(p);
-        let chart_hash = charts[p].short_hash.as_str();
-        let score_type = player_profiles[p].mini_indicator_score_type;
-        let personal_best = mini_indicator_personal_best_percent(chart_hash, side, score_type);
-        let machine_best = mini_indicator_machine_best_percent(chart_hash, score_type);
+        let personal_best = score_data.personal_best_percent[p];
+        let machine_best = score_data.machine_best_percent[p];
 
         let target = match player_profiles[p].target_score {
             profile_data::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
@@ -6475,37 +6555,8 @@ pub fn init(
             .max(personal_best.unwrap_or(0.0));
     }
 
-    let mut scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
-        std::array::from_fn(|_| score_data::GameplayScoreboxProfileSnapshot::default());
-    for p in 0..num_players {
-        let side = session.runtime_player_side(p);
-        scorebox_profile_snapshot[profile_data::player_side_index(side)] =
-            scores::scorebox_profile_snapshot(
-                &player_profiles[p],
-                session.side_joined(side),
-                session.active_profile_id_for_side(side),
-            );
-    }
-
-    let mut scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
-    for p in 0..num_players {
-        let side = session.runtime_player_side(p);
-        let profile_snapshot = &scorebox_profile_snapshot[profile_data::player_side_index(side)];
-        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
-            continue;
-        }
-        let chart_hash = charts[p].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        scorebox_side_snapshot[profile_data::player_side_index(side)] =
-            scores::get_or_fetch_player_leaderboards_for_profile(
-                chart_hash,
-                profile_snapshot,
-                SCOREBOX_NUM_ENTRIES,
-            );
-    }
+    let scorebox_profile_snapshot = score_data.scorebox_profile_snapshot;
+    let scorebox_side_snapshot = score_data.scorebox_side_snapshot;
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let graph_prep_started = Instant::now();
@@ -6627,16 +6678,6 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
-    let background_changes = build_background_changes(
-        &song,
-        &timing,
-        &gameplay_charts[0].timing_segments,
-        random_movie_paths,
-    );
-    let next_background_change_ix = background_changes
-        .iter()
-        .take_while(|change| change.start_beat <= init_beat)
-        .count();
     let base_attack_appearance = std::array::from_fn(|player| {
         if player < num_players {
             base_appearance_effects(&player_profiles[player])
@@ -6651,23 +6692,8 @@ pub fn init(
         song_full_title,
         stage_intro_text,
         course_display_info,
-        pack_group,
-        pack_banner_path,
-        song_banner_key,
-        pack_banner_key,
-        current_background_path: None,
-        current_background_key: None,
-        background_path_dirty: true,
-        background_allow_video: false,
-        background_changes,
-        next_background_change_ix,
         charts,
         gameplay_charts,
-        background_texture_key: Arc::from("__black"),
-        previous_background_texture_key: None,
-        background_transition: String::new(),
-        background_transition_start_time: init_music_time,
-        foreground_texture_keys,
         num_cols,
         cols_per_player,
         num_players,
@@ -6780,7 +6806,6 @@ pub fn init(
         song_lua_hidden_players,
         song_lua_note_hides,
         song_lua_column_offsets,
-        song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
         song_lua_player_x: [None; MAX_PLAYERS],
@@ -6810,16 +6835,12 @@ pub fn init(
         active_attack_perspective: [PerspectiveOverrides::default(); MAX_PLAYERS],
         active_attack_scroll_speed: [None; MAX_PLAYERS],
         active_attack_mini_percent: [None; MAX_PLAYERS],
-        noteskin,
-        mine_noteskin,
-        receptor_noteskin,
-        tap_explosion_noteskin,
+        noteskin_effects,
         active_color_index,
         player_color_index,
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
-        notefield_model_cache,
         scroll_pixels_per_second: pixels_per_second,
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
@@ -6831,7 +6852,7 @@ pub fn init(
         receptor_glow_lift_start_alpha: [0.0; MAX_COLS],
         receptor_glow_lift_start_zoom: [1.0; MAX_COLS],
         receptor_bop_timers: [0.0; MAX_COLS],
-        receptor_bop_behaviors: [noteskin::ReceptorStepBehavior::identity(); MAX_COLS],
+        receptor_bop_behaviors: [GameplayReceptorStepBehavior::identity(); MAX_COLS],
         tap_explosions: Default::default(),
         column_flashes: Default::default(),
         last_tap_judgments: Default::default(),
@@ -7164,29 +7185,26 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
     } else {
         column % state.cols_per_player
     };
-    let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
-        if ns
-            .tap_explosion_for_col_with_bright(local_col, window_key, bright)
-            .is_some()
-        {
-            Some(window_key)
-        } else {
-            None
-        }
-    });
-    if let Some(window) = spawn_window {
+    let spawn_duration = state
+        .noteskin_effects
+        .tap_explosion_duration(player, local_col, window_key, bright);
+    if let Some(duration) = spawn_duration {
         state.tap_explosions[column] = Some(ActiveTapExplosion {
-            window,
+            window: window_key,
             bright,
             elapsed: 0.0,
+            duration,
             start_beat: state.current_beat,
         });
     }
 }
 
 fn trigger_mine_explosion(state: &mut State, column: usize) {
+    let player = player_for_col(state, column);
+    let duration = state.noteskin_effects.mine_explosion_duration(player);
     state.mine_explosions[column] = Some(ActiveMineExplosion {
         elapsed: 0.0,
+        duration,
         started_at_screen_s: state.total_elapsed_in_screen,
     });
     if state.play_mine_sounds {
@@ -9198,8 +9216,6 @@ pub fn update(
         return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
-    refresh_scorebox_snapshots(state);
-
     finalize_update_trace(
         state,
         delta_time,
@@ -9208,39 +9224,6 @@ pub fn update(
         phase_timings,
     );
     GameplayAction::None
-}
-
-/// Re-check the leaderboard cache for any scorebox snapshots that were still
-/// loading when gameplay started. Once the background fetch completes, the
-/// snapshot is replaced so the scorebox shows the real scores mid-song.
-fn refresh_scorebox_snapshots(state: &mut State) {
-    for p in 0..state.num_players {
-        let side = state.session.runtime_player_side(p);
-        let idx = profile_data::player_side_index(side);
-        let profile_snapshot = &state.scorebox_profile_snapshot[idx];
-        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
-            continue;
-        }
-        let needs_refresh = state.scorebox_side_snapshot[idx]
-            .as_ref()
-            .is_some_and(|s| s.loading);
-        if !needs_refresh {
-            continue;
-        }
-        let chart_hash = state.charts[p].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_profile(
-            chart_hash,
-            profile_snapshot,
-            SCOREBOX_NUM_ENTRIES,
-        ) {
-            if !fresh.loading {
-                state.scorebox_side_snapshot[idx] = Some(fresh);
-            }
-        }
-    }
 }
 
 fn update_danger_fx(state: &mut State) {
@@ -9349,8 +9332,10 @@ mod tests {
         turn_option_bits, update_active_holds, update_judged_rows, update_lane_input_slot,
         visible_notefield_time_ns,
     };
+    use crate::game::parsing::noteskin::{self, Noteskin, Style};
     use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
+    use crate::screens::gameplay as screen_gameplay;
     use deadsync_chart::SongData;
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
@@ -9666,21 +9651,190 @@ mod tests {
         }
     }
 
+    #[inline(always)]
+    fn test_gameplay_tween(tween: noteskin::TweenType) -> super::GameplayTween {
+        match tween {
+            noteskin::TweenType::Linear => super::GameplayTween::Linear,
+            noteskin::TweenType::Accelerate => super::GameplayTween::Accelerate,
+            noteskin::TweenType::Decelerate => super::GameplayTween::Decelerate,
+        }
+    }
+
+    #[inline(always)]
+    fn test_gameplay_receptor_glow_behavior(
+        behavior: noteskin::ReceptorGlowBehavior,
+    ) -> super::GameplayReceptorGlowBehavior {
+        super::GameplayReceptorGlowBehavior {
+            press_duration: behavior.press_duration,
+            press_alpha_start: behavior.press_alpha_start,
+            press_alpha_end: behavior.press_alpha_end,
+            press_zoom_start: behavior.press_zoom_start,
+            press_zoom_end: behavior.press_zoom_end,
+            press_tween: test_gameplay_tween(behavior.press_tween),
+            duration: behavior.duration,
+            alpha_start: behavior.alpha_start,
+            alpha_end: behavior.alpha_end,
+            zoom_start: behavior.zoom_start,
+            zoom_end: behavior.zoom_end,
+            tween: test_gameplay_tween(behavior.tween),
+            blend_add: behavior.blend_add,
+        }
+    }
+
+    #[inline(always)]
+    fn test_gameplay_receptor_step_behavior(
+        behavior: noteskin::ReceptorStepBehavior,
+    ) -> super::GameplayReceptorStepBehavior {
+        super::GameplayReceptorStepBehavior {
+            duration: behavior.duration,
+            zoom_start: behavior.zoom_start,
+            zoom_end: behavior.zoom_end,
+            tween: test_gameplay_tween(behavior.tween),
+            interrupts: behavior.interrupts,
+        }
+    }
+
+    fn test_noteskin_data(
+        cols_per_player: usize,
+        num_players: usize,
+        player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+        session: &super::GameplaySession,
+    ) -> super::GameplayNoteskinData {
+        let style = Style {
+            num_cols: cols_per_player,
+            num_players: 1,
+        };
+        let mut runtime_profiles = (*player_profiles).clone();
+        if session.p2_runtime_player() {
+            runtime_profiles[0] = runtime_profiles[1].clone();
+        }
+        let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= num_players {
+                return None;
+            }
+            let skin = runtime_profiles[player].noteskin.to_string();
+            noteskin::load_itg_skin_cached(&style, &skin).ok()
+        });
+        let mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= num_players {
+                return None;
+            }
+            let skin = runtime_profiles[player]
+                .resolved_mine_noteskin()
+                .to_string();
+            noteskin::load_itg_skin_cached(&style, &skin)
+                .ok()
+                .or_else(|| noteskin[player].clone())
+        });
+        let receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
+            std::array::from_fn(|player| {
+                if player >= num_players {
+                    return None;
+                }
+                let skin = runtime_profiles[player]
+                    .resolved_receptor_noteskin()
+                    .to_string();
+                noteskin::load_itg_skin_cached(&style, &skin)
+                    .ok()
+                    .or_else(|| noteskin[player].clone())
+            });
+        let tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
+            std::array::from_fn(|player| {
+                if player >= num_players {
+                    return None;
+                }
+                let Some(skin) = runtime_profiles[player].resolved_tap_explosion_noteskin() else {
+                    return None;
+                };
+                noteskin::load_itg_skin_cached(&style, skin.as_str())
+                    .ok()
+                    .or_else(|| noteskin[player].clone())
+            });
+        let mut effects = super::GameplayNoteskinEffects::default();
+        let cols = cols_per_player.min(MAX_COLS);
+        for player in 0..num_players.min(MAX_PLAYERS) {
+            let receptor_ns = receptor_noteskin[player]
+                .as_deref()
+                .or_else(|| noteskin[player].as_deref());
+            if let Some(ns) = receptor_ns {
+                effects.set_receptor_glow_behavior(
+                    player,
+                    test_gameplay_receptor_glow_behavior(ns.receptor_glow_behavior),
+                );
+                for col in 0..cols {
+                    for window in super::RECEPTOR_STEP_WINDOWS {
+                        effects.set_receptor_step_behavior(
+                            player,
+                            col,
+                            window,
+                            test_gameplay_receptor_step_behavior(
+                                ns.receptor_step_behavior_for_col(col, window),
+                            ),
+                        );
+                    }
+                }
+            }
+
+            let tap_ns = if runtime_profiles[player].tap_explosion_noteskin_hidden() {
+                None
+            } else {
+                tap_explosion_noteskin[player]
+                    .as_deref()
+                    .or_else(|| noteskin[player].as_deref())
+            };
+            if let Some(ns) = tap_ns {
+                for col in 0..cols {
+                    for window in super::TAP_EXPLOSION_WINDOWS {
+                        for bright in [false, true] {
+                            effects.set_tap_explosion_duration(
+                                player,
+                                col,
+                                window,
+                                bright,
+                                ns.tap_explosion_for_col_with_bright(col, window, bright)
+                                    .map(|explosion| explosion.duration()),
+                            );
+                        }
+                    }
+                }
+            }
+
+            let duration = mine_noteskin[player]
+                .as_deref()
+                .or_else(|| noteskin[player].as_deref())
+                .and_then(|ns| ns.mine_hit_explosion.as_ref())
+                .map_or(super::MINE_EXPLOSION_DURATION, |explosion| {
+                    explosion.duration()
+                });
+            effects.set_mine_explosion_duration(player, duration);
+        }
+        super::GameplayNoteskinData { effects }
+    }
+
     fn regression_state(player_profiles: [profile_data::Profile; MAX_PLAYERS]) -> super::State {
         let song = Arc::new(gameplay_regression_song());
         let chart = Arc::new(song.charts[0].clone());
         let charts = [chart.clone(), chart];
         let gameplay_chart = Arc::new(gameplay_regression_payload());
         let gameplay_charts = [gameplay_chart.clone(), gameplay_chart];
+        let session = super::GameplaySession::default();
+        let noteskin_data = test_noteskin_data(
+            session.play_style.cols_per_player(),
+            session.play_style.player_count(),
+            &player_profiles,
+            &session,
+        );
         super::init(
             song,
             charts,
             gameplay_charts,
             super::GameplayViewport::default(),
-            super::GameplaySession::default(),
+            session,
             super::GameplayConfig::default(),
-            Vec::new(),
-            super::GameplayPackInfo::default(),
+            deadsync_chart::SyncPref::Default,
+            super::GameplayScoreData::default(),
+            noteskin_data,
+            super::GameplaySongLuaData::default(),
             5,
             1.0,
             [
@@ -9836,22 +9990,72 @@ return Def.ActorFrame{}
                     true,
                     false,
                     || {
-                        let mut state =
-                            crate::screens::gameplay::State::from_gameplay(super::init(
+                        let session = super::GameplaySession::default();
+                        let charts = [chart.clone(), chart];
+                        let gameplay_charts = [gameplay_chart.clone(), gameplay_chart];
+                        let scroll_speed = [
+                            player_profiles[0].scroll_speed,
+                            player_profiles[1].scroll_speed,
+                        ];
+                        let noteskin_data = test_noteskin_data(
+                            session.play_style.cols_per_player(),
+                            session.play_style.player_count(),
+                            &player_profiles,
+                            &session,
+                        );
+                        let runtime_profiles =
+                            screen_gameplay::gameplay_runtime_profiles(&player_profiles, &session);
+                        let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
+                            session.play_style.cols_per_player(),
+                            session.play_style.player_count(),
+                            &runtime_profiles,
+                        );
+                        let context = super::song_lua_compile_context(
+                            song.as_ref(),
+                            &charts,
+                            session.play_style.player_count(),
+                            &player_profiles,
+                            &scroll_speed,
+                            1.0,
+                            0.0,
+                            super::GameplayViewport::default(),
+                            &session,
+                            false,
+                        );
+                        let primary = song
+                            .foreground_lua_changes
+                            .iter()
+                            .find(|change| change.start_beat <= 0.0 && change.path.is_file())
+                            .map(|change| {
+                                crate::game::parsing::song_lua::compile_song_lua(
+                                    &change.path,
+                                    &context,
+                                )
+                                .expect("generated song lua should compile")
+                            })
+                            .map(|compiled| super::GameplayCompiledSongLua {
+                                compiled,
+                                compile_ms: 0.0,
+                            });
+                        let song_lua_data = super::GameplaySongLuaData {
+                            primary,
+                            ..Default::default()
+                        };
+                        let mut state = screen_gameplay::State::from_gameplay(
+                            super::init(
                                 song,
-                                [chart.clone(), chart],
-                                [gameplay_chart.clone(), gameplay_chart],
+                                charts,
+                                gameplay_charts,
                                 super::GameplayViewport::default(),
-                                super::GameplaySession::default(),
+                                session,
                                 super::GameplayConfig::default(),
-                                Vec::new(),
-                                super::GameplayPackInfo::default(),
+                                deadsync_chart::SyncPref::Default,
+                                super::GameplayScoreData::default(),
+                                noteskin_data,
+                                song_lua_data,
                                 5,
                                 1.0,
-                                [
-                                    player_profiles[0].scroll_speed,
-                                    player_profiles[1].scroll_speed,
-                                ],
+                                scroll_speed,
                                 player_profiles,
                                 None,
                                 None,
@@ -9863,7 +10067,9 @@ return Def.ActorFrame{}
                                 None,
                                 None,
                                 [0; MAX_PLAYERS],
-                            ));
+                            ),
+                            noteskin_assets,
+                        );
                         assert!(!state.song_lua_ease_windows[0].is_empty());
 
                         let mut times = vec![0.0, state.current_music_time_display];
@@ -9883,11 +10089,11 @@ return Def.ActorFrame{}
                             state.current_beat = state.timing.get_beat_for_time(time);
                             refresh_active_attack_masks(&mut state.gameplay, 0.0);
                             let mut actors = Vec::new();
-                            crate::screens::gameplay::push_actors(
+                            screen_gameplay::push_actors(
                                 &mut actors,
                                 &mut state,
                                 &assets,
-                                crate::screens::gameplay::ActorViewOverride::default(),
+                                screen_gameplay::ActorViewOverride::default(),
                             );
                         }
                     },

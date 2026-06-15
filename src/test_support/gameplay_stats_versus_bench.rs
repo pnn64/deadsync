@@ -83,8 +83,8 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         state.song_full_title = Arc::from("Gameplay Stats Versus Benchmark");
     }
 
-    let (state, _) = base.into_parts();
-    let mut state = gameplay_screen::State::from_gameplay(state);
+    let (state, noteskin_assets, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
     gameplay_stats::refresh_density_graph_meshes(&mut state);
 
     let mut asset_manager = AssetManager::new();

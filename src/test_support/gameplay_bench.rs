@@ -42,7 +42,6 @@ pub fn fixture() -> GameplayBenchFixture {
         let state = base.state_mut();
         state.song_full_title = Arc::from("Gameplay Screen Benchmark");
         state.stage_intro_text = Arc::from("STAGE 1");
-        state.background_texture_key = Arc::from("bench/gameplay_bg.png");
         state.autoplay_enabled = true;
         state.replay_status_text = Some(Arc::from("REPLAY BENCH"));
         state.sync_overlay_message = Some(Arc::from("Clock drift stable"));
@@ -70,8 +69,9 @@ pub fn fixture() -> GameplayBenchFixture {
         state.player_profiles[0].hide_song_bg = false;
         state.player_profiles[0].step_statistics = profile_data::StepStatisticsMask::empty();
     }
-    let (state, _) = base.into_parts();
-    let mut state = gameplay_screen::State::from_gameplay(state);
+    let (state, noteskin_assets, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
+    state.background_texture_key = Arc::from("bench/gameplay_bg.png");
     state.density_graph.top_mesh[0] = Some(top_graph_mesh());
 
     let mut asset_manager = AssetManager::new();

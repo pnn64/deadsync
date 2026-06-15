@@ -44,8 +44,6 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
         let state = base.state_mut();
         let song = Arc::make_mut(&mut state.song);
         song.banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.pack_banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.pack_group = Arc::from("Bench Pack");
         state.song_full_title = Arc::from("Gameplay Stats Double Benchmark");
         state.total_elapsed_in_screen = 9.6;
         state.current_music_time_display = 64.25;
@@ -116,8 +114,12 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
         });
     }
 
-    let (state, _) = base.into_parts();
-    let mut state = gameplay_screen::State::from_gameplay(state);
+    let (state, noteskin_assets, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
+    state.set_pack_display(
+        Arc::from("Bench Pack"),
+        Some(PathBuf::from("bench/banner.png")),
+    );
     gameplay_stats::refresh_density_graph_meshes(&mut state);
 
     let mut asset_manager = AssetManager::new();

@@ -2253,7 +2253,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         scores::save_local_scores_from_gameplay(&gs);
         let _ = scores::save_itl_data_from_gameplay(&gs);
         scores::submit_groovestats_payloads_from_gameplay(&gs);
-        scores::submit_arrowcloud_payloads_from_gameplay(&gs);
+        scores::submit_arrowcloud_payloads_from_gameplay(&gs, gs.pack_group.as_ref());
 
         let cols_per_player = gs.cols_per_player;
         for (player_idx, score_info_slot) in score_info
@@ -2261,7 +2261,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             .enumerate()
             .take(gs.num_players.min(MAX_PLAYERS))
         {
-            let noteskin = gs.noteskin[player_idx].take();
+            let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
             let note_times = &gs.note_time_cache_ns[start..end];

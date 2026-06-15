@@ -1,4 +1,3 @@
-use crate::game::parsing::noteskin::{self, Noteskin};
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action};
 use deadsync_profile as profile_data;
@@ -10,14 +9,15 @@ use super::{
     ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, ExitTransitionKind,
     GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
-    GameplayUpdatePhaseTimings, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
-    HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION,
-    RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge,
-    SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us,
-    begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
-    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
-    live_autoplay_enabled, music_time_ns_from_song_clock, queue_preloaded_assist_tick,
-    record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
+    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
+    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS,
+    MAX_ACTIVE_INPUT_SLOTS, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
+    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
+    abort_hold_to_exit, add_elapsed_us, begin_exit_transition, column_flash_duration,
+    current_music_time_s, elapsed_us_between, gameplay_input_log_enabled,
+    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
+    music_time_ns_from_song_clock, queue_preloaded_assist_tick, record_step_calories,
+    refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -83,46 +83,24 @@ fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
     } else {
         (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
     };
-    state.receptor_noteskin[player]
-        .as_ref()
-        .map(|ns| ns.receptor_glow_behavior.duration)
+    let behavior = state
+        .noteskin_effects
+        .receptor_glow_behavior_for_player(player);
+    Some(behavior.duration)
         .filter(|d| *d > f32::EPSILON)
-        .or_else(|| {
-            state.noteskin[player]
-                .as_ref()
-                .map(|ns| ns.receptor_glow_behavior.duration)
-                .filter(|d| *d > f32::EPSILON)
-        })
         .unwrap_or(RECEPTOR_GLOW_DURATION)
 }
 
 #[inline(always)]
-fn receptor_glow_behavior_noteskin(state: &State, player: usize) -> Option<&Noteskin> {
-    state.receptor_noteskin[player]
-        .as_deref()
-        .or_else(|| state.noteskin[player].as_deref())
-}
-
-#[inline(always)]
-pub(super) fn tap_explosion_noteskin_for_player(state: &State, player: usize) -> Option<&Noteskin> {
-    if state.player_profiles[player].tap_explosion_noteskin_hidden() {
-        return None;
-    }
-    state.tap_explosion_noteskin[player]
-        .as_deref()
-        .or_else(|| state.noteskin[player].as_deref())
-}
-
-#[inline(always)]
-fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::ReceptorGlowBehavior {
+fn receptor_glow_behavior_for_col(state: &State, col: usize) -> GameplayReceptorGlowBehavior {
     let player = if state.num_players <= 1 || state.cols_per_player == 0 {
         0
     } else {
         (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
     };
-    receptor_glow_behavior_noteskin(state, player)
-        .map(|ns| ns.receptor_glow_behavior)
-        .unwrap_or_default()
+    state
+        .noteskin_effects
+        .receptor_glow_behavior_for_player(player)
 }
 
 #[inline(always)]
@@ -130,7 +108,7 @@ fn receptor_step_behavior_for_col(
     state: &State,
     col: usize,
     window: Option<&str>,
-) -> noteskin::ReceptorStepBehavior {
+) -> GameplayReceptorStepBehavior {
     let player = if state.num_players <= 1 || state.cols_per_player == 0 {
         0
     } else {
@@ -141,9 +119,9 @@ fn receptor_step_behavior_for_col(
     } else {
         col % state.cols_per_player
     };
-    receptor_glow_behavior_noteskin(state, player)
-        .map(|ns| ns.receptor_step_behavior_for_col(local_col, window))
-        .unwrap_or_else(|| noteskin::ReceptorStepBehaviors::default().for_window(window))
+    state
+        .noteskin_effects
+        .receptor_step_behavior_for_col(player, local_col, window)
 }
 
 #[inline(always)]
@@ -854,45 +832,18 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
                 milestone.elapsed < max_duration
             });
     }
-    let num_players = state.num_players;
-    let cols_per_player = state.cols_per_player;
-    for col in 0..state.tap_explosions.len() {
-        let Some((window, bright, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
-            active.elapsed += delta_time;
-            (active.window, active.bright, active.elapsed)
-        }) else {
-            continue;
-        };
-        let player = if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (col / cols_per_player).min(num_players.saturating_sub(1))
-        };
-        let local_col = if cols_per_player == 0 {
-            col
-        } else {
-            col % cols_per_player
-        };
-        let lifetime = tap_explosion_noteskin_for_player(state, player)
-            .and_then(|ns| ns.tap_explosion_for_col_with_bright(local_col, window, bright))
-            .map_or(0.0, |explosion| explosion.duration());
-        if lifetime <= 0.0 || elapsed >= lifetime {
-            state.tap_explosions[col] = None;
-        }
-    }
-    for (col, explosion) in state.mine_explosions.iter_mut().enumerate() {
+    for explosion in &mut state.tap_explosions {
         if let Some(active) = explosion {
             active.elapsed += delta_time;
-            let player = if num_players <= 1 || cols_per_player == 0 {
-                0
-            } else {
-                (col / cols_per_player).min(num_players.saturating_sub(1))
-            };
-            let lifetime = state.mine_noteskin[player]
-                .as_ref()
-                .and_then(|ns| ns.mine_hit_explosion.as_ref())
-                .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.duration());
-            if lifetime <= 0.0 || active.elapsed >= lifetime {
+            if active.duration <= 0.0 || active.elapsed >= active.duration {
+                *explosion = None;
+            }
+        }
+    }
+    for explosion in &mut state.mine_explosions {
+        if let Some(active) = explosion {
+            active.elapsed += delta_time;
+            if active.duration <= 0.0 || active.elapsed >= active.duration {
                 *explosion = None;
             }
         }

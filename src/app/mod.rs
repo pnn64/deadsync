@@ -3038,7 +3038,7 @@ fn prewarm_gameplay_assets(
     let mut seen = HashSet::<String>::with_capacity(256);
     let mut seen_model_textures = HashSet::<String>::with_capacity(64);
     let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
-    for noteskin in state.noteskin.iter().flatten() {
+    for noteskin in state.noteskin_assets.noteskin.iter().flatten() {
         prewarm_noteskin_textures(
             assets,
             backend,
@@ -3047,7 +3047,7 @@ fn prewarm_gameplay_assets(
             noteskin,
         );
     }
-    for noteskin in state.mine_noteskin.iter().flatten() {
+    for noteskin in state.noteskin_assets.mine_noteskin.iter().flatten() {
         prewarm_noteskin_textures(
             assets,
             backend,
@@ -3056,7 +3056,7 @@ fn prewarm_gameplay_assets(
             noteskin,
         );
     }
-    for noteskin in state.receptor_noteskin.iter().flatten() {
+    for noteskin in state.noteskin_assets.receptor_noteskin.iter().flatten() {
         prewarm_noteskin_textures(
             assets,
             backend,
@@ -3065,7 +3065,12 @@ fn prewarm_gameplay_assets(
             noteskin,
         );
     }
-    for noteskin in state.tap_explosion_noteskin.iter().flatten() {
+    for noteskin in state
+        .noteskin_assets
+        .tap_explosion_noteskin
+        .iter()
+        .flatten()
+    {
         prewarm_noteskin_textures(
             assets,
             backend,
@@ -6859,7 +6864,7 @@ impl App {
     }
 
     fn refresh_gameplay_background_path(
-        state: &mut crate::game::gameplay::State,
+        state: &mut gameplay::State,
         show_video_backgrounds: bool,
     ) -> Option<PathBuf> {
         let path = state
@@ -6870,7 +6875,7 @@ impl App {
                 show_video_backgrounds,
             )
             .cloned();
-        state.current_background_key = path.as_deref().map(crate::game::gameplay::media_path_key);
+        state.current_background_key = path.as_deref().map(crate::assets::media_path_key);
         state.current_background_path = path.clone();
         state.background_allow_video = show_video_backgrounds;
         state.background_path_dirty = false;
@@ -6878,7 +6883,7 @@ impl App {
     }
 
     fn active_gameplay_background_change(
-        state: &crate::game::gameplay::State,
+        state: &gameplay::State,
     ) -> Option<&deadsync_chart::SongBackgroundChange> {
         state
             .next_background_change_ix

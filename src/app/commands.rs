@@ -334,9 +334,7 @@ impl App {
                 video_started_at_sec,
             );
             let key = Arc::<str>::from(key);
-            let path_key = path_opt
-                .as_deref()
-                .map(crate::game::gameplay::media_path_key);
+            let path_key = path_opt.as_deref().map(crate::assets::media_path_key);
             let show_video_backgrounds = crate::config::get().show_video_backgrounds;
             if let Some(gs) = &mut self.state.screens.gameplay_state {
                 let was_dirty = gs.background_path_dirty;

@@ -43,8 +43,6 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         let state = base.state_mut();
         let song = Arc::make_mut(&mut state.song);
         song.banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.pack_banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.pack_group = Arc::from("Bench Pack");
         state.song_full_title = Arc::from("Gameplay Stats Benchmark");
         state.total_elapsed_in_screen = 9.6;
         state.current_music_time_display = 64.25;
@@ -112,8 +110,12 @@ pub fn fixture() -> GameplayStatsBenchFixture {
             }),
         });
     }
-    let (state, bench_profile) = base.into_parts();
-    let mut state = gameplay_screen::State::from_gameplay(state);
+    let (state, noteskin_assets, bench_profile) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);
+    state.set_pack_display(
+        Arc::from("Bench Pack"),
+        Some(PathBuf::from("bench/banner.png")),
+    );
     gameplay_stats::refresh_density_graph_meshes(&mut state);
 
     let mut asset_manager = AssetManager::new();
@@ -125,6 +127,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
     let mut notefield_hud_actors = Vec::new();
     let playfield_center_x = notefield::build_bundles(
         &state,
+        &state.noteskin_assets,
+        &state.notefield_model_cache,
         &bench_profile,
         FieldPlacement::P1,
         profile_data::PlayStyle::Single,
