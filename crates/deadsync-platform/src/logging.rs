@@ -149,7 +149,9 @@ fn prune_old_logs(path: &Path, keep: usize) {
         return;
     };
     let prefix = format!("{stem}-");
-    let suffix = path.extension().map(|e| format!(".{}", e.to_string_lossy()));
+    let suffix = path
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()));
     let Ok(entries) = std::fs::read_dir(scan_dir) else {
         return;
     };

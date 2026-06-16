@@ -30,9 +30,7 @@ pub fn init(show: bool) {
 
 #[cfg(windows)]
 mod imp {
-    use windows::Win32::Foundation::{
-        GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
-    };
+    use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE};
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TYPE_DISK,
         FILE_TYPE_PIPE, GetFileType, OPEN_EXISTING,

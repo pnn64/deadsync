@@ -8,6 +8,7 @@ license = "GPL-3.0"
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
+twox-hash = "2.1.2"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -1,10 +1,9 @@
 use super::State;
 
 pub(crate) use deadsync_core::song_time::{
-    INVALID_SONG_TIME_NS, clamp_song_time_ns, normalized_song_rate, scaled_song_delta_ns,
-    scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_delta_seconds,
-    song_time_ns_from_seconds, song_time_ns_invalid, song_time_ns_span_seconds,
-    song_time_ns_to_seconds,
+    INVALID_SONG_TIME_NS, normalized_song_rate, scaled_song_delta_ns, scaled_song_time_ns,
+    song_time_ns_add_seconds, song_time_ns_delta_seconds, song_time_ns_from_seconds,
+    song_time_ns_invalid, song_time_ns_span_seconds, song_time_ns_to_seconds,
 };
 
 #[inline(always)]

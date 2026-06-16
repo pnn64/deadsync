@@ -1,10 +1,11 @@
+use deadsync_core::song_time::clamp_song_time_ns;
 use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use super::{
-    GameplayAudioSnapshot, SongTimeNs, State, clamp_song_time_ns, normalized_song_rate,
-    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_from_seconds, song_time_ns_invalid,
+    GameplayAudioSnapshot, SongTimeNs, State, normalized_song_rate, scaled_song_delta_ns,
+    scaled_song_time_ns, song_time_ns_from_seconds, song_time_ns_invalid,
     song_time_ns_span_seconds, song_time_ns_to_seconds, stream_pos_to_music_time,
 };
 

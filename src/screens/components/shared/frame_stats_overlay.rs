@@ -226,11 +226,21 @@ pub fn default_anchor() -> OverlayAnchor {
 pub fn next_anchor(current: OverlayAnchor, compact: bool) -> OverlayAnchor {
     use OverlayAnchor::*;
     let order: &[OverlayAnchor] = if compact {
-        &[BottomCenter, TopCenter, BottomLeft, BottomRight, TopLeft, TopRight]
+        &[
+            BottomCenter,
+            TopCenter,
+            BottomLeft,
+            BottomRight,
+            TopLeft,
+            TopRight,
+        ]
     } else {
         &[TopLeft, TopRight, BottomRight, BottomLeft]
     };
-    let idx = order.iter().position(|a| *a == current).unwrap_or(usize::MAX);
+    let idx = order
+        .iter()
+        .position(|a| *a == current)
+        .unwrap_or(usize::MAX);
     order[(idx.wrapping_add(1)) % order.len()]
 }
 
@@ -339,7 +349,11 @@ fn compute_layout(
         // slides up under the graph.
         let content_w = data_row_width(&cell_widths);
         let hist_h = if show_histogram { HIST_H } else { 0.0 };
-        let stack_after_graph = if show_histogram { HIST_GAP + HIST_H } else { 0.0 };
+        let stack_after_graph = if show_histogram {
+            HIST_GAP + HIST_H
+        } else {
+            0.0
+        };
         let full_h = GRAPH_H + stack_after_graph + DATA_GAP + data_h;
         let (ox, oy) = panel_origin(anchor, content_w, full_h, screen_w, screen_h);
         let hist_y = oy + GRAPH_H + HIST_GAP;
@@ -789,7 +803,14 @@ fn segment(
         return;
     }
     let top = baseline - *drawn - h;
-    actors.push(quad(x, top, col_w, h, [rgb[0], rgb[1], rgb[2], 0.95], DEBUG_OVERLAY_Z + 1));
+    actors.push(quad(
+        x,
+        top,
+        col_w,
+        h,
+        [rgb[0], rgb[1], rgb[2], 0.95],
+        DEBUG_OVERLAY_Z + 1,
+    ));
     *drawn += h;
 }
 
@@ -815,26 +836,105 @@ fn build_graph(
         }
         let x = gx + i as f32 * col_w;
         let mut drawn = 0.0f32;
-        segment(actors, x, baseline, &mut drawn, s.idle_us(), px_per_us, col_w, COLOR_IDLE);
-        segment(actors, x, baseline, &mut drawn, s.input_us, px_per_us, col_w, COLOR_INPUT);
-        segment(actors, x, baseline, &mut drawn, s.update_us, px_per_us, col_w, COLOR_UPDATE);
-        segment(actors, x, baseline, &mut drawn, s.compose_us, px_per_us, col_w, COLOR_COMPOSE);
-        segment(actors, x, baseline, &mut drawn, s.upload_us, px_per_us, col_w, COLOR_UPLOAD);
-        segment(actors, x, baseline, &mut drawn, s.draw_us, px_per_us, col_w, COLOR_DRAW);
-        segment(actors, x, baseline, &mut drawn, s.gpu_wait_us, px_per_us, col_w, COLOR_GPU_WAIT);
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.idle_us(),
+            px_per_us,
+            col_w,
+            COLOR_IDLE,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.input_us,
+            px_per_us,
+            col_w,
+            COLOR_INPUT,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.update_us,
+            px_per_us,
+            col_w,
+            COLOR_UPDATE,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.compose_us,
+            px_per_us,
+            col_w,
+            COLOR_COMPOSE,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.upload_us,
+            px_per_us,
+            col_w,
+            COLOR_UPLOAD,
+        );
+        segment(
+            actors, x, baseline, &mut drawn, s.draw_us, px_per_us, col_w, COLOR_DRAW,
+        );
+        segment(
+            actors,
+            x,
+            baseline,
+            &mut drawn,
+            s.gpu_wait_us,
+            px_per_us,
+            col_w,
+            COLOR_GPU_WAIT,
+        );
 
         // Event markers (osu! GC-marker analog): a full-height vertical line on frames
         // where the display clock is actively catching up, or that spiked well past scale.
         if s.catching_up {
-            actors.push(quad(x, gy, col_w.max(1.0), gh, COLOR_MARKER_CATCHUP, DEBUG_OVERLAY_Z + 2));
+            actors.push(quad(
+                x,
+                gy,
+                col_w.max(1.0),
+                gh,
+                COLOR_MARKER_CATCHUP,
+                DEBUG_OVERLAY_Z + 2,
+            ));
         } else if s.frame_us >= spike_us {
-            actors.push(quad(x, gy, col_w.max(1.0), gh, COLOR_MARKER_SPIKE, DEBUG_OVERLAY_Z + 2));
+            actors.push(quad(
+                x,
+                gy,
+                col_w.max(1.0),
+                gh,
+                COLOR_MARKER_SPIKE,
+                DEBUG_OVERLAY_Z + 2,
+            ));
         }
     }
 
     // osu!-style fixed reference lines: the monitor's target frame time and twice it.
     // Drawn last so they sit above the bars and markers; skipped if off the graph.
-    ref_line(actors, target_frame_us, scale_us, gx, baseline, gw, gh, COLOR_REF_TARGET);
+    ref_line(
+        actors,
+        target_frame_us,
+        scale_us,
+        gx,
+        baseline,
+        gw,
+        gh,
+        COLOR_REF_TARGET,
+    );
     ref_line(
         actors,
         target_frame_us.saturating_mul(2),
@@ -887,7 +987,14 @@ fn build_histogram(
         }
         let h = (count as f32 / peak) * hh;
         let x = hx + i as f32 * col_w;
-        actors.push(quad(x, baseline - h, col_w - 0.5, h, COLOR_HIST, DEBUG_OVERLAY_Z + 1));
+        actors.push(quad(
+            x,
+            baseline - h,
+            col_w - 0.5,
+            h,
+            COLOR_HIST,
+            DEBUG_OVERLAY_Z + 1,
+        ));
     }
 }
 
@@ -974,7 +1081,11 @@ fn display_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
     use std::fmt::Write;
     let mut text = String::with_capacity(64);
     if summary.in_gameplay {
-        let _ = write!(text, "DISPLAY CLOCK\nerr {:+.2}ms", summary.display_error_ms);
+        let _ = write!(
+            text,
+            "DISPLAY CLOCK\nerr {:+.2}ms",
+            summary.display_error_ms
+        );
         if show_p99 {
             let _ = write!(text, "\np99 {:.2}ms", summary.display_error_p99_ms);
         }
@@ -982,7 +1093,11 @@ fn display_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
             text,
             "\njit {:.2}ms\ncatch-up {}",
             ms(summary.display_error_jitter_us),
-            if summary.display_catching_up { "YES" } else { "no" },
+            if summary.display_catching_up {
+                "YES"
+            } else {
+                "no"
+            },
         );
     } else {
         let _ = write!(text, "DISPLAY CLOCK\nn/a (menu)");
@@ -1039,7 +1154,11 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
             text,
             "\nerr {:+.2} ms  catch-up {}  underruns {}  out {:.1} ms",
             summary.display_error_ms,
-            if summary.display_catching_up { "YES" } else { "no" },
+            if summary.display_catching_up {
+                "YES"
+            } else {
+                "no"
+            },
             summary.audio_underruns,
             summary.audio_output_delay_ms,
         );
@@ -1047,9 +1166,7 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
         let _ = write!(
             text,
             "\nunderruns {}  out {:.1} ms  gap {:.2} ms",
-            summary.audio_underruns,
-            summary.audio_output_delay_ms,
-            summary.audio_callback_gap_ms,
+            summary.audio_underruns, summary.audio_output_delay_ms, summary.audio_callback_gap_ms,
         );
     }
     text
@@ -1077,10 +1194,7 @@ pub fn build(
 
     // Scale the graph to the worst recent frame (held briefly via spike-hold so the scale
     // doesn't snap back the instant a spike leaves the ring), with a sane floor.
-    let scale_us = summary
-        .max_frame_us
-        .max(summary.spike_hold_us)
-        .max(20_000);
+    let scale_us = summary.max_frame_us.max(summary.spike_hold_us).max(20_000);
     let bin_width_us = (scale_us / HISTOGRAM_BINS as u32).max(250);
 
     // Build the full-mode data-cell strings up front so the data block is sized to the
@@ -1304,14 +1418,32 @@ mod tests {
     #[test]
     fn next_anchor_cycles_and_wraps() {
         // Full-mode cycle walks the four corners and wraps.
-        assert_eq!(next_anchor(OverlayAnchor::TopLeft, false), OverlayAnchor::TopRight);
-        assert_eq!(next_anchor(OverlayAnchor::TopRight, false), OverlayAnchor::BottomRight);
-        assert_eq!(next_anchor(OverlayAnchor::BottomRight, false), OverlayAnchor::BottomLeft);
-        assert_eq!(next_anchor(OverlayAnchor::BottomLeft, false), OverlayAnchor::TopLeft);
+        assert_eq!(
+            next_anchor(OverlayAnchor::TopLeft, false),
+            OverlayAnchor::TopRight
+        );
+        assert_eq!(
+            next_anchor(OverlayAnchor::TopRight, false),
+            OverlayAnchor::BottomRight
+        );
+        assert_eq!(
+            next_anchor(OverlayAnchor::BottomRight, false),
+            OverlayAnchor::BottomLeft
+        );
+        assert_eq!(
+            next_anchor(OverlayAnchor::BottomLeft, false),
+            OverlayAnchor::TopLeft
+        );
         // Compact-mode cycle starts at the seams.
-        assert_eq!(next_anchor(OverlayAnchor::BottomCenter, true), OverlayAnchor::TopCenter);
+        assert_eq!(
+            next_anchor(OverlayAnchor::BottomCenter, true),
+            OverlayAnchor::TopCenter
+        );
         // An anchor outside the active list falls back to the first entry.
-        assert_eq!(next_anchor(OverlayAnchor::TopCenter, false), OverlayAnchor::TopLeft);
+        assert_eq!(
+            next_anchor(OverlayAnchor::TopCenter, false),
+            OverlayAnchor::TopLeft
+        );
     }
 
     #[test]
@@ -1328,7 +1460,11 @@ mod tests {
         assert!((16_000..=16_200).contains(&p50), "p50 was {p50}");
         assert!(p99 >= 49_800, "p99 was {p99}");
         // Effective window is bounded near 1/(1-gamma) (~1024), not the 2000 fed.
-        assert!(h.effective_n() <= 1100, "effective_n was {}", h.effective_n());
+        assert!(
+            h.effective_n() <= 1100,
+            "effective_n was {}",
+            h.effective_n()
+        );
     }
 
     #[test]
@@ -1346,7 +1482,10 @@ mod tests {
         }
         let after = h.percentile_us(0.99, DHIST_BUCKET_US);
         // One spike in ~1000 effective samples stays under the 99th percentile → no jump.
-        assert_eq!(before, after, "p99 moved {before}->{after} on a single outlier");
+        assert_eq!(
+            before, after,
+            "p99 moved {before}->{after} on a single outlier"
+        );
     }
 
     #[test]
@@ -1376,15 +1515,25 @@ mod tests {
         for _ in 0..(STATS_REFRESH_PERIOD - 1) {
             long.push(&s);
         }
-        assert_eq!(long.p99_frame_us(), 0, "cache should be cold before first refresh");
+        assert_eq!(
+            long.p99_frame_us(),
+            0,
+            "cache should be cold before first refresh"
+        );
         long.push(&s);
-        assert!(long.p99_frame_us() > 0, "cache should populate at the refresh cadence");
+        assert!(
+            long.p99_frame_us() > 0,
+            "cache should populate at the refresh cadence"
+        );
 
         s.display_error_us = 1_200;
         for _ in 0..STATS_REFRESH_PERIOD {
             long.push(&s);
         }
-        assert!(long.p99_error_us() > 0, "error percentile should populate too");
+        assert!(
+            long.p99_error_us() > 0,
+            "error percentile should populate too"
+        );
         long.reset();
         assert_eq!(long.p99_frame_us(), 0);
         assert_eq!(long.effective_n(), 0);
@@ -1394,10 +1543,35 @@ mod tests {
     fn ref_line_clips_off_scale_values() {
         let mut actors = Vec::new();
         // Target above the graph scale draws nothing; on-scale draws one line quad.
-        ref_line(&mut actors, 40_000, 20_000, 0.0, 100.0, 200.0, 100.0, COLOR_REF_TARGET);
-        assert!(actors.is_empty(), "off-scale reference line should be skipped");
-        ref_line(&mut actors, 16_700, 33_400, 0.0, 100.0, 200.0, 100.0, COLOR_REF_TARGET);
-        assert_eq!(actors.len(), 1, "on-scale reference line should draw one quad");
+        ref_line(
+            &mut actors,
+            40_000,
+            20_000,
+            0.0,
+            100.0,
+            200.0,
+            100.0,
+            COLOR_REF_TARGET,
+        );
+        assert!(
+            actors.is_empty(),
+            "off-scale reference line should be skipped"
+        );
+        ref_line(
+            &mut actors,
+            16_700,
+            33_400,
+            0.0,
+            100.0,
+            200.0,
+            100.0,
+            COLOR_REF_TARGET,
+        );
+        assert_eq!(
+            actors.len(),
+            1,
+            "on-scale reference line should draw one quad"
+        );
     }
 
     #[test]
@@ -1421,7 +1595,11 @@ mod tests {
         assert!(l.data_y > l.hist_y);
         // The graph spans the total content width and stays under half the screen.
         assert!((l.graph_w - content_w).abs() < 0.01);
-        assert!(l.graph_w <= sw * 0.5 + 0.01, "graph_w {} should be <= half screen", l.graph_w);
+        assert!(
+            l.graph_w <= sw * 0.5 + 0.01,
+            "graph_w {} should be <= half screen",
+            l.graph_w
+        );
         // Cells are laid left to right: each starts after the previous cell's width + the gap.
         assert!((l.data_cols[0] - l.graph_x).abs() < 0.01);
         for i in 1..DATA_COLS {
@@ -1438,7 +1616,15 @@ mod tests {
         assert!((r.hist_x - r.graph_x).abs() < 0.01);
         assert!(r.graph_x + r.graph_w <= sw - MARGIN + 0.01);
         // Bottom anchor grows upward from the bottom margin.
-        let b = compute_layout(OverlayAnchor::BottomLeft, false, true, data_h, widths, sw, sh);
+        let b = compute_layout(
+            OverlayAnchor::BottomLeft,
+            false,
+            true,
+            data_h,
+            widths,
+            sw,
+            sh,
+        );
         let full_h = GRAPH_H + HIST_GAP + HIST_H + DATA_GAP + data_h;
         assert!((b.graph_y + full_h - (sh - MARGIN)).abs() < 0.01);
         // Compact mode drops the histogram and the data row.
@@ -1546,7 +1732,14 @@ mod tests {
     #[test]
     fn anchor_and_style_keys_round_trip() {
         use OverlayAnchor::*;
-        for a in [TopLeft, TopRight, BottomLeft, BottomRight, TopCenter, BottomCenter] {
+        for a in [
+            TopLeft,
+            TopRight,
+            BottomLeft,
+            BottomRight,
+            TopCenter,
+            BottomCenter,
+        ] {
             assert_eq!(OverlayAnchor::from_key(a.to_key()), Some(a));
         }
         // "auto"/empty/unknown map to None so the engine falls back to the default.
@@ -1556,8 +1749,14 @@ mod tests {
         // Keys are case/whitespace tolerant.
         assert_eq!(OverlayAnchor::from_key("  TOP-LEFT "), Some(TopLeft));
         // Styles round-trip; unknown/empty falls back to detailed.
-        assert_eq!(OverlayStyle::from_key(OverlayStyle::Detailed.label()), OverlayStyle::Detailed);
-        assert_eq!(OverlayStyle::from_key(OverlayStyle::Minimal.label()), OverlayStyle::Minimal);
+        assert_eq!(
+            OverlayStyle::from_key(OverlayStyle::Detailed.label()),
+            OverlayStyle::Detailed
+        );
+        assert_eq!(
+            OverlayStyle::from_key(OverlayStyle::Minimal.label()),
+            OverlayStyle::Minimal
+        );
         assert_eq!(OverlayStyle::from_key("MINIMAL"), OverlayStyle::Minimal);
         assert_eq!(OverlayStyle::from_key("???"), OverlayStyle::Detailed);
     }
@@ -1577,8 +1776,24 @@ mod tests {
         assert!(minimal.data_y < detailed.data_y);
         assert!((minimal.data_y - (minimal.graph_y + GRAPH_H + DATA_GAP)).abs() < 0.01);
         // Bottom-anchored minimal panel is shorter, so its graph starts lower than detailed.
-        let detailed_b = compute_layout(OverlayAnchor::BottomLeft, false, true, data_h, widths, sw, sh);
-        let minimal_b = compute_layout(OverlayAnchor::BottomLeft, false, false, data_h, widths, sw, sh);
+        let detailed_b = compute_layout(
+            OverlayAnchor::BottomLeft,
+            false,
+            true,
+            data_h,
+            widths,
+            sw,
+            sh,
+        );
+        let minimal_b = compute_layout(
+            OverlayAnchor::BottomLeft,
+            false,
+            false,
+            data_h,
+            widths,
+            sw,
+            sh,
+        );
         assert!(minimal_b.graph_y > detailed_b.graph_y);
     }
 
@@ -1586,7 +1801,10 @@ mod tests {
     fn overlay_style_toggle_round_trips() {
         assert_eq!(OverlayStyle::Detailed.toggle(), OverlayStyle::Minimal);
         assert_eq!(OverlayStyle::Minimal.toggle(), OverlayStyle::Detailed);
-        assert_eq!(OverlayStyle::Detailed.toggle().toggle(), OverlayStyle::Detailed);
+        assert_eq!(
+            OverlayStyle::Detailed.toggle().toggle(),
+            OverlayStyle::Detailed
+        );
         assert!(OverlayStyle::Detailed.show_p99());
         assert!(!OverlayStyle::Minimal.show_p99());
         assert!(OverlayStyle::Detailed.show_histogram());

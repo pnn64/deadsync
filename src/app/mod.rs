@@ -1662,11 +1662,13 @@ pub struct ShellState {
     /// 0.0 = uninitialized (seeds from the first sample). Reset when the overlay is disabled.
     frame_stats_audio_gap_ms: f32,
     frame_stats_overlay_enabled: bool,
-    frame_stats_overlay_anchor: crate::screens::components::shared::frame_stats_overlay::OverlayAnchor,
+    frame_stats_overlay_anchor:
+        crate::screens::components::shared::frame_stats_overlay::OverlayAnchor,
     /// True once the user has explicitly positioned the overlay (via the move-corner key or a
     /// remembered config value). While false the anchor follows the play-context default.
     frame_stats_overlay_anchor_user_set: bool,
-    frame_stats_overlay_style: crate::screens::components::shared::frame_stats_overlay::OverlayStyle,
+    frame_stats_overlay_style:
+        crate::screens::components::shared::frame_stats_overlay::OverlayStyle,
     transition: TransitionState,
     display_width: u32,
     display_height: u32,
@@ -8632,7 +8634,10 @@ impl App {
                 // Ctrl+Shift+F3: move the frame-stats overlay to the next corner (runtime only).
                 if !raw_key.repeat && self.state.shell.frame_stats_overlay_enabled {
                     let (_, two_player, _) = self.frame_stats_play_context();
-                    let anchor = self.state.shell.cycle_frame_stats_overlay_anchor(two_player);
+                    let anchor = self
+                        .state
+                        .shell
+                        .cycle_frame_stats_overlay_anchor(two_player);
                     debug!("Frame stats overlay corner {anchor:?}");
                 }
             } else if self.state.shell.ctrl_held && self.state.shell.alt_held {
@@ -8648,7 +8653,8 @@ impl App {
                     // restore the remembered corner (persisted across toggles and restarts).
                     if on && !self.state.shell.frame_stats_overlay_anchor_user_set {
                         self.state.shell.frame_stats_overlay_anchor =
-                            crate::screens::components::shared::frame_stats_overlay::default_anchor();
+                            crate::screens::components::shared::frame_stats_overlay::default_anchor(
+                            );
                     }
                     debug!("Frame stats overlay {}", if on { "ON" } else { "OFF" });
                 }
