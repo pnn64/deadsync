@@ -374,6 +374,26 @@ pub(super) fn custom_fantastic_window_choices() -> Vec<String> {
     out
 }
 
+pub(super) fn crossover_cue_duration_choices() -> Vec<String> {
+    let lo = deadsync_profile::CROSSOVER_CUE_DURATION_MIN_MS;
+    let hi = deadsync_profile::CROSSOVER_CUE_DURATION_MAX_MS;
+    let step = deadsync_profile::CROSSOVER_CUE_DURATION_STEP_MS;
+    let mut out = Vec::new();
+    let mut ms = lo;
+    while ms <= hi {
+        out.push(format!("{ms}ms"));
+        ms += step;
+    }
+    out
+}
+
+pub(super) fn crossover_cue_quantization_choices() -> Vec<String> {
+    deadsync_profile::CROSSOVER_CUE_QUANTIZATIONS
+        .iter()
+        .map(|q| q.to_string())
+        .collect()
+}
+
 pub(super) fn resolve_p1_chart<'a>(
     song: &'a SongData,
     chart_steps_index: &[usize; PLAYER_SLOTS],

@@ -114,13 +114,14 @@ bitflags! {
 bitflags! {
     /// Active toggles for the Gameplay Extras row.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct GameplayExtrasMask: u8 {
+    pub struct GameplayExtrasMask: u16 {
         const FLASH_COLUMN_FOR_MISS = 1 << 0;
         const DENSITY_GRAPH_AT_TOP  = 1 << 1;
         const COLUMN_CUES           = 1 << 2;
         const MEASURE_CUES          = 1 << 3;
         const LIVE_TIMING_STATS     = 1 << 4;
-        const DISPLAY_SCOREBOX      = 1 << 5;
+        const COLUMN_COUNTDOWN      = 1 << 5;
+        const DISPLAY_SCOREBOX      = 1 << 6;
     }
 }
 

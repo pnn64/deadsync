@@ -1345,7 +1345,7 @@ pub(super) mod tests {
                 },
                 get_active: |m| m.gameplay_extras.bits() as u32,
                 set_active: |m, b| {
-                    m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
+                    m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u16);
                 },
                 cursor: CursorInit::FirstActiveBit,
             },

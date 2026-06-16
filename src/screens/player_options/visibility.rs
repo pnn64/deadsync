@@ -27,6 +27,7 @@ pub(super) struct RowVisibility {
     pub(super) show_mini_indicator_position: bool,
     pub(super) show_column_flash_judgments: bool,
     pub(super) show_live_timing_stats: bool,
+    pub(super) show_crossover_cue_options: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
     pub(super) show_pad_light_brightness: bool,
@@ -130,6 +131,12 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::LiveTimingStats {
         return visibility.show_live_timing_stats;
     }
+    if id == RowId::CrossoverCueDuration
+        || id == RowId::CrossoverCueQuantization
+        || id == RowId::CrossoverCueBrackets
+    {
+        return visibility.show_crossover_cue_options;
+    }
     if id == RowId::GlobalOffsetShift {
         return visibility.show_global_offset_shift;
     }
@@ -213,6 +220,12 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         || id == RowId::LiveTimingStats
     {
         return Some(RowId::GameplayExtras);
+    }
+    if id == RowId::CrossoverCueDuration
+        || id == RowId::CrossoverCueQuantization
+        || id == RowId::CrossoverCueBrackets
+    {
+        return Some(RowId::CrossoverCues);
     }
     if id == RowId::TapExplosionOptions {
         return Some(RowId::TapExplosionSkin);
@@ -390,6 +403,28 @@ pub(super) fn custom_fantastic_window_ms_visible(
     active: [bool; PLAYER_SLOTS],
 ) -> bool {
     let Some(row) = row_map.get(RowId::CustomBlueFantasticWindow) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        if choice_idx != 0 {
+            return true;
+        }
+    }
+    !any_active
+}
+
+/// Crossover-cue sub-options (duration, min quantization, brackets filter) are
+/// only shown when the standalone `CrossoverCues` toggle is ON for some active
+/// player.
+pub(super) fn crossover_cue_options_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    let Some(row) = row_map.get(RowId::CrossoverCues) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -693,6 +728,7 @@ pub(super) fn row_visibility(
         show_mini_indicator_position: mini_indicator_position_visible(row_map, active),
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
+        show_crossover_cue_options: crossover_cue_options_visible(row_map, active),
         show_global_offset_shift: allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
         // Pad-light brightness only matters when deadsync is actually driving the

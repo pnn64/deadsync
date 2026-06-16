@@ -440,6 +440,26 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
         from_profile: |p| if p.custom_fantastic_window { 1 } else { 0 },
     }),
 };
+const CROSSOVER_CUES: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.crossover_cues = v;
+        Outcome::persisted_with_visibility()
+    },
+    persist_for_side: gp::update_crossover_cues_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.crossover_cues { 1 } else { 0 },
+    }),
+};
+const CROSSOVER_CUE_BRACKETS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.crossover_cue_brackets = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_crossover_cue_brackets_for_side,
+    init: Some(CycleInit {
+        from_profile: |p| if p.crossover_cue_brackets { 1 } else { 0 },
+    }),
+};
 
 const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -621,6 +641,9 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             if p.live_timing_stats {
                 bits.insert(GameplayExtrasMask::LIVE_TIMING_STATS);
             }
+            if p.column_countdown {
+                bits.insert(GameplayExtrasMask::COLUMN_COUNTDOWN);
+            }
             if p.display_scorebox {
                 bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
             }
@@ -629,22 +652,23 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
         get_active: |m| m.gameplay_extras.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32),
+                b & !(u16::MAX as u32),
                 0,
-                "GameplayExtrasMask init bits exceed u8 width",
+                "GameplayExtrasMask init bits exceed u16 width",
             );
-            m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
+            m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u16);
         },
         cursor: CursorInit::FirstActiveBit,
     },
     writeback: BitmaskWriteback {
         project: |m, p, b| {
-            let mask = GameplayExtrasMask::from_bits_truncate(b as u8);
+            let mask = GameplayExtrasMask::from_bits_truncate(b as u16);
             p.column_flash_on_miss = mask.contains(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
             p.nps_graph_at_top = mask.contains(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
             p.column_cues = mask.contains(GameplayExtrasMask::COLUMN_CUES);
             p.measure_cues = mask.contains(GameplayExtrasMask::MEASURE_CUES);
             p.live_timing_stats = mask.contains(GameplayExtrasMask::LIVE_TIMING_STATS);
+            p.column_countdown = mask.contains(GameplayExtrasMask::COLUMN_COUNTDOWN);
             p.display_scorebox = mask.contains(GameplayExtrasMask::DISPLAY_SCOREBOX);
             let mut more = GameplayExtrasMoreMask::empty();
             if p.column_cues {
@@ -665,10 +689,11 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             );
             gp::update_column_cues_for_side(s, p.column_cues);
             gp::update_measure_cues_for_side(s, p.measure_cues);
+            gp::update_column_countdown_for_side(s, p.column_countdown);
             gp::update_live_timing_stats_enabled_for_side(s, p.live_timing_stats);
             gp::update_display_scorebox_for_side(s, p.display_scorebox);
         },
-        bit_mapping: BitMapping::Sequential { width: 6 },
+        bit_mapping: BitMapping::Sequential { width: 7 },
         sync_visibility: true,
     },
 };
@@ -1314,6 +1339,62 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
     },
 };
 
+const CROSSOVER_CUE_DURATION: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let Ok(raw) = choice.trim_end_matches("ms").parse::<u16>() else {
+            return Outcome::persisted();
+        };
+        let ms = deadsync_profile::clamp_crossover_cue_duration_ms(raw);
+        state.player_profiles[player_idx].crossover_cue_duration_ms = ms;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_crossover_cue_duration_ms_for_side(side, ms);
+        }
+        Outcome::persisted()
+    },
+};
+
+const CROSSOVER_CUE_QUANTIZATION: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
+            return Outcome::NONE;
+        };
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+        let Ok(raw) = choice.parse::<u8>() else {
+            return Outcome::persisted();
+        };
+        let q = deadsync_profile::clamp_crossover_cue_quantization(raw);
+        state.player_profiles[player_idx].crossover_cue_quantization = q;
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_crossover_cue_quantization_for_side(side, q);
+        }
+        Outcome::persisted()
+    },
+};
+
 #[inline(always)]
 fn step_stats_extra_label_key(setting: StepStatsExtra) -> &'static str {
     match setting {
@@ -1345,6 +1426,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         tr("PlayerOptions", "GameplayExtrasColumnCues").to_string(),
         tr("PlayerOptions", "GameplayExtrasMeasureCues").to_string(),
         tr("PlayerOptions", "GameplayExtrasLiveTimingStats").to_string(),
+        tr("PlayerOptions", "GameplayExtrasColumnCountdown").to_string(),
     ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
         gameplay_extras_choices
@@ -1632,6 +1714,40 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "LiveTimingStatsHelp"),
         LIVE_TIMING_STATS,
         live_timing_stats_choices,
+    ));
+    b.push(Row::cycle(
+        RowId::CrossoverCues,
+        lookup_key("PlayerOptions", "CrossoverCues"),
+        lookup_key("PlayerOptionsHelp", "CrossoverCuesHelp"),
+        CycleBinding::Bool(CROSSOVER_CUES),
+        vec![
+            tr("PlayerOptions", "CrossoverCuesOff").to_string(),
+            tr("PlayerOptions", "CrossoverCuesOn").to_string(),
+        ],
+    ));
+    b.push(Row::custom(
+        RowId::CrossoverCueDuration,
+        lookup_key("PlayerOptions", "CrossoverCueDuration"),
+        lookup_key("PlayerOptionsHelp", "CrossoverCueDurationHelp"),
+        CROSSOVER_CUE_DURATION,
+        crossover_cue_duration_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::CrossoverCueQuantization,
+        lookup_key("PlayerOptions", "CrossoverCueQuantization"),
+        lookup_key("PlayerOptionsHelp", "CrossoverCueQuantizationHelp"),
+        CROSSOVER_CUE_QUANTIZATION,
+        crossover_cue_quantization_choices(),
+    ));
+    b.push(Row::cycle(
+        RowId::CrossoverCueBrackets,
+        lookup_key("PlayerOptions", "CrossoverCueBrackets"),
+        lookup_key("PlayerOptionsHelp", "CrossoverCueBracketsHelp"),
+        CycleBinding::Bool(CROSSOVER_CUE_BRACKETS),
+        vec![
+            tr("PlayerOptions", "CrossoverCueBracketsOff").to_string(),
+            tr("PlayerOptions", "CrossoverCueBracketsOn").to_string(),
+        ],
     ));
     b.push(Row::cycle(
         RowId::ComboColors,

@@ -107,6 +107,7 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
+use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use log::{debug, info, trace, warn};
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -503,6 +504,300 @@ fn apply_uncommon_chart_transforms(
 
     *notes = transformed;
     *note_ranges = transformed_ranges;
+}
+
+/// Lead-in/out fade applied to every crossover cue.
+const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
+
+/// Lowest matching lane wins so results are deterministic; `pos % 4` keeps it
+/// working for the second pad of doubles, not just the left pad.
+fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
+    let mut m = column_mask;
+    while m != 0 {
+        let c = m.trailing_zeros() as usize;
+        m &= m - 1;
+        let pos = c % 4;
+        let is_outer = pos == 0 || pos == 3;
+        if is_outer == want_outer {
+            return Some(c);
+        }
+    }
+    None
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct CrossoverRow {
+    beat: f32,
+    /// Occupancy bitmask of the foot-bearing columns this row (0-indexed).
+    column_mask: u8,
+    /// Whether the parity solver flagged this row as a crossover.
+    crossover: bool,
+    /// Kept raw (rather than pre-filtered) so the cue builder can honour the
+    /// per-player "include brackets" toggle.
+    bracket: bool,
+}
+
+impl CrossoverRow {
+    /// A bracket crossover only counts when the player opts brackets in.
+    #[inline]
+    fn is_active_crossover(&self, include_brackets: bool) -> bool {
+        self.crossover && (include_brackets || !self.bracket)
+    }
+}
+
+impl From<&rssp::RowAnnotation> for CrossoverRow {
+    #[inline]
+    fn from(anno: &rssp::RowAnnotation) -> Self {
+        Self {
+            beat: anno.beat,
+            column_mask: anno.column_mask,
+            crossover: anno.row_tech.crossovers > 0,
+            bracket: anno.foot_count() > 1,
+        }
+    }
+}
+
+/// Re-encodes notes into `rssp`'s parity row format. Keyed by note row so hold
+/// tails (`3`) merge with coincident taps and foot occupancy stays correct.
+fn build_crossover_rows<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+) -> (Vec<[u8; LANES]>, Vec<f32>) {
+    use std::collections::BTreeMap;
+    let (start, end) = note_range;
+    let mut rows: BTreeMap<usize, ([u8; LANES], f32)> = BTreeMap::new();
+    for note in &notes[start..end] {
+        if note.column < col_start || note.column - col_start >= LANES {
+            continue;
+        }
+        if note.is_fake {
+            continue;
+        }
+        let lane = note.column - col_start;
+        let ch = match note.note_type {
+            NoteType::Tap | NoteType::Lift => b'1',
+            NoteType::Hold => b'2',
+            NoteType::Roll => b'4',
+            NoteType::Mine | NoteType::Fake => continue,
+        };
+        let entry = rows
+            .entry(note.row_index)
+            .or_insert(([b'0'; LANES], note.beat));
+        entry.0[lane] = ch;
+        if let Some(hold) = note.hold.as_ref() {
+            let tail = rows
+                .entry(hold.end_row_index)
+                .or_insert(([b'0'; LANES], hold.end_beat));
+            if tail.0[lane] == b'0' {
+                tail.0[lane] = b'3';
+            }
+        }
+    }
+    let mut row_arrays = Vec::with_capacity(rows.len());
+    let mut row_to_beat = Vec::with_capacity(rows.len());
+    for (_row_index, (arr, beat)) in rows {
+        row_arrays.push(arr);
+        row_to_beat.push(beat);
+    }
+    (row_arrays, row_to_beat)
+}
+
+/// Uses the player's base `TimingData` (not rate-scaled) so cue times share the
+/// mine-cue frame; rate scaling is reapplied at render time.
+#[allow(clippy::too_many_arguments)]
+fn build_crossover_cues_from_annotations(
+    annos: &[CrossoverRow],
+    timing_player: &TimingData,
+    col_start: usize,
+    duration_ms: u16,
+    quantization: u8,
+    include_brackets: bool,
+    first_visible_time: f32,
+) -> Vec<ColumnCue> {
+    let arrow_time =
+        |beat: f32| -> f32 { song_time_ns_to_seconds(timing_player.get_time_for_beat_ns(beat)) };
+    build_crossover_cues_core(
+        annos,
+        arrow_time,
+        col_start,
+        duration_ms,
+        quantization,
+        include_brackets,
+        first_visible_time,
+    )
+}
+
+/// Split from the public entry so the beat→seconds mapping can be faked in
+/// unit tests without a full `TimingData`.
+#[allow(clippy::too_many_arguments)]
+fn build_crossover_cues_core(
+    annos: &[CrossoverRow],
+    arrow_time: impl Fn(f32) -> f32,
+    col_start: usize,
+    duration_ms: u16,
+    quantization: u8,
+    include_brackets: bool,
+    first_visible_time: f32,
+) -> Vec<ColumnCue> {
+    if annos.len() < 2 {
+        return Vec::new();
+    }
+    let duration = f32::from(duration_ms) / 1000.0;
+    let fade = CROSSOVER_CUE_FADE_SECONDS;
+    let quant = if quantization == 0 {
+        1.0
+    } else {
+        f32::from(quantization)
+    };
+    let spacing_threshold = 4.0 / quant + 0.001;
+
+    let mut cues: Vec<ColumnCue> = Vec::new();
+    for i in 1..annos.len() {
+        let current = &annos[i];
+        let prev = &annos[i - 1];
+        // Consecutive crossovers: `current` is a scooby already emitted while
+        // processing `prev`, so skip it here.
+        if !current.is_active_crossover(include_brackets)
+            || prev.is_active_crossover(include_brackets)
+        {
+            continue;
+        }
+        let next = annos.get(i + 1);
+        let next_next = annos.get(i + 2);
+        let is_scooby = next.is_some_and(|a| a.is_active_crossover(include_brackets));
+        let first_condition = current.beat - prev.beat <= spacing_threshold;
+        let second_condition = next.is_some_and(|n| n.beat - current.beat <= spacing_threshold);
+        let third_condition = match (next, next_next) {
+            (Some(n), Some(nn)) => nn.beat - n.beat <= spacing_threshold,
+            _ => false,
+        };
+        if !(first_condition || second_condition || third_condition) {
+            continue;
+        }
+        let (Some(prev_col), Some(curr_col)) = (
+            crossover_arrow_col(prev.column_mask, false),
+            crossover_arrow_col(current.column_mask, true),
+        ) else {
+            continue;
+        };
+        let prev_arrow_time = arrow_time(prev.beat);
+        let cur_arrow_time = arrow_time(current.beat);
+        let mut columns = vec![
+            ColumnCueColumn {
+                column: col_start + curr_col,
+                is_mine: false,
+            },
+            ColumnCueColumn {
+                column: col_start + prev_col,
+                is_mine: false,
+            },
+        ];
+        let mut start_time = prev_arrow_time - duration;
+        let mut cue_duration = duration + fade;
+        // Large gap before the crossover: keep the cue lit until the crossover
+        // actually happens, not just until the arrow before it.
+        if !first_condition {
+            cue_duration += cur_arrow_time - prev_arrow_time;
+        }
+        if is_scooby
+            && let Some(next_anno) = next
+            && let Some(next_col) = crossover_arrow_col(next_anno.column_mask, true)
+        {
+            columns.push(ColumnCueColumn {
+                column: col_start + next_col,
+                is_mine: true,
+            });
+        }
+        // Keep consecutive cues from overlapping.
+        if let Some(last) = cues.last() {
+            let prev_end = last.start_time + last.duration;
+            if start_time < prev_end {
+                let duration_difference = prev_end - start_time;
+                start_time = prev_end - fade;
+                cue_duration = cue_duration - duration_difference + fade;
+            }
+        }
+        cues.push(ColumnCue {
+            start_time,
+            duration: cue_duration,
+            columns,
+        });
+    }
+
+    // Without this guard, a first crossover deep in the song gets pulled
+    // earlier and over-inflated — a spurious, over-long first cue. Only cues
+    // already due before t=0 should absorb the pre-roll, hence the
+    // `start_time <= 0` gate.
+    if first_visible_time < 0.0
+        && let Some(first) = cues.first_mut()
+        && first.start_time <= 0.0
+    {
+        first.duration -= first_visible_time;
+        first.start_time += first_visible_time;
+    }
+    cues
+}
+
+/// Bails on non-4/8-panel layouts because `rssp` parity only models those.
+#[allow(clippy::too_many_arguments)]
+fn build_crossover_cues_for_player(
+    notes: &[Note],
+    note_range: (usize, usize),
+    timing_segments: &deadsync_rules::timing::TimingSegments,
+    timing_player: &TimingData,
+    cols_per_player: usize,
+    col_start: usize,
+    duration_ms: u16,
+    quantization: u8,
+    include_brackets: bool,
+    first_visible_time: f32,
+) -> Vec<ColumnCue> {
+    let (start, end) = note_range;
+    if start >= end {
+        return Vec::new();
+    }
+    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
+    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    let annos: Vec<CrossoverRow> = match cols_per_player {
+        4 => {
+            let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
+            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
+                return Vec::new();
+            };
+            rssp::step_parity::annotate_timing_rows::<4>(
+                &rows,
+                &row_to_beat,
+                &rssp_timing,
+                &mut scratch,
+            )
+        }
+        8 => {
+            let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
+            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
+                return Vec::new();
+            };
+            rssp::step_parity::annotate_timing_rows::<8>(
+                &rows,
+                &row_to_beat,
+                &rssp_timing,
+                &mut scratch,
+            )
+        }
+        _ => return Vec::new(),
+    }
+    .iter()
+    .map(CrossoverRow::from)
+    .collect();
+    build_crossover_cues_from_annotations(
+        &annos,
+        timing_player,
+        col_start,
+        duration_ms,
+        quantization,
+        include_brackets,
+        first_visible_time,
+    )
 }
 
 #[inline(always)]
@@ -960,6 +1255,7 @@ pub struct State {
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     pub column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    pub crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     pub mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     pub mini_indicator_total_stream_measures: [f32; MAX_PLAYERS],
     pub mini_indicator_target_score_percent: [f64; MAX_PLAYERS],
@@ -2997,6 +3293,30 @@ pub fn init(
         second[0].clone_from(&first[0]);
     }
 
+    let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    for player in 0..num_players {
+        if !player_profiles[player].crossover_cues {
+            continue;
+        }
+        let col_start = player.saturating_mul(cols_per_player);
+        crossover_cues[player] = build_crossover_cues_for_player(
+            &notes,
+            note_ranges[player],
+            &gameplay_charts[player].timing_segments,
+            &timing_players[player],
+            cols_per_player,
+            col_start,
+            player_profiles[player].crossover_cue_duration_ms,
+            player_profiles[player].crossover_cue_quantization,
+            player_profiles[player].crossover_cue_brackets,
+            current_music_time_visible[player],
+        );
+    }
+    if num_players == 1 {
+        let (first, second) = crossover_cues.split_at_mut(1);
+        second[0].clone_from(&first[0]);
+    }
+
     let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
         if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
@@ -3241,6 +3561,7 @@ pub fn init(
         row_entries,
         measure_counter_segments,
         column_cues,
+        crossover_cues,
         mini_indicator_stream_segments,
         mini_indicator_total_stream_measures,
         mini_indicator_target_score_percent,
@@ -11792,5 +12113,221 @@ return Def.ActorFrame{}
         assert!(super::set_music_rate(&mut state, 1.5));
         assert!(super::set_music_rate(&mut state, -2.0));
         assert!((state.music_rate - 1.0).abs() < 1e-6);
+    }
+
+    fn xover_anno(
+        beat: f32,
+        note_count: u8,
+        column_mask: u8,
+        is_crossover: bool,
+    ) -> super::CrossoverRow {
+        debug_assert_eq!(
+            u32::from(note_count),
+            column_mask.count_ones(),
+            "xover_anno note_count must equal the number of set columns",
+        );
+        super::CrossoverRow {
+            beat,
+            column_mask,
+            crossover: is_crossover,
+            bracket: note_count > 1,
+        }
+    }
+
+    // 120 BPM: beat b occurs at b * 0.5 seconds.
+    fn xover_time(beat: f32) -> f32 {
+        beat * 0.5
+    }
+
+    #[test]
+    fn crossover_arrow_col_picks_outer_and_inner_panels() {
+        // Single-pad panels: col0/col3 outer, col1/col2 inner.
+        assert_eq!(super::crossover_arrow_col(0b0001, true), Some(0));
+        assert_eq!(super::crossover_arrow_col(0b0001, false), None);
+        assert_eq!(super::crossover_arrow_col(0b1000, true), Some(3));
+        assert_eq!(super::crossover_arrow_col(0b0010, false), Some(1));
+        assert_eq!(super::crossover_arrow_col(0b0010, true), None);
+        assert_eq!(super::crossover_arrow_col(0b0100, false), Some(2));
+        // Lowest matching lane wins when several are set.
+        assert_eq!(super::crossover_arrow_col(0b1001, true), Some(0));
+        assert_eq!(super::crossover_arrow_col(0b0110, false), Some(1));
+        // Second pad of doubles repeats the pattern (col4 outer, col5 inner).
+        assert_eq!(super::crossover_arrow_col(1 << 4, true), Some(4));
+        assert_eq!(super::crossover_arrow_col(1 << 5, false), Some(5));
+    }
+
+    #[test]
+    fn crossover_cue_single_event() {
+        // prev = inner pivot tap, current = outer crossover, closely spaced.
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 1);
+        let cue = &cues[0];
+        assert!((cue.start_time - (-0.5)).abs() < 1e-4, "start {}", cue.start_time);
+        assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
+        assert_eq!(cue.columns.len(), 2);
+        assert_eq!(cue.columns[0].column, 0);
+        assert!(!cue.columns[0].is_mine);
+        assert_eq!(cue.columns[1].column, 1);
+        assert!(!cue.columns[1].is_mine);
+    }
+
+    #[test]
+    fn crossover_cue_scooby_appends_red_column() {
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+            xover_anno(1.0, 1, 0b1000, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        // Only one cue: the second crossover is consumed as the scooby.
+        assert_eq!(cues.len(), 1);
+        let cue = &cues[0];
+        assert_eq!(cue.columns.len(), 3);
+        assert_eq!(cue.columns[2].column, 3);
+        assert!(cue.columns[2].is_mine, "scooby column flagged red");
+    }
+
+    #[test]
+    fn crossover_cue_quantization_threshold_skips_isolated() {
+        // Lone crossover far from any neighbour and no following note: none of
+        // the spacing conditions hold, so no cue is produced.
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(5.0, 1, 0b0001, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert!(cues.is_empty());
+    }
+
+    #[test]
+    fn crossover_cue_extends_across_large_gap() {
+        // Large gap before the crossover (first condition false) but a close
+        // following note (second condition true): the cue stretches to cover
+        // the gap.
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(2.0, 1, 0b0001, true),
+            xover_anno(2.4, 1, 0b0010, false),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 1);
+        let cue = &cues[0];
+        // base 0.575 + (cur_arrow 1.0 - prev_arrow 0.0) = 1.575
+        assert!((cue.duration - 1.575).abs() < 1e-4, "dur {}", cue.duration);
+        assert!((cue.start_time - (-0.5)).abs() < 1e-4, "start {}", cue.start_time);
+    }
+
+    #[test]
+    fn crossover_cue_clamps_overlapping_consecutive() {
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+            xover_anno(0.6, 1, 0b0100, false),
+            xover_anno(0.7, 1, 0b1000, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 2);
+        // First cue ends at -0.5 + 0.575 = 0.075; the second would start at
+        // -0.2, so it is clamped to start at prev_end - fade = 0.0 with its
+        // duration shortened accordingly.
+        assert!((cues[1].start_time - 0.0).abs() < 1e-4, "start {}", cues[1].start_time);
+        assert!((cues[1].duration - 0.375).abs() < 1e-4, "dur {}", cues[1].duration);
+    }
+
+    #[test]
+    fn crossover_cue_negative_first_visible_adjust() {
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, -0.3);
+        assert_eq!(cues.len(), 1);
+        let cue = &cues[0];
+        // First cue genuinely starts before t=0 (start_time -0.5), so the
+        // pre-roll compensation applies: start += fvt, duration -= fvt (fvt
+        // negative => earlier start, longer duration).
+        assert!((cue.start_time - (-0.8)).abs() < 1e-4, "start {}", cue.start_time);
+        assert!((cue.duration - 0.875).abs() < 1e-4, "dur {}", cue.duration);
+    }
+
+    #[test]
+    fn crossover_cue_positive_first_start_not_adjusted() {
+        // First crossover occurs well into the song: prev arrow at beat 2.0
+        // (t=1.0s) minus the 500ms lead gives a positive start_time of 0.5s.
+        // Even with a negative first-visible (pre-roll) time, the cue must NOT
+        // be shifted earlier or have its duration inflated — only cues already
+        // due before t=0 get the pre-roll compensation. Regression for a
+        // spurious, over-long first crossover cue.
+        let annos = [
+            xover_anno(2.0, 1, 0b0010, false),
+            xover_anno(2.5, 1, 0b0001, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, -0.3);
+        assert_eq!(cues.len(), 1);
+        let cue = &cues[0];
+        assert!((cue.start_time - 0.5).abs() < 1e-4, "start {}", cue.start_time);
+        assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
+    }
+
+    #[test]
+    fn crossover_cue_respects_col_start_offset() {
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 4, 500, 8, false, 0.0);
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].columns[0].column, 4);
+        assert_eq!(cues[0].columns[1].column, 5);
+    }
+
+    #[test]
+    fn crossover_bracket_suppressed_when_excluded() {
+        // A two-foot (bracket) crossover. With brackets excluded — the
+        // default — it is not an active crossover, so no cue.
+        let annos = [
+            xover_anno(0.0, 1, 0b0100, false),
+            xover_anno(0.5, 2, 0b0011, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert!(cues.is_empty(), "bracket crossover suppressed when excluded");
+    }
+
+    #[test]
+    fn crossover_bracket_emitted_when_included() {
+        // Same bracket crossover, but with brackets included it schedules a cue.
+        let annos = [
+            xover_anno(0.0, 1, 0b0100, false),
+            xover_anno(0.5, 2, 0b0011, true),
+        ];
+        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, true, 0.0);
+        assert_eq!(cues.len(), 1, "bracket crossover emitted when included");
+    }
+
+    #[test]
+    fn crossover_bracket_scooby_respects_toggle() {
+        // A single-foot crossover followed by a bracket crossover. The bracket
+        // only chains as a scooby when brackets are included.
+        let annos = [
+            xover_anno(0.0, 1, 0b0010, false),
+            xover_anno(0.5, 1, 0b0001, true),
+            xover_anno(1.0, 2, 0b1100, true),
+        ];
+
+        // Excluded: the bracket is not an active crossover, so it is neither a
+        // scooby nor its own cue — one plain cue with no appended red column.
+        let excluded = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
+        assert_eq!(excluded.len(), 1);
+        assert_eq!(excluded[0].columns.len(), 2, "no scooby when bracket excluded");
+
+        // Included: the bracket chains as a scooby and is appended in red.
+        let included = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, true, 0.0);
+        assert_eq!(included.len(), 1);
+        assert_eq!(included[0].columns.len(), 3, "scooby appended when bracket included");
+        assert!(included[0].columns[2].is_mine, "scooby column flagged red");
     }
 }
