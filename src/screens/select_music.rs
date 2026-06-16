@@ -10637,6 +10637,18 @@ fn push_folder_stats_overlay(
     });
 }
 
+#[inline(always)]
+fn solo_scorebox_side(
+    play_style: profile_data::PlayStyle,
+    session_side: profile_data::PlayerSide,
+) -> profile_data::PlayerSide {
+    if profile_data::runtime_player_is_p2(play_style, session_side) {
+        profile_data::PlayerSide::P2
+    } else {
+        profile_data::PlayerSide::P1
+    }
+}
+
 pub fn push_actors(
     mut actors: &mut Vec<Actor>,
     state: &State,
@@ -11810,6 +11822,7 @@ pub fn push_actors(
         let p1_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
+        let solo_side = solo_scorebox_side(play_style, side);
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox = |side: profile_data::PlayerSide,
@@ -11870,7 +11883,7 @@ pub fn push_actors(
                     pane_scorebox_zoom,
                     60,
                 );
-            } else if is_p2_single {
+            } else if solo_side == profile_data::PlayerSide::P2 {
                 push_scorebox(
                     profile_data::PlayerSide::P2,
                     pane_box_center_x(screen_width() * 0.75 + 5.0),
@@ -11920,7 +11933,7 @@ pub fn push_actors(
                     0,
                 );
             }
-        } else if is_p2_single {
+        } else if solo_side == profile_data::PlayerSide::P2 {
             push_scorebox(
                 profile_data::PlayerSide::P2,
                 scorebox_center_p1,
@@ -12386,8 +12399,8 @@ mod tests {
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
         init_placeholder, keymap_has_player_input, reset_preview_after_gameplay,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, steps_index_for_side,
-        sync_low_confidence_warning,
+        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_scorebox_side,
+        steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::screens::ScreenAction;
@@ -12427,6 +12440,38 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    #[test]
+    fn solo_scorebox_side_tracks_double_p2_runtime_side() {
+        assert_eq!(
+            solo_scorebox_side(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1
+            ),
+            profile_data::PlayerSide::P1
+        );
+        assert_eq!(
+            solo_scorebox_side(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2
+            ),
+            profile_data::PlayerSide::P2
+        );
+        assert_eq!(
+            solo_scorebox_side(
+                profile_data::PlayStyle::Double,
+                profile_data::PlayerSide::P1
+            ),
+            profile_data::PlayerSide::P1
+        );
+        assert_eq!(
+            solo_scorebox_side(
+                profile_data::PlayStyle::Double,
+                profile_data::PlayerSide::P2
+            ),
+            profile_data::PlayerSide::P2
+        );
     }
 
     fn input_event(action: VirtualAction, source: InputSource, pressed: bool) -> InputEvent {
