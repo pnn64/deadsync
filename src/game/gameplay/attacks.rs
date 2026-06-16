@@ -19,18 +19,19 @@ use std::time::Instant;
 
 use super::{
     AccelEffects, AccelOverrides, AppearanceEffects, AppearanceOverrides, ChartAttackEffects,
-    GameplaySession, GameplayViewport, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
-    HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG,
-    INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
-    INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS,
-    PerspectiveEffects, PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS,
-    RANDOM_ATTACK_MOD_POOL, RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
-    RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
-    REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
-    REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
-    ScrollOverrides, State, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
-    VisualOverrides, apply_hyper_shuffle, apply_super_shuffle_taps, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, sort_player_notes,
+    GameplaySession, GameplayTurnOption, GameplayViewport, HOLDS_MASK_BIT_FLOORED,
+    HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
+    HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
+    INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
+    INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, PerspectiveEffects, PerspectiveOverrides,
+    RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL, RANDOM_ATTACK_OVERLAP_SECONDS,
+    RANDOM_ATTACK_RUN_TIME_SECONDS, RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE,
+    REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
+    REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
+    REMOVE_MASK_BIT_NO_QUADS, ScrollEffects, ScrollOverrides, State, TurnRng, VisibilityEffects,
+    VisibilityOverrides, VisualEffects, VisualOverrides, apply_hyper_shuffle,
+    apply_super_shuffle_taps, apply_turn_permutation, apply_uncommon_masks_with_masks,
+    gameplay_turn_option_from_profile, sort_player_notes,
 };
 
 #[derive(Clone, Debug)]
@@ -3734,19 +3735,20 @@ fn apply_attack_turn_mod(
     seed: u64,
     player: usize,
 ) {
-    if notes.is_empty() || turn_option == profile_data::TurnOption::None {
+    let turn_option = gameplay_turn_option_from_profile(turn_option);
+    if notes.is_empty() || turn_option == GameplayTurnOption::None {
         return;
     }
     let note_range = (0usize, notes.len());
     match turn_option {
-        profile_data::TurnOption::None => {}
-        profile_data::TurnOption::Blender => {
+        GameplayTurnOption::None => {}
+        GameplayTurnOption::Blender => {
             apply_turn_permutation(
                 notes,
                 note_range,
                 col_offset,
                 cols,
-                profile_data::TurnOption::Shuffle,
+                GameplayTurnOption::Shuffle,
                 seed,
             );
             apply_super_shuffle_taps(
@@ -3757,7 +3759,7 @@ fn apply_attack_turn_mod(
                 seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
             );
         }
-        profile_data::TurnOption::Random => {
+        GameplayTurnOption::Random => {
             apply_hyper_shuffle(
                 notes,
                 note_range,

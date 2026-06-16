@@ -2,20 +2,13 @@ use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing;
 
 use super::{
-    FinalizedRowOutcome, RowEntry, SongTimeNs, State, active_hold_is_engaged,
+    FinalizedRowOutcome, State, active_hold_is_engaged, advance_judged_row_cursor,
     apply_autosync_for_row_hits, apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
     capture_failed_ex_score_inputs, current_music_time_s, error_bar_register_tap, is_player_dead,
-    judge_life_delta, max_step_distance_ns, player_col_range, record_current_combo_window_count,
-    record_display_window_counts, set_last_judgment, update_itg_grade_totals,
+    judge_life_delta, max_step_distance_ns, next_ready_row_in_lookahead, player_col_range,
+    player_row_scan_state, record_current_combo_window_count, record_display_window_counts,
+    set_last_judgment, suppress_final_bad_rescore_visual, update_itg_grade_totals,
 };
-
-#[inline(always)]
-pub(super) const fn suppress_final_bad_rescore_visual(
-    row_had_provisional_early_hit: bool,
-    final_grade: JudgeGrade,
-) -> bool {
-    row_had_provisional_early_hit && matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff)
-}
 
 pub(super) fn finalize_row_judgment(
     state: &mut State,
@@ -107,86 +100,6 @@ pub(super) fn finalize_row_judgment(
     if !skip_life_change {
         capture_failed_ex_score_inputs(state, player);
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PlayerRowScanState {
-    BeyondLookahead,
-    Pending,
-    Ready {
-        row_index: usize,
-        skip_life_change: bool,
-    },
-    Finalized,
-}
-
-#[inline(always)]
-pub(super) fn player_row_scan_state(
-    row_entries: &[RowEntry],
-    row_entry_index: usize,
-    lookahead_time_ns: SongTimeNs,
-) -> PlayerRowScanState {
-    let row_entry = &row_entries[row_entry_index];
-    if row_entry.final_outcome.is_some() {
-        return PlayerRowScanState::Finalized;
-    }
-    if row_entry.time_ns > lookahead_time_ns {
-        return PlayerRowScanState::BeyondLookahead;
-    }
-    if row_entry.unresolved_count != 0 {
-        return PlayerRowScanState::Pending;
-    }
-    PlayerRowScanState::Ready {
-        row_index: row_entry.row_index,
-        skip_life_change: row_entry.had_provisional_early_hit,
-    }
-}
-
-#[inline(always)]
-pub(super) fn next_ready_row_in_lookahead<F>(
-    start: usize,
-    row_count: usize,
-    mut row_state: F,
-) -> Option<(usize, usize, bool)>
-where
-    F: FnMut(usize) -> PlayerRowScanState,
-{
-    let mut row_entry_index = start;
-    while row_entry_index < row_count {
-        match row_state(row_entry_index) {
-            PlayerRowScanState::BeyondLookahead => break,
-            PlayerRowScanState::Ready {
-                row_index,
-                skip_life_change,
-            } => return Some((row_entry_index, row_index, skip_life_change)),
-            PlayerRowScanState::Pending | PlayerRowScanState::Finalized => {}
-        }
-        row_entry_index += 1;
-    }
-    None
-}
-
-#[inline(always)]
-pub(super) fn advance_judged_row_cursor<F>(
-    cursor: usize,
-    row_count: usize,
-    mut row_state: F,
-) -> usize
-where
-    F: FnMut(usize) -> PlayerRowScanState,
-{
-    let mut next_cursor = cursor;
-    while next_cursor < row_count {
-        match row_state(next_cursor) {
-            PlayerRowScanState::Finalized => {
-                next_cursor += 1;
-            }
-            PlayerRowScanState::BeyondLookahead
-            | PlayerRowScanState::Pending
-            | PlayerRowScanState::Ready { .. } => break,
-        }
-    }
-    next_cursor
 }
 
 pub(super) fn update_judged_rows(state: &mut State) {
