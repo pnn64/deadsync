@@ -148,6 +148,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "Language", default.language_flag.as_str());
     push_line(content, "LogLevel", default.log_level.as_str());
     push_bool(content, "LogToFile", default.log_to_file);
+    push_bool(content, "ShowConsole", default.show_console);
     push_line(
         content,
         "LinuxAudioBackend",

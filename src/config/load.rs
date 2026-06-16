@@ -20,6 +20,17 @@ pub fn bootstrap_log_to_file() -> bool {
         .unwrap_or(default)
 }
 
+pub fn bootstrap_show_console() -> bool {
+    let mut conf = SimpleIni::new();
+    let default = Config::default().show_console;
+    if conf.load(dirs::app_dirs().config_path()).is_err() {
+        return default;
+    }
+    conf.get("Options", "ShowConsole")
+        .and_then(|v| parse_bool_str(&v))
+        .unwrap_or(default)
+}
+
 pub fn load() {
     ensure_config_file();
 

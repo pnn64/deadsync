@@ -235,6 +235,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "LogToFile")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.log_to_file);
+    cfg.show_console = conf
+        .get("Options", "ShowConsole")
+        .and_then(|v| parse_bool_str(&v))
+        .unwrap_or(default.show_console);
 }
 
 fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {

@@ -24,7 +24,7 @@ pub(crate) use self::keybinds::{
     editable_key_binding_slot_indices, keycode_to_token, parse_keycode_to_key,
     protected_default_key_for_action,
 };
-pub use self::load::{bootstrap_log_to_file, load};
+pub use self::load::{bootstrap_log_to_file, bootstrap_show_console, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::pad_order::pad_index_for_uuid;
 pub use self::runtime::{
@@ -97,6 +97,10 @@ pub struct Config {
     pub language_flag: LanguageFlag,
     pub log_level: LogLevel,
     pub log_to_file: bool,
+    /// Windows: open a console window for live log output. Off by default so the
+    /// game launches cleanly with no stray terminal. Ignored on other platforms,
+    /// which always inherit their controlling terminal. Applied at startup.
+    pub show_console: bool,
     /// Write the active screen name to save/current_screen.txt on each transition.
     pub write_current_screen: bool,
     /// Hold-Tab fast-forward (4×) for non-gameplay screens. Issue #174 / ITGmania parity.
@@ -372,6 +376,7 @@ impl Default for Config {
             language_flag: LanguageFlag::Auto,
             log_level: LogLevel::Warn,
             log_to_file: true,
+            show_console: false,
             write_current_screen: false,
             tab_acceleration: true,
             show_stats_mode: 0,
