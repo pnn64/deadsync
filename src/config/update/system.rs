@@ -180,6 +180,28 @@ pub fn update_show_stats_mode(mode: u8) {
     save_without_keymaps();
 }
 
+pub fn update_frame_stats_overlay_anchor(key: &'static str) {
+    {
+        let mut cfg = lock_config();
+        if cfg.frame_stats_overlay_anchor == key {
+            return;
+        }
+        cfg.frame_stats_overlay_anchor = key;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_frame_stats_overlay_style(key: &'static str) {
+    {
+        let mut cfg = lock_config();
+        if cfg.frame_stats_overlay_style == key {
+            return;
+        }
+        cfg.frame_stats_overlay_style = key;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_log_level(level: LogLevel) {
     log::set_max_level(level.as_level_filter());
     {

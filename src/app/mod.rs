@@ -122,6 +122,7 @@ const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
+const FRAME_STATS_SAMPLE_COUNT: usize = 128;
 const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
 const LIGHTS_QUARTER_ROWS: usize = ROWS_PER_BEAT as usize;
@@ -1013,6 +1014,23 @@ fn seconds_to_us_u32(seconds: f32) -> u32 {
     }
 }
 
+/// Slow-decay "worst recent frame" hold for the overlay's max readout and graph scale.
+/// New highs latch instantly and hold for `SPIKE_HOLD_FRAMES`; afterwards the value eases
+/// down geometrically toward the current frame so it tracks recovery without snapping.
+#[inline(always)]
+fn update_frame_stats_spike_hold(spike_us: &mut u32, ttl: &mut u16, frame_us: u32) {
+    const SPIKE_HOLD_FRAMES: u16 = 90;
+    if frame_us >= *spike_us {
+        *spike_us = frame_us;
+        *ttl = SPIKE_HOLD_FRAMES;
+    } else if *ttl > 0 {
+        *ttl -= 1;
+    } else {
+        let decayed = (u64::from(*spike_us) * 31 / 32) as u32;
+        *spike_us = decayed.max(frame_us);
+    }
+}
+
 #[inline(always)]
 fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
     if expected_seconds <= 0.0 {
@@ -1248,6 +1266,55 @@ impl StutterDiagRecorder {
             if now_host_nanos.saturating_sub(sample.host_nanos) <= window_ns {
                 out.push(sample);
             }
+        }
+    }
+}
+
+type FrameStatsSample = crate::screens::components::shared::frame_stats_overlay::FrameStatsSample;
+
+/// Fixed-size ring of per-phase frame timings feeding the live frame-stats overlay.
+/// `Copy` array, no heap; only written while the overlay is enabled.
+#[derive(Clone, Copy)]
+struct FrameStatsRing {
+    samples: [FrameStatsSample; FRAME_STATS_SAMPLE_COUNT],
+    cursor: usize,
+    len: usize,
+}
+
+impl FrameStatsRing {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            samples: [FrameStatsSample::empty(); FRAME_STATS_SAMPLE_COUNT],
+            cursor: 0,
+            len: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn clear(&mut self) {
+        self.samples = [FrameStatsSample::empty(); FRAME_STATS_SAMPLE_COUNT];
+        self.cursor = 0;
+        self.len = 0;
+    }
+
+    #[inline(always)]
+    fn push(&mut self, sample: FrameStatsSample) {
+        self.samples[self.cursor] = sample;
+        self.cursor = (self.cursor + 1) % FRAME_STATS_SAMPLE_COUNT;
+        self.len = self.len.saturating_add(1).min(FRAME_STATS_SAMPLE_COUNT);
+    }
+
+    /// Copy the ring into `out` in chronological (oldest-first) order.
+    fn snapshot(&self, out: &mut Vec<FrameStatsSample>) {
+        out.clear();
+        let start = self
+            .cursor
+            .saturating_add(FRAME_STATS_SAMPLE_COUNT)
+            .saturating_sub(self.len)
+            % FRAME_STATS_SAMPLE_COUNT;
+        for i in 0..self.len {
+            out.push(self.samples[(start + i) % FRAME_STATS_SAMPLE_COUNT]);
         }
     }
 }
@@ -1525,6 +1592,20 @@ pub struct ShellState {
     stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
     stutter_cursor: usize,
     stutter_diag: StutterDiagRecorder,
+    frame_stats: FrameStatsRing,
+    frame_stats_scratch: Vec<FrameStatsSample>,
+    frame_stats_long: crate::screens::components::shared::frame_stats_overlay::FrameStatsLong,
+    frame_stats_spike_us: u32,
+    frame_stats_spike_ttl: u16,
+    /// EWMA-smoothed audio callback gap (ms) so the readout stops bouncing frame-to-frame.
+    /// 0.0 = uninitialized (seeds from the first sample). Reset when the overlay is disabled.
+    frame_stats_audio_gap_ms: f32,
+    frame_stats_overlay_enabled: bool,
+    frame_stats_overlay_anchor: crate::screens::components::shared::frame_stats_overlay::OverlayAnchor,
+    /// True once the user has explicitly positioned the overlay (via the move-corner key or a
+    /// remembered config value). While false the anchor follows the play-context default.
+    frame_stats_overlay_anchor_user_set: bool,
+    frame_stats_overlay_style: crate::screens::components::shared::frame_stats_overlay::OverlayStyle,
     transition: TransitionState,
     display_width: u32,
     display_height: u32,
@@ -1717,6 +1798,30 @@ impl ShellState {
             stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
             stutter_cursor: 0,
             stutter_diag: StutterDiagRecorder::new(),
+            frame_stats: FrameStatsRing::new(),
+            frame_stats_scratch: Vec::new(),
+            frame_stats_long:
+                crate::screens::components::shared::frame_stats_overlay::FrameStatsLong::new(),
+            frame_stats_spike_us: 0,
+            frame_stats_spike_ttl: 0,
+            frame_stats_audio_gap_ms: 0.0,
+            frame_stats_overlay_enabled: false,
+            frame_stats_overlay_anchor:
+                crate::screens::components::shared::frame_stats_overlay::OverlayAnchor::from_key(
+                    cfg.frame_stats_overlay_anchor,
+                )
+                .unwrap_or(
+                    crate::screens::components::shared::frame_stats_overlay::OverlayAnchor::TopLeft,
+                ),
+            frame_stats_overlay_anchor_user_set:
+                crate::screens::components::shared::frame_stats_overlay::OverlayAnchor::from_key(
+                    cfg.frame_stats_overlay_anchor,
+                )
+                .is_some(),
+            frame_stats_overlay_style:
+                crate::screens::components::shared::frame_stats_overlay::OverlayStyle::from_key(
+                    cfg.frame_stats_overlay_style,
+                ),
             transition: TransitionState::Idle,
             display_width: cfg.display_width,
             display_height: cfg.display_height,
@@ -2016,6 +2121,42 @@ impl ShellState {
             self.clear_stutter_samples();
         }
         self.overlay_mode.code()
+    }
+
+    #[inline(always)]
+    fn toggle_frame_stats_overlay(&mut self) -> bool {
+        self.frame_stats_overlay_enabled = !self.frame_stats_overlay_enabled;
+        if !self.frame_stats_overlay_enabled {
+            self.frame_stats.clear();
+            self.frame_stats_long.reset();
+            self.frame_stats_spike_us = 0;
+            self.frame_stats_spike_ttl = 0;
+            self.frame_stats_audio_gap_ms = 0.0;
+        }
+        self.frame_stats_overlay_enabled
+    }
+
+    fn cycle_frame_stats_overlay_anchor(
+        &mut self,
+        compact: bool,
+    ) -> crate::screens::components::shared::frame_stats_overlay::OverlayAnchor {
+        use crate::screens::components::shared::frame_stats_overlay as fso;
+        self.frame_stats_overlay_anchor =
+            fso::next_anchor(self.frame_stats_overlay_anchor, compact);
+        // The user explicitly positioned it: remember this corner across toggles + restarts
+        // instead of snapping back to the play-context default.
+        self.frame_stats_overlay_anchor_user_set = true;
+        config::update_frame_stats_overlay_anchor(self.frame_stats_overlay_anchor.to_key());
+        self.frame_stats_overlay_anchor
+    }
+
+    #[inline(always)]
+    fn toggle_frame_stats_overlay_style(
+        &mut self,
+    ) -> crate::screens::components::shared::frame_stats_overlay::OverlayStyle {
+        self.frame_stats_overlay_style = self.frame_stats_overlay_style.toggle();
+        config::update_frame_stats_overlay_style(self.frame_stats_overlay_style.label());
+        self.frame_stats_overlay_style
     }
 
     #[inline(always)]
@@ -5060,6 +5201,16 @@ impl App {
             .as_secs_f32();
         let frame_host_nanos = deadsync_platform::host_time::now_nanos();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
+        self.record_frame_stats_sample(
+            frame_host_nanos,
+            frame_seconds,
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            draw_stats,
+        );
         self.record_stutter_diag_frame(
             frame_host_nanos,
             self.state.screens.current_screen,
@@ -7128,6 +7279,8 @@ impl App {
             }
         }
 
+        self.push_frame_stats_overlay(&mut actors);
+
         // Bottom-corner build watermark so videos / screenshots always
         // carry the running version. Default on; user-toggleable via
         // Options, with a separate Left/Right side preference.
@@ -7243,6 +7396,198 @@ impl App {
         self.state
             .shell
             .push_stutter_sample(total_elapsed, frame_seconds, expected, severity);
+    }
+
+    #[inline(always)]
+    fn record_frame_stats_sample(
+        &mut self,
+        frame_host_nanos: u64,
+        frame_seconds: f32,
+        input_us: u32,
+        update_us: u32,
+        compose_us: u32,
+        upload_us: u32,
+        draw_us: u32,
+        draw_stats: renderer::DrawStats,
+    ) {
+        if !self.state.shell.frame_stats_overlay_enabled {
+            return;
+        }
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
+            .unwrap_or_default();
+        let display_error_us = (f64::from(display_clock.error_seconds) * 1_000_000.0)
+            .round()
+            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+        let sample = FrameStatsSample {
+            host_nanos: frame_host_nanos.max(1),
+            frame_us: seconds_to_us_u32(frame_seconds),
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            gpu_wait_us: draw_stats.gpu_wait_us,
+            display_error_us,
+            catching_up: display_clock.catching_up,
+        };
+        self.state.shell.frame_stats.push(sample);
+        self.state.shell.frame_stats_long.push(&sample);
+        update_frame_stats_spike_hold(
+            &mut self.state.shell.frame_stats_spike_us,
+            &mut self.state.shell.frame_stats_spike_ttl,
+            sample.frame_us,
+        );
+    }
+
+    fn push_frame_stats_overlay(&mut self, actors: &mut Vec<Actor>) {
+        use crate::screens::components::shared::frame_stats_overlay;
+
+        if !self.state.shell.frame_stats_overlay_enabled {
+            return;
+        }
+        self.state
+            .shell
+            .frame_stats
+            .snapshot(&mut self.state.shell.frame_stats_scratch);
+        let samples = &self.state.shell.frame_stats_scratch;
+
+        // Graph scale still tracks the live ring max; all displayed numbers come from the
+        // long-window streaming stats (decaying-histogram p99 + EWMA mean/jitter) so they
+        // stay steady instead of sawtoothing as outliers enter and leave a short window.
+        let mut max_us: u32 = 0;
+        for s in samples.iter() {
+            if s.host_nanos == 0 {
+                continue;
+            }
+            max_us = max_us.max(s.frame_us);
+        }
+        let long = &self.state.shell.frame_stats_long;
+        let avg_frame_us = long.avg_frame_us();
+        let p99_frame_us = long.p99_frame_us();
+        let frame_jitter_us = long.frame_jitter_us();
+        let display_error_jitter_us = long.error_jitter_us();
+        let display_error_p99_ms = f64::from(long.p99_error_us()) as f32 / 1000.0;
+        let cpu_work_us = long.avg_cpu_us();
+        let gpu_wait_us = long.avg_gpu_us();
+        let spike_hold_us = self.state.shell.frame_stats_spike_us.max(max_us);
+
+        // Target frame time for the graph reference lines: the monitor refresh period if
+        // known, else the configured max-FPS cap, else the smoothed average.
+        let refresh_ns = self.state.shell.last_present_stats.refresh_ns;
+        let target_frame_us = if refresh_ns != 0 {
+            (refresh_ns / 1000) as u32
+        } else if let Some(iv) = self.effective_frame_interval() {
+            iv.as_micros().min(u128::from(u32::MAX)) as u32
+        } else {
+            avg_frame_us
+        };
+
+        // Stutter tally over the rolling ring window: frames past the 2× stutter threshold
+        // (the orange reference line), and distinct display-clock catch-up events (rising
+        // edges so a multi-frame resync counts once). Cheap single pass, gated to overlay-on.
+        let over_budget_threshold = target_frame_us.saturating_mul(2).max(1);
+        let mut over_budget_count: u32 = 0;
+        let mut catch_up_count: u32 = 0;
+        let mut prev_catch = false;
+        for s in samples.iter() {
+            if s.host_nanos == 0 {
+                continue;
+            }
+            if s.frame_us >= over_budget_threshold {
+                over_budget_count = over_budget_count.saturating_add(1);
+            }
+            if s.catching_up && !prev_catch {
+                catch_up_count = catch_up_count.saturating_add(1);
+            }
+            prev_catch = s.catching_up;
+        }
+
+        let in_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
+            .unwrap_or_default();
+
+        let audio = deadsync_audio_stream::get_output_timing_snapshot();
+        let raw_callback_gap_ms =
+            deadsync_audio_stream::timing_diag_last_callback_gap_ns() as f32 / 1_000_000.0;
+        // Smooth the callback gap so the readout stops bouncing between e.g. 9.xx and 10.xx
+        // every frame. Seed on the first sample, then EWMA at the same rate as the frame
+        // average. Negative/zero raw values (no data yet) pass through unsmoothed.
+        let callback_gap_ms = if raw_callback_gap_ms > 0.0 {
+            let prev = self.state.shell.frame_stats_audio_gap_ms;
+            let smoothed = if prev > 0.0 {
+                prev + frame_stats_overlay::EWMA_ALPHA_MEAN * (raw_callback_gap_ms - prev)
+            } else {
+                raw_callback_gap_ms
+            };
+            self.state.shell.frame_stats_audio_gap_ms = smoothed;
+            smoothed
+        } else {
+            raw_callback_gap_ms
+        };
+
+        let summary = frame_stats_overlay::FrameStatsSummary {
+            avg_frame_us,
+            p99_frame_us,
+            max_frame_us: max_us,
+            fps: self.state.shell.last_fps,
+            display_error_ms: display_clock.error_seconds * 1000.0,
+            display_error_p99_ms,
+            display_catching_up: display_clock.catching_up,
+            in_gameplay,
+            audio_callback_gap_ms: callback_gap_ms,
+            audio_underruns: audio.underrun_count,
+            audio_output_delay_ms: audio.estimated_output_delay_ns as f32 / 1_000_000.0,
+            audio_queued_frames: audio.queued_frames,
+            frame_jitter_us,
+            display_error_jitter_us,
+            spike_hold_us,
+            target_frame_us,
+            cpu_work_us,
+            gpu_wait_us,
+            over_budget_count,
+            catch_up_count,
+        };
+        let anchor = self.state.shell.frame_stats_overlay_anchor;
+        let style = self.state.shell.frame_stats_overlay_style;
+        let screen_w = deadsync_present::space::screen_width();
+        let screen_h = deadsync_present::space::screen_height();
+        // Always render the full overlay, including 2 players — the panel is narrow enough
+        // (~half-screen) to sit in a corner or the bottom-center seam without covering either
+        // notefield, so there's no need to drop to the stripped compact layout.
+        actors.extend(frame_stats_overlay::build(
+            samples, summary, anchor, false, style, screen_w, screen_h,
+        ));
+    }
+
+    /// Current play context for overlay placement: `(in_gameplay, two_player, player_is_p2)`.
+    /// Two-player covers Versus/Double or any 2+ active notefields (both sides occupied).
+    fn frame_stats_play_context(&self) -> (bool, bool, bool) {
+        let in_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let play_style = crate::game::profile::get_session_play_style();
+        let side = crate::game::profile::get_session_player_side();
+        let num_players = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(|gs| gs.num_players)
+            .unwrap_or(1);
+        let two_player = matches!(
+            play_style,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::Double
+        ) || num_players >= 2;
+        let player_is_p2 = matches!(side, profile_data::PlayerSide::P2);
+        (in_gameplay, two_player, player_is_p2)
     }
 
     #[inline(always)]
@@ -8117,10 +8462,36 @@ impl App {
         );
 
         if raw_key.pressed && raw_key.code == KeyCode::F3 {
-            let mode = self.state.shell.cycle_overlay_mode();
-            debug!("Overlay {}", self.state.shell.overlay_mode.label());
-            config::update_show_stats_mode(mode);
-            options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
+            if self.state.shell.ctrl_held && self.state.shell.shift_held {
+                // Ctrl+Shift+F3: move the frame-stats overlay to the next corner (runtime only).
+                if !raw_key.repeat && self.state.shell.frame_stats_overlay_enabled {
+                    let (_, two_player, _) = self.frame_stats_play_context();
+                    let anchor = self.state.shell.cycle_frame_stats_overlay_anchor(two_player);
+                    debug!("Frame stats overlay corner {anchor:?}");
+                }
+            } else if self.state.shell.ctrl_held && self.state.shell.alt_held {
+                // Ctrl+Alt+F3: switch the overlay presentation (detailed ↔ minimal).
+                if !raw_key.repeat && self.state.shell.frame_stats_overlay_enabled {
+                    let style = self.state.shell.toggle_frame_stats_overlay_style();
+                    debug!("Frame stats overlay style {}", style.label());
+                }
+            } else if self.state.shell.ctrl_held {
+                if !raw_key.repeat {
+                    let on = self.state.shell.toggle_frame_stats_overlay();
+                    // Only auto-place when the user hasn't positioned it themselves; otherwise
+                    // restore the remembered corner (persisted across toggles and restarts).
+                    if on && !self.state.shell.frame_stats_overlay_anchor_user_set {
+                        self.state.shell.frame_stats_overlay_anchor =
+                            crate::screens::components::shared::frame_stats_overlay::default_anchor();
+                    }
+                    debug!("Frame stats overlay {}", if on { "ON" } else { "OFF" });
+                }
+            } else {
+                let mode = self.state.shell.cycle_overlay_mode();
+                debug!("Overlay {}", self.state.shell.overlay_mode.label());
+                config::update_show_stats_mode(mode);
+                options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
+            }
         }
         if raw_key.pressed && !raw_key.repeat && raw_key.code == KeyCode::F9 {
             let new_value = !config::get().translated_titles;

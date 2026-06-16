@@ -104,6 +104,12 @@ pub struct Config {
     pub tab_acceleration: bool,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
+    /// Last frame-statistics overlay corner (`OverlayAnchor::to_key`, e.g. "bottom-right"),
+    /// or "auto" = follow play context until the user moves it. Remembered across sessions.
+    pub frame_stats_overlay_anchor: &'static str,
+    /// Frame-statistics overlay presentation style (`OverlayStyle::label`): "detailed" or
+    /// "minimal". Remembered across sessions.
+    pub frame_stats_overlay_style: &'static str,
     pub translated_titles: bool,
     pub mine_hit_sound: bool,
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
@@ -371,6 +377,8 @@ impl Default for Config {
             write_current_screen: false,
             tab_acceleration: true,
             show_stats_mode: 0,
+            frame_stats_overlay_anchor: "auto",
+            frame_stats_overlay_style: "detailed",
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,
