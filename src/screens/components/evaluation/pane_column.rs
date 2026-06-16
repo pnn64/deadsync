@@ -15,9 +15,20 @@ use std::hash::Hasher;
 use std::path::Path;
 use twox_hash::XxHash64;
 
-use super::utils::pane_origin_x;
+use super::utils::pane3_origin_x;
 
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+const PANE3_SINGLE_WIDTH: f32 = 230.0;
+const PANE3_DOUBLE_WIDTH: f32 = 520.0;
+
+#[inline(always)]
+fn pane3_width(num_cols: usize) -> f32 {
+    if num_cols == 8 {
+        PANE3_DOUBLE_WIDTH
+    } else {
+        PANE3_SINGLE_WIDTH
+    }
+}
 
 #[inline(always)]
 fn pane3_solid_arrow_mask_key(texture_key: &str) -> String {
@@ -250,10 +261,11 @@ pub fn build_column_judgments_pane(
     };
 
     let cy = screen_center_y();
-    let pane_origin_x = pane_origin_x(controller);
+    let pane_origin_x = pane3_origin_x(controller, num_cols);
 
-    // Pane3 geometry (Simply Love): 230x146 box, anchored near (-104, cy-40) within the P1 pane.
-    let box_width: f32 = 230.0;
+    // Pane3 geometry (SL/zmod): 230x146 normally; dance-double expands to
+    // 520px and P2's controller pane shifts left into the same full-width slot.
+    let box_width = pane3_width(num_cols);
     let box_height: f32 = 146.0;
     let col_width = box_width / num_cols as f32;
     let row_height = box_height / rows.len() as f32;
@@ -889,8 +901,13 @@ pub(crate) fn build_pane3_arrow_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::{RowCounts, RowKind, column_row_counts, row_disabled};
+    use super::super::utils::pane3_origin_x;
+    use super::{
+        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts, pane3_width,
+        row_disabled,
+    };
     use crate::screens::evaluation::ColumnJudgments;
+    use deadsync_profile as profile_data;
 
     #[test]
     fn column_counts_expose_arrowcloud_all_bad_rescores() {
@@ -979,5 +996,15 @@ mod tests {
         assert!(row_disabled(disabled, RowKind::Wo));
         assert!(!row_disabled(disabled, RowKind::Gr));
         assert!(!row_disabled(disabled, RowKind::Miss));
+    }
+
+    #[test]
+    fn pane3_doubles_layout_uses_full_width_slot() {
+        assert_eq!(pane3_width(4), PANE3_SINGLE_WIDTH);
+        assert_eq!(pane3_width(8), PANE3_DOUBLE_WIDTH);
+        assert_eq!(
+            pane3_origin_x(profile_data::PlayerSide::P1, 8),
+            pane3_origin_x(profile_data::PlayerSide::P2, 8)
+        );
     }
 }

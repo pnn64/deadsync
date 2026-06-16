@@ -4694,8 +4694,20 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
+        let double_expanded_controller = if play_style == profile_data::PlayStyle::Double {
+            state
+                .active_pane
+                .iter()
+                .position(|&pane| pane == EvalPane::Column)
+        } else {
+            None
+        };
+
         for controller in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
             let controller_idx = profile_data::player_side_index(controller);
+            if double_expanded_controller.is_some_and(|idx| idx != controller_idx) {
+                continue;
+            }
             let player_idx = profile_data::runtime_player_index(play_style, controller);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;

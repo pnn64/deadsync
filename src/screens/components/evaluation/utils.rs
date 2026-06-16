@@ -14,6 +14,16 @@ pub(crate) fn pane_origin_x(controller: profile_data::PlayerSide) -> f32 {
     }
 }
 
+#[inline(always)]
+pub(crate) fn pane3_origin_x(controller: profile_data::PlayerSide, num_cols: usize) -> f32 {
+    let origin = pane_origin_x(controller);
+    if num_cols == 8 && controller == profile_data::PlayerSide::P2 {
+        origin - 310.0
+    } else {
+        origin
+    }
+}
+
 pub(crate) fn eval_style_alpha(opaque_alpha: f32, transparent_alpha: f32) -> f32 {
     let (visual_style, eval_style) = std::panic::catch_unwind(|| {
         let cfg = crate::config::get();

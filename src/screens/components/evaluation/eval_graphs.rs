@@ -537,4 +537,22 @@ mod tests {
         assert_eq!(verts.len(), 6);
         assert!(verts.iter().all(|v| v.color == [1.0, 0.0, 0.0, 0.666]));
     }
+
+    #[test]
+    fn arrow_scatter_doubles_fifth_column_is_white() {
+        let mut point = scatter_point(10.0);
+        point.direction_code = 5;
+        let verts = build_scatter_mesh(
+            &[point],
+            0.0,
+            2.0,
+            100.0,
+            50.0,
+            180.0,
+            ScatterPlotScale::Arrow,
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert!(verts.iter().all(|v| v.color == [1.0, 1.0, 1.0, 0.666]));
+    }
 }

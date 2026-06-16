@@ -6,7 +6,7 @@ use deadsync_present::actors::{Actor, SizeSpec};
 use deadsync_present::color;
 use deadsync_profile as profile_data;
 
-use super::utils::{eval_style_alpha, pane_origin_x};
+use super::utils::{eval_style_alpha, pane_origin_x, pane3_origin_x};
 
 // Simply Love uses Wendy/_wendy white for evaluation percentages. Arrow Cloud's
 // Mega path uses ThemeFont Bold with larger zooms so the narrower Mega glyphs
@@ -47,7 +47,11 @@ pub(crate) fn build_pane_percentage_display(
         return vec![];
     }
 
-    let pane_origin_x = pane_origin_x(controller);
+    let pane_origin_x = if pane == EvalPane::Column {
+        pane3_origin_x(controller, score_info.column_judgments.len())
+    } else {
+        pane_origin_x(controller)
+    };
     let cy = deadsync_present::space::screen_center_y();
 
     let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
