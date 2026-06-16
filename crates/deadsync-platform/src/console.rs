@@ -18,9 +18,9 @@
 /// Set up the console according to the user's preference.
 ///
 /// `show` is the resolved `ShowConsole` preference (config value, possibly
-/// overridden by a CLI flag). Call this once, as early as possible during
-/// startup and before the logger is initialized, so the very first log lines
-/// land in the right place.
+/// overridden by the `--console` CLI flag). Call this once, as early as possible
+/// during startup and before the logger is initialized, so the very first log
+/// lines land in the right place.
 pub fn init(show: bool) {
     #[cfg(windows)]
     imp::init(show);

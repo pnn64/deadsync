@@ -127,15 +127,11 @@ fn install_panic_hook() {
 }
 
 /// Resolve whether the console window should be shown at startup. An explicit
-/// `--console` / `--no-console` argument wins; otherwise fall back to the
-/// `ShowConsole` config preference (default off).
+/// `--console` argument wins; otherwise fall back to the `ShowConsole` config
+/// preference (default off).
 fn resolve_show_console() -> bool {
-    for arg in std::env::args().skip(1) {
-        match arg.as_str() {
-            "--console" => return true,
-            "--no-console" => return false,
-            _ => {}
-        }
+    if std::env::args().skip(1).any(|arg| arg == "--console") {
+        return true;
     }
     config::bootstrap_show_console()
 }
