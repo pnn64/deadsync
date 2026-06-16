@@ -513,7 +513,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if ev.pressed {
         match ev.action {
-            VirtualAction::p1_start | VirtualAction::p1_back => {
+            VirtualAction::p1_start
+            | VirtualAction::p1_back
+            | VirtualAction::p2_start
+            | VirtualAction::p2_back => {
                 return ScreenAction::Navigate(Screen::Menu);
             }
             _ => {}
