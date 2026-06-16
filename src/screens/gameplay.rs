@@ -800,6 +800,18 @@ pub(crate) fn gameplay_runtime_profiles(
     runtime_profiles
 }
 
+pub(crate) fn gameplay_runtime_charts(
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    session: &GameplaySession,
+) -> [Arc<ChartData>; MAX_PLAYERS] {
+    let mut runtime_charts: [Arc<ChartData>; MAX_PLAYERS] =
+        std::array::from_fn(|player| charts[player].clone());
+    if session.p2_runtime_player() {
+        runtime_charts[0] = runtime_charts[1].clone();
+    }
+    runtime_charts
+}
+
 pub(crate) fn gameplay_noteskin_assets(
     cols_per_player: usize,
     num_players: usize,
@@ -1079,6 +1091,7 @@ pub fn init(
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+    let runtime_charts = gameplay_runtime_charts(&charts, &session);
     let noteskin_assets = gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profiles);
     let noteskin_data =
         noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profiles);
@@ -1104,8 +1117,9 @@ pub fn init(
         course_display_info.as_ref(),
         course_banner_path.as_ref(),
     );
-    let mini_indicator_data = gameplay_mini_indicator_data(&charts, &player_profiles, &session);
-    let scorebox_data = gameplay_scorebox_data(&charts, &player_profiles, &session);
+    let mini_indicator_data =
+        gameplay_mini_indicator_data(&runtime_charts, &runtime_profiles, &session);
+    let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
     State::from_gameplay_with_screen_data(
         gameplay_core::init(
             song,
@@ -10711,6 +10725,7 @@ fn draw_smx_mini_pad(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
     use deadsync_present::actors::TextAttribute;
 
     fn empty_text_attributes() -> Arc<[TextAttribute]> {
@@ -10743,6 +10758,89 @@ mod tests {
 
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
+    }
+
+    fn test_chart(hash: &str) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 10,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: hash.to_string(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    #[test]
+    fn p2_solo_scorebox_data_uses_runtime_profile_and_chart() {
+        for play_style in [
+            profile_data::PlayStyle::Single,
+            profile_data::PlayStyle::Double,
+        ] {
+            let charts = [
+                Arc::new(test_chart("p1-hash")),
+                Arc::new(test_chart("p2-hash")),
+            ];
+            let mut player_profiles: [profile_data::Profile; MAX_PLAYERS] =
+                std::array::from_fn(|_| profile_data::Profile::default());
+            player_profiles[0].display_scorebox = false;
+            player_profiles[0].show_ex_score = false;
+            player_profiles[1].display_scorebox = true;
+            player_profiles[1].show_ex_score = true;
+            player_profiles[1].groovestats_username = "p2-user".to_string();
+            let session = GameplaySession {
+                play_style,
+                player_side: profile_data::PlayerSide::P2,
+                joined_sides: [false, true],
+                active_profile_ids: [None, Some("p2-profile".to_string())],
+                ..GameplaySession::default()
+            };
+
+            let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+            let runtime_charts = gameplay_runtime_charts(&charts, &session);
+            assert_eq!(runtime_charts[0].short_hash, "p2-hash");
+
+            let data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
+            let p1_idx = profile_data::player_side_index(profile_data::PlayerSide::P1);
+            let p2_idx = profile_data::player_side_index(profile_data::PlayerSide::P2);
+            assert!(!data.profile_snapshot[p1_idx].display_scorebox);
+            assert!(data.profile_snapshot[p2_idx].display_scorebox);
+            assert!(data.profile_snapshot[p2_idx].show_ex_score);
+            assert_eq!(data.profile_snapshot[p2_idx].gs_username(), "p2-user");
+            assert_eq!(
+                data.profile_snapshot[p2_idx].persistent_profile_id(),
+                Some("p2-profile")
+            );
+            assert!(data.side_snapshot[p2_idx].is_none());
+        }
     }
 
     #[test]
