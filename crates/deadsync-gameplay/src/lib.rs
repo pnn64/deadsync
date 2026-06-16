@@ -241,6 +241,54 @@ pub fn step_stats_density_graph_width(
     sidepane_width.round().max(1.0_f32)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SongLuaCompilePlayStyle {
+    #[default]
+    Single,
+    Double,
+    Versus,
+}
+
+pub fn song_lua_compile_player_screen_x(
+    num_players: usize,
+    player_index: usize,
+    viewport: GameplayViewport,
+    play_style: SongLuaCompilePlayStyle,
+    single_player_uses_p2_side: bool,
+    note_field_offset_x: f32,
+    center_1player_notefield: bool,
+) -> f32 {
+    let clamped_width = viewport.width().clamp(640.0, 854.0);
+    let centered_one_side = num_players == 1
+        && play_style == SongLuaCompilePlayStyle::Single
+        && center_1player_notefield;
+    let centered_both_sides = num_players == 1 && play_style == SongLuaCompilePlayStyle::Double;
+    let p2_side = if num_players == 1 {
+        single_player_uses_p2_side
+    } else {
+        player_index == 1
+    };
+    let base_center_x = if num_players == 2 {
+        if p2_side {
+            viewport.center_x() + (clamped_width * 0.25)
+        } else {
+            viewport.center_x() - (clamped_width * 0.25)
+        }
+    } else if centered_both_sides || centered_one_side {
+        viewport.center_x()
+    } else if p2_side {
+        viewport.center_x() + (clamped_width * 0.25)
+    } else {
+        viewport.center_x() - (clamped_width * 0.25)
+    };
+    if num_players == 1 && (centered_both_sides || centered_one_side) {
+        viewport.center_x()
+    } else {
+        let offset_sign = if p2_side { 1.0 } else { -1.0 };
+        base_center_x + offset_sign * note_field_offset_x.clamp(0.0, 50.0)
+    }
+}
+
 pub const MINI_PERCENT_MIN: f32 = -100.0;
 pub const MINI_PERCENT_MAX: f32 = 150.0;
 
@@ -1290,6 +1338,489 @@ pub struct AttackMaskWindow {
     pub mini_speed: Option<f32>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SongLuaEaseMaskTarget {
+    AccelBoost,
+    AccelBrake,
+    AccelWave,
+    AccelExpand,
+    AccelBoomerang,
+    VisualDrunk,
+    VisualDizzy,
+    VisualConfusion,
+    VisualConfusionOffset,
+    VisualConfusionOffsetColumn(usize),
+    VisualFlip,
+    VisualInvert,
+    VisualTornado,
+    VisualTipsy,
+    VisualTiny,
+    VisualBumpy,
+    VisualBumpyOffset,
+    VisualBumpyPeriod,
+    VisualBumpyColumn(usize),
+    VisualTinyColumn(usize),
+    VisualMoveXColumn(usize),
+    VisualMoveYColumn(usize),
+    VisualPulseInner,
+    VisualPulseOuter,
+    VisualPulsePeriod,
+    VisualPulseOffset,
+    VisualBeat,
+    AppearanceHidden,
+    AppearanceSudden,
+    AppearanceStealth,
+    AppearanceBlink,
+    AppearanceRandomVanish,
+    VisibilityDark,
+    VisibilityBlind,
+    VisibilityCover,
+    ScrollReverse,
+    ScrollSplit,
+    ScrollAlternate,
+    ScrollCross,
+    ScrollCentered,
+    PerspectiveTilt,
+    PerspectiveSkew,
+    ScrollSpeedX,
+    ScrollSpeedC,
+    ScrollSpeedM,
+    MiniPercent,
+    PlayerX,
+    PlayerY,
+    PlayerZ,
+    PlayerRotationX,
+    PlayerRotationZ,
+    PlayerRotationY,
+    PlayerSkewX,
+    PlayerSkewY,
+    PlayerZoom,
+    PlayerZoomX,
+    PlayerZoomY,
+    PlayerZoomZ,
+    ConfusionYOffsetY,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongLuaEaseMaskWindow {
+    pub start_second: f32,
+    pub end_second: f32,
+    pub sustain_end_second: f32,
+    pub target: SongLuaEaseMaskTarget,
+    pub from: f32,
+    pub to: f32,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
+#[inline(always)]
+fn song_lua_normalized_value(value: f32) -> f32 {
+    value / 100.0
+}
+
+fn push_song_lua_ease_target(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    target: SongLuaEaseMaskTarget,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) {
+    out.push(SongLuaEaseMaskWindow {
+        start_second,
+        end_second,
+        sustain_end_second,
+        target,
+        from,
+        to,
+        easing: easing.map(ToString::to_string),
+        opt1,
+        opt2,
+    });
+}
+
+pub fn append_song_lua_ease_targets(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    target_name: &str,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> bool {
+    let key = attack_token_key(target_name);
+    if key.is_empty() {
+        return false;
+    }
+    let pct_from = song_lua_normalized_value(from);
+    let pct_to = song_lua_normalized_value(to);
+    let mut push = |target, from, to| {
+        push_song_lua_ease_target(
+            out,
+            target,
+            start_second,
+            end_second,
+            sustain_end_second,
+            from,
+            to,
+            easing,
+            opt1,
+            opt2,
+        );
+    };
+
+    if let Some(col) = mod_column_suffix(&key, "bumpy") {
+        push(
+            SongLuaEaseMaskTarget::VisualBumpyColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "tiny") {
+        push(
+            SongLuaEaseMaskTarget::VisualTinyColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "movex") {
+        push(
+            SongLuaEaseMaskTarget::VisualMoveXColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "movey") {
+        push(
+            SongLuaEaseMaskTarget::VisualMoveYColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "confusionoffset") {
+        push(
+            SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+
+    match key.as_str() {
+        "boost" => push(SongLuaEaseMaskTarget::AccelBoost, pct_from, pct_to),
+        "brake" => push(SongLuaEaseMaskTarget::AccelBrake, pct_from, pct_to),
+        "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
+        "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
+        "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
+        "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
+        "dizzy" => push(SongLuaEaseMaskTarget::VisualDizzy, pct_from, pct_to),
+        "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
+        "confusionoffset" => push(
+            SongLuaEaseMaskTarget::VisualConfusionOffset,
+            pct_from,
+            pct_to,
+        ),
+        "flip" => push(SongLuaEaseMaskTarget::VisualFlip, pct_from, pct_to),
+        "invert" => push(SongLuaEaseMaskTarget::VisualInvert, pct_from, pct_to),
+        "tornado" => push(SongLuaEaseMaskTarget::VisualTornado, pct_from, pct_to),
+        "tipsy" => push(SongLuaEaseMaskTarget::VisualTipsy, pct_from, pct_to),
+        "bumpy" => push(SongLuaEaseMaskTarget::VisualBumpy, pct_from, pct_to),
+        "bumpyoffset" => push(SongLuaEaseMaskTarget::VisualBumpyOffset, pct_from, pct_to),
+        "bumpyperiod" => push(SongLuaEaseMaskTarget::VisualBumpyPeriod, pct_from, pct_to),
+        "pulseinner" => push(SongLuaEaseMaskTarget::VisualPulseInner, pct_from, pct_to),
+        "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
+        "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
+        "pulseoffset" => push(SongLuaEaseMaskTarget::VisualPulseOffset, pct_from, pct_to),
+        "beat" => push(SongLuaEaseMaskTarget::VisualBeat, pct_from, pct_to),
+        "hidden" => push(SongLuaEaseMaskTarget::AppearanceHidden, pct_from, pct_to),
+        "sudden" => push(SongLuaEaseMaskTarget::AppearanceSudden, pct_from, pct_to),
+        "stealth" => push(SongLuaEaseMaskTarget::AppearanceStealth, pct_from, pct_to),
+        "blink" => push(SongLuaEaseMaskTarget::AppearanceBlink, pct_from, pct_to),
+        "rvanish" | "randomvanish" | "reversevanish" => push(
+            SongLuaEaseMaskTarget::AppearanceRandomVanish,
+            pct_from,
+            pct_to,
+        ),
+        "dark" => push(SongLuaEaseMaskTarget::VisibilityDark, pct_from, pct_to),
+        "blind" => push(SongLuaEaseMaskTarget::VisibilityBlind, pct_from, pct_to),
+        "cover" => push(SongLuaEaseMaskTarget::VisibilityCover, pct_from, pct_to),
+        "reverse" => push(SongLuaEaseMaskTarget::ScrollReverse, pct_from, pct_to),
+        "split" => push(SongLuaEaseMaskTarget::ScrollSplit, pct_from, pct_to),
+        "alternate" => push(SongLuaEaseMaskTarget::ScrollAlternate, pct_from, pct_to),
+        "cross" => push(SongLuaEaseMaskTarget::ScrollCross, pct_from, pct_to),
+        "centered" => push(SongLuaEaseMaskTarget::ScrollCentered, pct_from, pct_to),
+        "incoming" => {
+            push(SongLuaEaseMaskTarget::PerspectiveTilt, -pct_from, -pct_to);
+            push(SongLuaEaseMaskTarget::PerspectiveSkew, pct_from, pct_to);
+        }
+        "space" => {
+            push(SongLuaEaseMaskTarget::PerspectiveTilt, pct_from, pct_to);
+            push(SongLuaEaseMaskTarget::PerspectiveSkew, pct_from, pct_to);
+        }
+        "hallway" => {
+            push(SongLuaEaseMaskTarget::PerspectiveTilt, -pct_from, -pct_to);
+            push(SongLuaEaseMaskTarget::PerspectiveSkew, 0.0, 0.0);
+        }
+        "distant" => {
+            push(SongLuaEaseMaskTarget::PerspectiveTilt, pct_from, pct_to);
+            push(SongLuaEaseMaskTarget::PerspectiveSkew, 0.0, 0.0);
+        }
+        "overhead" => {
+            push(SongLuaEaseMaskTarget::PerspectiveTilt, 0.0, 0.0);
+            push(SongLuaEaseMaskTarget::PerspectiveSkew, 0.0, 0.0);
+        }
+        "xmod" => push(SongLuaEaseMaskTarget::ScrollSpeedX, from, to),
+        "cmod" => push(SongLuaEaseMaskTarget::ScrollSpeedC, from, to),
+        "mmod" => push(SongLuaEaseMaskTarget::ScrollSpeedM, from, to),
+        "tiny" => push(SongLuaEaseMaskTarget::VisualTiny, pct_from, pct_to),
+        "mini" => push(SongLuaEaseMaskTarget::MiniPercent, from, to),
+        "skewx" => push(SongLuaEaseMaskTarget::PlayerSkewX, pct_from, pct_to),
+        "skewy" => push(SongLuaEaseMaskTarget::PlayerSkewY, pct_from, pct_to),
+        "confusionyoffset" => push(
+            SongLuaEaseMaskTarget::ConfusionYOffsetY,
+            pct_from * (180.0 / std::f32::consts::PI),
+            pct_to * (180.0 / std::f32::consts::PI),
+        ),
+        _ => return false,
+    }
+    true
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SongLuaPlayerTransformValues {
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub z: Option<f32>,
+    pub rotation_x: Option<f32>,
+    pub rotation_z: Option<f32>,
+    pub rotation_y: Option<f32>,
+    pub skew_x: Option<f32>,
+    pub skew_y: Option<f32>,
+    pub zoom_x: Option<f32>,
+    pub zoom_y: Option<f32>,
+    pub zoom_z: Option<f32>,
+    pub confusion_y_offset: Option<f32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongLuaPlayerTransform {
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub z: f32,
+    pub rotation_x: f32,
+    pub rotation_z: f32,
+    pub rotation_y: f32,
+    pub skew_x: f32,
+    pub skew_y: f32,
+    pub zoom_x: f32,
+    pub zoom_y: f32,
+    pub zoom_z: f32,
+    pub confusion_y_offset: f32,
+}
+
+impl Default for SongLuaPlayerTransform {
+    fn default() -> Self {
+        Self {
+            x: None,
+            y: None,
+            z: 0.0,
+            rotation_x: 0.0,
+            rotation_z: 0.0,
+            rotation_y: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            zoom_x: 1.0,
+            zoom_y: 1.0,
+            zoom_z: 1.0,
+            confusion_y_offset: 0.0,
+        }
+    }
+}
+
+#[inline(always)]
+fn finite_transform_option(value: Option<f32>) -> Option<f32> {
+    value.filter(|v| v.is_finite())
+}
+
+#[inline(always)]
+fn finite_transform_or(value: Option<f32>, fallback: f32) -> f32 {
+    finite_transform_option(value).unwrap_or(fallback)
+}
+
+impl SongLuaPlayerTransformValues {
+    pub fn resolve(self) -> SongLuaPlayerTransform {
+        SongLuaPlayerTransform {
+            x: finite_transform_option(self.x),
+            y: finite_transform_option(self.y),
+            z: finite_transform_or(self.z, 0.0),
+            rotation_x: finite_transform_or(self.rotation_x, 0.0),
+            rotation_z: finite_transform_or(self.rotation_z, 0.0),
+            rotation_y: finite_transform_or(self.rotation_y, 0.0),
+            skew_x: finite_transform_or(self.skew_x, 0.0),
+            skew_y: finite_transform_or(self.skew_y, 0.0),
+            zoom_x: finite_transform_or(self.zoom_x, 1.0),
+            zoom_y: finite_transform_or(self.zoom_y, 1.0),
+            zoom_z: finite_transform_or(self.zoom_z, 1.0),
+            confusion_y_offset: finite_transform_or(self.confusion_y_offset, 0.0),
+        }
+    }
+}
+
+pub fn song_lua_apply_player_transform_target(
+    target: SongLuaEaseMaskTarget,
+    value: f32,
+    player: &mut SongLuaPlayerTransformValues,
+) {
+    if !value.is_finite() {
+        return;
+    }
+    match target {
+        SongLuaEaseMaskTarget::PlayerX => player.x = Some(value),
+        SongLuaEaseMaskTarget::PlayerY => player.y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZ => player.z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationX => player.rotation_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationZ => player.rotation_z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationY => player.rotation_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewX => player.skew_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewY => player.skew_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoom => {
+            player.zoom_x = Some(value);
+            player.zoom_y = Some(value);
+            player.zoom_z = Some(value);
+        }
+        SongLuaEaseMaskTarget::PlayerZoomX => player.zoom_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomY => player.zoom_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomZ => player.zoom_z = Some(value),
+        SongLuaEaseMaskTarget::ConfusionYOffsetY => player.confusion_y_offset = Some(value),
+        _ => {}
+    }
+}
+
+pub fn song_lua_apply_eased_target(
+    target: SongLuaEaseMaskTarget,
+    value: f32,
+    accel: &mut AccelOverrides,
+    visual: &mut VisualOverrides,
+    appearance: &mut AppearanceEffects,
+    visibility: &mut VisibilityOverrides,
+    scroll: &mut ScrollOverrides,
+    perspective: &mut PerspectiveOverrides,
+    scroll_speed: &mut Option<ScrollSpeedSetting>,
+    mini_percent: &mut Option<f32>,
+    player: &mut SongLuaPlayerTransformValues,
+) {
+    if !value.is_finite() {
+        return;
+    }
+    match target {
+        SongLuaEaseMaskTarget::AccelBoost => accel.boost = Some(value),
+        SongLuaEaseMaskTarget::AccelBrake => accel.brake = Some(value),
+        SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
+        SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
+        SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
+        SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => {
+            if col < MAX_COLS {
+                visual.confusion_offset_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualFlip => visual.flip = Some(value),
+        SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
+        SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
+        SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
+        SongLuaEaseMaskTarget::VisualTiny => visual.tiny = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyOffset => visual.bumpy_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyPeriod => visual.bumpy_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => {
+            if col < MAX_COLS {
+                visual.bumpy_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualTinyColumn(col) => {
+            if col < MAX_COLS {
+                visual.tiny_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => {
+            if col < MAX_COLS {
+                visual.move_x_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => {
+            if col < MAX_COLS {
+                visual.move_y_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
+        SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
+        SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
+        SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
+        SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
+        SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
+        SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
+        SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
+        SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
+        SongLuaEaseMaskTarget::VisibilityDark => visibility.dark = Some(value),
+        SongLuaEaseMaskTarget::VisibilityBlind => visibility.blind = Some(value),
+        SongLuaEaseMaskTarget::VisibilityCover => visibility.cover = Some(value),
+        SongLuaEaseMaskTarget::ScrollReverse => scroll.reverse = Some(value),
+        SongLuaEaseMaskTarget::ScrollSplit => scroll.split = Some(value),
+        SongLuaEaseMaskTarget::ScrollAlternate => scroll.alternate = Some(value),
+        SongLuaEaseMaskTarget::ScrollCross => scroll.cross = Some(value),
+        SongLuaEaseMaskTarget::ScrollCentered => scroll.centered = Some(value),
+        SongLuaEaseMaskTarget::PerspectiveTilt => perspective.tilt = Some(value),
+        SongLuaEaseMaskTarget::PerspectiveSkew => perspective.skew = Some(value),
+        SongLuaEaseMaskTarget::ScrollSpeedX => {
+            if value > 0.0 {
+                *scroll_speed = Some(ScrollSpeedSetting::XMod(value));
+            }
+        }
+        SongLuaEaseMaskTarget::ScrollSpeedC => {
+            if value > 0.0 {
+                *scroll_speed = Some(ScrollSpeedSetting::CMod(value));
+            }
+        }
+        SongLuaEaseMaskTarget::ScrollSpeedM => {
+            if value > 0.0 {
+                *scroll_speed = Some(ScrollSpeedSetting::MMod(value));
+            }
+        }
+        SongLuaEaseMaskTarget::MiniPercent => *mini_percent = Some(value),
+        SongLuaEaseMaskTarget::PlayerX
+        | SongLuaEaseMaskTarget::PlayerY
+        | SongLuaEaseMaskTarget::PlayerZ
+        | SongLuaEaseMaskTarget::PlayerRotationX
+        | SongLuaEaseMaskTarget::PlayerRotationZ
+        | SongLuaEaseMaskTarget::PlayerRotationY
+        | SongLuaEaseMaskTarget::PlayerSkewX
+        | SongLuaEaseMaskTarget::PlayerSkewY
+        | SongLuaEaseMaskTarget::PlayerZoom
+        | SongLuaEaseMaskTarget::PlayerZoomX
+        | SongLuaEaseMaskTarget::PlayerZoomY
+        | SongLuaEaseMaskTarget::PlayerZoomZ
+        | SongLuaEaseMaskTarget::ConfusionYOffsetY => {
+            song_lua_apply_player_transform_target(target, value, player);
+        }
+    }
+}
+
 pub fn attack_mask_window_from_parts(
     attack: &ChartAttackWindow,
     mods: ParsedAttackMods,
@@ -1342,6 +1873,375 @@ pub fn build_attack_mask_windows(attacks: &[ChartAttackWindow]) -> Vec<AttackMas
         }
     }
     windows
+}
+
+#[inline(always)]
+pub const fn song_lua_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
+    matches!(
+        target,
+        SongLuaEaseMaskTarget::PlayerX
+            | SongLuaEaseMaskTarget::PlayerY
+            | SongLuaEaseMaskTarget::PlayerZ
+            | SongLuaEaseMaskTarget::PlayerRotationX
+            | SongLuaEaseMaskTarget::PlayerRotationZ
+            | SongLuaEaseMaskTarget::PlayerRotationY
+            | SongLuaEaseMaskTarget::PlayerSkewX
+            | SongLuaEaseMaskTarget::PlayerSkewY
+            | SongLuaEaseMaskTarget::PlayerZoom
+            | SongLuaEaseMaskTarget::PlayerZoomX
+            | SongLuaEaseMaskTarget::PlayerZoomY
+            | SongLuaEaseMaskTarget::PlayerZoomZ
+            | SongLuaEaseMaskTarget::ConfusionYOffsetY
+    )
+}
+
+#[inline(always)]
+fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseMaskTarget) -> bool {
+    if window.clear_all && !song_lua_player_transform_target(target) {
+        return true;
+    }
+    match target {
+        SongLuaEaseMaskTarget::AccelBoost => window.accel.boost.is_some(),
+        SongLuaEaseMaskTarget::AccelBrake => window.accel.brake.is_some(),
+        SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
+        SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
+        SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
+        SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
+            .visual
+            .confusion_offset_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualFlip => window.visual.flip.is_some(),
+        SongLuaEaseMaskTarget::VisualInvert => window.visual.invert.is_some(),
+        SongLuaEaseMaskTarget::VisualTornado => window.visual.tornado.is_some(),
+        SongLuaEaseMaskTarget::VisualTipsy => window.visual.tipsy.is_some(),
+        SongLuaEaseMaskTarget::VisualTiny => window.visual.tiny.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpy => window.visual.bumpy.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyOffset => window.visual.bumpy_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyPeriod => window.visual.bumpy_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => window
+            .visual
+            .bumpy_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualTinyColumn(col) => window
+            .visual
+            .tiny_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => window
+            .visual
+            .move_x_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => window
+            .visual
+            .move_y_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualPulseInner => window.visual.pulse_inner.is_some(),
+        SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
+        SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
+        SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
+        SongLuaEaseMaskTarget::AppearanceHidden => window.appearance.hidden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
+        SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
+        SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
+        SongLuaEaseMaskTarget::VisibilityDark => window.visibility.dark.is_some(),
+        SongLuaEaseMaskTarget::VisibilityBlind => window.visibility.blind.is_some(),
+        SongLuaEaseMaskTarget::VisibilityCover => window.visibility.cover.is_some(),
+        SongLuaEaseMaskTarget::ScrollReverse => window.scroll.reverse.is_some(),
+        SongLuaEaseMaskTarget::ScrollSplit => window.scroll.split.is_some(),
+        SongLuaEaseMaskTarget::ScrollAlternate => window.scroll.alternate.is_some(),
+        SongLuaEaseMaskTarget::ScrollCross => window.scroll.cross.is_some(),
+        SongLuaEaseMaskTarget::ScrollCentered => window.scroll.centered.is_some(),
+        SongLuaEaseMaskTarget::PerspectiveTilt => window.perspective.tilt.is_some(),
+        SongLuaEaseMaskTarget::PerspectiveSkew => window.perspective.skew.is_some(),
+        SongLuaEaseMaskTarget::ScrollSpeedX
+        | SongLuaEaseMaskTarget::ScrollSpeedC
+        | SongLuaEaseMaskTarget::ScrollSpeedM => window.scroll_speed.is_some(),
+        SongLuaEaseMaskTarget::MiniPercent => window.mini_percent.is_some(),
+        SongLuaEaseMaskTarget::PlayerX
+        | SongLuaEaseMaskTarget::PlayerY
+        | SongLuaEaseMaskTarget::PlayerZ
+        | SongLuaEaseMaskTarget::PlayerRotationX
+        | SongLuaEaseMaskTarget::PlayerRotationZ
+        | SongLuaEaseMaskTarget::PlayerRotationY
+        | SongLuaEaseMaskTarget::PlayerSkewX
+        | SongLuaEaseMaskTarget::PlayerSkewY
+        | SongLuaEaseMaskTarget::PlayerZoom
+        | SongLuaEaseMaskTarget::PlayerZoomX
+        | SongLuaEaseMaskTarget::PlayerZoomY
+        | SongLuaEaseMaskTarget::PlayerZoomZ
+        | SongLuaEaseMaskTarget::ConfusionYOffsetY => false,
+    }
+}
+
+fn song_lua_constant_cutoff_second(
+    constant: &AttackMaskWindow,
+    window: &SongLuaEaseMaskWindow,
+    epsilon: f32,
+) -> Option<f32> {
+    if !constant.start_second.is_finite()
+        || !constant.end_second.is_finite()
+        || !window.end_second.is_finite()
+        || !song_lua_constant_sets_target(constant, window.target)
+    {
+        return None;
+    }
+    if constant.end_second <= window.end_second + epsilon {
+        return None;
+    }
+    if constant.start_second <= window.end_second + epsilon {
+        Some(window.end_second)
+    } else {
+        Some(constant.start_second)
+    }
+}
+
+pub fn song_lua_extend_ease_tails(
+    out: &mut [SongLuaEaseMaskWindow],
+    constants: &[AttackMaskWindow],
+) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    for i in 0..out.len() {
+        let window = &out[i];
+        let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+            window.sustain_end_second
+        } else {
+            f32::MAX
+        };
+        let cutoff_second = out
+            .iter()
+            .enumerate()
+            .filter_map(|(j, other)| {
+                if i == j
+                    || other.target != window.target
+                    || !other.start_second.is_finite()
+                    || other.start_second <= window.start_second + SAME_TICK_EPSILON
+                {
+                    None
+                } else {
+                    Some(other.start_second)
+                }
+            })
+            .fold(None::<f32>, |acc, start| {
+                Some(match acc {
+                    Some(current) => current.min(start),
+                    None => start,
+                })
+            });
+        let constant_cutoff = constants
+            .iter()
+            .filter_map(|constant| {
+                song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
+            })
+            .fold(cutoff_second, |acc, start| {
+                Some(match acc {
+                    Some(current) => current.min(start),
+                    None => start,
+                })
+            });
+        out[i].sustain_end_second =
+            constant_cutoff.map_or(default_end, |cutoff| default_end.min(cutoff));
+    }
+}
+
+#[inline(always)]
+fn song_lua_lerp_unclamped(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
+}
+
+pub fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> Option<f32> {
+    if !now.is_finite()
+        || !window.start_second.is_finite()
+        || !window.sustain_end_second.is_finite()
+        || !window.from.is_finite()
+        || !window.to.is_finite()
+        || now < window.start_second
+        || now >= window.sustain_end_second
+    {
+        return None;
+    }
+    if !window.end_second.is_finite()
+        || window.end_second <= window.start_second
+        || now >= window.end_second
+    {
+        return Some(window.to);
+    }
+    let duration = window.end_second - window.start_second;
+    if duration <= f32::EPSILON {
+        return Some(window.to);
+    }
+    let factor = song_lua_ease_factor(
+        window.easing.as_deref(),
+        (now - window.start_second) / duration,
+        window.opt1,
+        window.opt2,
+    );
+    let value = song_lua_lerp_unclamped(window.from, window.to, factor);
+    if value.is_finite() {
+        Some(value)
+    } else {
+        Some(window.to)
+    }
+}
+
+#[inline(always)]
+pub fn chart_attack_row_range(
+    attack: &ChartAttackWindow,
+    timing_player: &TimingData,
+) -> Option<(usize, usize)> {
+    let start_beat = timing_player.get_beat_for_time(attack.start_second);
+    let end_beat = timing_player.get_beat_for_time(attack.start_second + attack.len_seconds);
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as f32;
+    let start_row = (start_beat.max(0.0) * rows_per_beat).round() as usize;
+    let end_row = (end_beat.max(0.0) * rows_per_beat).round() as usize;
+    (end_row >= start_row).then_some((start_row, end_row))
+}
+
+#[inline(always)]
+pub fn chart_attack_turn_seed(base_seed: u64, player: usize, window_index: usize) -> u64 {
+    base_seed
+        ^ (0x9E37_79B9_u64.wrapping_mul(player as u64 + 1))
+        ^ ((window_index as u64).wrapping_mul(0xA5A5_5A5A_u64))
+}
+
+pub fn apply_attack_turn_mod(
+    notes: &mut [Note],
+    col_offset: usize,
+    cols: usize,
+    turn_option: GameplayTurnOption,
+    seed: u64,
+    player: usize,
+) {
+    if notes.is_empty() || turn_option == GameplayTurnOption::None {
+        return;
+    }
+    let note_range = (0usize, notes.len());
+    match turn_option {
+        GameplayTurnOption::None => {}
+        GameplayTurnOption::Blender => {
+            apply_turn_permutation(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                GameplayTurnOption::Shuffle,
+                seed,
+            );
+            apply_super_shuffle_taps(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
+            );
+        }
+        GameplayTurnOption::Random => {
+            apply_hyper_shuffle(
+                notes,
+                note_range,
+                col_offset,
+                cols,
+                seed ^ (0xA5A5_5A5A_u64.wrapping_mul(player as u64 + 1)),
+            );
+        }
+        other => {
+            apply_turn_permutation(notes, note_range, col_offset, cols, other, seed);
+        }
+    }
+}
+
+pub fn apply_chart_attack_window(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    row_bounds: (usize, usize),
+    mods: ParsedAttackMods,
+    turn_seed: u64,
+) {
+    let (start_row, end_row) = row_bounds;
+    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
+        return;
+    }
+    let mut in_range = Vec::with_capacity(notes.len());
+    let mut out_range = Vec::with_capacity(notes.len());
+    for note in notes.drain(..) {
+        if note.row_index >= start_row && note.row_index <= end_row {
+            in_range.push(note);
+        } else {
+            out_range.push(note);
+        }
+    }
+    if in_range.is_empty() {
+        *notes = out_range;
+        return;
+    }
+
+    apply_uncommon_masks_with_masks(
+        &mut in_range,
+        mods.insert_mask,
+        mods.remove_mask,
+        mods.holds_mask,
+        timing_player,
+        col_offset,
+        cols,
+        &out_range,
+        Some(row_bounds),
+        player,
+    );
+    apply_attack_turn_mod(
+        &mut in_range,
+        col_offset,
+        cols,
+        mods.turn_option,
+        turn_seed,
+        player,
+    );
+
+    out_range.extend(in_range);
+    *notes = out_range;
+    sort_player_notes(notes);
+}
+
+pub fn apply_chart_attack_windows(
+    notes: &mut Vec<Note>,
+    attacks: &[ChartAttackWindow],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    player: usize,
+    base_seed: u64,
+) {
+    for (i, attack) in attacks.iter().enumerate() {
+        let mods = parse_attack_mods(&attack.mods);
+        if !mods.has_chart_effect() {
+            continue;
+        }
+        let Some(row_bounds) = chart_attack_row_range(attack, timing_player) else {
+            continue;
+        };
+        apply_chart_attack_window(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            player,
+            row_bounds,
+            mods,
+            chart_attack_turn_seed(base_seed, player, i),
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -1439,6 +2339,487 @@ pub fn persisted_target_allowed(
 #[inline(always)]
 pub fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
     !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ActiveAttackMaskValues {
+    pub clear_all: bool,
+    pub chart: ChartAttackEffects,
+    pub accel: AccelOverrides,
+    pub visual: VisualOverrides,
+    pub visual_speed: VisualOverrides,
+    pub appearance_target: AppearanceEffects,
+    pub appearance_speed: AppearanceEffects,
+    pub visibility: VisibilityOverrides,
+    pub scroll: ScrollOverrides,
+    pub scroll_approach_speed: ScrollOverrides,
+    pub perspective: PerspectiveOverrides,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub mini_percent: Option<f32>,
+    pub mini_speed: Option<f32>,
+}
+
+impl ActiveAttackMaskValues {
+    #[inline(always)]
+    pub fn new(base_appearance: AppearanceEffects) -> Self {
+        Self {
+            clear_all: false,
+            chart: ChartAttackEffects::default(),
+            accel: AccelOverrides::default(),
+            visual: VisualOverrides::default(),
+            visual_speed: VisualOverrides::default(),
+            appearance_target: base_appearance,
+            appearance_speed: AppearanceEffects::approach_speeds(),
+            visibility: VisibilityOverrides::default(),
+            scroll: ScrollOverrides::default(),
+            scroll_approach_speed: ScrollOverrides::default(),
+            perspective: PerspectiveOverrides::default(),
+            scroll_speed: None,
+            mini_percent: None,
+            mini_speed: None,
+        }
+    }
+
+    #[inline(always)]
+    fn clear_for_window(&mut self) {
+        *self = Self::new(AppearanceEffects::default());
+        self.clear_all = true;
+    }
+}
+
+pub fn apply_song_lua_player_eases(
+    player: &mut SongLuaPlayerTransformValues,
+    windows: &[SongLuaEaseMaskWindow],
+    now: f32,
+) {
+    for window in windows {
+        if let Some(value) = song_lua_ease_window_value(window, now) {
+            song_lua_apply_player_transform_target(window.target, value, player);
+        }
+    }
+}
+
+pub fn apply_song_lua_attack_eases(
+    attack: &mut ActiveAttackMaskValues,
+    appearance: &mut AppearanceEffects,
+    player: &mut SongLuaPlayerTransformValues,
+    windows: &[SongLuaEaseMaskWindow],
+    now: f32,
+    mini_base_percent: f32,
+) {
+    for window in windows {
+        if let Some(value) = song_lua_ease_window_value(window, now) {
+            let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
+                mini_base_percent + value
+            } else {
+                value
+            };
+            song_lua_apply_eased_target(
+                window.target,
+                value,
+                &mut attack.accel,
+                &mut attack.visual,
+                appearance,
+                &mut attack.visibility,
+                &mut attack.scroll,
+                &mut attack.perspective,
+                &mut attack.scroll_speed,
+                &mut attack.mini_percent,
+                player,
+            );
+        }
+    }
+}
+
+pub fn apply_active_attack_mask_window(
+    values: &mut ActiveAttackMaskValues,
+    window: &AttackMaskWindow,
+    active_targets: AttackActiveTargets,
+    persisted: bool,
+    profile_mini_percent: f32,
+) {
+    if window.clear_all {
+        values.clear_for_window();
+    }
+    values.chart.insert_mask |= window.chart.insert_mask;
+    values.chart.remove_mask |= window.chart.remove_mask;
+    values.chart.holds_mask |= window.chart.holds_mask;
+    values.chart.turn_bits |= window.chart.turn_bits;
+
+    if let Some(v) = window.accel.boost {
+        values.accel.boost = Some(v);
+    }
+    if let Some(v) = window.accel.brake {
+        values.accel.brake = Some(v);
+    }
+    if let Some(v) = window.accel.wave {
+        values.accel.wave = Some(v);
+    }
+    if let Some(v) = window.accel.expand {
+        values.accel.expand = Some(v);
+    }
+    if let Some(v) = window.accel.boomerang {
+        values.accel.boomerang = Some(v);
+    }
+
+    apply_active_visual_window(values, window, active_targets, persisted);
+    apply_appearance_target(
+        &mut values.appearance_target,
+        &mut values.appearance_speed,
+        window.appearance,
+        window.appearance_speed,
+    );
+
+    if let Some(v) = window.visibility.dark {
+        values.visibility.dark = Some(v);
+    }
+    if let Some(v) = window.visibility.blind {
+        values.visibility.blind = Some(v);
+    }
+    if let Some(v) = window.visibility.cover {
+        values.visibility.cover = Some(v);
+    }
+
+    apply_active_scroll_window(values, window, active_targets, persisted);
+
+    if let Some(v) = window.perspective.tilt {
+        values.perspective.tilt = Some(v);
+    }
+    if let Some(v) = window.perspective.skew {
+        values.perspective.skew = Some(v);
+    }
+    if let Some(speed) = window.scroll_speed {
+        values.scroll_speed = Some(speed);
+    }
+    if let Some(mini) = window.mini_percent.filter(|v| v.is_finite())
+        && persisted_mini_allowed(persisted, active_targets)
+    {
+        let base = if values.clear_all {
+            0.0
+        } else {
+            profile_mini_percent
+        };
+        values.mini_percent =
+            Some(attack_mini_target_percent(mini, window.mini_mode, base).clamp(-100.0, 150.0));
+        values.mini_speed = window.mini_speed;
+    }
+}
+
+fn apply_active_visual_target(
+    value: &mut Option<f32>,
+    speed: &mut Option<f32>,
+    incoming: Option<f32>,
+    incoming_speed: Option<f32>,
+    active_target: Option<f32>,
+    active_clear_all: bool,
+    persisted: bool,
+) {
+    if let Some(v) = incoming
+        && persisted_target_allowed(persisted, active_clear_all, active_target)
+    {
+        *value = Some(v);
+        *speed = incoming_speed;
+    }
+}
+
+fn apply_active_visual_cols(
+    values: &mut [Option<f32>; MAX_COLS],
+    speeds: &mut [Option<f32>; MAX_COLS],
+    incoming: [Option<f32>; MAX_COLS],
+    incoming_speeds: [Option<f32>; MAX_COLS],
+    active: [Option<f32>; MAX_COLS],
+    active_clear_all: bool,
+    persisted: bool,
+) {
+    for col in 0..MAX_COLS {
+        apply_active_visual_target(
+            &mut values[col],
+            &mut speeds[col],
+            incoming[col],
+            incoming_speeds[col],
+            active[col],
+            active_clear_all,
+            persisted,
+        );
+    }
+}
+
+fn apply_active_visual_window(
+    values: &mut ActiveAttackMaskValues,
+    window: &AttackMaskWindow,
+    active_targets: AttackActiveTargets,
+    persisted: bool,
+) {
+    let active_clear_all = active_targets.clear_all;
+    apply_active_visual_target(
+        &mut values.visual.drunk,
+        &mut values.visual_speed.drunk,
+        window.visual.drunk,
+        window.visual_speed.drunk,
+        active_targets.visual.drunk,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.dizzy,
+        &mut values.visual_speed.dizzy,
+        window.visual.dizzy,
+        window.visual_speed.dizzy,
+        active_targets.visual.dizzy,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.confusion,
+        &mut values.visual_speed.confusion,
+        window.visual.confusion,
+        window.visual_speed.confusion,
+        active_targets.visual.confusion,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.confusion_offset,
+        &mut values.visual_speed.confusion_offset,
+        window.visual.confusion_offset,
+        window.visual_speed.confusion_offset,
+        active_targets.visual.confusion_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.confusion_offset_cols,
+        &mut values.visual_speed.confusion_offset_cols,
+        window.visual.confusion_offset_cols,
+        window.visual_speed.confusion_offset_cols,
+        active_targets.visual.confusion_offset_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.flip,
+        &mut values.visual_speed.flip,
+        window.visual.flip,
+        window.visual_speed.flip,
+        active_targets.visual.flip,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.invert,
+        &mut values.visual_speed.invert,
+        window.visual.invert,
+        window.visual_speed.invert,
+        active_targets.visual.invert,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado,
+        &mut values.visual_speed.tornado,
+        window.visual.tornado,
+        window.visual_speed.tornado,
+        active_targets.visual.tornado,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tipsy,
+        &mut values.visual_speed.tipsy,
+        window.visual.tipsy,
+        window.visual_speed.tipsy,
+        active_targets.visual.tipsy,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tiny,
+        &mut values.visual_speed.tiny,
+        window.visual.tiny,
+        window.visual_speed.tiny,
+        active_targets.visual.tiny,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy,
+        &mut values.visual_speed.bumpy,
+        window.visual.bumpy,
+        window.visual_speed.bumpy,
+        active_targets.visual.bumpy,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy_offset,
+        &mut values.visual_speed.bumpy_offset,
+        window.visual.bumpy_offset,
+        window.visual_speed.bumpy_offset,
+        active_targets.visual.bumpy_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy_period,
+        &mut values.visual_speed.bumpy_period,
+        window.visual.bumpy_period,
+        window.visual_speed.bumpy_period,
+        active_targets.visual.bumpy_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.bumpy_cols,
+        &mut values.visual_speed.bumpy_cols,
+        window.visual.bumpy_cols,
+        window.visual_speed.bumpy_cols,
+        active_targets.visual.bumpy_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.tiny_cols,
+        &mut values.visual_speed.tiny_cols,
+        window.visual.tiny_cols,
+        window.visual_speed.tiny_cols,
+        active_targets.visual.tiny_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.move_x_cols,
+        &mut values.visual_speed.move_x_cols,
+        window.visual.move_x_cols,
+        window.visual_speed.move_x_cols,
+        active_targets.visual.move_x_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.move_y_cols,
+        &mut values.visual_speed.move_y_cols,
+        window.visual.move_y_cols,
+        window.visual_speed.move_y_cols,
+        active_targets.visual.move_y_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.pulse_inner,
+        &mut values.visual_speed.pulse_inner,
+        window.visual.pulse_inner,
+        window.visual_speed.pulse_inner,
+        active_targets.visual.pulse_inner,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.pulse_outer,
+        &mut values.visual_speed.pulse_outer,
+        window.visual.pulse_outer,
+        window.visual_speed.pulse_outer,
+        active_targets.visual.pulse_outer,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.pulse_period,
+        &mut values.visual_speed.pulse_period,
+        window.visual.pulse_period,
+        window.visual_speed.pulse_period,
+        active_targets.visual.pulse_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.pulse_offset,
+        &mut values.visual_speed.pulse_offset,
+        window.visual.pulse_offset,
+        window.visual_speed.pulse_offset,
+        active_targets.visual.pulse_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.beat,
+        &mut values.visual_speed.beat,
+        window.visual.beat,
+        window.visual_speed.beat,
+        active_targets.visual.beat,
+        active_clear_all,
+        persisted,
+    );
+}
+
+fn apply_active_scroll_target(
+    value: &mut Option<f32>,
+    speed: &mut Option<f32>,
+    incoming: Option<f32>,
+    incoming_speed: Option<f32>,
+    active_target: Option<f32>,
+    active_clear_all: bool,
+    persisted: bool,
+) {
+    if let Some(v) = incoming
+        && persisted_target_allowed(persisted, active_clear_all, active_target)
+    {
+        *value = Some(v);
+        *speed = incoming_speed;
+    }
+}
+
+fn apply_active_scroll_window(
+    values: &mut ActiveAttackMaskValues,
+    window: &AttackMaskWindow,
+    active_targets: AttackActiveTargets,
+    persisted: bool,
+) {
+    let active_clear_all = active_targets.clear_all;
+    apply_active_scroll_target(
+        &mut values.scroll.reverse,
+        &mut values.scroll_approach_speed.reverse,
+        window.scroll.reverse,
+        window.scroll_approach_speed.reverse,
+        active_targets.scroll.reverse,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_scroll_target(
+        &mut values.scroll.split,
+        &mut values.scroll_approach_speed.split,
+        window.scroll.split,
+        window.scroll_approach_speed.split,
+        active_targets.scroll.split,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_scroll_target(
+        &mut values.scroll.alternate,
+        &mut values.scroll_approach_speed.alternate,
+        window.scroll.alternate,
+        window.scroll_approach_speed.alternate,
+        active_targets.scroll.alternate,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_scroll_target(
+        &mut values.scroll.cross,
+        &mut values.scroll_approach_speed.cross,
+        window.scroll.cross,
+        window.scroll_approach_speed.cross,
+        active_targets.scroll.cross,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_scroll_target(
+        &mut values.scroll.centered,
+        &mut values.scroll_approach_speed.centered,
+        window.scroll.centered,
+        window.scroll_approach_speed.centered,
+        active_targets.scroll.centered,
+        active_clear_all,
+        persisted,
+    );
 }
 
 #[inline(always)]
@@ -2049,6 +3430,182 @@ pub fn approach_scroll_overrides_to_target(
 pub struct PerspectiveEffects {
     pub tilt: f32,
     pub skew: f32,
+}
+
+#[inline(always)]
+pub fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
+    attack.filter(|v| v.is_finite()).unwrap_or(base)
+}
+
+#[inline(always)]
+pub fn merge_attack_accel_effects(base: AccelEffects, attack: AccelOverrides) -> AccelEffects {
+    AccelEffects {
+        boost: merge_attack_value(base.boost, attack.boost),
+        brake: merge_attack_value(base.brake, attack.brake),
+        wave: merge_attack_value(base.wave, attack.wave),
+        expand: merge_attack_value(base.expand, attack.expand),
+        boomerang: merge_attack_value(base.boomerang, attack.boomerang),
+    }
+}
+
+pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides) -> VisualEffects {
+    let mut confusion_offset_cols = base.confusion_offset_cols;
+    let mut bumpy_cols = base.bumpy_cols;
+    let mut tiny_cols = base.tiny_cols;
+    let mut move_x_cols = base.move_x_cols;
+    let mut move_y_cols = base.move_y_cols;
+    for i in 0..MAX_COLS {
+        if let Some(v) = attack.confusion_offset_cols[i].filter(|v| v.is_finite()) {
+            confusion_offset_cols[i] = v;
+        }
+        if let Some(v) = attack.bumpy_cols[i].filter(|v| v.is_finite()) {
+            bumpy_cols[i] = v;
+        }
+        if let Some(v) = attack.tiny_cols[i].filter(|v| v.is_finite()) {
+            tiny_cols[i] = v;
+        }
+        if let Some(v) = attack.move_x_cols[i].filter(|v| v.is_finite()) {
+            move_x_cols[i] = v;
+        }
+        if let Some(v) = attack.move_y_cols[i].filter(|v| v.is_finite()) {
+            move_y_cols[i] = v;
+        }
+    }
+    VisualEffects {
+        drunk: merge_attack_value(base.drunk, attack.drunk),
+        dizzy: merge_attack_value(base.dizzy, attack.dizzy),
+        confusion: merge_attack_value(base.confusion, attack.confusion),
+        confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
+        confusion_offset_cols,
+        big: base.big,
+        flip: merge_attack_value(base.flip, attack.flip),
+        invert: merge_attack_value(base.invert, attack.invert),
+        tornado: merge_attack_value(base.tornado, attack.tornado),
+        tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        tiny: merge_attack_value(base.tiny, attack.tiny),
+        bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        bumpy_offset: merge_attack_value(base.bumpy_offset, attack.bumpy_offset),
+        bumpy_period: merge_attack_value(base.bumpy_period, attack.bumpy_period),
+        bumpy_cols,
+        tiny_cols,
+        move_x_cols,
+        move_y_cols,
+        pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
+        pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
+        pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
+        pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
+        beat: merge_attack_value(base.beat, attack.beat),
+    }
+}
+
+#[inline(always)]
+pub fn merge_attack_visibility_effects(
+    base: VisibilityEffects,
+    attack: VisibilityOverrides,
+) -> VisibilityEffects {
+    VisibilityEffects {
+        dark: merge_attack_value(base.dark, attack.dark),
+        blind: merge_attack_value(base.blind, attack.blind),
+        cover: merge_attack_value(base.cover, attack.cover),
+    }
+}
+
+#[inline(always)]
+pub fn merge_attack_scroll_effects(base: ScrollEffects, attack: ScrollOverrides) -> ScrollEffects {
+    ScrollEffects {
+        reverse: merge_attack_value(base.reverse, attack.reverse),
+        split: merge_attack_value(base.split, attack.split),
+        alternate: merge_attack_value(base.alternate, attack.alternate),
+        cross: merge_attack_value(base.cross, attack.cross),
+        centered: merge_attack_value(base.centered, attack.centered),
+    }
+}
+
+#[inline(always)]
+pub fn merge_attack_perspective_effects(
+    base: PerspectiveEffects,
+    attack: PerspectiveOverrides,
+) -> PerspectiveEffects {
+    PerspectiveEffects {
+        tilt: merge_attack_value(base.tilt, attack.tilt),
+        skew: merge_attack_value(base.skew, attack.skew),
+    }
+}
+
+#[inline(always)]
+pub fn effective_attack_accel_effects(
+    base_cleared: bool,
+    profile_mask_bits: u8,
+    attack: AccelOverrides,
+) -> AccelEffects {
+    let base = if base_cleared {
+        AccelEffects::default()
+    } else {
+        AccelEffects::from_mask_bits(profile_mask_bits)
+    };
+    merge_attack_accel_effects(base, attack)
+}
+
+#[inline(always)]
+pub fn effective_attack_visual_effects(
+    base_cleared: bool,
+    profile_mask_bits: u16,
+    attack: VisualOverrides,
+) -> VisualEffects {
+    let base = if base_cleared {
+        VisualEffects::default()
+    } else {
+        VisualEffects::from_mask_bits(profile_mask_bits)
+    };
+    merge_attack_visual_effects(base, attack)
+}
+
+#[inline(always)]
+pub fn effective_attack_visibility_effects(attack: VisibilityOverrides) -> VisibilityEffects {
+    merge_attack_visibility_effects(VisibilityEffects::default(), attack)
+}
+
+#[inline(always)]
+pub fn effective_attack_scroll_effects(
+    base_cleared: bool,
+    base_scroll: ScrollEffects,
+    attack: ScrollOverrides,
+) -> ScrollEffects {
+    let base = if base_cleared {
+        ScrollEffects::default()
+    } else {
+        base_scroll
+    };
+    merge_attack_scroll_effects(base, attack)
+}
+
+#[inline(always)]
+pub fn effective_attack_perspective_effects(
+    base_cleared: bool,
+    base_perspective: PerspectiveEffects,
+    attack: PerspectiveOverrides,
+) -> PerspectiveEffects {
+    let base = if base_cleared {
+        PerspectiveEffects::default()
+    } else {
+        base_perspective
+    };
+    merge_attack_perspective_effects(base, attack)
+}
+
+#[inline(always)]
+pub fn effective_attack_scroll_speed(
+    base_cleared: bool,
+    active_scroll_speed: Option<ScrollSpeedSetting>,
+    base_scroll_speed: ScrollSpeedSetting,
+) -> ScrollSpeedSetting {
+    active_scroll_speed.unwrap_or_else(|| {
+        if base_cleared {
+            ScrollSpeedSetting::default()
+        } else {
+            base_scroll_speed
+        }
+    })
 }
 
 pub const SPACING_PERCENT_MIN: i32 = -100;
@@ -5889,6 +7446,43 @@ mod tests {
         );
     }
 
+    fn song_lua_ease_mask_window(
+        target: SongLuaEaseMaskTarget,
+        start_second: f32,
+        end_second: f32,
+        sustain_end_second: f32,
+        from: f32,
+        to: f32,
+    ) -> SongLuaEaseMaskWindow {
+        SongLuaEaseMaskWindow {
+            start_second,
+            end_second,
+            sustain_end_second,
+            target,
+            from,
+            to,
+            easing: None,
+            opt1: None,
+            opt2: None,
+        }
+    }
+
+    fn attack_mask_window(
+        start_second: f32,
+        end_second: f32,
+        mods: ParsedAttackMods,
+    ) -> AttackMaskWindow {
+        attack_mask_window_from_parts(
+            &ChartAttackWindow {
+                start_second,
+                len_seconds: end_second - start_second,
+                mods: String::new(),
+            },
+            mods,
+        )
+        .expect("test attack mask window must have an effect")
+    }
+
     #[test]
     fn exit_timing_matches_screen_policy() {
         assert_eq!(hold_to_exit_seconds(HoldToExitKey::Start), 0.33);
@@ -6022,6 +7616,96 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_compile_player_screen_x_places_two_players() {
+        let viewport = GameplayViewport::design();
+
+        assert_near(
+            song_lua_compile_player_screen_x(
+                2,
+                0,
+                viewport,
+                SongLuaCompilePlayStyle::Versus,
+                false,
+                20.0,
+                false,
+            ),
+            193.5,
+        );
+        assert_near(
+            song_lua_compile_player_screen_x(
+                2,
+                1,
+                viewport,
+                SongLuaCompilePlayStyle::Versus,
+                false,
+                20.0,
+                false,
+            ),
+            660.5,
+        );
+    }
+
+    #[test]
+    fn song_lua_compile_player_screen_x_centers_single_and_double() {
+        let viewport = GameplayViewport::design();
+
+        assert_near(
+            song_lua_compile_player_screen_x(
+                1,
+                0,
+                viewport,
+                SongLuaCompilePlayStyle::Single,
+                false,
+                50.0,
+                true,
+            ),
+            viewport.center_x(),
+        );
+        assert_near(
+            song_lua_compile_player_screen_x(
+                1,
+                0,
+                viewport,
+                SongLuaCompilePlayStyle::Double,
+                true,
+                50.0,
+                false,
+            ),
+            viewport.center_x(),
+        );
+    }
+
+    #[test]
+    fn song_lua_compile_player_screen_x_uses_side_and_offset_policy() {
+        let viewport = GameplayViewport::design();
+
+        assert_near(
+            song_lua_compile_player_screen_x(
+                1,
+                0,
+                viewport,
+                SongLuaCompilePlayStyle::Single,
+                false,
+                10.0,
+                false,
+            ),
+            203.5,
+        );
+        assert_near(
+            song_lua_compile_player_screen_x(
+                1,
+                0,
+                viewport,
+                SongLuaCompilePlayStyle::Single,
+                true,
+                999.0,
+                false,
+            ),
+            690.5,
+        );
+    }
+
+    #[test]
     fn mini_value_uses_fallback_big_adjustment_and_clamps() {
         assert_near(mini_value_for_percent(50.0, 0.0, false), 0.5);
         assert_near(mini_value_for_percent(f32::NAN, 25.0, false), 0.25);
@@ -6065,6 +7749,229 @@ mod tests {
 
         approach_attack_value(&mut current, None, 0.0, Some(1.0), 1.0, 10.0);
         assert_eq!(current, None);
+    }
+
+    #[test]
+    fn attack_value_merge_uses_finite_override_or_base() {
+        assert_near(merge_attack_value(0.25, Some(0.75)), 0.75);
+        assert_near(merge_attack_value(0.25, Some(f32::NAN)), 0.25);
+        assert_near(merge_attack_value(0.25, None), 0.25);
+    }
+
+    #[test]
+    fn attack_effect_merges_apply_scalar_overrides() {
+        let accel = merge_attack_accel_effects(
+            AccelEffects {
+                boost: 0.25,
+                wave: 0.5,
+                ..AccelEffects::default()
+            },
+            AccelOverrides {
+                boost: Some(1.0),
+                wave: Some(f32::NAN),
+                ..AccelOverrides::default()
+            },
+        );
+        assert_near(accel.boost, 1.0);
+        assert_near(accel.wave, 0.5);
+
+        let visibility = merge_attack_visibility_effects(
+            VisibilityEffects {
+                dark: 0.1,
+                blind: 0.2,
+                cover: 0.3,
+            },
+            VisibilityOverrides {
+                dark: Some(1.0),
+                blind: Some(f32::NAN),
+                cover: None,
+            },
+        );
+        assert_near(visibility.dark, 1.0);
+        assert_near(visibility.blind, 0.2);
+        assert_near(visibility.cover, 0.3);
+    }
+
+    #[test]
+    fn attack_visual_merge_preserves_big_and_overrides_columns() {
+        let mut base = VisualEffects {
+            drunk: 0.25,
+            big: 1.0,
+            bumpy: 0.5,
+            ..VisualEffects::default()
+        };
+        base.bumpy_cols[1] = 0.25;
+        base.tiny_cols[2] = 0.5;
+
+        let mut attack = VisualOverrides {
+            drunk: Some(1.0),
+            bumpy: Some(f32::NAN),
+            ..VisualOverrides::default()
+        };
+        attack.bumpy_cols[1] = Some(0.75);
+        attack.tiny_cols[2] = Some(f32::NAN);
+
+        let visual = merge_attack_visual_effects(base, attack);
+
+        assert_near(visual.drunk, 1.0);
+        assert_near(visual.big, 1.0);
+        assert_near(visual.bumpy, 0.5);
+        assert_near(visual.bumpy_cols[1], 0.75);
+        assert_near(visual.tiny_cols[2], 0.5);
+    }
+
+    #[test]
+    fn attack_scroll_and_perspective_merges_use_base_for_invalid_overrides() {
+        let scroll = merge_attack_scroll_effects(
+            ScrollEffects {
+                reverse: 0.25,
+                split: 0.5,
+                ..ScrollEffects::default()
+            },
+            ScrollOverrides {
+                reverse: Some(1.0),
+                split: Some(f32::NAN),
+                centered: Some(0.75),
+                ..ScrollOverrides::default()
+            },
+        );
+        assert_near(scroll.reverse, 1.0);
+        assert_near(scroll.split, 0.5);
+        assert_near(scroll.centered, 0.75);
+
+        let perspective = merge_attack_perspective_effects(
+            PerspectiveEffects {
+                tilt: -0.5,
+                skew: 0.25,
+            },
+            PerspectiveOverrides {
+                tilt: Some(f32::NAN),
+                skew: Some(1.0),
+            },
+        );
+        assert_near(perspective.tilt, -0.5);
+        assert_near(perspective.skew, 1.0);
+    }
+
+    #[test]
+    fn effective_attack_outputs_use_profile_base_and_active_overrides() {
+        let accel = effective_attack_accel_effects(
+            false,
+            ACCEL_MASK_BIT_BOOST,
+            AccelOverrides {
+                brake: Some(0.5),
+                ..AccelOverrides::default()
+            },
+        );
+        assert_near(accel.boost, 1.0);
+        assert_near(accel.brake, 0.5);
+
+        let visual = effective_attack_visual_effects(
+            false,
+            VISUAL_MASK_BIT_BIG,
+            VisualOverrides {
+                drunk: Some(0.75),
+                ..VisualOverrides::default()
+            },
+        );
+        assert_near(visual.big, 1.0);
+        assert_near(visual.drunk, 0.75);
+
+        let visibility = effective_attack_visibility_effects(VisibilityOverrides {
+            dark: Some(1.0),
+            ..VisibilityOverrides::default()
+        });
+        assert_near(visibility.dark, 1.0);
+
+        let scroll = effective_attack_scroll_effects(
+            false,
+            ScrollEffects {
+                reverse: 0.25,
+                split: 0.5,
+                ..ScrollEffects::default()
+            },
+            ScrollOverrides {
+                reverse: Some(f32::NAN),
+                centered: Some(0.75),
+                ..ScrollOverrides::default()
+            },
+        );
+        assert_near(scroll.reverse, 0.25);
+        assert_near(scroll.split, 0.5);
+        assert_near(scroll.centered, 0.75);
+
+        let perspective = effective_attack_perspective_effects(
+            false,
+            PerspectiveEffects {
+                tilt: -0.5,
+                skew: 0.25,
+            },
+            PerspectiveOverrides {
+                tilt: Some(1.0),
+                ..PerspectiveOverrides::default()
+            },
+        );
+        assert_near(perspective.tilt, 1.0);
+        assert_near(perspective.skew, 0.25);
+    }
+
+    #[test]
+    fn effective_attack_outputs_clear_base_but_keep_active_overrides() {
+        let accel = effective_attack_accel_effects(
+            true,
+            ACCEL_MASK_BIT_BOOST,
+            AccelOverrides {
+                wave: Some(0.5),
+                ..AccelOverrides::default()
+            },
+        );
+        assert_near(accel.boost, 0.0);
+        assert_near(accel.wave, 0.5);
+
+        let visual = effective_attack_visual_effects(
+            true,
+            VISUAL_MASK_BIT_BIG,
+            VisualOverrides {
+                drunk: Some(0.75),
+                ..VisualOverrides::default()
+            },
+        );
+        assert_near(visual.big, 0.0);
+        assert_near(visual.drunk, 0.75);
+
+        let scroll = effective_attack_scroll_effects(
+            true,
+            ScrollEffects {
+                reverse: 1.0,
+                ..ScrollEffects::default()
+            },
+            ScrollOverrides {
+                centered: Some(0.5),
+                ..ScrollOverrides::default()
+            },
+        );
+        assert_near(scroll.reverse, 0.0);
+        assert_near(scroll.centered, 0.5);
+    }
+
+    #[test]
+    fn effective_attack_scroll_speed_uses_active_or_base_clear_policy() {
+        assert!(matches!(
+            effective_attack_scroll_speed(
+                false,
+                Some(ScrollSpeedSetting::CMod(650.0)),
+                ScrollSpeedSetting::XMod(2.0),
+            ),
+            ScrollSpeedSetting::CMod(v) if (v - 650.0).abs() <= 0.000_001
+        ));
+        assert!(matches!(
+            effective_attack_scroll_speed(false, None, ScrollSpeedSetting::XMod(2.0)),
+            ScrollSpeedSetting::XMod(v) if (v - 2.0).abs() <= 0.000_001
+        ));
+        assert_eq!(
+            effective_attack_scroll_speed(true, None, ScrollSpeedSetting::XMod(2.0)),
+            ScrollSpeedSetting::default()
+        );
     }
 
     #[test]
@@ -6451,6 +8358,89 @@ mod tests {
     }
 
     #[test]
+    fn chart_attack_row_range_uses_timing_seconds() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 4);
+        let attack = ChartAttackWindow {
+            start_second: 0.5,
+            len_seconds: 1.0,
+            mods: "mirror".to_string(),
+        };
+
+        assert_eq!(
+            chart_attack_row_range(&attack, &timing),
+            Some((ROWS_PER_BEAT as usize / 2, ROWS_PER_BEAT as usize * 3 / 2)),
+        );
+        assert_eq!(
+            chart_attack_turn_seed(99, 0, 0),
+            chart_attack_turn_seed(99, 0, 0),
+        );
+        assert_ne!(
+            chart_attack_turn_seed(99, 0, 0),
+            chart_attack_turn_seed(99, 1, 0),
+        );
+    }
+
+    #[test]
+    fn attack_turn_mod_applies_mirror_and_special_turns() {
+        let mut notes = (0..4)
+            .map(|col| {
+                let mut note = test_note_at(NoteType::Tap, None, false, 0, 0.0);
+                note.column = col;
+                note
+            })
+            .collect::<Vec<_>>();
+
+        apply_attack_turn_mod(&mut notes, 0, 4, GameplayTurnOption::Mirror, 1, 0);
+
+        let cols: Vec<_> = notes.iter().map(|note| note.column).collect();
+        assert_eq!(cols, vec![3, 2, 1, 0]);
+
+        apply_attack_turn_mod(&mut notes, 0, 4, GameplayTurnOption::None, 1, 0);
+        let unchanged_cols: Vec<_> = notes.iter().map(|note| note.column).collect();
+        assert_eq!(unchanged_cols, cols);
+    }
+
+    #[test]
+    fn chart_attack_windows_apply_only_targeted_rows() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 3);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            test_note_at(NoteType::Tap, None, false, ROWS_PER_BEAT as usize, 1.0),
+            test_note_at(NoteType::Tap, None, false, ROWS_PER_BEAT as usize * 2, 2.0),
+        ];
+        notes[0].column = 0;
+        notes[1].column = 1;
+        notes[2].column = 2;
+
+        apply_chart_attack_windows(
+            &mut notes,
+            &[ChartAttackWindow {
+                start_second: 0.5,
+                len_seconds: 1.0,
+                mods: "mirror".to_string(),
+            }],
+            &timing,
+            0,
+            4,
+            0,
+            7,
+        );
+
+        let rows_and_cols: Vec<_> = notes
+            .iter()
+            .map(|note| (note.row_index, note.column))
+            .collect();
+        assert_eq!(
+            rows_and_cols,
+            vec![
+                (0, 0),
+                (ROWS_PER_BEAT as usize, 2),
+                (ROWS_PER_BEAT as usize * 2, 2),
+            ],
+        );
+    }
+
+    #[test]
     fn active_attack_targets_mark_current_runtime_targets_only() {
         let windows = build_attack_mask_windows(&[
             ChartAttackWindow {
@@ -6510,6 +8500,100 @@ mod tests {
         targets.mini_percent = false;
         targets.clear_all = true;
         assert!(!persisted_mini_allowed(true, targets));
+    }
+
+    #[test]
+    fn active_attack_mask_window_applies_values_and_speeds() {
+        let mut mods = ParsedAttackMods {
+            scroll_speed: Some(ScrollSpeedSetting::CMod(650.0)),
+            mini_percent: Some(40.0),
+            ..ParsedAttackMods::default()
+        };
+        mods.accel.boost = Some(0.75);
+        mods.visual.drunk = Some(1.0);
+        mods.visual_speed.drunk = Some(0.25);
+        mods.appearance.hidden = Some(1.0);
+        mods.appearance_speed.hidden = Some(0.5);
+        mods.visibility.dark = Some(1.0);
+        mods.scroll.reverse = Some(0.5);
+        mods.scroll_approach_speed.reverse = Some(0.75);
+        mods.perspective.tilt = Some(-1.0);
+        let window = attack_mask_window(1.0, 4.0, mods);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+
+        apply_active_attack_mask_window(
+            &mut values,
+            &window,
+            AttackActiveTargets::default(),
+            false,
+            20.0,
+        );
+
+        assert_near(values.accel.boost.unwrap(), 0.75);
+        assert_near(values.visual.drunk.unwrap(), 1.0);
+        assert_near(values.visual_speed.drunk.unwrap(), 0.25);
+        assert_near(values.appearance_target.hidden, 1.0);
+        assert_near(values.appearance_speed.hidden, 0.5);
+        assert_near(values.visibility.dark.unwrap(), 1.0);
+        assert_near(values.scroll.reverse.unwrap(), 0.5);
+        assert_near(values.scroll_approach_speed.reverse.unwrap(), 0.75);
+        assert_near(values.perspective.tilt.unwrap(), -1.0);
+        assert!(matches!(
+            values.scroll_speed,
+            Some(ScrollSpeedSetting::CMod(v)) if (v - 650.0).abs() <= 0.000_001
+        ));
+        assert_near(values.mini_percent.unwrap(), 40.0);
+    }
+
+    #[test]
+    fn active_attack_mask_window_clearall_resets_values_and_delta_mini_base() {
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects {
+            hidden: 1.0,
+            ..AppearanceEffects::default()
+        });
+        values.accel.boost = Some(1.0);
+
+        let mut mods = ParsedAttackMods {
+            clear_all: true,
+            mini_percent: Some(25.0),
+            ..ParsedAttackMods::default()
+        };
+        mods.visual.drunk = Some(0.5);
+        let mut window = attack_mask_window(1.0, 4.0, mods);
+        window.mini_mode = MiniAttackMode::Delta;
+
+        apply_active_attack_mask_window(
+            &mut values,
+            &window,
+            AttackActiveTargets::default(),
+            false,
+            100.0,
+        );
+
+        assert!(values.clear_all);
+        assert_eq!(values.accel.boost, None);
+        assert_near(values.appearance_target.hidden, 0.0);
+        assert_near(values.visual.drunk.unwrap(), 0.5);
+        assert_near(values.mini_percent.unwrap(), 25.0);
+    }
+
+    #[test]
+    fn active_attack_mask_window_blocks_persisted_replaced_targets() {
+        let mut mods = ParsedAttackMods::default();
+        mods.visual.drunk = Some(0.75);
+        mods.visual.bumpy_cols[2] = Some(1.0);
+        mods.scroll.reverse = Some(0.5);
+        let window = attack_mask_window(1.0, 4.0, mods);
+        let mut targets = AttackActiveTargets::default();
+        targets.visual.drunk = Some(0.0);
+        targets.scroll.reverse = Some(0.0);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+
+        apply_active_attack_mask_window(&mut values, &window, targets, true, 0.0);
+
+        assert_eq!(values.visual.drunk, None);
+        assert_eq!(values.scroll.reverse, None);
+        assert_near(values.visual.bumpy_cols[2].unwrap(), 1.0);
     }
 
     #[test]
@@ -7168,6 +9252,170 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_ease_targets_normalize_column_mods() {
+        let mut windows = Vec::new();
+
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            1.0,
+            2.0,
+            4.0,
+            "Bumpy4",
+            25.0,
+            75.0,
+            Some("outQuad"),
+            Some(0.5),
+            Some(1.5),
+        ));
+
+        assert_eq!(windows.len(), 1);
+        let window = &windows[0];
+        assert_eq!(window.target, SongLuaEaseMaskTarget::VisualBumpyColumn(3));
+        assert_near(window.start_second, 1.0);
+        assert_near(window.end_second, 2.0);
+        assert_near(window.sustain_end_second, 4.0);
+        assert_near(window.from, 0.25);
+        assert_near(window.to, 0.75);
+        assert_eq!(window.easing.as_deref(), Some("outQuad"));
+        assert_eq!(window.opt1, Some(0.5));
+        assert_eq!(window.opt2, Some(1.5));
+    }
+
+    #[test]
+    fn song_lua_ease_targets_expand_perspective_aliases() {
+        let mut windows = Vec::new();
+
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "incoming",
+            20.0,
+            60.0,
+            None,
+            None,
+            None,
+        ));
+
+        assert_eq!(windows.len(), 2);
+        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::PerspectiveTilt);
+        assert_near(windows[0].from, -0.2);
+        assert_near(windows[0].to, -0.6);
+        assert_eq!(windows[1].target, SongLuaEaseMaskTarget::PerspectiveSkew);
+        assert_near(windows[1].from, 0.2);
+        assert_near(windows[1].to, 0.6);
+    }
+
+    #[test]
+    fn song_lua_ease_targets_keep_raw_speed_and_mini_values() {
+        let mut windows = Vec::new();
+
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "cmod",
+            300.0,
+            650.0,
+            None,
+            None,
+            None,
+        ));
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "mini",
+            25.0,
+            50.0,
+            None,
+            None,
+            None,
+        ));
+
+        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ScrollSpeedC);
+        assert_near(windows[0].from, 300.0);
+        assert_near(windows[0].to, 650.0);
+        assert_eq!(windows[1].target, SongLuaEaseMaskTarget::MiniPercent);
+        assert_near(windows[1].from, 25.0);
+        assert_near(windows[1].to, 50.0);
+    }
+
+    #[test]
+    fn song_lua_ease_targets_handle_aliases_and_reject_unknown() {
+        let mut windows = Vec::new();
+
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "reverse vanish",
+            0.0,
+            100.0,
+            None,
+            None,
+            None,
+        ));
+        assert_eq!(
+            windows[0].target,
+            SongLuaEaseMaskTarget::AppearanceRandomVanish
+        );
+        assert_near(windows[0].to, 1.0);
+
+        assert!(!append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "",
+            0.0,
+            100.0,
+            None,
+            None,
+            None,
+        ));
+        assert!(!append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "unsupported",
+            0.0,
+            100.0,
+            None,
+            None,
+            None,
+        ));
+        assert_eq!(windows.len(), 1);
+    }
+
+    #[test]
+    fn song_lua_ease_targets_convert_confusion_y_offset() {
+        let mut windows = Vec::new();
+
+        assert!(append_song_lua_ease_targets(
+            &mut windows,
+            0.0,
+            1.0,
+            1.0,
+            "confusionyoffset",
+            std::f32::consts::PI * 50.0,
+            std::f32::consts::PI * 100.0,
+            None,
+            None,
+            None,
+        ));
+
+        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ConfusionYOffsetY);
+        assert_near(windows[0].from, 90.0);
+        assert_near(windows[0].to, 180.0);
+    }
+
+    #[test]
     fn song_lua_ease_factor_defaults_to_clamped_linear() {
         assert_near(song_lua_ease_factor(None, 0.25, None, None), 0.25);
         assert_near(song_lua_ease_factor(Some("linear"), -1.0, None, None), 0.0);
@@ -7204,6 +9452,431 @@ mod tests {
         for easing in ["inBack", "outInBack", "inElastic", "outInElastic"] {
             assert!(song_lua_ease_factor(Some(easing), 0.35, Some(1.0), Some(0.2)).is_finite());
         }
+    }
+
+    #[test]
+    fn song_lua_ease_window_value_interpolates_and_sustains() {
+        let window = song_lua_ease_mask_window(
+            SongLuaEaseMaskTarget::AppearanceStealth,
+            1.0,
+            3.0,
+            5.0,
+            10.0,
+            30.0,
+        );
+
+        assert!(song_lua_ease_window_value(&window, 0.99).is_none());
+        assert_near(song_lua_ease_window_value(&window, 2.0).unwrap(), 20.0);
+        assert_near(song_lua_ease_window_value(&window, 4.0).unwrap(), 30.0);
+        assert!(song_lua_ease_window_value(&window, 5.0).is_none());
+        assert!(song_lua_ease_window_value(&window, f32::NAN).is_none());
+    }
+
+    #[test]
+    fn song_lua_ease_window_value_snaps_invalid_durations_to_target() {
+        let window =
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::MiniPercent, 2.0, 2.0, 4.0, 0.0, 50.0);
+
+        assert_near(song_lua_ease_window_value(&window, 2.5).unwrap(), 50.0);
+    }
+
+    #[test]
+    fn song_lua_ease_tails_stop_at_next_same_target() {
+        let mut windows = [
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::AppearanceStealth,
+                1.0,
+                2.0,
+                2.0,
+                0.0,
+                1.0,
+            ),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::AppearanceStealth,
+                4.0,
+                5.0,
+                5.0,
+                1.0,
+                0.0,
+            ),
+        ];
+
+        song_lua_extend_ease_tails(&mut windows, &[]);
+
+        assert_near(windows[0].sustain_end_second, 4.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
+    }
+
+    #[test]
+    fn song_lua_ease_tails_stop_at_constant_masks() {
+        let mut windows = [
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::AppearanceStealth,
+                1.0,
+                2.0,
+                2.0,
+                0.0,
+                1.0,
+            ),
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::PlayerX, 1.0, 2.0, 2.0, 0.0, 64.0),
+        ];
+        let mut mods = ParsedAttackMods {
+            clear_all: true,
+            ..ParsedAttackMods::default()
+        };
+        mods.appearance.hidden = Some(1.0);
+        let constant = attack_mask_window(3.0, 6.0, mods);
+
+        song_lua_extend_ease_tails(&mut windows, &[constant]);
+
+        assert_near(windows[0].sustain_end_second, 3.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
+    }
+
+    #[test]
+    fn song_lua_ease_tails_match_column_constant_targets() {
+        let mut windows = [
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::VisualBumpyColumn(2),
+                1.0,
+                2.0,
+                2.0,
+                0.0,
+                1.0,
+            ),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::VisualBumpyColumn(3),
+                1.0,
+                2.0,
+                2.0,
+                0.0,
+                1.0,
+            ),
+        ];
+        let mut mods = ParsedAttackMods::default();
+        mods.visual.bumpy_cols[2] = Some(1.0);
+        let constant = attack_mask_window(3.0, 6.0, mods);
+
+        song_lua_extend_ease_tails(&mut windows, &[constant]);
+
+        assert_near(windows[0].sustain_end_second, 3.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
+    }
+
+    #[test]
+    fn song_lua_player_transform_target_updates_player_values() {
+        let mut player = SongLuaPlayerTransformValues::default();
+
+        song_lua_apply_player_transform_target(
+            SongLuaEaseMaskTarget::PlayerX,
+            f32::NAN,
+            &mut player,
+        );
+        song_lua_apply_player_transform_target(
+            SongLuaEaseMaskTarget::VisualDrunk,
+            1.0,
+            &mut player,
+        );
+        assert_eq!(player, SongLuaPlayerTransformValues::default());
+
+        song_lua_apply_player_transform_target(
+            SongLuaEaseMaskTarget::PlayerZoom,
+            1.25,
+            &mut player,
+        );
+        song_lua_apply_player_transform_target(
+            SongLuaEaseMaskTarget::PlayerSkewY,
+            -0.5,
+            &mut player,
+        );
+
+        assert_near(player.zoom_x.unwrap(), 1.25);
+        assert_near(player.zoom_y.unwrap(), 1.25);
+        assert_near(player.zoom_z.unwrap(), 1.25);
+        assert_near(player.skew_y.unwrap(), -0.5);
+    }
+
+    #[test]
+    fn song_lua_player_transform_resolve_filters_and_defaults_values() {
+        let resolved = SongLuaPlayerTransformValues {
+            x: Some(f32::NAN),
+            y: Some(32.0),
+            z: Some(f32::INFINITY),
+            rotation_x: Some(12.0),
+            rotation_z: None,
+            rotation_y: Some(f32::NEG_INFINITY),
+            skew_x: Some(-0.25),
+            skew_y: Some(f32::NAN),
+            zoom_x: None,
+            zoom_y: Some(1.5),
+            zoom_z: Some(f32::NAN),
+            confusion_y_offset: Some(9.0),
+        }
+        .resolve();
+
+        assert_eq!(resolved.x, None);
+        assert_eq!(resolved.y, Some(32.0));
+        assert_near(resolved.z, 0.0);
+        assert_near(resolved.rotation_x, 12.0);
+        assert_near(resolved.rotation_z, 0.0);
+        assert_near(resolved.rotation_y, 0.0);
+        assert_near(resolved.skew_x, -0.25);
+        assert_near(resolved.skew_y, 0.0);
+        assert_near(resolved.zoom_x, 1.0);
+        assert_near(resolved.zoom_y, 1.5);
+        assert_near(resolved.zoom_z, 1.0);
+        assert_near(resolved.confusion_y_offset, 9.0);
+    }
+
+    #[test]
+    fn song_lua_eased_target_updates_effect_outputs() {
+        let mut accel = AccelOverrides::default();
+        let mut visual = VisualOverrides::default();
+        let mut appearance = AppearanceEffects::default();
+        let mut visibility = VisibilityOverrides::default();
+        let mut scroll = ScrollOverrides::default();
+        let mut perspective = PerspectiveOverrides::default();
+        let mut scroll_speed = None;
+        let mut mini_percent = None;
+        let mut player = SongLuaPlayerTransformValues::default();
+
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::AccelBoost,
+            0.75,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::VisualBumpyColumn(2),
+            1.5,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::AppearanceStealth,
+            0.25,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::VisibilityDark,
+            1.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::ScrollReverse,
+            0.5,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::PerspectiveTilt,
+            -1.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::MiniPercent,
+            30.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+
+        assert_near(accel.boost.unwrap(), 0.75);
+        assert_near(visual.bumpy_cols[2].unwrap(), 1.5);
+        assert_near(appearance.stealth, 0.25);
+        assert_near(visibility.dark.unwrap(), 1.0);
+        assert_near(scroll.reverse.unwrap(), 0.5);
+        assert_near(perspective.tilt.unwrap(), -1.0);
+        assert_near(mini_percent.unwrap(), 30.0);
+    }
+
+    #[test]
+    fn song_lua_eased_target_handles_scroll_speed_and_player_targets() {
+        let mut accel = AccelOverrides::default();
+        let mut visual = VisualOverrides::default();
+        let mut appearance = AppearanceEffects::default();
+        let mut visibility = VisibilityOverrides::default();
+        let mut scroll = ScrollOverrides::default();
+        let mut perspective = PerspectiveOverrides::default();
+        let mut scroll_speed = None;
+        let mut mini_percent = None;
+        let mut player = SongLuaPlayerTransformValues::default();
+
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::ScrollSpeedC,
+            -100.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        assert!(scroll_speed.is_none());
+
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::ScrollSpeedC,
+            650.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        assert!(matches!(
+            scroll_speed,
+            Some(ScrollSpeedSetting::CMod(v)) if (v - 650.0).abs() <= 0.000_001
+        ));
+
+        song_lua_apply_eased_target(
+            SongLuaEaseMaskTarget::PlayerRotationZ,
+            45.0,
+            &mut accel,
+            &mut visual,
+            &mut appearance,
+            &mut visibility,
+            &mut scroll,
+            &mut perspective,
+            &mut scroll_speed,
+            &mut mini_percent,
+            &mut player,
+        );
+        assert_near(player.rotation_z.unwrap(), 45.0);
+    }
+
+    #[test]
+    fn song_lua_player_eases_apply_only_player_targets() {
+        let windows = [
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::PlayerZoom, 1.0, 3.0, 3.0, 0.0, 2.0),
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::VisualDrunk, 1.0, 3.0, 3.0, 0.0, 1.0),
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::PlayerX, 3.0, 4.0, 4.0, 0.0, 100.0),
+        ];
+        let mut player = SongLuaPlayerTransformValues::default();
+
+        apply_song_lua_player_eases(&mut player, &windows, 2.0);
+
+        assert_near(player.zoom_x.unwrap(), 1.0);
+        assert_near(player.zoom_y.unwrap(), 1.0);
+        assert_near(player.zoom_z.unwrap(), 1.0);
+        assert_eq!(player.x, None);
+    }
+
+    #[test]
+    fn song_lua_attack_eases_apply_active_windows_and_mini_delta() {
+        let windows = [
+            song_lua_ease_mask_window(SongLuaEaseMaskTarget::AccelBoost, 1.0, 3.0, 3.0, 0.0, 1.0),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::AppearanceStealth,
+                1.0,
+                3.0,
+                3.0,
+                0.0,
+                1.0,
+            ),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::ScrollSpeedC,
+                1.0,
+                3.0,
+                3.0,
+                300.0,
+                600.0,
+            ),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::MiniPercent,
+                1.0,
+                3.0,
+                3.0,
+                10.0,
+                20.0,
+            ),
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::PlayerRotationZ,
+                1.0,
+                3.0,
+                3.0,
+                0.0,
+                90.0,
+            ),
+        ];
+        let mut attack = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        let mut appearance = AppearanceEffects::default();
+        let mut player = SongLuaPlayerTransformValues::default();
+
+        apply_song_lua_attack_eases(
+            &mut attack,
+            &mut appearance,
+            &mut player,
+            &windows,
+            2.0,
+            30.0,
+        );
+
+        assert_near(attack.accel.boost.unwrap(), 0.5);
+        assert_near(appearance.stealth, 0.5);
+        assert!(matches!(
+            attack.scroll_speed,
+            Some(ScrollSpeedSetting::CMod(v)) if (v - 450.0).abs() <= 0.000_001
+        ));
+        assert_near(attack.mini_percent.unwrap(), 45.0);
+        assert_near(player.rotation_z.unwrap(), 45.0);
     }
 
     #[test]

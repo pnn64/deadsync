@@ -6,19 +6,31 @@ use crate::game::parsing::song_lua::{
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
-use deadsync_core::timing::ROWS_PER_BEAT;
-pub(super) use deadsync_gameplay::AttackMaskWindow;
+#[cfg(test)]
+pub(super) use deadsync_gameplay::parse_attack_mods;
+pub(super) use deadsync_gameplay::parse_song_lua_runtime_mods;
+#[cfg(test)]
+pub(super) use deadsync_gameplay::song_lua_ease_window_value;
 #[cfg(test)]
 pub(super) use deadsync_gameplay::turn_option_bits;
 use deadsync_gameplay::{
-    ChartAttackWindow, ParsedAttackMods, apply_appearance_target, approach_appearance_effects,
-    approach_scroll_overrides_to_target, approach_visual_overrides_to_base,
-    approach_visual_overrides_to_target, attack_token_key,
+    ActiveAttackMaskValues, ChartAttackWindow, SongLuaCompilePlayStyle,
+    append_song_lua_ease_targets, apply_active_attack_mask_window,
+    apply_chart_attack_windows as apply_chart_attack_windows_to_notes, apply_song_lua_attack_eases,
+    apply_song_lua_player_eases, approach_appearance_effects, approach_scroll_overrides_to_target,
+    approach_visual_overrides_to_base, approach_visual_overrides_to_target,
     build_attack_mask_windows as build_mask_windows_from_attacks, build_random_attack_windows,
-    collect_active_attack_targets, mod_column_suffix, parse_chart_attack_windows,
-    persisted_mini_allowed, persisted_target_allowed,
+    collect_active_attack_targets, effective_attack_accel_effects,
+    effective_attack_perspective_effects, effective_attack_scroll_effects,
+    effective_attack_scroll_speed, effective_attack_visibility_effects,
+    effective_attack_visual_effects, parse_chart_attack_windows,
+    song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
+    song_lua_extend_ease_tails,
 };
-pub(super) use deadsync_gameplay::{parse_attack_mods, parse_song_lua_runtime_mods};
+pub(super) use deadsync_gameplay::{
+    AttackMaskWindow, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaPlayerTransform,
+    SongLuaPlayerTransformValues,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -30,27 +42,11 @@ use std::time::Instant;
 
 use super::{
     AccelEffects, AccelOverrides, AppearanceEffects, ChartAttackEffects, GameplaySession,
-    GameplayTurnOption, GameplayViewport, MAX_COLS, MAX_PLAYERS, MiniAttackMode,
-    PerspectiveEffects, PerspectiveOverrides, ScrollEffects, ScrollOverrides, State,
-    VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides, apply_hyper_shuffle,
-    apply_super_shuffle_taps, apply_turn_permutation, apply_uncommon_masks_with_masks,
-    approach_attack_mini_percent_to_target, attack_mini_target_percent, effective_mini_percent,
-    perspective_effects_from_profile, scroll_effects_from_option, song_lua_ease_factor,
-    sort_player_notes, spacing_multiplier_for_percent,
+    GameplayViewport, MAX_PLAYERS, MiniAttackMode, PerspectiveEffects, PerspectiveOverrides,
+    ScrollEffects, ScrollOverrides, State, VisibilityEffects, VisualEffects,
+    approach_attack_mini_percent_to_target, effective_mini_percent,
+    perspective_effects_from_profile, scroll_effects_from_option, spacing_multiplier_for_percent,
 };
-
-#[derive(Clone, Debug)]
-pub(super) struct SongLuaEaseMaskWindow {
-    pub(super) start_second: f32,
-    pub(super) end_second: f32,
-    pub(super) sustain_end_second: f32,
-    pub(super) target: SongLuaEaseMaskTarget,
-    pub(super) from: f32,
-    pub(super) to: f32,
-    pub(super) easing: Option<String>,
-    pub(super) opt1: Option<f32>,
-    pub(super) opt2: Option<f32>,
-}
 
 #[derive(Clone, Debug)]
 pub struct SongLuaOverlayEaseWindowRuntime {
@@ -115,69 +111,6 @@ pub struct GameplaySongLuaData {
     pub primary: Option<GameplayCompiledSongLua>,
     pub background_layers: Vec<GameplaySongLuaLayer>,
     pub foreground_layers: Vec<GameplaySongLuaLayer>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum SongLuaEaseMaskTarget {
-    AccelBoost,
-    AccelBrake,
-    AccelWave,
-    AccelExpand,
-    AccelBoomerang,
-    VisualDrunk,
-    VisualDizzy,
-    VisualConfusion,
-    VisualConfusionOffset,
-    VisualConfusionOffsetColumn(usize),
-    VisualFlip,
-    VisualInvert,
-    VisualTornado,
-    VisualTipsy,
-    VisualTiny,
-    VisualBumpy,
-    VisualBumpyOffset,
-    VisualBumpyPeriod,
-    VisualBumpyColumn(usize),
-    VisualTinyColumn(usize),
-    VisualMoveXColumn(usize),
-    VisualMoveYColumn(usize),
-    VisualPulseInner,
-    VisualPulseOuter,
-    VisualPulsePeriod,
-    VisualPulseOffset,
-    VisualBeat,
-    AppearanceHidden,
-    AppearanceSudden,
-    AppearanceStealth,
-    AppearanceBlink,
-    AppearanceRandomVanish,
-    VisibilityDark,
-    VisibilityBlind,
-    VisibilityCover,
-    ScrollReverse,
-    ScrollSplit,
-    ScrollAlternate,
-    ScrollCross,
-    ScrollCentered,
-    PerspectiveTilt,
-    PerspectiveSkew,
-    ScrollSpeedX,
-    ScrollSpeedC,
-    ScrollSpeedM,
-    MiniPercent,
-    PlayerX,
-    PlayerY,
-    PlayerZ,
-    PlayerRotationX,
-    PlayerRotationZ,
-    PlayerRotationY,
-    PlayerSkewX,
-    PlayerSkewY,
-    PlayerZoom,
-    PlayerZoomX,
-    PlayerZoomY,
-    PlayerZoomZ,
-    ConfusionYOffsetY,
 }
 
 fn build_attack_windows_for_player(
@@ -378,945 +311,6 @@ pub(super) fn build_song_lua_constant_windows_for_player(
         }
     }
     out
-}
-
-#[inline(always)]
-fn song_lua_normalized_value(value: f32) -> f32 {
-    value / 100.0
-}
-
-fn push_song_lua_ease_target(
-    out: &mut Vec<SongLuaEaseMaskWindow>,
-    target: SongLuaEaseMaskTarget,
-    start_second: f32,
-    end_second: f32,
-    sustain_end_second: f32,
-    from: f32,
-    to: f32,
-    easing: Option<&str>,
-    opt1: Option<f32>,
-    opt2: Option<f32>,
-) {
-    out.push(SongLuaEaseMaskWindow {
-        start_second,
-        end_second,
-        sustain_end_second,
-        target,
-        from,
-        to,
-        easing: easing.map(ToString::to_string),
-        opt1,
-        opt2,
-    });
-}
-
-fn append_song_lua_ease_targets(
-    out: &mut Vec<SongLuaEaseMaskWindow>,
-    start_second: f32,
-    end_second: f32,
-    sustain_end_second: f32,
-    target_name: &str,
-    from: f32,
-    to: f32,
-    easing: Option<&str>,
-    opt1: Option<f32>,
-    opt2: Option<f32>,
-) -> bool {
-    let key = attack_token_key(target_name);
-    if key.is_empty() {
-        return false;
-    }
-    let pct_from = song_lua_normalized_value(from);
-    let pct_to = song_lua_normalized_value(to);
-    if let Some(col) = mod_column_suffix(&key, "bumpy") {
-        push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualBumpyColumn(col),
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        );
-        return true;
-    }
-    if let Some(col) = mod_column_suffix(&key, "tiny") {
-        push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualTinyColumn(col),
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        );
-        return true;
-    }
-    if let Some(col) = mod_column_suffix(&key, "movex") {
-        push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualMoveXColumn(col),
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        );
-        return true;
-    }
-    if let Some(col) = mod_column_suffix(&key, "movey") {
-        push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualMoveYColumn(col),
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        );
-        return true;
-    }
-    if let Some(col) = mod_column_suffix(&key, "confusionoffset") {
-        push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col),
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        );
-        return true;
-    }
-    match key.as_str() {
-        "boost" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AccelBoost,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "brake" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AccelBrake,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "wave" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AccelWave,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "expand" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AccelExpand,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "boomerang" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AccelBoomerang,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "drunk" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualDrunk,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "dizzy" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualDizzy,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "confusion" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualConfusion,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "confusionoffset" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualConfusionOffset,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "flip" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualFlip,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "invert" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualInvert,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "tornado" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualTornado,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "tipsy" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualTipsy,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "bumpy" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualBumpy,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "bumpyoffset" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualBumpyOffset,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "bumpyperiod" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualBumpyPeriod,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "pulseinner" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualPulseInner,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "pulseouter" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualPulseOuter,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "pulseperiod" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualPulsePeriod,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "pulseoffset" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualPulseOffset,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "beat" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualBeat,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "hidden" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AppearanceHidden,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "sudden" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AppearanceSudden,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "stealth" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AppearanceStealth,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "blink" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AppearanceBlink,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "rvanish" | "randomvanish" | "reversevanish" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::AppearanceRandomVanish,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "dark" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisibilityDark,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "blind" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisibilityBlind,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "cover" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisibilityCover,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "reverse" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollReverse,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "split" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollSplit,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "alternate" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollAlternate,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "cross" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollCross,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "centered" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollCentered,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "incoming" => {
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveTilt,
-                start_second,
-                end_second,
-                sustain_end_second,
-                -pct_from,
-                -pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveSkew,
-                start_second,
-                end_second,
-                sustain_end_second,
-                pct_from,
-                pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-        }
-        "space" => {
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveTilt,
-                start_second,
-                end_second,
-                sustain_end_second,
-                pct_from,
-                pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveSkew,
-                start_second,
-                end_second,
-                sustain_end_second,
-                pct_from,
-                pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-        }
-        "hallway" => {
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveTilt,
-                start_second,
-                end_second,
-                sustain_end_second,
-                -pct_from,
-                -pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveSkew,
-                start_second,
-                end_second,
-                sustain_end_second,
-                0.0,
-                0.0,
-                easing,
-                opt1,
-                opt2,
-            );
-        }
-        "distant" => {
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveTilt,
-                start_second,
-                end_second,
-                sustain_end_second,
-                pct_from,
-                pct_to,
-                easing,
-                opt1,
-                opt2,
-            );
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveSkew,
-                start_second,
-                end_second,
-                sustain_end_second,
-                0.0,
-                0.0,
-                easing,
-                opt1,
-                opt2,
-            );
-        }
-        "overhead" => {
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveTilt,
-                start_second,
-                end_second,
-                sustain_end_second,
-                0.0,
-                0.0,
-                easing,
-                opt1,
-                opt2,
-            );
-            push_song_lua_ease_target(
-                out,
-                SongLuaEaseMaskTarget::PerspectiveSkew,
-                start_second,
-                end_second,
-                sustain_end_second,
-                0.0,
-                0.0,
-                easing,
-                opt1,
-                opt2,
-            );
-        }
-        "xmod" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollSpeedX,
-            start_second,
-            end_second,
-            sustain_end_second,
-            from,
-            to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "cmod" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollSpeedC,
-            start_second,
-            end_second,
-            sustain_end_second,
-            from,
-            to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "mmod" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ScrollSpeedM,
-            start_second,
-            end_second,
-            sustain_end_second,
-            from,
-            to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "tiny" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::VisualTiny,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "mini" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::MiniPercent,
-            start_second,
-            end_second,
-            sustain_end_second,
-            from,
-            to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "skewx" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::PlayerSkewX,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "skewy" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::PlayerSkewY,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from,
-            pct_to,
-            easing,
-            opt1,
-            opt2,
-        ),
-        "confusionyoffset" => push_song_lua_ease_target(
-            out,
-            SongLuaEaseMaskTarget::ConfusionYOffsetY,
-            start_second,
-            end_second,
-            sustain_end_second,
-            pct_from * (180.0 / std::f32::consts::PI),
-            pct_to * (180.0 / std::f32::consts::PI),
-            easing,
-            opt1,
-            opt2,
-        ),
-        _ => return false,
-    }
-    true
-}
-
-#[inline(always)]
-fn song_lua_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
-    matches!(
-        target,
-        SongLuaEaseMaskTarget::PlayerX
-            | SongLuaEaseMaskTarget::PlayerY
-            | SongLuaEaseMaskTarget::PlayerZ
-            | SongLuaEaseMaskTarget::PlayerRotationX
-            | SongLuaEaseMaskTarget::PlayerRotationZ
-            | SongLuaEaseMaskTarget::PlayerRotationY
-            | SongLuaEaseMaskTarget::PlayerSkewX
-            | SongLuaEaseMaskTarget::PlayerSkewY
-            | SongLuaEaseMaskTarget::PlayerZoom
-            | SongLuaEaseMaskTarget::PlayerZoomX
-            | SongLuaEaseMaskTarget::PlayerZoomY
-            | SongLuaEaseMaskTarget::PlayerZoomZ
-            | SongLuaEaseMaskTarget::ConfusionYOffsetY
-    )
-}
-
-#[inline(always)]
-fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseMaskTarget) -> bool {
-    if window.clear_all && !song_lua_player_transform_target(target) {
-        return true;
-    }
-    match target {
-        SongLuaEaseMaskTarget::AccelBoost => window.accel.boost.is_some(),
-        SongLuaEaseMaskTarget::AccelBrake => window.accel.brake.is_some(),
-        SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
-        SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
-        SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
-        SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
-        SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
-        SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
-        SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
-        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
-            .visual
-            .confusion_offset_cols
-            .get(col)
-            .is_some_and(Option::is_some),
-        SongLuaEaseMaskTarget::VisualFlip => window.visual.flip.is_some(),
-        SongLuaEaseMaskTarget::VisualInvert => window.visual.invert.is_some(),
-        SongLuaEaseMaskTarget::VisualTornado => window.visual.tornado.is_some(),
-        SongLuaEaseMaskTarget::VisualTipsy => window.visual.tipsy.is_some(),
-        SongLuaEaseMaskTarget::VisualTiny => window.visual.tiny.is_some(),
-        SongLuaEaseMaskTarget::VisualBumpy => window.visual.bumpy.is_some(),
-        SongLuaEaseMaskTarget::VisualBumpyOffset => window.visual.bumpy_offset.is_some(),
-        SongLuaEaseMaskTarget::VisualBumpyPeriod => window.visual.bumpy_period.is_some(),
-        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => window
-            .visual
-            .bumpy_cols
-            .get(col)
-            .is_some_and(Option::is_some),
-        SongLuaEaseMaskTarget::VisualTinyColumn(col) => window
-            .visual
-            .tiny_cols
-            .get(col)
-            .is_some_and(Option::is_some),
-        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => window
-            .visual
-            .move_x_cols
-            .get(col)
-            .is_some_and(Option::is_some),
-        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => window
-            .visual
-            .move_y_cols
-            .get(col)
-            .is_some_and(Option::is_some),
-        SongLuaEaseMaskTarget::VisualPulseInner => window.visual.pulse_inner.is_some(),
-        SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
-        SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
-        SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
-        SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
-        SongLuaEaseMaskTarget::AppearanceHidden => window.appearance.hidden.is_some(),
-        SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
-        SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
-        SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
-        SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
-        SongLuaEaseMaskTarget::VisibilityDark => window.visibility.dark.is_some(),
-        SongLuaEaseMaskTarget::VisibilityBlind => window.visibility.blind.is_some(),
-        SongLuaEaseMaskTarget::VisibilityCover => window.visibility.cover.is_some(),
-        SongLuaEaseMaskTarget::ScrollReverse => window.scroll.reverse.is_some(),
-        SongLuaEaseMaskTarget::ScrollSplit => window.scroll.split.is_some(),
-        SongLuaEaseMaskTarget::ScrollAlternate => window.scroll.alternate.is_some(),
-        SongLuaEaseMaskTarget::ScrollCross => window.scroll.cross.is_some(),
-        SongLuaEaseMaskTarget::ScrollCentered => window.scroll.centered.is_some(),
-        SongLuaEaseMaskTarget::PerspectiveTilt => window.perspective.tilt.is_some(),
-        SongLuaEaseMaskTarget::PerspectiveSkew => window.perspective.skew.is_some(),
-        SongLuaEaseMaskTarget::ScrollSpeedX
-        | SongLuaEaseMaskTarget::ScrollSpeedC
-        | SongLuaEaseMaskTarget::ScrollSpeedM => window.scroll_speed.is_some(),
-        SongLuaEaseMaskTarget::MiniPercent => window.mini_percent.is_some(),
-        SongLuaEaseMaskTarget::PlayerX
-        | SongLuaEaseMaskTarget::PlayerY
-        | SongLuaEaseMaskTarget::PlayerZ
-        | SongLuaEaseMaskTarget::PlayerRotationX
-        | SongLuaEaseMaskTarget::PlayerRotationZ
-        | SongLuaEaseMaskTarget::PlayerRotationY
-        | SongLuaEaseMaskTarget::PlayerSkewX
-        | SongLuaEaseMaskTarget::PlayerSkewY
-        | SongLuaEaseMaskTarget::PlayerZoom
-        | SongLuaEaseMaskTarget::PlayerZoomX
-        | SongLuaEaseMaskTarget::PlayerZoomY
-        | SongLuaEaseMaskTarget::PlayerZoomZ
-        | SongLuaEaseMaskTarget::ConfusionYOffsetY => false,
-    }
-}
-
-fn song_lua_constant_cutoff_second(
-    constant: &AttackMaskWindow,
-    window: &SongLuaEaseMaskWindow,
-    epsilon: f32,
-) -> Option<f32> {
-    if !constant.start_second.is_finite()
-        || !constant.end_second.is_finite()
-        || !window.end_second.is_finite()
-        || !song_lua_constant_sets_target(constant, window.target)
-    {
-        return None;
-    }
-    if constant.end_second <= window.end_second + epsilon {
-        return None;
-    }
-    if constant.start_second <= window.end_second + epsilon {
-        Some(window.end_second)
-    } else {
-        Some(constant.start_second)
-    }
-}
-
-fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow], constants: &[AttackMaskWindow]) {
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
-    for i in 0..out.len() {
-        let window = &out[i];
-        let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
-            window.sustain_end_second
-        } else {
-            f32::MAX
-        };
-        let cutoff_second = out
-            .iter()
-            .enumerate()
-            .filter_map(|(j, other)| {
-                if i == j
-                    || other.target != window.target
-                    || !other.start_second.is_finite()
-                    || other.start_second <= window.start_second + SAME_TICK_EPSILON
-                {
-                    None
-                } else {
-                    Some(other.start_second)
-                }
-            })
-            .fold(None::<f32>, |acc, start| {
-                Some(match acc {
-                    Some(current) => current.min(start),
-                    None => start,
-                })
-            });
-        let constant_cutoff = constants
-            .iter()
-            .filter_map(|constant| {
-                song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
-            })
-            .fold(cutoff_second, |acc, start| {
-                Some(match acc {
-                    Some(current) => current.min(start),
-                    None => start,
-                })
-            });
-        out[i].sustain_end_second =
-            constant_cutoff.map_or(default_end, |cutoff| default_end.min(cutoff));
-    }
 }
 
 pub(super) fn build_song_lua_ease_windows_for_player(
@@ -1931,6 +925,15 @@ fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod 
     }
 }
 
+#[inline(always)]
+fn song_lua_compile_play_style(play_style: profile_data::PlayStyle) -> SongLuaCompilePlayStyle {
+    match play_style {
+        profile_data::PlayStyle::Single => SongLuaCompilePlayStyle::Single,
+        profile_data::PlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
+        profile_data::PlayStyle::Double => SongLuaCompilePlayStyle::Double,
+    }
+}
+
 fn song_lua_compile_player_screen_x(
     num_players: usize,
     player_index: usize,
@@ -1940,35 +943,15 @@ fn song_lua_compile_player_screen_x(
     player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
-    let clamped_width = viewport.width().clamp(640.0, 854.0);
-    let centered_one_side = num_players == 1
-        && play_style == profile_data::PlayStyle::Single
-        && center_1player_notefield;
-    let centered_both_sides = num_players == 1 && play_style == profile_data::PlayStyle::Double;
-    let p2_side = if num_players == 1 {
-        profile_data::is_single_p2_side(play_style, player_side)
-    } else {
-        player_index == 1
-    };
-    let base_center_x = if num_players == 2 {
-        if p2_side {
-            viewport.center_x() + (clamped_width * 0.25)
-        } else {
-            viewport.center_x() - (clamped_width * 0.25)
-        }
-    } else if centered_both_sides || centered_one_side {
-        viewport.center_x()
-    } else if p2_side {
-        viewport.center_x() + (clamped_width * 0.25)
-    } else {
-        viewport.center_x() - (clamped_width * 0.25)
-    };
-    if num_players == 1 && (centered_both_sides || centered_one_side) {
-        viewport.center_x()
-    } else {
-        let offset_sign = if p2_side { 1.0 } else { -1.0 };
-        base_center_x + offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32)
-    }
+    gameplay_song_lua_compile_player_screen_x(
+        num_players,
+        player_index,
+        viewport,
+        song_lua_compile_play_style(play_style),
+        profile_data::is_single_p2_side(play_style, player_side),
+        profile.note_field_offset_x as f32,
+        center_1player_notefield,
+    )
 }
 
 pub(crate) fn song_lua_compile_context(
@@ -2559,278 +1542,6 @@ fn log_song_lua_runtime_debug(
     }
 }
 
-#[inline(always)]
-fn song_lua_lerp_unclamped(a: f32, b: f32, t: f32) -> f32 {
-    (b - a).mul_add(t, a)
-}
-
-pub(super) fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> Option<f32> {
-    if !now.is_finite()
-        || !window.start_second.is_finite()
-        || !window.sustain_end_second.is_finite()
-        || !window.from.is_finite()
-        || !window.to.is_finite()
-        || now < window.start_second
-        || now >= window.sustain_end_second
-    {
-        return None;
-    }
-    if !window.end_second.is_finite()
-        || window.end_second <= window.start_second
-        || now >= window.end_second
-    {
-        return Some(window.to);
-    }
-    let duration = window.end_second - window.start_second;
-    if duration <= f32::EPSILON {
-        return Some(window.to);
-    }
-    let factor = song_lua_ease_factor(
-        window.easing.as_deref(),
-        (now - window.start_second) / duration,
-        window.opt1,
-        window.opt2,
-    );
-    let value = song_lua_lerp_unclamped(window.from, window.to, factor);
-    if value.is_finite() {
-        Some(value)
-    } else {
-        Some(window.to)
-    }
-}
-
-pub(super) fn song_lua_apply_eased_target(
-    target: SongLuaEaseMaskTarget,
-    value: f32,
-    accel: &mut AccelOverrides,
-    visual: &mut VisualOverrides,
-    appearance: &mut AppearanceEffects,
-    visibility: &mut VisibilityOverrides,
-    scroll: &mut ScrollOverrides,
-    perspective: &mut PerspectiveOverrides,
-    scroll_speed: &mut Option<ScrollSpeedSetting>,
-    mini_percent: &mut Option<f32>,
-    player_x: &mut Option<f32>,
-    player_y: &mut Option<f32>,
-    player_z: &mut Option<f32>,
-    player_rotation_x: &mut Option<f32>,
-    player_rotation_z: &mut Option<f32>,
-    player_rotation_y: &mut Option<f32>,
-    player_skew_x: &mut Option<f32>,
-    player_skew_y: &mut Option<f32>,
-    player_zoom_x: &mut Option<f32>,
-    player_zoom_y: &mut Option<f32>,
-    player_zoom_z: &mut Option<f32>,
-    player_confusion_y_offset: &mut Option<f32>,
-) {
-    if !value.is_finite() {
-        return;
-    }
-    match target {
-        SongLuaEaseMaskTarget::AccelBoost => accel.boost = Some(value),
-        SongLuaEaseMaskTarget::AccelBrake => accel.brake = Some(value),
-        SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
-        SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
-        SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
-        SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
-        SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
-        SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
-        SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
-        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => {
-            if col < MAX_COLS {
-                visual.confusion_offset_cols[col] = Some(value);
-            }
-        }
-        SongLuaEaseMaskTarget::VisualFlip => visual.flip = Some(value),
-        SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
-        SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
-        SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
-        SongLuaEaseMaskTarget::VisualTiny => visual.tiny = Some(value),
-        SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
-        SongLuaEaseMaskTarget::VisualBumpyOffset => visual.bumpy_offset = Some(value),
-        SongLuaEaseMaskTarget::VisualBumpyPeriod => visual.bumpy_period = Some(value),
-        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => {
-            if col < MAX_COLS {
-                visual.bumpy_cols[col] = Some(value);
-            }
-        }
-        SongLuaEaseMaskTarget::VisualTinyColumn(col) => {
-            if col < MAX_COLS {
-                visual.tiny_cols[col] = Some(value);
-            }
-        }
-        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => {
-            if col < MAX_COLS {
-                visual.move_x_cols[col] = Some(value);
-            }
-        }
-        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => {
-            if col < MAX_COLS {
-                visual.move_y_cols[col] = Some(value);
-            }
-        }
-        SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
-        SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
-        SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
-        SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
-        SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
-        SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
-        SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
-        SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
-        SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
-        SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
-        SongLuaEaseMaskTarget::VisibilityDark => visibility.dark = Some(value),
-        SongLuaEaseMaskTarget::VisibilityBlind => visibility.blind = Some(value),
-        SongLuaEaseMaskTarget::VisibilityCover => visibility.cover = Some(value),
-        SongLuaEaseMaskTarget::ScrollReverse => scroll.reverse = Some(value),
-        SongLuaEaseMaskTarget::ScrollSplit => scroll.split = Some(value),
-        SongLuaEaseMaskTarget::ScrollAlternate => scroll.alternate = Some(value),
-        SongLuaEaseMaskTarget::ScrollCross => scroll.cross = Some(value),
-        SongLuaEaseMaskTarget::ScrollCentered => scroll.centered = Some(value),
-        SongLuaEaseMaskTarget::PerspectiveTilt => perspective.tilt = Some(value),
-        SongLuaEaseMaskTarget::PerspectiveSkew => perspective.skew = Some(value),
-        SongLuaEaseMaskTarget::ScrollSpeedX => {
-            if value > 0.0 {
-                *scroll_speed = Some(ScrollSpeedSetting::XMod(value));
-            }
-        }
-        SongLuaEaseMaskTarget::ScrollSpeedC => {
-            if value > 0.0 {
-                *scroll_speed = Some(ScrollSpeedSetting::CMod(value));
-            }
-        }
-        SongLuaEaseMaskTarget::ScrollSpeedM => {
-            if value > 0.0 {
-                *scroll_speed = Some(ScrollSpeedSetting::MMod(value));
-            }
-        }
-        SongLuaEaseMaskTarget::MiniPercent => *mini_percent = Some(value),
-        SongLuaEaseMaskTarget::PlayerX => *player_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerY => *player_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZ => *player_z = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationX => *player_rotation_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoom => {
-            *player_zoom_x = Some(value);
-            *player_zoom_y = Some(value);
-            *player_zoom_z = Some(value);
-        }
-        SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),
-        SongLuaEaseMaskTarget::ConfusionYOffsetY => *player_confusion_y_offset = Some(value),
-    }
-}
-
-#[inline(always)]
-fn beat_to_note_row_index(beat: f32) -> usize {
-    let rows_per_beat = ROWS_PER_BEAT.max(1) as f32;
-    (beat.max(0.0) * rows_per_beat).round() as usize
-}
-
-fn apply_attack_turn_mod(
-    notes: &mut [Note],
-    col_offset: usize,
-    cols: usize,
-    turn_option: GameplayTurnOption,
-    seed: u64,
-    player: usize,
-) {
-    if notes.is_empty() || turn_option == GameplayTurnOption::None {
-        return;
-    }
-    let note_range = (0usize, notes.len());
-    match turn_option {
-        GameplayTurnOption::None => {}
-        GameplayTurnOption::Blender => {
-            apply_turn_permutation(
-                notes,
-                note_range,
-                col_offset,
-                cols,
-                GameplayTurnOption::Shuffle,
-                seed,
-            );
-            apply_super_shuffle_taps(
-                notes,
-                note_range,
-                col_offset,
-                cols,
-                seed ^ (0xD00D_F00D_u64.wrapping_mul(player as u64 + 1)),
-            );
-        }
-        GameplayTurnOption::Random => {
-            apply_hyper_shuffle(
-                notes,
-                note_range,
-                col_offset,
-                cols,
-                seed ^ (0xA5A5_5A5A_u64.wrapping_mul(player as u64 + 1)),
-            );
-        }
-        other => {
-            apply_turn_permutation(notes, note_range, col_offset, cols, other, seed);
-        }
-    }
-}
-
-fn apply_chart_attack_window(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    start_row: usize,
-    end_row: usize,
-    mods: ParsedAttackMods,
-    turn_seed: u64,
-) {
-    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
-        return;
-    }
-    let mut in_range = Vec::with_capacity(notes.len());
-    let mut out_range = Vec::with_capacity(notes.len());
-    for note in notes.drain(..) {
-        if note.row_index >= start_row && note.row_index <= end_row {
-            in_range.push(note);
-        } else {
-            out_range.push(note);
-        }
-    }
-    if in_range.is_empty() {
-        *notes = out_range;
-        return;
-    }
-
-    apply_uncommon_masks_with_masks(
-        &mut in_range,
-        mods.insert_mask,
-        mods.remove_mask,
-        mods.holds_mask,
-        timing_player,
-        col_offset,
-        cols,
-        &out_range,
-        Some((start_row, end_row)),
-        player,
-    );
-    apply_attack_turn_mod(
-        &mut in_range,
-        col_offset,
-        cols,
-        mods.turn_option,
-        turn_seed,
-        player,
-    );
-
-    out_range.extend(in_range);
-    *notes = out_range;
-    sort_player_notes(notes);
-}
-
 fn apply_chart_attacks_for_player(
     notes: &mut Vec<Note>,
     chart_attacks: Option<&str>,
@@ -2852,40 +1563,15 @@ fn apply_chart_attacks_for_player(
     if attacks.is_empty() {
         return;
     }
-    let selected_mods: Vec<_> = attacks
-        .iter()
-        .map(|attack| parse_attack_mods(&attack.mods))
-        .collect();
-    for (i, (attack, mods)) in attacks
-        .iter()
-        .zip(selected_mods.iter().copied())
-        .enumerate()
-    {
-        if !mods.has_chart_effect() {
-            continue;
-        }
-        let start_beat = timing_player.get_beat_for_time(attack.start_second);
-        let end_beat = timing_player.get_beat_for_time(attack.start_second + attack.len_seconds);
-        let start_row = beat_to_note_row_index(start_beat);
-        let end_row = beat_to_note_row_index(end_beat);
-        if end_row < start_row {
-            continue;
-        }
-        let turn_seed = base_seed
-            ^ (0x9E37_79B9_u64.wrapping_mul(player as u64 + 1))
-            ^ ((i as u64).wrapping_mul(0xA5A5_5A5A_u64));
-        apply_chart_attack_window(
-            notes,
-            timing_player,
-            col_offset,
-            cols,
-            player,
-            start_row,
-            end_row,
-            mods,
-            turn_seed,
-        );
-    }
+    apply_chart_attack_windows_to_notes(
+        notes,
+        &attacks,
+        timing_player,
+        col_offset,
+        cols,
+        player,
+        base_seed,
+    );
 }
 
 #[inline(always)]
@@ -2998,113 +1684,46 @@ fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
 }
 
 #[inline(always)]
-fn apply_song_lua_player_transform_target(
-    target: SongLuaEaseMaskTarget,
-    value: f32,
-    player_x: &mut Option<f32>,
-    player_y: &mut Option<f32>,
-    player_z: &mut Option<f32>,
-    player_rotation_x: &mut Option<f32>,
-    player_rotation_z: &mut Option<f32>,
-    player_rotation_y: &mut Option<f32>,
-    player_skew_x: &mut Option<f32>,
-    player_skew_y: &mut Option<f32>,
-    player_zoom_x: &mut Option<f32>,
-    player_zoom_y: &mut Option<f32>,
-    player_zoom_z: &mut Option<f32>,
-    player_confusion_y_offset: &mut Option<f32>,
-) {
-    if !value.is_finite() {
-        return;
-    }
-    match target {
-        SongLuaEaseMaskTarget::PlayerX => *player_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerY => *player_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZ => *player_z = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationX => *player_rotation_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
-        SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoom => {
-            *player_zoom_x = Some(value);
-            *player_zoom_y = Some(value);
-            *player_zoom_z = Some(value);
-        }
-        SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
-        SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),
-        SongLuaEaseMaskTarget::ConfusionYOffsetY => *player_confusion_y_offset = Some(value),
-        _ => {}
-    }
-}
-
-#[inline(always)]
 fn store_song_lua_player_transforms(
     state: &mut State,
     player: usize,
-    player_x: Option<f32>,
-    player_y: Option<f32>,
-    player_z: Option<f32>,
-    player_rotation_x: Option<f32>,
-    player_rotation_z: Option<f32>,
-    player_rotation_y: Option<f32>,
-    player_skew_x: Option<f32>,
-    player_skew_y: Option<f32>,
-    player_zoom_x: Option<f32>,
-    player_zoom_y: Option<f32>,
-    player_zoom_z: Option<f32>,
-    player_confusion_y_offset: Option<f32>,
+    values: SongLuaPlayerTransformValues,
 ) {
-    state.song_lua_player_x[player] = player_x.filter(|v| v.is_finite());
-    state.song_lua_player_y[player] = player_y.filter(|v| v.is_finite());
-    state.song_lua_player_z[player] = player_z.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_rotation_x[player] =
-        player_rotation_x.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_rotation_z[player] =
-        player_rotation_z.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_rotation_y[player] =
-        player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_skew_x[player] = player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_skew_y[player] = player_skew_y.filter(|v| v.is_finite()).unwrap_or(0.0);
-    state.song_lua_player_zoom_x[player] = player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
-    state.song_lua_player_zoom_y[player] = player_zoom_y.filter(|v| v.is_finite()).unwrap_or(1.0);
-    state.song_lua_player_zoom_z[player] = player_zoom_z.filter(|v| v.is_finite()).unwrap_or(1.0);
-    state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
-        .filter(|v| v.is_finite())
-        .unwrap_or(0.0);
+    let SongLuaPlayerTransform {
+        x,
+        y,
+        z,
+        rotation_x,
+        rotation_z,
+        rotation_y,
+        skew_x,
+        skew_y,
+        zoom_x,
+        zoom_y,
+        zoom_z,
+        confusion_y_offset,
+    } = values.resolve();
+    state.song_lua_player_x[player] = x;
+    state.song_lua_player_y[player] = y;
+    state.song_lua_player_z[player] = z;
+    state.song_lua_player_rotation_x[player] = rotation_x;
+    state.song_lua_player_rotation_z[player] = rotation_z;
+    state.song_lua_player_rotation_y[player] = rotation_y;
+    state.song_lua_player_skew_x[player] = skew_x;
+    state.song_lua_player_skew_y[player] = skew_y;
+    state.song_lua_player_zoom_x[player] = zoom_x;
+    state.song_lua_player_zoom_y[player] = zoom_y;
+    state.song_lua_player_zoom_z[player] = zoom_z;
+    state.song_lua_player_confusion_y_offset[player] = confusion_y_offset;
 }
 
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
         let active_targets = collect_active_attack_targets(&state.attack_mask_windows[player], now);
-        let mut clear_all = false;
-        let mut chart = ChartAttackEffects::default();
-        let mut accel = AccelOverrides::default();
-        let mut visual = VisualOverrides::default();
-        let mut visual_speed = VisualOverrides::default();
-        let mut appearance_target = base_appearance_effects(&state.player_profiles[player]);
-        let mut appearance_speed = AppearanceEffects::approach_speeds();
-        let mut visibility = VisibilityOverrides::default();
-        let mut scroll = ScrollOverrides::default();
-        let mut scroll_approach_speed = ScrollOverrides::default();
-        let mut perspective = PerspectiveOverrides::default();
-        let mut scroll_speed = None;
-        let mut mini_percent = None;
-        let mut mini_speed = None;
-        let mut player_x = None;
-        let mut player_y = None;
-        let mut player_z = None;
-        let mut player_rotation_x = None;
-        let mut player_rotation_z = None;
-        let mut player_rotation_y = None;
-        let mut player_skew_x = None;
-        let mut player_skew_y = None;
-        let mut player_zoom_x = None;
-        let mut player_zoom_y = None;
-        let mut player_zoom_z = None;
-        let mut player_confusion_y_offset = None;
+        let mut attack =
+            ActiveAttackMaskValues::new(base_appearance_effects(&state.player_profiles[player]));
+        let mut player_transform = SongLuaPlayerTransformValues::default();
         for window in &state.attack_mask_windows[player] {
             let persisted = window.persist_after_end && now >= window.end_second;
             if !state.attacks_cleared_for_outro
@@ -3112,387 +1731,30 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 && now < window.sustain_end_second
                 && (now < window.end_second || persisted)
             {
-                if window.clear_all {
-                    clear_all = true;
-                    accel = AccelOverrides::default();
-                    visual = VisualOverrides::default();
-                    visual_speed = VisualOverrides::default();
-                    appearance_target = AppearanceEffects::default();
-                    appearance_speed = AppearanceEffects::approach_speeds();
-                    visibility = VisibilityOverrides::default();
-                    scroll = ScrollOverrides::default();
-                    scroll_approach_speed = ScrollOverrides::default();
-                    perspective = PerspectiveOverrides::default();
-                    scroll_speed = None;
-                    mini_percent = None;
-                    mini_speed = None;
-                }
-                chart.insert_mask |= window.chart.insert_mask;
-                chart.remove_mask |= window.chart.remove_mask;
-                chart.holds_mask |= window.chart.holds_mask;
-                chart.turn_bits |= window.chart.turn_bits;
-                if let Some(v) = window.accel.boost {
-                    accel.boost = Some(v);
-                }
-                if let Some(v) = window.accel.brake {
-                    accel.brake = Some(v);
-                }
-                if let Some(v) = window.accel.wave {
-                    accel.wave = Some(v);
-                }
-                if let Some(v) = window.accel.expand {
-                    accel.expand = Some(v);
-                }
-                if let Some(v) = window.accel.boomerang {
-                    accel.boomerang = Some(v);
-                }
-                if let Some(v) = window.visual.drunk
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.drunk,
-                    )
-                {
-                    visual.drunk = Some(v);
-                    visual_speed.drunk = window.visual_speed.drunk;
-                }
-                if let Some(v) = window.visual.dizzy
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.dizzy,
-                    )
-                {
-                    visual.dizzy = Some(v);
-                    visual_speed.dizzy = window.visual_speed.dizzy;
-                }
-                if let Some(v) = window.visual.confusion
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.confusion,
-                    )
-                {
-                    visual.confusion = Some(v);
-                    visual_speed.confusion = window.visual_speed.confusion;
-                }
-                if let Some(v) = window.visual.confusion_offset
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.confusion_offset,
-                    )
-                {
-                    visual.confusion_offset = Some(v);
-                    visual_speed.confusion_offset = window.visual_speed.confusion_offset;
-                }
-                for col in 0..MAX_COLS {
-                    if let Some(src) = window.visual.confusion_offset_cols[col]
-                        && persisted_target_allowed(
-                            persisted,
-                            active_targets.clear_all,
-                            active_targets.visual.confusion_offset_cols[col],
-                        )
-                    {
-                        visual.confusion_offset_cols[col] = Some(src);
-                        visual_speed.confusion_offset_cols[col] =
-                            window.visual_speed.confusion_offset_cols[col];
-                    }
-                }
-                if let Some(v) = window.visual.flip
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.flip,
-                    )
-                {
-                    visual.flip = Some(v);
-                    visual_speed.flip = window.visual_speed.flip;
-                }
-                if let Some(v) = window.visual.invert
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.invert,
-                    )
-                {
-                    visual.invert = Some(v);
-                    visual_speed.invert = window.visual_speed.invert;
-                }
-                if let Some(v) = window.visual.tornado
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.tornado,
-                    )
-                {
-                    visual.tornado = Some(v);
-                    visual_speed.tornado = window.visual_speed.tornado;
-                }
-                if let Some(v) = window.visual.tipsy
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.tipsy,
-                    )
-                {
-                    visual.tipsy = Some(v);
-                    visual_speed.tipsy = window.visual_speed.tipsy;
-                }
-                if let Some(v) = window.visual.tiny
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.tiny,
-                    )
-                {
-                    visual.tiny = Some(v);
-                    visual_speed.tiny = window.visual_speed.tiny;
-                }
-                if let Some(v) = window.visual.bumpy
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.bumpy,
-                    )
-                {
-                    visual.bumpy = Some(v);
-                    visual_speed.bumpy = window.visual_speed.bumpy;
-                }
-                if let Some(v) = window.visual.bumpy_offset
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.bumpy_offset,
-                    )
-                {
-                    visual.bumpy_offset = Some(v);
-                    visual_speed.bumpy_offset = window.visual_speed.bumpy_offset;
-                }
-                if let Some(v) = window.visual.bumpy_period
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.bumpy_period,
-                    )
-                {
-                    visual.bumpy_period = Some(v);
-                    visual_speed.bumpy_period = window.visual_speed.bumpy_period;
-                }
-                for col in 0..MAX_COLS {
-                    if let Some(src) = window.visual.bumpy_cols[col]
-                        && persisted_target_allowed(
-                            persisted,
-                            active_targets.clear_all,
-                            active_targets.visual.bumpy_cols[col],
-                        )
-                    {
-                        visual.bumpy_cols[col] = Some(src);
-                        visual_speed.bumpy_cols[col] = window.visual_speed.bumpy_cols[col];
-                    }
-                }
-                for col in 0..MAX_COLS {
-                    if let Some(src) = window.visual.tiny_cols[col]
-                        && persisted_target_allowed(
-                            persisted,
-                            active_targets.clear_all,
-                            active_targets.visual.tiny_cols[col],
-                        )
-                    {
-                        visual.tiny_cols[col] = Some(src);
-                        visual_speed.tiny_cols[col] = window.visual_speed.tiny_cols[col];
-                    }
-                }
-                for col in 0..MAX_COLS {
-                    if let Some(src) = window.visual.move_x_cols[col]
-                        && persisted_target_allowed(
-                            persisted,
-                            active_targets.clear_all,
-                            active_targets.visual.move_x_cols[col],
-                        )
-                    {
-                        visual.move_x_cols[col] = Some(src);
-                        visual_speed.move_x_cols[col] = window.visual_speed.move_x_cols[col];
-                    }
-                }
-                for col in 0..MAX_COLS {
-                    if let Some(src) = window.visual.move_y_cols[col]
-                        && persisted_target_allowed(
-                            persisted,
-                            active_targets.clear_all,
-                            active_targets.visual.move_y_cols[col],
-                        )
-                    {
-                        visual.move_y_cols[col] = Some(src);
-                        visual_speed.move_y_cols[col] = window.visual_speed.move_y_cols[col];
-                    }
-                }
-                if let Some(v) = window.visual.pulse_inner
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.pulse_inner,
-                    )
-                {
-                    visual.pulse_inner = Some(v);
-                    visual_speed.pulse_inner = window.visual_speed.pulse_inner;
-                }
-                if let Some(v) = window.visual.pulse_outer
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.pulse_outer,
-                    )
-                {
-                    visual.pulse_outer = Some(v);
-                    visual_speed.pulse_outer = window.visual_speed.pulse_outer;
-                }
-                if let Some(v) = window.visual.pulse_period
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.pulse_period,
-                    )
-                {
-                    visual.pulse_period = Some(v);
-                    visual_speed.pulse_period = window.visual_speed.pulse_period;
-                }
-                if let Some(v) = window.visual.pulse_offset
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.pulse_offset,
-                    )
-                {
-                    visual.pulse_offset = Some(v);
-                    visual_speed.pulse_offset = window.visual_speed.pulse_offset;
-                }
-                if let Some(v) = window.visual.beat
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.visual.beat,
-                    )
-                {
-                    visual.beat = Some(v);
-                    visual_speed.beat = window.visual_speed.beat;
-                }
-                apply_appearance_target(
-                    &mut appearance_target,
-                    &mut appearance_speed,
-                    window.appearance,
-                    window.appearance_speed,
+                apply_active_attack_mask_window(
+                    &mut attack,
+                    window,
+                    active_targets,
+                    persisted,
+                    state.player_profiles[player].mini_percent as f32,
                 );
-                if let Some(v) = window.visibility.dark {
-                    visibility.dark = Some(v);
-                }
-                if let Some(v) = window.visibility.blind {
-                    visibility.blind = Some(v);
-                }
-                if let Some(v) = window.visibility.cover {
-                    visibility.cover = Some(v);
-                }
-                if let Some(v) = window.scroll.reverse
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.scroll.reverse,
-                    )
-                {
-                    scroll.reverse = Some(v);
-                    scroll_approach_speed.reverse = window.scroll_approach_speed.reverse;
-                }
-                if let Some(v) = window.scroll.split
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.scroll.split,
-                    )
-                {
-                    scroll.split = Some(v);
-                    scroll_approach_speed.split = window.scroll_approach_speed.split;
-                }
-                if let Some(v) = window.scroll.alternate
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.scroll.alternate,
-                    )
-                {
-                    scroll.alternate = Some(v);
-                    scroll_approach_speed.alternate = window.scroll_approach_speed.alternate;
-                }
-                if let Some(v) = window.scroll.cross
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.scroll.cross,
-                    )
-                {
-                    scroll.cross = Some(v);
-                    scroll_approach_speed.cross = window.scroll_approach_speed.cross;
-                }
-                if let Some(v) = window.scroll.centered
-                    && persisted_target_allowed(
-                        persisted,
-                        active_targets.clear_all,
-                        active_targets.scroll.centered,
-                    )
-                {
-                    scroll.centered = Some(v);
-                    scroll_approach_speed.centered = window.scroll_approach_speed.centered;
-                }
-                if let Some(v) = window.perspective.tilt {
-                    perspective.tilt = Some(v);
-                }
-                if let Some(v) = window.perspective.skew {
-                    perspective.skew = Some(v);
-                }
-                if let Some(speed) = window.scroll_speed {
-                    scroll_speed = Some(speed);
-                }
-                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite())
-                    && persisted_mini_allowed(persisted, active_targets)
-                {
-                    let base = attack_mini_base_percent(state, player, clear_all);
-                    mini_percent = Some(
-                        attack_mini_target_percent(mini, window.mini_mode, base)
-                            .clamp(-100.0, 150.0),
-                    );
-                    mini_speed = window.mini_speed;
-                }
             }
         }
-        state.attack_target_appearance[player] = appearance_target;
-        state.attack_speed_appearance[player] = appearance_speed;
+        state.attack_target_appearance[player] = attack.appearance_target;
+        state.attack_speed_appearance[player] = attack.appearance_speed;
         approach_appearance_effects(
             &mut state.attack_current_appearance[player],
-            appearance_target,
-            appearance_speed,
+            attack.appearance_target,
+            attack.appearance_speed,
             delta_time,
         );
         let mut appearance = state.attack_current_appearance[player];
         if state.attacks_cleared_for_outro {
-            for window in &state.song_lua_ease_windows[player] {
-                if let Some(value) = song_lua_ease_window_value(window, now) {
-                    apply_song_lua_player_transform_target(
-                        window.target,
-                        value,
-                        &mut player_x,
-                        &mut player_y,
-                        &mut player_z,
-                        &mut player_rotation_x,
-                        &mut player_rotation_z,
-                        &mut player_rotation_y,
-                        &mut player_skew_x,
-                        &mut player_skew_y,
-                        &mut player_zoom_x,
-                        &mut player_zoom_y,
-                        &mut player_zoom_z,
-                        &mut player_confusion_y_offset,
-                    );
-                }
-            }
+            apply_song_lua_player_eases(
+                &mut player_transform,
+                &state.song_lua_ease_windows[player],
+                now,
+            );
             let base_visual = base_visual_effects(&state.player_profiles[player]);
             let mut visual = state.outro_attack_visual[player];
             approach_visual_overrides_to_base(&mut visual, base_visual, delta_time);
@@ -3510,25 +1772,10 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
             state.active_attack_perspective[player] = PerspectiveOverrides::default();
             state.active_attack_scroll_speed[player] = None;
             state.active_attack_mini_percent[player] = None;
-            store_song_lua_player_transforms(
-                state,
-                player,
-                player_x,
-                player_y,
-                player_z,
-                player_rotation_x,
-                player_rotation_z,
-                player_rotation_y,
-                player_skew_x,
-                player_skew_y,
-                player_zoom_x,
-                player_zoom_y,
-                player_zoom_z,
-                player_confusion_y_offset,
-            );
+            store_song_lua_player_transforms(state, player, player_transform);
             continue;
         }
-        let base_visual = if clear_all {
+        let base_visual = if attack.clear_all {
             VisualEffects::default()
         } else {
             base_visual_effects(&state.player_profiles[player])
@@ -3536,14 +1783,14 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut visual_current = state.active_attack_visual[player];
         approach_visual_overrides_to_target(
             &mut visual_current,
-            visual,
-            visual_speed,
+            attack.visual,
+            attack.visual_speed,
             base_visual,
             delta_time,
         );
-        visual = visual_current;
+        attack.visual = visual_current;
 
-        let base_scroll = if clear_all {
+        let base_scroll = if attack.clear_all {
             ScrollEffects::default()
         } else {
             scroll_effects_from_option(state.player_profiles[player].scroll_option)
@@ -3551,93 +1798,48 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut scroll_current = state.active_attack_scroll[player];
         approach_scroll_overrides_to_target(
             &mut scroll_current,
-            scroll,
-            scroll_approach_speed,
+            attack.scroll,
+            attack.scroll_approach_speed,
             base_scroll,
             delta_time,
         );
-        scroll = scroll_current;
+        attack.scroll = scroll_current;
 
-        let base_mini_percent = attack_mini_base_percent(state, player, clear_all);
+        let base_mini_percent = attack_mini_base_percent(state, player, attack.clear_all);
         let mut mini_current = state.active_attack_mini_percent[player];
         approach_attack_mini_percent_to_target(
             &mut mini_current,
-            mini_percent,
+            attack.mini_percent,
             base_mini_percent,
-            mini_speed,
+            attack.mini_speed,
             delta_time,
         );
-        mini_percent = mini_current;
+        attack.mini_percent = mini_current;
 
-        for window in &state.song_lua_ease_windows[player] {
-            if let Some(value) = song_lua_ease_window_value(window, now) {
-                let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
-                    base_mini_percent + value
-                } else {
-                    value
-                };
-                song_lua_apply_eased_target(
-                    window.target,
-                    value,
-                    &mut accel,
-                    &mut visual,
-                    &mut appearance,
-                    &mut visibility,
-                    &mut scroll,
-                    &mut perspective,
-                    &mut scroll_speed,
-                    &mut mini_percent,
-                    &mut player_x,
-                    &mut player_y,
-                    &mut player_z,
-                    &mut player_rotation_x,
-                    &mut player_rotation_z,
-                    &mut player_rotation_y,
-                    &mut player_skew_x,
-                    &mut player_skew_y,
-                    &mut player_zoom_x,
-                    &mut player_zoom_y,
-                    &mut player_zoom_z,
-                    &mut player_confusion_y_offset,
-                );
-            }
-        }
-        state.attack_current_appearance[player] = appearance;
-        if let Some(mini) = mini_percent.filter(|v| v.is_finite()) {
-            mini_percent = Some(mini.clamp(-100.0, 150.0));
-        }
-        state.active_attack_clear_all[player] = clear_all;
-        state.active_attack_chart[player] = chart;
-        state.active_attack_accel[player] = accel;
-        state.active_attack_visual[player] = visual;
-        state.active_attack_appearance[player] = appearance;
-        state.active_attack_visibility[player] = visibility;
-        state.active_attack_scroll[player] = scroll;
-        state.active_attack_perspective[player] = perspective;
-        state.active_attack_scroll_speed[player] = scroll_speed;
-        state.active_attack_mini_percent[player] = mini_percent;
-        store_song_lua_player_transforms(
-            state,
-            player,
-            player_x,
-            player_y,
-            player_z,
-            player_rotation_x,
-            player_rotation_z,
-            player_rotation_y,
-            player_skew_x,
-            player_skew_y,
-            player_zoom_x,
-            player_zoom_y,
-            player_zoom_z,
-            player_confusion_y_offset,
+        apply_song_lua_attack_eases(
+            &mut attack,
+            &mut appearance,
+            &mut player_transform,
+            &state.song_lua_ease_windows[player],
+            now,
+            base_mini_percent,
         );
+        state.attack_current_appearance[player] = appearance;
+        if let Some(mini) = attack.mini_percent.filter(|v| v.is_finite()) {
+            attack.mini_percent = Some(mini.clamp(-100.0, 150.0));
+        }
+        state.active_attack_clear_all[player] = attack.clear_all;
+        state.active_attack_chart[player] = attack.chart;
+        state.active_attack_accel[player] = attack.accel;
+        state.active_attack_visual[player] = attack.visual;
+        state.active_attack_appearance[player] = appearance;
+        state.active_attack_visibility[player] = attack.visibility;
+        state.active_attack_scroll[player] = attack.scroll;
+        state.active_attack_perspective[player] = attack.perspective;
+        state.active_attack_scroll_speed[player] = attack.scroll_speed;
+        state.active_attack_mini_percent[player] = attack.mini_percent;
+        store_song_lua_player_transforms(state, player, player_transform);
     }
-}
-
-#[inline(always)]
-fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
-    attack.filter(|v| v.is_finite()).unwrap_or(base)
 }
 
 #[inline(always)]
@@ -3650,23 +1852,13 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
     if player_idx >= state.num_players {
         return AccelEffects::default();
     }
-    let base = if player_attack_base_cleared(state, player_idx) {
-        AccelEffects::default()
-    } else {
-        AccelEffects::from_mask_bits(
-            state.player_profiles[player_idx]
-                .accel_effects_active_mask
-                .bits(),
-        )
-    };
-    let attack = state.active_attack_accel[player_idx];
-    AccelEffects {
-        boost: merge_attack_value(base.boost, attack.boost),
-        brake: merge_attack_value(base.brake, attack.brake),
-        wave: merge_attack_value(base.wave, attack.wave),
-        expand: merge_attack_value(base.expand, attack.expand),
-        boomerang: merge_attack_value(base.boomerang, attack.boomerang),
-    }
+    effective_attack_accel_effects(
+        player_attack_base_cleared(state, player_idx),
+        state.player_profiles[player_idx]
+            .accel_effects_active_mask
+            .bits(),
+        state.active_attack_accel[player_idx],
+    )
 }
 
 #[inline(always)]
@@ -3674,63 +1866,13 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
     if player_idx >= state.num_players {
         return VisualEffects::default();
     }
-    let base = if player_attack_base_cleared(state, player_idx) {
-        VisualEffects::default()
-    } else {
-        VisualEffects::from_mask_bits(
-            state.player_profiles[player_idx]
-                .visual_effects_active_mask
-                .bits(),
-        )
-    };
-    let attack = state.active_attack_visual[player_idx];
-    let mut confusion_offset_cols = base.confusion_offset_cols;
-    let mut bumpy_cols = base.bumpy_cols;
-    let mut tiny_cols = base.tiny_cols;
-    let mut move_x_cols = base.move_x_cols;
-    let mut move_y_cols = base.move_y_cols;
-    for i in 0..MAX_COLS {
-        if let Some(v) = attack.confusion_offset_cols[i].filter(|v| v.is_finite()) {
-            confusion_offset_cols[i] = v;
-        }
-        if let Some(v) = attack.bumpy_cols[i].filter(|v| v.is_finite()) {
-            bumpy_cols[i] = v;
-        }
-        if let Some(v) = attack.tiny_cols[i].filter(|v| v.is_finite()) {
-            tiny_cols[i] = v;
-        }
-        if let Some(v) = attack.move_x_cols[i].filter(|v| v.is_finite()) {
-            move_x_cols[i] = v;
-        }
-        if let Some(v) = attack.move_y_cols[i].filter(|v| v.is_finite()) {
-            move_y_cols[i] = v;
-        }
-    }
-    VisualEffects {
-        drunk: merge_attack_value(base.drunk, attack.drunk),
-        dizzy: merge_attack_value(base.dizzy, attack.dizzy),
-        confusion: merge_attack_value(base.confusion, attack.confusion),
-        confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
-        confusion_offset_cols,
-        big: base.big,
-        flip: merge_attack_value(base.flip, attack.flip),
-        invert: merge_attack_value(base.invert, attack.invert),
-        tornado: merge_attack_value(base.tornado, attack.tornado),
-        tipsy: merge_attack_value(base.tipsy, attack.tipsy),
-        tiny: merge_attack_value(base.tiny, attack.tiny),
-        bumpy: merge_attack_value(base.bumpy, attack.bumpy),
-        bumpy_offset: merge_attack_value(base.bumpy_offset, attack.bumpy_offset),
-        bumpy_period: merge_attack_value(base.bumpy_period, attack.bumpy_period),
-        bumpy_cols,
-        tiny_cols,
-        move_x_cols,
-        move_y_cols,
-        pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
-        pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
-        pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
-        pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
-        beat: merge_attack_value(base.beat, attack.beat),
-    }
+    effective_attack_visual_effects(
+        player_attack_base_cleared(state, player_idx),
+        state.player_profiles[player_idx]
+            .visual_effects_active_mask
+            .bits(),
+        state.active_attack_visual[player_idx],
+    )
 }
 
 #[inline(always)]
@@ -3752,12 +1894,7 @@ pub fn effective_visibility_effects_for_player(
     if player_idx >= state.num_players {
         return VisibilityEffects::default();
     }
-    let attack = state.active_attack_visibility[player_idx];
-    VisibilityEffects {
-        dark: merge_attack_value(0.0, attack.dark),
-        blind: merge_attack_value(0.0, attack.blind),
-        cover: merge_attack_value(0.0, attack.cover),
-    }
+    effective_attack_visibility_effects(state.active_attack_visibility[player_idx])
 }
 
 #[inline(always)]
@@ -3776,19 +1913,11 @@ pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> 
     if player_idx >= state.num_players {
         return ScrollEffects::default();
     }
-    let base = if player_attack_base_cleared(state, player_idx) {
-        ScrollEffects::default()
-    } else {
-        scroll_effects_from_option(state.player_profiles[player_idx].scroll_option)
-    };
-    let attack = state.active_attack_scroll[player_idx];
-    ScrollEffects {
-        reverse: merge_attack_value(base.reverse, attack.reverse),
-        split: merge_attack_value(base.split, attack.split),
-        alternate: merge_attack_value(base.alternate, attack.alternate),
-        cross: merge_attack_value(base.cross, attack.cross),
-        centered: merge_attack_value(base.centered, attack.centered),
-    }
+    effective_attack_scroll_effects(
+        player_attack_base_cleared(state, player_idx),
+        scroll_effects_from_option(state.player_profiles[player_idx].scroll_option),
+        state.active_attack_scroll[player_idx],
+    )
 }
 
 #[inline(always)]
@@ -3799,16 +1928,11 @@ pub fn effective_perspective_effects_for_player(
     if player_idx >= state.num_players {
         return PerspectiveEffects::default();
     }
-    let base = if player_attack_base_cleared(state, player_idx) {
-        PerspectiveEffects::default()
-    } else {
-        perspective_effects_from_profile(state.player_profiles[player_idx].perspective)
-    };
-    let attack = state.active_attack_perspective[player_idx];
-    PerspectiveEffects {
-        tilt: merge_attack_value(base.tilt, attack.tilt),
-        skew: merge_attack_value(base.skew, attack.skew),
-    }
+    effective_attack_perspective_effects(
+        player_attack_base_cleared(state, player_idx),
+        perspective_effects_from_profile(state.player_profiles[player_idx].perspective),
+        state.active_attack_perspective[player_idx],
+    )
 }
 
 #[inline(always)]
@@ -3844,11 +1968,9 @@ pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> Sc
     if player_idx >= state.num_players {
         return ScrollSpeedSetting::default();
     }
-    state.active_attack_scroll_speed[player_idx].unwrap_or_else(|| {
-        if player_attack_base_cleared(state, player_idx) {
-            ScrollSpeedSetting::default()
-        } else {
-            state.scroll_speed[player_idx]
-        }
-    })
+    effective_attack_scroll_speed(
+        player_attack_base_cleared(state, player_idx),
+        state.active_attack_scroll_speed[player_idx],
+        state.scroll_speed[player_idx],
+    )
 }
