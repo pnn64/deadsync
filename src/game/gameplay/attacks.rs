@@ -1,8 +1,8 @@
 use crate::game::parsing::song_lua::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
-    SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaNoteHideWindow, SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
-    SongLuaOverlayState, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
+    SongLuaEaseTarget, SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow,
+    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
+    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
@@ -14,23 +14,26 @@ pub(super) use deadsync_gameplay::song_lua_ease_window_value;
 #[cfg(test)]
 pub(super) use deadsync_gameplay::turn_option_bits;
 use deadsync_gameplay::{
-    ActiveAttackMaskValues, ChartAttackWindow, SongLuaCompilePlayStyle,
-    append_song_lua_ease_targets, apply_active_attack_mask_window,
-    apply_chart_attack_windows as apply_chart_attack_windows_to_notes, apply_song_lua_attack_eases,
-    apply_song_lua_player_eases, approach_appearance_effects, approach_scroll_overrides_to_target,
-    approach_visual_overrides_to_base, approach_visual_overrides_to_target,
-    build_attack_mask_windows as build_mask_windows_from_attacks, build_random_attack_windows,
-    collect_active_attack_targets, effective_attack_accel_effects,
+    ActiveAttackRefreshInput, ActiveAttackRefreshState, ChartAttackTransformPlayer,
+    ChartAttackWindow, GameplayAttackMode, SongLuaCompilePlayStyle, append_song_lua_ease_targets,
+    apply_chart_attack_transforms as apply_chart_attack_transforms_to_notes,
+    begin_outro_attack_visual_clear, build_attack_mask_windows as build_mask_windows_from_attacks,
+    build_attack_windows_for_mode, effective_attack_accel_effects,
     effective_attack_perspective_effects, effective_attack_scroll_effects,
     effective_attack_scroll_speed, effective_attack_visibility_effects,
-    effective_attack_visual_effects, parse_chart_attack_windows,
+    effective_attack_visual_effects, group_song_lua_overlay_eases, offset_song_lua_message_events,
+    offset_song_lua_overlay_eases, player_chart_changes_for_options, refresh_active_attack_player,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
-    song_lua_extend_ease_tails,
+    song_lua_extend_column_offset_tails, song_lua_extend_ease_tails, song_lua_message_second,
+    song_lua_sustain_end_second as gameplay_song_lua_sustain_end_second,
+    song_lua_target_matches_player, song_lua_time_to_second as gameplay_song_lua_time_to_second,
+    song_lua_window_seconds as gameplay_song_lua_window_seconds,
 };
 pub(super) use deadsync_gameplay::{
     AttackMaskWindow, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaPlayerTransform,
-    SongLuaPlayerTransformValues,
+    SongLuaPlayerTransformValues, SongLuaRuntimeSpanMode, SongLuaRuntimeTimeUnit,
 };
+pub use deadsync_gameplay::{SongLuaColumnOffsetWindowRuntime, SongLuaOverlayMessageRuntime};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -41,45 +44,24 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::{
-    AccelEffects, AccelOverrides, AppearanceEffects, ChartAttackEffects, GameplaySession,
-    GameplayViewport, MAX_PLAYERS, MiniAttackMode, PerspectiveEffects, PerspectiveOverrides,
-    ScrollEffects, ScrollOverrides, State, VisibilityEffects, VisualEffects,
-    approach_attack_mini_percent_to_target, effective_mini_percent,
-    perspective_effects_from_profile, scroll_effects_from_option, spacing_multiplier_for_percent,
+    AccelEffects, AppearanceEffects, ChartAttackEffects, GameplaySession, GameplayViewport,
+    MAX_PLAYERS, MiniAttackMode, PerspectiveEffects, ScrollEffects, State, VisibilityEffects,
+    VisualEffects, effective_mini_percent, perspective_effects_from_profile,
+    scroll_effects_from_option, spacing_multiplier_for_percent,
 };
 
-#[derive(Clone, Debug)]
-pub struct SongLuaOverlayEaseWindowRuntime {
-    pub overlay_index: usize,
-    pub start_second: f32,
-    pub end_second: f32,
-    pub sustain_end_second: f32,
-    pub cutoff_second: Option<f32>,
-    pub from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
-    pub to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
-    pub easing: Option<String>,
-    pub opt1: Option<f32>,
-    pub opt2: Option<f32>,
+#[inline(always)]
+fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
+    match attack_mode {
+        profile_data::AttackMode::Off => GameplayAttackMode::Off,
+        profile_data::AttackMode::On => GameplayAttackMode::On,
+        profile_data::AttackMode::Random => GameplayAttackMode::Random,
+    }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct SongLuaOverlayMessageRuntime {
-    pub event_second: f32,
-    pub command_index: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct SongLuaColumnOffsetWindowRuntime {
-    pub column: usize,
-    pub start_second: f32,
-    pub end_second: f32,
-    pub sustain_end_second: f32,
-    pub from_y: f32,
-    pub to_y: f32,
-    pub easing: Option<String>,
-    pub opt1: Option<f32>,
-    pub opt2: Option<f32>,
-}
+pub type SongLuaOverlayEaseWindowRuntime = deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<
+    crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+>;
 
 #[derive(Clone, Debug)]
 pub struct SongLuaVisualLayerRuntime {
@@ -120,15 +102,13 @@ fn build_attack_windows_for_player(
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<ChartAttackWindow> {
-    match attack_mode {
-        profile_data::AttackMode::Off => Vec::new(),
-        profile_data::AttackMode::On => chart_attacks
-            .map(parse_chart_attack_windows)
-            .unwrap_or_default(),
-        profile_data::AttackMode::Random => {
-            build_random_attack_windows(song_length_seconds, player, base_seed)
-        }
-    }
+    build_attack_windows_for_mode(
+        chart_attacks,
+        gameplay_attack_mode(attack_mode),
+        player,
+        base_seed,
+        song_length_seconds,
+    )
 }
 
 pub(super) fn build_attack_mask_windows_for_player(
@@ -152,18 +132,18 @@ pub(super) fn build_attack_mask_windows_for_player(
 }
 
 #[inline(always)]
-fn song_lua_target_matches_player(target_player: Option<u8>, player: usize) -> bool {
-    match target_player {
-        Some(target) => usize::from(target) == player + 1,
-        None => true,
+fn song_lua_runtime_span_mode(span_mode: SongLuaSpanMode) -> SongLuaRuntimeSpanMode {
+    match span_mode {
+        SongLuaSpanMode::Len => SongLuaRuntimeSpanMode::Len,
+        SongLuaSpanMode::End => SongLuaRuntimeSpanMode::End,
     }
 }
 
 #[inline(always)]
-fn song_lua_end_value(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> f32 {
-    match span_mode {
-        SongLuaSpanMode::Len => start + limit.max(0.0),
-        SongLuaSpanMode::End => limit,
+fn song_lua_runtime_time_unit(unit: SongLuaTimeUnit) -> SongLuaRuntimeTimeUnit {
+    match unit {
+        SongLuaTimeUnit::Beat => SongLuaRuntimeTimeUnit::Beat,
+        SongLuaTimeUnit::Second => SongLuaRuntimeTimeUnit::Second,
     }
 }
 
@@ -174,10 +154,12 @@ fn song_lua_time_to_second(
     timing_player: &TimingData,
     global_offset_seconds: f32,
 ) -> f32 {
-    match unit {
-        SongLuaTimeUnit::Beat => timing_player.get_time_for_beat(value),
-        SongLuaTimeUnit::Second => value - global_offset_seconds,
-    }
+    gameplay_song_lua_time_to_second(
+        song_lua_runtime_time_unit(unit),
+        value,
+        timing_player,
+        global_offset_seconds,
+    )
 }
 
 fn song_lua_message_seconds(
@@ -187,15 +169,7 @@ fn song_lua_message_seconds(
 ) -> Vec<Option<f32>> {
     messages
         .iter()
-        .map(|message| {
-            let event_second = song_lua_time_to_second(
-                SongLuaTimeUnit::Beat,
-                message.beat,
-                timing_player,
-                global_offset_seconds,
-            );
-            event_second.is_finite().then_some(event_second)
-        })
+        .map(|message| song_lua_message_second(message.beat, timing_player, global_offset_seconds))
         .collect()
 }
 
@@ -207,41 +181,36 @@ fn song_lua_window_seconds(
     timing_player: &TimingData,
     global_offset_seconds: f32,
 ) -> Option<(f32, f32)> {
-    let end = song_lua_end_value(start, limit, span_mode);
-    let start_second = song_lua_time_to_second(unit, start, timing_player, global_offset_seconds);
-    let end_second = song_lua_time_to_second(unit, end, timing_player, global_offset_seconds);
-    if !start_second.is_finite() || !end_second.is_finite() || end_second < start_second {
-        return None;
-    }
-    Some((start_second, end_second))
+    gameplay_song_lua_window_seconds(
+        song_lua_runtime_time_unit(unit),
+        start,
+        limit,
+        song_lua_runtime_span_mode(span_mode),
+        timing_player,
+        global_offset_seconds,
+    )
 }
 
 fn song_lua_sustain_end_second(
-    window: &SongLuaEaseWindow,
+    unit: SongLuaTimeUnit,
+    start: f32,
+    limit: f32,
+    span_mode: SongLuaSpanMode,
+    sustain: Option<f32>,
     timing_player: &TimingData,
     global_offset_seconds: f32,
     end_second: f32,
 ) -> f32 {
-    let Some(sustain) = window.sustain else {
-        return end_second;
-    };
-    let sustain_value = match window.span_mode {
-        SongLuaSpanMode::Len => {
-            song_lua_end_value(window.start, window.limit, window.span_mode) + sustain
-        }
-        SongLuaSpanMode::End => sustain,
-    };
-    let sustain_end_second = song_lua_time_to_second(
-        window.unit,
-        sustain_value,
+    gameplay_song_lua_sustain_end_second(
+        song_lua_runtime_time_unit(unit),
+        start,
+        limit,
+        song_lua_runtime_span_mode(span_mode),
+        sustain,
         timing_player,
         global_offset_seconds,
-    );
-    if sustain_end_second.is_finite() && sustain_end_second > end_second {
-        sustain_end_second
-    } else {
-        end_second
-    }
+        end_second,
+    )
 }
 
 fn build_song_lua_constant_window(
@@ -336,8 +305,16 @@ pub(super) fn build_song_lua_ease_windows_for_player(
         ) else {
             continue;
         };
-        let sustain_end_second =
-            song_lua_sustain_end_second(window, timing_player, global_offset_seconds, end_second);
+        let sustain_end_second = song_lua_sustain_end_second(
+            window.unit,
+            window.start,
+            window.limit,
+            window.span_mode,
+            window.sustain,
+            timing_player,
+            global_offset_seconds,
+            end_second,
+        );
         if sustain_end_second <= start_second {
             continue;
         }
@@ -508,69 +485,6 @@ pub(super) fn build_song_lua_ease_windows_for_player(
     (out, unsupported_targets)
 }
 
-fn song_lua_column_sustain_end_second(
-    window: &SongLuaColumnOffsetWindow,
-    timing_player: &TimingData,
-    global_offset_seconds: f32,
-    end_second: f32,
-) -> f32 {
-    let Some(sustain) = window.sustain else {
-        return end_second;
-    };
-    let sustain_value = match window.span_mode {
-        SongLuaSpanMode::Len => {
-            song_lua_end_value(window.start, window.limit, window.span_mode) + sustain
-        }
-        SongLuaSpanMode::End => sustain,
-    };
-    let sustain_end_second = song_lua_time_to_second(
-        window.unit,
-        sustain_value,
-        timing_player,
-        global_offset_seconds,
-    );
-    if sustain_end_second.is_finite() && sustain_end_second > end_second {
-        sustain_end_second
-    } else {
-        end_second
-    }
-}
-
-fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
-    for i in 0..out.len() {
-        let window = &out[i];
-        let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
-            window.sustain_end_second
-        } else {
-            f32::MAX
-        };
-        let cutoff_second = out
-            .iter()
-            .enumerate()
-            .filter_map(|(j, other)| {
-                if i == j
-                    || other.column != window.column
-                    || !other.start_second.is_finite()
-                    || other.start_second <= window.start_second + SAME_TICK_EPSILON
-                {
-                    None
-                } else {
-                    Some(other.start_second)
-                }
-            })
-            .fold(None::<f32>, |acc, start| {
-                Some(match acc {
-                    Some(current) => current.min(start),
-                    None => start,
-                })
-            });
-        out[i].sustain_end_second =
-            cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
-    }
-}
-
 pub(super) fn build_song_lua_column_offset_windows_for_player(
     compiled: &CompiledSongLua,
     timing_player: &TimingData,
@@ -592,8 +506,12 @@ pub(super) fn build_song_lua_column_offset_windows_for_player(
         ) else {
             continue;
         };
-        let sustain_end_second = song_lua_column_sustain_end_second(
-            window,
+        let sustain_end_second = song_lua_sustain_end_second(
+            window.unit,
+            window.start,
+            window.limit,
+            window.span_mode,
+            window.sustain,
             timing_player,
             global_offset_seconds,
             end_second,
@@ -653,8 +571,12 @@ fn build_song_lua_overlay_ease_windows_with_events(
         if end_second < start_second {
             continue;
         }
-        let sustain_end_second = SongLuaOverlayEaseWindowRuntime::sustain_end_second(
-            ease,
+        let sustain_end_second = song_lua_sustain_end_second(
+            ease.unit,
+            ease.start,
+            ease.limit,
+            ease.span_mode,
+            ease.sustain,
             timing_player,
             global_offset_seconds,
             end_second,
@@ -675,36 +597,6 @@ fn build_song_lua_overlay_ease_windows_with_events(
         });
     }
     out
-}
-
-fn group_song_lua_overlay_eases(
-    overlay_count: usize,
-    overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
-) -> (
-    Vec<SongLuaOverlayEaseWindowRuntime>,
-    Vec<std::ops::Range<usize>>,
-) {
-    let mut buckets = vec![Vec::new(); overlay_count];
-    for ease in overlay_eases {
-        if let Some(bucket) = buckets.get_mut(ease.overlay_index) {
-            bucket.push(ease);
-        }
-    }
-    let total_len = buckets.iter().map(Vec::len).sum();
-    let mut flat = Vec::with_capacity(total_len);
-    let mut ranges = Vec::with_capacity(overlay_count);
-    for mut bucket in buckets {
-        bucket.sort_by(|left, right| {
-            left.start_second
-                .total_cmp(&right.start_second)
-                .then_with(|| left.end_second.total_cmp(&right.end_second))
-                .then_with(|| left.sustain_end_second.total_cmp(&right.sustain_end_second))
-        });
-        let start = flat.len();
-        flat.extend(bucket);
-        ranges.push(start..flat.len());
-    }
-    (flat, ranges)
 }
 
 fn build_song_lua_overlay_message_events_with_seconds(
@@ -865,36 +757,6 @@ fn song_lua_overlay_delta_overlaps(
     false
 }
 
-impl SongLuaOverlayEaseWindowRuntime {
-    fn sustain_end_second(
-        ease: &SongLuaOverlayEase,
-        timing_player: &TimingData,
-        global_offset_seconds: f32,
-        end_second: f32,
-    ) -> f32 {
-        let Some(sustain) = ease.sustain else {
-            return end_second;
-        };
-        let sustain_value = match ease.span_mode {
-            SongLuaSpanMode::Len => {
-                song_lua_end_value(ease.start, ease.limit, ease.span_mode) + sustain
-            }
-            SongLuaSpanMode::End => sustain,
-        };
-        let sustain_end_second = song_lua_time_to_second(
-            ease.unit,
-            sustain_value,
-            timing_player,
-            global_offset_seconds,
-        );
-        if sustain_end_second.is_finite() && sustain_end_second > end_second {
-            sustain_end_second
-        } else {
-            end_second
-        }
-    }
-}
-
 #[inline(always)]
 fn song_lua_difficulty_from_chart(difficulty: &str) -> SongLuaDifficulty {
     if difficulty.eq_ignore_ascii_case("beginner") {
@@ -1035,29 +897,6 @@ pub(crate) fn song_lua_compile_context(
         screen_y: viewport.center_y(),
     });
     context
-}
-
-#[inline(always)]
-fn offset_song_lua_overlay_eases(eases: &mut [SongLuaOverlayEaseWindowRuntime], delta: f32) {
-    if !delta.is_finite() || delta.abs() <= f32::EPSILON {
-        return;
-    }
-    for ease in eases {
-        ease.start_second += delta;
-        ease.end_second += delta;
-        ease.sustain_end_second += delta;
-        ease.cutoff_second = ease.cutoff_second.map(|cutoff| cutoff + delta);
-    }
-}
-
-#[inline(always)]
-fn offset_song_lua_message_events(events: &mut [SongLuaOverlayMessageRuntime], delta: f32) {
-    if !delta.is_finite() || delta.abs() <= f32::EPSILON {
-        return;
-    }
-    for event in events {
-        event.event_second += delta;
-    }
 }
 
 fn build_song_lua_visual_layer_runtime(
@@ -1542,61 +1381,17 @@ fn log_song_lua_runtime_debug(
     }
 }
 
-fn apply_chart_attacks_for_player(
-    notes: &mut Vec<Note>,
-    chart_attacks: Option<&str>,
-    attack_mode: profile_data::AttackMode,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    base_seed: u64,
-    song_length_seconds: f32,
-) {
-    let attacks = build_attack_windows_for_player(
-        chart_attacks,
-        attack_mode,
-        player,
-        base_seed,
-        song_length_seconds,
-    );
-    if attacks.is_empty() {
-        return;
-    }
-    apply_chart_attack_windows_to_notes(
-        notes,
-        &attacks,
-        timing_player,
-        col_offset,
-        cols,
-        player,
-        base_seed,
-    );
-}
-
-#[inline(always)]
-pub(super) fn has_chart_attacks(
-    chart: &GameplayChartData,
-    profile: &profile_data::Profile,
-) -> bool {
-    match profile.attack_mode {
-        profile_data::AttackMode::Off => false,
-        profile_data::AttackMode::On => chart
-            .chart_attacks
-            .as_deref()
-            .is_some_and(|raw| !raw.trim().is_empty()),
-        profile_data::AttackMode::Random => true,
-    }
-}
-
 #[inline(always)]
 pub(super) fn player_changes_chart(
     chart: &GameplayChartData,
     profile: &profile_data::Profile,
 ) -> bool {
-    super::has_uncommon_masks(profile)
-        || profile.turn_option != profile_data::TurnOption::None
-        || has_chart_attacks(chart, profile)
+    player_chart_changes_for_options(
+        super::has_uncommon_masks(profile),
+        super::gameplay_turn_option_from_profile(profile.turn_option),
+        chart.chart_attacks.as_deref(),
+        gameplay_attack_mode(profile.attack_mode),
+    )
 }
 
 pub(super) fn apply_chart_attacks_transforms(
@@ -1610,47 +1405,20 @@ pub(super) fn apply_chart_attacks_transforms(
     base_seed: u64,
     song_length_seconds: f32,
 ) {
-    if num_players == 0
-        || !(0..num_players)
-            .any(|player| has_chart_attacks(&gameplay_charts[player], &player_profiles[player]))
-    {
-        return;
-    }
-    let mut transformed = Vec::with_capacity(notes.len());
-    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
-
-    for player in 0..num_players {
-        let (start, end) = note_ranges[player];
-        let slice_end = end.min(notes.len());
-        let slice_start = start.min(slice_end);
-        let out_start = transformed.len();
-        if !has_chart_attacks(&gameplay_charts[player], &player_profiles[player]) {
-            transformed.extend_from_slice(&notes[slice_start..slice_end]);
-            transformed_ranges[player] = (out_start, transformed.len());
-            continue;
-        }
-        let mut player_notes = notes[slice_start..slice_end].to_vec();
-        apply_chart_attacks_for_player(
-            &mut player_notes,
-            gameplay_charts[player].chart_attacks.as_deref(),
-            player_profiles[player].attack_mode,
-            timing_players[player].as_ref(),
-            player.saturating_mul(cols_per_player),
-            cols_per_player,
-            player,
-            base_seed,
-            song_length_seconds,
-        );
-        transformed.extend(player_notes);
-        transformed_ranges[player] = (out_start, transformed.len());
-    }
-
-    if num_players == 1 {
-        transformed_ranges[1] = transformed_ranges[0];
-    }
-
-    *notes = transformed;
-    *note_ranges = transformed_ranges;
+    let players = std::array::from_fn(|player| ChartAttackTransformPlayer {
+        chart_attacks: gameplay_charts[player].chart_attacks.as_deref(),
+        attack_mode: gameplay_attack_mode(player_profiles[player].attack_mode),
+        timing_player: timing_players[player].as_ref(),
+    });
+    apply_chart_attack_transforms_to_notes(
+        notes,
+        note_ranges,
+        cols_per_player,
+        num_players,
+        &players,
+        base_seed,
+        song_length_seconds,
+    );
 }
 
 #[inline(always)]
@@ -1660,22 +1428,12 @@ pub(super) fn base_appearance_effects(profile: &profile_data::Profile) -> Appear
 
 #[inline(always)]
 pub(super) fn begin_outro_attack_clear(state: &mut State) {
-    if state.attacks_cleared_for_outro {
-        return;
-    }
-    state.attacks_cleared_for_outro = true;
-    for player in 0..state.num_players {
-        state.outro_attack_visual[player] = state.active_attack_visual[player];
-    }
-}
-
-#[inline(always)]
-fn attack_mini_base_percent(state: &State, player: usize, clear_all: bool) -> f32 {
-    if clear_all {
-        0.0
-    } else {
-        state.player_profiles[player].mini_percent as f32
-    }
+    begin_outro_attack_visual_clear(
+        &mut state.attacks_cleared_for_outro,
+        state.num_players,
+        &state.active_attack_visual,
+        &mut state.outro_attack_visual,
+    );
 }
 
 #[inline(always)]
@@ -1720,125 +1478,44 @@ fn store_song_lua_player_transforms(
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
-        let active_targets = collect_active_attack_targets(&state.attack_mask_windows[player], now);
-        let mut attack =
-            ActiveAttackMaskValues::new(base_appearance_effects(&state.player_profiles[player]));
-        let mut player_transform = SongLuaPlayerTransformValues::default();
-        for window in &state.attack_mask_windows[player] {
-            let persisted = window.persist_after_end && now >= window.end_second;
-            if !state.attacks_cleared_for_outro
-                && now >= window.start_second
-                && now < window.sustain_end_second
-                && (now < window.end_second || persisted)
-            {
-                apply_active_attack_mask_window(
-                    &mut attack,
-                    window,
-                    active_targets,
-                    persisted,
-                    state.player_profiles[player].mini_percent as f32,
-                );
-            }
-        }
-        state.attack_target_appearance[player] = attack.appearance_target;
-        state.attack_speed_appearance[player] = attack.appearance_speed;
-        approach_appearance_effects(
-            &mut state.attack_current_appearance[player],
-            attack.appearance_target,
-            attack.appearance_speed,
-            delta_time,
-        );
-        let mut appearance = state.attack_current_appearance[player];
-        if state.attacks_cleared_for_outro {
-            apply_song_lua_player_eases(
-                &mut player_transform,
-                &state.song_lua_ease_windows[player],
+        let output = refresh_active_attack_player(
+            ActiveAttackRefreshInput {
                 now,
-            );
-            let base_visual = base_visual_effects(&state.player_profiles[player]);
-            let mut visual = state.outro_attack_visual[player];
-            approach_visual_overrides_to_base(&mut visual, base_visual, delta_time);
-            state.outro_attack_visual[player] = visual;
-            state.active_attack_clear_all[player] = false;
-            state.active_attack_chart[player] = ChartAttackEffects::default();
-            state.active_attack_accel[player] = AccelOverrides::default();
-            state.active_attack_visual[player] = visual;
-            state.active_attack_appearance[player] = appearance;
-            // ITGmania does not clear receptor visibility for the gameplay
-            // out fade. Keep the last active Dark/Blind/Cover values so
-            // Riddle's final 100% Dark state remains hidden, while the rest of
-            // this branch still lets player-transform outro eases keep moving.
-            state.active_attack_scroll[player] = ScrollOverrides::default();
-            state.active_attack_perspective[player] = PerspectiveOverrides::default();
-            state.active_attack_scroll_speed[player] = None;
-            state.active_attack_mini_percent[player] = None;
-            store_song_lua_player_transforms(state, player, player_transform);
-            continue;
-        }
-        let base_visual = if attack.clear_all {
-            VisualEffects::default()
-        } else {
-            base_visual_effects(&state.player_profiles[player])
-        };
-        let mut visual_current = state.active_attack_visual[player];
-        approach_visual_overrides_to_target(
-            &mut visual_current,
-            attack.visual,
-            attack.visual_speed,
-            base_visual,
-            delta_time,
+                delta_time,
+                attacks_cleared_for_outro: state.attacks_cleared_for_outro,
+                base_appearance: base_appearance_effects(&state.player_profiles[player]),
+                base_visual: base_visual_effects(&state.player_profiles[player]),
+                base_scroll: scroll_effects_from_option(
+                    state.player_profiles[player].scroll_option,
+                ),
+                base_mini_percent: state.player_profiles[player].mini_percent as f32,
+                attack_windows: &state.attack_mask_windows[player],
+                song_lua_ease_windows: &state.song_lua_ease_windows[player],
+            },
+            ActiveAttackRefreshState {
+                attack_current_appearance: state.attack_current_appearance[player],
+                active_attack_visual: state.active_attack_visual[player],
+                active_attack_visibility: state.active_attack_visibility[player],
+                active_attack_scroll: state.active_attack_scroll[player],
+                active_attack_mini_percent: state.active_attack_mini_percent[player],
+                outro_attack_visual: state.outro_attack_visual[player],
+            },
         );
-        attack.visual = visual_current;
-
-        let base_scroll = if attack.clear_all {
-            ScrollEffects::default()
-        } else {
-            scroll_effects_from_option(state.player_profiles[player].scroll_option)
-        };
-        let mut scroll_current = state.active_attack_scroll[player];
-        approach_scroll_overrides_to_target(
-            &mut scroll_current,
-            attack.scroll,
-            attack.scroll_approach_speed,
-            base_scroll,
-            delta_time,
-        );
-        attack.scroll = scroll_current;
-
-        let base_mini_percent = attack_mini_base_percent(state, player, attack.clear_all);
-        let mut mini_current = state.active_attack_mini_percent[player];
-        approach_attack_mini_percent_to_target(
-            &mut mini_current,
-            attack.mini_percent,
-            base_mini_percent,
-            attack.mini_speed,
-            delta_time,
-        );
-        attack.mini_percent = mini_current;
-
-        apply_song_lua_attack_eases(
-            &mut attack,
-            &mut appearance,
-            &mut player_transform,
-            &state.song_lua_ease_windows[player],
-            now,
-            base_mini_percent,
-        );
-        state.attack_current_appearance[player] = appearance;
-        if let Some(mini) = attack.mini_percent.filter(|v| v.is_finite()) {
-            attack.mini_percent = Some(mini.clamp(-100.0, 150.0));
-        }
-        state.active_attack_clear_all[player] = attack.clear_all;
-        state.active_attack_chart[player] = attack.chart;
-        state.active_attack_accel[player] = attack.accel;
-        state.active_attack_visual[player] = attack.visual;
-        state.active_attack_appearance[player] = appearance;
-        state.active_attack_visibility[player] = attack.visibility;
-        state.active_attack_scroll[player] = attack.scroll;
-        state.active_attack_perspective[player] = attack.perspective;
-        state.active_attack_scroll_speed[player] = attack.scroll_speed;
-        state.active_attack_mini_percent[player] = attack.mini_percent;
-        store_song_lua_player_transforms(state, player, player_transform);
+        state.attack_target_appearance[player] = output.attack_target_appearance;
+        state.attack_speed_appearance[player] = output.attack_speed_appearance;
+        state.attack_current_appearance[player] = output.attack_current_appearance;
+        state.outro_attack_visual[player] = output.outro_attack_visual;
+        state.active_attack_clear_all[player] = output.active_attack_clear_all;
+        state.active_attack_chart[player] = output.active_attack_chart;
+        state.active_attack_accel[player] = output.active_attack_accel;
+        state.active_attack_visual[player] = output.active_attack_visual;
+        state.active_attack_appearance[player] = output.active_attack_appearance;
+        state.active_attack_visibility[player] = output.active_attack_visibility;
+        state.active_attack_scroll[player] = output.active_attack_scroll;
+        state.active_attack_perspective[player] = output.active_attack_perspective;
+        state.active_attack_scroll_speed[player] = output.active_attack_scroll_speed;
+        state.active_attack_mini_percent[player] = output.active_attack_mini_percent;
+        store_song_lua_player_transforms(state, player, output.player_transform);
     }
 }
 
