@@ -4120,8 +4120,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.52"
-source = "git+https://github.com/pnn64/rssp?branch=main#9cf45646ead53b045b405d839376e442ca5ad2f3"
+version = "0.4.53"
+source = "git+https://github.com/pnn64/rssp?branch=main#bd90d19506d3664c615714f6df67e09aea990067"
 dependencies = [
  "rssp-core",
  "serde_json",
@@ -4129,8 +4129,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.52"
-source = "git+https://github.com/pnn64/rssp?branch=main#9cf45646ead53b045b405d839376e442ca5ad2f3"
+version = "0.4.53"
+source = "git+https://github.com/pnn64/rssp?branch=main#bd90d19506d3664c615714f6df67e09aea990067"
 
 [[package]]
 name = "rubato"
@@ -4714,9 +4714,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.117"
+version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
+checksum = "1b9ae57f904213ebb649ce6895b8a66c66f0203b9319718f69a5612a065b1422"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5661,9 +5661,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "8.0.3"
+version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c789537cf2f7f55be8e6192f92e464174ee55f91af622777f7f1ceb0dbccd03e"
+checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
 dependencies = [
  "libc",
 ]
