@@ -146,8 +146,14 @@ Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::D
 | `Tab` (hold) | Fast-forward menus and transitions at 4×. Disabled in gameplay. |
 | `` ` `` (hold) | Slow menus and transitions to 0.25×. Disabled in gameplay. |
 | `Tab` + `` ` `` | Halt menu animations. Disabled in gameplay. |
+| `F3` | Cycle the stats overlay (off → FPS → +stutter → +timing). |
+| `Ctrl`+`F3` | Toggle the live frame-statistics overlay: rolling per-phase frame-time graph (with idle/await-GPU segments and catch-up/spike markers), a frame-interval jitter histogram, and display-clock + audio sync-health readouts. Opens in the top-right corner, or the last position you moved it to. |
+| `Ctrl`+`Shift`+`F3` | Move the frame-statistics overlay to the next corner. The chosen corner is remembered across toggles and restarts. |
+| `Ctrl`+`Alt`+`F3` | Switch the frame-statistics overlay between the *detailed* presentation (stable decaying-histogram p99 + jitter histogram) and a *minimal* presentation (the graph is the jitter display — no histogram, no percentiles). Remembered across restarts. |
 
 These shortcuts mirror ITGmania's debug-loop modifiers and never affect timing-sensitive gameplay (note timing, scoring, music sync). Set `TabAcceleration=0` in `deadsync.ini` to disable them entirely.
+
+See [Frame-Statistics Overlay](docs/frame-stats-overlay.md) for how to read the colored graph, the marker and reference lines, and the readout cells.
 
 ### Profile & Online Features
 A `save` directory is created inside the data directory to store your personal data (see [Data Directories](#data-directories) for its location).

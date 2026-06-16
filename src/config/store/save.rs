@@ -395,6 +395,8 @@ fn push_saved_options(
     );
     push_bool(content, "ShowStats", cfg.show_stats_mode != 0);
     push_line(content, "ShowStatsMode", cfg.show_stats_mode.min(3));
+    push_line(content, "FrameStatsOverlayAnchor", cfg.frame_stats_overlay_anchor);
+    push_line(content, "FrameStatsOverlayStyle", cfg.frame_stats_overlay_style);
     push_bool(content, "SmoothHistogram", cfg.smooth_histogram);
     push_bool(
         content,

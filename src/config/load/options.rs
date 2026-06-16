@@ -3,6 +3,31 @@ use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
 };
 
+/// Normalize a persisted frame-stats overlay anchor to a canonical static key, mapping
+/// "auto"/empty/unknown to "auto" (the engine then follows the play-context default).
+fn canonical_overlay_anchor(value: &str) -> &'static str {
+    const KEYS: &[&str] = &[
+        "top-left",
+        "top-right",
+        "bottom-left",
+        "bottom-right",
+        "top-center",
+        "bottom-center",
+    ];
+    let value = value.trim().to_ascii_lowercase();
+    KEYS.iter().copied().find(|&k| k == value).unwrap_or("auto")
+}
+
+/// Normalize a persisted frame-stats overlay style to a canonical static key; anything other
+/// than "minimal" falls back to "detailed".
+fn canonical_overlay_style(value: &str) -> &'static str {
+    if value.trim().eq_ignore_ascii_case("minimal") {
+        "minimal"
+    } else {
+        "detailed"
+    }
+}
+
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     load_system_opts(conf, default, cfg);
     load_null_or_die_opts(conf, default, cfg);
@@ -105,6 +130,14 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
                 .map(|v| if v != 0 { 1 } else { 0 })
         })
         .unwrap_or(default.show_stats_mode);
+    cfg.frame_stats_overlay_anchor = conf
+        .get("Options", "FrameStatsOverlayAnchor")
+        .map(|v| canonical_overlay_anchor(&v))
+        .unwrap_or(default.frame_stats_overlay_anchor);
+    cfg.frame_stats_overlay_style = conf
+        .get("Options", "FrameStatsOverlayStyle")
+        .map(|v| canonical_overlay_style(&v))
+        .unwrap_or(default.frame_stats_overlay_style);
     cfg.translated_titles = conf
         .get("Options", "TranslatedTitles")
         .or_else(|| conf.get("Options", "translatedtitles"))
