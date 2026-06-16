@@ -1,15 +1,19 @@
-use chrono::Local;
+use chrono::{DateTime, Local};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 #[cfg(not(windows))]
 use std::ffi::OsStr;
 
 const LOG_FILE_PATH_FALLBACK: &str = "deadsync.log";
+/// Total number of log files to retain: the live `deadsync.log` plus the most
+/// recent `MAX_LOG_FILES - 1` timestamped backups of previous runs.
+const MAX_LOG_FILES: usize = 3;
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
 static LOG_FILE: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 static LOG_FILE_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -87,8 +91,101 @@ fn log_file_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(LOG_FILE_PATH_FALLBACK))
 }
 
+/// Rotates logs so the previous run is preserved under a timestamped name.
+///
+/// `deadsync.log` always points at the current run. Before it is truncated the
+/// existing file is archived as `deadsync-YYYY-MM-DD_HHMMSS.log` (stamped from
+/// its last-modified time), then older backups are pruned so at most
+/// `keep` files total remain on disk (the live log plus `keep - 1` backups).
+fn rotate_log_files(path: &Path, keep: usize) {
+    let backups = match keep.checked_sub(1) {
+        Some(n) if n > 0 => n,
+        // Only the live log is retained; truncation alone handles that.
+        _ => return,
+    };
+    if path.exists()
+        && let Some(dest) = timestamped_backup_path(path)
+    {
+        let _ = std::fs::rename(path, dest);
+    }
+    prune_old_logs(path, backups);
+}
+
+/// Builds a unique timestamped backup path next to `path`, e.g.
+/// `deadsync.log` -> `deadsync-2026-06-15_175005.log`. A numeric suffix is
+/// appended if a backup from the same second already exists.
+fn timestamped_backup_path(path: &Path) -> Option<PathBuf> {
+    let dir = path.parent()?;
+    let stem = path.file_stem()?.to_string_lossy().into_owned();
+    let ext = path.extension().map(|e| e.to_string_lossy().into_owned());
+    let modified = std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    let stamp = DateTime::<Local>::from(modified)
+        .format("%Y-%m-%d_%H%M%S")
+        .to_string();
+    let name = |suffix: &str| match &ext {
+        Some(ext) => format!("{stem}-{stamp}{suffix}.{ext}"),
+        None => format!("{stem}-{stamp}{suffix}"),
+    };
+    let mut candidate = dir.join(name(""));
+    let mut counter = 1;
+    while candidate.exists() {
+        candidate = dir.join(name(&format!("-{counter}")));
+        counter += 1;
+    }
+    Some(candidate)
+}
+
+/// Deletes the oldest timestamped backups, keeping the newest `keep`.
+fn prune_old_logs(path: &Path, keep: usize) {
+    let dir = path.parent().unwrap_or_else(|| Path::new(""));
+    let scan_dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().into_owned()) else {
+        return;
+    };
+    let prefix = format!("{stem}-");
+    let suffix = path.extension().map(|e| format!(".{}", e.to_string_lossy()));
+    let Ok(entries) = std::fs::read_dir(scan_dir) else {
+        return;
+    };
+    let mut backups: Vec<PathBuf> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !name.starts_with(&prefix) {
+                return None;
+            }
+            if let Some(suffix) = &suffix
+                && !name.ends_with(suffix)
+            {
+                return None;
+            }
+            let path = entry.path();
+            path.is_file().then_some(path)
+        })
+        .collect();
+    if backups.len() <= keep {
+        return;
+    }
+    // Timestamped names sort chronologically, so the oldest sort first.
+    backups.sort();
+    let remove_count = backups.len() - keep;
+    for old in backups.into_iter().take(remove_count) {
+        let _ = std::fs::remove_file(old);
+    }
+}
+
 fn open_log_file() -> Option<File> {
     let path = log_file_path();
+    if FILE_LOGGING_ENABLED.load(Ordering::Relaxed) {
+        rotate_log_files(&path, MAX_LOG_FILES);
+    }
     match OpenOptions::new()
         .create(true)
         .truncate(true)
