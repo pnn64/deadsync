@@ -23,15 +23,17 @@ use super::{
     HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
     HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
     INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
-    INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, PerspectiveEffects, PerspectiveOverrides,
-    RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL, RANDOM_ATTACK_OVERLAP_SECONDS,
-    RANDOM_ATTACK_RUN_TIME_SECONDS, RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE,
-    REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
-    REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
-    REMOVE_MASK_BIT_NO_QUADS, ScrollEffects, ScrollOverrides, State, TurnRng, VisibilityEffects,
-    VisibilityOverrides, VisualEffects, VisualOverrides, apply_hyper_shuffle,
-    apply_super_shuffle_taps, apply_turn_permutation, apply_uncommon_masks_with_masks,
-    gameplay_turn_option_from_profile, sort_player_notes,
+    INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, MiniAttackMode, PerspectiveEffects,
+    PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL,
+    RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
+    RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
+    REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
+    REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
+    ScrollOverrides, State, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
+    VisualOverrides, apply_hyper_shuffle, apply_super_shuffle_taps, apply_turn_permutation,
+    apply_uncommon_masks_with_masks, approach_attack_mini_percent_to_target, approach_attack_value,
+    attack_mini_target_percent, effective_mini_percent, gameplay_turn_option_from_profile,
+    song_lua_ease_factor, sort_player_notes, spacing_multiplier_for_percent,
 };
 
 #[derive(Clone, Debug)]
@@ -39,12 +41,6 @@ struct ChartAttackWindow {
     start_second: f32,
     len_seconds: f32,
     mods: String,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) enum AttackMiniMode {
-    Absolute,
-    Delta,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -66,7 +62,7 @@ pub(super) struct AttackMaskWindow {
     pub(super) perspective: PerspectiveOverrides,
     pub(super) scroll_speed: Option<ScrollSpeedSetting>,
     pub(super) mini_percent: Option<f32>,
-    pub(super) mini_mode: AttackMiniMode,
+    pub(super) mini_mode: MiniAttackMode,
     pub(super) mini_speed: Option<f32>,
 }
 
@@ -983,7 +979,7 @@ pub(super) fn build_attack_mask_windows_for_player(
             perspective: mods.perspective,
             scroll_speed: mods.scroll_speed,
             mini_percent: mods.mini_percent,
-            mini_mode: AttackMiniMode::Absolute,
+            mini_mode: MiniAttackMode::Absolute,
             mini_speed: mods.mini_speed,
         });
     }
@@ -1121,7 +1117,7 @@ fn build_song_lua_constant_window(
         perspective: mods.perspective,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
-        mini_mode: AttackMiniMode::Delta,
+        mini_mode: MiniAttackMode::Delta,
         mini_speed: mods.mini_speed,
     })
 }
@@ -3336,230 +3332,6 @@ fn song_lua_lerp_unclamped(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)
 }
 
-#[inline(always)]
-fn song_lua_pow_in(t: f32, power: f32) -> f32 {
-    t.powf(power)
-}
-
-#[inline(always)]
-fn song_lua_pow_out(t: f32, power: f32) -> f32 {
-    1.0 - (1.0 - t).powf(power)
-}
-
-#[inline(always)]
-fn song_lua_pow_in_out(t: f32, power: f32) -> f32 {
-    if t < 0.5 {
-        0.5 * (2.0 * t).powf(power)
-    } else {
-        1.0 - 0.5 * (2.0 * (1.0 - t)).powf(power)
-    }
-}
-
-#[inline(always)]
-fn song_lua_pow_out_in(t: f32, power: f32) -> f32 {
-    if t < 0.5 {
-        0.5 * song_lua_pow_out(t * 2.0, power)
-    } else {
-        0.5 + 0.5 * song_lua_pow_in((t * 2.0) - 1.0, power)
-    }
-}
-
-fn song_lua_out_bounce(t: f32) -> f32 {
-    const N1: f32 = 7.5625;
-    const D1: f32 = 2.75;
-    if t < 1.0 / D1 {
-        N1 * t * t
-    } else if t < 2.0 / D1 {
-        let t = t - 1.5 / D1;
-        N1 * t * t + 0.75
-    } else if t < 2.5 / D1 {
-        let t = t - 2.25 / D1;
-        N1 * t * t + 0.9375
-    } else {
-        let t = t - 2.625 / D1;
-        N1 * t * t + 0.984_375
-    }
-}
-
-#[inline(always)]
-fn song_lua_in_bounce(t: f32) -> f32 {
-    1.0 - song_lua_out_bounce(1.0 - t)
-}
-
-#[inline(always)]
-fn song_lua_in_out_bounce(t: f32) -> f32 {
-    if t < 0.5 {
-        0.5 * song_lua_in_bounce(t * 2.0)
-    } else {
-        0.5 + 0.5 * song_lua_out_bounce((t * 2.0) - 1.0)
-    }
-}
-
-pub(crate) fn song_lua_ease_factor(
-    easing: Option<&str>,
-    t: f32,
-    opt1: Option<f32>,
-    opt2: Option<f32>,
-) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
-    let elastic_period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
-    let elastic_tau = std::f32::consts::TAU / elastic_period;
-    match easing.unwrap_or("linear") {
-        "instant" => 1.0,
-        "linear" => t,
-        "inQuad" => song_lua_pow_in(t, 2.0),
-        "outQuad" => song_lua_pow_out(t, 2.0),
-        "inOutQuad" => song_lua_pow_in_out(t, 2.0),
-        "outInQuad" => song_lua_pow_out_in(t, 2.0),
-        "inCubic" => song_lua_pow_in(t, 3.0),
-        "outCubic" => song_lua_pow_out(t, 3.0),
-        "inOutCubic" => song_lua_pow_in_out(t, 3.0),
-        "outInCubic" => song_lua_pow_out_in(t, 3.0),
-        "inQuart" => song_lua_pow_in(t, 4.0),
-        "outQuart" => song_lua_pow_out(t, 4.0),
-        "inOutQuart" => song_lua_pow_in_out(t, 4.0),
-        "outInQuart" => song_lua_pow_out_in(t, 4.0),
-        "inQuint" => song_lua_pow_in(t, 5.0),
-        "outQuint" => song_lua_pow_out(t, 5.0),
-        "inOutQuint" => song_lua_pow_in_out(t, 5.0),
-        "outInQuint" => song_lua_pow_out_in(t, 5.0),
-        "inSine" => 1.0 - (t * std::f32::consts::FRAC_PI_2).cos(),
-        "outSine" => (t * std::f32::consts::FRAC_PI_2).sin(),
-        "inOutSine" => -((std::f32::consts::PI * t).cos() - 1.0) * 0.5,
-        "outInSine" => {
-            if t < 0.5 {
-                0.5 * ((t * std::f32::consts::PI).sin())
-            } else {
-                0.5 + 0.5 * (1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos())
-            }
-        }
-        "inExpo" => {
-            if t <= 0.0 {
-                0.0
-            } else {
-                2.0_f32.powf((10.0 * t) - 10.0)
-            }
-        }
-        "outExpo" => {
-            if t >= 1.0 {
-                1.0
-            } else {
-                1.0 - 2.0_f32.powf(-10.0 * t)
-            }
-        }
-        "inOutExpo" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else if t < 0.5 {
-                0.5 * 2.0_f32.powf((20.0 * t) - 10.0)
-            } else {
-                1.0 - (0.5 * 2.0_f32.powf((-20.0 * t) + 10.0))
-            }
-        }
-        "outInExpo" => {
-            if t < 0.5 {
-                0.5 * (1.0 - 2.0_f32.powf(-20.0 * t))
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                0.5 + 0.5 * 2.0_f32.powf((20.0 * t) - 20.0)
-            }
-        }
-        "inCirc" => 1.0 - (1.0 - (t * t)).sqrt(),
-        "outCirc" => (1.0 - ((t - 1.0) * (t - 1.0))).sqrt(),
-        "inOutCirc" => {
-            if t < 0.5 {
-                0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
-            } else {
-                0.5 * ((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt() + 1.0)
-            }
-        }
-        "outInCirc" => {
-            if t < 0.5 {
-                0.5 * (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt()
-            } else {
-                0.5 + 0.5 * (1.0 - (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt())
-            }
-        }
-        "inElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                let u = t - 1.0;
-                -(2.0_f32.powf(10.0 * u)) * ((u - elastic_period * 0.25) * elastic_tau).sin()
-            }
-        }
-        "outElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else {
-                2.0_f32.powf(-10.0 * t) * ((t - elastic_period * 0.25) * elastic_tau).sin() + 1.0
-            }
-        }
-        "inOutElastic" => {
-            if t <= 0.0 {
-                0.0
-            } else if t >= 1.0 {
-                1.0
-            } else if t < 0.5 {
-                let u = (2.0 * t) - 1.0;
-                -0.5 * 2.0_f32.powf(10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
-            } else {
-                let u = (2.0 * t) - 1.0;
-                0.5 * 2.0_f32.powf(-10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
-                    + 1.0
-            }
-        }
-        "outInElastic" => {
-            if t < 0.5 {
-                0.5 * song_lua_ease_factor(Some("outElastic"), t * 2.0, opt1, opt2)
-            } else {
-                0.5 + 0.5 * song_lua_ease_factor(Some("inElastic"), (t * 2.0) - 1.0, opt1, opt2)
-            }
-        }
-        "inBack" => t * t * (((overshoot + 1.0) * t) - overshoot),
-        "outBack" => {
-            let u = t - 1.0;
-            (u * u * (((overshoot + 1.0) * u) + overshoot)) + 1.0
-        }
-        "inOutBack" => {
-            let s = overshoot * 1.525;
-            if t < 0.5 {
-                let u = 2.0 * t;
-                0.5 * (u * u * (((s + 1.0) * u) - s))
-            } else {
-                let u = (2.0 * t) - 2.0;
-                0.5 * (u * u * (((s + 1.0) * u) + s) + 2.0)
-            }
-        }
-        "outInBack" => {
-            if t < 0.5 {
-                0.5 * song_lua_ease_factor(Some("outBack"), t * 2.0, opt1, opt2)
-            } else {
-                0.5 + 0.5 * song_lua_ease_factor(Some("inBack"), (t * 2.0) - 1.0, opt1, opt2)
-            }
-        }
-        "inBounce" => song_lua_in_bounce(t),
-        "outBounce" => song_lua_out_bounce(t),
-        "inOutBounce" => song_lua_in_out_bounce(t),
-        "outInBounce" => {
-            if t < 0.5 {
-                0.5 * song_lua_out_bounce(t * 2.0)
-            } else {
-                0.5 + 0.5 * song_lua_in_bounce((t * 2.0) - 1.0)
-            }
-        }
-        _ => t,
-    }
-}
-
 pub(super) fn song_lua_ease_window_value(window: &SongLuaEaseMaskWindow, now: f32) -> Option<f32> {
     if !now.is_finite()
         || !window.start_second.is_finite()
@@ -4124,36 +3896,6 @@ fn approach_visual_overrides_to_base(
 }
 
 #[inline(always)]
-fn approach_attack_value(
-    current: &mut Option<f32>,
-    target: Option<f32>,
-    base: f32,
-    speed: Option<f32>,
-    delta_time: f32,
-    unit_scale: f32,
-) {
-    let Some(target) = target.filter(|value| value.is_finite()) else {
-        *current = None;
-        return;
-    };
-    if delta_time <= f32::EPSILON {
-        *current = Some(target);
-        return;
-    }
-    let Some(speed) = speed.filter(|value| value.is_finite()) else {
-        *current = Some(target);
-        return;
-    };
-    let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
-    if step <= f32::EPSILON {
-        return;
-    }
-    let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
-    super::approach_f32(&mut value, target, step);
-    *current = Some(value);
-}
-
-#[inline(always)]
 fn approach_attack_cols(
     current: &mut [Option<f32>; MAX_COLS],
     target: [Option<f32>; MAX_COLS],
@@ -4396,33 +4138,11 @@ fn approach_scroll_overrides_to_target(
 }
 
 #[inline(always)]
-fn approach_mini_percent_to_target(
-    current: &mut Option<f32>,
-    target: Option<f32>,
-    base: f32,
-    speed: Option<f32>,
-    delta_time: f32,
-) {
-    approach_attack_value(current, target, base, speed, delta_time, 100.0);
-    if let Some(value) = current.as_mut() {
-        *value = value.clamp(-100.0, 150.0);
-    }
-}
-
-#[inline(always)]
 fn attack_mini_base_percent(state: &State, player: usize, clear_all: bool) -> f32 {
     if clear_all {
         0.0
     } else {
         state.player_profiles[player].mini_percent as f32
-    }
-}
-
-#[inline(always)]
-fn attack_mini_target_percent(value: f32, mode: AttackMiniMode, base: f32) -> f32 {
-    match mode {
-        AttackMiniMode::Absolute => value,
-        AttackMiniMode::Delta => base + value,
     }
 }
 
@@ -5088,7 +4808,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
 
         let base_mini_percent = attack_mini_base_percent(state, player, clear_all);
         let mut mini_current = state.active_attack_mini_percent[player];
-        approach_mini_percent_to_target(
+        approach_attack_mini_percent_to_target(
             &mut mini_current,
             mini_percent,
             base_mini_percent,
@@ -5349,16 +5069,11 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
     if player_idx >= state.num_players {
         return 0.0;
     }
-    let mini = state.active_attack_mini_percent[player_idx]
-        .filter(|v| v.is_finite())
-        .unwrap_or_else(|| {
-            if player_attack_base_cleared(state, player_idx) {
-                0.0
-            } else {
-                state.player_profiles[player_idx].mini_percent as f32
-            }
-        });
-    mini.clamp(-100.0, 150.0)
+    effective_mini_percent(
+        state.active_attack_mini_percent[player_idx],
+        state.player_profiles[player_idx].mini_percent as f32,
+        player_attack_base_cleared(state, player_idx),
+    )
 }
 
 /// Multiplier applied to the noteskin's per-column lateral offsets to
@@ -5370,15 +5085,6 @@ pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize)
         return 1.0;
     }
     spacing_multiplier_for_percent(state.player_profiles[player_idx].spacing_percent)
-}
-
-#[inline(always)]
-pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
-    let clamped = spacing_percent.clamp(
-        profile_data::SPACING_PERCENT_MIN,
-        profile_data::SPACING_PERCENT_MAX,
-    );
-    1.0 + clamped as f32 / 100.0
 }
 
 #[inline(always)]

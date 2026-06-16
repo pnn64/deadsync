@@ -7,6 +7,9 @@ use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
+pub(crate) use deadsync_gameplay::song_lua_ease_factor;
+#[cfg(test)]
+use deadsync_gameplay::step_stats_notefield_width;
 pub use deadsync_gameplay::{
     ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, ActiveColumnFlash, ActiveComboMilestone, ActiveHold,
     ActiveMineExplosion, ActiveTapExplosion, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION,
@@ -14,7 +17,7 @@ pub use deadsync_gameplay::{
     COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ColumnCueColumn, ColumnScrollFlags,
     ColumnTapJudgment, ComboMilestoneKind, DRAW_DISTANCE_AFTER_TARGETS,
     DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx, ErrorBarText, ErrorBarTick, ExitTransition,
-    ExitTransitionKind, FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN,
+    ExitTransitionKind, FantasticFeedbackOptions, FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN,
     GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
     GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
@@ -25,20 +28,22 @@ pub use deadsync_gameplay::{
     HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG,
     INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
     INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, JudgmentRenderInfo,
-    LeadInTiming, MINE_EXPLOSION_DURATION, MineJudgmentRenderInfo, NoteCountStat,
-    OffsetIndicatorText, PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
-    REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
-    REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
-    REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
-    ReplayOffsetSnapshot, RowEntry, RowGrid, TAP_EXPLOSION_WINDOWS, TOGGLE_FLASH_DURATION,
-    TOGGLE_FLASH_FADE_START, TurnRng, active_hold_counts_as_pressed, active_hold_is_engaged,
-    advance_judged_row_cursor, apply_echo_insert, apply_hyper_shuffle,
+    LeadInTiming, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN,
+    MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, OffsetIndicatorText, PlayerRowScanState,
+    RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
+    REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
+    REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS,
+    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge, ReplayOffsetSnapshot, RowEntry,
+    RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
+    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TurnRng, active_hold_counts_as_pressed,
+    active_hold_is_engaged, advance_judged_row_cursor, apply_echo_insert, apply_hyper_shuffle,
     apply_insert_intelligent_taps, apply_mines_insert, apply_stomp_insert,
     apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, apply_wide_insert, assist_clap_cursor_for_row,
+    apply_uncommon_masks_with_masks, apply_wide_insert, approach_attack_mini_percent_to_target,
+    approach_attack_value, approach_f32, assist_clap_cursor_for_row,
     assist_lookahead_music_horizon_seconds, assist_row_no_offset_for_timing,
-    autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+    attack_mini_target_percent, autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
     build_column_cues_for_player, build_note_count_stats, build_row_entry, build_row_grids,
     cell_has_any_note, cell_has_nonfake_note, closest_lane_note_ns, collect_edge_judge_indices,
     column_cue_is_mine, column_flash_duration, column_scroll_dirs_for_flags,
@@ -47,25 +52,32 @@ pub use deadsync_gameplay::{
     count_held_tracks_at_row, count_nonempty_tracks_at_row, count_rescore_tracks_on_row,
     count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row, counts_for_early_rescore,
     crossed_mine_bounds_ns, crossed_mine_held_start_time, danger_fx_rgba, danger_health_state,
-    draw_distance_after_targets, draw_distance_before_targets, enforce_max_simultaneous_notes,
-    error_bar_average_offset_s, error_bar_long_term_offset_s, error_bar_push_tick,
-    error_bar_window_ix, exit_total_seconds, exit_transition_alpha,
+    draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
+    enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
+    error_bar_push_tick, error_bar_window_ix, exit_total_seconds, exit_transition_alpha,
     finalized_row_outcome_for_cached_row, finalized_row_outcome_for_entry,
     first_nonempty_track_at_row, first_row_entry_index_at_or_after_time, first_tap_track_at_row,
-    first_time_index_at_or_after, gameplay_exit_for_kind, hold_to_exit_seconds, input_queue_cap,
-    is_hold_body_at_row, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-    lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-    lane_release_finished, late_note_resolution_window_ns, local_player_col, max_step_distance_ns,
-    mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_from_stream_position,
+    first_time_index_at_or_after, gameplay_exit_for_kind, grade_to_window, hold_to_exit_seconds,
+    input_queue_cap, is_hold_body_at_row, lane_edge_judges_lift, lane_edge_judges_tap,
+    lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+    lane_press_started, lane_release_finished, late_note_resolution_window_ns, local_player_col,
+    max_step_distance_ns, mine_window_bounds_ns, mini_value_for_percent,
+    missed_note_cutoff_row_for_timing, music_time_from_stream_position,
     next_ready_row_in_lookahead, note_has_displayable_hold, note_tracks_held_miss,
-    notes_row_sorted, player_row_scan_state, player_rows, quantization_index_from_beat,
-    recent_step_tracks, remove_cell_notes, replay_edge_cap, row_entry_for_cached_row,
-    row_entry_index_for_cached_row, row_final_grade_hides_note, scroll_receptor_y,
+    notes_row_sorted, player_draw_scale_for_mini, player_row_scan_state, player_rows,
+    quantization_index_from_beat, recent_step_tracks, remove_cell_notes, replay_edge_cap,
+    row_entry_for_cached_row, row_entry_index_for_cached_row, row_final_grade_hides_note,
+    scroll_receptor_y, scroll_reverse_percent_for_column, scroll_reverse_scale_for_column,
     set_added_mine_note, set_added_tap_note, song_audio_end_time_ns, sort_player_notes,
-    stage_music_cut, step_search_row_bounds, stomp_mirror_track, suppress_final_bad_rescore_visual,
+    spacing_multiplier_for_percent, stage_music_cut, step_search_row_bounds, stomp_mirror_track,
+    suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion_for_options,
     timing_row_floor, timing_row_nearest, toggle_flash_alpha, track_held_miss_window_for_player,
-    track_range_has_any_note, turn_seed_for_song, update_danger_fx_for_health,
-    visible_notefield_time_ns,
+    track_range_has_any_note, trigger_combo_milestone, turn_seed_for_song,
+    update_danger_fx_for_health, visible_notefield_time_ns,
+};
+use deadsync_gameplay::{
+    StepStatsPlayStyle, step_stats_density_graph_width as gameplay_step_stats_density_graph_width,
+    step_stats_upper_density_graph_width,
 };
 use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
@@ -91,9 +103,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
-use deadsync_rules::timing::{
-    BeatInfoCache, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
-};
+use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
 use log::{debug, info, trace, warn};
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -132,7 +142,6 @@ mod stats;
 mod time;
 
 pub(crate) use self::attacks::song_lua_compile_context;
-pub(crate) use self::attacks::song_lua_ease_factor;
 #[cfg(test)]
 use self::attacks::song_lua_ease_window_value;
 use self::attacks::{
@@ -150,7 +159,6 @@ pub use self::attacks::{
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
     effective_scroll_speed_for_player, effective_spacing_multiplier_for_player,
     effective_visibility_effects_for_player, effective_visual_effects_for_player,
-    spacing_multiplier_for_percent,
 };
 #[cfg(test)]
 use self::attacks::{
@@ -470,33 +478,30 @@ impl ScrollEffects {
 
     #[inline(always)]
     pub fn reverse_percent_for_column(self, local_col: usize, num_cols: usize) -> f32 {
-        if num_cols == 0 {
-            return 0.0;
-        }
-        let mut percent = self.reverse;
-        if local_col >= num_cols / 2 {
-            percent += self.split;
-        }
-        if (local_col & 1) != 0 {
-            percent += self.alternate;
-        }
-        let first_cross_col = num_cols / 4;
-        let last_cross_col = num_cols.saturating_sub(first_cross_col + 1);
-        if local_col >= first_cross_col && local_col <= last_cross_col {
-            percent += self.cross;
-        }
-        if percent > 2.0 {
-            percent = percent.rem_euclid(2.0);
-        }
-        if percent > 1.0 {
-            return lerp(1.0, 0.0, percent - 1.0);
-        }
-        percent.clamp(0.0, 1.0)
+        scroll_reverse_percent_for_column(
+            ScrollReverseOptions {
+                reverse: self.reverse,
+                split: self.split,
+                alternate: self.alternate,
+                cross: self.cross,
+            },
+            local_col,
+            num_cols,
+        )
     }
 
     #[inline(always)]
     pub fn reverse_scale_for_column(self, local_col: usize, num_cols: usize) -> f32 {
-        1.0 - 2.0 * self.reverse_percent_for_column(local_col, num_cols)
+        scroll_reverse_scale_for_column(
+            ScrollReverseOptions {
+                reverse: self.reverse,
+                split: self.split,
+                alternate: self.alternate,
+                cross: self.cross,
+            },
+            local_col,
+            num_cols,
+        )
     }
 }
 
@@ -715,16 +720,11 @@ fn effective_mini_value_with_visual_mask(
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
-    let mut mini = if mini_percent.is_finite() {
-        mini_percent
-    } else {
-        profile.mini_percent as f32
-    };
-    if (visual_mask & VISUAL_MASK_BIT_BIG) != 0 {
-        // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
-        mini -= 100.0;
-    }
-    mini.clamp(-100.0, 150.0) / 100.0
+    mini_value_for_percent(
+        mini_percent,
+        profile.mini_percent as f32,
+        (visual_mask & VISUAL_MASK_BIT_BIG) != 0,
+    )
 }
 
 #[inline(always)]
@@ -741,7 +741,7 @@ fn player_draw_scale_for_tilt_with_visual_mask(
     mini_percent: f32,
 ) -> f32 {
     let mini = effective_mini_value_with_visual_mask(profile, visual_mask, mini_percent);
-    (1.0 + 0.5 * tilt.abs()) * (1.0 + mini.abs())
+    player_draw_scale_for_mini(tilt, mini)
 }
 
 #[inline(always)]
@@ -935,11 +935,6 @@ fn compute_column_scroll_dirs(
         },
         num_cols,
     )
-}
-
-#[inline(always)]
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    (b - a).mul_add(t.clamp(0.0, 1.0), a)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -2099,25 +2094,6 @@ fn finalize_update_trace(
     trace_gameplay_update(state, delta_time, music_time_sec, total_us, phase_timings);
 }
 
-#[inline(always)]
-fn approach_f32(current: &mut f32, target: f32, step: f32) {
-    if !current.is_finite() || !target.is_finite() {
-        *current = target;
-        return;
-    }
-    let step = step.max(0.0);
-    if step <= f32::EPSILON || (*current - target).abs() <= f32::EPSILON {
-        return;
-    }
-    let delta = target - *current;
-    let step = delta.clamp(-step, step);
-    if step.abs() >= delta.abs() {
-        *current = target;
-    } else {
-        *current += step;
-    }
-}
-
 fn refresh_live_notefield_options(state: &mut State, current_bpm: f32) {
     for player in 0..state.num_players {
         let scroll = effective_scroll_effects_for_player(state, player);
@@ -2710,28 +2686,16 @@ fn get_reference_bpm_from_display_tag(
     s.parse::<f32>().ok()
 }
 
-fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
-    if cols_per_player == 0 {
-        return None;
+fn step_stats_play_style(play_style: profile_data::PlayStyle) -> StepStatsPlayStyle {
+    match play_style {
+        profile_data::PlayStyle::Single => StepStatsPlayStyle::Single,
+        profile_data::PlayStyle::Double => StepStatsPlayStyle::Double,
+        profile_data::PlayStyle::Versus => StepStatsPlayStyle::Versus,
     }
-    // Simply Love GetNotefieldWidth() parity: this is a style width, not the
-    // rendered field width. Mini and Spacing must not move step statistics.
-    Some(cols_per_player as f32 * 64.0)
 }
 
 fn upper_density_graph_width(play_style: profile_data::PlayStyle) -> f32 {
-    // zmod UpperNPSGraph parity:
-    //   width = GetNotefieldWidth()
-    //   if OnePlayerTwoSides then width = width / 2
-    //   width = width - 30
-    let mut width = match play_style {
-        profile_data::PlayStyle::Double => 512.0_f32,
-        profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => 256.0_f32,
-    };
-    if play_style == profile_data::PlayStyle::Double {
-        width *= 0.5_f32;
-    }
-    (width - 30.0_f32).max(0.0_f32)
+    step_stats_upper_density_graph_width(step_stats_play_style(play_style))
 }
 
 fn step_stats_density_graph_width(
@@ -2743,30 +2707,15 @@ fn step_stats_density_graph_width(
     wide: bool,
     center_1player_notefield: bool,
 ) -> f32 {
-    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
-    let note_field_is_centered = match play_style {
-        profile_data::PlayStyle::Double => true,
-        profile_data::PlayStyle::Single => num_players == 1 && center_1player_notefield,
-        profile_data::PlayStyle::Versus => false,
-    };
-
-    let mut sidepane_width = screen_w * 0.5_f32;
-    if !is_ultrawide && note_field_is_centered && wide {
-        let nf_width = step_stats_notefield_width(cols_per_player)
-            .unwrap_or(256.0_f32)
-            .max(1.0_f32);
-        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
-    }
-    if is_ultrawide && num_players > 1 {
-        sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);
-    }
-
-    // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
-    // to 95% of the side pane and positions it in the right dark pane.
-    if play_style == profile_data::PlayStyle::Double {
-        return (sidepane_width * 0.95_f32).max(1.0_f32);
-    }
-    sidepane_width.round().max(1.0_f32)
+    gameplay_step_stats_density_graph_width(
+        step_stats_play_style(play_style),
+        cols_per_player,
+        num_players,
+        screen_w,
+        screen_h,
+        wide,
+        center_1player_notefield,
+    )
 }
 
 pub fn init(
@@ -3893,17 +3842,6 @@ fn update_itg_grade_totals(p: &mut PlayerRuntime) {
     );
 }
 
-const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
-    match grade {
-        JudgeGrade::Fantastic => Some("W1"),
-        JudgeGrade::Excellent => Some("W2"),
-        JudgeGrade::Great => Some("W3"),
-        JudgeGrade::Decent => Some("W4"),
-        JudgeGrade::WayOff => Some("W5"),
-        JudgeGrade::Miss => Some("Miss"),
-    }
-}
-
 #[inline(always)]
 fn timing_hit_log_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
@@ -4019,16 +3957,15 @@ fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &J
     let Some(profile) = state.player_profiles.get(player) else {
         return false;
     };
-    if !profile.show_fa_plus_window || judgment.grade != JudgeGrade::Fantastic {
-        return false;
-    }
-    if profile.fa_plus_10ms_blue_window
-        && !profile.split_15_10ms
-        && !profile.custom_fantastic_window
-    {
-        return judgment.time_error_ms.abs() > FA_PLUS_W010_MS;
-    }
-    judgment.window == Some(TimingWindow::W1)
+    tap_judgment_uses_bright_explosion_for_options(
+        FantasticFeedbackOptions {
+            show_fa_plus_window: profile.show_fa_plus_window,
+            fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+            split_15_10ms: profile.split_15_10ms,
+            custom_fantastic_window: profile.custom_fantastic_window,
+        },
+        judgment,
+    )
 }
 
 #[inline(always)]
@@ -4155,19 +4092,6 @@ fn trigger_mine_explosion(state: &mut State, column: usize) {
     }
 }
 
-fn trigger_combo_milestone(p: &mut PlayerRuntime, kind: ComboMilestoneKind) {
-    if let Some(index) = p
-        .combo_milestones
-        .iter()
-        .position(|milestone| milestone.kind == kind)
-    {
-        p.combo_milestones[index].elapsed = 0.0;
-    } else {
-        p.combo_milestones
-            .push(ActiveComboMilestone { kind, elapsed: 0.0 });
-    }
-}
-
 #[inline(always)]
 fn player_combo_state(p: &PlayerRuntime) -> ComboState {
     ComboState {
@@ -4194,10 +4118,10 @@ fn apply_combo_update(p: &mut PlayerRuntime, update: combo_rules::ComboUpdate) {
         p.current_combo_window_counts = deadsync_rules::timing::WindowCounts::default();
     }
     if update.hit_thousand_milestone {
-        trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
+        trigger_combo_milestone(&mut p.combo_milestones, ComboMilestoneKind::Thousand);
     }
     if update.hit_hundred_milestone {
-        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
+        trigger_combo_milestone(&mut p.combo_milestones, ComboMilestoneKind::Hundred);
     }
 }
 

@@ -10,7 +10,7 @@ use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{
     HoldData, HoldResult, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL,
 };
-use deadsync_rules::timing::{TimingData, TimingProfile, TimingProfileNs};
+use deadsync_rules::timing::{FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs};
 use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -172,6 +172,183 @@ pub fn draw_distance_after_targets(
     )
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StepStatsPlayStyle {
+    #[default]
+    Single,
+    Double,
+    Versus,
+}
+
+pub fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
+    if cols_per_player == 0 {
+        return None;
+    }
+    // Simply Love GetNotefieldWidth() parity: this is a style width, not the
+    // rendered field width. Mini and Spacing must not move step statistics.
+    Some(cols_per_player as f32 * 64.0)
+}
+
+pub fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f32 {
+    // zmod UpperNPSGraph parity:
+    //   width = GetNotefieldWidth()
+    //   if OnePlayerTwoSides then width = width / 2
+    //   width = width - 30
+    let mut width = match play_style {
+        StepStatsPlayStyle::Double => 512.0_f32,
+        StepStatsPlayStyle::Single | StepStatsPlayStyle::Versus => 256.0_f32,
+    };
+    if play_style == StepStatsPlayStyle::Double {
+        width *= 0.5_f32;
+    }
+    (width - 30.0_f32).max(0.0_f32)
+}
+
+pub fn step_stats_density_graph_width(
+    play_style: StepStatsPlayStyle,
+    cols_per_player: usize,
+    num_players: usize,
+    screen_w: f32,
+    screen_h: f32,
+    wide: bool,
+    center_1player_notefield: bool,
+) -> f32 {
+    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
+    let note_field_is_centered = match play_style {
+        StepStatsPlayStyle::Double => true,
+        StepStatsPlayStyle::Single => num_players == 1 && center_1player_notefield,
+        StepStatsPlayStyle::Versus => false,
+    };
+
+    let mut sidepane_width = screen_w * 0.5_f32;
+    if !is_ultrawide && note_field_is_centered && wide {
+        let nf_width = step_stats_notefield_width(cols_per_player)
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
+        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
+    }
+    if is_ultrawide && num_players > 1 {
+        sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);
+    }
+
+    // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
+    // to 95% of the side pane and positions it in the right dark pane.
+    if play_style == StepStatsPlayStyle::Double {
+        return (sidepane_width * 0.95_f32).max(1.0_f32);
+    }
+    sidepane_width.round().max(1.0_f32)
+}
+
+pub const MINI_PERCENT_MIN: f32 = -100.0;
+pub const MINI_PERCENT_MAX: f32 = 150.0;
+
+#[inline(always)]
+pub fn effective_mini_percent(
+    active_mini_percent: Option<f32>,
+    fallback_mini_percent: f32,
+    base_cleared: bool,
+) -> f32 {
+    let mini = active_mini_percent
+        .filter(|v| v.is_finite())
+        .unwrap_or(if base_cleared {
+            0.0
+        } else {
+            fallback_mini_percent
+        });
+    mini.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MiniAttackMode {
+    Absolute,
+    Delta,
+}
+
+#[inline(always)]
+pub fn attack_mini_target_percent(value: f32, mode: MiniAttackMode, base: f32) -> f32 {
+    match mode {
+        MiniAttackMode::Absolute => value,
+        MiniAttackMode::Delta => base + value,
+    }
+}
+
+#[inline(always)]
+pub fn approach_attack_value(
+    current: &mut Option<f32>,
+    target: Option<f32>,
+    base: f32,
+    speed: Option<f32>,
+    delta_time: f32,
+    unit_scale: f32,
+) {
+    let Some(target) = target.filter(|value| value.is_finite()) else {
+        *current = None;
+        return;
+    };
+    if delta_time <= f32::EPSILON {
+        *current = Some(target);
+        return;
+    }
+    let Some(speed) = speed.filter(|value| value.is_finite()) else {
+        *current = Some(target);
+        return;
+    };
+    let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
+    if step <= f32::EPSILON {
+        return;
+    }
+    let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
+    approach_f32(&mut value, target, step);
+    *current = Some(value);
+}
+
+#[inline(always)]
+pub fn approach_attack_mini_percent_to_target(
+    current: &mut Option<f32>,
+    target: Option<f32>,
+    base: f32,
+    speed: Option<f32>,
+    delta_time: f32,
+) {
+    approach_attack_value(current, target, base, speed, delta_time, 100.0);
+    if let Some(value) = current.as_mut() {
+        *value = value.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX);
+    }
+}
+
+#[inline(always)]
+pub fn mini_value_for_percent(
+    mini_percent: f32,
+    fallback_mini_percent: f32,
+    big_active: bool,
+) -> f32 {
+    let mut mini = if mini_percent.is_finite() {
+        mini_percent
+    } else {
+        fallback_mini_percent
+    };
+    if big_active {
+        // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
+        mini -= 100.0;
+    }
+    mini.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX) / 100.0
+}
+
+#[inline(always)]
+pub fn player_draw_scale_for_mini(tilt: f32, mini_value: f32) -> f32 {
+    (1.0 + 0.5 * tilt.abs()) * (1.0 + mini_value.abs())
+}
+
+pub const SPACING_PERCENT_MIN: i32 = -100;
+pub const SPACING_PERCENT_MAX: i32 = 100;
+
+/// Multiplier applied to noteskin per-column lateral offsets for Spacing.
+#[inline(always)]
+pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
+    let clamped = spacing_percent.clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
+    1.0 + clamped as f32 / 100.0
+}
+
 #[inline(always)]
 pub fn toggle_flash_alpha(timer_remaining: f32) -> Option<f32> {
     if timer_remaining <= 0.0 {
@@ -185,6 +362,25 @@ pub fn toggle_flash_alpha(timer_remaining: f32) -> Option<f32> {
         1.0 - ((age - TOGGLE_FLASH_FADE_START) / fade_len).clamp(0.0, 1.0)
     };
     Some(alpha)
+}
+
+#[inline(always)]
+pub fn approach_f32(current: &mut f32, target: f32, step: f32) {
+    if !current.is_finite() || !target.is_finite() {
+        *current = target;
+        return;
+    }
+    let step = step.max(0.0);
+    if step <= f32::EPSILON || (*current - target).abs() <= f32::EPSILON {
+        return;
+    }
+    let delta = target - *current;
+    let step = delta.clamp(-step, step);
+    if step.abs() >= delta.abs() {
+        *current = target;
+    } else {
+        *current += step;
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -232,6 +428,53 @@ pub struct ColumnScrollFlags {
     pub split: bool,
     pub alternate: bool,
     pub cross: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScrollReverseOptions {
+    pub reverse: f32,
+    pub split: f32,
+    pub alternate: f32,
+    pub cross: f32,
+}
+
+#[inline(always)]
+pub fn scroll_reverse_percent_for_column(
+    options: ScrollReverseOptions,
+    local_col: usize,
+    num_cols: usize,
+) -> f32 {
+    if num_cols == 0 {
+        return 0.0;
+    }
+    let mut percent = options.reverse;
+    if local_col >= num_cols / 2 {
+        percent += options.split;
+    }
+    if (local_col & 1) != 0 {
+        percent += options.alternate;
+    }
+    let first_cross_col = num_cols / 4;
+    let last_cross_col = num_cols.saturating_sub(first_cross_col + 1);
+    if local_col >= first_cross_col && local_col <= last_cross_col {
+        percent += options.cross;
+    }
+    if percent > 2.0 {
+        percent = percent.rem_euclid(2.0);
+    }
+    if percent > 1.0 {
+        return lerp(1.0, 0.0, percent - 1.0);
+    }
+    percent.clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+pub fn scroll_reverse_scale_for_column(
+    options: ScrollReverseOptions,
+    local_col: usize,
+    num_cols: usize,
+) -> f32 {
+    1.0 - 2.0 * scroll_reverse_percent_for_column(options, local_col, num_cols)
 }
 
 pub fn column_scroll_dirs_for_flags(flags: ColumnScrollFlags, num_cols: usize) -> [f32; MAX_COLS] {
@@ -507,6 +750,43 @@ pub const TAP_EXPLOSION_WINDOW_COUNT: usize = 7;
 pub const TAP_EXPLOSION_WINDOWS: [&str; TAP_EXPLOSION_WINDOW_COUNT] =
     ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
 
+#[inline(always)]
+pub const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
+    match grade {
+        JudgeGrade::Fantastic => Some("W1"),
+        JudgeGrade::Excellent => Some("W2"),
+        JudgeGrade::Great => Some("W3"),
+        JudgeGrade::Decent => Some("W4"),
+        JudgeGrade::WayOff => Some("W5"),
+        JudgeGrade::Miss => Some("Miss"),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FantasticFeedbackOptions {
+    pub show_fa_plus_window: bool,
+    pub fa_plus_10ms_blue_window: bool,
+    pub split_15_10ms: bool,
+    pub custom_fantastic_window: bool,
+}
+
+#[inline(always)]
+pub fn tap_judgment_uses_bright_explosion_for_options(
+    options: FantasticFeedbackOptions,
+    judgment: &Judgment,
+) -> bool {
+    if !options.show_fa_plus_window || judgment.grade != JudgeGrade::Fantastic {
+        return false;
+    }
+    if options.fa_plus_10ms_blue_window
+        && !options.split_15_10ms
+        && !options.custom_fantastic_window
+    {
+        return judgment.time_error_ms.abs() > FA_PLUS_W010_MS;
+    }
+    judgment.window == Some(TimingWindow::W1)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum GameplayTween {
     Linear,
@@ -523,6 +803,230 @@ impl GameplayTween {
             Self::Accelerate => t * t,
             Self::Decelerate => 1.0 - (1.0 - t) * (1.0 - t),
         }
+    }
+}
+
+#[inline(always)]
+fn song_lua_pow_in(t: f32, power: f32) -> f32 {
+    t.powf(power)
+}
+
+#[inline(always)]
+fn song_lua_pow_out(t: f32, power: f32) -> f32 {
+    1.0 - (1.0 - t).powf(power)
+}
+
+#[inline(always)]
+fn song_lua_pow_in_out(t: f32, power: f32) -> f32 {
+    if t < 0.5 {
+        0.5 * (2.0 * t).powf(power)
+    } else {
+        1.0 - 0.5 * (2.0 * (1.0 - t)).powf(power)
+    }
+}
+
+#[inline(always)]
+fn song_lua_pow_out_in(t: f32, power: f32) -> f32 {
+    if t < 0.5 {
+        0.5 * song_lua_pow_out(t * 2.0, power)
+    } else {
+        0.5 + 0.5 * song_lua_pow_in((t * 2.0) - 1.0, power)
+    }
+}
+
+fn song_lua_out_bounce(t: f32) -> f32 {
+    const N1: f32 = 7.5625;
+    const D1: f32 = 2.75;
+    if t < 1.0 / D1 {
+        N1 * t * t
+    } else if t < 2.0 / D1 {
+        let t = t - 1.5 / D1;
+        N1 * t * t + 0.75
+    } else if t < 2.5 / D1 {
+        let t = t - 2.25 / D1;
+        N1 * t * t + 0.9375
+    } else {
+        let t = t - 2.625 / D1;
+        N1 * t * t + 0.984_375
+    }
+}
+
+#[inline(always)]
+fn song_lua_in_bounce(t: f32) -> f32 {
+    1.0 - song_lua_out_bounce(1.0 - t)
+}
+
+#[inline(always)]
+fn song_lua_in_out_bounce(t: f32) -> f32 {
+    if t < 0.5 {
+        0.5 * song_lua_in_bounce(t * 2.0)
+    } else {
+        0.5 + 0.5 * song_lua_out_bounce((t * 2.0) - 1.0)
+    }
+}
+
+pub fn song_lua_ease_factor(
+    easing: Option<&str>,
+    t: f32,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+    let elastic_period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
+    let elastic_tau = std::f32::consts::TAU / elastic_period;
+    match easing.unwrap_or("linear") {
+        "instant" => 1.0,
+        "linear" => t,
+        "inQuad" => song_lua_pow_in(t, 2.0),
+        "outQuad" => song_lua_pow_out(t, 2.0),
+        "inOutQuad" => song_lua_pow_in_out(t, 2.0),
+        "outInQuad" => song_lua_pow_out_in(t, 2.0),
+        "inCubic" => song_lua_pow_in(t, 3.0),
+        "outCubic" => song_lua_pow_out(t, 3.0),
+        "inOutCubic" => song_lua_pow_in_out(t, 3.0),
+        "outInCubic" => song_lua_pow_out_in(t, 3.0),
+        "inQuart" => song_lua_pow_in(t, 4.0),
+        "outQuart" => song_lua_pow_out(t, 4.0),
+        "inOutQuart" => song_lua_pow_in_out(t, 4.0),
+        "outInQuart" => song_lua_pow_out_in(t, 4.0),
+        "inQuint" => song_lua_pow_in(t, 5.0),
+        "outQuint" => song_lua_pow_out(t, 5.0),
+        "inOutQuint" => song_lua_pow_in_out(t, 5.0),
+        "outInQuint" => song_lua_pow_out_in(t, 5.0),
+        "inSine" => 1.0 - (t * std::f32::consts::FRAC_PI_2).cos(),
+        "outSine" => (t * std::f32::consts::FRAC_PI_2).sin(),
+        "inOutSine" => -((std::f32::consts::PI * t).cos() - 1.0) * 0.5,
+        "outInSine" => {
+            if t < 0.5 {
+                0.5 * ((t * std::f32::consts::PI).sin())
+            } else {
+                0.5 + 0.5 * (1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos())
+            }
+        }
+        "inExpo" => {
+            if t <= 0.0 {
+                0.0
+            } else {
+                2.0_f32.powf((10.0 * t) - 10.0)
+            }
+        }
+        "outExpo" => {
+            if t >= 1.0 {
+                1.0
+            } else {
+                1.0 - 2.0_f32.powf(-10.0 * t)
+            }
+        }
+        "inOutExpo" => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else if t < 0.5 {
+                0.5 * 2.0_f32.powf((20.0 * t) - 10.0)
+            } else {
+                1.0 - (0.5 * 2.0_f32.powf((-20.0 * t) + 10.0))
+            }
+        }
+        "outInExpo" => {
+            if t < 0.5 {
+                0.5 * (1.0 - 2.0_f32.powf(-20.0 * t))
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                0.5 + 0.5 * 2.0_f32.powf((20.0 * t) - 20.0)
+            }
+        }
+        "inCirc" => 1.0 - (1.0 - (t * t)).sqrt(),
+        "outCirc" => (1.0 - ((t - 1.0) * (t - 1.0))).sqrt(),
+        "inOutCirc" => {
+            if t < 0.5 {
+                0.5 * (1.0 - (1.0 - 4.0 * t * t).sqrt())
+            } else {
+                0.5 * ((1.0 - ((-2.0 * t + 2.0) * (-2.0 * t + 2.0))).sqrt() + 1.0)
+            }
+        }
+        "outInCirc" => {
+            if t < 0.5 {
+                0.5 * (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt()
+            } else {
+                0.5 + 0.5 * (1.0 - (1.0 - ((2.0 * t - 1.0) * (2.0 * t - 1.0))).sqrt())
+            }
+        }
+        "inElastic" => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                let u = t - 1.0;
+                -(2.0_f32.powf(10.0 * u)) * ((u - elastic_period * 0.25) * elastic_tau).sin()
+            }
+        }
+        "outElastic" => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                2.0_f32.powf(-10.0 * t) * ((t - elastic_period * 0.25) * elastic_tau).sin() + 1.0
+            }
+        }
+        "inOutElastic" => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else if t < 0.5 {
+                let u = (2.0 * t) - 1.0;
+                -0.5 * 2.0_f32.powf(10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
+            } else {
+                let u = (2.0 * t) - 1.0;
+                0.5 * 2.0_f32.powf(-10.0 * u) * ((u - elastic_period * 0.375) * elastic_tau).sin()
+                    + 1.0
+            }
+        }
+        "outInElastic" => {
+            if t < 0.5 {
+                0.5 * song_lua_ease_factor(Some("outElastic"), t * 2.0, opt1, opt2)
+            } else {
+                0.5 + 0.5 * song_lua_ease_factor(Some("inElastic"), (t * 2.0) - 1.0, opt1, opt2)
+            }
+        }
+        "inBack" => t * t * (((overshoot + 1.0) * t) - overshoot),
+        "outBack" => {
+            let u = t - 1.0;
+            (u * u * (((overshoot + 1.0) * u) + overshoot)) + 1.0
+        }
+        "inOutBack" => {
+            let s = overshoot * 1.525;
+            if t < 0.5 {
+                let u = 2.0 * t;
+                0.5 * (u * u * (((s + 1.0) * u) - s))
+            } else {
+                let u = (2.0 * t) - 2.0;
+                0.5 * (u * u * (((s + 1.0) * u) + s) + 2.0)
+            }
+        }
+        "outInBack" => {
+            if t < 0.5 {
+                0.5 * song_lua_ease_factor(Some("outBack"), t * 2.0, opt1, opt2)
+            } else {
+                0.5 + 0.5 * song_lua_ease_factor(Some("inBack"), (t * 2.0) - 1.0, opt1, opt2)
+            }
+        }
+        "inBounce" => song_lua_in_bounce(t),
+        "outBounce" => song_lua_out_bounce(t),
+        "inOutBounce" => song_lua_in_out_bounce(t),
+        "outInBounce" => {
+            if t < 0.5 {
+                0.5 * song_lua_out_bounce(t * 2.0)
+            } else {
+                0.5 + 0.5 * song_lua_in_bounce((t * 2.0) - 1.0)
+            }
+        }
+        _ => t,
     }
 }
 
@@ -828,6 +1332,20 @@ pub enum ComboMilestoneKind {
 pub struct ActiveComboMilestone {
     pub kind: ComboMilestoneKind,
     pub elapsed: f32,
+}
+
+pub fn trigger_combo_milestone(
+    milestones: &mut Vec<ActiveComboMilestone>,
+    kind: ComboMilestoneKind,
+) {
+    if let Some(index) = milestones
+        .iter()
+        .position(|milestone| milestone.kind == kind)
+    {
+        milestones[index].elapsed = 0.0;
+    } else {
+        milestones.push(ActiveComboMilestone { kind, elapsed: 0.0 });
+    }
 }
 
 // Simply Love danger overlay semantics (ScreenGameplay underlay/PerPlayer/Danger.lua).
@@ -3726,6 +4244,162 @@ mod tests {
     }
 
     #[test]
+    fn step_stats_notefield_width_matches_sl_style_widths() {
+        assert_eq!(step_stats_notefield_width(4), Some(256.0));
+        assert_eq!(step_stats_notefield_width(8), Some(512.0));
+        assert_eq!(step_stats_notefield_width(0), None);
+    }
+
+    #[test]
+    fn step_stats_upper_density_width_matches_zmod_policy() {
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Single),
+            226.0,
+        );
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Versus),
+            226.0,
+        );
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Double),
+            226.0,
+        );
+    }
+
+    #[test]
+    fn step_stats_density_graph_width_matches_sl_double() {
+        let width = step_stats_density_graph_width(
+            StepStatsPlayStyle::Double,
+            8,
+            1,
+            854.0,
+            480.0,
+            true,
+            false,
+        );
+        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
+        assert_near(width, expected);
+    }
+
+    #[test]
+    fn step_stats_density_graph_width_handles_centered_and_ultrawide() {
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                854.0,
+                480.0,
+                true,
+                true,
+            ),
+            299.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Versus,
+                4,
+                2,
+                2560.0,
+                1080.0,
+                true,
+                false,
+            ),
+            512.0,
+        );
+    }
+
+    #[test]
+    fn mini_value_uses_fallback_big_adjustment_and_clamps() {
+        assert_near(mini_value_for_percent(50.0, 0.0, false), 0.5);
+        assert_near(mini_value_for_percent(f32::NAN, 25.0, false), 0.25);
+        assert_near(mini_value_for_percent(50.0, 0.0, true), -0.5);
+        assert_near(mini_value_for_percent(-250.0, 0.0, false), -1.0);
+        assert_near(mini_value_for_percent(250.0, 0.0, false), 1.5);
+    }
+
+    #[test]
+    fn effective_mini_percent_uses_active_fallback_and_clear_all() {
+        assert_eq!(MINI_PERCENT_MIN, -100.0);
+        assert_eq!(MINI_PERCENT_MAX, 150.0);
+        assert_near(effective_mini_percent(Some(25.0), 50.0, false), 25.0);
+        assert_near(effective_mini_percent(Some(f32::NAN), 50.0, false), 50.0);
+        assert_near(effective_mini_percent(None, 50.0, true), 0.0);
+        assert_near(effective_mini_percent(None, 50.0, false), 50.0);
+        assert_near(effective_mini_percent(Some(250.0), 0.0, false), 150.0);
+        assert_near(effective_mini_percent(Some(-250.0), 0.0, false), -100.0);
+    }
+
+    #[test]
+    fn mini_attack_target_supports_absolute_and_delta_modes() {
+        assert_near(
+            attack_mini_target_percent(25.0, MiniAttackMode::Absolute, 50.0),
+            25.0,
+        );
+        assert_near(
+            attack_mini_target_percent(25.0, MiniAttackMode::Delta, 50.0),
+            75.0,
+        );
+    }
+
+    #[test]
+    fn attack_value_approaches_or_snaps_to_target() {
+        let mut current = Some(10.0);
+        approach_attack_value(&mut current, Some(50.0), 0.0, Some(2.0), 0.5, 10.0);
+        assert_near(current.unwrap(), 20.0);
+
+        approach_attack_value(&mut current, Some(50.0), 0.0, None, 1.0, 10.0);
+        assert_near(current.unwrap(), 50.0);
+
+        approach_attack_value(&mut current, None, 0.0, Some(1.0), 1.0, 10.0);
+        assert_eq!(current, None);
+    }
+
+    #[test]
+    fn attack_mini_approach_uses_base_and_clamps() {
+        let mut current = None;
+        approach_attack_mini_percent_to_target(&mut current, Some(100.0), 0.0, Some(1.0), 0.5);
+        assert_near(current.unwrap(), 50.0);
+
+        let mut invalid_current = Some(f32::NAN);
+        approach_attack_mini_percent_to_target(
+            &mut invalid_current,
+            Some(75.0),
+            25.0,
+            Some(0.25),
+            1.0,
+        );
+        assert_near(invalid_current.unwrap(), 50.0);
+
+        let mut high = None;
+        approach_attack_mini_percent_to_target(&mut high, Some(250.0), 0.0, None, 1.0);
+        assert_near(high.unwrap(), 150.0);
+
+        let mut low = None;
+        approach_attack_mini_percent_to_target(&mut low, Some(-250.0), 0.0, None, 1.0);
+        assert_near(low.unwrap(), -100.0);
+    }
+
+    #[test]
+    fn player_draw_scale_uses_tilt_and_absolute_mini() {
+        assert_near(player_draw_scale_for_mini(0.0, 0.0), 1.0);
+        assert_near(player_draw_scale_for_mini(-1.0, 0.0), 1.5);
+        assert_near(player_draw_scale_for_mini(0.0, -0.5), 1.5);
+        assert_near(player_draw_scale_for_mini(1.0, 0.5), 2.25);
+    }
+
+    #[test]
+    fn spacing_multiplier_clamps_and_scales_percent() {
+        assert_eq!(SPACING_PERCENT_MIN, -100);
+        assert_eq!(SPACING_PERCENT_MAX, 100);
+        assert_near(spacing_multiplier_for_percent(0), 1.0);
+        assert_near(spacing_multiplier_for_percent(25), 1.25);
+        assert_near(spacing_multiplier_for_percent(-50), 0.5);
+        assert_near(spacing_multiplier_for_percent(250), 2.0);
+        assert_near(spacing_multiplier_for_percent(-250), 0.0);
+    }
+
+    #[test]
     fn toggle_flash_alpha_uses_hold_then_fade_countdown() {
         assert_eq!(toggle_flash_alpha(0.0), None);
         assert_eq!(toggle_flash_alpha(-1.0), None);
@@ -3744,6 +4418,36 @@ mod tests {
             toggle_flash_alpha(TOGGLE_FLASH_DURATION + 1.0).unwrap(),
             1.0,
         );
+    }
+
+    #[test]
+    fn approach_f32_steps_toward_target_without_overshoot() {
+        let mut value = 0.0;
+        approach_f32(&mut value, 1.0, 0.25);
+        assert_near(value, 0.25);
+
+        approach_f32(&mut value, 1.0, 2.0);
+        assert_near(value, 1.0);
+
+        approach_f32(&mut value, -1.0, 0.5);
+        assert_near(value, 0.5);
+    }
+
+    #[test]
+    fn approach_f32_handles_bad_inputs_like_runtime_policy() {
+        let mut value = 0.5;
+        approach_f32(&mut value, 1.0, 0.0);
+        assert_near(value, 0.5);
+
+        approach_f32(&mut value, 1.0, -1.0);
+        assert_near(value, 0.5);
+
+        value = f32::INFINITY;
+        approach_f32(&mut value, 2.0, 0.25);
+        assert_near(value, 2.0);
+
+        approach_f32(&mut value, f32::NAN, 0.25);
+        assert!(value.is_nan());
     }
 
     #[test]
@@ -3787,6 +4491,26 @@ mod tests {
         assert_near(RECEPTOR_GLOW_DURATION, 0.2);
         assert_near(COMBO_HUNDRED_MILESTONE_DURATION, 0.6);
         assert_near(COMBO_THOUSAND_MILESTONE_DURATION, 0.7);
+    }
+
+    #[test]
+    fn combo_milestone_trigger_appends_or_resets_existing_kind() {
+        let mut milestones = Vec::new();
+        trigger_combo_milestone(&mut milestones, ComboMilestoneKind::Hundred);
+
+        assert_eq!(milestones.len(), 1);
+        assert_eq!(milestones[0].kind, ComboMilestoneKind::Hundred);
+        assert_near(milestones[0].elapsed, 0.0);
+
+        milestones[0].elapsed = 0.4;
+        trigger_combo_milestone(&mut milestones, ComboMilestoneKind::Hundred);
+        assert_eq!(milestones.len(), 1);
+        assert_near(milestones[0].elapsed, 0.0);
+
+        trigger_combo_milestone(&mut milestones, ComboMilestoneKind::Thousand);
+        assert_eq!(milestones.len(), 2);
+        assert_eq!(milestones[1].kind, ComboMilestoneKind::Thousand);
+        assert_near(milestones[1].elapsed, 0.0);
     }
 
     #[test]
@@ -3990,6 +4714,53 @@ mod tests {
     }
 
     #[test]
+    fn scroll_reverse_percent_matches_itg_column_rules() {
+        let options = ScrollReverseOptions {
+            reverse: 1.0,
+            split: 1.0,
+            alternate: 1.0,
+            cross: 0.0,
+        };
+
+        assert_near(scroll_reverse_percent_for_column(options, 0, 4), 1.0);
+        assert_near(scroll_reverse_percent_for_column(options, 1, 4), 0.0);
+        assert_near(scroll_reverse_percent_for_column(options, 2, 4), 0.0);
+        assert_near(scroll_reverse_percent_for_column(options, 3, 4), 1.0);
+    }
+
+    #[test]
+    fn scroll_reverse_percent_handles_cross_wrap_and_empty_fields() {
+        let cross = ScrollReverseOptions {
+            cross: 1.0,
+            ..ScrollReverseOptions::default()
+        };
+        assert_near(scroll_reverse_percent_for_column(cross, 0, 4), 0.0);
+        assert_near(scroll_reverse_percent_for_column(cross, 1, 4), 1.0);
+        assert_near(scroll_reverse_percent_for_column(cross, 2, 4), 1.0);
+        assert_near(scroll_reverse_percent_for_column(cross, 3, 4), 0.0);
+
+        let wrapped = ScrollReverseOptions {
+            reverse: 3.25,
+            ..ScrollReverseOptions::default()
+        };
+        assert_near(scroll_reverse_percent_for_column(wrapped, 0, 4), 0.75);
+        assert_near(scroll_reverse_percent_for_column(wrapped, 0, 0), 0.0);
+    }
+
+    #[test]
+    fn scroll_reverse_scale_maps_percent_to_direction() {
+        let reverse = ScrollReverseOptions {
+            reverse: 1.0,
+            ..ScrollReverseOptions::default()
+        };
+        assert_near(scroll_reverse_scale_for_column(reverse, 0, 4), -1.0);
+        assert_near(
+            scroll_reverse_scale_for_column(ScrollReverseOptions::default(), 0, 4),
+            1.0,
+        );
+    }
+
+    #[test]
     fn column_scroll_dirs_apply_mods_per_four_panel_group() {
         let dirs = column_scroll_dirs_for_flags(
             ColumnScrollFlags {
@@ -4033,6 +4804,45 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_ease_factor_defaults_to_clamped_linear() {
+        assert_near(song_lua_ease_factor(None, 0.25, None, None), 0.25);
+        assert_near(song_lua_ease_factor(Some("linear"), -1.0, None, None), 0.0);
+        assert_near(song_lua_ease_factor(Some("linear"), 2.0, None, None), 1.0);
+        assert_near(
+            song_lua_ease_factor(Some("unknown"), 0.75, None, None),
+            0.75,
+        );
+    }
+
+    #[test]
+    fn song_lua_ease_factor_matches_core_polynomial_curves() {
+        assert_near(song_lua_ease_factor(Some("instant"), 0.0, None, None), 1.0);
+        assert_near(song_lua_ease_factor(Some("inQuad"), 0.5, None, None), 0.25);
+        assert_near(song_lua_ease_factor(Some("outQuad"), 0.5, None, None), 0.75);
+        assert_near(
+            song_lua_ease_factor(Some("inOutQuad"), 0.25, None, None),
+            0.125,
+        );
+        assert_near(
+            song_lua_ease_factor(Some("outInQuad"), 0.25, None, None),
+            0.375,
+        );
+    }
+
+    #[test]
+    fn song_lua_ease_factor_handles_bounce_back_and_elastic() {
+        assert_near(song_lua_ease_factor(Some("inBounce"), 0.0, None, None), 0.0);
+        assert_near(
+            song_lua_ease_factor(Some("outBounce"), 1.0, None, None),
+            1.0,
+        );
+
+        for easing in ["inBack", "outInBack", "inElastic", "outInElastic"] {
+            assert!(song_lua_ease_factor(Some(easing), 0.35, Some(1.0), Some(0.2)).is_finite());
+        }
+    }
+
+    #[test]
     fn noteskin_effect_defaults_match_runtime_fallbacks() {
         let effects = GameplayNoteskinEffects::default();
 
@@ -4050,6 +4860,92 @@ mod tests {
 
         assert_eq!(effects.tap_explosion_duration(0, 0, "W1", false), None);
         assert_near(effects.mine_explosion_duration(0), MINE_EXPLOSION_DURATION);
+    }
+
+    #[test]
+    fn judge_grades_map_to_noteskin_windows() {
+        assert_eq!(grade_to_window(JudgeGrade::Fantastic), Some("W1"));
+        assert_eq!(grade_to_window(JudgeGrade::Excellent), Some("W2"));
+        assert_eq!(grade_to_window(JudgeGrade::Great), Some("W3"));
+        assert_eq!(grade_to_window(JudgeGrade::Decent), Some("W4"));
+        assert_eq!(grade_to_window(JudgeGrade::WayOff), Some("W5"));
+        assert_eq!(grade_to_window(JudgeGrade::Miss), Some("Miss"));
+    }
+
+    #[test]
+    fn fantastic_feedback_requires_fa_plus_and_fantastic_grade() {
+        let fantastic = test_judgment(JudgeGrade::Fantastic);
+        let excellent = test_judgment(JudgeGrade::Excellent);
+
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            FantasticFeedbackOptions::default(),
+            &fantastic,
+        ));
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            FantasticFeedbackOptions {
+                show_fa_plus_window: true,
+                ..FantasticFeedbackOptions::default()
+            },
+            &excellent,
+        ));
+    }
+
+    #[test]
+    fn fantastic_feedback_uses_w1_for_bright_tap_explosion() {
+        let mut white = test_judgment(JudgeGrade::Fantastic);
+        white.window = Some(TimingWindow::W1);
+        let mut blue = white.clone();
+        blue.window = Some(TimingWindow::W0);
+        let options = FantasticFeedbackOptions {
+            show_fa_plus_window: true,
+            ..FantasticFeedbackOptions::default()
+        };
+
+        assert!(tap_judgment_uses_bright_explosion_for_options(
+            options, &white
+        ));
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            options, &blue
+        ));
+    }
+
+    #[test]
+    fn fantastic_feedback_uses_10ms_blue_window_when_enabled() {
+        let mut blue = test_judgment(JudgeGrade::Fantastic);
+        blue.window = Some(TimingWindow::W0);
+        blue.time_error_ms = FA_PLUS_W010_MS;
+        let mut white = blue.clone();
+        white.time_error_ms = FA_PLUS_W010_MS + 0.001;
+        let options = FantasticFeedbackOptions {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            ..FantasticFeedbackOptions::default()
+        };
+
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            options, &blue
+        ));
+        assert!(tap_judgment_uses_bright_explosion_for_options(
+            options, &white
+        ));
+
+        let split_options = FantasticFeedbackOptions {
+            split_15_10ms: true,
+            ..options
+        };
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            split_options,
+            &white,
+        ));
+
+        let custom_options = FantasticFeedbackOptions {
+            custom_fantastic_window: true,
+            ..options
+        };
+        assert!(!tap_judgment_uses_bright_explosion_for_options(
+            custom_options,
+            &white,
+        ));
     }
 
     #[test]
