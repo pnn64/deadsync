@@ -1,3 +1,4 @@
+pub mod console;
 pub mod dirs;
 pub mod display;
 pub mod host_time;

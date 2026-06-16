@@ -216,6 +216,7 @@ fn push_saved_options(
     push_line(content, "Language", cfg.language_flag.as_str());
     push_line(content, "LogLevel", cfg.log_level.as_str());
     push_bool(content, "LogToFile", cfg.log_to_file);
+    push_bool(content, "ShowConsole", cfg.show_console);
     push_line(
         content,
         "LinuxAudioBackend",

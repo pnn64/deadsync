@@ -1,3 +1,10 @@
+// Ship release builds as a Windows GUI-subsystem app so launching the game
+// doesn't pop up a console window. Debug builds keep the console for developer
+// convenience. Runtime output is still reachable: see `deadsync_platform::console`
+// (reattaches to a parent terminal, or opens a console when `ShowConsole`/
+// `--console` is set). No effect on non-Windows targets.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use deadsync::{app, assets, config, game};
 use deadsync_platform::logging::{self, StartupBuildInfo};
 use std::backtrace::Backtrace;
@@ -119,6 +126,16 @@ fn install_panic_hook() {
     }));
 }
 
+/// Resolve whether the console window should be shown at startup. An explicit
+/// `--console` argument wins; otherwise fall back to the `ShowConsole` config
+/// preference (default off).
+fn resolve_show_console() -> bool {
+    if std::env::args().skip(1).any(|arg| arg == "--console") {
+        return true;
+    }
+    config::bootstrap_show_console()
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = deadsync_updater::cli::UpdaterCli::from_env();
     deadsync_platform::runtime_dir::set_current_dir_to_exe_dir()?;
@@ -126,6 +143,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Resolve and create platform-native data/cache directories.
     deadsync_platform::dirs::ensure_dirs_exist();
+
+    // Reconcile the GUI-subsystem release build with terminal/opt-in output
+    // before the logger starts, so the first log lines land in the console when
+    // one is wanted (and no window appears when it isn't).
+    deadsync_platform::console::init(resolve_show_console());
 
     // Install logger immediately, then set runtime max level from config after loading it.
     logging::init(
