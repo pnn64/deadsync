@@ -210,7 +210,7 @@ By default, DeadSync stores user data outside the install directory so that upgr
 
 ```
 deadsync.ini          # game configuration
-deadsync.log          # log file
+deadsync.log          # current run's log (previous runs kept as deadsync-<timestamp>.log)
 save/
   profiles/           # player profiles, scores, settings
   screenshots/        # captured screenshots
@@ -282,7 +282,7 @@ Use **Debug** for most bug reports. Use **Trace** only if asked—it produces si
 
 ### 2. Reproduce the issue
 
-Launch the game and reproduce the problem. The log is written to **`deadsync.log`** in the data directory (see [Data Directories](#data-directories) above).
+Launch the game and reproduce the problem. The log is written to **`deadsync.log`** in the data directory (see [Data Directories](#data-directories) above). The previous two runs are kept alongside it as `deadsync-<timestamp>.log`.
 
 ### 3. Share the log
 
