@@ -533,6 +533,38 @@ pub fn update_measure_cues_for_side(side: PlayerSide, enabled: bool) {
     });
 }
 
+pub fn update_crossover_cues_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.crossover_cues, enabled)
+    });
+}
+
+pub fn update_crossover_cue_brackets_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.crossover_cue_brackets, enabled)
+    });
+}
+
+pub fn update_crossover_cue_duration_ms_for_side(side: PlayerSide, ms: u16) {
+    let ms = deadsync_profile::clamp_crossover_cue_duration_ms(ms);
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.crossover_cue_duration_ms, ms)
+    });
+}
+
+pub fn update_crossover_cue_quantization_for_side(side: PlayerSide, quantization: u8) {
+    let quantization = deadsync_profile::clamp_crossover_cue_quantization(quantization);
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.crossover_cue_quantization, quantization)
+    });
+}
+
+pub fn update_column_countdown_for_side(side: PlayerSide, enabled: bool) {
+    update_profile_ini(side, |profile| {
+        set_if_changed(&mut profile.column_countdown, enabled)
+    });
+}
+
 pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
         set_if_changed(&mut profile.judgment_back, enabled)

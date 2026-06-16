@@ -61,6 +61,9 @@ const HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 90.0;
 const TAP_JUDGMENT_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback JudgmentTransformCommand
 const COMBO_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback ComboTransformCommand (non-centered)
 const COLUMN_CUE_Y_OFFSET: f32 = 80.0;
+// 270px shorter than mine column cues so the flash clears the upcoming step
+// rather than spanning the whole lane.
+const CROSSOVER_CUE_HEIGHT_REDUCTION: f32 = 270.0;
 const COLUMN_CUE_TEXT_NORMAL_Y: f32 = 80.0;
 const COLUMN_CUE_TEXT_REVERSE_Y: f32 = 260.0;
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
@@ -2638,6 +2641,11 @@ fn column_flash_reverse_top_y(
 #[inline(always)]
 fn column_cue_height() -> f32 {
     (screen_height() - COLUMN_CUE_Y_OFFSET).max(0.0)
+}
+
+#[inline(always)]
+fn crossover_cue_height() -> f32 {
+    (screen_height() - COLUMN_CUE_Y_OFFSET - CROSSOVER_CUE_HEIGHT_REDUCTION).max(0.0)
 }
 
 #[inline(always)]
@@ -5291,6 +5299,98 @@ pub(crate) fn build_bundles(
                     let mut countdown_text: Option<(f32, f32, i32)> = None;
 
                     if duration_real >= 5.0 {
+                        let remaining = duration_real - elapsed_real;
+                        if remaining > 0.5
+                            && let Some(last_col) = cue.columns.last()
+                        {
+                            let local_col = last_col.column.saturating_sub(col_start);
+                            if local_col < num_cols {
+                                let x = playfield_center_x
+                                    + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
+                                let y = if column_dirs[local_col] < 0.0 {
+                                    COLUMN_CUE_TEXT_REVERSE_Y
+                                        + COLUMN_CUE_Y_OFFSET
+                                        + notefield_offset_y
+                                } else {
+                                    COLUMN_CUE_TEXT_NORMAL_Y
+                                        + COLUMN_CUE_Y_OFFSET
+                                        + notefield_offset_y
+                                };
+                                countdown_text = Some((x, y, remaining.round() as i32));
+                            }
+                        }
+                    }
+
+                    for col_cue in &cue.columns {
+                        let local_col = col_cue.column.saturating_sub(col_start);
+                        if local_col >= num_cols {
+                            continue;
+                        }
+                        let x = playfield_center_x
+                            + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
+                        let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
+                        let color = if col_cue.is_mine {
+                            [1.0, 0.0, 0.0, alpha]
+                        } else {
+                            [0.3, 1.0, 1.0, alpha]
+                        };
+                        if column_dirs[local_col] < 0.0 {
+                            let reverse_y = column_cue_reverse_top_y(
+                                lane_width,
+                                cue_height,
+                                notefield_offset_y,
+                            );
+                            actors.push(act!(quad:
+                                align(0.5, 0.0):
+                                xy(x, reverse_y):
+                                zoomto(lane_width, cue_height):
+                                fadetop(0.333):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                z(Z_COLUMN_CUE)
+                            ));
+                        } else {
+                            actors.push(act!(quad:
+                                align(0.5, 0.0):
+                                xy(x, COLUMN_CUE_Y_OFFSET + notefield_offset_y):
+                                zoomto(lane_width, cue_height):
+                                fadebottom(0.333):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                z(Z_COLUMN_CUE)
+                            ));
+                        }
+                    }
+
+                    if let Some((x, y, value)) = countdown_text {
+                        hud_actors.push(act!(text:
+                            font(mc_font_name):
+                            settext(cached_int_i32(value)):
+                            align(0.5, 0.5):
+                            xy(x, y):
+                            zoom(0.5):
+                            z(200):
+                            diffuse(1.0, 1.0, 1.0, alpha_mul)
+                        ));
+                    }
+                }
+            }
+        }
+
+        if profile.crossover_cues {
+            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+                state.music_rate
+            } else {
+                1.0
+            };
+            if let Some(cue) = active_column_cue(&state.crossover_cues[player_idx], current_time) {
+                let duration_real = cue.duration / rate;
+                let elapsed_real = (current_time - cue.start_time) / rate;
+                let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
+                if alpha_mul > 0.0 {
+                    let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
+                    let cue_height = crossover_cue_height();
+                    let mut countdown_text: Option<(f32, f32, i32)> = None;
+
+                    if profile.column_countdown && duration_real >= 5.0 {
                         let remaining = duration_real - elapsed_real;
                         if remaining > 0.5
                             && let Some(last_col) = cue.columns.last()

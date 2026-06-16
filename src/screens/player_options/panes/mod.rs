@@ -348,6 +348,22 @@ pub(super) fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
+    if let Some(row) = row_map.get_mut(RowId::CrossoverCueDuration) {
+        let ms =
+            deadsync_profile::clamp_crossover_cue_duration_ms(profile.crossover_cue_duration_ms);
+        let target = format!("{ms}ms");
+        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    if let Some(row) = row_map.get_mut(RowId::CrossoverCueQuantization) {
+        let q =
+            deadsync_profile::clamp_crossover_cue_quantization(profile.crossover_cue_quantization);
+        let target = q.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &target) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
 
     if let Some(row) = row_map.get_mut(RowId::Attacks) {
         row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS

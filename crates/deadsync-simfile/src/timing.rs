@@ -113,9 +113,46 @@ pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> Timi
     }
 }
 
+/// Inverse of [`timing_segments_from_rssp`]: convert deadsync timing segments
+/// into the `rssp` timing-segment form so the parity/annotation engine can be
+/// driven from deadsync chart data. Offsets are intentionally not encoded here;
+/// callers that need absolute times use deadsync's own `TimingData` instead.
+pub fn rssp_timing_segments_from_deadsync(
+    segments: &TimingSegments,
+) -> rssp_timing::TimingSegments {
+    rssp_timing::TimingSegments {
+        beat0_offset_adjust: segments.beat0_offset_adjust,
+        bpms: segments.bpms.clone(),
+        stops: segments.stops.iter().map(|s| (s.beat, s.duration)).collect(),
+        delays: segments
+            .delays
+            .iter()
+            .map(|s| (s.beat, s.duration))
+            .collect(),
+        warps: segments.warps.iter().map(|s| (s.beat, s.length)).collect(),
+        speeds: segments
+            .speeds
+            .iter()
+            .map(|s| {
+                (
+                    s.beat,
+                    s.ratio,
+                    s.delay,
+                    match s.unit {
+                        SpeedUnit::Beats => rssp_timing::SpeedUnit::Beats,
+                        SpeedUnit::Seconds => rssp_timing::SpeedUnit::Seconds,
+                    },
+                )
+            })
+            .collect(),
+        scrolls: segments.scrolls.iter().map(|s| (s.beat, s.ratio)).collect(),
+        fakes: segments.fakes.iter().map(|s| (s.beat, s.length)).collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_time_signatures, timing_segments_from_rssp};
+    use super::{parse_time_signatures, rssp_timing_segments_from_deadsync, timing_segments_from_rssp};
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
 
@@ -174,5 +211,40 @@ mod tests {
             converted.time_signatures[0].denominator,
             default_sig.denominator
         );
+    }
+
+    #[test]
+    fn deadsync_to_rssp_round_trips() {
+        let source = rssp_timing::TimingSegments {
+            beat0_offset_adjust: 0.25,
+            bpms: vec![(0.0, 120.0), (48.0, 180.0)],
+            stops: vec![(4.0, 0.5)],
+            delays: vec![(8.0, 0.25)],
+            warps: vec![(12.0, 4.0)],
+            speeds: vec![
+                (16.0, 2.0, 0.5, rssp_timing::SpeedUnit::Beats),
+                (24.0, 1.5, 0.25, rssp_timing::SpeedUnit::Seconds),
+            ],
+            scrolls: vec![(32.0, 0.75)],
+            fakes: vec![(40.0, 2.0)],
+        };
+
+        let deadsync = timing_segments_from_rssp(&source);
+        let back = rssp_timing_segments_from_deadsync(&deadsync);
+
+        assert_eq!(back.beat0_offset_adjust, source.beat0_offset_adjust);
+        assert_eq!(back.bpms, source.bpms);
+        assert_eq!(back.stops, source.stops);
+        assert_eq!(back.delays, source.delays);
+        assert_eq!(back.warps, source.warps);
+        assert_eq!(back.scrolls, source.scrolls);
+        assert_eq!(back.fakes, source.fakes);
+        assert_eq!(back.speeds.len(), source.speeds.len());
+        for (got, want) in back.speeds.iter().zip(source.speeds.iter()) {
+            assert_eq!(got.0, want.0);
+            assert_eq!(got.1, want.1);
+            assert_eq!(got.2, want.2);
+            assert_eq!(got.3, want.3);
+        }
     }
 }

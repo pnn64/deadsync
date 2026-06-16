@@ -57,6 +57,51 @@ pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
 
+// Crossover Cues. A cue flashes a notefield column shortly before an
+// upcoming crossover step.
+pub const CROSSOVER_CUE_DURATION_MIN_MS: u16 = 500;
+pub const CROSSOVER_CUE_DURATION_MAX_MS: u16 = 1500;
+pub const CROSSOVER_CUE_DURATION_STEP_MS: u16 = 100;
+pub const CROSSOVER_CUE_DURATION_DEFAULT_MS: u16 = 500;
+/// Discrete quantization values for the crossover-cue spacing threshold
+/// (`4 / Quantization`). Higher values cue tighter bursts.
+pub const CROSSOVER_CUE_QUANTIZATIONS: [u8; 8] = [4, 8, 12, 16, 24, 32, 48, 64];
+pub const CROSSOVER_CUE_QUANTIZATION_DEFAULT: u8 = 8;
+
+/// Clamp a crossover-cue duration to `[500, 1500]` ms, snapped to the 100 ms grid.
+#[inline]
+pub const fn clamp_crossover_cue_duration_ms(ms: u16) -> u16 {
+    let clamped = if ms < CROSSOVER_CUE_DURATION_MIN_MS {
+        CROSSOVER_CUE_DURATION_MIN_MS
+    } else if ms > CROSSOVER_CUE_DURATION_MAX_MS {
+        CROSSOVER_CUE_DURATION_MAX_MS
+    } else {
+        ms
+    };
+    let steps = (clamped - CROSSOVER_CUE_DURATION_MIN_MS + CROSSOVER_CUE_DURATION_STEP_MS / 2)
+        / CROSSOVER_CUE_DURATION_STEP_MS;
+    CROSSOVER_CUE_DURATION_MIN_MS + steps * CROSSOVER_CUE_DURATION_STEP_MS
+}
+
+/// Snap an arbitrary quantization value to the nearest supported crossover-cue
+/// quantization (falling back to the default for non-positive input).
+#[inline]
+pub fn clamp_crossover_cue_quantization(q: u8) -> u8 {
+    if q == 0 {
+        return CROSSOVER_CUE_QUANTIZATION_DEFAULT;
+    }
+    let mut best = CROSSOVER_CUE_QUANTIZATIONS[0];
+    let mut best_diff = u8::MAX;
+    for &candidate in &CROSSOVER_CUE_QUANTIZATIONS {
+        let diff = candidate.abs_diff(q);
+        if diff < best_diff {
+            best_diff = diff;
+            best = candidate;
+        }
+    }
+    best
+}
+
 /// Fallback pad-light brightness (0..=100) when a profile has no saved value.
 /// New profiles are seeded from the StepManiaX machine default instead (see
 /// `game::profile`); this is only the in-crate default for a fresh struct.
@@ -3113,6 +3158,18 @@ pub struct PlayerOptionsData {
     pub judgment_tilt: bool,
     pub column_cues: bool,
     pub measure_cues: bool,
+    /// Crossover Cues: flash a column before an upcoming crossover step.
+    pub crossover_cues: bool,
+    /// Lead time of a crossover cue in milliseconds (`[500, 1500]`, 100 ms grid).
+    pub crossover_cue_duration_ms: u16,
+    /// Quantization for the crossover-cue spacing threshold (`4 / Quantization`).
+    pub crossover_cue_quantization: u8,
+    /// Include crossover brackets (multi-foot crossover steps) in crossover
+    /// cues. Off by default, since crossover brackets are commonly
+    /// unintended or misidentified.
+    pub crossover_cue_brackets: bool,
+    /// Show the break-length countdown number on long crossover cues (>= 5 s).
+    pub column_countdown: bool,
     pub judgment_back: bool,
     pub error_ms_display: bool,
     pub display_scorebox: bool,
@@ -3241,6 +3298,11 @@ fn default_player_options() -> PlayerOptionsData {
         judgment_tilt: false,
         column_cues: false,
         measure_cues: false,
+        crossover_cues: false,
+        crossover_cue_duration_ms: CROSSOVER_CUE_DURATION_DEFAULT_MS,
+        crossover_cue_quantization: CROSSOVER_CUE_QUANTIZATION_DEFAULT,
+        crossover_cue_brackets: false,
+        column_countdown: false,
         judgment_back: false,
         error_ms_display: false,
         display_scorebox: true,
@@ -3473,6 +3535,19 @@ where
     options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
     options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
     options.measure_cues = load_u8_bool(&mut get, "MeasureCues", options.measure_cues);
+    options.crossover_cues = load_u8_bool(&mut get, "CrossoverCues", options.crossover_cues);
+    options.crossover_cue_duration_ms = get("CrossoverCueDuration")
+        .and_then(|s| s.trim().trim_end_matches("ms").parse::<u16>().ok())
+        .map(clamp_crossover_cue_duration_ms)
+        .unwrap_or(options.crossover_cue_duration_ms);
+    options.crossover_cue_quantization = get("CrossoverCueQuantization")
+        .and_then(|s| s.trim().parse::<u8>().ok())
+        .map(clamp_crossover_cue_quantization)
+        .unwrap_or(options.crossover_cue_quantization);
+    options.crossover_cue_brackets =
+        load_u8_bool(&mut get, "CrossoverCueBrackets", options.crossover_cue_brackets);
+    options.column_countdown =
+        load_u8_bool(&mut get, "ColumnCountdown", options.column_countdown);
     options.judgment_back = load_u8_bool(&mut get, "JudgmentBack", options.judgment_back);
     options.error_ms_display = load_u8_bool(&mut get, "ErrorMSDisplay", options.error_ms_display);
     options.display_scorebox = load_u8_bool(&mut get, "DisplayScorebox", options.display_scorebox);
@@ -3825,6 +3900,26 @@ pub fn append_player_options_section(
         i32::from(options.measure_cues)
     ));
     content.push_str(&format!(
+        "CrossoverCues={}\n",
+        i32::from(options.crossover_cues)
+    ));
+    content.push_str(&format!(
+        "CrossoverCueDuration={}ms\n",
+        options.crossover_cue_duration_ms
+    ));
+    content.push_str(&format!(
+        "CrossoverCueQuantization={}\n",
+        options.crossover_cue_quantization
+    ));
+    content.push_str(&format!(
+        "CrossoverCueBrackets={}\n",
+        i32::from(options.crossover_cue_brackets)
+    ));
+    content.push_str(&format!(
+        "ColumnCountdown={}\n",
+        i32::from(options.column_countdown)
+    ));
+    content.push_str(&format!(
         "JudgmentBack={}\n",
         i32::from(options.judgment_back)
     ));
@@ -4135,6 +4230,11 @@ pub struct Profile {
     pub judgment_tilt: bool,
     pub column_cues: bool,
     pub measure_cues: bool,
+    pub crossover_cues: bool,
+    pub crossover_cue_duration_ms: u16,
+    pub crossover_cue_quantization: u8,
+    pub crossover_cue_brackets: bool,
+    pub column_countdown: bool,
     // zmod ExtraAesthetics: draw judgments/error timing HUD behind notes.
     pub judgment_back: bool,
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
@@ -4315,6 +4415,11 @@ impl Default for Profile {
             judgment_tilt: player_options.judgment_tilt,
             column_cues: player_options.column_cues,
             measure_cues: player_options.measure_cues,
+            crossover_cues: player_options.crossover_cues,
+            crossover_cue_duration_ms: player_options.crossover_cue_duration_ms,
+            crossover_cue_quantization: player_options.crossover_cue_quantization,
+            crossover_cue_brackets: player_options.crossover_cue_brackets,
+            column_countdown: player_options.column_countdown,
             judgment_back: player_options.judgment_back,
             error_ms_display: player_options.error_ms_display,
             display_scorebox: player_options.display_scorebox,
@@ -4881,6 +4986,11 @@ impl Profile {
             judgment_tilt: self.judgment_tilt,
             column_cues: self.column_cues,
             measure_cues: self.measure_cues,
+            crossover_cues: self.crossover_cues,
+            crossover_cue_duration_ms: self.crossover_cue_duration_ms,
+            crossover_cue_quantization: self.crossover_cue_quantization,
+            crossover_cue_brackets: self.crossover_cue_brackets,
+            column_countdown: self.column_countdown,
             judgment_back: self.judgment_back,
             error_ms_display: self.error_ms_display,
             display_scorebox: self.display_scorebox,
@@ -5011,6 +5121,11 @@ impl Profile {
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
         self.measure_cues = options.measure_cues;
+        self.crossover_cues = options.crossover_cues;
+        self.crossover_cue_duration_ms = options.crossover_cue_duration_ms;
+        self.crossover_cue_quantization = options.crossover_cue_quantization;
+        self.crossover_cue_brackets = options.crossover_cue_brackets;
+        self.column_countdown = options.column_countdown;
         self.judgment_back = options.judgment_back;
         self.error_ms_display = options.error_ms_display;
         self.display_scorebox = options.display_scorebox;
