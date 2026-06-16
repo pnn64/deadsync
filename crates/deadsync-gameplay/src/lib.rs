@@ -10,10 +10,12 @@ use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{
     HoldData, HoldResult, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL,
 };
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs};
 use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Instant;
 use twox_hash::XxHash64;
 
@@ -337,6 +339,1716 @@ pub fn mini_value_for_percent(
 #[inline(always)]
 pub fn player_draw_scale_for_mini(tilt: f32, mini_value: f32) -> f32 {
     (1.0 + 0.5 * tilt.abs()) * (1.0 + mini_value.abs())
+}
+
+const ACCEL_MASK_BIT_BOOST: u8 = 1u8 << 0;
+const ACCEL_MASK_BIT_BRAKE: u8 = 1u8 << 1;
+const ACCEL_MASK_BIT_WAVE: u8 = 1u8 << 2;
+const ACCEL_MASK_BIT_EXPAND: u8 = 1u8 << 3;
+const ACCEL_MASK_BIT_BOOMERANG: u8 = 1u8 << 4;
+const VISUAL_MASK_BIT_DRUNK: u16 = 1u16 << 0;
+const VISUAL_MASK_BIT_DIZZY: u16 = 1u16 << 1;
+const VISUAL_MASK_BIT_CONFUSION: u16 = 1u16 << 2;
+pub const VISUAL_MASK_BIT_BIG: u16 = 1u16 << 3;
+const VISUAL_MASK_BIT_FLIP: u16 = 1u16 << 4;
+const VISUAL_MASK_BIT_INVERT: u16 = 1u16 << 5;
+const VISUAL_MASK_BIT_TORNADO: u16 = 1u16 << 6;
+const VISUAL_MASK_BIT_TIPSY: u16 = 1u16 << 7;
+const VISUAL_MASK_BIT_BUMPY: u16 = 1u16 << 8;
+const VISUAL_MASK_BIT_BEAT: u16 = 1u16 << 9;
+const APPEARANCE_MASK_BIT_HIDDEN: u8 = 1u8 << 0;
+const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
+const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
+const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
+const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AccelOverrides {
+    pub boost: Option<f32>,
+    pub brake: Option<f32>,
+    pub wave: Option<f32>,
+    pub expand: Option<f32>,
+    pub boomerang: Option<f32>,
+}
+
+impl AccelOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.boost.is_some()
+            || self.brake.is_some()
+            || self.wave.is_some()
+            || self.expand.is_some()
+            || self.boomerang.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct VisualOverrides {
+    pub drunk: Option<f32>,
+    pub dizzy: Option<f32>,
+    pub confusion: Option<f32>,
+    pub confusion_offset: Option<f32>,
+    pub confusion_offset_cols: [Option<f32>; MAX_COLS],
+    pub flip: Option<f32>,
+    pub invert: Option<f32>,
+    pub tornado: Option<f32>,
+    pub tipsy: Option<f32>,
+    pub tiny: Option<f32>,
+    pub bumpy: Option<f32>,
+    pub bumpy_offset: Option<f32>,
+    pub bumpy_period: Option<f32>,
+    pub bumpy_cols: [Option<f32>; MAX_COLS],
+    pub tiny_cols: [Option<f32>; MAX_COLS],
+    pub move_x_cols: [Option<f32>; MAX_COLS],
+    pub move_y_cols: [Option<f32>; MAX_COLS],
+    pub pulse_inner: Option<f32>,
+    pub pulse_outer: Option<f32>,
+    pub pulse_period: Option<f32>,
+    pub pulse_offset: Option<f32>,
+    pub beat: Option<f32>,
+}
+
+impl Default for VisualOverrides {
+    fn default() -> Self {
+        Self {
+            drunk: None,
+            dizzy: None,
+            confusion: None,
+            confusion_offset: None,
+            confusion_offset_cols: [None; MAX_COLS],
+            flip: None,
+            invert: None,
+            tornado: None,
+            tipsy: None,
+            tiny: None,
+            bumpy: None,
+            bumpy_offset: None,
+            bumpy_period: None,
+            bumpy_cols: [None; MAX_COLS],
+            tiny_cols: [None; MAX_COLS],
+            move_x_cols: [None; MAX_COLS],
+            move_y_cols: [None; MAX_COLS],
+            pulse_inner: None,
+            pulse_outer: None,
+            pulse_period: None,
+            pulse_offset: None,
+            beat: None,
+        }
+    }
+}
+
+impl VisualOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.drunk.is_some()
+            || self.dizzy.is_some()
+            || self.confusion.is_some()
+            || self.confusion_offset.is_some()
+            || self.confusion_offset_cols.iter().any(Option::is_some)
+            || self.flip.is_some()
+            || self.invert.is_some()
+            || self.tornado.is_some()
+            || self.tipsy.is_some()
+            || self.tiny.is_some()
+            || self.bumpy.is_some()
+            || self.bumpy_offset.is_some()
+            || self.bumpy_period.is_some()
+            || self.bumpy_cols.iter().any(Option::is_some)
+            || self.tiny_cols.iter().any(Option::is_some)
+            || self.move_x_cols.iter().any(Option::is_some)
+            || self.move_y_cols.iter().any(Option::is_some)
+            || self.pulse_inner.is_some()
+            || self.pulse_outer.is_some()
+            || self.pulse_period.is_some()
+            || self.pulse_offset.is_some()
+            || self.beat.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AppearanceOverrides {
+    pub hidden: Option<f32>,
+    pub hidden_offset: Option<f32>,
+    pub sudden: Option<f32>,
+    pub sudden_offset: Option<f32>,
+    pub stealth: Option<f32>,
+    pub blink: Option<f32>,
+    pub random_vanish: Option<f32>,
+}
+
+impl AppearanceOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.hidden.is_some()
+            || self.hidden_offset.is_some()
+            || self.sudden.is_some()
+            || self.sudden_offset.is_some()
+            || self.stealth.is_some()
+            || self.blink.is_some()
+            || self.random_vanish.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VisibilityOverrides {
+    pub dark: Option<f32>,
+    pub blind: Option<f32>,
+    pub cover: Option<f32>,
+}
+
+impl VisibilityOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ScrollOverrides {
+    pub reverse: Option<f32>,
+    pub split: Option<f32>,
+    pub alternate: Option<f32>,
+    pub cross: Option<f32>,
+    pub centered: Option<f32>,
+}
+
+impl ScrollOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.reverse.is_some()
+            || self.split.is_some()
+            || self.alternate.is_some()
+            || self.cross.is_some()
+            || self.centered.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PerspectiveOverrides {
+    pub tilt: Option<f32>,
+    pub skew: Option<f32>,
+}
+
+impl PerspectiveOverrides {
+    #[inline(always)]
+    pub fn any(self) -> bool {
+        self.tilt.is_some() || self.skew.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AccelEffects {
+    pub boost: f32,
+    pub brake: f32,
+    pub wave: f32,
+    pub expand: f32,
+    pub boomerang: f32,
+}
+
+impl AccelEffects {
+    #[inline(always)]
+    pub fn from_mask_bits(mask: u8) -> Self {
+        Self {
+            boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
+            brake: f32::from((mask & ACCEL_MASK_BIT_BRAKE) != 0),
+            wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
+            expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
+            boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VisualEffects {
+    pub drunk: f32,
+    pub dizzy: f32,
+    pub confusion: f32,
+    pub confusion_offset: f32,
+    pub confusion_offset_cols: [f32; MAX_COLS],
+    pub big: f32,
+    pub flip: f32,
+    pub invert: f32,
+    pub tornado: f32,
+    pub tipsy: f32,
+    pub tiny: f32,
+    pub bumpy: f32,
+    pub bumpy_offset: f32,
+    pub bumpy_period: f32,
+    pub bumpy_cols: [f32; MAX_COLS],
+    pub tiny_cols: [f32; MAX_COLS],
+    pub move_x_cols: [f32; MAX_COLS],
+    pub move_y_cols: [f32; MAX_COLS],
+    pub pulse_inner: f32,
+    pub pulse_outer: f32,
+    pub pulse_period: f32,
+    pub pulse_offset: f32,
+    pub beat: f32,
+}
+
+impl VisualEffects {
+    #[inline(always)]
+    pub fn from_mask_bits(mask: u16) -> Self {
+        Self {
+            drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
+            dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
+            confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
+            confusion_offset: 0.0,
+            confusion_offset_cols: [0.0; MAX_COLS],
+            big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
+            flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
+            invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
+            tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
+            tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
+            tiny: 0.0,
+            bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
+            bumpy_offset: 0.0,
+            bumpy_period: 0.0,
+            bumpy_cols: [0.0; MAX_COLS],
+            tiny_cols: [0.0; MAX_COLS],
+            move_x_cols: [0.0; MAX_COLS],
+            move_y_cols: [0.0; MAX_COLS],
+            pulse_inner: 0.0,
+            pulse_outer: 0.0,
+            pulse_period: 0.0,
+            pulse_offset: 0.0,
+            beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
+        }
+    }
+
+    #[inline(always)]
+    pub fn to_mask_bits(self) -> u16 {
+        let mut mask = 0;
+        if self.drunk > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_DRUNK;
+        }
+        if self.dizzy > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_DIZZY;
+        }
+        if self.confusion > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_CONFUSION;
+        }
+        if self.big > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_BIG;
+        }
+        if self.flip > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_FLIP;
+        }
+        if self.invert > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_INVERT;
+        }
+        if self.tornado > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_TORNADO;
+        }
+        if self.tipsy > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_TIPSY;
+        }
+        if self.bumpy > f32::EPSILON || self.bumpy_cols.iter().any(|v| *v > f32::EPSILON) {
+            mask |= VISUAL_MASK_BIT_BUMPY;
+        }
+        if self.beat > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_BEAT;
+        }
+        mask
+    }
+}
+
+const OUTRO_ATTACK_CLEAR_RATE: f32 = 1.0;
+const OUTRO_ATTACK_CLEAR_EPSILON: f32 = 0.0001;
+
+#[inline(always)]
+fn approach_optional_visual(value: &mut Option<f32>, target: f32, step: f32) {
+    let Some(current) = value.as_mut() else {
+        return;
+    };
+    approach_f32(current, target, step);
+    if (*current - target).abs() <= OUTRO_ATTACK_CLEAR_EPSILON {
+        *value = None;
+    }
+}
+
+#[inline(always)]
+fn approach_optional_visual_cols(
+    values: &mut [Option<f32>; MAX_COLS],
+    targets: [f32; MAX_COLS],
+    step: f32,
+) {
+    for (value, target) in values.iter_mut().zip(targets) {
+        approach_optional_visual(value, target, step);
+    }
+}
+
+pub fn approach_visual_overrides_to_base(
+    visual: &mut VisualOverrides,
+    base: VisualEffects,
+    delta_time: f32,
+) {
+    let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
+    approach_optional_visual(&mut visual.drunk, base.drunk, step);
+    approach_optional_visual(&mut visual.dizzy, base.dizzy, step);
+    approach_optional_visual(&mut visual.confusion, base.confusion, step);
+    approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
+    approach_optional_visual_cols(
+        &mut visual.confusion_offset_cols,
+        base.confusion_offset_cols,
+        step,
+    );
+    approach_optional_visual(&mut visual.flip, base.flip, step);
+    approach_optional_visual(&mut visual.invert, base.invert, step);
+    approach_optional_visual(&mut visual.tornado, base.tornado, step);
+    approach_optional_visual(&mut visual.tipsy, base.tipsy, step);
+    approach_optional_visual(&mut visual.tiny, base.tiny, step);
+    approach_optional_visual(&mut visual.bumpy, base.bumpy, step);
+    approach_optional_visual(&mut visual.bumpy_offset, base.bumpy_offset, step);
+    approach_optional_visual(&mut visual.bumpy_period, base.bumpy_period, step);
+    approach_optional_visual_cols(&mut visual.bumpy_cols, base.bumpy_cols, step);
+    approach_optional_visual_cols(&mut visual.tiny_cols, base.tiny_cols, step);
+    approach_optional_visual_cols(&mut visual.move_x_cols, base.move_x_cols, step);
+    approach_optional_visual_cols(&mut visual.move_y_cols, base.move_y_cols, step);
+    approach_optional_visual(&mut visual.pulse_inner, base.pulse_inner, step);
+    approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
+    approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
+    approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
+    approach_optional_visual(&mut visual.beat, base.beat, step);
+}
+
+#[inline(always)]
+fn approach_attack_cols(
+    current: &mut [Option<f32>; MAX_COLS],
+    target: [Option<f32>; MAX_COLS],
+    base: [f32; MAX_COLS],
+    speed: [Option<f32>; MAX_COLS],
+    delta_time: f32,
+) {
+    for (((current, target), base), speed) in current.iter_mut().zip(target).zip(base).zip(speed) {
+        approach_attack_value(current, target, base, speed, delta_time, 1.0);
+    }
+}
+
+pub fn approach_visual_overrides_to_target(
+    current: &mut VisualOverrides,
+    target: VisualOverrides,
+    speed: VisualOverrides,
+    base: VisualEffects,
+    delta_time: f32,
+) {
+    approach_attack_value(
+        &mut current.drunk,
+        target.drunk,
+        base.drunk,
+        speed.drunk,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.dizzy,
+        target.dizzy,
+        base.dizzy,
+        speed.dizzy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion,
+        target.confusion,
+        base.confusion,
+        speed.confusion,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_offset,
+        target.confusion_offset,
+        base.confusion_offset,
+        speed.confusion_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_cols(
+        &mut current.confusion_offset_cols,
+        target.confusion_offset_cols,
+        base.confusion_offset_cols,
+        speed.confusion_offset_cols,
+        delta_time,
+    );
+    approach_attack_value(
+        &mut current.flip,
+        target.flip,
+        base.flip,
+        speed.flip,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.invert,
+        target.invert,
+        base.invert,
+        speed.invert,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado,
+        target.tornado,
+        base.tornado,
+        speed.tornado,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tipsy,
+        target.tipsy,
+        base.tipsy,
+        speed.tipsy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tiny,
+        target.tiny,
+        base.tiny,
+        speed.tiny,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy,
+        target.bumpy,
+        base.bumpy,
+        speed.bumpy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_offset,
+        target.bumpy_offset,
+        base.bumpy_offset,
+        speed.bumpy_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_period,
+        target.bumpy_period,
+        base.bumpy_period,
+        speed.bumpy_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_cols(
+        &mut current.bumpy_cols,
+        target.bumpy_cols,
+        base.bumpy_cols,
+        speed.bumpy_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.tiny_cols,
+        target.tiny_cols,
+        base.tiny_cols,
+        speed.tiny_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.move_x_cols,
+        target.move_x_cols,
+        base.move_x_cols,
+        speed.move_x_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.move_y_cols,
+        target.move_y_cols,
+        base.move_y_cols,
+        speed.move_y_cols,
+        delta_time,
+    );
+    approach_attack_value(
+        &mut current.pulse_inner,
+        target.pulse_inner,
+        base.pulse_inner,
+        speed.pulse_inner,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_outer,
+        target.pulse_outer,
+        base.pulse_outer,
+        speed.pulse_outer,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_period,
+        target.pulse_period,
+        base.pulse_period,
+        speed.pulse_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.pulse_offset,
+        target.pulse_offset,
+        base.pulse_offset,
+        speed.pulse_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat,
+        target.beat,
+        base.beat,
+        speed.beat,
+        delta_time,
+        1.0,
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AppearanceEffects {
+    pub hidden: f32,
+    pub hidden_offset: f32,
+    pub sudden: f32,
+    pub sudden_offset: f32,
+    pub stealth: f32,
+    pub blink: f32,
+    pub random_vanish: f32,
+}
+
+impl AppearanceEffects {
+    #[inline(always)]
+    pub fn from_mask_bits(mask: u8) -> Self {
+        Self {
+            hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
+            hidden_offset: 0.0,
+            sudden: f32::from((mask & APPEARANCE_MASK_BIT_SUDDEN) != 0),
+            sudden_offset: 0.0,
+            stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
+            blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
+            random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
+        }
+    }
+
+    #[inline(always)]
+    pub fn approach_speeds() -> Self {
+        Self {
+            hidden: 1.0,
+            hidden_offset: 1.0,
+            sudden: 1.0,
+            sudden_offset: 1.0,
+            stealth: 1.0,
+            blink: 1.0,
+            random_vanish: 1.0,
+        }
+    }
+}
+
+#[inline(always)]
+pub fn apply_appearance_target(
+    target: &mut AppearanceEffects,
+    speed: &mut AppearanceEffects,
+    overrides: AppearanceOverrides,
+    override_speeds: AppearanceOverrides,
+) {
+    if let Some(value) = overrides.hidden {
+        target.hidden = value;
+        speed.hidden = override_speeds.hidden.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.hidden_offset {
+        target.hidden_offset = value;
+        speed.hidden_offset = override_speeds.hidden_offset.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.sudden {
+        target.sudden = value;
+        speed.sudden = override_speeds.sudden.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.sudden_offset {
+        target.sudden_offset = value;
+        speed.sudden_offset = override_speeds.sudden_offset.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.stealth {
+        target.stealth = value;
+        speed.stealth = override_speeds.stealth.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.blink {
+        target.blink = value;
+        speed.blink = override_speeds.blink.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.random_vanish {
+        target.random_vanish = value;
+        speed.random_vanish = override_speeds.random_vanish.unwrap_or(1.0).max(0.0);
+    }
+}
+
+#[inline(always)]
+pub fn approach_appearance_effects(
+    current: &mut AppearanceEffects,
+    target: AppearanceEffects,
+    speed: AppearanceEffects,
+    delta_time: f32,
+) {
+    let delta_time = delta_time.max(0.0);
+    approach_f32(
+        &mut current.hidden,
+        target.hidden,
+        delta_time * speed.hidden,
+    );
+    approach_f32(
+        &mut current.hidden_offset,
+        target.hidden_offset,
+        delta_time * speed.hidden_offset,
+    );
+    approach_f32(
+        &mut current.sudden,
+        target.sudden,
+        delta_time * speed.sudden,
+    );
+    approach_f32(
+        &mut current.sudden_offset,
+        target.sudden_offset,
+        delta_time * speed.sudden_offset,
+    );
+    approach_f32(
+        &mut current.stealth,
+        target.stealth,
+        delta_time * speed.stealth,
+    );
+    approach_f32(&mut current.blink, target.blink, delta_time * speed.blink);
+    approach_f32(
+        &mut current.random_vanish,
+        target.random_vanish,
+        delta_time * speed.random_vanish,
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VisibilityEffects {
+    pub dark: f32,
+    pub blind: f32,
+    pub cover: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ChartAttackEffects {
+    pub insert_mask: u8,
+    pub remove_mask: u8,
+    pub holds_mask: u8,
+    pub turn_bits: u16,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChartAttackWindow {
+    pub start_second: f32,
+    pub len_seconds: f32,
+    pub mods: String,
+}
+
+pub const RANDOM_ATTACK_RUN_TIME_SECONDS: f32 = 6.0;
+pub const RANDOM_ATTACK_OVERLAP_SECONDS: f32 = 0.5;
+pub const RANDOM_ATTACK_START_SECONDS_INIT: f32 = -1.0;
+pub const RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS: f32 = 1.0;
+
+// Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
+pub const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
+    "0.5x",
+    "1x",
+    "1.5x",
+    "2x",
+    "boost",
+    "brake",
+    "wave",
+    "expand",
+    "drunk",
+    "dizzy",
+    "confusion",
+    "65% mini",
+    "20% flip",
+    "30% invert",
+    "30% tornado",
+    "tipsy",
+    "beat",
+    "bumpy",
+    "50% hidden",
+    "50% sudden",
+    "30% blink",
+    "30% reverse",
+    "reverse",
+    "centered",
+    "hallway",
+    "space",
+    "incoming",
+    "overhead",
+    "distant",
+];
+
+pub fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+
+    let upper = raw.to_ascii_uppercase();
+    let mut starts = Vec::with_capacity(8);
+    let mut scan = 0usize;
+    while let Some(pos) = upper[scan..].find("TIME=") {
+        let idx = scan + pos;
+        starts.push(idx);
+        scan = idx.saturating_add(5);
+        if scan >= raw.len() {
+            break;
+        }
+    }
+    if starts.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::with_capacity(starts.len());
+    for (i, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(i + 1).copied().unwrap_or(raw.len());
+        let chunk = &raw[start..end];
+        let mut time = None;
+        let mut len = None;
+        let mut end_time = None;
+        let mut mods = None;
+
+        for part in chunk.split(':') {
+            let part = part.trim();
+            let Some((k, v)) = part.split_once('=') else {
+                continue;
+            };
+            let key = k.trim().to_ascii_uppercase();
+            let value = v.trim().trim_end_matches(',').trim();
+            if value.is_empty() {
+                continue;
+            }
+            match key.as_str() {
+                "TIME" => time = value.parse::<f32>().ok(),
+                "LEN" => len = value.parse::<f32>().ok(),
+                "END" => end_time = value.parse::<f32>().ok(),
+                "MODS" => mods = Some(value.to_string()),
+                _ => {}
+            }
+        }
+
+        let (Some(start_second), Some(mods)) = (time, mods) else {
+            continue;
+        };
+        if !start_second.is_finite() || mods.is_empty() {
+            continue;
+        }
+        let mut len_seconds = len.unwrap_or(0.0);
+        if let Some(end_second) = end_time
+            && end_second.is_finite()
+        {
+            len_seconds = end_second - start_second;
+        }
+        if !len_seconds.is_finite() || len_seconds < 0.0 {
+            len_seconds = 0.0;
+        }
+        out.push(ChartAttackWindow {
+            start_second,
+            len_seconds,
+            mods,
+        });
+    }
+
+    out
+}
+
+#[inline(always)]
+pub fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
+    base_seed
+        ^ (0xC2B2_AE3D_27D4_EB4F_u64.wrapping_mul(player as u64 + 1))
+        ^ (attacks_len as u64).wrapping_mul(0x9E37_79B9_u64)
+}
+
+pub fn build_random_attack_windows(
+    song_length_seconds: f32,
+    player: usize,
+    base_seed: u64,
+) -> Vec<ChartAttackWindow> {
+    if !song_length_seconds.is_finite() || song_length_seconds <= 0.0 {
+        return Vec::new();
+    }
+    let period = (RANDOM_ATTACK_RUN_TIME_SECONDS - RANDOM_ATTACK_OVERLAP_SECONDS).max(0.0);
+    if period <= f32::EPSILON || RANDOM_ATTACK_MOD_POOL.is_empty() {
+        return Vec::new();
+    }
+    let first_start =
+        (period + RANDOM_ATTACK_START_SECONDS_INIT).max(RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS);
+    if first_start >= song_length_seconds {
+        return Vec::new();
+    }
+
+    let max_windows = ((song_length_seconds - first_start) / period)
+        .floor()
+        .max(0.0) as usize
+        + 1;
+    let mut out = Vec::with_capacity(max_windows);
+    let mut rng = TurnRng::new(random_attack_seed(base_seed, player, max_windows));
+    let mut start = first_start;
+    while start < song_length_seconds {
+        let mod_idx = rng.gen_range(RANDOM_ATTACK_MOD_POOL.len());
+        out.push(ChartAttackWindow {
+            start_second: start,
+            len_seconds: RANDOM_ATTACK_RUN_TIME_SECONDS,
+            mods: RANDOM_ATTACK_MOD_POOL[mod_idx].to_string(),
+        });
+        start += period;
+    }
+    out
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ParsedAttackMods {
+    pub insert_mask: u8,
+    pub remove_mask: u8,
+    pub holds_mask: u8,
+    pub turn_option: GameplayTurnOption,
+    pub clear_all: bool,
+    pub accel: AccelOverrides,
+    pub visual: VisualOverrides,
+    pub visual_speed: VisualOverrides,
+    pub appearance: AppearanceOverrides,
+    pub appearance_speed: AppearanceOverrides,
+    pub visibility: VisibilityOverrides,
+    pub scroll: ScrollOverrides,
+    pub scroll_approach_speed: ScrollOverrides,
+    pub perspective: PerspectiveOverrides,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub mini_percent: Option<f32>,
+    pub mini_speed: Option<f32>,
+}
+
+impl Default for ParsedAttackMods {
+    fn default() -> Self {
+        Self {
+            insert_mask: 0,
+            remove_mask: 0,
+            holds_mask: 0,
+            turn_option: GameplayTurnOption::None,
+            clear_all: false,
+            accel: AccelOverrides::default(),
+            visual: VisualOverrides::default(),
+            visual_speed: VisualOverrides::default(),
+            appearance: AppearanceOverrides::default(),
+            appearance_speed: AppearanceOverrides::default(),
+            visibility: VisibilityOverrides::default(),
+            scroll: ScrollOverrides::default(),
+            scroll_approach_speed: ScrollOverrides::default(),
+            perspective: PerspectiveOverrides::default(),
+            scroll_speed: None,
+            mini_percent: None,
+            mini_speed: None,
+        }
+    }
+}
+
+impl ParsedAttackMods {
+    #[inline(always)]
+    pub fn has_chart_effect(self) -> bool {
+        self.insert_mask != 0
+            || self.remove_mask != 0
+            || self.holds_mask != 0
+            || self.turn_option != GameplayTurnOption::None
+    }
+
+    #[inline(always)]
+    pub fn has_runtime_mask_effect(self) -> bool {
+        self.clear_all
+            || self.accel.any()
+            || self.visual.any()
+            || self.appearance.any()
+            || self.visibility.any()
+            || self.scroll.any()
+            || self.perspective.any()
+            || self.scroll_speed.is_some()
+            || self.mini_percent.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AttackMaskWindow {
+    pub start_second: f32,
+    pub end_second: f32,
+    pub sustain_end_second: f32,
+    pub persist_after_end: bool,
+    pub clear_all: bool,
+    pub chart: ChartAttackEffects,
+    pub accel: AccelOverrides,
+    pub visual: VisualOverrides,
+    pub visual_speed: VisualOverrides,
+    pub appearance: AppearanceOverrides,
+    pub appearance_speed: AppearanceOverrides,
+    pub visibility: VisibilityOverrides,
+    pub scroll: ScrollOverrides,
+    pub scroll_approach_speed: ScrollOverrides,
+    pub perspective: PerspectiveOverrides,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub mini_percent: Option<f32>,
+    pub mini_mode: MiniAttackMode,
+    pub mini_speed: Option<f32>,
+}
+
+pub fn attack_mask_window_from_parts(
+    attack: &ChartAttackWindow,
+    mods: ParsedAttackMods,
+) -> Option<AttackMaskWindow> {
+    if !mods.has_runtime_mask_effect() && !mods.has_chart_effect() {
+        return None;
+    }
+    let start_second = attack.start_second;
+    let end_second = start_second + attack.len_seconds.max(0.0);
+    if !start_second.is_finite() || !end_second.is_finite() || end_second <= start_second {
+        return None;
+    }
+    Some(AttackMaskWindow {
+        start_second,
+        end_second,
+        sustain_end_second: end_second,
+        persist_after_end: false,
+        clear_all: mods.clear_all,
+        chart: ChartAttackEffects {
+            insert_mask: mods.insert_mask,
+            remove_mask: mods.remove_mask,
+            holds_mask: mods.holds_mask,
+            turn_bits: turn_option_bits(mods.turn_option),
+        },
+        accel: mods.accel,
+        visual: mods.visual,
+        visual_speed: mods.visual_speed,
+        appearance: mods.appearance,
+        appearance_speed: mods.appearance_speed,
+        visibility: mods.visibility,
+        scroll: mods.scroll,
+        scroll_approach_speed: mods.scroll_approach_speed,
+        perspective: mods.perspective,
+        scroll_speed: mods.scroll_speed,
+        mini_percent: mods.mini_percent,
+        mini_mode: MiniAttackMode::Absolute,
+        mini_speed: mods.mini_speed,
+    })
+}
+
+pub fn build_attack_mask_windows(attacks: &[ChartAttackWindow]) -> Vec<AttackMaskWindow> {
+    if attacks.is_empty() {
+        return Vec::new();
+    }
+    let mut windows = Vec::with_capacity(attacks.len());
+    for attack in attacks {
+        if let Some(window) = attack_mask_window_from_parts(attack, parse_attack_mods(&attack.mods))
+        {
+            windows.push(window);
+        }
+    }
+    windows
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AttackActiveTargets {
+    pub clear_all: bool,
+    pub visual: VisualOverrides,
+    pub scroll: ScrollOverrides,
+    pub mini_percent: bool,
+}
+
+#[inline(always)]
+fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
+    if value.is_some() {
+        *targets = Some(0.0);
+    }
+}
+
+fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
+    mark_active_target(&mut targets.drunk, visual.drunk);
+    mark_active_target(&mut targets.dizzy, visual.dizzy);
+    mark_active_target(&mut targets.confusion, visual.confusion);
+    mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
+    for (target, value) in targets
+        .confusion_offset_cols
+        .iter_mut()
+        .zip(visual.confusion_offset_cols)
+    {
+        mark_active_target(target, value);
+    }
+    mark_active_target(&mut targets.flip, visual.flip);
+    mark_active_target(&mut targets.invert, visual.invert);
+    mark_active_target(&mut targets.tornado, visual.tornado);
+    mark_active_target(&mut targets.tipsy, visual.tipsy);
+    mark_active_target(&mut targets.tiny, visual.tiny);
+    mark_active_target(&mut targets.bumpy, visual.bumpy);
+    mark_active_target(&mut targets.bumpy_offset, visual.bumpy_offset);
+    mark_active_target(&mut targets.bumpy_period, visual.bumpy_period);
+    for (target, value) in targets.bumpy_cols.iter_mut().zip(visual.bumpy_cols) {
+        mark_active_target(target, value);
+    }
+    for (target, value) in targets.tiny_cols.iter_mut().zip(visual.tiny_cols) {
+        mark_active_target(target, value);
+    }
+    for (target, value) in targets.move_x_cols.iter_mut().zip(visual.move_x_cols) {
+        mark_active_target(target, value);
+    }
+    for (target, value) in targets.move_y_cols.iter_mut().zip(visual.move_y_cols) {
+        mark_active_target(target, value);
+    }
+    mark_active_target(&mut targets.pulse_inner, visual.pulse_inner);
+    mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
+    mark_active_target(&mut targets.pulse_period, visual.pulse_period);
+    mark_active_target(&mut targets.pulse_offset, visual.pulse_offset);
+    mark_active_target(&mut targets.beat, visual.beat);
+}
+
+fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
+    mark_active_target(&mut targets.reverse, scroll.reverse);
+    mark_active_target(&mut targets.split, scroll.split);
+    mark_active_target(&mut targets.alternate, scroll.alternate);
+    mark_active_target(&mut targets.cross, scroll.cross);
+    mark_active_target(&mut targets.centered, scroll.centered);
+}
+
+pub fn collect_active_attack_targets(
+    windows: &[AttackMaskWindow],
+    now: f32,
+) -> AttackActiveTargets {
+    let mut targets = AttackActiveTargets::default();
+    for window in windows {
+        if now < window.start_second || now >= window.end_second {
+            continue;
+        }
+        if window.clear_all {
+            targets.clear_all = true;
+        }
+        mark_visual_targets(&mut targets.visual, window.visual);
+        mark_scroll_targets(&mut targets.scroll, window.scroll);
+        if window.mini_percent.is_some() {
+            targets.mini_percent = true;
+        }
+    }
+    targets
+}
+
+#[inline(always)]
+pub fn persisted_target_allowed(
+    persisted: bool,
+    active_clear_all: bool,
+    active_target: Option<f32>,
+) -> bool {
+    !persisted || (!active_clear_all && active_target.is_none())
+}
+
+#[inline(always)]
+pub fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
+    !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
+}
+
+#[inline(always)]
+pub const fn turn_option_bits(turn: GameplayTurnOption) -> u16 {
+    match turn {
+        GameplayTurnOption::None => 0,
+        GameplayTurnOption::Mirror => 1 << 0,
+        GameplayTurnOption::Left => 1 << 1,
+        GameplayTurnOption::Right => 1 << 2,
+        GameplayTurnOption::LRMirror => 1 << 3,
+        GameplayTurnOption::UDMirror => 1 << 4,
+        GameplayTurnOption::Shuffle => 1 << 5,
+        GameplayTurnOption::Blender => 1 << 6,
+        GameplayTurnOption::Random => 1 << 7,
+    }
+}
+
+pub fn attack_token_key(token: &str) -> String {
+    let mut key = String::with_capacity(token.len());
+    for ch in token.chars() {
+        if ch.is_ascii_alphanumeric() {
+            key.push(ch.to_ascii_lowercase());
+        }
+    }
+    while key.as_bytes().first().is_some_and(u8::is_ascii_digit) {
+        key.remove(0);
+    }
+    key
+}
+
+#[inline(always)]
+pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
+    let suffix = key.strip_prefix(prefix)?;
+    if suffix.is_empty() {
+        return None;
+    }
+    let col = suffix.parse::<usize>().ok()?;
+    (1..=MAX_COLS).contains(&col).then_some(col - 1)
+}
+
+#[inline(always)]
+fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
+    let trimmed = token.trim();
+    let value = trimmed
+        .strip_suffix('x')
+        .or_else(|| trimmed.strip_suffix('X'))
+        .and_then(|v| v.trim().parse::<f32>().ok());
+    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
+        return Some(ScrollSpeedSetting::XMod(v));
+    }
+    ScrollSpeedSetting::from_str(trimmed).ok()
+}
+
+#[inline(always)]
+fn parse_attack_approach_prefix(token: &str) -> (f32, &str) {
+    let token = token.trim();
+    let Some(prefix) = token.split_ascii_whitespace().next() else {
+        return (1.0, token);
+    };
+    if prefix.len() <= 1 || !prefix.starts_with('*') {
+        return (1.0, token);
+    }
+    let Some(speed) = prefix[1..]
+        .parse::<f32>()
+        .ok()
+        .filter(|value| value.is_finite())
+    else {
+        return (1.0, token);
+    };
+    (speed.max(0.0), token[prefix.len()..].trim_start())
+}
+
+#[inline(always)]
+fn attack_level(percent_value: Option<f32>) -> Option<f32> {
+    let raw = percent_value.unwrap_or(100.0);
+    raw.is_finite().then_some(raw / 100.0)
+}
+
+#[inline(always)]
+fn parse_attack_percent_prefix(token: &str) -> (Option<f32>, &str) {
+    let Some(idx) = token.find('%') else {
+        return (None, token);
+    };
+    let value = token[..idx].trim().parse::<f32>().ok();
+    (value, token[idx + 1..].trim())
+}
+
+#[inline(always)]
+fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
+    let token = token.trim();
+    if token.len() >= 3 && token[..3].eq_ignore_ascii_case("no ") {
+        return (Some(0.0), token[3..].trim());
+    }
+    parse_attack_percent_prefix(token)
+}
+
+#[inline(always)]
+fn set_approached_mod(
+    value: &mut Option<f32>,
+    value_speed: &mut Option<f32>,
+    target: Option<f32>,
+    approach_speed: f32,
+) {
+    *value = target;
+    if target.is_some() {
+        *value_speed = Some(approach_speed.max(0.0));
+    }
+}
+
+fn apply_runtime_mod(
+    out: &mut ParsedAttackMods,
+    key: &str,
+    percent_value: Option<f32>,
+    approach_speed: f32,
+) {
+    if let Some(col) = mod_column_suffix(key, "bumpy") {
+        set_approached_mod(
+            &mut out.visual.bumpy_cols[col],
+            &mut out.visual_speed.bumpy_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "tiny") {
+        set_approached_mod(
+            &mut out.visual.tiny_cols[col],
+            &mut out.visual_speed.tiny_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "movex") {
+        set_approached_mod(
+            &mut out.visual.move_x_cols[col],
+            &mut out.visual_speed.move_x_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "movey") {
+        set_approached_mod(
+            &mut out.visual.move_y_cols[col],
+            &mut out.visual_speed.move_y_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "confusionoffset") {
+        set_approached_mod(
+            &mut out.visual.confusion_offset_cols[col],
+            &mut out.visual_speed.confusion_offset_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+
+    match key {
+        "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
+        "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
+        "quick" => out.insert_mask |= INSERT_MASK_BIT_QUICK,
+        "bmrize" => out.insert_mask |= INSERT_MASK_BIT_BMRIZE,
+        "skippy" => out.insert_mask |= INSERT_MASK_BIT_SKIPPY,
+        "echo" => out.insert_mask |= INSERT_MASK_BIT_ECHO,
+        "stomp" => out.insert_mask |= INSERT_MASK_BIT_STOMP,
+        "mines" => out.insert_mask |= INSERT_MASK_BIT_MINES,
+        "little" => out.remove_mask |= REMOVE_MASK_BIT_LITTLE,
+        "nomines" => out.remove_mask |= REMOVE_MASK_BIT_NO_MINES,
+        "noholds" => out.remove_mask |= REMOVE_MASK_BIT_NO_HOLDS,
+        "nojumps" => out.remove_mask |= REMOVE_MASK_BIT_NO_JUMPS,
+        "nohands" => out.remove_mask |= REMOVE_MASK_BIT_NO_HANDS,
+        "noquads" => out.remove_mask |= REMOVE_MASK_BIT_NO_QUADS,
+        "nolifts" => out.remove_mask |= REMOVE_MASK_BIT_NO_LIFTS,
+        "nofakes" => out.remove_mask |= REMOVE_MASK_BIT_NO_FAKES,
+        "planted" => out.holds_mask |= HOLDS_MASK_BIT_PLANTED,
+        "floored" => out.holds_mask |= HOLDS_MASK_BIT_FLOORED,
+        "twister" => out.holds_mask |= HOLDS_MASK_BIT_TWISTER,
+        "norolls" => out.holds_mask |= HOLDS_MASK_BIT_NO_ROLLS,
+        "holdrolls" | "holdstorolls" => out.holds_mask |= HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+        "mirror" => out.turn_option = GameplayTurnOption::Mirror,
+        "left" => out.turn_option = GameplayTurnOption::Left,
+        "right" => out.turn_option = GameplayTurnOption::Right,
+        "lrmirror" => out.turn_option = GameplayTurnOption::LRMirror,
+        "udmirror" => out.turn_option = GameplayTurnOption::UDMirror,
+        "shuffle" => out.turn_option = GameplayTurnOption::Shuffle,
+        "supershuffle" | "blender" => out.turn_option = GameplayTurnOption::Blender,
+        "hypershuffle" => out.turn_option = GameplayTurnOption::Random,
+        "reverse" => set_approached_mod(
+            &mut out.scroll.reverse,
+            &mut out.scroll_approach_speed.reverse,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "split" => set_approached_mod(
+            &mut out.scroll.split,
+            &mut out.scroll_approach_speed.split,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "alternate" => set_approached_mod(
+            &mut out.scroll.alternate,
+            &mut out.scroll_approach_speed.alternate,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "cross" => set_approached_mod(
+            &mut out.scroll.cross,
+            &mut out.scroll_approach_speed.cross,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "centered" => set_approached_mod(
+            &mut out.scroll.centered,
+            &mut out.scroll_approach_speed.centered,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "boost" => out.accel.boost = attack_level(percent_value),
+        "brake" => out.accel.brake = attack_level(percent_value),
+        "wave" => out.accel.wave = attack_level(percent_value),
+        "expand" => out.accel.expand = attack_level(percent_value),
+        "boomerang" => out.accel.boomerang = attack_level(percent_value),
+        "drunk" => set_approached_mod(
+            &mut out.visual.drunk,
+            &mut out.visual_speed.drunk,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "dizzy" => set_approached_mod(
+            &mut out.visual.dizzy,
+            &mut out.visual_speed.dizzy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusion" => set_approached_mod(
+            &mut out.visual.confusion,
+            &mut out.visual_speed.confusion,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusionoffset" => set_approached_mod(
+            &mut out.visual.confusion_offset,
+            &mut out.visual_speed.confusion_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "flip" => set_approached_mod(
+            &mut out.visual.flip,
+            &mut out.visual_speed.flip,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "invert" => set_approached_mod(
+            &mut out.visual.invert,
+            &mut out.visual_speed.invert,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornado" => set_approached_mod(
+            &mut out.visual.tornado,
+            &mut out.visual_speed.tornado,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tipsy" => set_approached_mod(
+            &mut out.visual.tipsy,
+            &mut out.visual_speed.tipsy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpy" => set_approached_mod(
+            &mut out.visual.bumpy,
+            &mut out.visual_speed.bumpy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyoffset" => set_approached_mod(
+            &mut out.visual.bumpy_offset,
+            &mut out.visual_speed.bumpy_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyperiod" => set_approached_mod(
+            &mut out.visual.bumpy_period,
+            &mut out.visual_speed.bumpy_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseinner" => set_approached_mod(
+            &mut out.visual.pulse_inner,
+            &mut out.visual_speed.pulse_inner,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseouter" => set_approached_mod(
+            &mut out.visual.pulse_outer,
+            &mut out.visual_speed.pulse_outer,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseperiod" => set_approached_mod(
+            &mut out.visual.pulse_period,
+            &mut out.visual_speed.pulse_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "pulseoffset" => set_approached_mod(
+            &mut out.visual.pulse_offset,
+            &mut out.visual_speed.pulse_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "beat" => set_approached_mod(
+            &mut out.visual.beat,
+            &mut out.visual_speed.beat,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tiny" => set_approached_mod(
+            &mut out.visual.tiny,
+            &mut out.visual_speed.tiny,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "mini" => {
+            let mini = percent_value.unwrap_or(100.0);
+            if mini.is_finite() {
+                out.mini_percent = Some(mini);
+                out.mini_speed = Some(approach_speed.max(0.0));
+            }
+        }
+        "hidden" => {
+            out.appearance.hidden = attack_level(percent_value);
+            out.appearance_speed.hidden = Some(approach_speed);
+        }
+        "hiddenoffset" => {
+            out.appearance.hidden_offset = attack_level(percent_value);
+            out.appearance_speed.hidden_offset = Some(approach_speed);
+        }
+        "sudden" => {
+            out.appearance.sudden = attack_level(percent_value);
+            out.appearance_speed.sudden = Some(approach_speed);
+        }
+        "suddenoffset" => {
+            out.appearance.sudden_offset = attack_level(percent_value);
+            out.appearance_speed.sudden_offset = Some(approach_speed);
+        }
+        "stealth" => {
+            out.appearance.stealth = attack_level(percent_value);
+            out.appearance_speed.stealth = Some(approach_speed);
+        }
+        "blink" => {
+            out.appearance.blink = attack_level(percent_value);
+            out.appearance_speed.blink = Some(approach_speed);
+        }
+        "rvanish" | "randomvanish" | "reversevanish" => {
+            out.appearance.random_vanish = attack_level(percent_value);
+            out.appearance_speed.random_vanish = Some(approach_speed);
+        }
+        "dark" => out.visibility.dark = attack_level(percent_value),
+        "blind" => out.visibility.blind = attack_level(percent_value),
+        "cover" => out.visibility.cover = attack_level(percent_value),
+        "overhead" => {
+            out.perspective.tilt = Some(0.0);
+            out.perspective.skew = Some(0.0);
+        }
+        "incoming" => {
+            let level = attack_level(percent_value).unwrap_or(1.0);
+            out.perspective.tilt = Some(-level);
+            out.perspective.skew = Some(level);
+        }
+        "space" => {
+            let level = attack_level(percent_value).unwrap_or(1.0);
+            out.perspective.tilt = Some(level);
+            out.perspective.skew = Some(level);
+        }
+        "hallway" => {
+            let level = attack_level(percent_value).unwrap_or(1.0);
+            out.perspective.tilt = Some(-level);
+            out.perspective.skew = Some(0.0);
+        }
+        "distant" => {
+            let level = attack_level(percent_value).unwrap_or(1.0);
+            out.perspective.tilt = Some(level);
+            out.perspective.skew = Some(0.0);
+        }
+        _ => {}
+    }
+}
+
+pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
+    let mut out = ParsedAttackMods::default();
+    for token in mods.split(',') {
+        let (approach_speed, token) = parse_attack_approach_prefix(token);
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(scroll_speed) = parse_attack_scroll_override(token) {
+            out.scroll_speed = Some(scroll_speed);
+            continue;
+        }
+        let (percent_value, token_key) = parse_attack_level_token(token);
+        let key = attack_token_key(token_key);
+        if key.is_empty() {
+            continue;
+        }
+        match key.as_str() {
+            "clearall" => {
+                out = ParsedAttackMods {
+                    clear_all: true,
+                    ..ParsedAttackMods::default()
+                };
+            }
+            _ => apply_runtime_mod(&mut out, key.as_str(), percent_value, approach_speed),
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
+    let word = word.trim();
+    if word.eq_ignore_ascii_case("no") {
+        return Some(0.0);
+    }
+    if let Some(value) = word.strip_suffix('%') {
+        return value.trim().parse::<f32>().ok();
+    }
+    word.parse::<f32>().ok()
+}
+
+pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
+    let mut out = ParsedAttackMods::default();
+    for token in mods.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = token
+            .split_ascii_whitespace()
+            .filter(|part| !part.is_empty())
+            .collect();
+        if parts.is_empty() {
+            continue;
+        }
+        if parts.len() == 1 {
+            if let Some(scroll_speed) = parse_attack_scroll_override(parts[0]) {
+                out.scroll_speed = Some(scroll_speed);
+                continue;
+            }
+            let key = attack_token_key(parts[0]);
+            if key.is_empty() {
+                continue;
+            }
+            if key == "clearall" {
+                out = ParsedAttackMods {
+                    clear_all: true,
+                    ..ParsedAttackMods::default()
+                };
+                continue;
+            }
+            apply_runtime_mod(&mut out, key.as_str(), Some(100.0), 1.0);
+            continue;
+        }
+
+        if parts[0].starts_with('*') {
+            let approach_speed = parse_attack_approach_prefix(parts[0]).0;
+            if parts.len() == 2 {
+                if let Some(scroll_speed) = parse_attack_scroll_override(parts[1]) {
+                    out.scroll_speed = Some(scroll_speed);
+                    continue;
+                }
+                let key = attack_token_key(parts[1]);
+                if !key.is_empty() {
+                    apply_runtime_mod(&mut out, key.as_str(), Some(100.0), approach_speed);
+                }
+                continue;
+            }
+            let key = attack_token_key(parts[2]);
+            if key.is_empty() {
+                continue;
+            }
+            let amount = parse_song_lua_mod_amount(parts[1]).unwrap_or(0.0);
+            apply_runtime_mod(&mut out, key.as_str(), Some(amount), approach_speed);
+            continue;
+        }
+
+        let key = attack_token_key(parts[1]);
+        if key.is_empty() {
+            continue;
+        }
+        let amount = parse_song_lua_mod_amount(parts[0]).unwrap_or(0.0);
+        apply_runtime_mod(&mut out, key.as_str(), Some(amount), 1.0);
+    }
+    out
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScrollEffects {
+    pub reverse: f32,
+    pub split: f32,
+    pub alternate: f32,
+    pub cross: f32,
+    pub centered: f32,
+}
+
+impl ScrollEffects {
+    #[inline(always)]
+    pub fn from_flags(
+        reverse: bool,
+        split: bool,
+        alternate: bool,
+        cross: bool,
+        centered: bool,
+    ) -> Self {
+        Self {
+            reverse: f32::from(reverse),
+            split: f32::from(split),
+            alternate: f32::from(alternate),
+            cross: f32::from(cross),
+            centered: f32::from(centered),
+        }
+    }
+
+    #[inline(always)]
+    pub fn reverse_percent_for_column(self, local_col: usize, num_cols: usize) -> f32 {
+        scroll_reverse_percent_for_column(
+            ScrollReverseOptions {
+                reverse: self.reverse,
+                split: self.split,
+                alternate: self.alternate,
+                cross: self.cross,
+            },
+            local_col,
+            num_cols,
+        )
+    }
+
+    #[inline(always)]
+    pub fn reverse_scale_for_column(self, local_col: usize, num_cols: usize) -> f32 {
+        scroll_reverse_scale_for_column(
+            ScrollReverseOptions {
+                reverse: self.reverse,
+                split: self.split,
+                alternate: self.alternate,
+                cross: self.cross,
+            },
+            local_col,
+            num_cols,
+        )
+    }
+}
+
+pub fn approach_scroll_overrides_to_target(
+    current: &mut ScrollOverrides,
+    target: ScrollOverrides,
+    speed: ScrollOverrides,
+    base: ScrollEffects,
+    delta_time: f32,
+) {
+    approach_attack_value(
+        &mut current.reverse,
+        target.reverse,
+        base.reverse,
+        speed.reverse,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.split,
+        target.split,
+        base.split,
+        speed.split,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.alternate,
+        target.alternate,
+        base.alternate,
+        speed.alternate,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.cross,
+        target.cross,
+        base.cross,
+        speed.cross,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.centered,
+        target.centered,
+        base.centered,
+        speed.centered,
+        delta_time,
+        1.0,
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PerspectiveEffects {
+    pub tilt: f32,
+    pub skew: f32,
 }
 
 pub const SPACING_PERCENT_MIN: i32 = -100;
@@ -4389,6 +6101,611 @@ mod tests {
     }
 
     #[test]
+    fn accel_effects_decode_profile_mask_bits() {
+        let effects = AccelEffects::from_mask_bits(
+            ACCEL_MASK_BIT_BOOST
+                | ACCEL_MASK_BIT_BRAKE
+                | ACCEL_MASK_BIT_WAVE
+                | ACCEL_MASK_BIT_EXPAND
+                | ACCEL_MASK_BIT_BOOMERANG,
+        );
+
+        assert_near(effects.boost, 1.0);
+        assert_near(effects.brake, 1.0);
+        assert_near(effects.wave, 1.0);
+        assert_near(effects.expand, 1.0);
+        assert_near(effects.boomerang, 1.0);
+        assert_eq!(AccelEffects::from_mask_bits(0).boost, 0.0);
+    }
+
+    #[test]
+    fn visual_effects_decode_and_reencode_mask_bits() {
+        let mask = VISUAL_MASK_BIT_DRUNK
+            | VISUAL_MASK_BIT_BIG
+            | VISUAL_MASK_BIT_FLIP
+            | VISUAL_MASK_BIT_BUMPY
+            | VISUAL_MASK_BIT_BEAT;
+        let effects = VisualEffects::from_mask_bits(mask);
+
+        assert_near(effects.drunk, 1.0);
+        assert_near(effects.big, 1.0);
+        assert_near(effects.flip, 1.0);
+        assert_near(effects.bumpy, 1.0);
+        assert_near(effects.beat, 1.0);
+        assert_eq!(effects.to_mask_bits() & mask, mask);
+
+        let mut column_bumpy = VisualEffects::default();
+        column_bumpy.bumpy_cols[2] = 0.5;
+        assert_near(column_bumpy.bumpy, 0.0);
+        assert_ne!(column_bumpy.to_mask_bits() & VISUAL_MASK_BIT_BUMPY, 0);
+    }
+
+    #[test]
+    fn visual_overrides_approach_base_and_clear_when_reached() {
+        let mut visual = VisualOverrides {
+            drunk: Some(1.0),
+            tipsy: None,
+            ..VisualOverrides::default()
+        };
+        visual.bumpy_cols[1] = Some(1.0);
+
+        let mut base = VisualEffects::default();
+        base.bumpy_cols[1] = 0.25;
+
+        approach_visual_overrides_to_base(&mut visual, base, 0.5);
+
+        assert_near(visual.drunk.unwrap(), 0.5);
+        assert_eq!(visual.tipsy, None);
+        assert_near(visual.bumpy_cols[1].unwrap(), 0.5);
+
+        approach_visual_overrides_to_base(&mut visual, base, 1.0);
+
+        assert_eq!(visual.drunk, None);
+        assert_eq!(visual.bumpy_cols[1], None);
+    }
+
+    #[test]
+    fn visual_overrides_approach_target_scalars_and_columns() {
+        let mut current = VisualOverrides {
+            flip: Some(1.0),
+            ..VisualOverrides::default()
+        };
+
+        let mut target = VisualOverrides {
+            drunk: Some(1.0),
+            flip: None,
+            ..VisualOverrides::default()
+        };
+        target.bumpy_cols[2] = Some(-1.0);
+
+        let mut speed = VisualOverrides {
+            drunk: Some(2.0),
+            ..VisualOverrides::default()
+        };
+        speed.bumpy_cols[2] = Some(4.0);
+
+        let mut base = VisualEffects {
+            drunk: 0.25,
+            ..VisualEffects::default()
+        };
+        base.bumpy_cols[2] = 0.0;
+
+        approach_visual_overrides_to_target(&mut current, target, speed, base, 0.25);
+
+        assert_near(current.drunk.unwrap(), 0.75);
+        assert_eq!(current.flip, None);
+        assert_near(current.bumpy_cols[2].unwrap(), -1.0);
+    }
+
+    #[test]
+    fn appearance_effects_decode_mask_bits_and_default_speeds() {
+        let effects = AppearanceEffects::from_mask_bits(
+            APPEARANCE_MASK_BIT_HIDDEN
+                | APPEARANCE_MASK_BIT_SUDDEN
+                | APPEARANCE_MASK_BIT_STEALTH
+                | APPEARANCE_MASK_BIT_BLINK
+                | APPEARANCE_MASK_BIT_RANDOM_VANISH,
+        );
+
+        assert_near(effects.hidden, 1.0);
+        assert_near(effects.sudden, 1.0);
+        assert_near(effects.stealth, 1.0);
+        assert_near(effects.blink, 1.0);
+        assert_near(effects.random_vanish, 1.0);
+
+        let speeds = AppearanceEffects::approach_speeds();
+        assert_near(speeds.hidden, 1.0);
+        assert_near(speeds.hidden_offset, 1.0);
+        assert_near(speeds.random_vanish, 1.0);
+    }
+
+    #[test]
+    fn appearance_target_applies_overrides_and_speeds() {
+        let mut target = AppearanceEffects {
+            hidden: 0.2,
+            sudden: 0.3,
+            blink: 0.4,
+            ..AppearanceEffects::default()
+        };
+        let mut speed = AppearanceEffects::approach_speeds();
+
+        apply_appearance_target(
+            &mut target,
+            &mut speed,
+            AppearanceOverrides {
+                hidden: Some(0.75),
+                sudden: Some(0.25),
+                random_vanish: Some(1.0),
+                ..AppearanceOverrides::default()
+            },
+            AppearanceOverrides {
+                hidden: Some(2.0),
+                sudden: Some(-1.0),
+                ..AppearanceOverrides::default()
+            },
+        );
+
+        assert_near(target.hidden, 0.75);
+        assert_near(speed.hidden, 2.0);
+        assert_near(target.sudden, 0.25);
+        assert_near(speed.sudden, 0.0);
+        assert_near(target.blink, 0.4);
+        assert_near(speed.blink, 1.0);
+        assert_near(target.random_vanish, 1.0);
+        assert_near(speed.random_vanish, 1.0);
+    }
+
+    #[test]
+    fn appearance_effects_approach_targets_by_speed() {
+        let mut current = AppearanceEffects {
+            hidden: 0.0,
+            sudden: 1.0,
+            random_vanish: 0.25,
+            ..AppearanceEffects::default()
+        };
+
+        approach_appearance_effects(
+            &mut current,
+            AppearanceEffects {
+                hidden: 1.0,
+                sudden: 0.0,
+                random_vanish: 1.0,
+                ..AppearanceEffects::default()
+            },
+            AppearanceEffects {
+                hidden: 2.0,
+                sudden: 4.0,
+                random_vanish: 100.0,
+                ..AppearanceEffects::default()
+            },
+            0.25,
+        );
+
+        assert_near(current.hidden, 0.5);
+        assert_near(current.sudden, 0.0);
+        assert_near(current.random_vanish, 1.0);
+
+        approach_appearance_effects(
+            &mut current,
+            AppearanceEffects::default(),
+            AppearanceEffects::approach_speeds(),
+            -1.0,
+        );
+
+        assert_near(current.hidden, 0.5);
+        assert_near(current.random_vanish, 1.0);
+    }
+
+    #[test]
+    fn chart_attack_windows_parse_time_len_and_mods_chunks() {
+        let windows = parse_chart_attack_windows(
+            "TIME=1.25:LEN=2.5:MODS=*2 50% drunk, TIME=5:END=8:MODS=clearall",
+        );
+
+        assert_eq!(windows.len(), 2);
+        assert_near(windows[0].start_second, 1.25);
+        assert_near(windows[0].len_seconds, 2.5);
+        assert_eq!(windows[0].mods, "*2 50% drunk");
+        assert_near(windows[1].start_second, 5.0);
+        assert_near(windows[1].len_seconds, 3.0);
+        assert_eq!(windows[1].mods, "clearall");
+    }
+
+    #[test]
+    fn chart_attack_windows_skip_bad_chunks_and_clamp_lengths() {
+        let windows = parse_chart_attack_windows(
+            "garbage TIME=nan:LEN=2:MODS=drunk TIME=4:END=2:MODS=tipsy \
+             TIME=6:LEN=abc:MODS=wave TIME=9:LEN=1:MODS=,",
+        );
+
+        assert_eq!(windows.len(), 2);
+        assert_near(windows[0].start_second, 4.0);
+        assert_near(windows[0].len_seconds, 0.0);
+        assert_eq!(windows[0].mods, "tipsy");
+        assert_near(windows[1].start_second, 6.0);
+        assert_near(windows[1].len_seconds, 0.0);
+        assert_eq!(windows[1].mods, "wave");
+        assert!(parse_chart_attack_windows("").is_empty());
+        assert!(parse_chart_attack_windows("LEN=1:MODS=drunk").is_empty());
+    }
+
+    #[test]
+    fn random_attack_windows_use_fixed_timing_policy() {
+        let windows = build_random_attack_windows(18.0, 0, 12345);
+
+        assert_eq!(windows.len(), 3);
+        assert_near(windows[0].start_second, 4.5);
+        assert_near(windows[1].start_second, 10.0);
+        assert_near(windows[2].start_second, 15.5);
+        for window in &windows {
+            assert_near(window.len_seconds, RANDOM_ATTACK_RUN_TIME_SECONDS);
+            assert!(RANDOM_ATTACK_MOD_POOL.contains(&window.mods.as_str()));
+        }
+    }
+
+    #[test]
+    fn random_attack_windows_are_seeded_by_player_and_count() {
+        let player_one = build_random_attack_windows(18.0, 0, 99);
+        let player_one_again = build_random_attack_windows(18.0, 0, 99);
+        let player_two = build_random_attack_windows(18.0, 1, 99);
+        let longer_song = build_random_attack_windows(24.0, 0, 99);
+
+        assert_eq!(player_one, player_one_again);
+        assert_ne!(player_one, player_two);
+        assert_ne!(player_one, longer_song);
+        assert_ne!(
+            random_attack_seed(99, 0, player_one.len()),
+            random_attack_seed(99, 1, player_one.len()),
+        );
+    }
+
+    #[test]
+    fn random_attack_windows_skip_invalid_or_too_short_songs() {
+        assert!(build_random_attack_windows(f32::NAN, 0, 1).is_empty());
+        assert!(build_random_attack_windows(0.0, 0, 1).is_empty());
+        assert!(build_random_attack_windows(4.5, 0, 1).is_empty());
+        assert_eq!(build_random_attack_windows(4.6, 0, 1).len(), 1);
+    }
+
+    #[test]
+    fn attack_mask_windows_filter_noops_and_invalid_durations() {
+        let attacks = [
+            ChartAttackWindow {
+                start_second: 1.0,
+                len_seconds: 0.0,
+                mods: "drunk".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 2.0,
+                len_seconds: 1.0,
+                mods: "unknown".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: f32::NAN,
+                len_seconds: 1.0,
+                mods: "drunk".to_string(),
+            },
+        ];
+
+        assert!(build_attack_mask_windows(&attacks).is_empty());
+    }
+
+    #[test]
+    fn attack_mask_window_keeps_runtime_mods() {
+        let attack = ChartAttackWindow {
+            start_second: 1.5,
+            len_seconds: 2.25,
+            mods: "*2 50% drunk,25% mini,C600".to_string(),
+        };
+        let window = attack_mask_window_from_parts(&attack, parse_attack_mods(&attack.mods))
+            .expect("runtime mods should build an attack mask window");
+
+        assert_near(window.start_second, 1.5);
+        assert_near(window.end_second, 3.75);
+        assert_near(window.sustain_end_second, 3.75);
+        assert!(!window.persist_after_end);
+        assert!(!window.clear_all);
+        assert_eq!(window.chart, ChartAttackEffects::default());
+        assert_eq!(window.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
+        assert_eq!(window.mini_percent, Some(25.0));
+        assert_eq!(window.mini_mode, MiniAttackMode::Absolute);
+        assert_eq!(window.mini_speed, Some(1.0));
+        assert_eq!(window.visual.drunk, Some(0.5));
+        assert_eq!(window.visual_speed.drunk, Some(2.0));
+    }
+
+    #[test]
+    fn attack_mask_window_keeps_chart_masks_and_turn_bits() {
+        let attack = ChartAttackWindow {
+            start_second: 4.0,
+            len_seconds: 3.0,
+            mods: "mirror,mines,noholds,planted".to_string(),
+        };
+        let window = attack_mask_window_from_parts(&attack, parse_attack_mods(&attack.mods))
+            .expect("chart mods should build an attack mask window");
+
+        assert_eq!(window.chart.insert_mask, INSERT_MASK_BIT_MINES);
+        assert_eq!(window.chart.remove_mask, REMOVE_MASK_BIT_NO_HOLDS);
+        assert_eq!(window.chart.holds_mask, HOLDS_MASK_BIT_PLANTED);
+        assert_eq!(
+            window.chart.turn_bits,
+            turn_option_bits(GameplayTurnOption::Mirror)
+        );
+        assert!(!window.clear_all);
+        assert_eq!(window.scroll_speed, None);
+        assert_eq!(window.mini_percent, None);
+    }
+
+    #[test]
+    fn attack_mask_windows_keep_clearall() {
+        let attacks = [ChartAttackWindow {
+            start_second: 5.0,
+            len_seconds: 1.0,
+            mods: "clearall".to_string(),
+        }];
+        let windows = build_attack_mask_windows(&attacks);
+
+        assert_eq!(windows.len(), 1);
+        assert!(windows[0].clear_all);
+        assert_eq!(windows[0].chart, ChartAttackEffects::default());
+    }
+
+    #[test]
+    fn active_attack_targets_mark_current_runtime_targets_only() {
+        let windows = build_attack_mask_windows(&[
+            ChartAttackWindow {
+                start_second: 0.0,
+                len_seconds: 1.0,
+                mods: "tipsy".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 1.0,
+                len_seconds: 2.0,
+                mods: "50% drunk,30% reverse,25% mini".to_string(),
+            },
+            ChartAttackWindow {
+                start_second: 5.0,
+                len_seconds: 1.0,
+                mods: "clearall".to_string(),
+            },
+        ]);
+
+        let targets = collect_active_attack_targets(&windows, 2.0);
+
+        assert!(!targets.clear_all);
+        assert_eq!(targets.visual.drunk, Some(0.0));
+        assert_eq!(targets.visual.tipsy, None);
+        assert_eq!(targets.scroll.reverse, Some(0.0));
+        assert!(targets.mini_percent);
+    }
+
+    #[test]
+    fn active_attack_targets_use_half_open_time_windows() {
+        let windows = build_attack_mask_windows(&[ChartAttackWindow {
+            start_second: 1.0,
+            len_seconds: 1.0,
+            mods: "clearall".to_string(),
+        }]);
+
+        assert!(!collect_active_attack_targets(&windows, 0.99).clear_all);
+        assert!(collect_active_attack_targets(&windows, 1.0).clear_all);
+        assert!(collect_active_attack_targets(&windows, 1.99).clear_all);
+        assert!(!collect_active_attack_targets(&windows, 2.0).clear_all);
+    }
+
+    #[test]
+    fn persisted_attack_targets_are_blocked_by_active_replacements() {
+        assert!(persisted_target_allowed(false, true, Some(0.0)));
+        assert!(persisted_target_allowed(true, false, None));
+        assert!(!persisted_target_allowed(true, true, None));
+        assert!(!persisted_target_allowed(true, false, Some(0.0)));
+
+        let mut targets = AttackActiveTargets::default();
+        assert!(persisted_mini_allowed(false, targets));
+        assert!(persisted_mini_allowed(true, targets));
+
+        targets.mini_percent = true;
+        assert!(!persisted_mini_allowed(true, targets));
+
+        targets.mini_percent = false;
+        targets.clear_all = true;
+        assert!(!persisted_mini_allowed(true, targets));
+    }
+
+    #[test]
+    fn attack_mod_parser_keeps_scroll_override_and_partial_levels() {
+        let mods = parse_attack_mods("0.5x,20% flip,50% hidden,30% blink,25% mini");
+
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::XMod(0.5)));
+        assert_eq!(mods.visual.flip, Some(0.2));
+        assert_eq!(mods.appearance.hidden, Some(0.5));
+        assert_eq!(mods.appearance.blink, Some(0.3));
+        assert_eq!(mods.mini_percent, Some(25.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_maps_chart_masks_and_turn_options() {
+        let mods = parse_attack_mods(
+            "wide,big,quick,bmrize,skippy,echo,stomp,mines,little,nomines,noholds,\
+             nojumps,nohands,noquads,nolifts,nofakes,planted,floored,twister,norolls,\
+             holdstorolls,mirror,left,right,lrmirror,udmirror,shuffle,blender,hypershuffle",
+        );
+
+        assert_eq!(
+            mods.insert_mask,
+            INSERT_MASK_BIT_WIDE
+                | INSERT_MASK_BIT_BIG
+                | INSERT_MASK_BIT_QUICK
+                | INSERT_MASK_BIT_BMRIZE
+                | INSERT_MASK_BIT_SKIPPY
+                | INSERT_MASK_BIT_ECHO
+                | INSERT_MASK_BIT_STOMP
+                | INSERT_MASK_BIT_MINES,
+        );
+        assert_eq!(
+            mods.remove_mask,
+            REMOVE_MASK_BIT_LITTLE
+                | REMOVE_MASK_BIT_NO_MINES
+                | REMOVE_MASK_BIT_NO_HOLDS
+                | REMOVE_MASK_BIT_NO_JUMPS
+                | REMOVE_MASK_BIT_NO_HANDS
+                | REMOVE_MASK_BIT_NO_QUADS
+                | REMOVE_MASK_BIT_NO_LIFTS
+                | REMOVE_MASK_BIT_NO_FAKES,
+        );
+        assert_eq!(
+            mods.holds_mask,
+            HOLDS_MASK_BIT_PLANTED
+                | HOLDS_MASK_BIT_FLOORED
+                | HOLDS_MASK_BIT_TWISTER
+                | HOLDS_MASK_BIT_NO_ROLLS
+                | HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+        );
+        assert_eq!(mods.turn_option, GameplayTurnOption::Random);
+        assert_eq!(turn_option_bits(GameplayTurnOption::Mirror), 1 << 0);
+        assert_eq!(turn_option_bits(GameplayTurnOption::Random), 1 << 7);
+    }
+
+    #[test]
+    fn attack_mod_parser_clearall_discards_prior_mods_and_no_prefix_zeroes_levels() {
+        let mods = parse_attack_mods("drunk,clearall,30% blink,no hidden");
+
+        assert!(mods.clear_all);
+        assert_eq!(mods.visual.drunk, None);
+        assert_eq!(mods.appearance.blink, Some(0.3));
+        assert_eq!(mods.appearance.hidden, Some(0.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_accepts_scroll_perspective_and_approach_prefixes() {
+        let mods = parse_attack_mods(
+            "C600,*1000 sudden,*1000 -125% suddenoffset,*2.4 150% hiddenoffset,\
+             30% reverse,centered,50% incoming,dark,50% blind,75% cover",
+        );
+
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
+        assert_eq!(mods.appearance.sudden, Some(1.0));
+        assert_eq!(mods.appearance.sudden_offset, Some(-1.25));
+        assert_eq!(mods.appearance.hidden_offset, Some(1.5));
+        assert_eq!(mods.appearance_speed.sudden, Some(1000.0));
+        assert_eq!(mods.appearance_speed.sudden_offset, Some(1000.0));
+        assert_eq!(mods.appearance_speed.hidden_offset, Some(2.4));
+        assert_eq!(mods.scroll.reverse, Some(0.3));
+        assert_eq!(mods.scroll.centered, Some(1.0));
+        assert_eq!(mods.perspective.tilt, Some(-0.5));
+        assert_eq!(mods.perspective.skew, Some(0.5));
+        assert_eq!(mods.visibility.dark, Some(1.0));
+        assert_eq!(mods.visibility.blind, Some(0.5));
+        assert_eq!(mods.visibility.cover, Some(0.75));
+    }
+
+    #[test]
+    fn song_lua_runtime_mod_parser_accepts_itgmania_forms() {
+        let mods = parse_song_lua_runtime_mods(
+            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,\
+             *9999 25 mini,*9999 50 incoming,*9999 15 bumpy3,*9999 250 tiny2,\
+             *9999 -125 bumpyperiod,*9999 100 pulseouter",
+        );
+
+        assert_eq!(mods.visual.invert, Some(0.25));
+        assert_eq!(mods.appearance.hidden, Some(0.0));
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::XMod(3.0)));
+        assert_eq!(mods.visual.tiny, Some(-0.25));
+        assert_eq!(mods.mini_percent, Some(25.0));
+        assert_eq!(mods.perspective.tilt, Some(-0.5));
+        assert_eq!(mods.perspective.skew, Some(0.5));
+        assert_eq!(mods.visual.bumpy, None);
+        assert_eq!(mods.visual.bumpy_cols[2], Some(0.15));
+        assert_eq!(mods.visual.tiny_cols[1], Some(2.5));
+        assert_eq!(mods.visual.bumpy_period, Some(-1.25));
+        assert_eq!(mods.visual.pulse_outer, Some(1.0));
+    }
+
+    #[test]
+    fn song_lua_runtime_mod_parser_scales_column_moves() {
+        let mods = parse_song_lua_runtime_mods(
+            "*10000 -80 movey1,*10000 40 movex2,*10000 -314 confusionoffset3,\
+             *10000 -80 tiny",
+        );
+
+        assert_eq!(mods.visual.move_y_cols[0], Some(-0.8));
+        assert_eq!(mods.visual.move_x_cols[1], Some(0.4));
+        assert_eq!(mods.visual.confusion_offset_cols[2], Some(-3.14));
+        assert_eq!(mods.visual.tiny, Some(-0.8));
+        assert_eq!(mods.mini_percent, None);
+    }
+
+    #[test]
+    fn effect_overrides_report_active_scalar_values() {
+        assert!(!AccelOverrides::default().any());
+        assert!(!AppearanceOverrides::default().any());
+        assert!(!VisibilityOverrides::default().any());
+        assert!(!ScrollOverrides::default().any());
+        assert!(!PerspectiveOverrides::default().any());
+
+        assert!(
+            AccelOverrides {
+                wave: Some(0.0),
+                ..AccelOverrides::default()
+            }
+            .any()
+        );
+        assert!(
+            AppearanceOverrides {
+                stealth: Some(0.0),
+                ..AppearanceOverrides::default()
+            }
+            .any()
+        );
+        assert!(
+            VisibilityOverrides {
+                cover: Some(0.0),
+                ..VisibilityOverrides::default()
+            }
+            .any()
+        );
+        assert!(
+            ScrollOverrides {
+                centered: Some(0.0),
+                ..ScrollOverrides::default()
+            }
+            .any()
+        );
+        assert!(
+            PerspectiveOverrides {
+                skew: Some(0.0),
+                ..PerspectiveOverrides::default()
+            }
+            .any()
+        );
+    }
+
+    #[test]
+    fn visual_overrides_report_active_column_values() {
+        assert!(!VisualOverrides::default().any());
+
+        let mut bumpy = VisualOverrides::default();
+        bumpy.bumpy_cols[MAX_COLS - 1] = Some(0.0);
+        assert!(bumpy.any());
+
+        let mut tiny = VisualOverrides::default();
+        tiny.tiny_cols[1] = Some(0.25);
+        assert!(tiny.any());
+
+        let mut move_x = VisualOverrides::default();
+        move_x.move_x_cols[0] = Some(-4.0);
+        assert!(move_x.any());
+
+        let mut move_y = VisualOverrides::default();
+        move_y.move_y_cols[2] = Some(8.0);
+        assert!(move_y.any());
+
+        let mut confusion = VisualOverrides::default();
+        confusion.confusion_offset_cols[3] = Some(90.0);
+        assert!(confusion.any());
+    }
+
+    #[test]
     fn spacing_multiplier_clamps_and_scales_percent() {
         assert_eq!(SPACING_PERCENT_MIN, -100);
         assert_eq!(SPACING_PERCENT_MAX, 100);
@@ -4758,6 +7075,53 @@ mod tests {
             scroll_reverse_scale_for_column(ScrollReverseOptions::default(), 0, 4),
             1.0,
         );
+    }
+
+    #[test]
+    fn scroll_effects_build_from_flags_and_reuse_column_policy() {
+        let scroll = ScrollEffects::from_flags(true, true, false, false, true);
+        assert_near(scroll.reverse, 1.0);
+        assert_near(scroll.split, 1.0);
+        assert_near(scroll.alternate, 0.0);
+        assert_near(scroll.cross, 0.0);
+        assert_near(scroll.centered, 1.0);
+        assert_near(scroll.reverse_percent_for_column(0, 4), 1.0);
+        assert_near(scroll.reverse_percent_for_column(3, 4), 0.0);
+        assert_near(scroll.reverse_scale_for_column(0, 4), -1.0);
+    }
+
+    #[test]
+    fn scroll_overrides_approach_targets_by_speed() {
+        let mut current = ScrollOverrides {
+            reverse: Some(0.0),
+            split: Some(1.0),
+            cross: Some(0.25),
+            ..ScrollOverrides::default()
+        };
+        let target = ScrollOverrides {
+            reverse: Some(1.0),
+            split: None,
+            alternate: Some(0.5),
+            cross: Some(1.0),
+            ..ScrollOverrides::default()
+        };
+        let speed = ScrollOverrides {
+            reverse: Some(2.0),
+            alternate: None,
+            cross: Some(0.0),
+            ..ScrollOverrides::default()
+        };
+        let base = ScrollEffects {
+            alternate: 0.25,
+            ..ScrollEffects::default()
+        };
+
+        approach_scroll_overrides_to_target(&mut current, target, speed, base, 0.25);
+
+        assert_near(current.reverse.unwrap(), 0.5);
+        assert_eq!(current.split, None);
+        assert_near(current.alternate.unwrap(), 0.5);
+        assert_near(current.cross.unwrap(), 0.25);
     }
 
     #[test]

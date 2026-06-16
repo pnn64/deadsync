@@ -1279,7 +1279,7 @@ fn saved_targets_hit_meter(profile: &profile_data::Profile, num_cols: usize, met
     let receptor_y_centered = screen_center_y() + offset_y;
     // This HUD dodge follows the player's chosen layout only. Live song
     // Lua/attack effects may move receptors, but should not move the rating box.
-    let scroll = gameplay_core::ScrollEffects::from_option(profile.scroll_option);
+    let scroll = gameplay_core::scroll_effects_from_option(profile.scroll_option);
 
     (0..num_cols).any(|col| {
         let receptor_y = scroll_receptor_y(

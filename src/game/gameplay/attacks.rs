@@ -7,64 +7,37 @@ use crate::game::parsing::song_lua::{
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
 use deadsync_core::timing::ROWS_PER_BEAT;
+pub(super) use deadsync_gameplay::AttackMaskWindow;
+#[cfg(test)]
+pub(super) use deadsync_gameplay::turn_option_bits;
+use deadsync_gameplay::{
+    ChartAttackWindow, ParsedAttackMods, apply_appearance_target, approach_appearance_effects,
+    approach_scroll_overrides_to_target, approach_visual_overrides_to_base,
+    approach_visual_overrides_to_target, attack_token_key,
+    build_attack_mask_windows as build_mask_windows_from_attacks, build_random_attack_windows,
+    collect_active_attack_targets, mod_column_suffix, parse_chart_attack_windows,
+    persisted_mini_allowed, persisted_target_allowed,
+};
+pub(super) use deadsync_gameplay::{parse_attack_mods, parse_song_lua_runtime_mods};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
 use super::{
-    AccelEffects, AccelOverrides, AppearanceEffects, AppearanceOverrides, ChartAttackEffects,
-    GameplaySession, GameplayTurnOption, GameplayViewport, HOLDS_MASK_BIT_FLOORED,
-    HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
-    HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
-    INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
-    INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, MiniAttackMode, PerspectiveEffects,
-    PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL,
-    RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
-    RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
-    REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
-    REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, ScrollEffects,
-    ScrollOverrides, State, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
-    VisualOverrides, apply_hyper_shuffle, apply_super_shuffle_taps, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, approach_attack_mini_percent_to_target, approach_attack_value,
-    attack_mini_target_percent, effective_mini_percent, gameplay_turn_option_from_profile,
-    song_lua_ease_factor, sort_player_notes, spacing_multiplier_for_percent,
+    AccelEffects, AccelOverrides, AppearanceEffects, ChartAttackEffects, GameplaySession,
+    GameplayTurnOption, GameplayViewport, MAX_COLS, MAX_PLAYERS, MiniAttackMode,
+    PerspectiveEffects, PerspectiveOverrides, ScrollEffects, ScrollOverrides, State,
+    VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides, apply_hyper_shuffle,
+    apply_super_shuffle_taps, apply_turn_permutation, apply_uncommon_masks_with_masks,
+    approach_attack_mini_percent_to_target, attack_mini_target_percent, effective_mini_percent,
+    perspective_effects_from_profile, scroll_effects_from_option, song_lua_ease_factor,
+    sort_player_notes, spacing_multiplier_for_percent,
 };
-
-#[derive(Clone, Debug)]
-struct ChartAttackWindow {
-    start_second: f32,
-    len_seconds: f32,
-    mods: String,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct AttackMaskWindow {
-    pub(super) start_second: f32,
-    pub(super) end_second: f32,
-    pub(super) sustain_end_second: f32,
-    pub(super) persist_after_end: bool,
-    pub(super) clear_all: bool,
-    pub(super) chart: ChartAttackEffects,
-    pub(super) accel: AccelOverrides,
-    pub(super) visual: VisualOverrides,
-    pub(super) visual_speed: VisualOverrides,
-    pub(super) appearance: AppearanceOverrides,
-    pub(super) appearance_speed: AppearanceOverrides,
-    pub(super) visibility: VisibilityOverrides,
-    pub(super) scroll: ScrollOverrides,
-    pub(super) scroll_approach_speed: ScrollOverrides,
-    pub(super) perspective: PerspectiveOverrides,
-    pub(super) scroll_speed: Option<ScrollSpeedSetting>,
-    pub(super) mini_percent: Option<f32>,
-    pub(super) mini_mode: MiniAttackMode,
-    pub(super) mini_speed: Option<f32>,
-}
 
 #[derive(Clone, Debug)]
 pub(super) struct SongLuaEaseMaskWindow {
@@ -207,691 +180,6 @@ pub(super) enum SongLuaEaseMaskTarget {
     ConfusionYOffsetY,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(super) struct ParsedAttackMods {
-    pub(super) insert_mask: u8,
-    pub(super) remove_mask: u8,
-    pub(super) holds_mask: u8,
-    pub(super) turn_option: profile_data::TurnOption,
-    pub(super) clear_all: bool,
-    pub(super) accel: AccelOverrides,
-    pub(super) visual: VisualOverrides,
-    pub(super) visual_speed: VisualOverrides,
-    pub(super) appearance: AppearanceOverrides,
-    pub(super) appearance_speed: AppearanceOverrides,
-    pub(super) visibility: VisibilityOverrides,
-    pub(super) scroll: ScrollOverrides,
-    pub(super) scroll_approach_speed: ScrollOverrides,
-    pub(super) perspective: PerspectiveOverrides,
-    pub(super) scroll_speed: Option<ScrollSpeedSetting>,
-    pub(super) mini_percent: Option<f32>,
-    pub(super) mini_speed: Option<f32>,
-}
-
-impl Default for ParsedAttackMods {
-    fn default() -> Self {
-        Self {
-            insert_mask: 0,
-            remove_mask: 0,
-            holds_mask: 0,
-            turn_option: profile_data::TurnOption::None,
-            clear_all: false,
-            accel: AccelOverrides::default(),
-            visual: VisualOverrides::default(),
-            visual_speed: VisualOverrides::default(),
-            appearance: AppearanceOverrides::default(),
-            appearance_speed: AppearanceOverrides::default(),
-            visibility: VisibilityOverrides::default(),
-            scroll: ScrollOverrides::default(),
-            scroll_approach_speed: ScrollOverrides::default(),
-            perspective: PerspectiveOverrides::default(),
-            scroll_speed: None,
-            mini_percent: None,
-            mini_speed: None,
-        }
-    }
-}
-
-impl ParsedAttackMods {
-    #[inline(always)]
-    fn has_chart_effect(self) -> bool {
-        self.insert_mask != 0
-            || self.remove_mask != 0
-            || self.holds_mask != 0
-            || self.turn_option != profile_data::TurnOption::None
-    }
-
-    #[inline(always)]
-    fn has_runtime_mask_effect(self) -> bool {
-        self.clear_all
-            || self.accel.any()
-            || self.visual.any()
-            || self.appearance.any()
-            || self.visibility.any()
-            || self.scroll.any()
-            || self.perspective.any()
-            || self.scroll_speed.is_some()
-            || self.mini_percent.is_some()
-    }
-}
-
-#[inline(always)]
-pub(super) const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
-    match turn {
-        profile_data::TurnOption::None => 0,
-        profile_data::TurnOption::Mirror => 1 << 0,
-        profile_data::TurnOption::Left => 1 << 1,
-        profile_data::TurnOption::Right => 1 << 2,
-        profile_data::TurnOption::LRMirror => 1 << 3,
-        profile_data::TurnOption::UDMirror => 1 << 4,
-        profile_data::TurnOption::Shuffle => 1 << 5,
-        profile_data::TurnOption::Blender => 1 << 6,
-        profile_data::TurnOption::Random => 1 << 7,
-    }
-}
-
-fn parse_chart_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Vec::new();
-    }
-
-    let upper = raw.to_ascii_uppercase();
-    let mut starts = Vec::with_capacity(8);
-    let mut scan = 0usize;
-    while let Some(pos) = upper[scan..].find("TIME=") {
-        let idx = scan + pos;
-        starts.push(idx);
-        scan = idx.saturating_add(5);
-        if scan >= raw.len() {
-            break;
-        }
-    }
-    if starts.is_empty() {
-        return Vec::new();
-    }
-
-    let mut out = Vec::with_capacity(starts.len());
-    for (i, start) in starts.iter().copied().enumerate() {
-        let end = starts.get(i + 1).copied().unwrap_or(raw.len());
-        let chunk = &raw[start..end];
-        let mut time = None;
-        let mut len = None;
-        let mut end_time = None;
-        let mut mods = None;
-
-        for part in chunk.split(':') {
-            let part = part.trim();
-            let Some((k, v)) = part.split_once('=') else {
-                continue;
-            };
-            let key = k.trim().to_ascii_uppercase();
-            let value = v.trim().trim_end_matches(',').trim();
-            if value.is_empty() {
-                continue;
-            }
-            match key.as_str() {
-                "TIME" => time = value.parse::<f32>().ok(),
-                "LEN" => len = value.parse::<f32>().ok(),
-                "END" => end_time = value.parse::<f32>().ok(),
-                "MODS" => mods = Some(value.to_string()),
-                _ => {}
-            }
-        }
-
-        let (Some(start_second), Some(mods)) = (time, mods) else {
-            continue;
-        };
-        if !start_second.is_finite() || mods.is_empty() {
-            continue;
-        }
-        let mut len_seconds = len.unwrap_or(0.0);
-        if let Some(end_second) = end_time
-            && end_second.is_finite()
-        {
-            len_seconds = end_second - start_second;
-        }
-        if !len_seconds.is_finite() || len_seconds < 0.0 {
-            len_seconds = 0.0;
-        }
-        out.push(ChartAttackWindow {
-            start_second,
-            len_seconds,
-            mods,
-        });
-    }
-
-    out
-}
-
-fn attack_token_key(token: &str) -> String {
-    let mut key = String::with_capacity(token.len());
-    for ch in token.chars() {
-        if ch.is_ascii_alphanumeric() {
-            key.push(ch.to_ascii_lowercase());
-        }
-    }
-    while key.as_bytes().first().is_some_and(u8::is_ascii_digit) {
-        key.remove(0);
-    }
-    key
-}
-
-#[inline(always)]
-fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
-    let suffix = key.strip_prefix(prefix)?;
-    if suffix.is_empty() {
-        return None;
-    }
-    let col = suffix.parse::<usize>().ok()?;
-    (1..=MAX_COLS).contains(&col).then_some(col - 1)
-}
-
-#[inline(always)]
-fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
-    let trimmed = token.trim();
-    let value = trimmed
-        .strip_suffix('x')
-        .or_else(|| trimmed.strip_suffix('X'))
-        .and_then(|v| v.trim().parse::<f32>().ok());
-    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
-        return Some(ScrollSpeedSetting::XMod(v));
-    }
-    ScrollSpeedSetting::from_str(trimmed).ok()
-}
-
-#[inline(always)]
-fn parse_attack_approach_prefix(token: &str) -> (f32, &str) {
-    let token = token.trim();
-    let Some(prefix) = token.split_ascii_whitespace().next() else {
-        return (1.0, token);
-    };
-    if prefix.len() <= 1 || !prefix.starts_with('*') {
-        return (1.0, token);
-    }
-    let Some(speed) = prefix[1..]
-        .parse::<f32>()
-        .ok()
-        .filter(|value| value.is_finite())
-    else {
-        return (1.0, token);
-    };
-    (speed.max(0.0), token[prefix.len()..].trim_start())
-}
-
-#[inline(always)]
-fn attack_level(percent_value: Option<f32>) -> Option<f32> {
-    let raw = percent_value.unwrap_or(100.0);
-    raw.is_finite().then_some(raw / 100.0)
-}
-
-#[inline(always)]
-fn parse_attack_percent_prefix(token: &str) -> (Option<f32>, &str) {
-    let Some(idx) = token.find('%') else {
-        return (None, token);
-    };
-    let value = token[..idx].trim().parse::<f32>().ok();
-    (value, token[idx + 1..].trim())
-}
-
-#[inline(always)]
-fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
-    let token = token.trim();
-    if token.len() >= 3 && token[..3].eq_ignore_ascii_case("no ") {
-        return (Some(0.0), token[3..].trim());
-    }
-    parse_attack_percent_prefix(token)
-}
-
-#[inline(always)]
-fn set_approached_mod(
-    value: &mut Option<f32>,
-    value_speed: &mut Option<f32>,
-    target: Option<f32>,
-    approach_speed: f32,
-) {
-    *value = target;
-    if target.is_some() {
-        *value_speed = Some(approach_speed.max(0.0));
-    }
-}
-
-fn apply_runtime_mod(
-    out: &mut ParsedAttackMods,
-    key: &str,
-    percent_value: Option<f32>,
-    approach_speed: f32,
-) {
-    if let Some(col) = mod_column_suffix(key, "bumpy") {
-        set_approached_mod(
-            &mut out.visual.bumpy_cols[col],
-            &mut out.visual_speed.bumpy_cols[col],
-            attack_level(percent_value),
-            approach_speed,
-        );
-        return;
-    }
-    if let Some(col) = mod_column_suffix(key, "tiny") {
-        set_approached_mod(
-            &mut out.visual.tiny_cols[col],
-            &mut out.visual_speed.tiny_cols[col],
-            attack_level(percent_value),
-            approach_speed,
-        );
-        return;
-    }
-    if let Some(col) = mod_column_suffix(key, "movex") {
-        set_approached_mod(
-            &mut out.visual.move_x_cols[col],
-            &mut out.visual_speed.move_x_cols[col],
-            attack_level(percent_value),
-            approach_speed,
-        );
-        return;
-    }
-    if let Some(col) = mod_column_suffix(key, "movey") {
-        set_approached_mod(
-            &mut out.visual.move_y_cols[col],
-            &mut out.visual_speed.move_y_cols[col],
-            attack_level(percent_value),
-            approach_speed,
-        );
-        return;
-    }
-    if let Some(col) = mod_column_suffix(key, "confusionoffset") {
-        set_approached_mod(
-            &mut out.visual.confusion_offset_cols[col],
-            &mut out.visual_speed.confusion_offset_cols[col],
-            attack_level(percent_value),
-            approach_speed,
-        );
-        return;
-    }
-
-    match key {
-        "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
-        "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
-        "quick" => out.insert_mask |= INSERT_MASK_BIT_QUICK,
-        "bmrize" => out.insert_mask |= INSERT_MASK_BIT_BMRIZE,
-        "skippy" => out.insert_mask |= INSERT_MASK_BIT_SKIPPY,
-        "echo" => out.insert_mask |= INSERT_MASK_BIT_ECHO,
-        "stomp" => out.insert_mask |= INSERT_MASK_BIT_STOMP,
-        "mines" => out.insert_mask |= INSERT_MASK_BIT_MINES,
-        "little" => out.remove_mask |= REMOVE_MASK_BIT_LITTLE,
-        "nomines" => out.remove_mask |= REMOVE_MASK_BIT_NO_MINES,
-        "noholds" => out.remove_mask |= REMOVE_MASK_BIT_NO_HOLDS,
-        "nojumps" => out.remove_mask |= REMOVE_MASK_BIT_NO_JUMPS,
-        "nohands" => out.remove_mask |= REMOVE_MASK_BIT_NO_HANDS,
-        "noquads" => out.remove_mask |= REMOVE_MASK_BIT_NO_QUADS,
-        "nolifts" => out.remove_mask |= REMOVE_MASK_BIT_NO_LIFTS,
-        "nofakes" => out.remove_mask |= REMOVE_MASK_BIT_NO_FAKES,
-        "planted" => out.holds_mask |= HOLDS_MASK_BIT_PLANTED,
-        "floored" => out.holds_mask |= HOLDS_MASK_BIT_FLOORED,
-        "twister" => out.holds_mask |= HOLDS_MASK_BIT_TWISTER,
-        "norolls" => out.holds_mask |= HOLDS_MASK_BIT_NO_ROLLS,
-        "holdrolls" | "holdstorolls" => out.holds_mask |= HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
-        "mirror" => out.turn_option = profile_data::TurnOption::Mirror,
-        "left" => out.turn_option = profile_data::TurnOption::Left,
-        "right" => out.turn_option = profile_data::TurnOption::Right,
-        "lrmirror" => out.turn_option = profile_data::TurnOption::LRMirror,
-        "udmirror" => out.turn_option = profile_data::TurnOption::UDMirror,
-        "shuffle" => out.turn_option = profile_data::TurnOption::Shuffle,
-        "supershuffle" | "blender" => out.turn_option = profile_data::TurnOption::Blender,
-        "hypershuffle" => out.turn_option = profile_data::TurnOption::Random,
-        "reverse" => set_approached_mod(
-            &mut out.scroll.reverse,
-            &mut out.scroll_approach_speed.reverse,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "split" => set_approached_mod(
-            &mut out.scroll.split,
-            &mut out.scroll_approach_speed.split,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "alternate" => set_approached_mod(
-            &mut out.scroll.alternate,
-            &mut out.scroll_approach_speed.alternate,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "cross" => set_approached_mod(
-            &mut out.scroll.cross,
-            &mut out.scroll_approach_speed.cross,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "centered" => set_approached_mod(
-            &mut out.scroll.centered,
-            &mut out.scroll_approach_speed.centered,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "boost" => out.accel.boost = attack_level(percent_value),
-        "brake" => out.accel.brake = attack_level(percent_value),
-        "wave" => out.accel.wave = attack_level(percent_value),
-        "expand" => out.accel.expand = attack_level(percent_value),
-        "boomerang" => out.accel.boomerang = attack_level(percent_value),
-        "drunk" => set_approached_mod(
-            &mut out.visual.drunk,
-            &mut out.visual_speed.drunk,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "dizzy" => set_approached_mod(
-            &mut out.visual.dizzy,
-            &mut out.visual_speed.dizzy,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "confusion" => set_approached_mod(
-            &mut out.visual.confusion,
-            &mut out.visual_speed.confusion,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "confusionoffset" => set_approached_mod(
-            &mut out.visual.confusion_offset,
-            &mut out.visual_speed.confusion_offset,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "flip" => set_approached_mod(
-            &mut out.visual.flip,
-            &mut out.visual_speed.flip,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "invert" => set_approached_mod(
-            &mut out.visual.invert,
-            &mut out.visual_speed.invert,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "tornado" => set_approached_mod(
-            &mut out.visual.tornado,
-            &mut out.visual_speed.tornado,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "tipsy" => set_approached_mod(
-            &mut out.visual.tipsy,
-            &mut out.visual_speed.tipsy,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "bumpy" => set_approached_mod(
-            &mut out.visual.bumpy,
-            &mut out.visual_speed.bumpy,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "bumpyoffset" => set_approached_mod(
-            &mut out.visual.bumpy_offset,
-            &mut out.visual_speed.bumpy_offset,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "bumpyperiod" => set_approached_mod(
-            &mut out.visual.bumpy_period,
-            &mut out.visual_speed.bumpy_period,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "pulseinner" => set_approached_mod(
-            &mut out.visual.pulse_inner,
-            &mut out.visual_speed.pulse_inner,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "pulseouter" => set_approached_mod(
-            &mut out.visual.pulse_outer,
-            &mut out.visual_speed.pulse_outer,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "pulseperiod" => set_approached_mod(
-            &mut out.visual.pulse_period,
-            &mut out.visual_speed.pulse_period,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "pulseoffset" => set_approached_mod(
-            &mut out.visual.pulse_offset,
-            &mut out.visual_speed.pulse_offset,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "beat" => set_approached_mod(
-            &mut out.visual.beat,
-            &mut out.visual_speed.beat,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "tiny" => set_approached_mod(
-            &mut out.visual.tiny,
-            &mut out.visual_speed.tiny,
-            attack_level(percent_value),
-            approach_speed,
-        ),
-        "mini" => {
-            let mini = percent_value.unwrap_or(100.0);
-            if mini.is_finite() {
-                out.mini_percent = Some(mini);
-                out.mini_speed = Some(approach_speed.max(0.0));
-            }
-        }
-        "hidden" => {
-            out.appearance.hidden = attack_level(percent_value);
-            out.appearance_speed.hidden = Some(approach_speed);
-        }
-        "hiddenoffset" => {
-            out.appearance.hidden_offset = attack_level(percent_value);
-            out.appearance_speed.hidden_offset = Some(approach_speed);
-        }
-        "sudden" => {
-            out.appearance.sudden = attack_level(percent_value);
-            out.appearance_speed.sudden = Some(approach_speed);
-        }
-        "suddenoffset" => {
-            out.appearance.sudden_offset = attack_level(percent_value);
-            out.appearance_speed.sudden_offset = Some(approach_speed);
-        }
-        "stealth" => {
-            out.appearance.stealth = attack_level(percent_value);
-            out.appearance_speed.stealth = Some(approach_speed);
-        }
-        "blink" => {
-            out.appearance.blink = attack_level(percent_value);
-            out.appearance_speed.blink = Some(approach_speed);
-        }
-        "rvanish" | "randomvanish" | "reversevanish" => {
-            out.appearance.random_vanish = attack_level(percent_value);
-            out.appearance_speed.random_vanish = Some(approach_speed);
-        }
-        "dark" => out.visibility.dark = attack_level(percent_value),
-        "blind" => out.visibility.blind = attack_level(percent_value),
-        "cover" => out.visibility.cover = attack_level(percent_value),
-        "overhead" => {
-            out.perspective.tilt = Some(0.0);
-            out.perspective.skew = Some(0.0);
-        }
-        "incoming" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(-level);
-            out.perspective.skew = Some(level);
-        }
-        "space" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(level);
-            out.perspective.skew = Some(level);
-        }
-        "hallway" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(-level);
-            out.perspective.skew = Some(0.0);
-        }
-        "distant" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(level);
-            out.perspective.skew = Some(0.0);
-        }
-        _ => {}
-    }
-}
-
-pub(super) fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
-    let mut out = ParsedAttackMods::default();
-    for token in mods.split(',') {
-        let (approach_speed, token) = parse_attack_approach_prefix(token);
-        if token.is_empty() {
-            continue;
-        }
-        if let Some(scroll_speed) = parse_attack_scroll_override(token) {
-            out.scroll_speed = Some(scroll_speed);
-            continue;
-        }
-        let (percent_value, token_key) = parse_attack_level_token(token);
-        let key = attack_token_key(token_key);
-        if key.is_empty() {
-            continue;
-        }
-        match key.as_str() {
-            "clearall" => {
-                out = ParsedAttackMods {
-                    clear_all: true,
-                    ..ParsedAttackMods::default()
-                };
-            }
-            _ => apply_runtime_mod(&mut out, key.as_str(), percent_value, approach_speed),
-        }
-    }
-    out
-}
-
-#[inline(always)]
-fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
-    let word = word.trim();
-    if word.eq_ignore_ascii_case("no") {
-        return Some(0.0);
-    }
-    if let Some(value) = word.strip_suffix('%') {
-        return value.trim().parse::<f32>().ok();
-    }
-    word.parse::<f32>().ok()
-}
-
-pub(super) fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
-    let mut out = ParsedAttackMods::default();
-    for token in mods.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let parts: Vec<&str> = token
-            .split_ascii_whitespace()
-            .filter(|part| !part.is_empty())
-            .collect();
-        if parts.is_empty() {
-            continue;
-        }
-        if parts.len() == 1 {
-            if let Some(scroll_speed) = parse_attack_scroll_override(parts[0]) {
-                out.scroll_speed = Some(scroll_speed);
-                continue;
-            }
-            let key = attack_token_key(parts[0]);
-            if key.is_empty() {
-                continue;
-            }
-            if key == "clearall" {
-                out = ParsedAttackMods {
-                    clear_all: true,
-                    ..ParsedAttackMods::default()
-                };
-                continue;
-            }
-            apply_runtime_mod(&mut out, key.as_str(), Some(100.0), 1.0);
-            continue;
-        }
-
-        if parts[0].starts_with('*') {
-            let approach_speed = parse_attack_approach_prefix(parts[0]).0;
-            if parts.len() == 2 {
-                if let Some(scroll_speed) = parse_attack_scroll_override(parts[1]) {
-                    out.scroll_speed = Some(scroll_speed);
-                    continue;
-                }
-                let key = attack_token_key(parts[1]);
-                if !key.is_empty() {
-                    apply_runtime_mod(&mut out, key.as_str(), Some(100.0), approach_speed);
-                }
-                continue;
-            }
-            let key = attack_token_key(parts[2]);
-            if key.is_empty() {
-                continue;
-            }
-            let amount = parse_song_lua_mod_amount(parts[1]).unwrap_or(0.0);
-            apply_runtime_mod(&mut out, key.as_str(), Some(amount), approach_speed);
-            continue;
-        }
-
-        let key = attack_token_key(parts[1]);
-        if key.is_empty() {
-            continue;
-        }
-        let amount = parse_song_lua_mod_amount(parts[0]).unwrap_or(0.0);
-        apply_runtime_mod(&mut out, key.as_str(), Some(amount), 1.0);
-    }
-    out
-}
-
-#[inline(always)]
-fn random_attack_seed(base_seed: u64, player: usize, attacks_len: usize) -> u64 {
-    base_seed
-        ^ (0xC2B2_AE3D_27D4_EB4F_u64.wrapping_mul(player as u64 + 1))
-        ^ (attacks_len as u64).wrapping_mul(0x9E37_79B9_u64)
-}
-
-fn build_random_attack_windows(
-    song_length_seconds: f32,
-    player: usize,
-    base_seed: u64,
-) -> Vec<ChartAttackWindow> {
-    if !song_length_seconds.is_finite() || song_length_seconds <= 0.0 {
-        return Vec::new();
-    }
-    let period = (RANDOM_ATTACK_RUN_TIME_SECONDS - RANDOM_ATTACK_OVERLAP_SECONDS).max(0.0);
-    if period <= f32::EPSILON || RANDOM_ATTACK_MOD_POOL.is_empty() {
-        return Vec::new();
-    }
-    let first_start =
-        (period + RANDOM_ATTACK_START_SECONDS_INIT).max(RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS);
-    if first_start >= song_length_seconds {
-        return Vec::new();
-    }
-
-    let max_windows = ((song_length_seconds - first_start) / period)
-        .floor()
-        .max(0.0) as usize
-        + 1;
-    let mut out = Vec::with_capacity(max_windows);
-    let mut rng = TurnRng::new(random_attack_seed(base_seed, player, max_windows));
-    let mut start = first_start;
-    while start < song_length_seconds {
-        let mod_idx = rng.gen_range(RANDOM_ATTACK_MOD_POOL.len());
-        out.push(ChartAttackWindow {
-            start_second: start,
-            len_seconds: RANDOM_ATTACK_RUN_TIME_SECONDS,
-            mods: RANDOM_ATTACK_MOD_POOL[mod_idx].to_string(),
-        });
-        start += period;
-    }
-    out
-}
-
 fn build_attack_windows_for_player(
     chart_attacks: Option<&str>,
     attack_mode: profile_data::AttackMode,
@@ -908,21 +196,6 @@ fn build_attack_windows_for_player(
             build_random_attack_windows(song_length_seconds, player, base_seed)
         }
     }
-}
-
-fn select_attack_mods(
-    attacks: &[ChartAttackWindow],
-    _attack_mode: profile_data::AttackMode,
-    _player: usize,
-    _base_seed: u64,
-) -> Vec<ParsedAttackMods> {
-    if attacks.is_empty() {
-        return Vec::new();
-    }
-    attacks
-        .iter()
-        .map(|attack| parse_attack_mods(&attack.mods))
-        .collect()
 }
 
 pub(super) fn build_attack_mask_windows_for_player(
@@ -942,48 +215,7 @@ pub(super) fn build_attack_mask_windows_for_player(
     if attacks.is_empty() {
         return Vec::new();
     }
-    let selected_mods = select_attack_mods(&attacks, attack_mode, player, base_seed);
-    if selected_mods.is_empty() {
-        return Vec::new();
-    }
-    let mut windows = Vec::with_capacity(attacks.len());
-    for (attack, mods) in attacks.iter().zip(selected_mods.iter().copied()) {
-        if !mods.has_runtime_mask_effect() && !mods.has_chart_effect() {
-            continue;
-        }
-        let start_second = attack.start_second;
-        let end_second = start_second + attack.len_seconds.max(0.0);
-        if !start_second.is_finite() || !end_second.is_finite() || end_second <= start_second {
-            continue;
-        }
-        windows.push(AttackMaskWindow {
-            start_second,
-            end_second,
-            sustain_end_second: end_second,
-            persist_after_end: false,
-            clear_all: mods.clear_all,
-            chart: ChartAttackEffects {
-                insert_mask: mods.insert_mask,
-                remove_mask: mods.remove_mask,
-                holds_mask: mods.holds_mask,
-                turn_bits: turn_option_bits(mods.turn_option),
-            },
-            accel: mods.accel,
-            visual: mods.visual,
-            visual_speed: mods.visual_speed,
-            appearance: mods.appearance,
-            appearance_speed: mods.appearance_speed,
-            visibility: mods.visibility,
-            scroll: mods.scroll,
-            scroll_approach_speed: mods.scroll_approach_speed,
-            perspective: mods.perspective,
-            scroll_speed: mods.scroll_speed,
-            mini_percent: mods.mini_percent,
-            mini_mode: MiniAttackMode::Absolute,
-            mini_speed: mods.mini_speed,
-        });
-    }
-    windows
+    build_mask_windows_from_attacks(&attacks)
 }
 
 #[inline(always)]
@@ -3503,11 +2735,10 @@ fn apply_attack_turn_mod(
     notes: &mut [Note],
     col_offset: usize,
     cols: usize,
-    turn_option: profile_data::TurnOption,
+    turn_option: GameplayTurnOption,
     seed: u64,
     player: usize,
 ) {
-    let turn_option = gameplay_turn_option_from_profile(turn_option);
     if notes.is_empty() || turn_option == GameplayTurnOption::None {
         return;
     }
@@ -3621,16 +2852,10 @@ fn apply_chart_attacks_for_player(
     if attacks.is_empty() {
         return;
     }
-    let selected_mods = select_attack_mods(&attacks, attack_mode, player, base_seed);
-    if selected_mods.is_empty() {
-        if attack_mode == profile_data::AttackMode::Random {
-            debug!(
-                "Player {} selected RandomAttacks, but no random attack windows were generated.",
-                player + 1,
-            );
-        }
-        return;
-    }
+    let selected_mods: Vec<_> = attacks
+        .iter()
+        .map(|attack| parse_attack_mods(&attack.mods))
+        .collect();
     for (i, (attack, mods)) in attacks
         .iter()
         .zip(selected_mods.iter().copied())
@@ -3744,89 +2969,8 @@ pub(super) fn apply_chart_attacks_transforms(
 
 #[inline(always)]
 pub(super) fn base_appearance_effects(profile: &profile_data::Profile) -> AppearanceEffects {
-    AppearanceEffects::from_mask(profile.appearance_effects_active_mask.bits())
+    AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits())
 }
-
-#[inline(always)]
-fn apply_appearance_target(
-    target: &mut AppearanceEffects,
-    speed: &mut AppearanceEffects,
-    overrides: AppearanceOverrides,
-    override_speeds: AppearanceOverrides,
-) {
-    if let Some(value) = overrides.hidden {
-        target.hidden = value;
-        speed.hidden = override_speeds.hidden.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.hidden_offset {
-        target.hidden_offset = value;
-        speed.hidden_offset = override_speeds.hidden_offset.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.sudden {
-        target.sudden = value;
-        speed.sudden = override_speeds.sudden.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.sudden_offset {
-        target.sudden_offset = value;
-        speed.sudden_offset = override_speeds.sudden_offset.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.stealth {
-        target.stealth = value;
-        speed.stealth = override_speeds.stealth.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.blink {
-        target.blink = value;
-        speed.blink = override_speeds.blink.unwrap_or(1.0).max(0.0);
-    }
-    if let Some(value) = overrides.random_vanish {
-        target.random_vanish = value;
-        speed.random_vanish = override_speeds.random_vanish.unwrap_or(1.0).max(0.0);
-    }
-}
-
-#[inline(always)]
-fn approach_appearance_effects(
-    current: &mut AppearanceEffects,
-    target: AppearanceEffects,
-    speed: AppearanceEffects,
-    delta_time: f32,
-) {
-    let delta_time = delta_time.max(0.0);
-    super::approach_f32(
-        &mut current.hidden,
-        target.hidden,
-        delta_time * speed.hidden,
-    );
-    super::approach_f32(
-        &mut current.hidden_offset,
-        target.hidden_offset,
-        delta_time * speed.hidden_offset,
-    );
-    super::approach_f32(
-        &mut current.sudden,
-        target.sudden,
-        delta_time * speed.sudden,
-    );
-    super::approach_f32(
-        &mut current.sudden_offset,
-        target.sudden_offset,
-        delta_time * speed.sudden_offset,
-    );
-    super::approach_f32(
-        &mut current.stealth,
-        target.stealth,
-        delta_time * speed.stealth,
-    );
-    super::approach_f32(&mut current.blink, target.blink, delta_time * speed.blink);
-    super::approach_f32(
-        &mut current.random_vanish,
-        target.random_vanish,
-        delta_time * speed.random_vanish,
-    );
-}
-
-const OUTRO_ATTACK_CLEAR_RATE: f32 = 1.0;
-const OUTRO_ATTACK_CLEAR_EPSILON: f32 = 0.0001;
 
 #[inline(always)]
 pub(super) fn begin_outro_attack_clear(state: &mut State) {
@@ -3840,304 +2984,6 @@ pub(super) fn begin_outro_attack_clear(state: &mut State) {
 }
 
 #[inline(always)]
-fn approach_optional_visual(value: &mut Option<f32>, target: f32, step: f32) {
-    let Some(current) = value.as_mut() else {
-        return;
-    };
-    super::approach_f32(current, target, step);
-    if (*current - target).abs() <= OUTRO_ATTACK_CLEAR_EPSILON {
-        *value = None;
-    }
-}
-
-#[inline(always)]
-fn approach_optional_visual_cols(
-    values: &mut [Option<f32>; MAX_COLS],
-    targets: [f32; MAX_COLS],
-    step: f32,
-) {
-    for (value, target) in values.iter_mut().zip(targets) {
-        approach_optional_visual(value, target, step);
-    }
-}
-
-fn approach_visual_overrides_to_base(
-    visual: &mut VisualOverrides,
-    base: VisualEffects,
-    delta_time: f32,
-) {
-    let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
-    approach_optional_visual(&mut visual.drunk, base.drunk, step);
-    approach_optional_visual(&mut visual.dizzy, base.dizzy, step);
-    approach_optional_visual(&mut visual.confusion, base.confusion, step);
-    approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
-    approach_optional_visual_cols(
-        &mut visual.confusion_offset_cols,
-        base.confusion_offset_cols,
-        step,
-    );
-    approach_optional_visual(&mut visual.flip, base.flip, step);
-    approach_optional_visual(&mut visual.invert, base.invert, step);
-    approach_optional_visual(&mut visual.tornado, base.tornado, step);
-    approach_optional_visual(&mut visual.tipsy, base.tipsy, step);
-    approach_optional_visual(&mut visual.tiny, base.tiny, step);
-    approach_optional_visual(&mut visual.bumpy, base.bumpy, step);
-    approach_optional_visual(&mut visual.bumpy_offset, base.bumpy_offset, step);
-    approach_optional_visual(&mut visual.bumpy_period, base.bumpy_period, step);
-    approach_optional_visual_cols(&mut visual.bumpy_cols, base.bumpy_cols, step);
-    approach_optional_visual_cols(&mut visual.tiny_cols, base.tiny_cols, step);
-    approach_optional_visual_cols(&mut visual.move_x_cols, base.move_x_cols, step);
-    approach_optional_visual_cols(&mut visual.move_y_cols, base.move_y_cols, step);
-    approach_optional_visual(&mut visual.pulse_inner, base.pulse_inner, step);
-    approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
-    approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
-    approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
-    approach_optional_visual(&mut visual.beat, base.beat, step);
-}
-
-#[inline(always)]
-fn approach_attack_cols(
-    current: &mut [Option<f32>; MAX_COLS],
-    target: [Option<f32>; MAX_COLS],
-    base: [f32; MAX_COLS],
-    speed: [Option<f32>; MAX_COLS],
-    delta_time: f32,
-) {
-    for (((current, target), base), speed) in current.iter_mut().zip(target).zip(base).zip(speed) {
-        approach_attack_value(current, target, base, speed, delta_time, 1.0);
-    }
-}
-
-fn approach_visual_overrides_to_target(
-    current: &mut VisualOverrides,
-    target: VisualOverrides,
-    speed: VisualOverrides,
-    base: VisualEffects,
-    delta_time: f32,
-) {
-    approach_attack_value(
-        &mut current.drunk,
-        target.drunk,
-        base.drunk,
-        speed.drunk,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.dizzy,
-        target.dizzy,
-        base.dizzy,
-        speed.dizzy,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.confusion,
-        target.confusion,
-        base.confusion,
-        speed.confusion,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.confusion_offset,
-        target.confusion_offset,
-        base.confusion_offset,
-        speed.confusion_offset,
-        delta_time,
-        1.0,
-    );
-    approach_attack_cols(
-        &mut current.confusion_offset_cols,
-        target.confusion_offset_cols,
-        base.confusion_offset_cols,
-        speed.confusion_offset_cols,
-        delta_time,
-    );
-    approach_attack_value(
-        &mut current.flip,
-        target.flip,
-        base.flip,
-        speed.flip,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.invert,
-        target.invert,
-        base.invert,
-        speed.invert,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.tornado,
-        target.tornado,
-        base.tornado,
-        speed.tornado,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.tipsy,
-        target.tipsy,
-        base.tipsy,
-        speed.tipsy,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.tiny,
-        target.tiny,
-        base.tiny,
-        speed.tiny,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.bumpy,
-        target.bumpy,
-        base.bumpy,
-        speed.bumpy,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.bumpy_offset,
-        target.bumpy_offset,
-        base.bumpy_offset,
-        speed.bumpy_offset,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.bumpy_period,
-        target.bumpy_period,
-        base.bumpy_period,
-        speed.bumpy_period,
-        delta_time,
-        1.0,
-    );
-    approach_attack_cols(
-        &mut current.bumpy_cols,
-        target.bumpy_cols,
-        base.bumpy_cols,
-        speed.bumpy_cols,
-        delta_time,
-    );
-    approach_attack_cols(
-        &mut current.tiny_cols,
-        target.tiny_cols,
-        base.tiny_cols,
-        speed.tiny_cols,
-        delta_time,
-    );
-    approach_attack_cols(
-        &mut current.move_x_cols,
-        target.move_x_cols,
-        base.move_x_cols,
-        speed.move_x_cols,
-        delta_time,
-    );
-    approach_attack_cols(
-        &mut current.move_y_cols,
-        target.move_y_cols,
-        base.move_y_cols,
-        speed.move_y_cols,
-        delta_time,
-    );
-    approach_attack_value(
-        &mut current.pulse_inner,
-        target.pulse_inner,
-        base.pulse_inner,
-        speed.pulse_inner,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.pulse_outer,
-        target.pulse_outer,
-        base.pulse_outer,
-        speed.pulse_outer,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.pulse_period,
-        target.pulse_period,
-        base.pulse_period,
-        speed.pulse_period,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.pulse_offset,
-        target.pulse_offset,
-        base.pulse_offset,
-        speed.pulse_offset,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.beat,
-        target.beat,
-        base.beat,
-        speed.beat,
-        delta_time,
-        1.0,
-    );
-}
-
-fn approach_scroll_overrides_to_target(
-    current: &mut ScrollOverrides,
-    target: ScrollOverrides,
-    speed: ScrollOverrides,
-    base: ScrollEffects,
-    delta_time: f32,
-) {
-    approach_attack_value(
-        &mut current.reverse,
-        target.reverse,
-        base.reverse,
-        speed.reverse,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.split,
-        target.split,
-        base.split,
-        speed.split,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.alternate,
-        target.alternate,
-        base.alternate,
-        speed.alternate,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.cross,
-        target.cross,
-        base.cross,
-        speed.cross,
-        delta_time,
-        1.0,
-    );
-    approach_attack_value(
-        &mut current.centered,
-        target.centered,
-        base.centered,
-        speed.centered,
-        delta_time,
-        1.0,
-    );
-}
-
-#[inline(always)]
 fn attack_mini_base_percent(state: &State, player: usize, clear_all: bool) -> f32 {
     if clear_all {
         0.0
@@ -4148,7 +2994,7 @@ fn attack_mini_base_percent(state: &State, player: usize, clear_all: bool) -> f3
 
 #[inline(always)]
 fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
-    VisualEffects::from_mask(profile.visual_effects_active_mask.bits())
+    VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits())
 }
 
 #[inline(always)]
@@ -4227,100 +3073,6 @@ fn store_song_lua_player_transforms(
     state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
         .filter(|v| v.is_finite())
         .unwrap_or(0.0);
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct AttackActiveTargets {
-    clear_all: bool,
-    visual: VisualOverrides,
-    scroll: ScrollOverrides,
-    mini_percent: bool,
-}
-
-#[inline(always)]
-fn mark_visual_target(targets: &mut Option<f32>, value: Option<f32>) {
-    if value.is_some() {
-        *targets = Some(0.0);
-    }
-}
-
-fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
-    mark_visual_target(&mut targets.drunk, visual.drunk);
-    mark_visual_target(&mut targets.dizzy, visual.dizzy);
-    mark_visual_target(&mut targets.confusion, visual.confusion);
-    mark_visual_target(&mut targets.confusion_offset, visual.confusion_offset);
-    for (target, value) in targets
-        .confusion_offset_cols
-        .iter_mut()
-        .zip(visual.confusion_offset_cols)
-    {
-        mark_visual_target(target, value);
-    }
-    mark_visual_target(&mut targets.flip, visual.flip);
-    mark_visual_target(&mut targets.invert, visual.invert);
-    mark_visual_target(&mut targets.tornado, visual.tornado);
-    mark_visual_target(&mut targets.tipsy, visual.tipsy);
-    mark_visual_target(&mut targets.tiny, visual.tiny);
-    mark_visual_target(&mut targets.bumpy, visual.bumpy);
-    mark_visual_target(&mut targets.bumpy_offset, visual.bumpy_offset);
-    mark_visual_target(&mut targets.bumpy_period, visual.bumpy_period);
-    for (target, value) in targets.bumpy_cols.iter_mut().zip(visual.bumpy_cols) {
-        mark_visual_target(target, value);
-    }
-    for (target, value) in targets.tiny_cols.iter_mut().zip(visual.tiny_cols) {
-        mark_visual_target(target, value);
-    }
-    for (target, value) in targets.move_x_cols.iter_mut().zip(visual.move_x_cols) {
-        mark_visual_target(target, value);
-    }
-    for (target, value) in targets.move_y_cols.iter_mut().zip(visual.move_y_cols) {
-        mark_visual_target(target, value);
-    }
-    mark_visual_target(&mut targets.pulse_inner, visual.pulse_inner);
-    mark_visual_target(&mut targets.pulse_outer, visual.pulse_outer);
-    mark_visual_target(&mut targets.pulse_period, visual.pulse_period);
-    mark_visual_target(&mut targets.pulse_offset, visual.pulse_offset);
-    mark_visual_target(&mut targets.beat, visual.beat);
-}
-
-fn mark_scroll_targets(targets: &mut ScrollOverrides, scroll: ScrollOverrides) {
-    mark_visual_target(&mut targets.reverse, scroll.reverse);
-    mark_visual_target(&mut targets.split, scroll.split);
-    mark_visual_target(&mut targets.alternate, scroll.alternate);
-    mark_visual_target(&mut targets.cross, scroll.cross);
-    mark_visual_target(&mut targets.centered, scroll.centered);
-}
-
-fn collect_active_attack_targets(windows: &[AttackMaskWindow], now: f32) -> AttackActiveTargets {
-    let mut targets = AttackActiveTargets::default();
-    for window in windows {
-        if now < window.start_second || now >= window.end_second {
-            continue;
-        }
-        if window.clear_all {
-            targets.clear_all = true;
-        }
-        mark_visual_targets(&mut targets.visual, window.visual);
-        mark_scroll_targets(&mut targets.scroll, window.scroll);
-        if window.mini_percent.is_some() {
-            targets.mini_percent = true;
-        }
-    }
-    targets
-}
-
-#[inline(always)]
-fn persisted_target_allowed(
-    persisted: bool,
-    active_clear_all: bool,
-    active_target: Option<f32>,
-) -> bool {
-    !persisted || (!active_clear_all && active_target.is_none())
-}
-
-#[inline(always)]
-fn persisted_mini_allowed(persisted: bool, active_targets: AttackActiveTargets) -> bool {
-    !persisted || (!active_targets.clear_all && !active_targets.mini_percent)
 }
 
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
@@ -4794,7 +3546,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let base_scroll = if clear_all {
             ScrollEffects::default()
         } else {
-            ScrollEffects::from_option(state.player_profiles[player].scroll_option)
+            scroll_effects_from_option(state.player_profiles[player].scroll_option)
         };
         let mut scroll_current = state.active_attack_scroll[player];
         approach_scroll_overrides_to_target(
@@ -4901,7 +3653,7 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
     let base = if player_attack_base_cleared(state, player_idx) {
         AccelEffects::default()
     } else {
-        AccelEffects::from_mask(
+        AccelEffects::from_mask_bits(
             state.player_profiles[player_idx]
                 .accel_effects_active_mask
                 .bits(),
@@ -4925,7 +3677,7 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
     let base = if player_attack_base_cleared(state, player_idx) {
         VisualEffects::default()
     } else {
-        VisualEffects::from_mask(
+        VisualEffects::from_mask_bits(
             state.player_profiles[player_idx]
                 .visual_effects_active_mask
                 .bits(),
@@ -5027,7 +3779,7 @@ pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> 
     let base = if player_attack_base_cleared(state, player_idx) {
         ScrollEffects::default()
     } else {
-        ScrollEffects::from_option(state.player_profiles[player_idx].scroll_option)
+        scroll_effects_from_option(state.player_profiles[player_idx].scroll_option)
     };
     let attack = state.active_attack_scroll[player_idx];
     ScrollEffects {
@@ -5050,7 +3802,7 @@ pub fn effective_perspective_effects_for_player(
     let base = if player_attack_base_cleared(state, player_idx) {
         PerspectiveEffects::default()
     } else {
-        PerspectiveEffects::from_perspective(state.player_profiles[player_idx].perspective)
+        perspective_effects_from_profile(state.player_profiles[player_idx].perspective)
     };
     let attack = state.active_attack_perspective[player_idx];
     PerspectiveEffects {
@@ -5061,7 +3813,7 @@ pub fn effective_perspective_effects_for_player(
 
 #[inline(always)]
 pub(super) fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16 {
-    effective_visual_effects_for_player(state, player_idx).to_mask()
+    effective_visual_effects_for_player(state, player_idx).to_mask_bits()
 }
 
 #[inline(always)]

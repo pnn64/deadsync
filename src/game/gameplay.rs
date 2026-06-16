@@ -7,36 +7,39 @@ use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
+pub(crate) use deadsync_gameplay::VISUAL_MASK_BIT_BIG;
 pub(crate) use deadsync_gameplay::song_lua_ease_factor;
 #[cfg(test)]
 use deadsync_gameplay::step_stats_notefield_width;
 pub use deadsync_gameplay::{
-    ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, ActiveColumnFlash, ActiveComboMilestone, ActiveHold,
-    ActiveMineExplosion, ActiveTapExplosion, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION,
-    COLUMN_FLASH_MISS_DURATION, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ColumnCueColumn, ColumnScrollFlags,
-    ColumnTapJudgment, ComboMilestoneKind, DRAW_DISTANCE_AFTER_TARGETS,
-    DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx, ErrorBarText, ErrorBarTick, ExitTransition,
-    ExitTransitionKind, FantasticFeedbackOptions, FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN,
-    GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
-    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplayStreamClockSnapshot, GameplayTurnOption, GameplayTween,
-    GameplayViewport, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
-    HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS,
-    HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, HealthState, HeldMissRenderInfo,
-    HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG,
-    INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
-    INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, JudgmentRenderInfo,
-    LeadInTiming, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN,
-    MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, OffsetIndicatorText, PlayerRowScanState,
-    RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
-    REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS,
-    REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS,
-    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge, ReplayOffsetSnapshot, RowEntry,
-    RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
-    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TurnRng, active_hold_counts_as_pressed,
+    ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
+    ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects,
+    AppearanceOverrides, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
+    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ChartAttackEffects,
+    ColumnCue, ColumnCueColumn, ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind,
+    DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx, ErrorBarText,
+    ErrorBarTick, ExitTransition, ExitTransitionKind, FantasticFeedbackOptions,
+    FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN, GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction,
+    GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayFailType,
+    GameplayMiniIndicatorData, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
+    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayStreamClockSnapshot,
+    GameplayTurnOption, GameplayTween, GameplayViewport, HELD_MISS_TOTAL_DURATION,
+    HOLD_JUDGMENT_TOTAL_DURATION, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
+    HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, HealthState,
+    HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE,
+    INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES,
+    INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE,
+    JudgmentRenderInfo, LeadInTiming, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN,
+    MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, OffsetIndicatorText, PerspectiveEffects,
+    PerspectiveOverrides, PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
+    REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
+    REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
+    REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
+    ReplayOffsetSnapshot, RowEntry, RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
+    ScrollEffects, ScrollOverrides, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
+    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TurnRng, VisibilityEffects,
+    VisibilityOverrides, VisualEffects, VisualOverrides, active_hold_counts_as_pressed,
     active_hold_is_engaged, advance_judged_row_cursor, apply_echo_insert, apply_hyper_shuffle,
     apply_insert_intelligent_taps, apply_mines_insert, apply_stomp_insert,
     apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
@@ -264,406 +267,6 @@ const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
 const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
 const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
 const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
-const ACCEL_MASK_BIT_BOOST: u8 = 1u8 << 0;
-const ACCEL_MASK_BIT_BRAKE: u8 = 1u8 << 1;
-const ACCEL_MASK_BIT_WAVE: u8 = 1u8 << 2;
-const ACCEL_MASK_BIT_EXPAND: u8 = 1u8 << 3;
-const ACCEL_MASK_BIT_BOOMERANG: u8 = 1u8 << 4;
-const VISUAL_MASK_BIT_DRUNK: u16 = 1u16 << 0;
-const VISUAL_MASK_BIT_DIZZY: u16 = 1u16 << 1;
-const VISUAL_MASK_BIT_CONFUSION: u16 = 1u16 << 2;
-const VISUAL_MASK_BIT_BIG: u16 = 1u16 << 3;
-const VISUAL_MASK_BIT_FLIP: u16 = 1u16 << 4;
-const VISUAL_MASK_BIT_INVERT: u16 = 1u16 << 5;
-const VISUAL_MASK_BIT_TORNADO: u16 = 1u16 << 6;
-const VISUAL_MASK_BIT_TIPSY: u16 = 1u16 << 7;
-const VISUAL_MASK_BIT_BUMPY: u16 = 1u16 << 8;
-const VISUAL_MASK_BIT_BEAT: u16 = 1u16 << 9;
-const APPEARANCE_MASK_BIT_HIDDEN: u8 = 1u8 << 0;
-const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
-const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
-const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
-const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AccelEffects {
-    pub boost: f32,
-    pub brake: f32,
-    pub wave: f32,
-    pub expand: f32,
-    pub boomerang: f32,
-}
-
-impl AccelEffects {
-    #[inline(always)]
-    fn from_mask(mask: u8) -> Self {
-        Self {
-            boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
-            brake: f32::from((mask & ACCEL_MASK_BIT_BRAKE) != 0),
-            wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
-            expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
-            boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct VisualEffects {
-    pub drunk: f32,
-    pub dizzy: f32,
-    pub confusion: f32,
-    pub confusion_offset: f32,
-    pub confusion_offset_cols: [f32; MAX_COLS],
-    pub big: f32,
-    pub flip: f32,
-    pub invert: f32,
-    pub tornado: f32,
-    pub tipsy: f32,
-    pub tiny: f32,
-    pub bumpy: f32,
-    pub bumpy_offset: f32,
-    pub bumpy_period: f32,
-    pub bumpy_cols: [f32; MAX_COLS],
-    pub tiny_cols: [f32; MAX_COLS],
-    pub move_x_cols: [f32; MAX_COLS],
-    pub move_y_cols: [f32; MAX_COLS],
-    pub pulse_inner: f32,
-    pub pulse_outer: f32,
-    pub pulse_period: f32,
-    pub pulse_offset: f32,
-    pub beat: f32,
-}
-
-impl VisualEffects {
-    #[inline(always)]
-    fn from_mask(mask: u16) -> Self {
-        Self {
-            drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
-            dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
-            confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
-            confusion_offset: 0.0,
-            confusion_offset_cols: [0.0; MAX_COLS],
-            big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
-            flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
-            invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
-            tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
-            tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
-            tiny: 0.0,
-            bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
-            bumpy_offset: 0.0,
-            bumpy_period: 0.0,
-            bumpy_cols: [0.0; MAX_COLS],
-            tiny_cols: [0.0; MAX_COLS],
-            move_x_cols: [0.0; MAX_COLS],
-            move_y_cols: [0.0; MAX_COLS],
-            pulse_inner: 0.0,
-            pulse_outer: 0.0,
-            pulse_period: 0.0,
-            pulse_offset: 0.0,
-            beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
-        }
-    }
-
-    #[inline(always)]
-    fn to_mask(self) -> u16 {
-        let mut mask = 0;
-        if self.drunk > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_DRUNK;
-        }
-        if self.dizzy > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_DIZZY;
-        }
-        if self.confusion > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_CONFUSION;
-        }
-        if self.big > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_BIG;
-        }
-        if self.flip > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_FLIP;
-        }
-        if self.invert > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_INVERT;
-        }
-        if self.tornado > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_TORNADO;
-        }
-        if self.tipsy > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_TIPSY;
-        }
-        if self.bumpy > f32::EPSILON || self.bumpy_cols.iter().any(|v| *v > f32::EPSILON) {
-            mask |= VISUAL_MASK_BIT_BUMPY;
-        }
-        if self.beat > f32::EPSILON {
-            mask |= VISUAL_MASK_BIT_BEAT;
-        }
-        mask
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AppearanceEffects {
-    pub hidden: f32,
-    pub hidden_offset: f32,
-    pub sudden: f32,
-    pub sudden_offset: f32,
-    pub stealth: f32,
-    pub blink: f32,
-    pub random_vanish: f32,
-}
-
-impl AppearanceEffects {
-    #[inline(always)]
-    fn from_mask(mask: u8) -> Self {
-        Self {
-            hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
-            hidden_offset: 0.0,
-            sudden: f32::from((mask & APPEARANCE_MASK_BIT_SUDDEN) != 0),
-            sudden_offset: 0.0,
-            stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
-            blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
-            random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
-        }
-    }
-
-    #[inline(always)]
-    fn approach_speeds() -> Self {
-        Self {
-            hidden: 1.0,
-            hidden_offset: 1.0,
-            sudden: 1.0,
-            sudden_offset: 1.0,
-            stealth: 1.0,
-            blink: 1.0,
-            random_vanish: 1.0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct VisibilityEffects {
-    pub dark: f32,
-    pub blind: f32,
-    pub cover: f32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ChartAttackEffects {
-    pub insert_mask: u8,
-    pub remove_mask: u8,
-    pub holds_mask: u8,
-    pub turn_bits: u16,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ScrollEffects {
-    pub reverse: f32,
-    pub split: f32,
-    pub alternate: f32,
-    pub cross: f32,
-    pub centered: f32,
-}
-
-impl ScrollEffects {
-    #[inline(always)]
-    pub(crate) fn from_option(scroll: profile_data::ScrollOption) -> Self {
-        Self {
-            reverse: f32::from(scroll.contains(profile_data::ScrollOption::Reverse)),
-            split: f32::from(scroll.contains(profile_data::ScrollOption::Split)),
-            alternate: f32::from(scroll.contains(profile_data::ScrollOption::Alternate)),
-            cross: f32::from(scroll.contains(profile_data::ScrollOption::Cross)),
-            centered: f32::from(scroll.contains(profile_data::ScrollOption::Centered)),
-        }
-    }
-
-    #[inline(always)]
-    pub fn reverse_percent_for_column(self, local_col: usize, num_cols: usize) -> f32 {
-        scroll_reverse_percent_for_column(
-            ScrollReverseOptions {
-                reverse: self.reverse,
-                split: self.split,
-                alternate: self.alternate,
-                cross: self.cross,
-            },
-            local_col,
-            num_cols,
-        )
-    }
-
-    #[inline(always)]
-    pub fn reverse_scale_for_column(self, local_col: usize, num_cols: usize) -> f32 {
-        scroll_reverse_scale_for_column(
-            ScrollReverseOptions {
-                reverse: self.reverse,
-                split: self.split,
-                alternate: self.alternate,
-                cross: self.cross,
-            },
-            local_col,
-            num_cols,
-        )
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PerspectiveEffects {
-    pub tilt: f32,
-    pub skew: f32,
-}
-
-impl PerspectiveEffects {
-    #[inline(always)]
-    fn from_perspective(perspective: profile_data::Perspective) -> Self {
-        let (tilt, skew) = perspective.tilt_skew();
-        Self { tilt, skew }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct AccelOverrides {
-    boost: Option<f32>,
-    brake: Option<f32>,
-    wave: Option<f32>,
-    expand: Option<f32>,
-    boomerang: Option<f32>,
-}
-
-impl AccelOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.boost.is_some()
-            || self.brake.is_some()
-            || self.wave.is_some()
-            || self.expand.is_some()
-            || self.boomerang.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct VisualOverrides {
-    drunk: Option<f32>,
-    dizzy: Option<f32>,
-    confusion: Option<f32>,
-    confusion_offset: Option<f32>,
-    confusion_offset_cols: [Option<f32>; MAX_COLS],
-    flip: Option<f32>,
-    invert: Option<f32>,
-    tornado: Option<f32>,
-    tipsy: Option<f32>,
-    tiny: Option<f32>,
-    bumpy: Option<f32>,
-    bumpy_offset: Option<f32>,
-    bumpy_period: Option<f32>,
-    bumpy_cols: [Option<f32>; MAX_COLS],
-    tiny_cols: [Option<f32>; MAX_COLS],
-    move_x_cols: [Option<f32>; MAX_COLS],
-    move_y_cols: [Option<f32>; MAX_COLS],
-    pulse_inner: Option<f32>,
-    pulse_outer: Option<f32>,
-    pulse_period: Option<f32>,
-    pulse_offset: Option<f32>,
-    beat: Option<f32>,
-}
-
-impl VisualOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.drunk.is_some()
-            || self.dizzy.is_some()
-            || self.confusion.is_some()
-            || self.confusion_offset.is_some()
-            || self.confusion_offset_cols.iter().any(Option::is_some)
-            || self.flip.is_some()
-            || self.invert.is_some()
-            || self.tornado.is_some()
-            || self.tipsy.is_some()
-            || self.tiny.is_some()
-            || self.bumpy.is_some()
-            || self.bumpy_offset.is_some()
-            || self.bumpy_period.is_some()
-            || self.bumpy_cols.iter().any(Option::is_some)
-            || self.tiny_cols.iter().any(Option::is_some)
-            || self.move_x_cols.iter().any(Option::is_some)
-            || self.move_y_cols.iter().any(Option::is_some)
-            || self.pulse_inner.is_some()
-            || self.pulse_outer.is_some()
-            || self.pulse_period.is_some()
-            || self.pulse_offset.is_some()
-            || self.beat.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct AppearanceOverrides {
-    hidden: Option<f32>,
-    hidden_offset: Option<f32>,
-    sudden: Option<f32>,
-    sudden_offset: Option<f32>,
-    stealth: Option<f32>,
-    blink: Option<f32>,
-    random_vanish: Option<f32>,
-}
-
-impl AppearanceOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.hidden.is_some()
-            || self.hidden_offset.is_some()
-            || self.sudden.is_some()
-            || self.sudden_offset.is_some()
-            || self.stealth.is_some()
-            || self.blink.is_some()
-            || self.random_vanish.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct VisibilityOverrides {
-    dark: Option<f32>,
-    blind: Option<f32>,
-    cover: Option<f32>,
-}
-
-impl VisibilityOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ScrollOverrides {
-    reverse: Option<f32>,
-    split: Option<f32>,
-    alternate: Option<f32>,
-    cross: Option<f32>,
-    centered: Option<f32>,
-}
-
-impl ScrollOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.reverse.is_some()
-            || self.split.is_some()
-            || self.alternate.is_some()
-            || self.cross.is_some()
-            || self.centered.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct PerspectiveOverrides {
-    tilt: Option<f32>,
-    skew: Option<f32>,
-}
-
-impl PerspectiveOverrides {
-    #[inline(always)]
-    fn any(self) -> bool {
-        self.tilt.is_some() || self.skew.is_some()
-    }
-}
-
 const M_MOD_HIGH_CAP: f32 = 600.0;
 pub const SCOREBOX_NUM_ENTRIES: usize = 5;
 
@@ -673,46 +276,28 @@ const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
-const RANDOM_ATTACK_RUN_TIME_SECONDS: f32 = 6.0;
-const RANDOM_ATTACK_OVERLAP_SECONDS: f32 = 0.5;
-const RANDOM_ATTACK_START_SECONDS_INIT: f32 = -1.0;
-const RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS: f32 = 1.0;
 const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
-// Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
-const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
-    "0.5x",
-    "1x",
-    "1.5x",
-    "2x",
-    "boost",
-    "brake",
-    "wave",
-    "expand",
-    "drunk",
-    "dizzy",
-    "confusion",
-    "65% mini",
-    "20% flip",
-    "30% invert",
-    "30% tornado",
-    "tipsy",
-    "beat",
-    "bumpy",
-    "50% hidden",
-    "50% sudden",
-    "30% blink",
-    "30% reverse",
-    "reverse",
-    "centered",
-    "hallway",
-    "space",
-    "incoming",
-    "overhead",
-    "distant",
-];
+
+#[inline(always)]
+pub(crate) fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
+    use profile_data::ScrollOption;
+    ScrollEffects::from_flags(
+        scroll.contains(ScrollOption::Reverse),
+        scroll.contains(ScrollOption::Split),
+        scroll.contains(ScrollOption::Alternate),
+        scroll.contains(ScrollOption::Cross),
+        scroll.contains(ScrollOption::Centered),
+    )
+}
+
+#[inline(always)]
+fn perspective_effects_from_profile(perspective: profile_data::Perspective) -> PerspectiveEffects {
+    let (tilt, skew) = perspective.tilt_skew();
+    PerspectiveEffects { tilt, skew }
+}
 
 #[inline(always)]
 fn effective_mini_value_with_visual_mask(
@@ -5934,9 +5519,9 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
         FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        GameplayAudioCommand, GameplaySessionCommand, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo,
-        HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
-        OFFSET_ADJUST_STEP_SECONDS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        GameplayAudioCommand, GameplaySessionCommand, GameplayTurnOption, HELD_MISS_TOTAL_DURATION,
+        HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS,
+        MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
         ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode,
         active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
         advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
@@ -9830,12 +9415,13 @@ return Def.ActorFrame{}
     #[test]
     fn song_lua_mod_parser_accepts_star_prefix_and_aliases() {
         let mods = parse_song_lua_runtime_mods(
-            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,*9999 50 incoming,*9999 15 bumpy3,*9999 250 tiny2,*9999 -125 bumpyperiod,*9999 100 pulseouter",
+            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,*9999 25 mini,*9999 50 incoming,*9999 15 bumpy3,*9999 250 tiny2,*9999 -125 bumpyperiod,*9999 100 pulseouter",
         );
         assert_eq!(mods.visual.invert, Some(0.25));
         assert_eq!(mods.appearance.hidden, Some(0.0));
         assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::XMod(3.0)));
-        assert_eq!(mods.mini_percent, Some(-25.0));
+        assert_eq!(mods.visual.tiny, Some(-0.25));
+        assert_eq!(mods.mini_percent, Some(25.0));
         assert_eq!(mods.perspective.tilt, Some(-0.5));
         assert_eq!(mods.perspective.skew, Some(0.5));
         assert_eq!(mods.visual.bumpy, None);
@@ -11107,7 +10693,7 @@ return Def.ActorFrame{}
         assert_eq!(windows[0].chart.insert_mask, INSERT_MASK_BIT_MINES);
         assert_eq!(
             windows[0].chart.turn_bits,
-            turn_option_bits(profile_data::TurnOption::Mirror)
+            turn_option_bits(GameplayTurnOption::Mirror)
         );
     }
 
