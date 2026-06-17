@@ -1,5 +1,5 @@
 use super::{ButtonLight, CabinetLight, Player, State};
-use log::{debug, warn};
+use log::{info, warn};
 use std::borrow::Cow;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -72,16 +72,19 @@ impl Driver {
         match OpenOptions::new().write(true).open(port_path.as_ref()) {
             Ok(file) => {
                 if let Err(e) = configure_serial(&file) {
-                    warn!("{} serial setup failed for {}: {e}", self.name, self.port);
+                    if !self.warned_missing {
+                        warn!("{} serial setup failed for {}: {e}", self.name, self.port);
+                        self.warned_missing = true;
+                    }
                     return;
                 }
-                debug!("Opened {} serial lights output at {}", self.name, self.port);
+                info!("Opened {} serial lights output at {}", self.name, self.port);
                 self.warned_missing = false;
                 self.file = Some(file);
             }
             Err(e) => {
                 if !self.warned_missing {
-                    debug!(
+                    warn!(
                         "No {} serial lights output at {}: {e}",
                         self.name, self.port
                     );

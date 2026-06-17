@@ -21,9 +21,11 @@ const SERIAL_PORT_NAME_CAP: usize = 64;
 const TEST_AUTO_CYCLE_SECONDS: f32 = 1.0;
 
 #[cfg(windows)]
-pub const DEFAULT_LITBOARD_PORT: &str = "COM54";
+pub const DEFAULT_WIN32_SERIAL_PORT: &str = "COM54";
 #[cfg(not(windows))]
-pub const DEFAULT_LITBOARD_PORT: &str = "/dev/ttyUSB0";
+pub const DEFAULT_WIN32_SERIAL_PORT: &str = "/dev/ttyUSB0";
+
+pub const DEFAULT_LITBOARD_PORT: &str = DEFAULT_WIN32_SERIAL_PORT;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SerialPortName {
@@ -838,6 +840,7 @@ mod tests {
     #[test]
     fn parses_serial_port_names_with_default_fallback() {
         let default = SerialPortName::default();
+        assert_eq!(default.as_str(), DEFAULT_WIN32_SERIAL_PORT);
         assert_eq!(SerialPortName::parse(" COM7 ", default).as_str(), "COM7");
         assert_eq!(SerialPortName::parse("", default), default);
         assert_eq!(SerialPortName::parse("COM\u{1b}", default), default);
