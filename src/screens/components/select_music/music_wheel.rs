@@ -8,15 +8,15 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
+use deadlib_present::actors::Actor;
+use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::color;
+use deadlib_present::space::widescale;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
-use deadsync_present::actors::Actor;
-use deadsync_present::cache::{SharedStrCache, cached_shared_str};
-use deadsync_present::color;
-use deadsync_present::space::widescale;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::cell::RefCell;
@@ -1416,8 +1416,8 @@ mod tests {
     };
     use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
     use crate::screens::select_music::MusicWheelEntry;
+    use deadlib_present::color;
     use deadsync_chart::SongData;
-    use deadsync_present::color;
     use deadsync_profile as profile_data;
     use deadsync_score::CachedItlScore;
     use std::path::PathBuf;

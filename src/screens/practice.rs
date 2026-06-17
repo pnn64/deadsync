@@ -5,14 +5,14 @@ use crate::game::gameplay::{self as gameplay_core, effective_spacing_multiplier_
 use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
 use deadsync_audio_stream as audio;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{
-    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
-};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};

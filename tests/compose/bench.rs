@@ -1,3 +1,6 @@
+use deadlib_present::actors::Actor;
+use deadlib_present::compose;
+use deadlib_render::RenderList;
 use deadsync::assets::AssetManager;
 use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
 use deadsync::test_support::{
@@ -6,9 +9,6 @@ use deadsync::test_support::{
     gameplay_stats_versus_bench, gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench,
     notefield_bench, options_bench, pane_stats_bench, player_options_bench, visual_style_bg_bench,
 };
-use deadsync_present::actors::Actor;
-use deadsync_present::compose;
-use deadsync_render::RenderList;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::error::Error;
@@ -778,8 +778,8 @@ fn build_screen_for_mode(
     scratch: &mut compose::ComposeScratch,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     total_elapsed: f32,
 ) -> RenderList {
     match cache_mode {
@@ -827,8 +827,8 @@ fn recycle_screen_for_mode(
 fn benchmark_actor_builder<F>(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     total_elapsed: f32,
     iters: u64,
     warmup: u64,
@@ -942,8 +942,8 @@ where
 fn benchmark_actor_pusher<F>(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     total_elapsed: f32,
     iters: u64,
     warmup: u64,
@@ -1062,8 +1062,8 @@ where
 fn benchmark_notefield_actor_builder(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     total_elapsed: f32,
     iters: u64,
     warmup: u64,
@@ -1199,8 +1199,8 @@ fn benchmark_compose<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,
@@ -1346,8 +1346,8 @@ fn benchmark_compose_resolve<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync_present::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync_present::font::Font>,
+    metrics: &deadlib_present::space::Metrics,
+    fonts: &HashMap<&'static str, deadlib_present::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,

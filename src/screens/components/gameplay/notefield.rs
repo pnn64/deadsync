@@ -27,18 +27,18 @@ use crate::game::{
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::screens::gameplay::GameplayNoteskinAssets;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::color;
+use deadlib_present::compose::TextLayoutCache;
+use deadlib_present::font;
+use deadlib_present::space::*;
+use deadlib_render::{BlendMode, TexturedMeshVertex};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::cache::{TextCache, cached_text};
-use deadsync_present::color;
-use deadsync_present::compose::TextLayoutCache;
-use deadsync_present::font;
-use deadsync_present::space::*;
 use deadsync_profile as profile_data;
-use deadsync_render::{BlendMode, TexturedMeshVertex};
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1561,7 +1561,7 @@ fn signed_effect_active(value: f32) -> bool {
 
 #[inline(always)]
 fn arrow_effect_game_time_seconds() -> f32 {
-    deadsync_platform::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
+    deadlib_platform::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
 }
 
 #[inline(always)]
@@ -2027,7 +2027,7 @@ fn hold_strip_actor(
         tint: [1.0; 4],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
-        geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -2055,7 +2055,7 @@ fn hold_strip_glow_actor(
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices,
-        geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -9677,12 +9677,12 @@ mod tests {
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
+    use deadlib_present::actors::Actor;
+    use deadlib_present::color;
+    use deadlib_render::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
-    use deadsync_present::actors::Actor;
-    use deadsync_present::color;
     use deadsync_profile as profile_data;
-    use deadsync_render::BlendMode;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;

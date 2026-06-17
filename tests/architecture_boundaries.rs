@@ -148,14 +148,14 @@ const RENDER_BACKEND_IMPORT_SCAN_DIRS: &[&str] = &[
     "src/screens",
     "src/test_support",
     "tests",
-    "crates/deadsync-present/src",
+    "crates/deadlib-present/src",
 ];
 
 const RENDER_BACKEND_IMPORTS: &[&str] = &[
-    "deadsync_render_backend_gl",
-    "deadsync_render_backend_software",
-    "deadsync_render_backend_vulkan",
-    "deadsync_render_backend_wgpu",
+    "deadlib_render_backend_gl",
+    "deadlib_render_backend_software",
+    "deadlib_render_backend_vulkan",
+    "deadlib_render_backend_wgpu",
 ];
 
 const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
@@ -261,7 +261,7 @@ const AUDIO_CORE_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::config",
     "crate::game",
     "crate::screens",
-    "deadsync_platform",
+    "deadlib_platform",
     "deadsync_audio_decode",
     "std::fs",
     "std::path",
@@ -276,9 +276,9 @@ const AUDIO_DECODE_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::config",
     "crate::game",
     "crate::screens",
-    "deadsync_platform",
-    "deadsync_present",
-    "deadsync_render",
+    "deadlib_platform",
+    "deadlib_present",
+    "deadlib_render",
     "std::sync::mpsc",
     "Mutex",
     "log::",
@@ -290,9 +290,9 @@ const AUDIO_ANALYSIS_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::config",
     "crate::game",
     "crate::screens",
-    "deadsync_platform",
-    "deadsync_present",
-    "deadsync_render",
+    "deadlib_platform",
+    "deadlib_present",
+    "deadlib_render",
     "std::sync::mpsc",
     "Mutex",
     "log::",
@@ -304,8 +304,8 @@ const AUDIO_STREAM_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::config",
     "crate::game",
     "crate::screens",
-    "deadsync_present",
-    "deadsync_render",
+    "deadlib_present",
+    "deadlib_render",
 ];
 
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
@@ -976,12 +976,12 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
             "deadsync-config",
             "deadsync-input-native",
             "deadsync-online",
-            "deadsync-present",
+            "deadlib-present",
             "deadsync-profile",
-            "deadsync-render",
-            "deadsync-renderer",
+            "deadlib-render",
+            "deadlib-renderer",
             "deadsync-score",
-            "deadsync-video",
+            "deadlib-video",
         ] {
             let count = manifest.match_indices(token).count();
             if count != 0 {
@@ -1007,12 +1007,12 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "deadsync_audio_stream",
                 "deadsync_input_native",
                 "deadsync_online",
-                "deadsync_present",
+                "deadlib_present",
                 "deadsync_profile",
-                "deadsync_render",
-                "deadsync_renderer",
+                "deadlib_render",
+                "deadlib_renderer",
                 "deadsync_score",
-                "deadsync_video",
+                "deadlib_video",
                 "std::fs",
                 "std::io",
             ] {
@@ -1293,7 +1293,7 @@ fn audio_core_lives_in_audio_crate() {
             "fn load_callback_clock_snapshot_now",
             "fn stream_position_frames_from_window",
             "fn music_stream_clock_snapshot_at_nanos",
-            "deadsync_platform::host_time::instant_nanos",
+            "deadlib_platform::host_time::instant_nanos",
             "current_qpc_nanos",
             "fallback_stream_position_frames",
             "stream_position_frames_from_window as audio_stream_position_frames_from_window",
@@ -1630,9 +1630,9 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
                 "crate::config",
                 "crate::game",
                 "crate::screens",
-                "deadsync_platform",
-                "deadsync_present",
-                "deadsync_render",
+                "deadlib_platform",
+                "deadlib_present",
+                "deadlib_render",
             ] {
                 let count = count_token_refs(&text, token);
                 if count != 0 {
@@ -2043,7 +2043,7 @@ fn video_imports_do_not_use_engine_facade() {
 
     if facade_path.exists() {
         failures.push(format!(
-            "{} still exists; import deadsync_video directly",
+            "{} still exists; import deadlib_video directly",
             rel_path(&root, &facade_path)
         ));
     }
@@ -2070,7 +2070,7 @@ fn video_imports_do_not_use_engine_facade() {
 
     assert!(
         failures.is_empty(),
-        "video should be imported from deadsync_video:\n{}",
+        "video should be imported from deadlib_video:\n{}",
         failures.join("\n")
     );
 }
@@ -2088,37 +2088,37 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
 
     if draw_prep_path.exists() {
         failures.push(format!(
-            "{} still exists; import deadsync_render::draw_prep directly",
+            "{} still exists; import deadlib_render::draw_prep directly",
             rel_path(&root, &draw_prep_path)
         ));
     }
     if opengl_backend_path.exists() {
         failures.push(format!(
-            "{} still exists; use deadsync-render-backend-gl",
+            "{} still exists; use deadlib-render-backend-gl",
             rel_path(&root, &opengl_backend_path)
         ));
     }
     if software_backend_path.exists() {
         failures.push(format!(
-            "{} still exists; use deadsync-render-backend-software",
+            "{} still exists; use deadlib-render-backend-software",
             rel_path(&root, &software_backend_path)
         ));
     }
     if vulkan_backend_path.exists() {
         failures.push(format!(
-            "{} still exists; use deadsync-render-backend-vulkan",
+            "{} still exists; use deadlib-render-backend-vulkan",
             rel_path(&root, &vulkan_backend_path)
         ));
     }
     if wgpu_backend_path.exists() {
         failures.push(format!(
-            "{} still exists; use deadsync-render-backend-wgpu",
+            "{} still exists; use deadlib-render-backend-wgpu",
             rel_path(&root, &wgpu_backend_path)
         ));
     }
     if gfx_facade_path.exists() {
         failures.push(format!(
-            "{} still exists; import deadsync_renderer directly",
+            "{} still exists; import deadlib_renderer directly",
             rel_path(&root, &gfx_facade_path)
         ));
     }
@@ -2128,13 +2128,13 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
         let count = count_token_refs(&text, "pub mod gfx");
         if count != 0 {
             failures.push(format!(
-                "{} declares engine::gfx {count} times; import deadsync_renderer directly",
+                "{} declares engine::gfx {count} times; import deadlib_renderer directly",
                 rel_path(&root, &engine_mod_path)
             ));
         }
     }
 
-    let renderer_src = root.join("crates/deadsync-renderer/src");
+    let renderer_src = root.join("crates/deadlib-renderer/src");
     if renderer_src.exists() {
         for file in rust_files(&renderer_src) {
             let text = fs::read_to_string(&file).expect("source file should be readable");
@@ -2205,7 +2205,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
 
     assert!(
         failures.is_empty(),
-        "render contract should be imported from deadsync_render:\n{}",
+        "render contract should be imported from deadlib_render:\n{}",
         failures.join("\n")
     );
 }
@@ -2219,7 +2219,7 @@ fn present_model_lives_in_present_crate() {
         let path = root.join(file);
         if path.exists() {
             failures.push(format!(
-                "{} still exists; use deadsync-present",
+                "{} still exists; use deadlib-present",
                 rel_path(&root, &path)
             ));
         }
@@ -2230,14 +2230,14 @@ fn present_model_lives_in_present_crate() {
         let count = count_token_refs(&text, "pub mod space");
         if count != 0 {
             failures.push(format!(
-                "{} declares engine::space {count} times; import deadsync_present::space directly",
+                "{} declares engine::space {count} times; import deadlib_present::space directly",
                 rel_path(&root, &engine_mod)
             ));
         }
         let present_count = count_token_refs(&text, "pub mod present");
         if present_count != 0 {
             failures.push(format!(
-                "{} declares engine::present {present_count} times; import deadsync_present directly",
+                "{} declares engine::present {present_count} times; import deadlib_present directly",
                 rel_path(&root, &engine_mod)
             ));
         }
@@ -2281,7 +2281,7 @@ fn present_model_lives_in_present_crate() {
     let asset_dsl = root.join("src/assets/present_dsl.rs");
     if let Ok(text) = fs::read_to_string(&asset_dsl) {
         for token in [
-            "use deadsync_present::dsl as present_dsl",
+            "use deadlib_present::dsl as present_dsl",
             "pub struct SpriteBuilder",
             "static_texture_cached",
             "static_texture_cached_with_texture_context",
@@ -2289,7 +2289,7 @@ fn present_model_lives_in_present_crate() {
             "build_with_texture_context",
             "$crate::assets::present_dsl::SpriteBuilder",
             "$crate::assets::present_dsl::TextBuilder",
-            "::deadsync_present::__act_from_builder!",
+            "::deadlib_present::__act_from_builder!",
         ] {
             if !text.contains(token) {
                 failures.push(format!(
@@ -2304,9 +2304,9 @@ fn present_model_lives_in_present_crate() {
 
     let root_lib = root.join("src/lib.rs");
     if let Ok(text) = fs::read_to_string(&root_lib) {
-        if !text.contains("pub use deadsync_present::{rgba, rgba_const};") {
+        if !text.contains("pub use deadlib_present::{rgba, rgba_const};") {
             failures.push(format!(
-                "{} should re-export presentation color macros from deadsync-present",
+                "{} should re-export presentation color macros from deadlib-present",
                 rel_path(&root, &root_lib)
             ));
         }
@@ -2316,7 +2316,7 @@ fn present_model_lives_in_present_crate() {
     if let Ok(text) = fs::read_to_string(&asset_textures) {
         if !text.contains("present_texture::cached_texture_key_handle") {
             failures.push(format!(
-                "{} should delegate TextureChoice handle caching to deadsync-present",
+                "{} should delegate TextureChoice handle caching to deadlib-present",
                 rel_path(&root, &asset_textures)
             ));
         }
@@ -2358,12 +2358,12 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    let present_crate = root.join("crates/deadsync-present/src/lib.rs");
+    let present_crate = root.join("crates/deadlib-present/src/lib.rs");
     if !present_crate.exists() {
         failures.push(format!("{} is missing", rel_path(&root, &present_crate)));
     }
 
-    let present_dsl = root.join("crates/deadsync-present/src/dsl.rs");
+    let present_dsl = root.join("crates/deadlib-present/src/dsl.rs");
     if let Ok(text) = fs::read_to_string(&present_dsl) {
         for macro_name in [
             "macro_rules! __ui_textalign_from_ident",
@@ -2382,7 +2382,7 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    let present_src = root.join("crates/deadsync-present/src");
+    let present_src = root.join("crates/deadlib-present/src");
     if present_src.exists() {
         for file in rust_files(&present_src) {
             let text = fs::read_to_string(&file).expect("source file should be readable");
@@ -2410,7 +2410,7 @@ fn present_model_lives_in_present_crate() {
 
     assert!(
         failures.is_empty(),
-        "presentation model should live in deadsync-present:\n{}",
+        "presentation model should live in deadlib-present:\n{}",
         failures.join("\n")
     );
 }
@@ -2597,13 +2597,13 @@ fn platform_imports_do_not_use_engine_facade() {
         let dir_path = root.join("src").join("engine").join(module);
         if file_path.exists() {
             failures.push(format!(
-                "{} still exists; import deadsync_platform::{module} directly",
+                "{} still exists; import deadlib_platform::{module} directly",
                 rel_path(&root, &file_path)
             ));
         }
         if dir_path.exists() {
             failures.push(format!(
-                "{} still exists; import deadsync_platform::{module} directly",
+                "{} still exists; import deadlib_platform::{module} directly",
                 rel_path(&root, &dir_path)
             ));
         }
@@ -2613,13 +2613,13 @@ fn platform_imports_do_not_use_engine_facade() {
         let dir_path = root.join("src").join("config").join(module);
         if file_path.exists() {
             failures.push(format!(
-                "{} still exists; import deadsync_platform::{module} directly",
+                "{} still exists; import deadlib_platform::{module} directly",
                 rel_path(&root, &file_path)
             ));
         }
         if dir_path.exists() {
             failures.push(format!(
-                "{} still exists; import deadsync_platform::{module} directly",
+                "{} still exists; import deadlib_platform::{module} directly",
                 rel_path(&root, &dir_path)
             ));
         }
@@ -2657,7 +2657,7 @@ fn platform_imports_do_not_use_engine_facade() {
 
     assert!(
         failures.is_empty(),
-        "platform helpers should be imported from deadsync_platform:\n{}",
+        "platform helpers should be imported from deadlib_platform:\n{}",
         failures.join("\n")
     );
 }

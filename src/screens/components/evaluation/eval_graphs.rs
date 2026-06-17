@@ -1,5 +1,5 @@
-use deadsync_present::color;
-use deadsync_render::MeshVertex;
+use deadlib_present::color;
+use deadlib_render::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

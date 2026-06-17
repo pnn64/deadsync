@@ -26,22 +26,22 @@ members = [
     "crates/deadsync-lights",
     "crates/deadsync-net",
     "crates/deadsync-online",
-    "crates/deadsync-platform",
-    "crates/deadsync-present",
+    "crates/deadlib-platform",
+    "crates/deadlib-present",
     "crates/deadsync-profile",
-    "crates/deadsync-render",
-    "crates/deadsync-render-backend-gl",
-    "crates/deadsync-render-backend-software",
-    "crates/deadsync-render-backend-vulkan",
-    "crates/deadsync-render-backend-wgpu",
-    "crates/deadsync-renderer",
+    "crates/deadlib-render",
+    "crates/deadlib-render-backend-gl",
+    "crates/deadlib-render-backend-software",
+    "crates/deadlib-render-backend-vulkan",
+    "crates/deadlib-render-backend-wgpu",
+    "crates/deadlib-renderer",
     "crates/deadsync-rules",
     "crates/deadsync-score",
     "crates/deadsync-simfile",
     "crates/deadsync-smx",
     "crates/deadsync-updater",
     "crates/deadsync-version",
-    "crates/deadsync-video",
+    "crates/deadlib-video",
 ]
 resolver = "3"
 
@@ -50,7 +50,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.888"
+version = "0.4.889"
 
 [[bin]]
 name = "compose_bench"
@@ -102,18 +102,18 @@ deadsync-input-native = { path = "crates/deadsync-input-native" }
 deadsync-lights = { path = "crates/deadsync-lights" }
 deadsync-net = { path = "crates/deadsync-net" }
 deadsync-online = { path = "crates/deadsync-online" }
-deadsync-platform = { path = "crates/deadsync-platform" }
-deadsync-present = { path = "crates/deadsync-present" }
+deadlib-platform = { path = "crates/deadlib-platform" }
+deadlib-present = { path = "crates/deadlib-present" }
 deadsync-profile = { path = "crates/deadsync-profile" }
-deadsync-render = { path = "crates/deadsync-render" }
-deadsync-renderer = { path = "crates/deadsync-renderer" }
+deadlib-render = { path = "crates/deadlib-render" }
+deadlib-renderer = { path = "crates/deadlib-renderer" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-smx = { path = "crates/deadsync-smx" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
-deadsync-video = { path = "crates/deadsync-video" }
+deadlib-video = { path = "crates/deadlib-video" }
 winit = "0.30.13"
 log = "0.4.32"
 image = "0.25.10"

@@ -1,4 +1,4 @@
-use deadsync_video as video;
+use deadlib_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{

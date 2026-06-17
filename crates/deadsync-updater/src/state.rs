@@ -160,7 +160,7 @@ fn write_cache(new_cache: UpdaterCache) {
         };
         *guard = new_cache.clone();
     }
-    let path = deadsync_platform::dirs::app_dirs()
+    let path = deadlib_platform::dirs::app_dirs()
         .cache_dir
         .join(CACHE_FILENAME);
     if let Err(err) = save_cache_to(&path, &new_cache) {
@@ -192,7 +192,7 @@ fn save_cache_to(path: &Path, cache: &UpdaterCache) -> std::io::Result<()> {
 /// it) -- and naturally degrades a stale cached release to
 /// [`UpdateState::UpToDate`] once the user has installed the update.
 pub fn load_persisted_cache() {
-    let path = deadsync_platform::dirs::app_dirs()
+    let path = deadlib_platform::dirs::app_dirs()
         .cache_dir
         .join(CACHE_FILENAME);
     let raw = load_cache_from(&path).unwrap_or_default();

@@ -1,7 +1,7 @@
 use crate::act;
 use crate::screens::evaluation::ScoreInfo;
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
 use std::sync::Arc;
 
 use super::utils::eval_style_alpha;
@@ -19,7 +19,7 @@ fn build_modifiers_pane_with_text(
     bar_center_x: f32,
     bar_width: f32,
 ) -> Vec<Actor> {
-    let frame_center_y = deadsync_present::space::screen_center_y() + 200.5;
+    let frame_center_y = deadlib_present::space::screen_center_y() + 200.5;
     let font_zoom = 0.7;
 
     // Simply Love places the modifiers text 10px from the bar's left edge.
@@ -52,7 +52,7 @@ fn build_modifiers_pane_with_text(
 #[cfg(test)]
 mod tests {
     use super::build_modifiers_pane_with_text;
-    use deadsync_present::actors::Actor;
+    use deadlib_present::actors::Actor;
     use std::sync::Arc;
 
     #[test]

@@ -1,5 +1,5 @@
 use crate::act;
-use deadsync_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::{Actor, SizeSpec};
 
 // This should match the native resolution of "rounded-square.png" from the theme (64x64).
 const PANEL_NATIVE_SIZE: f32 = 64.0;

@@ -10,12 +10,12 @@ use crate::screens::components::{
         visual_style_bg,
     },
 };
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
-use deadsync_present::color;
-use deadsync_present::space::widescale;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_render::{BlendMode, MeshVertex};
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
+use deadlib_present::color;
+use deadlib_present::space::widescale;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadlib_render::{BlendMode, MeshVertex};
 use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
@@ -26,12 +26,12 @@ use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
+use deadlib_present::font;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
 use deadsync_online::lobbies as lobby_data;
-use deadsync_present::font;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -881,7 +881,7 @@ fn build_course_density_graph_mesh(
 
         let first = stage.chart.first_second;
         let last = stage_seconds.max(first + 0.001);
-        let mut verts = deadsync_present::density::build_density_histogram_mesh(
+        let mut verts = deadlib_present::density::build_density_histogram_mesh(
             &stage.chart.measure_nps_vec,
             stage.chart.max_nps,
             &stage.chart.measure_seconds_vec,
@@ -919,7 +919,7 @@ fn build_eval_density_graph_mesh(
     }
 
     let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
-    let verts = deadsync_present::density::build_density_histogram_mesh(
+    let verts = deadlib_present::density::build_density_histogram_mesh(
         &si.chart.measure_nps_vec,
         si.chart.max_nps,
         &si.chart.measure_seconds_vec,
@@ -1033,9 +1033,9 @@ mod tests {
         stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
+    use deadlib_present::actors::Actor;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::note::NoteType;
-    use deadsync_present::actors::Actor;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::Note;
     use deadsync_score as score_data;

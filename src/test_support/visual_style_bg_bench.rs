@@ -1,5 +1,5 @@
 use crate::screens::components::shared::visual_style_bg;
-use deadsync_present::actors::Actor;
+use deadlib_present::actors::Actor;
 
 pub const SCENARIO_NAME: &str = "visual-style-bg";
 

@@ -1,7 +1,7 @@
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::density::{self, DensityHistCache};
-use deadsync_present::space::screen_center_x;
-use deadsync_render::BlendMode;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::density::{self, DensityHistCache};
+use deadlib_present::space::screen_center_x;
+use deadlib_render::BlendMode;
 use deadsync_rules::timing::{TimingData, TimingSegments};
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ pub struct DensityGraphBenchFixture {
     offset: f32,
     visible_width: f32,
     offset_xy: [f32; 2],
-    mesh: RefCell<Option<Arc<[deadsync_render::MeshVertex]>>>,
+    mesh: RefCell<Option<Arc<[deadlib_render::MeshVertex]>>>,
 }
 
 impl DensityGraphBenchFixture {

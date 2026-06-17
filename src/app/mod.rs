@@ -29,16 +29,16 @@ use crate::screens::{
     overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
     select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
-use deadsync_platform::dirs;
-use deadsync_platform::display;
+use deadlib_platform::dirs;
+use deadlib_platform::display;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-use deadsync_platform::host_time;
-use deadsync_present::color;
-use deadsync_present::compose;
-use deadsync_present::space::{self as space, Metrics};
-use deadsync_render as renderer;
-use deadsync_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
-use deadsync_renderer as renderer_backend;
+use deadlib_platform::host_time;
+use deadlib_present::color;
+use deadlib_present::compose;
+use deadlib_present::space::{self as space, Metrics};
+use deadlib_render as renderer;
+use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
+use deadlib_renderer as renderer_backend;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -69,6 +69,7 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
+use deadlib_present::actors::Actor;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
@@ -82,7 +83,6 @@ use deadsync_input_native::GpSystemEvent;
 use deadsync_lights::{
     self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
 };
-use deadsync_present::actors::Actor;
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1412,48 +1412,48 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn actor_tree_stats(actors: &[deadsync_present::actors::Actor]) -> ActorTreeStats {
-    fn visit(stats: &mut ActorTreeStats, actor: &deadsync_present::actors::Actor) {
+fn actor_tree_stats(actors: &[deadlib_present::actors::Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &deadlib_present::actors::Actor) {
         stats.total = stats.total.saturating_add(1);
         match actor {
-            deadsync_present::actors::Actor::Sprite { .. } => {
+            deadlib_present::actors::Actor::Sprite { .. } => {
                 stats.sprites = stats.sprites.saturating_add(1);
             }
-            deadsync_present::actors::Actor::Text { content, .. } => {
+            deadlib_present::actors::Actor::Text { content, .. } => {
                 stats.texts = stats.texts.saturating_add(1);
                 stats.text_chars = stats
                     .text_chars
                     .saturating_add(saturating_u32(content.len()));
             }
-            deadsync_present::actors::Actor::Mesh { .. } => {
+            deadlib_present::actors::Actor::Mesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
-            deadsync_present::actors::Actor::TexturedMesh { .. } => {
+            deadlib_present::actors::Actor::TexturedMesh { .. } => {
                 stats.textured_meshes = stats.textured_meshes.saturating_add(1);
             }
-            deadsync_present::actors::Actor::Frame { children, .. } => {
+            deadlib_present::actors::Actor::Frame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            deadsync_present::actors::Actor::SharedFrame { children, .. } => {
+            deadlib_present::actors::Actor::SharedFrame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children.iter() {
                     visit(stats, child);
                 }
             }
-            deadsync_present::actors::Actor::Camera { children, .. } => {
+            deadlib_present::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            deadsync_present::actors::Actor::CameraPush { .. } => {
+            deadlib_present::actors::Actor::CameraPush { .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
             }
-            deadsync_present::actors::Actor::CameraPop => {}
-            deadsync_present::actors::Actor::Shadow { child, .. } => {
+            deadlib_present::actors::Actor::CameraPop => {}
+            deadlib_present::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);
             }
@@ -4106,7 +4106,7 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer_backend::Backend>,
     backend_type: BackendType,
-    _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor,
+    _idle_inhibitor: deadlib_platform::idle_inhibit::IdleInhibitor,
     fsr_monitor: fsr_input::Monitor,
     /// Whether the Configure Pads screen currently has FSR live-reads enabled,
     /// so `set_active` only toggles on screen enter/leave (not every frame).
@@ -5005,7 +5005,7 @@ impl App {
             self.state.shell.slow_down_held,
             self.state.shell.tab_acceleration_enabled,
         );
-        deadsync_present::runtime::tick(logic_dt);
+        deadlib_present::runtime::tick(logic_dt);
         crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
@@ -5365,7 +5365,7 @@ impl App {
         let total_elapsed_end = frame_finished
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        let frame_host_nanos = deadsync_platform::host_time::now_nanos();
+        let frame_host_nanos = deadlib_platform::host_time::now_nanos();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
         self.record_frame_stats_sample(
             frame_host_nanos,
@@ -5457,7 +5457,7 @@ impl App {
             window: None,
             backend: None,
             backend_type,
-            _idle_inhibitor: deadsync_platform::idle_inhibit::IdleInhibitor::acquire(),
+            _idle_inhibitor: deadlib_platform::idle_inhibit::IdleInhibitor::acquire(),
             fsr_monitor: fsr_input::Monitor::new(),
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
@@ -7727,8 +7727,8 @@ impl App {
         };
         let anchor = self.state.shell.frame_stats_overlay_anchor;
         let style = self.state.shell.frame_stats_overlay_style;
-        let screen_w = deadsync_present::space::screen_width();
-        let screen_h = deadsync_present::space::screen_height();
+        let screen_w = deadlib_present::space::screen_width();
+        let screen_h = deadlib_present::space::screen_height();
         // Always render the full overlay, including 2 players — the panel is narrow enough
         // (~half-screen) to sit in a corner or the bottom-center seam without covering either
         // notefield, so there's no need to drop to the stripped compact layout.
@@ -8002,7 +8002,7 @@ impl App {
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
-        actors: &[deadsync_present::actors::Actor],
+        actors: &[deadlib_present::actors::Actor],
         draw_stats: renderer::DrawStats,
         compose_breakdown: ComposeBreakdown,
     ) {

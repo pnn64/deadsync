@@ -14,12 +14,12 @@ use crate::screens::components::shared::{
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use chrono::Local;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use std::collections::HashSet;
@@ -218,8 +218,8 @@ fn build_player_stats(
             -widescale(194.0, 250.0),
             1.0,
             0.0,
-            deadsync_present::actors::TextAlign::Right,
-            deadsync_present::actors::TextAlign::Left,
+            deadlib_present::actors::TextAlign::Right,
+            deadlib_present::actors::TextAlign::Left,
             -1.0,
         ),
         profile_data::PlayerSide::P2 => (
@@ -228,8 +228,8 @@ fn build_player_stats(
             widescale(194.0, 250.0),
             0.0,
             1.0,
-            deadsync_present::actors::TextAlign::Left,
-            deadsync_present::actors::TextAlign::Right,
+            deadlib_present::actors::TextAlign::Left,
+            deadlib_present::actors::TextAlign::Right,
             1.0,
         ),
     };

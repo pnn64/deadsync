@@ -5,6 +5,8 @@ mod sfx_cache;
 mod stream_runtime;
 mod stretch;
 
+#[cfg(windows)]
+use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 pub use deadsync_audio::{
     Cut, InitConfig, MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot,
 };
@@ -15,8 +17,6 @@ use deadsync_audio_decode::resample::{
     drop_front_samples, resampler_params, saturating_i64_from_u64, write_channel_mapped_i16,
     write_resampler_output,
 };
-#[cfg(windows)]
-use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{debug, error, warn};
 use rubato::{Resampler, SincFixedOut};
 use smallvec::SmallVec;

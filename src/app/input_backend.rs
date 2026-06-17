@@ -9,8 +9,8 @@ pub(super) fn host() -> BackendHost {
         |vendor, product| {
             deadsync_smx::native_smx_owns_device(vendor, product, config::get().smx_input)
         },
-        deadsync_platform::host_time::now_nanos,
-        deadsync_platform::host_time::instant_nanos,
+        deadlib_platform::host_time::now_nanos,
+        deadlib_platform::host_time::instant_nanos,
         qpc_ticks_to_nanos,
         boost_input_thread,
     )
@@ -19,7 +19,7 @@ pub(super) fn host() -> BackendHost {
 #[cfg(windows)]
 #[inline(always)]
 fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
-    deadsync_platform::windows_rt::qpc_ticks_to_nanos(ticks)
+    deadlib_platform::windows_rt::qpc_ticks_to_nanos(ticks)
 }
 
 #[cfg(not(windows))]
@@ -31,8 +31,8 @@ const fn qpc_ticks_to_nanos(_ticks: u64) -> Option<u64> {
 #[cfg(windows)]
 #[inline(always)]
 fn boost_input_thread() -> InputThreadPolicy {
-    let token = deadsync_platform::windows_rt::boost_current_thread(
-        deadsync_platform::windows_rt::ThreadRole::Input,
+    let token = deadlib_platform::windows_rt::boost_current_thread(
+        deadlib_platform::windows_rt::ThreadRole::Input,
     )
     .into_mmcss_token();
     InputThreadPolicy::new(token, restore_input_thread)
@@ -41,7 +41,7 @@ fn boost_input_thread() -> InputThreadPolicy {
 #[cfg(windows)]
 #[inline(always)]
 fn restore_input_thread(token: usize) {
-    deadsync_platform::windows_rt::restore_thread_policy_token(token);
+    deadlib_platform::windows_rt::restore_thread_policy_token(token);
 }
 
 #[cfg(not(windows))]

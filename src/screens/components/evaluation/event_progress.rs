@@ -2,11 +2,11 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::components::shared::banner as shared_banner;
+use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
+use deadlib_present::color::{self, JUDGMENT_RGBA};
+use deadlib_present::font;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_chart::SongData;
-use deadsync_present::actors::{Actor, SizeSpec, TextAttribute};
-use deadsync_present::color::{self, JUDGMENT_RGBA};
-use deadsync_present::font;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 

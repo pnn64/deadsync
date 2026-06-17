@@ -336,7 +336,7 @@ pub(super) fn cursor_dest_for_player(
             asset_manager.with_font("miso", |metrics_font| {
                 text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
                 for text in &row.choices {
-                    let mut w = deadsync_present::font::measure_line_width_logical(
+                    let mut w = deadlib_present::font::measure_line_width_logical(
                         metrics_font,
                         text,
                         all_fonts,

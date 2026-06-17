@@ -1,8 +1,8 @@
 use crate::screens::components::select_music::music_wheel::{self, MusicWheelParams};
 use crate::screens::select_music::MusicWheelEntry;
+use deadlib_present::actors::Actor;
 use deadsync_chart::SongData;
 use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-use deadsync_present::actors::Actor;
 use deadsync_score::{CachedScore, Grade};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

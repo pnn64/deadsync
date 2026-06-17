@@ -316,7 +316,7 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
     if let Some(p) = crate::assets::audio_folder::random_music_path(&folder_rel) {
         return p;
     }
-    deadsync_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
+    deadlib_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
 }
 
 /// Background-music tracks bundled with the game: the per-style menu loops plus
@@ -331,7 +331,7 @@ pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
     rels.insert("assets/music/select_course (loop).ogg");
     rels.insert("assets/music/credits.ogg");
 
-    let dirs = deadsync_platform::dirs::app_dirs();
+    let dirs = deadlib_platform::dirs::app_dirs();
     rels.into_iter()
         .map(|rel| dirs.resolve_asset_path(rel))
         .collect()

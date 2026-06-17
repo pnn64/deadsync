@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets;
-use deadsync_present::actors::Actor;
-use deadsync_present::space::screen_center_x;
+use deadlib_present::actors::Actor;
+use deadlib_present::space::screen_center_x;
 
 /// Parameters to tweak the layout easily.
 #[derive(Clone, Copy, Debug)]

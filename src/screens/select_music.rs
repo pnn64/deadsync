@@ -27,6 +27,16 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
     input as screen_input,
 };
+use deadlib_platform::dirs;
+use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
+use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
+use deadlib_present::color;
+use deadlib_present::font;
+use deadlib_present::space::{
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    widescale,
+};
+use deadlib_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use deadsync_audio_stream as audio;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
@@ -37,18 +47,8 @@ use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
-use deadsync_platform::dirs;
-use deadsync_present::actors::{Actor, SizeSpec, SpriteSource};
-use deadsync_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
-use deadsync_present::color;
-use deadsync_present::font;
-use deadsync_present::space::{
-    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
-    widescale,
-};
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
-use deadsync_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use image::{Rgba, RgbaImage};
@@ -8068,7 +8068,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
         .pad_config_intents
         .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
-    deadsync_present::runtime::clear_all();
+    deadlib_present::runtime::clear_all();
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -13599,7 +13599,7 @@ mod tests {
         let overlay = test_running_sync_overlay();
         let actors = super::build_null_or_die_overlay(&overlay, 0).unwrap();
         let heat_alpha = actors.iter().find_map(|actor| match actor {
-            deadsync_present::actors::Actor::Sprite { source, tint, .. }
+            deadlib_present::actors::Actor::Sprite { source, tint, .. }
                 if source.texture_key() == Some(super::SYNC_HEAT_TEXTURE_KEY) =>
             {
                 Some(tint[3])

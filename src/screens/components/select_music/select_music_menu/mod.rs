@@ -13,8 +13,8 @@ pub use menu::{
 pub use replay::*;
 pub use song_search::*;
 
-use deadsync_present::actors::Actor;
-use deadsync_present::actors::TextContent;
+use deadlib_present::actors::Actor;
+use deadlib_present::actors::TextContent;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

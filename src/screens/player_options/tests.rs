@@ -1581,7 +1581,7 @@ pub(super) mod tests {
 
         let actors = super::get_actors(&state, &asset_manager);
         let p2_text_x = actors.iter().find_map(|actor| match actor {
-            deadsync_present::actors::Actor::Text {
+            deadlib_present::actors::Actor::Text {
                 offset, content, z, ..
             } if *z == super::Z_ROW_FOREGROUND
                 && content.as_str() == "M250"
@@ -1604,8 +1604,8 @@ pub(super) mod tests {
         let (state, asset_manager) = setup_state();
         let actors = super::get_actors(&state, &asset_manager);
 
-        let is_screen_bar = |actor: &deadsync_present::actors::Actor, bottom: bool| {
-            let deadsync_present::actors::Actor::Frame {
+        let is_screen_bar = |actor: &deadlib_present::actors::Actor, bottom: bool| {
+            let deadlib_present::actors::Actor::Frame {
                 align,
                 offset,
                 size,
@@ -1615,12 +1615,12 @@ pub(super) mod tests {
             else {
                 return false;
             };
-            let deadsync_present::actors::SizeSpec::Px(h) = size[1] else {
+            let deadlib_present::actors::SizeSpec::Px(h) = size[1] else {
                 return false;
             };
             let y_matches = if bottom {
                 (align[1] - 1.0).abs() < 0.001
-                    && (offset[1] - deadsync_present::space::screen_height()).abs() < 0.001
+                    && (offset[1] - deadlib_present::space::screen_height()).abs() < 0.001
             } else {
                 align[1].abs() < 0.001 && offset[1].abs() < 0.001
             };
@@ -1663,7 +1663,7 @@ pub(super) mod tests {
         assert_eq!(actors.len(), 8, "two 4-sided cursor rings should draw");
 
         let sprite_y = |idx: usize| match &actors[idx] {
-            deadsync_present::actors::Actor::Sprite { offset, .. } => offset[1],
+            deadlib_present::actors::Actor::Sprite { offset, .. } => offset[1],
             _ => panic!("cursor ring actor should be a quad sprite"),
         };
         let p1_top_y = sprite_y(0);

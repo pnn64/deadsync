@@ -6,11 +6,11 @@ pub mod present_dsl;
 mod textures;
 pub mod visual_styles;
 
-use deadsync_platform::dirs;
-use deadsync_present::font::{self, Font, FontLoadData, FontParseError};
-use deadsync_present::texture as present_texture;
-use deadsync_render::{SamplerDesc, TextureHandle, TextureHandleMap};
-use deadsync_renderer::{Backend, Texture as RendererTexture};
+use deadlib_platform::dirs;
+use deadlib_present::font::{self, Font, FontLoadData, FontParseError};
+use deadlib_present::texture as present_texture;
+use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::{HashMap, VecDeque};

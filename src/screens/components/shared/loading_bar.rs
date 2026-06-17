@@ -1,5 +1,5 @@
 use crate::act;
-use deadsync_present::actors::{Actor, SizeSpec, TextContent};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 
 const BORDER_PX: f32 = 2.0;
 

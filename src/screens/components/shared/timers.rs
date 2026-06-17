@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use deadsync_present::actors::{Actor, TextContent};
-use deadsync_present::space::{screen_center_x, widescale};
+use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::space::{screen_center_x, widescale};
 
 pub fn build_session(text: impl Into<TextContent>) -> Actor {
     build_header_timer(text, screen_center_x())

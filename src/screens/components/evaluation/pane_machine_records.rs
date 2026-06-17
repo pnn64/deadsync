@@ -1,7 +1,7 @@
 use crate::act;
 use crate::screens::evaluation::ScoreInfo;
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
@@ -134,7 +134,7 @@ pub fn build_machine_records_pane(
     elapsed_s: f32,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadsync_present::space::screen_center_y() - 62.0;
+    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
     let pane_zoom = 0.8_f32;
     let rank_x = -120.0 * pane_zoom;
     let name_x = -110.0 * pane_zoom;

@@ -1,7 +1,7 @@
+use deadlib_platform::host_time::now_nanos;
 #[cfg(unix)]
 use deadsync_audio::OutputTimingQuality;
 use deadsync_audio::{AudioRenderCallbackResult, StutterDiagAudioEventKind};
-use deadsync_platform::host_time::now_nanos;
 
 #[inline(always)]
 fn stutter_diag_enabled() -> bool {

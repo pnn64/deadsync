@@ -6,8 +6,8 @@
 //! decides whether to consume the input or pass it to the menu.
 
 use crate::assets::i18n::{tr, tr_fmt};
+use deadlib_present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::Actor;
 use deadsync_updater::action::ActionErrorKind;
 use deadsync_updater::ffmpeg::{self, FfmpegPhase};
 

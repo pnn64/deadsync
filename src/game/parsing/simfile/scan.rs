@@ -1,7 +1,7 @@
 use super::{compute_song_cache_path, load_song_from_cache, parse_song_and_maybe_write_cache};
 use crate::game::song::{get_song_cache, set_song_cache};
+use deadlib_platform::dirs;
 use deadsync_chart::{SongData, SongPack};
-use deadsync_platform::dirs;
 use deadsync_simfile::scan::{
     PackScan, ScanFailure, collect_reload_pack_dirs, count_loaded_songs, empty_song_pack_from_scan,
     finalize_loaded_packs, fmt_scan_time, push_unique_path, replace_song_packs, scan_pack_dirs,

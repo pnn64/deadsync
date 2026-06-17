@@ -11,14 +11,14 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadlib_platform::dirs;
+use deadlib_present::actors::{self, Actor};
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadlib_render::BlendMode;
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_platform::dirs;
-use deadsync_present::actors::{self, Actor};
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_center_y};
 use deadsync_profile as profile_data;
-use deadsync_render::BlendMode;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -877,7 +877,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    static STEPS: std::sync::OnceLock<Vec<deadsync_present::anim::Step>> =
+    static STEPS: std::sync::OnceLock<Vec<deadlib_present::anim::Step>> =
         std::sync::OnceLock::new();
     super::transitions::linear_elapsed(
         exiting,
@@ -889,7 +889,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
 
 #[inline(always)]
 fn exit_zoom(exit_t: f32) -> f32 {
-    let p = deadsync_present::anim::bouncebegin_p(
+    let p = deadlib_present::anim::bouncebegin_p(
         (exit_t / PLAYERFRAME_EXIT_ZOOM_OUT_DURATION).clamp(0.0, 1.0),
     );
     (1.0 - p).max(0.0)
@@ -905,7 +905,7 @@ fn join_pulse_zoom(join_t: f32) -> f32 {
     if join_t >= JOIN_PULSE_DURATION {
         return 1.0;
     }
-    let p = deadsync_present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
+    let p = deadlib_present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
     lerp(JOIN_PULSE_ZOOM_IN, 1.0, p).max(0.0)
 }
 
@@ -914,18 +914,18 @@ fn shake_x(shake_t: f32) -> f32 {
     if shake_t >= SHAKE_DUR {
         return 0.0;
     }
-    let p = deadsync_present::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+    let p = deadlib_present::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
     if shake_t < SHAKE_STEP_DUR {
         lerp(0.0, 5.0, p)
     } else if shake_t < SHAKE_STEP_DUR * 2.0 {
         let t = (shake_t - SHAKE_STEP_DUR).clamp(0.0, SHAKE_STEP_DUR);
-        let p = deadsync_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = deadlib_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(5.0, -5.0, p)
     } else {
         let t = SHAKE_STEP_DUR
             .mul_add(-2.0, shake_t)
             .clamp(0.0, SHAKE_STEP_DUR);
-        let p = deadsync_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = deadlib_present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(-5.0, 0.0, p)
     }
 }
@@ -966,9 +966,9 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<deadsync_render::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<deadlib_render::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(deadsync_render::MeshVertex {
+                out.push(deadlib_render::MeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     color: v.color,
                 });
@@ -988,10 +988,10 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<deadsync_render::TexturedMeshVertex> =
+            let mut out: Vec<deadlib_render::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(deadsync_render::TexturedMeshVertex {
+                out.push(deadlib_render::TexturedMeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom, v.pos[2] * zoom],
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
@@ -1184,7 +1184,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
 
 #[inline(always)]
 fn box_inner_alpha() -> f32 {
-    use deadsync_present::{anim, runtime};
+    use deadlib_present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 
     let steps = STEPS.get_or_init(|| {

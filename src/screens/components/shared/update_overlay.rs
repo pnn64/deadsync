@@ -19,10 +19,10 @@
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
+use deadlib_present::actors::{Actor, TextAlign};
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::{Actor, TextAlign};
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_updater::action::{self, ActionErrorKind, ActionPhase};
 
 use super::loading_bar;
@@ -701,7 +701,7 @@ mod tests {
 
     #[test]
     fn build_downloading_uses_active_loading_bar_style() {
-        use deadsync_present::actors::SizeSpec;
+        use deadlib_present::actors::SizeSpec;
 
         let r = sample_release();
         let asset = r.assets[0].clone();

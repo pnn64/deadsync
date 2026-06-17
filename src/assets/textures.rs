@@ -1,11 +1,11 @@
 use crate::assets::AssetManager;
-use deadsync_platform::dirs;
-use deadsync_present::actors::TextureKeyHandle;
-use deadsync_present::texture as present_texture;
-use deadsync_render::{
+use deadlib_platform::dirs;
+use deadlib_present::actors::TextureKeyHandle;
+use deadlib_present::texture as present_texture;
+use deadlib_render::{
     FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
 };
-use deadsync_renderer::Backend;
+use deadlib_renderer::Backend;
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
@@ -1548,14 +1548,14 @@ mod tests {
         remove_texture_handle("Graphics/Banner.png");
         assert_eq!(
             texture_handle("graphics/banner.png"),
-            deadsync_render::INVALID_TEXTURE_HANDLE
+            deadlib_render::INVALID_TEXTURE_HANDLE
         );
 
         register_texture_handle("Other.png", 23);
         clear_texture_handles();
         assert_eq!(
             texture_handle("other.png"),
-            deadsync_render::INVALID_TEXTURE_HANDLE
+            deadlib_render::INVALID_TEXTURE_HANDLE
         );
     }
 

@@ -6,15 +6,15 @@ use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::select_music::sync_analysis;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{
+    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+};
 use deadsync_audio_stream as audio;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{
-    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
-};
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -1,8 +1,8 @@
 use crate::act;
 use crate::screens::gameplay::State;
+use deadlib_present::actors::Actor;
+use deadlib_present::space::{is_wide, screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_present::actors::Actor;
-use deadsync_present::space::{is_wide, screen_height, screen_width};
 use deadsync_profile::{PlayerSide, StepStatsExtra};
 
 const CROP: f32 = 0.02;

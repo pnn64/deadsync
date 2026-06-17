@@ -1,5 +1,5 @@
+use deadlib_platform::dirs;
 use deadsync_chart::SongData;
-use deadsync_platform::dirs;
 use deadsync_simfile::media::{
     RANDOM_MOVIES_DIR, collect_media_roots, random_movie_paths_for_song,
 };

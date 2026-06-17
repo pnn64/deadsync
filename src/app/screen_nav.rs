@@ -8,8 +8,8 @@ use super::{
 use crate::assets::visual_styles;
 use crate::config;
 use crate::game::profile;
-use deadsync_platform::dirs;
-use deadsync_present::actors::Actor;
+use deadlib_platform::dirs;
+use deadlib_present::actors::Actor;
 use deadsync_profile as profile_data;
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
@@ -316,7 +316,7 @@ impl App {
         } else {
             TransitionState::Idle
         };
-        deadsync_present::runtime::clear_all();
+        deadlib_present::runtime::clear_all();
     }
 
     pub(super) fn handle_navigation_action(&mut self, target: CurrentScreen) {
@@ -412,7 +412,7 @@ impl App {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.commit_screen_change(target);
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
-            deadsync_present::runtime::clear_all();
+            deadlib_present::runtime::clear_all();
             return;
         }
 
@@ -570,7 +570,7 @@ impl App {
             };
         }
         self.sync_gameplay_input_capture();
-        deadsync_present::runtime::clear_all();
+        deadlib_present::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
     }
 

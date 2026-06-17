@@ -5,8 +5,8 @@ use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::space::screen_center_x;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::space::screen_center_x;
 use deadsync_profile as profile_data;
 
 pub fn push(out: &mut Vec<Actor>, top_title: &str) {

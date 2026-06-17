@@ -16,6 +16,9 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
+use deadlib_platform::display::{self, MonitorSpec};
+use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
+use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
@@ -23,9 +26,6 @@ use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode as LightsGameplayPadMode,
 };
-use deadsync_platform::display::{self, MonitorSpec};
-use deadsync_present::space::{is_wide, screen_height, screen_width, widescale};
-use deadsync_render::{BackendType, PresentModePolicy};
 use deadsync_score as score_data;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -37,10 +37,10 @@ use std::time::{Duration, Instant};
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
-use deadsync_present::actors;
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::font;
+use deadlib_present::actors;
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::font;
 
 // Submodules — wildcard re-exports let sibling modules reach every item via
 // `use super::*`.

@@ -1,0 +1,21 @@
+[package]
+name = "deadlib-renderer"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadlib-render = { path = "../deadlib-render" }
+deadlib-render-backend-gl = { path = "../deadlib-render-backend-gl" }
+deadlib-render-backend-software = { path = "../deadlib-render-backend-software" }
+deadlib-render-backend-wgpu = { path = "../deadlib-render-backend-wgpu" }
+image = "0.25.10"
+winit = "0.30.13"
+
+[target.'cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))'.dependencies]
+deadlib-render-backend-vulkan = { path = "../deadlib-render-backend-vulkan" }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

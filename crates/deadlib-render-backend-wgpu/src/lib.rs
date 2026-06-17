@@ -1,0 +1,2332 @@
+use deadlib_render::{
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
+    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
+    TextureHandle, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+};
+use glam::Mat4 as Matrix4;
+use image::RgbaImage;
+use log::{debug, info, warn};
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    error::Error,
+    mem,
+    sync::{Arc, mpsc},
+    time::Instant,
+};
+use wgpu::util::DeviceExt;
+use winit::window::Window;
+
+const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
+const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const LOGICAL_HEIGHT: f32 = 480.0;
+const DESIGN_WIDTH_16_9: f32 = 854.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Api {
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+    Vulkan,
+    #[cfg(target_os = "macos")]
+    Metal,
+    OpenGL,
+    #[cfg(target_os = "windows")]
+    DirectX,
+}
+
+impl Api {
+    #[inline(always)]
+    const fn name(self) -> &'static str {
+        match self {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Self::Vulkan => "Vulkan",
+            #[cfg(target_os = "macos")]
+            Self::Metal => "Metal",
+            Self::OpenGL => "OpenGL",
+            #[cfg(target_os = "windows")]
+            Self::DirectX => "DirectX",
+        }
+    }
+
+    #[inline(always)]
+    const fn backends(self) -> wgpu::Backends {
+        match self {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            Self::Vulkan => wgpu::Backends::VULKAN,
+            #[cfg(target_os = "macos")]
+            Self::Metal => wgpu::Backends::METAL,
+            Self::OpenGL => wgpu::Backends::GL,
+            #[cfg(target_os = "windows")]
+            Self::DirectX => wgpu::Backends::DX12,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    pos: [f32; 2],
+    uv: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct InstanceRaw {
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    edge_fade: [f32; 4],
+    texture_mask: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct TexturedMeshInstanceRaw {
+    model_col0: [f32; 4],
+    model_col1: [f32; 4],
+    model_col2: [f32; 4],
+    model_col3: [f32; 4],
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    texture_mask: f32,
+}
+
+struct PipelineSet {
+    alpha: wgpu::RenderPipeline,
+    add: wgpu::RenderPipeline,
+    multiply: wgpu::RenderPipeline,
+    subtract: wgpu::RenderPipeline,
+}
+
+impl PipelineSet {
+    #[inline(always)]
+    const fn get(&self, mode: BlendMode) -> &wgpu::RenderPipeline {
+        match mode {
+            BlendMode::Alpha => &self.alpha,
+            BlendMode::Add => &self.add,
+            BlendMode::Multiply => &self.multiply,
+            BlendMode::Subtract => &self.subtract,
+        }
+    }
+}
+
+struct MeshPipelineSet {
+    alpha: wgpu::RenderPipeline,
+    add: wgpu::RenderPipeline,
+    multiply: wgpu::RenderPipeline,
+    subtract: wgpu::RenderPipeline,
+}
+
+const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+impl MeshPipelineSet {
+    #[inline(always)]
+    const fn get(&self, mode: BlendMode) -> &wgpu::RenderPipeline {
+        match mode {
+            BlendMode::Alpha => &self.alpha,
+            BlendMode::Add => &self.add,
+            BlendMode::Multiply => &self.multiply,
+            BlendMode::Subtract => &self.subtract,
+        }
+    }
+}
+
+enum ProjState {
+    Immediates,
+    Uniform {
+        stride: u64,
+        capacity: usize,
+        buffer: wgpu::Buffer,
+        group: wgpu::BindGroup,
+        layout: wgpu::BindGroupLayout,
+    },
+}
+
+// A handle to a wgpu texture and its bind group.
+pub struct Texture {
+    id: u64,
+    _texture: wgpu::Texture,
+    _view: wgpu::TextureView,
+    bind_group: Arc<wgpu::BindGroup>,
+    bind_group_repeat: Arc<wgpu::BindGroup>,
+}
+
+pub trait TextureLookup {
+    fn wgpu_texture(&self, handle: TextureHandle) -> Option<&Texture>;
+}
+
+struct CachedTMeshGeom {
+    buffer: Arc<wgpu::Buffer>,
+    vertex_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PresentCompletion {
+    present_id: u32,
+    host_ns: u64,
+    interval_ns: u64,
+}
+
+struct OwnedWindowHandle(pub Arc<Window>);
+
+impl std::fmt::Debug for OwnedWindowHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OwnedWindowHandle(..)")
+    }
+}
+
+impl HasWindowHandle for OwnedWindowHandle {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        self.0.window_handle()
+    }
+}
+impl HasDisplayHandle for OwnedWindowHandle {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        self.0.display_handle()
+    }
+}
+
+pub struct State {
+    api: Api,
+    proj: ProjState,
+    _instance: wgpu::Instance,
+    surface: wgpu::Surface<'static>,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    projection: Matrix4,
+    bind_layout: wgpu::BindGroupLayout,
+    samplers: HashMap<SamplerDesc, wgpu::Sampler>,
+    shader: wgpu::ShaderModule,
+    pipeline_layout: wgpu::PipelineLayout,
+    pipelines: PipelineSet,
+    mesh_shader: wgpu::ShaderModule,
+    mesh_pipeline_layout: wgpu::PipelineLayout,
+    mesh_pipelines: MeshPipelineSet,
+    tmesh_shader: wgpu::ShaderModule,
+    tmesh_pipeline_layout: wgpu::PipelineLayout,
+    tmesh_pipelines: PipelineSet,
+    tmesh_depth_pipelines: PipelineSet,
+    depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    index_count: u32,
+    instance_buffer: wgpu::Buffer,
+    instance_capacity: usize,
+    prep: DrawScratch,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
+    cached_tmesh_bytes: usize,
+    mesh_vertex_buffer: wgpu::Buffer,
+    mesh_vertex_capacity: usize,
+    tmesh_vertex_buffer: wgpu::Buffer,
+    tmesh_vertex_capacity: usize,
+    tmesh_instance_buffer: wgpu::Buffer,
+    tmesh_instance_capacity: usize,
+    window_size: (u32, u32),
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    next_texture_id: u64,
+    next_present_id: u32,
+    present_done_tx: mpsc::Sender<PresentCompletion>,
+    present_done_rx: mpsc::Receiver<PresentCompletion>,
+    last_completed_present_id: u32,
+    last_host_present_ns: u64,
+    last_present_interval_ns: u64,
+    screenshot_requested: bool,
+    captured_frame: Option<RgbaImage>,
+}
+
+#[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+pub fn init_vulkan(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(
+        Api::Vulkan,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
+}
+
+#[cfg(target_os = "macos")]
+pub fn init_metal(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(
+        Api::Metal,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
+}
+
+pub fn init_opengl(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(
+        Api::OpenGL,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
+}
+
+#[cfg(target_os = "windows")]
+pub fn init_dx12(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(
+        Api::DirectX,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
+}
+
+fn init(
+    api: Api,
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    info!("Initializing {} (wgpu) backend...", api.name());
+    if gfx_debug_enabled {
+        debug!("{} (wgpu) validation/debug is enabled.", api.name());
+    }
+    let instance_flags = if gfx_debug_enabled {
+        wgpu::InstanceFlags::debugging()
+    } else {
+        wgpu::InstanceFlags::empty()
+    };
+
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: api.backends(),
+        flags: instance_flags,
+        memory_budget_thresholds: Default::default(),
+        backend_options: Default::default(),
+        display: Some(Box::new(OwnedWindowHandle(window.clone()))),
+    });
+
+    let surface_target = OwnedWindowHandle(window.clone());
+    let surface = instance
+        .create_surface(surface_target)
+        .map_err(|e| format!("Failed to create wgpu surface: {e}"))?;
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: Some(&surface),
+        force_fallback_adapter: false,
+    }))
+    .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
+    log_wgpu_adapter_info(api, &adapter);
+
+    #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+    let want_immediates = matches!(api, Api::Vulkan);
+    #[cfg(any(target_pointer_width = "32", target_vendor = "win7"))]
+    let want_immediates = false;
+    let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
+    if want_immediates && !use_immediates {
+        warn!(
+            "{} adapter does not support wgpu immediates; falling back to uniform projection.",
+            api.name()
+        );
+    }
+
+    let required_features = if use_immediates {
+        wgpu::Features::IMMEDIATES
+    } else {
+        wgpu::Features::empty()
+    };
+    let required_limits = if use_immediates {
+        wgpu::Limits {
+            max_immediate_size: PROJ_BYTES as u32,
+            ..wgpu::Limits::default()
+        }
+    } else {
+        wgpu::Limits::default()
+    };
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: Some("deadsync wgpu device"),
+        required_features,
+        required_limits,
+        memory_hints: wgpu::MemoryHints::Performance,
+        trace: Default::default(),
+        experimental_features: Default::default(),
+    }))?;
+
+    let size = window.inner_size();
+    let caps = surface.get_capabilities(&adapter);
+    let format = pick_format(&caps);
+    let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled, present_mode_policy);
+    let alpha_mode = pick_alpha_mode(&caps);
+
+    let config = wgpu::SurfaceConfiguration {
+        usage: pick_surface_usage(&caps),
+        format,
+        width: size.width.max(1),
+        height: size.height.max(1),
+        present_mode,
+        alpha_mode,
+        view_formats: vec![],
+        desired_maximum_frame_latency: 0,
+    };
+    surface.configure(&device, &config);
+    let (depth_texture, depth_view) =
+        create_depth_target(&device, config.width.max(1), config.height.max(1));
+
+    let projection = ortho_for_window(size.width, size.height);
+    let proj = if use_immediates {
+        ProjState::Immediates
+    } else {
+        init_uniform_proj(&device, &queue, projection)
+    };
+
+    let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("wgpu texture layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let (shader, pipeline_layout, pipelines) =
+        build_pipeline_set(&device, &proj, &bind_layout, format);
+    let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
+        build_mesh_pipeline_set(&device, &proj, format);
+    let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines, tmesh_depth_pipelines) =
+        build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
+
+    let vertex_data = [
+        Vertex {
+            pos: [-0.5, -0.5],
+            uv: [0.0, 1.0],
+        },
+        Vertex {
+            pos: [0.5, -0.5],
+            uv: [1.0, 1.0],
+        },
+        Vertex {
+            pos: [0.5, 0.5],
+            uv: [1.0, 0.0],
+        },
+        Vertex {
+            pos: [-0.5, 0.5],
+            uv: [0.0, 0.0],
+        },
+    ];
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wgpu quad vertices"),
+        contents: cast_slice(&vertex_data),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let indices: [u16; 6] = [0, 1, 2, 2, 3, 0];
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wgpu quad indices"),
+        contents: cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    let instance_capacity = 64usize;
+    let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu instance buffer"),
+        size: (instance_capacity * mem::size_of::<InstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let mesh_vertex_capacity = 1024usize;
+    let mesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu mesh vertex buffer"),
+        size: (mesh_vertex_capacity * mem::size_of::<deadlib_render::MeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let tmesh_vertex_capacity = 1024usize;
+    let tmesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh vertex buffer"),
+        size: (tmesh_vertex_capacity * mem::size_of::<TexturedMeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let tmesh_instance_capacity = 256usize;
+    let tmesh_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh instance buffer"),
+        size: (tmesh_instance_capacity * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let (present_done_tx, present_done_rx) = mpsc::channel();
+
+    info!("{} (wgpu) backend initialized.", api.name());
+
+    Ok(State {
+        api,
+        proj,
+        _instance: instance,
+        surface,
+        adapter,
+        device,
+        queue,
+        config,
+        projection,
+        bind_layout,
+        samplers: HashMap::new(),
+        shader,
+        pipeline_layout,
+        pipelines,
+        mesh_shader,
+        mesh_pipeline_layout,
+        mesh_pipelines,
+        tmesh_shader,
+        tmesh_pipeline_layout,
+        tmesh_pipelines,
+        tmesh_depth_pipelines,
+        depth_texture,
+        depth_view,
+        vertex_buffer,
+        index_buffer,
+        index_count: indices.len() as u32,
+        instance_buffer,
+        instance_capacity,
+        prep: DrawScratch::with_capacity(
+            mesh_vertex_capacity,
+            tmesh_vertex_capacity,
+            tmesh_instance_capacity,
+            64,
+        ),
+        cached_tmesh: FastU64Map::default(),
+        cached_tmesh_bytes: 0,
+        mesh_vertex_buffer,
+        mesh_vertex_capacity,
+        tmesh_vertex_buffer,
+        tmesh_vertex_capacity,
+        tmesh_instance_buffer,
+        tmesh_instance_capacity,
+        window_size: (size.width, size.height),
+        vsync_enabled,
+        present_mode_policy,
+        next_texture_id: 1,
+        next_present_id: 1,
+        present_done_tx,
+        present_done_rx,
+        last_completed_present_id: 0,
+        last_host_present_ns: 0,
+        last_present_interval_ns: 0,
+        screenshot_requested: false,
+        captured_frame: None,
+    })
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    deadlib_platform::windows_rt::current_host_nanos()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn current_host_nanos() -> u64 {
+    0
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Qpc
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Unknown
+}
+
+#[inline(always)]
+const fn wgpu_present_mode_trace(mode: wgpu::PresentMode) -> PresentModeTrace {
+    match mode {
+        wgpu::PresentMode::Fifo | wgpu::PresentMode::AutoVsync => PresentModeTrace::Fifo,
+        wgpu::PresentMode::FifoRelaxed => PresentModeTrace::FifoRelaxed,
+        wgpu::PresentMode::Mailbox => PresentModeTrace::Mailbox,
+        wgpu::PresentMode::Immediate | wgpu::PresentMode::AutoNoVsync => {
+            PresentModeTrace::Immediate
+        }
+    }
+}
+
+#[inline(always)]
+fn next_present_id(state: &mut State) -> u32 {
+    let id = state.next_present_id.max(1);
+    state.next_present_id = state.next_present_id.wrapping_add(1);
+    if state.next_present_id == 0 {
+        state.next_present_id = 1;
+    }
+    id
+}
+
+#[inline(always)]
+fn drain_present_completions(state: &mut State) -> PresentCompletion {
+    let mut latest = PresentCompletion {
+        present_id: state.last_completed_present_id,
+        host_ns: state.last_host_present_ns,
+        interval_ns: 0,
+    };
+    while let Ok(done) = state.present_done_rx.try_recv() {
+        if done.present_id == 0 {
+            continue;
+        }
+        if done.host_ns != 0
+            && state.last_host_present_ns != 0
+            && done.present_id != state.last_completed_present_id
+        {
+            let interval_ns = done.host_ns.saturating_sub(state.last_host_present_ns);
+            latest.interval_ns = interval_ns;
+            if interval_ns != 0 {
+                state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
+                    interval_ns
+                } else {
+                    ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(interval_ns))
+                        / 4
+                };
+            }
+        }
+        state.last_completed_present_id = done.present_id;
+        if done.host_ns != 0 {
+            state.last_host_present_ns = done.host_ns;
+        }
+        latest.present_id = state.last_completed_present_id;
+        latest.host_ns = state.last_host_present_ns;
+    }
+    latest
+}
+
+#[inline(always)]
+const fn wgpu_vendor_name(vendor_id: u32) -> &'static str {
+    match vendor_id {
+        0x10DE => "NVIDIA",
+        0x1002 | 0x1022 => "AMD",
+        0x8086 => "Intel",
+        0x13B5 => "ARM",
+        0x5143 => "Qualcomm",
+        0x1010 => "ImgTec",
+        0x106B => "Apple",
+        0x1414 => "Microsoft",
+        _ => "Unknown",
+    }
+}
+
+fn log_wgpu_adapter_info(api: Api, adapter: &wgpu::Adapter) {
+    let info_data = adapter.get_info();
+    let vendor_name = wgpu_vendor_name(info_data.vendor);
+    let name = {
+        let trimmed = info_data.name.trim();
+        if trimmed.is_empty() {
+            "<unknown>".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    let driver = {
+        let a = info_data.driver.trim();
+        let b = info_data.driver_info.trim();
+        if a.is_empty() && b.is_empty() {
+            "unknown".to_string()
+        } else if b.is_empty() {
+            a.to_string()
+        } else if a.is_empty() {
+            b.to_string()
+        } else {
+            format!("{a}, {b}")
+        }
+    };
+    info!(
+        "{} adapter: {} [{}], driver {}, backend {:?} (vendor=0x{:04x}, device=0x{:04x}, type={:?})",
+        api.name(),
+        name,
+        vendor_name,
+        driver,
+        info_data.backend,
+        info_data.vendor,
+        info_data.device,
+        info_data.device_type
+    );
+}
+
+fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Matrix4) -> ProjState {
+    let align = device.limits().min_uniform_buffer_offset_alignment as u64;
+    let stride = if align > 0 {
+        PROJ_BYTES.div_ceil(align) * align
+    } else {
+        PROJ_BYTES
+    };
+    let capacity = 4usize;
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu projection"),
+        size: (capacity as u64) * stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let proj_array = projection.to_cols_array_2d();
+    queue.write_buffer(&buffer, 0, cast_slice(&proj_array));
+
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("wgpu proj layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: true,
+                min_binding_size: wgpu::BufferSize::new(PROJ_BYTES),
+            },
+            count: None,
+        }],
+    });
+    let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu proj group"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: proj_binding(&buffer),
+        }],
+    });
+
+    ProjState::Uniform {
+        stride,
+        capacity,
+        buffer,
+        group,
+        layout,
+    }
+}
+
+#[inline(always)]
+fn proj_binding(buffer: &wgpu::Buffer) -> wgpu::BindingResource<'_> {
+    wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+        buffer,
+        offset: 0,
+        size: wgpu::BufferSize::new(PROJ_BYTES),
+    })
+}
+
+pub fn create_texture(
+    state: &mut State,
+    image: &RgbaImage,
+    sampler_desc: SamplerDesc,
+) -> Result<Texture, Box<dyn Error>> {
+    let size = wgpu::Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+
+    let texture = state.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("wgpu texture"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    state.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        image.as_raw(),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * size.width),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
+
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let sampler = get_sampler(state, sampler_desc);
+    let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu texture bind group"),
+        layout: &state.bind_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+        ],
+    });
+    let sampler_repeat = get_sampler(
+        state,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..sampler_desc
+        },
+    );
+    let bind_group_repeat = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu texture bind group repeat"),
+        layout: &state.bind_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Sampler(&sampler_repeat),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+        ],
+    });
+
+    let id = state.next_texture_id;
+    state.next_texture_id = state.next_texture_id.wrapping_add(1);
+
+    Ok(Texture {
+        id,
+        _texture: texture,
+        _view: view,
+        bind_group: Arc::new(bind_group),
+        bind_group_repeat: Arc::new(bind_group_repeat),
+    })
+}
+
+fn create_depth_target(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> (wgpu::Texture, wgpu::TextureView) {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("wgpu depth texture"),
+        size: wgpu::Extent3d {
+            width: width.max(1),
+            height: height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: DEPTH_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    (texture, view)
+}
+
+pub fn update_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    image: &RgbaImage,
+) -> Result<(), Box<dyn Error>> {
+    let size = wgpu::Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+    state.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture._texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        image.as_raw(),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * size.width),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
+    Ok(())
+}
+
+fn ensure_cached_tmesh(
+    device: &wgpu::Device,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
+    cached_tmesh_bytes: &mut usize,
+    cache_key: TMeshCacheKey,
+    vertices: &[deadlib_render::TexturedMeshVertex],
+) -> bool {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return entry.vertex_count == vertices.len() as u32;
+    }
+
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    if bytes > WGPU_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
+    {
+        return false;
+    }
+
+    let buffer = Arc::new(
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wgpu cached textured-mesh vertex buffer"),
+            contents: cast_slice(vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+    );
+    cached_tmesh.insert(
+        cache_key,
+        CachedTMeshGeom {
+            buffer,
+            vertex_count: vertices.len() as u32,
+        },
+    );
+    *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
+    true
+}
+
+#[inline(always)]
+pub fn request_screenshot(state: &mut State) {
+    state.screenshot_requested = true;
+}
+
+pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
+    state
+        .captured_frame
+        .take()
+        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
+}
+
+pub fn draw(
+    state: &mut State,
+    render_list: &RenderList,
+    textures: &impl TextureLookup,
+    apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
+    let mut stats = DrawStats::default();
+    let (width, height) = state.window_size;
+    if width == 0 || height == 0 {
+        return Ok(stats);
+    }
+
+    {
+        let prep = &mut state.prep;
+        let device = &state.device;
+        let cached_tmesh = &mut state.cached_tmesh;
+        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+            ensure_cached_tmesh(
+                device,
+                cached_tmesh,
+                cached_tmesh_bytes,
+                cache_key,
+                vertices,
+            )
+        });
+    }
+
+    let instance_len = render_list.sprite_instances.len();
+    ensure_instance_capacity(state, instance_len);
+    if instance_len > 0 {
+        state.queue.write_buffer(
+            &state.instance_buffer,
+            0,
+            cast_slice(render_list.sprite_instances.as_slice()),
+        );
+    }
+    let mesh_len = state.prep.mesh_vertices.len();
+    ensure_mesh_vertex_capacity(state, mesh_len);
+    if mesh_len > 0 {
+        state.queue.write_buffer(
+            &state.mesh_vertex_buffer,
+            0,
+            cast_slice(state.prep.mesh_vertices.as_slice()),
+        );
+    }
+    let tmesh_len = state.prep.tmesh_vertices.len();
+    ensure_tmesh_vertex_capacity(state, tmesh_len);
+    if tmesh_len > 0 {
+        state.queue.write_buffer(
+            &state.tmesh_vertex_buffer,
+            0,
+            cast_slice(state.prep.tmesh_vertices.as_slice()),
+        );
+    }
+    let tmesh_instance_len = state.prep.tmesh_instances.len();
+    ensure_tmesh_instance_capacity(state, tmesh_instance_len);
+    if tmesh_instance_len > 0 {
+        state.queue.write_buffer(
+            &state.tmesh_instance_buffer,
+            0,
+            cast_slice(state.prep.tmesh_instances.as_slice()),
+        );
+    }
+    upload_projections(state, &render_list.cameras);
+
+    let acquire_started = Instant::now();
+    let (frame, suboptimal) = match state.surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
+        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
+        wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+            stats.acquire_us = elapsed_us_since(acquire_started);
+            reconfigure_surface(state);
+            return Ok(stats);
+        }
+        wgpu::CurrentSurfaceTexture::Timeout
+        | wgpu::CurrentSurfaceTexture::Occluded
+        | wgpu::CurrentSurfaceTexture::Validation => {
+            stats.acquire_us = elapsed_us_since(acquire_started);
+            return Ok(stats);
+        }
+    };
+    stats.acquire_us = elapsed_us_since(acquire_started);
+    let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
+    let view = frame
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = state
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("wgpu encoder"),
+        });
+
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wgpu render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: f64::from(render_list.clear_color[0]),
+                        g: f64::from(render_list.clear_color[1]),
+                        b: f64::from(render_list.clear_color[2]),
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &state.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Discard,
+                }),
+                stencil_ops: None,
+            }),
+            occlusion_query_set: None,
+            timestamp_writes: None,
+            multiview_mask: None,
+        });
+
+        let camera_count = render_list.cameras.len();
+        let texture_group = match state.proj {
+            ProjState::Immediates => 0,
+            ProjState::Uniform { .. } => 1,
+        };
+
+        let mut last_kind: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
+        let mut last_blend: Option<BlendMode> = None;
+        let mut last_bind: Option<u64> = None;
+        let mut last_camera: Option<u8> = None;
+        let mut last_tmesh_source: Option<TexturedMeshSource> = None;
+        let mut last_tmesh_depth_test: Option<bool> = None;
+        for op in &state.prep.ops {
+            match op {
+                DrawOp::Sprite(run) => {
+                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
+                        continue;
+                    };
+                    if last_kind != Some(0) {
+                        pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
+                        pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
+                        pass.set_index_buffer(
+                            state.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                        last_kind = Some(0);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                        last_tmesh_source = None;
+                        last_tmesh_depth_test = None;
+                    }
+                    if last_blend != Some(run.blend) {
+                        pass.set_pipeline(state.pipelines.get(run.blend));
+                        last_blend = Some(run.blend);
+                        last_bind = None;
+                    }
+                    if last_camera != Some(run.camera) {
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            run.camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
+                        last_camera = Some(run.camera);
+                    }
+                    if last_bind != Some(tex.id) {
+                        pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
+                        last_bind = Some(tex.id);
+                    }
+                    pass.draw_indexed(
+                        0..state.index_count,
+                        0,
+                        run.instance_start..(run.instance_start + run.instance_count),
+                    );
+                }
+                DrawOp::Mesh(run) => {
+                    if run.vertex_count == 0 {
+                        continue;
+                    }
+                    if last_kind != Some(1) {
+                        pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
+                        last_kind = Some(1);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                        last_tmesh_source = None;
+                        last_tmesh_depth_test = None;
+                    }
+                    if last_blend != Some(run.blend) {
+                        pass.set_pipeline(state.mesh_pipelines.get(run.blend));
+                        last_blend = Some(run.blend);
+                    }
+                    if last_camera != Some(run.camera) {
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            run.camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
+                        last_camera = Some(run.camera);
+                    }
+                    pass.draw(
+                        run.vertex_start..(run.vertex_start + run.vertex_count),
+                        0..1,
+                    );
+                }
+                DrawOp::TexturedMesh(run) => {
+                    if run.source.vertex_count() == 0 || run.instance_count == 0 {
+                        continue;
+                    }
+                    let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
+                        continue;
+                    };
+                    if last_kind != Some(2) {
+                        pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
+                        last_kind = Some(2);
+                        last_blend = None;
+                        last_bind = None;
+                        last_camera = None;
+                        last_tmesh_source = None;
+                        last_tmesh_depth_test = None;
+                    }
+                    if last_blend != Some(run.blend)
+                        || last_tmesh_depth_test != Some(run.depth_test)
+                    {
+                        pass.set_pipeline(if run.depth_test {
+                            state.tmesh_depth_pipelines.get(run.blend)
+                        } else {
+                            state.tmesh_pipelines.get(run.blend)
+                        });
+                        last_blend = Some(run.blend);
+                        last_tmesh_depth_test = Some(run.depth_test);
+                        last_bind = None;
+                    }
+                    if last_camera != Some(run.camera) {
+                        set_camera(
+                            &mut pass,
+                            &state.proj,
+                            run.camera,
+                            camera_count,
+                            &render_list.cameras,
+                            state.projection,
+                        );
+                        last_camera = Some(run.camera);
+                    }
+                    let bind_key = tex.id.wrapping_shl(1) | 1;
+                    if last_bind != Some(bind_key) {
+                        pass.set_bind_group(
+                            texture_group,
+                            Some(tex.bind_group_repeat.as_ref()),
+                            &[],
+                        );
+                        last_bind = Some(bind_key);
+                    }
+                    if last_tmesh_source != Some(run.source) {
+                        match run.source {
+                            TexturedMeshSource::Transient { .. } => {
+                                pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
+                            }
+                            TexturedMeshSource::Cached { cache_key, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                    continue;
+                                };
+                                pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                            }
+                        }
+                        last_tmesh_source = Some(run.source);
+                    }
+                    let draw_start = run.source.vertex_start();
+                    let draw_end = draw_start + run.source.vertex_count();
+                    pass.draw(
+                        draw_start..draw_end,
+                        run.instance_start..(run.instance_start + run.instance_count),
+                    );
+                }
+            }
+        }
+        drop(pass);
+    }
+
+    let screenshot_readback = if state.screenshot_requested {
+        state.screenshot_requested = false;
+        if state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
+            let format = state.config.format;
+            debug!(
+                "wgpu screenshot: surface format={:?} size={}x{}",
+                format, state.config.width, state.config.height
+            );
+            let width = state.config.width.max(1);
+            let height = state.config.height.max(1);
+            let bytes_per_row = 4 * width;
+            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+            let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
+            let readback_size = padded_bytes_per_row as u64 * height as u64;
+            let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("wgpu screenshot readback"),
+                size: readback_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &readback_buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(padded_bytes_per_row),
+                        rows_per_image: Some(height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            Some((
+                readback_buffer,
+                width as usize,
+                height as usize,
+                padded_bytes_per_row as usize,
+                state.config.format,
+            ))
+        } else {
+            state.captured_frame = None;
+            warn!(
+                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
+                state.api.name()
+            );
+            None
+        }
+    } else {
+        None
+    };
+
+    let submitted_present_id = next_present_id(state);
+    let submit_started = Instant::now();
+    let submission_index = state.queue.submit(Some(encoder.finish()));
+    stats.submit_us = elapsed_us_since(submit_started);
+    let present_done_tx = state.present_done_tx.clone();
+    state.queue.on_submitted_work_done(move || {
+        let _ = present_done_tx.send(PresentCompletion {
+            present_id: submitted_present_id,
+            host_ns: current_host_nanos(),
+            interval_ns: 0,
+        });
+    });
+    let present_started = Instant::now();
+    frame.present();
+    stats.present_us = elapsed_us_since(present_started);
+    let mut back_pressure_waited = false;
+    if apply_present_back_pressure && screenshot_readback.is_none() {
+        // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
+        // work continuously; wait for this frame to retire before proceeding.
+        let wait_started = Instant::now();
+        let _ = state.device.poll(wgpu::PollType::Wait {
+            submission_index: Some(submission_index),
+            timeout: None,
+        });
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
+    }
+    let mut queue_idle_waited = false;
+    if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
+        let slice = readback_buffer.slice(..);
+        let (tx, rx) = mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        let wait_started = Instant::now();
+        let _ = state.device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        queue_idle_waited = wait_us != 0;
+        if rx.recv().is_ok_and(|res| res.is_ok()) {
+            let data = slice.get_mapped_range();
+            let row_bytes = width * 4;
+            let mut rgba = vec![0u8; row_bytes * height];
+            let swap_rb = matches!(
+                format,
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+            );
+            for y in 0..height {
+                let src = y * padded_row_bytes;
+                // Surface readback rows are already top-to-bottom for this path.
+                let dst = y * row_bytes;
+                if swap_rb {
+                    let mut x = 0usize;
+                    while x < width {
+                        let s = src + x * 4;
+                        let d = dst + x * 4;
+                        rgba[d] = data[s + 2];
+                        rgba[d + 1] = data[s + 1];
+                        rgba[d + 2] = data[s];
+                        rgba[d + 3] = data[s + 3];
+                        x += 1;
+                    }
+                } else {
+                    rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
+                }
+            }
+            drop(data);
+            readback_buffer.unmap();
+            if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
+                state.captured_frame = Some(img);
+            }
+        } else {
+            readback_buffer.unmap();
+            state.captured_frame = None;
+            warn!("wgpu screenshot readback failed: map_async returned error");
+        }
+    }
+    let completion = drain_present_completions(state);
+    let in_flight_images = if completion.present_id == 0 {
+        1
+    } else if submitted_present_id >= completion.present_id {
+        submitted_present_id
+            .saturating_sub(completion.present_id)
+            .min(u32::from(u8::MAX)) as u8
+    } else {
+        0
+    };
+    stats.present_stats = PresentStats {
+        mode: wgpu_present_mode_trace(state.config.present_mode),
+        display_clock: ClockDomainTrace::Unknown,
+        host_clock: if completion.host_ns != 0 {
+            host_clock_trace()
+        } else {
+            ClockDomainTrace::Unknown
+        },
+        in_flight_images,
+        waited_for_image,
+        applied_back_pressure: back_pressure_waited,
+        queue_idle_waited,
+        suboptimal,
+        submitted_present_id,
+        completed_present_id: completion.present_id,
+        refresh_ns: state.last_present_interval_ns,
+        actual_interval_ns: completion.interval_ns,
+        present_margin_ns: 0,
+        host_present_ns: completion.host_ns,
+        calibration_error_ns: 0,
+    };
+    if suboptimal {
+        reconfigure_surface(state);
+    }
+
+    let mut tmesh_vpf = 0u32;
+    for op in &state.prep.ops {
+        if let DrawOp::TexturedMesh(run) = op {
+            let tri_count = run.source.vertex_count() / 3;
+            tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
+        }
+    }
+    stats.vertices = (instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf;
+    Ok(stats)
+}
+
+#[inline(always)]
+fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
+    let ProjState::Uniform { .. } = state.proj else {
+        return;
+    };
+    let needed = cameras.len().saturating_add(1).max(1);
+    ensure_projection_capacity(state, needed);
+
+    let ProjState::Uniform { buffer, stride, .. } = &state.proj else {
+        return;
+    };
+    for (i, &vp) in cameras.iter().enumerate() {
+        let arr = vp.to_cols_array_2d();
+        let offset = (i as u64) * *stride;
+        state.queue.write_buffer(buffer, offset, cast_slice(&arr));
+    }
+    let fallback_offset = (cameras.len() as u64) * *stride;
+    let fallback = state.projection.to_cols_array_2d();
+    state
+        .queue
+        .write_buffer(buffer, fallback_offset, cast_slice(&fallback));
+}
+
+fn set_camera(
+    pass: &mut wgpu::RenderPass<'_>,
+    proj: &ProjState,
+    camera: u8,
+    camera_count: usize,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
+) {
+    match proj {
+        ProjState::Immediates => {
+            let vp = cameras.get(camera as usize).copied().unwrap_or(fallback);
+            let vp_array = vp.to_cols_array_2d();
+            pass.set_immediates(0, cast_slice(&vp_array));
+        }
+        ProjState::Uniform { group, stride, .. } => {
+            let idx = if (camera as usize) < camera_count {
+                camera as usize
+            } else {
+                camera_count
+            };
+            let offset = ((idx as u64) * *stride) as u32;
+            pass.set_bind_group(0, group, &[offset]);
+        }
+    }
+}
+
+pub fn resize(state: &mut State, width: u32, height: u32) {
+    state.window_size = (width, height);
+    if width == 0 || height == 0 {
+        return;
+    }
+    state.projection = ortho_for_window(width, height);
+    reconfigure_surface(state);
+}
+
+pub fn cleanup(state: &mut State) {
+    info!("{} (wgpu) backend cleanup complete.", state.api.name());
+}
+
+pub fn wait_for_idle(state: &mut State) {
+    let _ = state.device.poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: None,
+    });
+}
+
+fn ensure_instance_capacity(state: &mut State, needed: usize) {
+    if needed <= state.instance_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(64);
+    state.instance_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu instance buffer"),
+        size: (new_cap * mem::size_of::<InstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.instance_capacity = new_cap;
+}
+
+fn ensure_mesh_vertex_capacity(state: &mut State, needed: usize) {
+    if needed <= state.mesh_vertex_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(1024);
+    state.mesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu mesh vertex buffer"),
+        size: (new_cap * mem::size_of::<deadlib_render::MeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.mesh_vertex_capacity = new_cap;
+}
+
+fn ensure_tmesh_vertex_capacity(state: &mut State, needed: usize) {
+    if needed <= state.tmesh_vertex_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(1024);
+    state.tmesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh vertex buffer"),
+        size: (new_cap * mem::size_of::<TexturedMeshVertex>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.tmesh_vertex_capacity = new_cap;
+}
+
+fn ensure_tmesh_instance_capacity(state: &mut State, needed: usize) {
+    if needed <= state.tmesh_instance_capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(256);
+    state.tmesh_instance_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu textured-mesh instance buffer"),
+        size: (new_cap * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    state.tmesh_instance_capacity = new_cap;
+}
+
+fn ensure_projection_capacity(state: &mut State, needed: usize) {
+    let ProjState::Uniform {
+        stride,
+        capacity,
+        buffer,
+        group,
+        layout,
+    } = &mut state.proj
+    else {
+        return;
+    };
+    if needed <= *capacity {
+        return;
+    }
+    let new_cap = needed.next_power_of_two().max(4);
+    *buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wgpu projection"),
+        size: (new_cap as u64) * *stride,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    *group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wgpu proj group"),
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: proj_binding(buffer),
+        }],
+    });
+    *capacity = new_cap;
+}
+
+fn reconfigure_surface(state: &mut State) {
+    if state.window_size.0 == 0 || state.window_size.1 == 0 {
+        return;
+    }
+    let caps = state.surface.get_capabilities(&state.adapter);
+    let new_format = pick_format(&caps);
+    let format_changed = new_format != state.config.format;
+    state.config.format = new_format;
+    state.config.present_mode = pick_present_mode(
+        &caps.present_modes,
+        state.vsync_enabled,
+        state.present_mode_policy,
+    );
+    state.config.alpha_mode = pick_alpha_mode(&caps);
+    state.config.usage = pick_surface_usage(&caps);
+    state.config.width = state.window_size.0;
+    state.config.height = state.window_size.1;
+    state.surface.configure(&state.device, &state.config);
+    (state.depth_texture, state.depth_view) = create_depth_target(
+        &state.device,
+        state.config.width.max(1),
+        state.config.height.max(1),
+    );
+
+    if matches!(state.proj, ProjState::Uniform { .. }) {
+        let fallback = state.projection.to_cols_array_2d();
+        if let ProjState::Uniform { buffer, .. } = &state.proj {
+            state.queue.write_buffer(buffer, 0, cast_slice(&fallback));
+        }
+    }
+
+    if format_changed {
+        let (shader, pipeline_layout, pipelines) = build_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.bind_layout,
+            state.config.format,
+        );
+        let (mesh_shader, mesh_pipeline_layout, mesh_pipelines) =
+            build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
+        let (tmesh_shader, tmesh_pipeline_layout, tmesh_pipelines, tmesh_depth_pipelines) =
+            build_textured_mesh_pipeline_set(
+                &state.device,
+                &state.proj,
+                &state.bind_layout,
+                state.config.format,
+            );
+        state.shader = shader;
+        state.pipeline_layout = pipeline_layout;
+        state.pipelines = pipelines;
+        state.mesh_shader = mesh_shader;
+        state.mesh_pipeline_layout = mesh_pipeline_layout;
+        state.mesh_pipelines = mesh_pipelines;
+        state.tmesh_shader = tmesh_shader;
+        state.tmesh_pipeline_layout = tmesh_pipeline_layout;
+        state.tmesh_pipelines = tmesh_pipelines;
+        state.tmesh_depth_pipelines = tmesh_depth_pipelines;
+    }
+}
+
+fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
+    // Prefer 8-bit non-sRGB formats for consistent colors and correct screenshot
+    // readback. The screenshot path assumes 4 bytes/pixel RGBA or BGRA; formats
+    // like Rgb10a2 or Rgba16Float would produce garbled captures.
+    const PREFERRED: &[wgpu::TextureFormat] = &[
+        wgpu::TextureFormat::Bgra8Unorm,
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    ];
+    for &pref in PREFERRED {
+        if caps.formats.contains(&pref) {
+            return pref;
+        }
+    }
+    // Fall back to the first non-sRGB, then the first format overall.
+    caps.formats
+        .iter()
+        .copied()
+        .find(|f| !f.is_srgb())
+        .unwrap_or_else(|| caps.formats[0])
+}
+
+#[inline(always)]
+fn pick_surface_usage(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureUsages {
+    let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+    if caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+        usage |= wgpu::TextureUsages::COPY_SRC;
+    }
+    usage
+}
+
+#[inline(always)]
+fn pick_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
+    caps.alpha_modes
+        .iter()
+        .copied()
+        .find(|mode| *mode == wgpu::CompositeAlphaMode::Opaque)
+        .unwrap_or_else(|| {
+            caps.alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Opaque)
+        })
+}
+
+#[inline(always)]
+const fn surface_write_mask() -> wgpu::ColorWrites {
+    wgpu::ColorWrites::RED
+        .union(wgpu::ColorWrites::GREEN)
+        .union(wgpu::ColorWrites::BLUE)
+}
+
+fn pick_present_mode(
+    modes: &[wgpu::PresentMode],
+    vsync: bool,
+    present_mode_policy: PresentModePolicy,
+) -> wgpu::PresentMode {
+    let preferred = if vsync {
+        [
+            wgpu::PresentMode::AutoVsync,
+            wgpu::PresentMode::Fifo,
+            wgpu::PresentMode::FifoRelaxed,
+        ]
+    } else if present_mode_policy == PresentModePolicy::Immediate {
+        [
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::AutoNoVsync,
+            wgpu::PresentMode::Mailbox,
+        ]
+    } else {
+        [
+            wgpu::PresentMode::Mailbox,
+            wgpu::PresentMode::AutoNoVsync,
+            wgpu::PresentMode::Immediate,
+        ]
+    };
+
+    preferred
+        .iter()
+        .copied()
+        .find(|p| modes.contains(p))
+        .unwrap_or_else(|| modes[0])
+}
+
+pub fn set_present_config(
+    state: &mut State,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+) {
+    if state.vsync_enabled == vsync_enabled && state.present_mode_policy == present_mode_policy {
+        return;
+    }
+    state.vsync_enabled = vsync_enabled;
+    state.present_mode_policy = present_mode_policy;
+    reconfigure_surface(state);
+}
+
+fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
+    let comp = |src, dst, op| wgpu::BlendComponent {
+        src_factor: src,
+        dst_factor: dst,
+        operation: op,
+    };
+    match mode {
+        BlendMode::Alpha => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
+        BlendMode::Add => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
+        BlendMode::Multiply => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::Dst,
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::DstAlpha,
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
+        BlendMode::Subtract => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::ReverseSubtract,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::ReverseSubtract,
+            ),
+        }),
+    }
+}
+
+fn build_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    bind_layout: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+) -> (wgpu::ShaderModule, wgpu::PipelineLayout, PipelineSet) {
+    let shader_src = match proj {
+        ProjState::Immediates => SHADER_IMM,
+        ProjState::Uniform { .. } => SHADER_UBO,
+    };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
+
+    let pipeline_layout = match proj {
+        ProjState::Immediates => {
+            let layouts = [Some(bind_layout)];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: PROJ_BYTES as u32,
+            })
+        }
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [Some(layout), Some(bind_layout)];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
+
+    let pipelines = PipelineSet {
+        alpha: build_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
+        add: build_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+        multiply: build_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+        ),
+        subtract: build_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+        ),
+    };
+
+    (shader, pipeline_layout, pipelines)
+}
+
+fn build_mesh_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    format: wgpu::TextureFormat,
+) -> (wgpu::ShaderModule, wgpu::PipelineLayout, MeshPipelineSet) {
+    let shader_src = match proj {
+        ProjState::Immediates => MESH_SHADER_IMM,
+        ProjState::Uniform { .. } => MESH_SHADER_UBO,
+    };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu mesh shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
+
+    let pipeline_layout = match proj {
+        ProjState::Immediates => device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("wgpu mesh pipeline layout"),
+            bind_group_layouts: &[],
+            immediate_size: PROJ_BYTES as u32,
+        }),
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [Some(layout)];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
+
+    let pipelines = MeshPipelineSet {
+        alpha: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Alpha, &shader),
+        add: build_mesh_pipeline(device, &pipeline_layout, format, BlendMode::Add, &shader),
+        multiply: build_mesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+        ),
+        subtract: build_mesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+        ),
+    };
+
+    (shader, pipeline_layout, pipelines)
+}
+
+fn build_textured_mesh_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    bind_layout: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+) -> (
+    wgpu::ShaderModule,
+    wgpu::PipelineLayout,
+    PipelineSet,
+    PipelineSet,
+) {
+    let shader_src = match proj {
+        ProjState::Immediates => TMESH_SHADER_IMM,
+        ProjState::Uniform { .. } => TMESH_SHADER_UBO,
+    };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu textured-mesh shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
+
+    let pipeline_layout = match proj {
+        ProjState::Immediates => {
+            let layouts = [Some(bind_layout)];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu textured-mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: PROJ_BYTES as u32,
+            })
+        }
+        ProjState::Uniform { layout, .. } => {
+            let layouts = [Some(layout), Some(bind_layout)];
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wgpu textured-mesh pipeline layout"),
+                bind_group_layouts: &layouts,
+                immediate_size: 0,
+            })
+        }
+    };
+
+    let pipelines = PipelineSet {
+        alpha: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Alpha,
+            &shader,
+            false,
+        ),
+        add: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Add,
+            &shader,
+            false,
+        ),
+        multiply: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+            false,
+        ),
+        subtract: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+            false,
+        ),
+    };
+    let depth_pipelines = PipelineSet {
+        alpha: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Alpha,
+            &shader,
+            true,
+        ),
+        add: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Add,
+            &shader,
+            true,
+        ),
+        multiply: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Multiply,
+            &shader,
+            true,
+        ),
+        subtract: build_tmesh_pipeline(
+            device,
+            &pipeline_layout,
+            format,
+            BlendMode::Subtract,
+            &shader,
+            true,
+        ),
+    };
+
+    (shader, pipeline_layout, pipelines, depth_pipelines)
+}
+
+fn build_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    mode: BlendMode,
+    shader: &wgpu::ShaderModule,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wgpu pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[vertex_layout(), instance_layout()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: blend_state(mode),
+                write_mask: surface_write_mask(),
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(false),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+fn build_mesh_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    mode: BlendMode,
+    shader: &wgpu::ShaderModule,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wgpu mesh pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[mesh_vertex_layout()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: blend_state(mode),
+                write_mask: surface_write_mask(),
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(false),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+fn build_tmesh_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    mode: BlendMode,
+    shader: &wgpu::ShaderModule,
+    use_depth: bool,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wgpu textured-mesh pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[
+                textured_mesh_vertex_layout(),
+                textured_mesh_instance_layout(),
+            ],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: blend_state(mode),
+                write_mask: surface_write_mask(),
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: use_depth.then_some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(use_depth),
+            depth_compare: Some(if use_depth {
+                wgpu::CompareFunction::LessEqual
+            } else {
+                wgpu::CompareFunction::Always
+            }),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+const fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<Vertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &VERT_ATTRS,
+    }
+}
+
+const fn instance_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<InstanceRaw>() as u64,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &INSTANCE_ATTRS,
+    }
+}
+
+const fn mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<deadlib_render::MeshVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &MESH_ATTRS,
+    }
+}
+
+const fn textured_mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<TexturedMeshVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &TMESH_ATTRS,
+    }
+}
+
+const fn textured_mesh_instance_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<TexturedMeshInstanceRaw>() as u64,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &TMESH_INSTANCE_ATTRS,
+    }
+}
+
+const VERT_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+    0 => Float32x2,
+    1 => Float32x2,
+];
+
+const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+    0 => Float32x2, // pos
+    1 => Float32x4, // color
+];
+
+const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+    0 => Float32x3, // pos
+    1 => Float32x2, // uv
+    2 => Float32x4, // color
+    3 => Float32x2, // tex-matrix scale
+];
+
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
+    4 => Float32x4, // model column 0
+    5 => Float32x4, // model column 1
+    6 => Float32x4, // model column 2
+    7 => Float32x4, // model column 3
+    8 => Float32x4, // tint
+    9 => Float32x2, // uv scale
+    10 => Float32x2, // uv offset
+    11 => Float32x2, // uv texture-matrix shift
+    12 => Float32, // texture alpha-mask mode
+];
+
+const INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
+    2 => Float32x4, // center xyz + pad
+    3 => Float32x2, // size
+    4 => Float32x2, // sin/cos
+    5 => Float32x4, // tint
+    6 => Float32x2, // uv scale
+    7 => Float32x2, // uv offset
+    8 => Float32x2, // local offset
+    9 => Float32x2, // local offset sin/cos
+    10 => Float32x4, // edge fade
+    11 => Float32, // texture alpha-mask mode
+];
+
+const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;
+
+#[inline(always)]
+fn cast_slice<T: bytemuck::Pod>(data: &[T]) -> &[u8] {
+    bytemuck::cast_slice(data)
+}
+
+#[inline(always)]
+const fn wgpu_filter_mode(filter: SamplerFilter) -> wgpu::FilterMode {
+    match filter {
+        SamplerFilter::Linear => wgpu::FilterMode::Linear,
+        SamplerFilter::Nearest => wgpu::FilterMode::Nearest,
+    }
+}
+
+#[inline(always)]
+const fn wgpu_address_mode(wrap: SamplerWrap) -> wgpu::AddressMode {
+    match wrap {
+        SamplerWrap::Clamp => wgpu::AddressMode::ClampToEdge,
+        SamplerWrap::Repeat => wgpu::AddressMode::Repeat,
+    }
+}
+
+#[inline(always)]
+fn sampler_descriptor(desc: SamplerDesc) -> wgpu::SamplerDescriptor<'static> {
+    let filter = wgpu_filter_mode(desc.filter);
+    let address = wgpu_address_mode(desc.wrap);
+    let mip_filter = if desc.mipmaps {
+        match desc.filter {
+            SamplerFilter::Linear => wgpu::MipmapFilterMode::Linear,
+            SamplerFilter::Nearest => wgpu::MipmapFilterMode::Nearest,
+        }
+    } else {
+        wgpu::MipmapFilterMode::Nearest
+    };
+    wgpu::SamplerDescriptor {
+        label: Some("wgpu sampler"),
+        address_mode_u: address,
+        address_mode_v: address,
+        address_mode_w: address,
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: mip_filter,
+        ..Default::default()
+    }
+}
+
+fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
+    if let Some(existing) = state.samplers.get(&desc) {
+        return existing.clone();
+    }
+    let sampler = state.device.create_sampler(&sampler_descriptor(desc));
+    state.samplers.insert(desc, sampler.clone());
+    sampler
+}
+
+#[inline(always)]
+fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
+    let aspect = if height == 0 {
+        1.0
+    } else {
+        width as f32 / height as f32
+    };
+    let h = LOGICAL_HEIGHT;
+    let w = if aspect >= 16.0 / 9.0 {
+        DESIGN_WIDTH_16_9
+    } else {
+        (h * aspect).min(DESIGN_WIDTH_16_9)
+    };
+    let half_w = 0.5 * w;
+    let half_h = 0.5 * h;
+    Matrix4::orthographic_rh_gl(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
+}
+
+const SHADER_IMM: &str = include_str!("shaders/wgpu_sprite.wgsl");
+const MESH_SHADER_IMM: &str = include_str!("shaders/wgpu_mesh.wgsl");
+const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
+const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
+const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
+const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");

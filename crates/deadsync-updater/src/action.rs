@@ -799,7 +799,7 @@ fn resolve_expected_digest(
 
 /// Absolute path of the directory archives are downloaded into.
 pub fn downloads_dir() -> PathBuf {
-    deadsync_platform::dirs::app_dirs()
+    deadlib_platform::dirs::app_dirs()
         .cache_dir
         .join(DOWNLOADS_SUBDIR)
 }

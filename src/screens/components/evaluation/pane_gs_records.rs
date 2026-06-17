@@ -1,7 +1,7 @@
 use crate::act;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
@@ -167,7 +167,7 @@ fn build_records_pane(
     kind: RecordsPaneKind,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadsync_present::space::screen_center_y() - 62.0;
+    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
     let pane_zoom = 0.8_f32;
     let row_height = 22.0 * pane_zoom;
     let first_row_y = row_height;

@@ -7,7 +7,7 @@ use super::{
     push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 use chrono::{Datelike, Local};
-use deadsync_present::actors::TextAlign;
+use deadlib_present::actors::TextAlign;
 use std::fs;
 use std::path::PathBuf;
 
@@ -5906,7 +5906,7 @@ return Def.ActorFrame{
     let text = compiled.overlays[1].initial_state;
     assert_eq!(
         text.effect_mode,
-        deadsync_present::anim::EffectMode::GlowShift
+        deadlib_present::anim::EffectMode::GlowShift
     );
     assert_eq!(text.effect_color1, [1.0, 1.0, 1.0, 0.2]);
     assert_eq!(text.effect_color2, [1.0, 1.0, 1.0, 0.8]);

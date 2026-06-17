@@ -1,8 +1,8 @@
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
 };
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_render::{BlendMode, TexturedMeshVertex};
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_render::{BlendMode, TexturedMeshVertex};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;
 
@@ -132,7 +132,7 @@ fn actor_from_vertices(
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
-    geom_cache_key: deadsync_render::TMeshCacheKey,
+    geom_cache_key: deadlib_render::TMeshCacheKey,
     local_transform: Matrix4,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -190,7 +190,7 @@ fn actor_from_draw(
         xy,
         tint,
         vertices,
-        deadsync_render::INVALID_TMESH_CACHE_KEY,
+        deadlib_render::INVALID_TMESH_CACHE_KEY,
         local_transform,
         uv_scale,
         uv_offset,
@@ -281,7 +281,7 @@ pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
         xy,
         tint,
         build_model_geometry(slot),
-        deadsync_render::INVALID_TMESH_CACHE_KEY,
+        deadlib_render::INVALID_TMESH_CACHE_KEY,
         local_transform,
         uv_scale,
         uv_offset,

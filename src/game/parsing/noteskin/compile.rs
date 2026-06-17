@@ -1272,7 +1272,7 @@ mod actor {
 mod compiled {
     use super::actor as noteskin_actor;
     use bincode::{Decode, Encode};
-    use deadsync_platform::dirs;
+    use deadlib_platform::dirs;
     use log::warn;
     use std::fs;
     use std::path::{Path, PathBuf};

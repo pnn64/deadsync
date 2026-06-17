@@ -1,11 +1,11 @@
-use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
-use deadsync::test_support::{compose_case, compose_scenarios};
-use deadsync_present::compose;
-use deadsync_render::draw_prep::{self, DrawOp, DrawScratch, PrepareStats, TexturedMeshSource};
-use deadsync_render::{
+use deadlib_present::compose;
+use deadlib_render::draw_prep::{self, DrawOp, DrawScratch, PrepareStats, TexturedMeshSource};
+use deadlib_render::{
     BlendMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshInstanceRaw,
     TexturedMeshVertex,
 };
+use deadsync::assets::PRESENT_TEXTURE_CONTEXT;
+use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
 use std::hash::Hasher;
@@ -513,17 +513,17 @@ fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>>
 fn ensure_texture_handles(render: &mut RenderList) {
     let mut next_handle = 1u64;
     for obj in &mut render.objects {
-        if obj.texture_handle != deadsync_render::INVALID_TEXTURE_HANDLE {
+        if obj.texture_handle != deadlib_render::INVALID_TEXTURE_HANDLE {
             continue;
         }
         obj.texture_handle = match &obj.object_type {
-            deadsync_render::ObjectType::Sprite(_)
-            | deadsync_render::ObjectType::TexturedMesh { .. } => {
+            deadlib_render::ObjectType::Sprite(_)
+            | deadlib_render::ObjectType::TexturedMesh { .. } => {
                 let handle = next_handle;
                 next_handle = next_handle.wrapping_add(1).max(1);
                 handle
             }
-            deadsync_render::ObjectType::Mesh { .. } => deadsync_render::INVALID_TEXTURE_HANDLE,
+            deadlib_render::ObjectType::Mesh { .. } => deadlib_render::INVALID_TEXTURE_HANDLE,
         };
     }
 }

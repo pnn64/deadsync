@@ -1,5 +1,5 @@
 use crate::act;
-use deadsync_present::actors::Actor;
+use deadlib_present::actors::Actor;
 
 const DEBUG_OVERLAY_Z: i16 = 32030;
 

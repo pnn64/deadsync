@@ -2,8 +2,8 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
 use deadsync_profile as profile_data;
 
 use super::utils::{eval_style_alpha, pane_origin_x, pane3_origin_x};
@@ -52,7 +52,7 @@ pub(crate) fn build_pane_percentage_display(
     } else {
         pane_origin_x(controller)
     };
-    let cy = deadsync_present::space::screen_center_y();
+    let cy = deadlib_present::space::screen_center_y();
 
     let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
     let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));

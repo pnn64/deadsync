@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets;
-use deadsync_platform::dirs;
-use deadsync_present::actors::Actor;
-use deadsync_render::SamplerDesc;
+use deadlib_platform::dirs;
+use deadlib_present::actors::Actor;
+use deadlib_render::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};

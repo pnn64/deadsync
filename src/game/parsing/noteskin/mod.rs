@@ -9,10 +9,10 @@ use self::{
     itg as noteskin_itg,
 };
 use crate::assets;
-use deadsync_platform::dirs;
-use deadsync_present::actors::TextureKeyHandle;
-use deadsync_present::anim as ui_anim;
-use deadsync_render::SamplerDesc;
+use deadlib_platform::dirs;
+use deadlib_present::actors::TextureKeyHandle;
+use deadlib_present::anim as ui_anim;
+use deadlib_render::SamplerDesc;
 use image::{Rgba, RgbaImage, image_dimensions};
 use log::warn;
 use std::borrow::Cow;
@@ -118,7 +118,7 @@ impl SpriteSource {
         };
         let generation = assets::texture_registry_generation();
         let handle = cached_handle.load(Ordering::Relaxed);
-        if handle != deadsync_render::INVALID_TEXTURE_HANDLE
+        if handle != deadlib_render::INVALID_TEXTURE_HANDLE
             && cached_generation.load(Ordering::Relaxed) == generation
         {
             return TextureKeyHandle {
@@ -1935,7 +1935,7 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         frame_indices: None,
         rate: AnimationRate::FramesPerBeat(1.0),
         frame_durations: None,
-        cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
         cached_generation: AtomicU64::new(u64::MAX),
     });
 
@@ -4882,7 +4882,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key.into(),
         tex_dims: dims,
-        cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
         cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
@@ -5296,7 +5296,7 @@ fn itg_apply_slot_state_properties(
         frame_indices: None,
         rate,
         frame_durations: Some(Arc::<[f32]>::from(durations)),
-        cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
         cached_generation: AtomicU64::new(u64::MAX),
     });
     let start_col = start_idx % cols;
@@ -6664,7 +6664,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key.into(),
         tex_dims: dims,
-        cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
         cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
@@ -6757,7 +6757,7 @@ fn itg_slot_from_path_animated(
         frame_indices,
         rate,
         frame_durations,
-        cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
         cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
@@ -7190,7 +7190,7 @@ mod tests {
             source: Arc::new(SpriteSource::Atlas {
                 texture_key: Arc::from("test"),
                 tex_dims: (64, 64),
-                cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+                cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
                 cached_generation: AtomicU64::new(u64::MAX),
             }),
             uv_velocity: [0.0, 0.0],
@@ -9031,7 +9031,7 @@ return skin
         slot.source = Arc::new(SpriteSource::Atlas {
             texture_key: Arc::<str>::from(key.as_str()),
             tex_dims: (2048, 2048),
-            cached_handle: AtomicU64::new(deadsync_render::INVALID_TEXTURE_HANDLE),
+            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
         });
         slot.model = None;

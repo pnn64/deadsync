@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use deadsync_present::actors::{TextAlign, TextAttribute};
-use deadsync_present::anim::{EffectClock, EffectMode};
+use deadlib_present::actors::{TextAlign, TextAttribute};
+use deadlib_present::anim::{EffectClock, EffectMode};
 
 mod actor_host;
 mod compat;

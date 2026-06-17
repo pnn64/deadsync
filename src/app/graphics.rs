@@ -1,11 +1,11 @@
 use super::App;
 use crate::config::{self, DisplayMode};
 use crate::screens::{DensityGraphSlot, options, select_music};
-use deadsync_platform::dirs;
-use deadsync_platform::display;
-use deadsync_present::space;
-use deadsync_render::BackendType;
-use deadsync_renderer::create_backend;
+use deadlib_platform::dirs;
+use deadlib_platform::display;
+use deadlib_present::space;
+use deadlib_render::BackendType;
+use deadlib_renderer::create_backend;
 use log::{error, info};
 use std::error::Error;
 use std::sync::Arc;
@@ -324,7 +324,7 @@ impl App {
             Ok(()) => {
                 config::update_video_renderer(target);
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
-                deadsync_present::runtime::clear_all();
+                deadlib_present::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
                 if let Some(window) = self.window.clone() {
                     self.request_redraw(&window, "switch_renderer");

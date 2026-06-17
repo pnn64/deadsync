@@ -2,9 +2,9 @@ use super::technique_bg;
 use crate::act;
 use crate::assets::visual_styles;
 use crate::config::{self, VisualStyle};
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::{
     Arc, Mutex, OnceLock,
     atomic::{AtomicU32, Ordering},

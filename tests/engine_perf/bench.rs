@@ -1,12 +1,12 @@
 use deadsync::assets::{self, PRESENT_TEXTURE_CONTEXT};
-use deadsync_render::{
+use deadlib_render::{
     self as gfx, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
     TexturedMeshInstanceRaw as GfxTexturedMeshInstanceRaw,
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
 use deadsync::test_support::compose_scenarios;
-use deadsync_present::actors::{Actor, SizeSpec, SpriteSource, TextContent, TextureKeyHandle};
-use deadsync_present::{anim, compose, font};
+use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextContent, TextureKeyHandle};
+use deadlib_present::{anim, compose, font};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -2536,7 +2536,7 @@ fn checksum_bytes(bytes: &[u8]) -> u64 {
         ^ (u64::from(bytes[bytes.len() - 1]) << 16)
 }
 
-fn checksum_gfx_render(render: &deadsync_render::RenderList) -> u64 {
+fn checksum_gfx_render(render: &deadlib_render::RenderList) -> u64 {
     let mut out = render.objects.len() as u64 ^ ((render.cameras.len() as u64) << 32);
     for obj in &render.objects {
         out = out
@@ -2546,7 +2546,7 @@ fn checksum_gfx_render(render: &deadsync_render::RenderList) -> u64 {
             .wrapping_add((obj.order as u64) << 16)
             .wrapping_add((obj.camera as u64) << 48);
         match &obj.object_type {
-            deadsync_render::ObjectType::Sprite(index) => {
+            deadlib_render::ObjectType::Sprite(index) => {
                 let sprite = render.sprite_instances[*index as usize];
                 out = out
                     .wrapping_add(sprite.center[0].to_bits() as u64)
@@ -2554,12 +2554,12 @@ fn checksum_gfx_render(render: &deadsync_render::RenderList) -> u64 {
                     .wrapping_add(sprite.size[0].to_bits() as u64)
                     .wrapping_add((sprite.tint[3].to_bits() as u64) << 1);
             }
-            deadsync_render::ObjectType::Mesh { tint, vertices, .. } => {
+            deadlib_render::ObjectType::Mesh { tint, vertices, .. } => {
                 out = out
                     .wrapping_add(vertices.len() as u64)
                     .wrapping_add(tint[3].to_bits() as u64);
             }
-            deadsync_render::ObjectType::TexturedMesh {
+            deadlib_render::ObjectType::TexturedMesh {
                 instance, vertices, ..
             } => {
                 out = out

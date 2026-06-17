@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::game::scores;
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_score as score_data;
 
 use super::leaderboard::format_groovestats_date;

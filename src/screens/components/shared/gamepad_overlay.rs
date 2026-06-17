@@ -1,7 +1,7 @@
 use crate::act;
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_width, widescale};
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_width, widescale};
 
 // --- Constants to match StepMania's SystemMessage display ---
 const FADE_IN_DURATION: f32 = 0.0; // SM appears instantly

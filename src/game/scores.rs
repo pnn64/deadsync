@@ -4,7 +4,7 @@ use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
-use deadsync_platform::dirs;
+use deadlib_platform::dirs;
 use deadsync_profile::Profile;
 use log::{debug, warn};
 use std::collections::{HashMap, HashSet};

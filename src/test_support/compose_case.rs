@@ -1,10 +1,10 @@
 use crate::assets::{self, PRESENT_TEXTURE_CONTEXT};
-use deadsync_present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
-use deadsync_present::anim::{EffectClock, EffectMode, EffectState};
-use deadsync_present::compose;
-use deadsync_present::font::{self, Font, Glyph};
-use deadsync_present::space::Metrics;
-use deadsync_render::{
+use deadlib_present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use deadlib_present::anim::{EffectClock, EffectMode, EffectState};
+use deadlib_present::compose;
+use deadlib_present::font::{self, Font, Glyph};
+use deadlib_present::space::Metrics;
+use deadlib_render::{
     BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     TexturedMeshInstanceRaw, TexturedMeshVertex,
 };
@@ -295,14 +295,14 @@ pub struct TextureResolveSnapshot {
 pub struct TextureResolveObjectSnapshot {
     #[serde(default)]
     pub texture_id: Option<String>,
-    pub texture_handle: deadsync_render::TextureHandle,
+    pub texture_handle: deadlib_render::TextureHandle,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderObjectSnapshot {
     pub object_type: RenderObjectTypeSnapshot,
     #[serde(default)]
-    pub texture_handle: deadsync_render::TextureHandle,
+    pub texture_handle: deadlib_render::TextureHandle,
     pub transform: [[f32; 4]; 4],
     pub blend: BlendModeSnapshot,
     pub z: i16,
@@ -1282,7 +1282,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             tint: *tint,
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vertices.clone()),
-            geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
+            geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
@@ -1433,7 +1433,7 @@ fn render_object_runtime(
     sprite_instances: &mut Vec<SpriteInstanceRaw>,
 ) -> RenderObject {
     let snapshot_transform = matrix_runtime(render.transform);
-    let texture_handle = if render.texture_handle != deadsync_render::INVALID_TEXTURE_HANDLE {
+    let texture_handle = if render.texture_handle != deadlib_render::INVALID_TEXTURE_HANDLE {
         render.texture_handle
     } else {
         match &render.object_type {
@@ -1441,8 +1441,8 @@ fn render_object_runtime(
             | RenderObjectTypeSnapshot::TexturedMesh { texture_id, .. } => texture_id
                 .as_deref()
                 .map(crate::assets::texture_handle)
-                .unwrap_or(deadsync_render::INVALID_TEXTURE_HANDLE),
-            RenderObjectTypeSnapshot::Mesh { .. } => deadsync_render::INVALID_TEXTURE_HANDLE,
+                .unwrap_or(deadlib_render::INVALID_TEXTURE_HANDLE),
+            RenderObjectTypeSnapshot::Mesh { .. } => deadlib_render::INVALID_TEXTURE_HANDLE,
         }
     };
     RenderObject {
@@ -1494,10 +1494,8 @@ fn render_object_runtime(
                     *uv_tex_shift,
                     false,
                 ),
-                vertices: deadsync_render::TexturedMeshVertices::Shared(Arc::from(
-                    vertices.clone(),
-                )),
-                geom_cache_key: deadsync_render::INVALID_TMESH_CACHE_KEY,
+                vertices: deadlib_render::TexturedMeshVertices::Shared(Arc::from(vertices.clone())),
+                geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
                 depth_test: *depth_test,
             },
         },

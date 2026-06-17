@@ -4,12 +4,12 @@ use crate::telemetry::{
 };
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
+use deadlib_platform::host_time::now_nanos;
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
-use deadsync_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_platform::dirs;
+use deadlib_platform::dirs;
 
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportProfileConfig {

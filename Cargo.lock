@@ -994,14 +994,146 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "deadlib-platform"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "directories",
+ "env_logger",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-foundation 0.3.2",
+ "smithay-client-toolkit 0.20.0",
+ "windows",
+ "winit",
+ "xcb",
+]
+
+[[package]]
+name = "deadlib-present"
+version = "0.1.0"
+dependencies = [
+ "deadlib-render",
+ "glam",
+ "image",
+ "log",
+ "rustc-hash 2.1.2",
+ "smallvec",
+ "twox-hash",
+]
+
+[[package]]
+name = "deadlib-render"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "serde",
+ "twox-hash",
+]
+
+[[package]]
+name = "deadlib-render-backend-gl"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "deadlib-render",
+ "glam",
+ "glow",
+ "glutin",
+ "image",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "raw-window-handle",
+ "winit",
+]
+
+[[package]]
+name = "deadlib-render-backend-software"
+version = "0.1.0"
+dependencies = [
+ "deadlib-render",
+ "glam",
+ "image",
+ "log",
+ "softbuffer",
+ "winit",
+]
+
+[[package]]
+name = "deadlib-render-backend-vulkan"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "ash-window",
+ "bytemuck",
+ "deadlib-platform",
+ "deadlib-render",
+ "glam",
+ "image",
+ "log",
+ "shaderc",
+ "windows",
+ "winit",
+]
+
+[[package]]
+name = "deadlib-render-backend-wgpu"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "deadlib-platform",
+ "deadlib-render",
+ "glam",
+ "image",
+ "log",
+ "pollster",
+ "raw-window-handle",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "deadlib-renderer"
+version = "0.1.0"
+dependencies = [
+ "deadlib-render",
+ "deadlib-render-backend-gl",
+ "deadlib-render-backend-software",
+ "deadlib-render-backend-vulkan",
+ "deadlib-render-backend-wgpu",
+ "image",
+ "winit",
+]
+
+[[package]]
+name = "deadlib-video"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "deadsync"
-version = "0.4.888"
+version = "0.4.889"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
  "bytemuck",
  "chrono",
  "coreaudio-rs",
+ "deadlib-platform",
+ "deadlib-present",
+ "deadlib-render",
+ "deadlib-renderer",
+ "deadlib-video",
  "deadsync-audio",
  "deadsync-audio-analysis",
  "deadsync-audio-backend-native",
@@ -1017,18 +1149,13 @@ dependencies = [
  "deadsync-lights",
  "deadsync-net",
  "deadsync-online",
- "deadsync-platform",
- "deadsync-present",
  "deadsync-profile",
- "deadsync-render",
- "deadsync-renderer",
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
  "deadsync-smx",
  "deadsync-updater",
  "deadsync-version",
- "deadsync-video",
  "dhat",
  "fs_extra",
  "glam",
@@ -1092,8 +1219,8 @@ version = "0.1.0"
 dependencies = [
  "alsa",
  "coreaudio-rs",
+ "deadlib-platform",
  "deadsync-audio",
- "deadsync-platform",
  "libc",
  "libloading 0.9.0",
  "log",
@@ -1126,11 +1253,11 @@ dependencies = [
 name = "deadsync-audio-stream"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
  "deadsync-audio",
  "deadsync-audio-backend-native",
  "deadsync-audio-decode",
  "deadsync-audio-replaygain",
- "deadsync-platform",
  "log",
  "rubato",
  "smallvec",
@@ -1224,38 +1351,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadsync-platform"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "directories",
- "env_logger",
- "log",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "objc2-foundation 0.3.2",
- "smithay-client-toolkit 0.20.0",
- "windows",
- "winit",
- "xcb",
-]
-
-[[package]]
-name = "deadsync-present"
-version = "0.1.0"
-dependencies = [
- "deadsync-render",
- "glam",
- "image",
- "log",
- "rustc-hash 2.1.2",
- "smallvec",
- "twox-hash",
-]
-
-[[package]]
 name = "deadsync-profile"
 version = "0.1.0"
 dependencies = [
@@ -1264,91 +1359,6 @@ dependencies = [
  "chrono",
  "deadsync-rules",
  "deadsync-score",
-]
-
-[[package]]
-name = "deadsync-render"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "glam",
- "serde",
- "twox-hash",
-]
-
-[[package]]
-name = "deadsync-render-backend-gl"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "deadsync-render",
- "glam",
- "glow",
- "glutin",
- "image",
- "log",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "raw-window-handle",
- "winit",
-]
-
-[[package]]
-name = "deadsync-render-backend-software"
-version = "0.1.0"
-dependencies = [
- "deadsync-render",
- "glam",
- "image",
- "log",
- "softbuffer",
- "winit",
-]
-
-[[package]]
-name = "deadsync-render-backend-vulkan"
-version = "0.1.0"
-dependencies = [
- "ash",
- "ash-window",
- "bytemuck",
- "deadsync-platform",
- "deadsync-render",
- "glam",
- "image",
- "log",
- "shaderc",
- "windows",
- "winit",
-]
-
-[[package]]
-name = "deadsync-render-backend-wgpu"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "deadsync-platform",
- "deadsync-render",
- "glam",
- "image",
- "log",
- "pollster",
- "raw-window-handle",
- "wgpu",
- "winit",
-]
-
-[[package]]
-name = "deadsync-renderer"
-version = "0.1.0"
-dependencies = [
- "deadsync-render",
- "deadsync-render-backend-gl",
- "deadsync-render-backend-software",
- "deadsync-render-backend-vulkan",
- "deadsync-render-backend-wgpu",
- "image",
- "winit",
 ]
 
 [[package]]
@@ -1388,9 +1398,9 @@ dependencies = [
 name = "deadsync-smx"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
  "deadsync-input",
  "deadsync-input-native",
- "deadsync-platform",
  "log",
  "rustmaniax-sdk",
 ]
@@ -1399,7 +1409,7 @@ dependencies = [
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
- "deadsync-platform",
+ "deadlib-platform",
  "deadsync-version",
  "flate2",
  "libc",
@@ -1416,20 +1426,10 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.888"
+version = "0.4.889"
 dependencies = [
  "log",
  "semver",
-]
-
-[[package]]
-name = "deadsync-video"
-version = "0.1.0"
-dependencies = [
- "image",
- "log",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -5479,9 +5479,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
+checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
 dependencies = [
  "rustls-pki-types",
 ]

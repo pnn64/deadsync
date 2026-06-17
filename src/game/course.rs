@@ -1,5 +1,5 @@
 use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
-use deadsync_platform::dirs;
+use deadlib_platform::dirs;
 use deadsync_simfile::course::{
     CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths, course_progress_names,
     parse_course_file, validate_course_refs,

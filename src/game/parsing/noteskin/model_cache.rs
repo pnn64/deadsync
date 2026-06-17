@@ -1,5 +1,5 @@
 use super::SpriteSlot;
-use deadsync_render::{TMeshCacheKey, TexturedMeshVertex};
+use deadlib_render::{TMeshCacheKey, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::sync::Arc;
@@ -164,7 +164,7 @@ mod tests {
                 texture_key: Arc::from("test"),
                 tex_dims: (64, 64),
                 cached_handle: std::sync::atomic::AtomicU64::new(
-                    deadsync_render::INVALID_TEXTURE_HANDLE,
+                    deadlib_render::INVALID_TEXTURE_HANDLE,
                 ),
                 cached_generation: std::sync::atomic::AtomicU64::new(u64::MAX),
             }),
@@ -182,7 +182,7 @@ mod tests {
             })),
             model_draw: ModelDrawState::default(),
             model_timeline: Arc::<[ModelTweenSegment]>::from([]),
-            model_effect: deadsync_present::anim::EffectState::default(),
+            model_effect: deadlib_present::anim::EffectState::default(),
             model_auto_rot_total_frames: 0.0,
             model_auto_rot_z_keys: Arc::<[ModelAutoRotKey]>::from([]),
         }

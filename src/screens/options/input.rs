@@ -1197,7 +1197,7 @@ pub(super) fn activate_current_selection(
                     // spawns subprocesses and would stutter the UI thread.
                     if let Some(generation) = deadsync_updater::ffmpeg::begin_availability_check() {
                         std::thread::spawn(move || {
-                            let available = deadsync_video::ffmpeg_available();
+                            let available = deadlib_video::ffmpeg_available();
                             deadsync_updater::ffmpeg::resolve_availability_check(
                                 generation, available,
                             );

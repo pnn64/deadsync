@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_platform::dirs;
+use deadlib_platform::dirs;
 
 pub(super) fn write_missing_fields(conf: &SimpleIni) {
     let content = current_save_content();

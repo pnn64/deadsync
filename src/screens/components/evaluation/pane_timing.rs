@@ -4,10 +4,10 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
+use deadlib_render::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
-use deadsync_render::{BlendMode, MeshVertex};
 use deadsync_rules::timing;
 
 use super::utils::{eval_style_alpha, pane_origin_x};
@@ -150,7 +150,7 @@ pub fn build_timing_pane(
 
     let pane_origin_x = pane_origin_x(controller);
     let frame_x = pane_origin_x - pane_width * 0.5;
-    let frame_y = deadsync_present::space::screen_center_y() - 56.0;
+    let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();
     const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");

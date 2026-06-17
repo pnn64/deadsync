@@ -1,7 +1,7 @@
 use crate::assets::{AssetManager, dynamic, open_image_fallback};
-use deadsync_platform::dirs;
-use deadsync_renderer::Backend;
-use deadsync_video as video;
+use deadlib_platform::dirs;
+use deadlib_renderer::Backend;
+use deadlib_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{

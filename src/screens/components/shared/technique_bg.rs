@@ -1,9 +1,9 @@
 use crate::act;
 use crate::game::parsing::noteskin;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_depth_sorted_affine;
-use deadsync_present::actors::Actor;
-use deadsync_present::color;
-use deadsync_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::sync::{Arc, OnceLock};
 
@@ -229,7 +229,7 @@ fn push_layers(
             uv,
             0.0,
             color,
-            deadsync_render::BlendMode::Alpha,
+            deadlib_render::BlendMode::Alpha,
             MODEL_Z,
         ) {
             if let Actor::TexturedMesh { depth_test, .. } = &mut actor {

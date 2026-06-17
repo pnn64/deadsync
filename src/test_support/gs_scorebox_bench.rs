@@ -1,6 +1,6 @@
 use crate::game::scores;
 use crate::screens::components::shared::gs_scorebox;
-use deadsync_present::actors::Actor;
+use deadlib_present::actors::Actor;
 use deadsync_score::{
     CachedPlayerLeaderboardData, GameplayScoreboxProfileSnapshot, LeaderboardEntry,
     LeaderboardPane, PlayerLeaderboardData,

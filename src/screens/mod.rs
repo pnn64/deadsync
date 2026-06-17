@@ -32,8 +32,8 @@ pub mod test_lights;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
+use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_profile::{ActiveProfile, PlayerSide};
-use deadsync_render::{BackendType, PresentModePolicy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DensityGraphSlot {

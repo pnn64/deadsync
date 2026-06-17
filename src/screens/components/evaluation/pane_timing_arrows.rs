@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::evaluation::ScoreInfo;
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing::ArrowTimingBucket;
 
@@ -43,7 +43,7 @@ pub fn build_timing_arrows_pane(
 
     let pane_origin_x = pane_origin_x(controller);
     let frame_x = pane_origin_x - pane_width * 0.5;
-    let frame_y = deadsync_present::space::screen_center_y() - 56.0;
+    let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();
 

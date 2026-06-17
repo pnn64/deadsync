@@ -2,7 +2,7 @@
 //!
 //! We deliberately don't bundle these binaries in releases; this module
 //! fetches a pinned, SHA256-verified build on demand into the runtime
-//! `bin/` dir, where `deadsync-video` picks it up (falling back to `PATH`).
+//! `bin/` dir, where `deadlib-video` picks it up (falling back to `PATH`).
 //!
 //! ```text
 //!   Idle ──(request_install)──► Confirm ──(request_confirm)──► Downloading ──► Extracting ──► Installed
@@ -312,7 +312,7 @@ pub fn request_install() {
 ///
 /// The caller runs the probe and reports back: it spawns subprocesses
 /// (which would stutter the UI thread), and this crate can't depend on
-/// `deadsync-video`.
+/// `deadlib-video`.
 pub fn begin_availability_check() -> Option<u64> {
     let _guard = WORKER_LOCK.try_lock().ok()?;
     let generation = begin_operation();
@@ -667,14 +667,14 @@ fn archive_file_name(url: &str) -> String {
 /// Absolute path of the directory archives are staged into.
 pub fn downloads_dir() -> Option<PathBuf> {
     Some(
-        deadsync_platform::dirs::app_dirs()
+        deadlib_platform::dirs::app_dirs()
             .cache_dir
             .join(DOWNLOADS_SUBDIR),
     )
 }
 
 /// Runtime `bin/` directory the tools are installed into
-/// (`<current_dir>/bin`), matching `deadsync-video`'s resolution path.
+/// (`<current_dir>/bin`), matching `deadlib-video`'s resolution path.
 pub fn install_dir() -> Option<PathBuf> {
     std::env::current_dir().ok().map(|dir| dir.join("bin"))
 }

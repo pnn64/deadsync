@@ -2,8 +2,8 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::color;
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::color;
 use deadsync_profile as profile_data;
 
 use super::utils::pane_origin_x;
@@ -28,7 +28,7 @@ pub fn build_gs_qr_pane(
         score_info.groovestats.reason_lines.join("\n")
     };
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadsync_present::space::screen_center_y() - 62.0;
+    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
     let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
     let score_w = 70.0;
     let score_h = 28.0;

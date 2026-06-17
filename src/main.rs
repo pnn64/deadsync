@@ -1,17 +1,17 @@
 // Ship release builds as a Windows GUI-subsystem app so launching the game
 // doesn't pop up a console window. Debug builds keep the console for developer
-// convenience. Runtime output is still reachable: see `deadsync_platform::console`
+// convenience. Runtime output is still reachable: see `deadlib_platform::console`
 // (reattaches to a parent terminal, or opens a console when `ShowConsole`/
 // `--console` is set). No effect on non-Windows targets.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use deadlib_platform::logging::{self, StartupBuildInfo};
 use deadsync::{app, assets, config, game};
-use deadsync_platform::logging::{self, StartupBuildInfo};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
 fn startup_lines(cfg: &config::Config) -> Vec<String> {
-    let dirs = deadsync_platform::dirs::app_dirs();
+    let dirs = deadlib_platform::dirs::app_dirs();
     vec![
         format!("Portable mode: {}", dirs.portable),
         format!("Data directory: {}", dirs.data_dir.display()),
@@ -138,21 +138,21 @@ fn resolve_show_console() -> bool {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = deadsync_updater::cli::UpdaterCli::from_env();
-    deadsync_platform::runtime_dir::set_current_dir_to_exe_dir()?;
-    deadsync_platform::host_time::init();
+    deadlib_platform::runtime_dir::set_current_dir_to_exe_dir()?;
+    deadlib_platform::host_time::init();
 
     // Resolve and create platform-native data/cache directories.
-    deadsync_platform::dirs::ensure_dirs_exist();
+    deadlib_platform::dirs::ensure_dirs_exist();
 
     // Reconcile the GUI-subsystem release build with terminal/opt-in output
     // before the logger starts, so the first log lines land in the console when
     // one is wanted (and no window appears when it isn't).
-    deadsync_platform::console::init(resolve_show_console());
+    deadlib_platform::console::init(resolve_show_console());
 
     // Install logger immediately, then set runtime max level from config after loading it.
     logging::init(
         config::bootstrap_log_to_file(),
-        deadsync_platform::dirs::app_dirs().log_path(),
+        deadlib_platform::dirs::app_dirs().log_path(),
     );
     install_panic_hook();
     // Startup default when config is missing or malformed.
@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assets::i18n::init(&locale);
 
     #[cfg(windows)]
-    let _windows_timing = deadsync_platform::windows_rt::boost_main_thread_timing();
+    let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
     game::profile::load();
     if let Err(e) = deadsync_audio_stream::init(deadsync_audio_stream::InitConfig {
         output_device_index: cfg.audio_output_device_index,

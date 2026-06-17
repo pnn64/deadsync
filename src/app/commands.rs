@@ -1,7 +1,7 @@
 use super::{App, CurrentScreen};
 use crate::game::{profile, scores};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
-use deadsync_present::density;
+use deadlib_present::density;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, warn};
@@ -228,7 +228,7 @@ impl App {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     ) {
-        let (graph_w, graph_h) = if deadsync_present::space::is_wide() {
+        let (graph_w, graph_h) = if deadlib_present::space::is_wide() {
             (286.0_f32, 64.0_f32)
         } else {
             (276.0_f32, 64.0_f32)

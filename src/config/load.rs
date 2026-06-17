@@ -1,6 +1,6 @@
 use super::store::{create_default_config_file, current_save_content};
 use super::*;
-use deadsync_platform::dirs;
+use deadlib_platform::dirs;
 
 #[path = "load/backfill.rs"]
 mod backfill;
@@ -78,7 +78,7 @@ fn publish_config(cfg: Config) {
         sync_audio_mix_levels_from_config(&current);
         deadsync_audio_stream::set_replaygain_enabled(current.enable_replaygain);
         deadsync_audio_stream::set_preserve_pitch_enabled(current.rate_mod_preserves_pitch);
-        deadsync_present::space::set_overscan(
+        deadlib_present::space::set_overscan(
             current.center_image_translate_x,
             current.center_image_translate_y,
             current.center_image_add_width,

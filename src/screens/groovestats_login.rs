@@ -25,9 +25,9 @@ use crate::screens::options::qr_login::{
     create_groovestats_login_ui_for_profile, poll_qr_login_ui,
 };
 use crate::screens::{Screen, ScreenAction};
+use deadlib_present::actors::Actor;
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_present::actors::Actor;
 
 const TRANSITION_IN_DURATION: f32 = 0.3;
 const TRANSITION_OUT_DURATION: f32 = 0.3;

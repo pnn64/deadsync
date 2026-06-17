@@ -11,19 +11,19 @@ use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadlib_present::actors::{Actor, TextAlign};
+use deadlib_present::color;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
 };
 use deadsync_online::groovestats::{ConnectionError as GrooveStatsError, ConnectionStatus};
-use deadsync_present::actors::{Actor, TextAlign};
-use deadsync_present::color;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
-use deadsync_present::space::screen_center_x;
+use deadlib_present::space::screen_center_x;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;

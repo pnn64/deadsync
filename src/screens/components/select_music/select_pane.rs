@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use deadsync_present::actors::Actor;
-use deadsync_present::space::{is_wide, screen_height, screen_width, widescale};
+use deadlib_present::actors::Actor;
+use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use std::sync::Arc;
 
 #[derive(Clone, Copy)]

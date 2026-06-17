@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use deadsync_present::actors::Actor;
+use deadlib_present::actors::Actor;
 use std::sync::Arc;
 
 const SCALE_TO_CLIPPED_FUDGE: f32 = 0.15;

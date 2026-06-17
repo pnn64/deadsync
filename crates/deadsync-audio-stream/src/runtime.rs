@@ -1,3 +1,4 @@
+use deadlib_platform::dirs;
 #[cfg(target_os = "linux")]
 use deadsync_audio::LinuxAudioBackend;
 use deadsync_audio::{
@@ -8,7 +9,6 @@ use deadsync_audio_backend_native::launch::{
     NativeBackendLaunch, build_audio_launch, start_output_backend,
 };
 use deadsync_audio_replaygain as replaygain;
-use deadsync_platform::dirs;
 use log::info;
 use std::path::PathBuf;
 use std::sync::OnceLock;

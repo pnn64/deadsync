@@ -1,13 +1,13 @@
 use crate::lookup_music_position;
+use deadlib_platform::host_time::instant_nanos;
+#[cfg(windows)]
+use deadlib_platform::windows_rt::current_qpc_nanos;
 use deadsync_audio::{
     CallbackClockSource, CallbackClockWindow, MusicStreamClockSnapshot,
     fallback_stream_position_frames, music_nanos_from_seconds, music_track_has_started,
     music_track_start_frame, seeded_music_position,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
-use deadsync_platform::host_time::instant_nanos;
-#[cfg(windows)]
-use deadsync_platform::windows_rt::current_qpc_nanos;
 use log::debug;
 use std::time::Instant;
 

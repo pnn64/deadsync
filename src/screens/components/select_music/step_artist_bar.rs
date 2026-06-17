@@ -1,6 +1,6 @@
 use crate::act;
-use deadsync_present::actors::{Actor, TextContent};
-use deadsync_present::space::screen_height;
+use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::space::screen_height;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepArtistBarLayout {
@@ -103,7 +103,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_present::actors::TextContent;
+    use deadlib_present::actors::TextContent;
 
     fn params(layout: StepArtistBarLayout) -> StepArtistBarParams {
         StepArtistBarParams {

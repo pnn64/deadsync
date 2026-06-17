@@ -9,13 +9,13 @@ use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::song::{get_song_cache, song_cache_generation};
 use chrono::Local;
+use deadlib_platform::dirs;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitApiQuest, LeaderboardApiEntry,
     leaderboard_entries_from_api,
 };
-use deadsync_platform::dirs;
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use serde::de::Deserializer;

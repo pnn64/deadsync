@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::config::{self, MachineBarColor};
-use deadsync_present::actors::{self, Actor, Background, SizeSpec};
-use deadsync_present::cache::{SharedStrCache, cached_shared_str};
-use deadsync_present::color;
-use deadsync_present::space;
-use deadsync_present::space::{screen_center_x, screen_height, screen_width};
+use deadlib_present::actors::{self, Actor, Background, SizeSpec};
+use deadlib_present::cache::{SharedStrCache, cached_shared_str};
+use deadlib_present::color;
+use deadlib_present::space;
+use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -15,16 +15,16 @@ use crate::screens::components::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::color;
+use deadlib_present::space::{
+    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+};
 use deadsync_audio_stream as audio;
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
-use deadsync_present::actors::{Actor, SizeSpec};
-use deadsync_present::cache::{TextCache, cached_text};
-use deadsync_present::color;
-use deadsync_present::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
-};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::course::{

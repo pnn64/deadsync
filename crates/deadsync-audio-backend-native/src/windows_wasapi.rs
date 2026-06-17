@@ -1,10 +1,10 @@
 use crate::telemetry::{publish_output_timing, report_audio_render_callback};
+use deadlib_platform::windows_rt::{ThreadRole, boost_current_thread};
 use deadsync_audio::ring as internal;
 use deadsync_audio::{
     AudioOutputMode, AudioRenderMaps, OutputBackendReady, OutputTelemetryClock,
     OutputTimingQuality, QueuedSfx, RenderState,
 };
-use deadsync_platform::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::ffi::c_void;
 use std::mem::size_of;

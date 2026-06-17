@@ -1,8 +1,8 @@
 use crate::assets::AssetManager;
 use crate::screens::ScreenAction;
 use crate::screens::components::shared::profile_boxes;
+use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
-use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
 
 pub type State = profile_boxes::State;

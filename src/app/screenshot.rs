@@ -4,11 +4,11 @@ use crate::assets;
 use crate::game::profile;
 use crate::screens::evaluation;
 use chrono::{Datelike, Local};
-use deadsync_platform::dirs;
-use deadsync_present::actors::Actor;
-use deadsync_present::space;
+use deadlib_platform::dirs;
+use deadlib_present::actors::Actor;
+use deadlib_present::space;
+use deadlib_render::TextureHandleMap;
 use deadsync_profile as profile_data;
-use deadsync_render::TextureHandleMap;
 use deadsync_score as score_data;
 use log::{info, warn};
 use std::error::Error;
@@ -264,7 +264,7 @@ impl App {
             backend.retire_textures(&mut old_map);
         }
 
-        let texture = backend.create_texture(image, deadsync_render::SamplerDesc::default())?;
+        let texture = backend.create_texture(image, deadlib_render::SamplerDesc::default())?;
         self.asset_manager.insert_texture(
             SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(),
             texture,
