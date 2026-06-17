@@ -2070,10 +2070,10 @@ fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGrap
 #[inline(always)]
 fn eval_graph_pane_label(pane: EvalGraphPane) -> &'static str {
     match pane {
-        EvalGraphPane::Itg | EvalGraphPane::Ex | EvalGraphPane::HardEx => "By Judgment",
-        EvalGraphPane::Arrow => "By Column",
-        EvalGraphPane::Quant => "By Quantization",
-        EvalGraphPane::FootParity => "By Foot",
+        EvalGraphPane::Itg | EvalGraphPane::Ex | EvalGraphPane::HardEx => "Judgment",
+        EvalGraphPane::Arrow => "Column",
+        EvalGraphPane::Quant => "Quantization",
+        EvalGraphPane::FootParity => "Foot",
     }
 }
 
