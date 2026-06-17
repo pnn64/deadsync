@@ -1,6 +1,6 @@
 use deadsync_present::color;
 use deadsync_render::MeshVertex;
-use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
+use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimingHistogramScale {
@@ -16,6 +16,10 @@ pub enum ScatterPlotScale {
     HardEx,
     Arrow,
     Foot,
+    /// Color points by note quantization (Simply Love's ScatterPlotQuantization).
+    Quant,
+    /// Color points by real `rssp` foot parity (Simply Love's ScatterPlotFoot).
+    FootParity,
 }
 
 const HIST_BIN_MS: f32 = 1.0;
@@ -119,6 +123,35 @@ fn color_for_foot(is_stream: bool, is_left_foot: bool) -> [f32; 4] {
     }
 }
 
+/// Simply Love `ScatterPlotQuantization` palette, keyed by deadsync's
+/// quantization index (0=4th .. 8=192nd). 64th and 192nd share teal, matching
+/// SL grouping the finest quantizations together. Unknown indices plot black.
+#[inline(always)]
+fn color_for_quant(quantization_idx: u8) -> [f32; 4] {
+    match quantization_idx {
+        0 => [232.0 / 255.0, 0.0, 0.0, 1.0],           // 4th  - red    #e80000
+        1 => [0.0, 102.0 / 255.0, 1.0, 1.0],           // 8th  - blue   #0066ff
+        2 => [149.0 / 255.0, 0.0, 1.0, 1.0],           // 12th - purple #9500ff
+        3 => [0.0, 1.0, 0.0, 1.0],                     // 16th - green  #00ff00
+        4 => [1.0, 102.0 / 255.0, 153.0 / 255.0, 1.0], // 24th - pink   #ff6699
+        5 => [1.0, 1.0, 0.0, 1.0],                     // 32nd - yellow #ffff00
+        6 => [1.0, 205.0 / 255.0, 224.0 / 255.0, 1.0], // 48th - l.pink #ffcde0
+        7 | 8 => [0.0, 232.0 / 255.0, 229.0 / 255.0, 1.0], // 64th/192nd - teal #00e8e5
+        _ => [0.0, 0.0, 0.0, 1.0],
+    }
+}
+
+/// Simply Love `ScatterPlotFoot` coloring: left foot red, right foot blue, and
+/// jumps (both feet) or unknown rows black.
+#[inline(always)]
+fn color_for_foot_parity(parity_foot: ScatterFoot) -> [f32; 4] {
+    match parity_foot {
+        ScatterFoot::Left => [1.0, 0.0, 0.0, 1.0],
+        ScatterFoot::Right => [0.0, 0.0, 1.0, 1.0],
+        ScatterFoot::Both | ScatterFoot::Unknown => [0.0, 0.0, 0.0, 1.0],
+    }
+}
+
 #[inline(always)]
 fn color_for_scatter(
     sp: &ScatterPoint,
@@ -138,6 +171,8 @@ fn color_for_scatter(
         }
         ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
         ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+        ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
+        ScatterPlotScale::FootParity => color_for_foot_parity(sp.parity_foot),
     }
 }
 
@@ -149,6 +184,8 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
         }
         ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
         ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
+        ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
+        ScatterPlotScale::FootParity => color_for_foot_parity(sp.parity_foot),
     }
 }
 
@@ -156,7 +193,10 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
 fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
     match scale {
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => 1.0,
-        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => 0.666,
+        ScatterPlotScale::Arrow
+        | ScatterPlotScale::Foot
+        | ScatterPlotScale::Quant
+        | ScatterPlotScale::FootParity => 0.666,
     }
 }
 
@@ -246,7 +286,10 @@ pub fn build_scatter_background_mesh(
             (timing_windows_ms[3], color::JUDGMENT_RGBA[3]),
             (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
         ],
-        ScatterPlotScale::Arrow | ScatterPlotScale::Foot => return Vec::new(),
+        ScatterPlotScale::Arrow
+        | ScatterPlotScale::Foot
+        | ScatterPlotScale::Quant
+        | ScatterPlotScale::FootParity => return Vec::new(),
     };
 
     // Matches Simply Love's `diffusealpha(0.1)` on its judgment-region quads.
@@ -497,6 +540,9 @@ mod tests {
             is_stream: true,
             is_left_foot: true,
             miss_because_held: false,
+            row_index: 0,
+            quantization_idx: 0,
+            parity_foot: ScatterFoot::Unknown,
         }
     }
 

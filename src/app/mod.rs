@@ -11402,6 +11402,9 @@ mod tests {
                 is_stream: false,
                 is_left_foot: true,
                 miss_because_held: false,
+                row_index: 0,
+                quantization_idx: 0,
+                parity_foot: timing_rules::ScatterFoot::Unknown,
             }],
             scatter_worst_window_ms: 45.0,
             histogram: timing_rules::HistogramMs {

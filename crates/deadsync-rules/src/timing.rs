@@ -1564,6 +1564,20 @@ pub fn compute_arrow_timing_stats(
     }
 }
 
+/// Real left/right foot placement for a scatter row, sourced from `rssp` parity
+/// data in the app layer (this crate stays `rssp`-free). `Unknown` means no
+/// parity was available (e.g. non-4/8-panel charts) and the foot-parity scatter
+/// treats it like a non-single-foot row.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum ScatterFoot {
+    #[default]
+    Unknown,
+    Left,
+    Right,
+    /// Both feet used on the same row (a jump); plotted black, like Simply Love.
+    Both,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ScatterPoint {
     pub time_sec: f32,
@@ -1573,6 +1587,15 @@ pub struct ScatterPoint {
     pub is_stream: bool,
     pub is_left_foot: bool,
     pub miss_because_held: bool,
+    /// Note-row index this point came from, so the app layer can join real
+    /// `rssp` foot-parity data back onto the point.
+    pub row_index: usize,
+    /// Quantization bucket of the representative note (0=4th .. 8=192nd), for
+    /// the by-quantization scatter.
+    pub quantization_idx: u8,
+    /// Real foot placement from `rssp` parity, for the by-foot scatter. Defaults
+    /// to `Unknown` until the app layer fills it in.
+    pub parity_foot: ScatterFoot,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1690,6 +1713,9 @@ pub fn build_scatter_points(
             is_stream: is_stream_beat(notes[idx].beat, stream_segments),
             is_left_foot: foot_left,
             miss_because_held: judgment.grade == JudgeGrade::Miss && judgment.miss_because_held,
+            row_index: row,
+            quantization_idx: notes[idx].quantization_idx,
+            parity_foot: ScatterFoot::Unknown,
         });
 
         row_start = row_end;

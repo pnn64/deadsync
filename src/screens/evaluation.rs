@@ -963,7 +963,10 @@ fn build_eval_scatter_bg_mesh(
         EvalGraphPane::Itg => ScatterPlotScale::Itg,
         EvalGraphPane::Ex => ScatterPlotScale::Ex,
         EvalGraphPane::HardEx => ScatterPlotScale::HardEx,
-        EvalGraphPane::Arrow | EvalGraphPane::Foot => return None,
+        EvalGraphPane::Arrow
+        | EvalGraphPane::Foot
+        | EvalGraphPane::Quant
+        | EvalGraphPane::FootParity => return None,
     };
     const GRAPH_H: f32 = 64.0;
     let verts =
@@ -2040,6 +2043,8 @@ enum EvalGraphPane {
     HardEx,
     Arrow,
     Foot,
+    Quant,
+    FootParity,
 }
 
 #[inline(always)]
@@ -2056,7 +2061,13 @@ const fn eval_graph_default_for(show_fa_plus_pane: bool, show_hard_ex: bool) -> 
 #[inline(always)]
 fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGraphPane> {
     let scoring = eval_graph_default_for(show_fa_plus_pane, show_hard_ex);
-    vec![scoring, EvalGraphPane::Arrow, EvalGraphPane::Foot]
+    vec![
+        scoring,
+        EvalGraphPane::Arrow,
+        EvalGraphPane::Foot,
+        EvalGraphPane::Quant,
+        EvalGraphPane::FootParity,
+    ]
 }
 
 #[inline(always)]
@@ -2128,6 +2139,8 @@ pub struct State {
     pub scatter_bg_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_mesh_arrow: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub density_graph_texture_key: String,
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
@@ -2182,6 +2195,8 @@ impl Clone for State {
             scatter_bg_mesh_hard_ex: self.scatter_bg_mesh_hard_ex.clone(),
             scatter_mesh_arrow: self.scatter_mesh_arrow.clone(),
             scatter_mesh_foot: self.scatter_mesh_foot.clone(),
+            scatter_mesh_quant: self.scatter_mesh_quant.clone(),
+            scatter_mesh_foot_parity: self.scatter_mesh_foot_parity.clone(),
             density_graph_texture_key: self.density_graph_texture_key.clone(),
             return_to_course: self.return_to_course,
             auto_advance_seconds: self.auto_advance_seconds,
@@ -2238,6 +2253,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         std::array::from_fn(|_| None);
     let mut scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
+    let mut scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    let mut scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
@@ -2277,13 +2296,24 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let arrow_timing =
                 timing_stats::compute_arrow_timing_stats(notes, col_offset, cols_per_player);
             // Prepare scatter points and histogram bins
-            let scatter = timing_stats::build_scatter_points(
+            let mut scatter = timing_stats::build_scatter_points(
                 notes,
                 note_times,
                 col_offset,
                 cols_per_player,
                 &stream_segments,
             );
+            // Join real rssp foot-parity onto each scatter row for the by-foot
+            // scatter pane. Empty on non-4/8-panel charts, leaving rows Unknown.
+            let foot_parity =
+                crate::game::gameplay::foot_parity_by_row_for_results(&gs, player_idx);
+            if !foot_parity.is_empty() {
+                for sp in &mut scatter {
+                    if let Some(&placement) = foot_parity.get(&sp.row_index) {
+                        sp.parity_foot = placement;
+                    }
+                }
+            }
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();
@@ -2663,6 +2693,34 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
+            scatter_mesh_quant[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    eval_graphs::ScatterPlotScale::Quant,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
+            scatter_mesh_foot_parity[player_idx] = {
+                const GRAPH_H: f32 = 64.0;
+                let verts = eval_graphs::build_scatter_mesh(
+                    &si.scatter,
+                    si.graph_first_second,
+                    si.graph_last_second,
+                    graph_width,
+                    GRAPH_H,
+                    si.scatter_worst_window_ms,
+                    eval_graphs::ScatterPlotScale::FootParity,
+                );
+                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+            };
+
             timing_hist_mesh[player_idx] = {
                 const PANE_W: f32 = 300.0;
                 const PANE_H: f32 = 180.0;
@@ -2781,6 +2839,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         scatter_bg_mesh_hard_ex,
         scatter_mesh_arrow,
         scatter_mesh_foot,
+        scatter_mesh_quant,
+        scatter_mesh_foot_parity,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
@@ -2899,6 +2959,16 @@ pub fn init_from_score_info(
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
             build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Foot)
         });
+    let scatter_mesh_quant: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::Quant)
+        });
+    let scatter_mesh_foot_parity: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
+        std::array::from_fn(|player_idx| {
+            let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
+            build_eval_scatter_mesh(si, graph_width, eval_graphs::ScatterPlotScale::FootParity)
+        });
     let timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|player_idx| {
             let si = score_info.get(player_idx).and_then(|s| s.as_ref())?;
@@ -2936,6 +3006,8 @@ pub fn init_from_score_info(
         scatter_bg_mesh_hard_ex,
         scatter_mesh_arrow,
         scatter_mesh_foot,
+        scatter_mesh_quant,
+        scatter_mesh_foot_parity,
         density_graph_texture_key: "__white".to_string(),
         return_to_course: false,
         auto_advance_seconds: None,
@@ -4973,13 +5045,20 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     EvalGraphPane::HardEx => state.scatter_mesh_hard_ex[player_idx].as_ref(),
                     EvalGraphPane::Arrow => state.scatter_mesh_arrow[player_idx].as_ref(),
                     EvalGraphPane::Foot => state.scatter_mesh_foot[player_idx].as_ref(),
+                    EvalGraphPane::Quant => state.scatter_mesh_quant[player_idx].as_ref(),
+                    EvalGraphPane::FootParity => {
+                        state.scatter_mesh_foot_parity[player_idx].as_ref()
+                    }
                 };
                 let scatter_bg_mesh = if shade {
                     match graph_mode {
                         EvalGraphPane::Itg => state.scatter_bg_mesh_itg[player_idx].as_ref(),
                         EvalGraphPane::Ex => state.scatter_bg_mesh_ex[player_idx].as_ref(),
                         EvalGraphPane::HardEx => state.scatter_bg_mesh_hard_ex[player_idx].as_ref(),
-                        EvalGraphPane::Arrow | EvalGraphPane::Foot => None,
+                        EvalGraphPane::Arrow
+                        | EvalGraphPane::Foot
+                        | EvalGraphPane::Quant
+                        | EvalGraphPane::FootParity => None,
                     }
                 } else {
                     None

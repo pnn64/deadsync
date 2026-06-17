@@ -885,7 +885,7 @@ mod tests {
         ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudSpeed,
         ArrowCloudTimingOffset,
     };
-    use deadsync_rules::timing::ScatterPoint;
+    use deadsync_rules::timing::{ScatterFoot, ScatterPoint};
     use serde_json::{Value, json};
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
@@ -896,6 +896,9 @@ mod tests {
             is_stream: false,
             is_left_foot: false,
             miss_because_held: false,
+            row_index: 0,
+            quantization_idx: 0,
+            parity_foot: ScatterFoot::Unknown,
         }
     }
 
