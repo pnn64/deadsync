@@ -497,7 +497,7 @@ fn build_crossover_rows<const LANES: usize>(
     notes: &[Note],
     note_range: (usize, usize),
     col_start: usize,
-) -> (Vec<[u8; LANES]>, Vec<f32>) {
+) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
     use std::collections::BTreeMap;
     let (start, end) = note_range;
     let mut rows: BTreeMap<usize, ([u8; LANES], f32)> = BTreeMap::new();
@@ -545,11 +545,13 @@ fn build_crossover_rows<const LANES: usize>(
     }
     let mut row_arrays = Vec::with_capacity(rows.len());
     let mut row_to_beat = Vec::with_capacity(rows.len());
-    for (_row_index, (arr, beat)) in rows {
+    let mut row_indices = Vec::with_capacity(rows.len());
+    for (row_index, (arr, beat)) in rows {
         row_arrays.push(arr);
         row_to_beat.push(beat);
+        row_indices.push(row_index);
     }
-    (row_arrays, row_to_beat)
+    (row_arrays, row_to_beat, row_indices)
 }
 
 /// Uses the player's base `TimingData` (not rate-scaled) so cue times share the
@@ -714,7 +716,8 @@ fn build_crossover_cues_for_player(
     let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
     let annos: Vec<CrossoverRow> = match cols_per_player {
         4 => {
-            let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
+            let (rows, row_to_beat, _row_indices) =
+                build_crossover_rows::<4>(notes, note_range, col_start);
             let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
                 return Vec::new();
             };
@@ -726,7 +729,8 @@ fn build_crossover_cues_for_player(
             )
         }
         8 => {
-            let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
+            let (rows, row_to_beat, _row_indices) =
+                build_crossover_rows::<8>(notes, note_range, col_start);
             let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
                 return Vec::new();
             };
@@ -751,6 +755,152 @@ fn build_crossover_cues_for_player(
         include_brackets,
         first_visible_time,
     )
+}
+
+/// Reduces one `rssp` row annotation to a single foot placement for the
+/// by-foot evaluation scatter: left if any column uses a left foot, right if any
+/// uses a right foot, both when a row uses both feet (a jump), or `None` when no
+/// foot steps on the row (so the caller can skip it).
+#[inline]
+fn parity_foot_from_annotation(
+    anno: &rssp::RowAnnotation,
+) -> Option<deadsync_rules::timing::ScatterFoot> {
+    use deadsync_rules::timing::ScatterFoot;
+    let mut uses_left = false;
+    let mut uses_right = false;
+    for &foot in anno.feet() {
+        match foot {
+            rssp::Foot::LeftHeel | rssp::Foot::LeftToe => uses_left = true,
+            rssp::Foot::RightHeel | rssp::Foot::RightToe => uses_right = true,
+            rssp::Foot::None => {}
+        }
+    }
+    match (uses_left, uses_right) {
+        (true, true) => Some(ScatterFoot::Both),
+        (true, false) => Some(ScatterFoot::Left),
+        (false, true) => Some(ScatterFoot::Right),
+        (false, false) => None,
+    }
+}
+
+fn foot_parity_map<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+    rssp_timing: &rssp::timing::TimingData,
+) -> std::collections::HashMap<usize, deadsync_rules::timing::ScatterFoot> {
+    use std::collections::HashMap;
+    let (rows, row_to_beat, row_indices) = build_crossover_rows::<LANES>(notes, note_range, col_start);
+    let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<LANES>() else {
+        return HashMap::new();
+    };
+    let annos = rssp::step_parity::annotate_timing_rows::<LANES>(
+        &rows,
+        &row_to_beat,
+        rssp_timing,
+        &mut scratch,
+    );
+    let mut map = HashMap::with_capacity(annos.len());
+    for (anno, &row_index) in annos.iter().zip(row_indices.iter()) {
+        if let Some(placement) = parity_foot_from_annotation(anno) {
+            map.insert(row_index, placement);
+        }
+    }
+    map
+}
+
+/// Per-row left/right/both foot placement from `rssp` parity, keyed by note
+/// `row_index`, for the evaluation by-foot scatter. Returns an empty map on
+/// non-4/8-panel layouts (the only layouts `rssp` parity models), in which case
+/// the scatter falls back to plotting those rows black.
+pub fn foot_parity_by_row_for_results(
+    state: &State,
+    player: usize,
+) -> std::collections::HashMap<usize, deadsync_rules::timing::ScatterFoot> {
+    use std::collections::HashMap;
+    if player >= state.num_players {
+        return HashMap::new();
+    }
+    let cols_per_player = state.cols_per_player;
+    let note_range = state.note_ranges[player];
+    if note_range.0 >= note_range.1 {
+        return HashMap::new();
+    }
+    let col_start = player.saturating_mul(cols_per_player);
+    let timing_segments = &state.gameplay_charts[player].timing_segments;
+    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
+    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    match cols_per_player {
+        4 => foot_parity_map::<4>(&state.notes, note_range, col_start, &rssp_timing),
+        8 => foot_parity_map::<8>(&state.notes, note_range, col_start, &rssp_timing),
+        _ => HashMap::new(),
+    }
+}
+
+/// Per-arrow left/right foot placement from `rssp` parity, keyed by
+/// `(row_index, absolute column)`, for the per-arrow timing-stats pane. Splits
+/// jumps correctly (each arrow gets its own foot). Returns an empty map on
+/// non-4/8-panel layouts, in which case the timing stats fall back to the
+/// alternation heuristic.
+fn foot_parity_by_note_map<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+    rssp_timing: &rssp::timing::TimingData,
+) -> std::collections::HashMap<(usize, usize), deadsync_rules::timing::ScatterFoot> {
+    use deadsync_rules::timing::ScatterFoot;
+    use std::collections::HashMap;
+    let (rows, row_to_beat, row_indices) =
+        build_crossover_rows::<LANES>(notes, note_range, col_start);
+    let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<LANES>() else {
+        return HashMap::new();
+    };
+    let annos = rssp::step_parity::annotate_timing_rows::<LANES>(
+        &rows,
+        &row_to_beat,
+        rssp_timing,
+        &mut scratch,
+    );
+    let mut map = HashMap::new();
+    for (anno, &row_index) in annos.iter().zip(row_indices.iter()) {
+        for local in 0..LANES {
+            let foot = match anno.foot(local) {
+                rssp::Foot::LeftHeel | rssp::Foot::LeftToe => ScatterFoot::Left,
+                rssp::Foot::RightHeel | rssp::Foot::RightToe => ScatterFoot::Right,
+                rssp::Foot::None => continue,
+            };
+            map.insert((row_index, col_start + local), foot);
+        }
+    }
+    map
+}
+
+/// Per-arrow left/right foot placement from `rssp` parity for the per-arrow
+/// timing-stats pane, keyed by `(row_index, absolute column)`. Returns an empty
+/// map on non-4/8-panel layouts (the only layouts `rssp` parity models), so the
+/// timing stats fall back to the alternation heuristic.
+pub fn foot_parity_by_note_for_results(
+    state: &State,
+    player: usize,
+) -> std::collections::HashMap<(usize, usize), deadsync_rules::timing::ScatterFoot> {
+    use std::collections::HashMap;
+    if player >= state.num_players {
+        return HashMap::new();
+    }
+    let cols_per_player = state.cols_per_player;
+    let note_range = state.note_ranges[player];
+    if note_range.0 >= note_range.1 {
+        return HashMap::new();
+    }
+    let col_start = player.saturating_mul(cols_per_player);
+    let timing_segments = &state.gameplay_charts[player].timing_segments;
+    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
+    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    match cols_per_player {
+        4 => foot_parity_by_note_map::<4>(&state.notes, note_range, col_start, &rssp_timing),
+        8 => foot_parity_by_note_map::<8>(&state.notes, note_range, col_start, &rssp_timing),
+        _ => HashMap::new(),
+    }
 }
 
 #[inline(always)]

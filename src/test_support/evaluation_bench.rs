@@ -5,7 +5,7 @@ use crate::test_support::{compose_scenarios, pane_stats_bench};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_present::actors::Actor;
 use deadsync_profile as profile_data;
-use deadsync_rules::timing::{HistogramMs, ScatterPoint};
+use deadsync_rules::timing::{HistogramMs, ScatterFoot, ScatterPoint};
 use deadsync_score::LeaderboardEntry;
 
 pub const SCENARIO_NAME: &str = "evaluation";
@@ -109,9 +109,10 @@ fn bench_scatter() -> Vec<ScatterPoint> {
                 time_sec: t * 128.0,
                 offset_ms: if is_miss { None } else { Some(offset) },
                 direction_code: (i % 4 + 1) as u8,
-                is_stream: i % 3 == 0,
-                is_left_foot: i % 2 == 0,
                 miss_because_held: false,
+                row_index: i,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             }
         })
         .collect()

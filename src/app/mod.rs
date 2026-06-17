@@ -11399,9 +11399,10 @@ mod tests {
                 time_sec: 12.0,
                 offset_ms: Some(10.0),
                 direction_code: 1,
-                is_stream: false,
-                is_left_foot: true,
                 miss_because_held: false,
+                row_index: 0,
+                quantization_idx: 0,
+                parity_foot: timing_rules::ScatterFoot::Unknown,
             }],
             scatter_worst_window_ms: 45.0,
             histogram: timing_rules::HistogramMs {

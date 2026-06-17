@@ -262,14 +262,7 @@ fn arrowcloud_timing_data(
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache_ns[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
-    let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
-    let scatter = timing::build_scatter_points(
-        notes,
-        note_times,
-        col_offset,
-        gs.cols_per_player,
-        &stream_segments,
-    );
+    let scatter = timing::build_scatter_points(notes, note_times, col_offset, gs.cols_per_player);
     let fail_time_s = fail_time_ns.map(gameplay::song_time_ns_to_seconds);
     arrowcloud_api::timing_data_from_scatter(&scatter, fail_time_s)
 }
@@ -885,7 +878,7 @@ mod tests {
         ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudSpeed,
         ArrowCloudTimingOffset,
     };
-    use deadsync_rules::timing::ScatterPoint;
+    use deadsync_rules::timing::{ScatterFoot, ScatterPoint};
     use serde_json::{Value, json};
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
@@ -893,9 +886,10 @@ mod tests {
             time_sec,
             offset_ms,
             direction_code: 1,
-            is_stream: false,
-            is_left_foot: false,
             miss_because_held: false,
+            row_index: 0,
+            quantization_idx: 0,
+            parity_foot: ScatterFoot::Unknown,
         }
     }
 

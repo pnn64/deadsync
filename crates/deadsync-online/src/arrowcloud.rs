@@ -1366,7 +1366,10 @@ mod tests {
         AccelEffectsMask, AppearanceEffectsMask, Perspective, ScrollOption, TurnOption,
         VisualEffectsMask,
     };
-    use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
+    use deadsync_rules::{
+        judgment, scroll::ScrollSpeedSetting,
+        timing::{ScatterFoot, WindowCounts},
+    };
     use deadsync_score::{
         ArrowCloudPaneKind, ArrowCloudServerGrade, ArrowCloudSubmitUiStatus, ArrowCloudUserContext,
         RejectReason,
@@ -1444,25 +1447,28 @@ mod tests {
                 time_sec: 1.0,
                 offset_ms: Some(8.0),
                 direction_code: 1,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 0,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
             ScatterPoint {
                 time_sec: 1.5,
                 offset_ms: None,
                 direction_code: 2,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 1,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
             ScatterPoint {
                 time_sec: 3.0,
                 offset_ms: Some(1.0),
                 direction_code: 3,
-                is_stream: false,
-                is_left_foot: false,
                 miss_because_held: false,
+                row_index: 2,
+                quantization_idx: 0,
+                parity_foot: ScatterFoot::Unknown,
             },
         ];
 

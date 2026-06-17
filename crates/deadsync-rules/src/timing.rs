@@ -1,6 +1,5 @@
 use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
-use crate::stream::StreamSegment;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use log::debug;
@@ -1408,12 +1407,14 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
 /// per-arrow timing pane on the evaluation screen.
 ///
 /// `per_column` has one entry per column on the player's pad (e.g. 4 for
-/// dance-single). `left_foot` / `right_foot` are computed using the same
-/// alternation heuristic as [`build_scatter_points`]: a step on the
-/// outermost-left column forces the left foot, a step on the
-/// outermost-right column forces the right foot, and anything else flips
-/// the foot from the previous row. Chord notes share the row's
-/// alternated foot.
+/// dance-single). `left_foot` / `right_foot` are taken from real `rssp` foot
+/// parity when a per-note parity map is supplied (each arrow, including the two
+/// halves of a jump, is attributed to its actual foot). When no parity is
+/// available for a note (e.g. non-4/8-panel charts, or rows `rssp` skips), the
+/// foot falls back to a simple alternation heuristic: a step on the
+/// outermost-left column forces the left foot, a step on the outermost-right
+/// column forces the right foot, and anything else flips the foot from the
+/// previous row.
 #[derive(Clone, Debug, Default)]
 pub struct ArrowTimingStats {
     pub per_column: Vec<ArrowTimingBucket>,
@@ -1482,6 +1483,7 @@ pub fn compute_arrow_timing_stats(
     notes: &[Note],
     col_offset: usize,
     cols_per_player: usize,
+    foot_by_note: Option<&std::collections::HashMap<(usize, usize), ScatterFoot>>,
 ) -> ArrowTimingStats {
     let mut per_column: Vec<StatsAccum> = vec![StatsAccum::default(); cols_per_player];
     let mut left = StatsAccum::default();
@@ -1497,8 +1499,8 @@ pub fn compute_arrow_timing_stats(
         let row_start = idx;
         row_judgments.clear();
 
-        // Direction code mirrors `build_scatter_points`: 1 = leftmost column,
-        // `cols_per_player` = rightmost column, anything else is a chord.
+        // Direction code: 1 = leftmost column, `cols_per_player` = rightmost
+        // column, anything else is a chord.
         let mut direction_code: u32 = 0;
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
@@ -1513,9 +1515,8 @@ pub fn compute_arrow_timing_stats(
             idx += 1;
         }
 
-        // Alternation must mirror `build_scatter_points` exactly, even for
-        // rows whose final judgment is a Miss, so foot assignments stay in
-        // sync with the per-arrow scatter plot.
+        // Fallback alternation runs even for rows whose final judgment is a
+        // Miss, so foot assignments stay consistent when parity is unavailable.
         let leftmost = 1u32;
         let rightmost = cols_per_player as u32;
         if direction_code == leftmost {
@@ -1537,8 +1538,9 @@ pub fn compute_arrow_timing_stats(
 
         // Per-column: each judgeable tap note in the row gets attributed
         // to its own column, but they all share the row's aggregated
-        // offset, so chord arrows count once per arrow.
-        let foot_bucket = if foot_left { &mut left } else { &mut right };
+        // offset, so chord arrows count once per arrow. Each arrow's foot
+        // comes from real `rssp` parity when available, else the row's
+        // alternated foot.
         for n in &notes[row_start..idx] {
             if n.is_fake
                 || !n.can_be_judged
@@ -1551,7 +1553,16 @@ pub fn compute_arrow_timing_stats(
                 let col = (code as usize).saturating_sub(1);
                 if col < cols_per_player {
                     per_column[col].add(e);
-                    foot_bucket.add(e);
+                    let use_left = match foot_by_note.and_then(|m| m.get(&(n.row_index, n.column))) {
+                        Some(ScatterFoot::Left) => true,
+                        Some(ScatterFoot::Right) => false,
+                        _ => foot_left,
+                    };
+                    if use_left {
+                        left.add(e);
+                    } else {
+                        right.add(e);
+                    }
                 }
             }
         }
@@ -1564,15 +1575,36 @@ pub fn compute_arrow_timing_stats(
     }
 }
 
+/// Real left/right foot placement for a scatter row, sourced from `rssp` parity
+/// data in the app layer (this crate stays `rssp`-free). `Unknown` means no
+/// parity was available (e.g. non-4/8-panel charts) and the foot-parity scatter
+/// treats it like a non-single-foot row.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum ScatterFoot {
+    #[default]
+    Unknown,
+    Left,
+    Right,
+    /// Both feet used on the same row (a jump); plotted black, like Simply Love.
+    Both,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ScatterPoint {
     pub time_sec: f32,
     pub offset_ms: Option<f32>, // None for Miss
     // Arrow Cloud-style "direction" code: 1..4 for L/D/U/R, other values for jumps/chords.
     pub direction_code: u8,
-    pub is_stream: bool,
-    pub is_left_foot: bool,
     pub miss_because_held: bool,
+    /// Note-row index this point came from, so the app layer can join real
+    /// `rssp` foot-parity data back onto the point.
+    pub row_index: usize,
+    /// Quantization bucket of the representative note (0=4th .. 8=192nd), for
+    /// the by-quantization scatter.
+    pub quantization_idx: u8,
+    /// Real foot placement from `rssp` parity, for the by-foot scatter. Defaults
+    /// to `Unknown` until the app layer fills it in.
+    pub parity_foot: ScatterFoot,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1602,26 +1634,13 @@ fn local_direction_code(note: &Note, col_offset: usize, cols_per_player: usize) 
 }
 
 #[inline(always)]
-fn is_stream_beat(beat: f32, stream_segments: &[StreamSegment]) -> bool {
-    if stream_segments.is_empty() {
-        return false;
-    }
-    let measure = (beat.floor() as i32).div_euclid(4).max(0) as usize;
-    stream_segments
-        .iter()
-        .any(|seg| !seg.is_break && measure >= seg.start && measure < seg.end)
-}
-
-#[inline(always)]
 pub fn build_scatter_points(
     notes: &[Note],
     note_time_cache_ns: &[i64],
     col_offset: usize,
     cols_per_player: usize,
-    stream_segments: &[StreamSegment],
 ) -> Vec<ScatterPoint> {
     let mut out = Vec::with_capacity(notes.len());
-    let mut foot_left = false;
     let mut row_start = 0usize;
 
     while row_start < notes.len() {
@@ -1660,14 +1679,6 @@ pub fn build_scatter_points(
             }
         }
 
-        if direction_code == 1 {
-            foot_left = true;
-        } else if direction_code == 4 {
-            foot_left = false;
-        } else if direction_code > 0 {
-            foot_left = !foot_left;
-        }
-
         let Some(idx) = representative_ix else {
             row_start = row_end;
             continue;
@@ -1687,9 +1698,10 @@ pub fn build_scatter_points(
             time_sec: t,
             offset_ms,
             direction_code,
-            is_stream: is_stream_beat(notes[idx].beat, stream_segments),
-            is_left_foot: foot_left,
             miss_because_held: judgment.grade == JudgeGrade::Miss && judgment.miss_because_held,
+            row_index: row,
+            quantization_idx: notes[idx].quantization_idx,
+            parity_foot: ScatterFoot::Unknown,
         });
 
         row_start = row_end;
@@ -2062,7 +2074,7 @@ mod tests {
             test_note(15, 0, JudgeGrade::Fantastic, 4.0),
         ];
 
-        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        let stats = compute_arrow_timing_stats(&notes, 0, 4, None);
         assert_eq!(stats.per_column.len(), 4);
         assert_eq!(stats.per_column[0].count, 2);
         assert!((stats.per_column[0].stats.mean_ms - 0.0).abs() < 0.0001);
@@ -2089,7 +2101,7 @@ mod tests {
             test_note(3, 2, JudgeGrade::Fantastic, 4.0),
         ];
 
-        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        let stats = compute_arrow_timing_stats(&notes, 0, 4, None);
         // Left foot: row 0 (col 0) + chord row 3 contributes both arrows.
         assert_eq!(stats.left_foot.count, 3);
         // Right foot: chord row 1 (both arrows) + row 2 (col 3).
@@ -2111,9 +2123,32 @@ mod tests {
             test_note(2, 2, JudgeGrade::Fantastic, 5.0), // alternates -> left
         ];
 
-        let stats = compute_arrow_timing_stats(&notes, 0, 4);
+        let stats = compute_arrow_timing_stats(&notes, 0, 4, None);
         assert_eq!(stats.left_foot.count, 2);
         assert_eq!(stats.right_foot.count, 0);
+    }
+
+    #[test]
+    fn arrow_timing_stats_use_parity_map_over_alternation() {
+        use std::collections::HashMap;
+        // A jump on columns 1 & 2. The alternation fallback attributes both
+        // arrows to a single foot; real parity splits them one per foot.
+        let notes = vec![
+            test_note(0, 1, JudgeGrade::Fantastic, 2.0),
+            test_note(0, 2, JudgeGrade::Fantastic, 2.0),
+        ];
+
+        let mut parity: HashMap<(usize, usize), ScatterFoot> = HashMap::new();
+        parity.insert((0, 1), ScatterFoot::Left);
+        parity.insert((0, 2), ScatterFoot::Right);
+        let stats = compute_arrow_timing_stats(&notes, 0, 4, Some(&parity));
+        assert_eq!(stats.left_foot.count, 1);
+        assert_eq!(stats.right_foot.count, 1);
+
+        // Without parity the same jump lands entirely on one alternated foot.
+        let alt = compute_arrow_timing_stats(&notes, 0, 4, None);
+        assert_eq!(alt.left_foot.count + alt.right_foot.count, 2);
+        assert!(alt.left_foot.count == 0 || alt.right_foot.count == 0);
     }
 
     #[test]
@@ -2200,7 +2235,7 @@ mod tests {
         ];
         let note_time_cache_ns = vec![1_000_000_000, 1_000_000_000];
 
-        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4, &[]);
+        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4);
 
         assert_eq!(scatter.len(), 1);
         assert_eq!(scatter[0].offset_ms, Some(12.0));
