@@ -2545,42 +2545,107 @@ fn build_top_grades_grouped_entries_for_side(
     entries
 }
 
-fn build_favorites_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    // Collect all chart hashes that are favorited by any joined player
+fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
 
-    let mut favorite_songs: Vec<Arc<SongData>> = Vec::new();
-    for song in &songs {
-        let is_fav = song.charts.iter().any(|chart| {
+    let pack_is_favorited = |pack_name: &str| -> bool {
+        (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_name))
+            || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_name))
+    };
+
+    let song_is_favorited = |song: &SongData| -> bool {
+        song.charts.iter().any(|chart| {
             (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &chart.short_hash))
                 || (p2_joined
                     && profile::is_favorite(profile_data::PlayerSide::P2, &chart.short_hash))
-        });
-        if is_fav {
-            favorite_songs.push(song.clone());
+        })
+    };
+
+    // Walk grouped_entries once: classify each pack as favorited-or-not, collect
+    // each pack's song-index range, and gather singular unpacked-song favorites that do NOT
+    // live in a favorited pack (de-dup step).
+    let mut current_header_idx: Option<usize> = None;
+    let mut current_pack_is_fav = false;
+    let mut favorited_pack_headers: Vec<(usize, usize, usize)> = Vec::new(); // (header_idx, song_start, song_end)
+    let mut song_start: usize = 0;
+    let mut unpacked_favorite_songs: Vec<Arc<SongData>> = Vec::new();
+
+    let close_pack =
+        |favorited_pack_headers: &mut Vec<(usize, usize, usize)>,
+         current_header_idx: Option<usize>,
+         current_pack_is_fav: bool,
+         song_start: usize,
+         end: usize| {
+            if let Some(header_idx) = current_header_idx {
+                if current_pack_is_fav {
+                    favorited_pack_headers.push((header_idx, song_start, end));
+                }
+            }
+        };
+
+    for (i, entry) in grouped_entries.iter().enumerate() {
+        match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                close_pack(
+                    &mut favorited_pack_headers,
+                    current_header_idx,
+                    current_pack_is_fav,
+                    song_start,
+                    i,
+                );
+                current_header_idx = Some(i);
+                current_pack_is_fav = pack_is_favorited(name);
+                song_start = i + 1;
+            }
+            MusicWheelEntry::Song(song) => {
+                if !current_pack_is_fav && song_is_favorited(song) {
+                    unpacked_favorite_songs.push(song.clone());
+                }
+            }
         }
     }
+    close_pack(
+        &mut favorited_pack_headers,
+        current_header_idx,
+        current_pack_is_fav,
+        song_start,
+        grouped_entries.len(),
+    );
 
-    favorite_songs.sort_by_cached_key(|song| song_title_sort_key(song.as_ref()));
+    unpacked_favorite_songs.sort_by_cached_key(|song| song_title_sort_key(song.as_ref()));
 
-    let count = favorite_songs.len();
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
+    favorited_pack_headers.sort_by_cached_key(|(header_idx, _, _)| {
+        match &grouped_entries[*header_idx] {
+            MusicWheelEntry::PackHeader { name, .. } => name.to_ascii_lowercase(),
+            _ => String::new(),
+        }
+    });
+
+    let total_capacity = 1
+        + unpacked_favorite_songs.len()
+        + favorited_pack_headers
+            .iter()
+            .map(|(_, start, end)| 1 + end.saturating_sub(*start))
+            .sum::<usize>();
+    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(total_capacity);
+
     entries.push(MusicWheelEntry::PackHeader {
         name: tr("SelectMusic", "Favorites").to_string(),
         original_index: 0,
         banner_path: None,
-        song_count: count,
+        song_count: unpacked_favorite_songs.len(),
     });
-    entries.extend(favorite_songs.into_iter().map(MusicWheelEntry::Song));
+    entries.extend(unpacked_favorite_songs.into_iter().map(MusicWheelEntry::Song));
+
+    for (header_idx, start, end) in favorited_pack_headers {
+        entries.push(grouped_entries[header_idx].clone());
+        for entry in &grouped_entries[start..end] {
+            if matches!(entry, MusicWheelEntry::Song(_)) {
+                entries.push(entry.clone());
+            }
+        }
+    }
 
     entries
 }
@@ -3036,7 +3101,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Favorites => {
             // Rebuild favorites on the fly so toggling is immediately reflected
-            state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
+            state.favorites_entries = build_favorites_view_entries(&state.group_entries);
             state.all_entries = state.favorites_entries.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
@@ -3258,7 +3323,7 @@ pub fn init() -> State {
         target_chart_type,
         profile_data::PlayerSide::P2,
     );
-    let favorites_entries = build_favorites_grouped_entries(&all_entries);
+    let favorites_entries = build_favorites_view_entries(&all_entries);
     let playlist_library = build_playlist_library(&all_entries);
 
     let new_pack_names = sync_new_pack_names(
@@ -3824,19 +3889,31 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
 }
 
 fn toggle_favorite_for_selected_song(state: &mut State, side: profile_data::PlayerSide) {
-    if let Some(song) = selected_song_arc(state) {
-        let target_chart_type = profile::get_session_play_style().chart_type();
-        if let Some(chart) =
-            song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
-        {
-            let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-            state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
+    match state.entries.get(state.selected_index).cloned() {
+        Some(MusicWheelEntry::Song(song)) => {
+            let target_chart_type = profile::get_session_play_style().chart_type();
+            if let Some(chart) =
+                song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
+            {
+                let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
+                state.favorites_entries = build_favorites_view_entries(&state.group_entries);
+                audio::play_sfx(if is_now_fav {
+                    "assets/sounds/start.ogg"
+                } else {
+                    "assets/sounds/start.ogg"
+                });
+            }
+        }
+        Some(MusicWheelEntry::PackHeader { name, .. }) => {
+            let is_now_fav = profile::toggle_pack_favorite(side, &name);
+            state.favorites_entries = build_favorites_view_entries(&state.group_entries);
             audio::play_sfx(if is_now_fav {
                 "assets/sounds/start.ogg"
             } else {
                 "assets/sounds/start.ogg"
             });
         }
+        None => {}
     }
 }
 
@@ -4181,6 +4258,8 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     if has_song_selected {
         standalone.push(select_music_menu::ITEM_PRACTICE_MODE);
         standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
+        standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
+    } else if has_pack_selected {
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
     }
     // Favorites shortcut (only when favorites exist)
@@ -8550,23 +8629,35 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             ScreenAction::None
         }
         select_music_menu::Action::ToggleFavorite => {
-            // Toggle favorite for the currently selected song's active chart
-            if let Some(song) = selected_song_arc(state) {
-                let side = profile::get_session_player_side();
-                let target_chart_type = profile::get_session_play_style().chart_type();
-                // Find the active chart hash for the selected difficulty
-                if let Some(chart) =
-                    song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
-                {
-                    let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-                    // Rebuild favorites entries so the favorites sort stays current
-                    state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
+            // Toggle favorite for the currently highlighted entry: a song
+            // toggles its active chart hash; a pack header toggles the pack name.
+            let side = profile::get_session_player_side();
+            match state.entries.get(state.selected_index).cloned() {
+                Some(MusicWheelEntry::Song(song)) => {
+                    let target_chart_type = profile::get_session_play_style().chart_type();
+                    if let Some(chart) =
+                        song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
+                    {
+                        let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
+                        state.favorites_entries =
+                            build_favorites_view_entries(&state.group_entries);
+                        audio::play_sfx(if is_now_fav {
+                            "assets/sounds/start.ogg"
+                        } else {
+                            "assets/sounds/start.ogg"
+                        });
+                    }
+                }
+                Some(MusicWheelEntry::PackHeader { name, .. }) => {
+                    let is_now_fav = profile::toggle_pack_favorite(side, &name);
+                    state.favorites_entries = build_favorites_view_entries(&state.group_entries);
                     audio::play_sfx(if is_now_fav {
                         "assets/sounds/start.ogg"
                     } else {
                         "assets/sounds/start.ogg"
                     });
                 }
+                None => {}
             }
             hide_select_music_menu(state);
             ScreenAction::None

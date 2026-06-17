@@ -2943,6 +2943,20 @@ pub fn render_favorites_content(favorites: &HashSet<String>) -> String {
     sorted.join("\n")
 }
 
+pub fn parse_favorited_packs_content(text: &str) -> HashSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+pub fn render_favorited_packs_content(packs: &HashSet<String>) -> String {
+    let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
+    sorted.sort_unstable_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
+    sorted.join("\n")
+}
+
 pub fn add_known_pack_names<'a>(
     known_pack_names: &mut HashSet<String>,
     pack_names: impl IntoIterator<Item = &'a str>,
@@ -4071,6 +4085,7 @@ pub struct Profile {
     pub current_combo: u32,
     pub known_pack_names: HashSet<String>,
     pub favorites: HashSet<String>,
+    pub favorited_packs: HashSet<String>,
     pub noteskin: NoteSkin,
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
@@ -4273,6 +4288,7 @@ impl Default for Profile {
             current_combo: 0,
             known_pack_names: HashSet::new(),
             favorites: HashSet::new(),
+            favorited_packs: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
             mine_noteskin: player_options.mine_noteskin.clone(),
             receptor_noteskin: player_options.receptor_noteskin.clone(),
@@ -5957,6 +5973,30 @@ mod tests {
             "abc123\nmid456\nxyz789"
         );
         assert_eq!(render_favorites_content(&HashSet::new()), "");
+    }
+
+    #[test]
+    fn favorited_packs_content_trims_ignores_empty_lines_and_dedupes() {
+        let packs = parse_favorited_packs_content(" Tachyon Alpha \n\nIn The Groove\nTachyon Alpha\n   \n");
+
+        assert_eq!(packs.len(), 2);
+        assert!(packs.contains("Tachyon Alpha"));
+        assert!(packs.contains("In The Groove"));
+    }
+
+    #[test]
+    fn favorited_packs_content_renders_case_insensitive_sorted() {
+        let packs = HashSet::from([
+            "zebra mix".to_string(),
+            "Alpha Pack".to_string(),
+            "midpack".to_string(),
+        ]);
+
+        assert_eq!(
+            render_favorited_packs_content(&packs),
+            "Alpha Pack\nmidpack\nzebra mix"
+        );
+        assert_eq!(render_favorited_packs_content(&HashSet::new()), "");
     }
 
     #[test]

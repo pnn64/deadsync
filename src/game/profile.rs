@@ -29,9 +29,11 @@ use deadsync_profile::{
     encode_profile_stats, find_profile_avatar_path, initials_from_name, is_local_profile_id,
     joined_player_mask, load_error_bar_options, load_last_played_course_section,
     load_last_played_section, load_timing_feedback_options, load_visual_player_options,
-    next_local_profile_id, parse_favorites_content, parse_groovestats_is_pad_player,
-    player_options_section, player_side_index as side_ix, player_side_is_joined,
-    render_favorites_content, rewrite_profile_display_name_content, sanitize_player_initials,
+    next_local_profile_id, parse_favorites_content, parse_favorited_packs_content,
+    parse_groovestats_is_pad_player, player_options_section,
+    player_side_index as side_ix, player_side_is_joined,
+    render_favorites_content, render_favorited_packs_content,
+    rewrite_profile_display_name_content, sanitize_player_initials,
     unknown_pack_names,
 };
 pub use update::*;
@@ -1186,6 +1188,7 @@ fn load_for_side(side: PlayerSide) {
         profile.current_combo = stats.current_combo;
         profile.known_pack_names = stats.known_pack_names;
         profile.favorites = load_favorites(&profile_id);
+        profile.favorited_packs = load_favorited_packs(&profile_id);
 
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
@@ -1495,6 +1498,79 @@ pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
     profiles[side_ix(side)]
         .favorites
         .insert(chart_hash.to_string());
+}
+
+fn favorited_packs_path(profile_id: &str) -> PathBuf {
+    dirs::app_dirs()
+        .profiles_root()
+        .join(profile_id)
+        .join("favorited_packs.txt")
+}
+
+fn load_favorited_packs(profile_id: &str) -> HashSet<String> {
+    let path = favorited_packs_path(profile_id);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return HashSet::new();
+    };
+    parse_favorited_packs_content(&text)
+}
+
+fn save_favorited_packs(profile_id: &str, packs: &HashSet<String>) {
+    let path = favorited_packs_path(profile_id);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let text = render_favorited_packs_content(packs);
+    let tmp_path = path.with_extension("tmp");
+    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
+        let _ = fs::rename(&tmp_path, &path);
+    }
+}
+
+/// Toggle a pack's favorite status for the given player side, identifying the
+/// pack by its display name. Returns `true` if the pack is
+/// now a favorite, `false` if it was removed.
+pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
+    let Some(profile_id) = active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    let is_now_favorite = {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        let existing = profile
+            .favorited_packs
+            .iter()
+            .find(|p| *p == pack_name)
+            .cloned();
+        if let Some(existing) = existing {
+            profile.favorited_packs.remove(&existing);
+            false
+        } else {
+            profile.favorited_packs.insert(pack_name.to_string());
+            true
+        }
+    };
+    let packs = lock_profiles()[side_ix(side)].favorited_packs.clone();
+    save_favorited_packs(&profile_id, &packs);
+    is_now_favorite
+}
+
+/// Check if a pack name is favorited for the given player side.
+pub fn is_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
+    let profiles = lock_profiles();
+    profiles[side_ix(side)]
+        .favorited_packs
+        .iter()
+        .any(|p| *p == pack_name)
+}
+
+/// Test/bench helper: mark a pack as favorited for the given side in the
+/// in-memory profile only, without persisting to disk.
+pub fn seed_session_favorited_pack(side: PlayerSide, pack_name: &str) {
+    let mut profiles = lock_profiles();
+    profiles[side_ix(side)]
+        .favorited_packs
+        .insert(pack_name.to_string());
 }
 
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
