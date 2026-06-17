@@ -15,7 +15,6 @@ pub enum ScatterPlotScale {
     Ex,
     HardEx,
     Arrow,
-    Foot,
     /// Color points by note quantization (Simply Love's ScatterPlotQuantization).
     Quant,
     /// Color points by real `rssp` foot parity (Simply Love's ScatterPlotFoot).
@@ -111,18 +110,6 @@ fn color_for_arrow(direction_code: u8) -> [f32; 4] {
     }
 }
 
-#[inline(always)]
-fn color_for_foot(is_stream: bool, is_left_foot: bool) -> [f32; 4] {
-    if !is_stream {
-        return [0.0, 0.0, 0.0, 1.0];
-    }
-    if is_left_foot {
-        [1.0, 0.0, 0.0, 1.0]
-    } else {
-        [0.0, 0.0, 1.0, 1.0]
-    }
-}
-
 /// Simply Love `ScatterPlotQuantization` palette, keyed by deadsync's
 /// quantization index (0=4th .. 8=192nd). 64th and 192nd share teal, matching
 /// SL grouping the finest quantizations together. Unknown indices plot black.
@@ -170,7 +157,6 @@ fn color_for_scatter(
             color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
         }
         ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
-        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
         ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
         ScatterPlotScale::FootParity => color_for_foot_parity(sp.parity_foot),
     }
@@ -183,7 +169,6 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
             [1.0, 0.0, 0.0, 1.0]
         }
         ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
-        ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
         ScatterPlotScale::Quant => color_for_quant(sp.quantization_idx),
         ScatterPlotScale::FootParity => color_for_foot_parity(sp.parity_foot),
     }
@@ -194,7 +179,6 @@ fn scatter_hit_alpha(scale: ScatterPlotScale) -> f32 {
     match scale {
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => 1.0,
         ScatterPlotScale::Arrow
-        | ScatterPlotScale::Foot
         | ScatterPlotScale::Quant
         | ScatterPlotScale::FootParity => 0.666,
     }
@@ -287,7 +271,6 @@ pub fn build_scatter_background_mesh(
             (timing_windows_ms[4], color::JUDGMENT_RGBA[4]),
         ],
         ScatterPlotScale::Arrow
-        | ScatterPlotScale::Foot
         | ScatterPlotScale::Quant
         | ScatterPlotScale::FootParity => return Vec::new(),
     };
@@ -537,8 +520,6 @@ mod tests {
             time_sec: 1.0,
             offset_ms: Some(offset_ms),
             direction_code: 1,
-            is_stream: true,
-            is_left_foot: true,
             miss_because_held: false,
             row_index: 0,
             quantization_idx: 0,

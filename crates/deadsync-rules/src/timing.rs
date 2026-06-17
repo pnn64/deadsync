@@ -1,6 +1,5 @@
 use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
-use crate::stream::StreamSegment;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use log::debug;
@@ -1408,12 +1407,11 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
 /// per-arrow timing pane on the evaluation screen.
 ///
 /// `per_column` has one entry per column on the player's pad (e.g. 4 for
-/// dance-single). `left_foot` / `right_foot` are computed using the same
-/// alternation heuristic as [`build_scatter_points`]: a step on the
-/// outermost-left column forces the left foot, a step on the
-/// outermost-right column forces the right foot, and anything else flips
-/// the foot from the previous row. Chord notes share the row's
-/// alternated foot.
+/// dance-single). `left_foot` / `right_foot` are computed with a simple
+/// alternation heuristic: a step on the outermost-left column forces the
+/// left foot, a step on the outermost-right column forces the right foot,
+/// and anything else flips the foot from the previous row. Chord notes
+/// share the row's alternated foot.
 #[derive(Clone, Debug, Default)]
 pub struct ArrowTimingStats {
     pub per_column: Vec<ArrowTimingBucket>,
@@ -1497,8 +1495,8 @@ pub fn compute_arrow_timing_stats(
         let row_start = idx;
         row_judgments.clear();
 
-        // Direction code mirrors `build_scatter_points`: 1 = leftmost column,
-        // `cols_per_player` = rightmost column, anything else is a chord.
+        // Direction code: 1 = leftmost column, `cols_per_player` = rightmost
+        // column, anything else is a chord.
         let mut direction_code: u32 = 0;
         while idx < len && notes[idx].row_index == row_index {
             let note = &notes[idx];
@@ -1513,9 +1511,8 @@ pub fn compute_arrow_timing_stats(
             idx += 1;
         }
 
-        // Alternation must mirror `build_scatter_points` exactly, even for
-        // rows whose final judgment is a Miss, so foot assignments stay in
-        // sync with the per-arrow scatter plot.
+        // Alternation runs even for rows whose final judgment is a Miss, so
+        // foot assignments stay consistent across the whole chart.
         let leftmost = 1u32;
         let rightmost = cols_per_player as u32;
         if direction_code == leftmost {
@@ -1584,8 +1581,6 @@ pub struct ScatterPoint {
     pub offset_ms: Option<f32>, // None for Miss
     // Arrow Cloud-style "direction" code: 1..4 for L/D/U/R, other values for jumps/chords.
     pub direction_code: u8,
-    pub is_stream: bool,
-    pub is_left_foot: bool,
     pub miss_because_held: bool,
     /// Note-row index this point came from, so the app layer can join real
     /// `rssp` foot-parity data back onto the point.
@@ -1625,26 +1620,13 @@ fn local_direction_code(note: &Note, col_offset: usize, cols_per_player: usize) 
 }
 
 #[inline(always)]
-fn is_stream_beat(beat: f32, stream_segments: &[StreamSegment]) -> bool {
-    if stream_segments.is_empty() {
-        return false;
-    }
-    let measure = (beat.floor() as i32).div_euclid(4).max(0) as usize;
-    stream_segments
-        .iter()
-        .any(|seg| !seg.is_break && measure >= seg.start && measure < seg.end)
-}
-
-#[inline(always)]
 pub fn build_scatter_points(
     notes: &[Note],
     note_time_cache_ns: &[i64],
     col_offset: usize,
     cols_per_player: usize,
-    stream_segments: &[StreamSegment],
 ) -> Vec<ScatterPoint> {
     let mut out = Vec::with_capacity(notes.len());
-    let mut foot_left = false;
     let mut row_start = 0usize;
 
     while row_start < notes.len() {
@@ -1683,14 +1665,6 @@ pub fn build_scatter_points(
             }
         }
 
-        if direction_code == 1 {
-            foot_left = true;
-        } else if direction_code == 4 {
-            foot_left = false;
-        } else if direction_code > 0 {
-            foot_left = !foot_left;
-        }
-
         let Some(idx) = representative_ix else {
             row_start = row_end;
             continue;
@@ -1710,8 +1684,6 @@ pub fn build_scatter_points(
             time_sec: t,
             offset_ms,
             direction_code,
-            is_stream: is_stream_beat(notes[idx].beat, stream_segments),
-            is_left_foot: foot_left,
             miss_because_held: judgment.grade == JudgeGrade::Miss && judgment.miss_because_held,
             row_index: row,
             quantization_idx: notes[idx].quantization_idx,
@@ -2226,7 +2198,7 @@ mod tests {
         ];
         let note_time_cache_ns = vec![1_000_000_000, 1_000_000_000];
 
-        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4, &[]);
+        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4);
 
         assert_eq!(scatter.len(), 1);
         assert_eq!(scatter[0].offset_ms, Some(12.0));
