@@ -348,6 +348,7 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 };
                 let mut row = tr_fmt("Updater", key, &[("version", &info.tag)]).to_string();
                 if let Some(date) = format_published_at(info.published_at.as_deref()) {
+                    row.push(' ');
                     row.push_str(&tr_fmt("Updater", "BodyRollbackRowDate", &[("date", &date)]));
                 }
                 body.push(row);
@@ -980,9 +981,17 @@ mod tests {
         for tag in ["v0.3.10", "v0.3.9", "v0.3.8"] {
             assert!(joined.contains(tag), "body should list {tag}: {joined:?}");
         }
-        // Each candidate row also surfaces its release date.
-        for date in ["2026-04-10", "2026-04-09", "2026-04-08"] {
-            assert!(joined.contains(date), "body should show date {date}: {joined:?}");
+        // Each candidate row also surfaces its release date, separated from
+        // the version by a space.
+        for (tag, date) in [
+            ("v0.3.10", "2026-04-10"),
+            ("v0.3.9", "2026-04-09"),
+            ("v0.3.8", "2026-04-08"),
+        ] {
+            assert!(
+                joined.contains(&format!("{tag} ({date})")),
+                "body should show '{tag} ({date})': {joined:?}"
+            );
         }
         // The selected (second) row is rendered differently from the
         // unselected rows: exactly one row carries the selection marker.
