@@ -29,12 +29,10 @@ use deadsync_profile::{
     encode_profile_stats, find_profile_avatar_path, initials_from_name, is_local_profile_id,
     joined_player_mask, load_error_bar_options, load_last_played_course_section,
     load_last_played_section, load_timing_feedback_options, load_visual_player_options,
-    next_local_profile_id, parse_favorites_content, parse_favorited_packs_content,
-    parse_groovestats_is_pad_player, player_options_section,
-    player_side_index as side_ix, player_side_is_joined,
-    render_favorites_content, render_favorited_packs_content,
-    rewrite_profile_display_name_content, sanitize_player_initials,
-    unknown_pack_names,
+    next_local_profile_id, parse_favorited_packs_content, parse_favorites_content,
+    parse_groovestats_is_pad_player, player_options_section, player_side_index as side_ix,
+    player_side_is_joined, render_favorited_packs_content, render_favorites_content,
+    rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
 };
 pub use update::*;
 

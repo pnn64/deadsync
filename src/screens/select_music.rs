@@ -957,8 +957,21 @@ pub enum MusicWheelEntry {
         original_index: usize,
         banner_path: Option<PathBuf>,
         song_count: usize,
+        pack_key: Option<String>,
     },
     Song(Arc<SongData>),
+}
+
+impl MusicWheelEntry {
+    pub fn pack_key(&self) -> Option<&str> {
+        match self {
+            MusicWheelEntry::PackHeader {
+                pack_key: Some(key),
+                ..
+            } => Some(key.as_str()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1719,6 +1732,7 @@ fn build_title_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Music
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -1773,6 +1787,7 @@ fn build_artist_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -1824,6 +1839,7 @@ fn build_genre_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Music
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -1963,6 +1979,7 @@ fn build_bpm_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWh
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2027,6 +2044,7 @@ fn build_length_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2098,6 +2116,7 @@ fn build_meter_grouped_entries(
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2157,6 +2176,7 @@ fn build_popularity_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<
         original_index: 0,
         banner_path: None,
         song_count: count,
+        pack_key: None,
     });
     entries.extend(
         ranked
@@ -2213,6 +2233,7 @@ fn build_recent_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
         original_index: 0,
         banner_path: None,
         song_count: count,
+        pack_key: None,
     });
     entries.extend(
         recent_song_ixs
@@ -2287,6 +2308,7 @@ fn build_top_grades_grouped_entries(
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2398,6 +2420,7 @@ fn build_popularity_grouped_entries_for_profile(
         original_index: 0,
         banner_path: None,
         song_count: count,
+        pack_key: None,
     });
     entries.extend(
         ranked
@@ -2458,6 +2481,7 @@ fn build_recent_grouped_entries_for_profile(
         original_index: 0,
         banner_path: None,
         song_count: count,
+        pack_key: None,
     });
     entries.extend(
         recent_song_ixs
@@ -2531,6 +2555,7 @@ fn build_top_grades_grouped_entries_for_side(
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
+                pack_key: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2549,9 +2574,9 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
     let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
 
-    let pack_is_favorited = |pack_name: &str| -> bool {
-        (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_name))
-            || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_name))
+    let pack_is_favorited = |pack_key: &str| -> bool {
+        (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_key))
+            || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_key))
     };
 
     let song_is_favorited = |song: &SongData| -> bool {
@@ -2562,6 +2587,14 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
         })
     };
 
+    build_favorites_view_entries_with(grouped_entries, pack_is_favorited, song_is_favorited)
+}
+
+fn build_favorites_view_entries_with(
+    grouped_entries: &[MusicWheelEntry],
+    mut pack_is_favorited: impl FnMut(&str) -> bool,
+    mut song_is_favorited: impl FnMut(&SongData) -> bool,
+) -> Vec<MusicWheelEntry> {
     // Walk grouped_entries once: classify each pack as favorited-or-not, collect
     // each pack's song-index range, and gather singular unpacked-song favorites that do NOT
     // live in a favorited pack (de-dup step).
@@ -2571,22 +2604,21 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
     let mut song_start: usize = 0;
     let mut unpacked_favorite_songs: Vec<Arc<SongData>> = Vec::new();
 
-    let close_pack =
-        |favorited_pack_headers: &mut Vec<(usize, usize, usize)>,
-         current_header_idx: Option<usize>,
-         current_pack_is_fav: bool,
-         song_start: usize,
-         end: usize| {
-            if let Some(header_idx) = current_header_idx {
-                if current_pack_is_fav {
-                    favorited_pack_headers.push((header_idx, song_start, end));
-                }
+    let close_pack = |favorited_pack_headers: &mut Vec<(usize, usize, usize)>,
+                      current_header_idx: Option<usize>,
+                      current_pack_is_fav: bool,
+                      song_start: usize,
+                      end: usize| {
+        if let Some(header_idx) = current_header_idx {
+            if current_pack_is_fav {
+                favorited_pack_headers.push((header_idx, song_start, end));
             }
-        };
+        }
+    };
 
     for (i, entry) in grouped_entries.iter().enumerate() {
         match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
+            MusicWheelEntry::PackHeader { pack_key, .. } => {
                 close_pack(
                     &mut favorited_pack_headers,
                     current_header_idx,
@@ -2595,7 +2627,11 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
                     i,
                 );
                 current_header_idx = Some(i);
-                current_pack_is_fav = pack_is_favorited(name);
+                current_pack_is_fav = if let Some(pack_key) = pack_key.as_deref() {
+                    pack_is_favorited(pack_key)
+                } else {
+                    false
+                };
                 song_start = i + 1;
             }
             MusicWheelEntry::Song(song) => {
@@ -2622,21 +2658,29 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
         }
     });
 
-    let total_capacity = 1
-        + unpacked_favorite_songs.len()
+    let total_capacity = unpacked_favorite_songs
+        .len()
+        .saturating_add(usize::from(!unpacked_favorite_songs.is_empty()))
         + favorited_pack_headers
             .iter()
             .map(|(_, start, end)| 1 + end.saturating_sub(*start))
             .sum::<usize>();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(total_capacity);
 
-    entries.push(MusicWheelEntry::PackHeader {
-        name: tr("SelectMusic", "Favorites").to_string(),
-        original_index: 0,
-        banner_path: None,
-        song_count: unpacked_favorite_songs.len(),
-    });
-    entries.extend(unpacked_favorite_songs.into_iter().map(MusicWheelEntry::Song));
+    if !unpacked_favorite_songs.is_empty() {
+        entries.push(MusicWheelEntry::PackHeader {
+            name: tr("SelectMusic", "Favorites").to_string(),
+            original_index: 0,
+            banner_path: None,
+            song_count: unpacked_favorite_songs.len(),
+            pack_key: None,
+        });
+        entries.extend(
+            unpacked_favorite_songs
+                .into_iter()
+                .map(MusicWheelEntry::Song),
+        );
+    }
 
     for (header_idx, start, end) in favorited_pack_headers {
         entries.push(grouped_entries[header_idx].clone());
@@ -2835,6 +2879,7 @@ fn push_playlist_section(
         original_index: *header_idx,
         banner_path: None,
         song_count,
+        pack_key: None,
     });
     *header_idx += 1;
     entries.extend(songs.drain(..).map(MusicWheelEntry::Song));
@@ -3243,6 +3288,7 @@ pub fn init() -> State {
                     original_index: i,
                     banner_path: pack.banner_path.clone(),
                     song_count: 0,
+                    pack_key: Some(name.clone()),
                 });
                 pack_header_index = Some(all_entries.len() - 1);
                 name
@@ -3888,7 +3934,7 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
     nav_hold_started(state)
 }
 
-fn toggle_favorite_for_selected_song(state: &mut State, side: profile_data::PlayerSide) {
+fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::PlayerSide) {
     match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
             let target_chart_type = profile::get_session_play_style().chart_type();
@@ -3904,8 +3950,11 @@ fn toggle_favorite_for_selected_song(state: &mut State, side: profile_data::Play
                 });
             }
         }
-        Some(MusicWheelEntry::PackHeader { name, .. }) => {
-            let is_now_fav = profile::toggle_pack_favorite(side, &name);
+        Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
+            let Some(pack_key) = entry.pack_key() else {
+                return;
+            };
+            let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
             state.favorites_entries = build_favorites_view_entries(&state.group_entries);
             audio::play_sfx(if is_now_fav {
                 "assets/sounds/start.ogg"
@@ -4241,10 +4290,11 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
     );
-    let has_pack_selected = matches!(
-        state.entries.get(state.selected_index),
-        Some(MusicWheelEntry::PackHeader { .. })
-    );
+    let has_pack_selected = state
+        .entries
+        .get(state.selected_index)
+        .and_then(MusicWheelEntry::pack_key)
+        .is_some();
     let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
@@ -8629,8 +8679,7 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             ScreenAction::None
         }
         select_music_menu::Action::ToggleFavorite => {
-            // Toggle favorite for the currently highlighted entry: a song
-            // toggles its active chart hash; a pack header toggles the pack name.
+            // Toggle favorite for the highlighted song chart or real pack header.
             let side = profile::get_session_player_side();
             match state.entries.get(state.selected_index).cloned() {
                 Some(MusicWheelEntry::Song(song)) => {
@@ -8648,14 +8697,17 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
                         });
                     }
                 }
-                Some(MusicWheelEntry::PackHeader { name, .. }) => {
-                    let is_now_fav = profile::toggle_pack_favorite(side, &name);
-                    state.favorites_entries = build_favorites_view_entries(&state.group_entries);
-                    audio::play_sfx(if is_now_fav {
-                        "assets/sounds/start.ogg"
-                    } else {
-                        "assets/sounds/start.ogg"
-                    });
+                Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
+                    if let Some(pack_key) = entry.pack_key() {
+                        let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
+                        state.favorites_entries =
+                            build_favorites_view_entries(&state.group_entries);
+                        audio::play_sfx(if is_now_fav {
+                            "assets/sounds/start.ogg"
+                        } else {
+                            "assets/sounds/start.ogg"
+                        });
+                    }
                 }
                 None => {}
             }
@@ -8897,7 +8949,7 @@ pub fn handle_pad_dir(
     if pressed {
         // Track favorite code sequence (Simply Love: Favorite1/Favorite2 codes)
         if let Some(side) = state.favorite_code.check(dir, timestamp) {
-            toggle_favorite_for_selected_song(state, side);
+            toggle_favorite_for_selected_entry(state, side);
         }
         match dir {
             PadDir::Right => {
@@ -12758,6 +12810,7 @@ mod tests {
                 original_index: 0,
                 banner_path: None,
                 song_count: 2,
+                pack_key: Some("Pack A".to_string()),
             },
             super::MusicWheelEntry::Song(test_song("Song A1")),
             super::MusicWheelEntry::Song(test_song("Song A2")),
@@ -12766,6 +12819,7 @@ mod tests {
                 original_index: 1,
                 banner_path: None,
                 song_count: 1,
+                pack_key: Some("Pack B".to_string()),
             },
             super::MusicWheelEntry::Song(test_song("Song B1")),
         ]
@@ -12778,6 +12832,7 @@ mod tests {
                 original_index: 0,
                 banner_path: None,
                 song_count: 2,
+                pack_key: Some("Pack A".to_string()),
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A1", "Alpha")),
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A2", "Beta")),
@@ -12786,9 +12841,107 @@ mod tests {
                 original_index: 1,
                 banner_path: None,
                 song_count: 1,
+                pack_key: Some("Pack B".to_string()),
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack B", "Song B1", "Gamma")),
         ]
+    }
+
+    fn header(
+        name: &str,
+        original_index: usize,
+        song_count: usize,
+        pack_key: Option<&str>,
+    ) -> super::MusicWheelEntry {
+        super::MusicWheelEntry::PackHeader {
+            name: name.to_string(),
+            original_index,
+            banner_path: None,
+            song_count,
+            pack_key: pack_key.map(str::to_string),
+        }
+    }
+
+    fn song_titles(entries: &[super::MusicWheelEntry]) -> Vec<&str> {
+        entries
+            .iter()
+            .filter_map(|entry| match entry {
+                super::MusicWheelEntry::Song(song) => Some(song.title.as_str()),
+                super::MusicWheelEntry::PackHeader { .. } => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn favorites_view_includes_favorited_pack_without_empty_bucket() {
+        let entries = test_entries();
+
+        let favorites =
+            super::build_favorites_view_entries_with(&entries, |key| key == "Pack B", |_| false);
+
+        assert_eq!(favorites.len(), 2);
+        assert!(matches!(
+            favorites[0],
+            super::MusicWheelEntry::PackHeader {
+                ref name,
+                pack_key: Some(ref key),
+                ..
+            } if name == "Pack B" && key == "Pack B"
+        ));
+        assert_eq!(song_titles(&favorites), ["Song B1"]);
+    }
+
+    #[test]
+    fn favorites_view_dedupes_song_favorites_inside_favorited_pack() {
+        let entries = test_entries();
+
+        let favorites = super::build_favorites_view_entries_with(
+            &entries,
+            |key| key == "Pack A",
+            |song| song.title == "Song A1",
+        );
+
+        assert_eq!(favorites.len(), 3);
+        assert!(matches!(
+            favorites[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
+        ));
+        assert_eq!(song_titles(&favorites), ["Song A1", "Song A2"]);
+    }
+
+    #[test]
+    fn favorites_view_ignores_synthetic_headers_for_pack_favorites() {
+        let entries = vec![
+            header("Pack A", 0, 1, None),
+            super::MusicWheelEntry::Song(test_song("Synthetic Song")),
+        ];
+
+        let favorites =
+            super::build_favorites_view_entries_with(&entries, |key| key == "Pack A", |_| false);
+
+        assert!(favorites.is_empty());
+    }
+
+    #[test]
+    fn favorites_view_keeps_loose_song_favorites_under_favorites_bucket() {
+        let entries = test_entries();
+
+        let favorites = super::build_favorites_view_entries_with(
+            &entries,
+            |_| false,
+            |song| song.title == "Song A2",
+        );
+
+        assert_eq!(favorites.len(), 2);
+        assert!(matches!(
+            favorites[0],
+            super::MusicWheelEntry::PackHeader {
+                ref name,
+                pack_key: None,
+                ..
+            } if name == "Favorites"
+        ));
+        assert_eq!(song_titles(&favorites), ["Song A2"]);
     }
 
     fn test_lobby_song_info(song_path: &str) -> lobby_data::LobbySongInfo {

@@ -665,6 +665,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     original_index,
                     banner_path,
                     song_count,
+                    pack_key,
                 } => {
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
@@ -753,11 +754,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     // Favorite heart icon on favorited pack headers — mirrors
                     // the song-row heart so the player can spot favorited packs
                     // while scrolling Group sort.
-                    {
+                    if let Some(pack_key) = pack_key.as_deref() {
                         let p1_fav = p1_joined
-                            && profile::is_pack_favorite(profile_data::PlayerSide::P1, name);
+                            && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_key);
                         let p2_fav = p2_joined
-                            && profile::is_pack_favorite(profile_data::PlayerSide::P2, name);
+                            && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_key);
                         let both_joined = p1_joined && p2_joined;
                         let heart_x = -23.0_f32;
                         let heart_pulse_t = {
@@ -1375,10 +1376,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
             (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
                 || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
         }),
-        Some(MusicWheelEntry::PackHeader { name, .. }) => {
-            (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, name))
-                || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, name))
-        }
+        Some(entry @ MusicWheelEntry::PackHeader { .. }) => entry.pack_key().is_some_and(|key| {
+            (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, key))
+                || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, key))
+        }),
         None => false,
     };
     let highlight_c1: [f32; 4] = if selected_is_favorite {
@@ -1611,6 +1612,7 @@ mod tests {
                 original_index: 0,
                 banner_path: Some(PathBuf::from("pack.png")),
                 song_count: 1,
+                pack_key: Some("Pack".to_string()),
             },
             MusicWheelEntry::Song(song_with_art(Some("song.png"), Some("background.png"))),
         ];

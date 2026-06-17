@@ -690,6 +690,7 @@ mod tests {
                 original_index: 0,
                 banner_path: None,
                 song_count: 2,
+                pack_key: Some("Pack".to_string()),
             },
             MusicWheelEntry::Song(slow),
             MusicWheelEntry::Song(range),

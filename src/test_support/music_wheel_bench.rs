@@ -77,6 +77,7 @@ pub fn fixture() -> MusicWheelBenchFixture {
             original_index: pack_idx,
             banner_path: None,
             song_count: 7,
+            pack_key: Some((*pack_name).to_string()),
         });
 
         for song_idx in 0..7 {
@@ -157,6 +158,7 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                 pack_idx + 1
             ))),
             song_count: 7,
+            pack_key: Some((*pack_name).to_string()),
         });
 
         for song_idx in 0..7 {
