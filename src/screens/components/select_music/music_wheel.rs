@@ -665,6 +665,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     original_index,
                     banner_path,
                     song_count,
+                    pack_key,
                 } => {
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
@@ -749,6 +750,57 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             z(53)
                         ));
                     }
+
+                    // Favorite heart icon on favorited pack headers — mirrors
+                    // the song-row heart so the player can spot favorited packs
+                    // while scrolling Group sort.
+                    if let Some(pack_key) = pack_key.as_deref() {
+                        let p1_fav = p1_joined
+                            && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_key);
+                        let p2_fav = p2_joined
+                            && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_key);
+                        let both_joined = p1_joined && p2_joined;
+                        let heart_x = -23.0_f32;
+                        let heart_pulse_t = {
+                            let t = (p.selection_animation_timer / HEART_PULSE_PERIOD).fract();
+                            (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
+                        };
+                        if p1_fav {
+                            let heart_y = if both_joined { -6.0 } else { 0.0 };
+                            let col =
+                                lerp_color(HEART_COLOR_P1, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
+                            let zm = if both_joined {
+                                HEART_ZOOM_DUAL
+                            } else {
+                                HEART_ZOOM_SINGLE
+                            };
+                            actors.push(act!(sprite("fave-icon.png"):
+                                align(0.5, 0.5):
+                                xy(highlight_left_world + heart_x, y_center_item + heart_y):
+                                zoom(zm):
+                                diffuse(col[0], col[1], col[2], col[3]):
+                                z(54)
+                            ));
+                        }
+                        if p2_fav {
+                            let heart_y = if both_joined { 6.0 } else { 0.0 };
+                            let col =
+                                lerp_color(HEART_COLOR_P2, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
+                            let zm = if both_joined {
+                                HEART_ZOOM_DUAL
+                            } else {
+                                HEART_ZOOM_SINGLE
+                            };
+                            actors.push(act!(sprite("fave-icon.png"):
+                                align(0.5, 0.5):
+                                xy(highlight_left_world + heart_x, y_center_item + heart_y):
+                                zoom(zm):
+                                diffuse(col[0], col[1], col[2], col[3]):
+                                z(54)
+                            ));
+                        }
+                    }
+
                     continue;
                 }
                 MusicWheelEntry::Song(info) => {
@@ -1319,15 +1371,16 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     }
 
     // Selection highlight overlay (Simply Love: Graphics/MusicWheel highlight.lua + [MusicWheel] HighlightOnCommand)
-    let selected_is_favorite = if let Some(MusicWheelEntry::Song(info)) =
-        p.entries.get(p.selected_index)
-    {
-        info.charts.iter().any(|c| {
+    let selected_is_favorite = match p.entries.get(p.selected_index) {
+        Some(MusicWheelEntry::Song(info)) => info.charts.iter().any(|c| {
             (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
                 || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
-        })
-    } else {
-        false
+        }),
+        Some(entry @ MusicWheelEntry::PackHeader { .. }) => entry.pack_key().is_some_and(|key| {
+            (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, key))
+                || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, key))
+        }),
+        None => false,
     };
     let highlight_c1: [f32; 4] = if selected_is_favorite {
         [1.0, 0.75, 0.80, 0.20] // pink tint
@@ -1559,6 +1612,7 @@ mod tests {
                 original_index: 0,
                 banner_path: Some(PathBuf::from("pack.png")),
                 song_count: 1,
+                pack_key: Some("Pack".to_string()),
             },
             MusicWheelEntry::Song(song_with_art(Some("song.png"), Some("background.png"))),
         ];
