@@ -34,17 +34,40 @@ pub const RELEASES_REPO: &str = "pnn64/deadsync";
 /// Endpoint for the most recent non-prerelease, non-draft release.
 pub const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/pnn64/deadsync/releases/latest";
 
+/// Endpoint for the paginated list of releases (newest first).  Used by
+/// the rollback flow to enumerate prior versions.  `per_page=30` is more
+/// than enough to surface the handful of recent releases we offer and
+/// stays within a single request.
+pub const LATEST_RELEASES_URL: &str =
+    "https://api.github.com/repos/pnn64/deadsync/releases?per_page=30";
+
 /// Environment variable that, when set, replaces [`LATEST_RELEASE_URL`]
 /// for the duration of the process.  Intended for local end-to-end
 /// tests served by `python -m http.server` against a fixture
 /// directory; never set this in production.
 pub const ENV_RELEASE_URL_OVERRIDE: &str = "DEADSYNC_UPDATER_RELEASE_URL";
 
+/// Environment variable that, when set, replaces [`LATEST_RELEASES_URL`]
+/// for the duration of the process.  Same testing intent as
+/// [`ENV_RELEASE_URL_OVERRIDE`]; never set this in production.
+pub const ENV_RELEASES_URL_OVERRIDE: &str = "DEADSYNC_UPDATER_RELEASES_URL";
+
+/// Number of prior versions offered in the rollback picker.
+pub const ROLLBACK_VERSION_LIMIT: usize = 5;
+
 /// Resolves the URL the update check should hit.  By default this is
 /// [`LATEST_RELEASE_URL`], but [`ENV_RELEASE_URL_OVERRIDE`] can
 /// override it for local end-to-end tests.
 pub fn release_url() -> String {
     std::env::var(ENV_RELEASE_URL_OVERRIDE).unwrap_or_else(|_| LATEST_RELEASE_URL.to_string())
+}
+
+/// Resolves the URL the rollback flow should hit to enumerate prior
+/// releases.  By default this is [`LATEST_RELEASES_URL`], but
+/// [`ENV_RELEASES_URL_OVERRIDE`] can override it for local end-to-end
+/// tests.
+pub fn releases_url() -> String {
+    std::env::var(ENV_RELEASES_URL_OVERRIDE).unwrap_or_else(|_| LATEST_RELEASES_URL.to_string())
 }
 
 /// User-Agent header value sent with every request.  GitHub rejects API
@@ -231,6 +254,10 @@ struct RawRelease {
     #[serde(default)]
     published_at: Option<String>,
     #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
+    #[serde(default)]
     assets: Vec<RawAsset>,
 }
 
@@ -243,18 +270,11 @@ struct RawAsset {
     digest: Option<String>,
 }
 
-/// Parse a GitHub Releases JSON payload into [`ReleaseInfo`].
-///
-/// Unknown tags (those that don't parse as semver) cause this to return
-/// `Err(UpdaterError::Parse(..))` rather than silently dropping the result,
-/// because the alternative (treating an unparseable tag as "up to date")
-/// would mask CI mistakes.
-pub fn parse_release_json(bytes: &[u8]) -> Result<ReleaseInfo, UpdaterError> {
-    let raw: RawRelease =
-        serde_json::from_slice(bytes).map_err(|err| UpdaterError::Parse(err.to_string()))?;
-    let version = deadsync_version::parse_release_tag(&raw.tag_name).ok_or_else(|| {
-        UpdaterError::Parse(format!("tag '{}' is not valid semver", raw.tag_name))
-    })?;
+/// Convert a deserialized [`RawRelease`] into a [`ReleaseInfo`],
+/// returning `None` when the tag is not valid semver.  Shared by the
+/// single-release and list parsers so they agree on field mapping.
+fn release_info_from_raw(raw: RawRelease) -> Option<ReleaseInfo> {
+    let version = deadsync_version::parse_release_tag(&raw.tag_name)?;
     let assets = raw
         .assets
         .into_iter()
@@ -265,7 +285,7 @@ pub fn parse_release_json(bytes: &[u8]) -> Result<ReleaseInfo, UpdaterError> {
             digest: a.digest,
         })
         .collect();
-    Ok(ReleaseInfo {
+    Some(ReleaseInfo {
         tag: raw.tag_name,
         version,
         html_url: raw.html_url,
@@ -273,6 +293,69 @@ pub fn parse_release_json(bytes: &[u8]) -> Result<ReleaseInfo, UpdaterError> {
         published_at: raw.published_at,
         assets,
     })
+}
+
+/// Parse a GitHub Releases JSON payload into [`ReleaseInfo`].
+///
+/// Unknown tags (those that don't parse as semver) cause this to return
+/// `Err(UpdaterError::Parse(..))` rather than silently dropping the result,
+/// because the alternative (treating an unparseable tag as "up to date")
+/// would mask CI mistakes.
+pub fn parse_release_json(bytes: &[u8]) -> Result<ReleaseInfo, UpdaterError> {
+    let raw: RawRelease =
+        serde_json::from_slice(bytes).map_err(|err| UpdaterError::Parse(err.to_string()))?;
+    let tag = raw.tag_name.clone();
+    release_info_from_raw(raw)
+        .ok_or_else(|| UpdaterError::Parse(format!("tag '{tag}' is not valid semver")))
+}
+
+/// Parse a GitHub *list* releases JSON payload (a JSON array) into
+/// [`ReleaseInfo`]s.
+///
+/// Unlike [`parse_release_json`], this is lenient: draft releases,
+/// prereleases, and entries whose tag isn't valid semver are silently
+/// dropped rather than failing the whole parse.  The rollback picker
+/// only ever offers stable, parseable versions, so a single odd tag in
+/// the feed must not break the list.  The returned order matches the
+/// server's (newest first); callers sort/filter as needed.
+pub fn parse_releases_json(bytes: &[u8]) -> Result<Vec<ReleaseInfo>, UpdaterError> {
+    let raw: Vec<RawRelease> =
+        serde_json::from_slice(bytes).map_err(|err| UpdaterError::Parse(err.to_string()))?;
+    let infos = raw
+        .into_iter()
+        .filter(|r| !r.draft && !r.prerelease)
+        .filter_map(release_info_from_raw)
+        .collect();
+    Ok(infos)
+}
+
+/// From a list of releases, pick the rollback candidates for `target`
+/// running version `current`: releases strictly older than `current`
+/// that ship an asset for the host, newest-first, capped at
+/// [`ROLLBACK_VERSION_LIMIT`].
+///
+/// Returns each surviving release paired with its host asset so the UI
+/// and download flow don't have to re-pick it.  Pure and table-tested.
+pub fn rollback_candidates(
+    releases: Vec<ReleaseInfo>,
+    current: &Version,
+    target: HostTarget,
+) -> Vec<(ReleaseInfo, ReleaseAsset)> {
+    let mut out: Vec<(ReleaseInfo, ReleaseAsset)> = releases
+        .into_iter()
+        .filter(|info| info.version < *current)
+        .filter_map(|info| {
+            pick_asset_for_host(&info.assets, &info.tag, target)
+                .cloned()
+                .map(|asset| (info, asset))
+        })
+        .collect();
+    // Newest-first so the picker lists the closest prior version at the
+    // top.  GitHub already returns newest-first, but sorting explicitly
+    // keeps us robust to feed ordering changes.
+    out.sort_by(|a, b| b.0.version.cmp(&a.0.version));
+    out.truncate(ROLLBACK_VERSION_LIMIT);
+    out
 }
 
 /// Compare a release against the current build and decide what to surface.
@@ -443,11 +526,64 @@ pub fn fetch_latest_release(
     Ok(FetchOutcome::Fresh { info, etag })
 }
 
+/// Fetch the list of recent releases from GitHub (newest first).
+///
+/// Mirrors [`fetch_latest_release`]'s header / status / rate-limit
+/// handling but hits the paginated list endpoint ([`releases_url`]) and
+/// returns the leniently-parsed [`ReleaseInfo`]s.  Draft, prerelease,
+/// and unparseable entries are dropped by [`parse_releases_json`].
+///
+/// No conditional-request (`ETag`) support: the rollback list is fetched
+/// only on an explicit user action, so the small saving isn't worth the
+/// extra state.
+pub fn fetch_releases(agent: &ureq::Agent) -> Result<Vec<ReleaseInfo>, UpdaterError> {
+    let url = releases_url();
+    let request = agent
+        .get(&url)
+        .header("User-Agent", user_agent().as_str())
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
+
+    let response = match request.call() {
+        Ok(resp) => resp,
+        Err(err) => return Err(UpdaterError::Network(err.to_string())),
+    };
+
+    let status = response.status().as_u16();
+    if status == 403 {
+        if let Some(remaining) = response
+            .headers()
+            .get("X-RateLimit-Remaining")
+            .and_then(|v| v.to_str().ok())
+            && remaining == "0"
+        {
+            return Err(UpdaterError::RateLimited);
+        }
+        return Err(UpdaterError::HttpStatus(status));
+    }
+    if !(200..300).contains(&status) {
+        return Err(UpdaterError::HttpStatus(status));
+    }
+
+    let bytes = response
+        .into_body()
+        .read_to_vec()
+        .map_err(|err| UpdaterError::Network(err.to_string()))?;
+    parse_releases_json(&bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const FIXTURE: &[u8] = include_bytes!("fixtures/latest_release.json");
+    const RELEASES_FIXTURE: &[u8] = include_bytes!("fixtures/releases_list.json");
+
+    const WIN_X64: HostTarget = HostTarget {
+        arch: "x86_64",
+        os: "windows",
+        ext: "zip",
+    };
 
     #[test]
     fn parses_real_fixture() {
@@ -526,6 +662,56 @@ mod tests {
         let ua = user_agent();
         assert!(ua.starts_with("deadsync/"));
         assert!(ua.contains(&deadsync_version::current().to_string()));
+    }
+
+    #[test]
+    fn parse_releases_skips_draft_prerelease_and_bad_tags() {
+        let releases = parse_releases_json(RELEASES_FIXTURE).expect("list parses");
+        let tags: Vec<&str> = releases.iter().map(|r| r.tag.as_str()).collect();
+        // Stable, parseable tags survive in feed order.
+        assert!(tags.contains(&"v0.3.875"));
+        assert!(tags.contains(&"v0.3.874"));
+        // Prerelease, draft, and non-semver entries are dropped.
+        assert!(!tags.contains(&"v0.3.874-rc1"));
+        assert!(!tags.contains(&"v0.3.872"));
+        assert!(!tags.contains(&"nightly"));
+    }
+
+    #[test]
+    fn parse_releases_rejects_non_array() {
+        // The single-release object isn't a JSON array; the list parser
+        // must surface a parse error rather than panicking.
+        assert!(matches!(
+            parse_releases_json(FIXTURE),
+            Err(UpdaterError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn rollback_candidates_filters_sorts_and_caps() {
+        let releases = parse_releases_json(RELEASES_FIXTURE).unwrap();
+        let current = Version::new(0, 3, 875);
+        let picks = rollback_candidates(releases, &current, WIN_X64);
+        let tags: Vec<&str> = picks.iter().map(|(info, _)| info.tag.as_str()).collect();
+        // Newest-first, older-than-current, host asset present, capped at 5.
+        // v0.3.873 has only an arm64-macos asset, so it's excluded for the
+        // windows host even though it is older than current.
+        assert_eq!(
+            tags,
+            vec!["v0.3.874", "v0.3.871", "v0.3.870", "v0.3.869", "v0.3.868"]
+        );
+        // Each pick carries the matching host asset.
+        for (info, asset) in &picks {
+            assert_eq!(asset.name, expected_asset_name(&info.tag, WIN_X64));
+        }
+    }
+
+    #[test]
+    fn rollback_candidates_excludes_current_and_newer() {
+        let releases = parse_releases_json(RELEASES_FIXTURE).unwrap();
+        // Pretend we're running an old build: nothing in the feed is older.
+        let current = Version::new(0, 3, 800);
+        assert!(rollback_candidates(releases, &current, WIN_X64).is_empty());
     }
 
     fn fixture_assets() -> Vec<ReleaseAsset> {
