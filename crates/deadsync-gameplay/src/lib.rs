@@ -8639,7 +8639,7 @@ pub fn error_bar_average_offset_s(
     music_time_s: f32,
     offset_s: f32,
     window_ms: u32,
-) -> f32 {
+) -> (f32, usize) {
     let now_ms = ((music_time_s * 100.0).round() * 10.0).max(0.0);
     samples.push_back((now_ms, offset_s));
 
@@ -8663,7 +8663,7 @@ pub fn error_bar_average_offset_s(
         oldest_in_window = Some(v);
     }
     if count == 0 {
-        return offset_s;
+        return (offset_s, 1);
     }
     if count > 1
         && (count & 1) == 1
@@ -8672,11 +8672,8 @@ pub fn error_bar_average_offset_s(
         sum -= oldest;
         count -= 1;
     }
-    let mut avg = sum / (count.max(1) as f32);
-    if count == 1 {
-        avg *= 0.75;
-    }
-    avg
+    let avg = sum / (count.max(1) as f32);
+    (avg, count)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -10836,12 +10833,14 @@ mod tests {
     #[test]
     fn average_error_bar_interval_controls_sample_window() {
         let mut broad = VecDeque::from([(0.0, 0.010), (100.0, 0.020), (200.0, 0.030)]);
-        let broad_avg = error_bar_average_offset_s(&mut broad, 0.5, 0.050, 400);
+        let (broad_avg, broad_count) = error_bar_average_offset_s(&mut broad, 0.5, 0.050, 400);
         assert!((broad_avg - 0.040).abs() <= 1e-6);
+        assert_eq!(broad_count, 2);
 
         let mut narrow = VecDeque::from([(0.0, 0.010), (100.0, 0.020), (200.0, 0.030)]);
-        let narrow_avg = error_bar_average_offset_s(&mut narrow, 0.5, 0.050, 200);
-        assert!((narrow_avg - 0.0375).abs() <= 1e-6);
+        let (narrow_avg, narrow_count) = error_bar_average_offset_s(&mut narrow, 0.5, 0.050, 200);
+        assert!((narrow_avg - 0.050).abs() <= 1e-6);
+        assert_eq!(narrow_count, 1);
     }
 
     #[test]
