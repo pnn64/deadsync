@@ -4240,6 +4240,8 @@ fn error_bar_register_tap(
     let long_avg_threshold_s =
         profile_data::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
             / 1000.0;
+    let long_avg_intensity =
+        profile_data::clamp_long_error_bar_intensity(prof.long_error_bar_intensity);
     let long_avg_min_samples =
         profile_data::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples) as usize;
     let average_interval_ms =
@@ -4387,7 +4389,9 @@ fn error_bar_register_tap(
                 offset_s,
                 average_interval_ms,
             );
-            if long_len >= long_avg_min_samples && long_mean.abs() >= long_avg_threshold_s {
+            if long_len >= long_avg_min_samples
+                && long_mean.abs() * long_avg_intensity >= long_avg_threshold_s
+            {
                 p.error_bar_long_avg_tick = Some(ErrorBarTick {
                     started_at: now,
                     offset_s: long_mean,
@@ -8107,6 +8111,82 @@ return Def.ActorFrame{}
             .error_bar_long_avg_tick
             .expect("long-only Average should still emit the blue tick");
         assert!((long_tick.offset_s - 0.010).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn long_error_bar_threshold_accounts_for_intensity() {
+        // Mean error of 2.5ms is below the 4ms threshold on its own, but with a
+        // 2x intensity the effective offset is 5ms, which should show the bar.
+        let p1 = profile_data::Profile {
+            error_bar_active_mask: profile_data::ErrorBarMask::AVERAGE,
+            short_average_error_bar_enabled: false,
+            long_error_bar_enabled: true,
+            long_error_bar_threshold_ms: 4,
+            long_error_bar_min_samples: 4,
+            long_error_bar_intensity: 2.0,
+            ..profile_data::Profile::default()
+        };
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        for i in 0..4 {
+            error_bar_register_tap(
+                &mut state,
+                0,
+                &Judgment {
+                    time_error_ms: 2.5,
+                    time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(2.5, 1.0),
+                    grade: JudgeGrade::Fantastic,
+                    window: Some(TimingWindow::W1),
+                    miss_because_held: false,
+                },
+                i as f32 * 0.1,
+            );
+        }
+
+        let player = &state.players[0];
+        assert!(
+            player.error_bar_long_avg_visible,
+            "intensity should scale the long-term mean past the threshold"
+        );
+        let long_tick = player
+            .error_bar_long_avg_tick
+            .expect("blue long-term tick should be emitted once intensity-scaled");
+        // The stored offset stays raw; intensity is re-applied at render time.
+        assert!((long_tick.offset_s - 0.0025).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn long_error_bar_stays_hidden_below_intensity_scaled_threshold() {
+        // 2.5ms mean with 1x intensity stays below the 4ms threshold.
+        let p1 = profile_data::Profile {
+            error_bar_active_mask: profile_data::ErrorBarMask::AVERAGE,
+            short_average_error_bar_enabled: false,
+            long_error_bar_enabled: true,
+            long_error_bar_threshold_ms: 4,
+            long_error_bar_min_samples: 4,
+            long_error_bar_intensity: 1.0,
+            ..profile_data::Profile::default()
+        };
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
+        state.total_elapsed_in_screen = 4.0;
+
+        for i in 0..4 {
+            error_bar_register_tap(
+                &mut state,
+                0,
+                &Judgment {
+                    time_error_ms: 2.5,
+                    time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(2.5, 1.0),
+                    grade: JudgeGrade::Fantastic,
+                    window: Some(TimingWindow::W1),
+                    miss_because_held: false,
+                },
+                i as f32 * 0.1,
+            );
+        }
+
+        assert!(!state.players[0].error_bar_long_avg_visible);
     }
 
     #[test]
