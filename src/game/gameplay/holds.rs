@@ -4,11 +4,10 @@ use deadsync_rules::note::{
 };
 
 use super::{
-    ActiveHold, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, HoldJudgmentRenderInfo, LIFE_HELD,
-    LIFE_LET_GO, MAX_COLS, SongTimeNs, State, apply_hold_success_combo_state, apply_life_change,
-    autoplay_blocks_scoring, break_combo_state, capture_failed_ex_score_inputs,
-    clear_full_combo_state, current_music_time_s, is_state_dead, player_for_col,
-    song_time_ns_invalid, song_time_ns_to_seconds, sync_active_hold_pressed_state,
+    ActiveHold, HoldJudgmentRenderInfo, LIFE_HELD, LIFE_LET_GO, MAX_COLS, SongTimeNs, State,
+    apply_hold_let_go_combo_state, apply_hold_success_combo_state, apply_life_change,
+    autoplay_blocks_scoring, capture_failed_ex_score_inputs, current_music_time_s, is_state_dead,
+    player_for_col, song_time_ns_invalid, song_time_ns_to_seconds, sync_active_hold_pressed_state,
     trigger_hold_explosion, update_itg_grade_totals,
 };
 
@@ -67,11 +66,7 @@ pub(super) fn handle_hold_let_go(
         update_itg_grade_totals(&mut state.players[player]);
     }
     if !scoring_blocked {
-        if COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO {
-            break_combo_state(&mut state.players[player], 1);
-        } else {
-            clear_full_combo_state(&mut state.players[player]);
-        }
+        apply_hold_let_go_combo_state(&mut state.players[player]);
     }
     state.receptor_glow_timers[column] = 0.0;
 }

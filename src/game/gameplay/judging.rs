@@ -7,7 +7,10 @@ use deadsync_rules::timing::{
     largest_enabled_tap_window_ns,
 };
 
-use super::{SongTimeNs, State, live_autoplay_judgment_offset_music_ns};
+use super::{
+    FantasticWindowOptions, SongTimeNs, State, blue_fantastic_window_ms, fantastic_window_seconds,
+    live_autoplay_judgment_offset_music_ns,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct PlayerJudgmentTiming {
@@ -49,32 +52,46 @@ fn profile_custom_window_ms(profile: &profile_data::Profile) -> f32 {
 }
 
 #[inline(always)]
+fn profile_custom_window_s(profile: &profile_data::Profile) -> f32 {
+    profile_custom_window_ms(profile) / 1000.0
+}
+
+#[inline(always)]
+fn fantastic_window_options(
+    base_fa_plus_s: f32,
+    profile: &profile_data::Profile,
+) -> FantasticWindowOptions {
+    FantasticWindowOptions {
+        base_fa_plus_s,
+        custom_fantastic_window_s: profile
+            .custom_fantastic_window
+            .then(|| profile_custom_window_s(profile)),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    }
+}
+
+#[inline(always)]
 pub fn player_fa_plus_window_s(state: &State, player_idx: usize) -> f32 {
     let base = default_fa_plus_window_s(state);
     if player_idx >= state.num_players {
         return base;
     }
-    let profile = &state.player_profiles[player_idx];
-    if profile.custom_fantastic_window {
-        profile_custom_window_ms(profile) / 1000.0
-    } else {
-        base
-    }
+    fantastic_window_seconds(fantastic_window_options(
+        base,
+        &state.player_profiles[player_idx],
+    ))
 }
 
 #[inline(always)]
 pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
+    let base = default_fa_plus_window_s(state);
     if player_idx >= state.num_players {
-        return default_fa_plus_window_s(state) * 1000.0;
+        return base * 1000.0;
     }
-    let profile = &state.player_profiles[player_idx];
-    if profile.custom_fantastic_window {
-        return profile_custom_window_ms(profile);
-    }
-    if profile.fa_plus_10ms_blue_window {
-        return 10.0;
-    }
-    default_fa_plus_window_s(state) * 1000.0
+    blue_fantastic_window_ms(fantastic_window_options(
+        base,
+        &state.player_profiles[player_idx],
+    ))
 }
 
 #[inline(always)]
@@ -86,11 +103,10 @@ pub(super) fn build_player_judgment_timing(
     let base_fa_plus_s = timing_profile
         .fa_plus_window_s
         .unwrap_or(timing_profile.windows_s[0]);
-    timing_profile.fa_plus_window_s = Some(if player_profile.custom_fantastic_window {
-        profile_custom_window_ms(player_profile) / 1000.0
-    } else {
-        base_fa_plus_s
-    });
+    timing_profile.fa_plus_window_s = Some(fantastic_window_seconds(fantastic_window_options(
+        base_fa_plus_s,
+        player_profile,
+    )));
     let disabled_windows = player_profile.timing_windows.disabled_windows();
     let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
     let largest_tap_window_music_ns =

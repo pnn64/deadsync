@@ -280,9 +280,7 @@ fn install_enabled() -> bool {
 /// abandoned.
 pub fn request_cancel() {
     match current() {
-        ActionPhase::Checking
-        | ActionPhase::RollbackChecking
-        | ActionPhase::Downloading { .. } => {
+        ActionPhase::Checking | ActionPhase::RollbackChecking | ActionPhase::Downloading { .. } => {
             // Bump the generation: any in-flight worker's eventual
             // result will be discarded by `set_phase_if_current`.
             let _ = begin_operation();
@@ -477,10 +475,7 @@ fn run_check_now(generation: u64) {
 /// install-enabled gate.  Lifted out of the worker so it is unit-testable
 /// without the network.
 pub fn classify_rollback_list(releases: Vec<ReleaseInfo>) -> ActionPhase {
-    classify_rollback_list_with(
-        releases,
-        apply_supported_for_host() && install_enabled(),
-    )
+    classify_rollback_list_with(releases, apply_supported_for_host() && install_enabled())
 }
 
 /// Same as [`classify_rollback_list`] but takes the "install allowed"

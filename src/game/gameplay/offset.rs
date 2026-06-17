@@ -5,7 +5,7 @@ use winit::keyboard::KeyCode;
 
 use super::{
     OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL, OFFSET_ADJUST_STEP_SECONDS, State,
-    compute_end_times_ns,
+    compute_end_times_ns, player_index_for_column,
 };
 
 #[inline(always)]
@@ -27,19 +27,11 @@ pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
     for (time_ns, note) in state.note_time_cache_ns.iter_mut().zip(&state.notes) {
-        let player = if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (note.column / cols_per_player).min(num_players.saturating_sub(1))
-        };
+        let player = player_index_for_column(num_players, cols_per_player, note.column);
         *time_ns = state.timing_players[player].get_time_for_beat_ns(note.beat);
     }
     for (time_opt_ns, note) in state.hold_end_time_cache_ns.iter_mut().zip(&state.notes) {
-        let player = if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (note.column / cols_per_player).min(num_players.saturating_sub(1))
-        };
+        let player = player_index_for_column(num_players, cols_per_player, note.column);
         *time_opt_ns = note
             .hold
             .as_ref()

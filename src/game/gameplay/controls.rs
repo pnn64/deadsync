@@ -8,35 +8,43 @@ use super::offset::{
     start_offset_adjust_hold,
 };
 use super::{
-    AutosyncMode, GameplaySessionCommand, MAX_COLS, State, assist_clap_cursor_for_row,
-    assist_row_no_offset, player_note_range, queue_session_command,
+    GameplaySessionCommand, GameplayTimingTickMode, MAX_COLS, State, assist_clap_cursor_for_row,
+    assist_row_no_offset, next_autosync_mode, next_timing_tick_mode, player_note_range,
+    queue_session_command, timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
+    timing_tick_mode_status_line as gameplay_tick_mode_status_line,
 };
 
 #[inline(always)]
-pub(super) const fn next_tick_mode(mode: TickMode) -> TickMode {
+const fn gameplay_tick_mode(mode: TickMode) -> GameplayTimingTickMode {
     match mode {
-        TickMode::Off => TickMode::Assist,
-        TickMode::Assist => TickMode::Hit,
-        TickMode::Hit => TickMode::Off,
+        TickMode::Off => GameplayTimingTickMode::Off,
+        TickMode::Assist => GameplayTimingTickMode::Assist,
+        TickMode::Hit => GameplayTimingTickMode::Hit,
     }
+}
+
+#[inline(always)]
+const fn profile_tick_mode(mode: GameplayTimingTickMode) -> TickMode {
+    match mode {
+        GameplayTimingTickMode::Off => TickMode::Off,
+        GameplayTimingTickMode::Assist => TickMode::Assist,
+        GameplayTimingTickMode::Hit => TickMode::Hit,
+    }
+}
+
+#[inline(always)]
+pub(super) const fn next_tick_mode(mode: TickMode) -> TickMode {
+    profile_tick_mode(next_timing_tick_mode(gameplay_tick_mode(mode)))
 }
 
 #[inline(always)]
 pub(super) const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
-    match mode {
-        TickMode::Off => None,
-        TickMode::Assist => Some("Assist Tick"),
-        TickMode::Hit => Some("Hit Tick"),
-    }
+    gameplay_tick_mode_status_line(gameplay_tick_mode(mode))
 }
 
 #[inline(always)]
 const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
-    match mode {
-        TickMode::Off => "off",
-        TickMode::Assist => "assist tick",
-        TickMode::Hit => "hit tick",
-    }
+    gameplay_tick_mode_debug_label(gameplay_tick_mode(mode))
 }
 
 #[inline(always)]
@@ -88,25 +96,9 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
 }
 
 #[inline(always)]
-pub const fn autosync_mode_status_line(mode: AutosyncMode) -> Option<&'static str> {
-    match mode {
-        AutosyncMode::Off => None,
-        AutosyncMode::Song => Some("AutoSync Song"),
-        AutosyncMode::Machine => Some("AutoSync Machine"),
-    }
-}
-
-#[inline(always)]
 fn cycle_autosync_mode(state: &mut State) {
-    let mut next = match state.autosync_mode {
-        AutosyncMode::Off => AutosyncMode::Song,
-        AutosyncMode::Song => AutosyncMode::Machine,
-        AutosyncMode::Machine => AutosyncMode::Off,
-    };
-    if state.course_display_totals.is_some() && next == AutosyncMode::Song {
-        next = AutosyncMode::Machine;
-    }
-    state.autosync_mode = next;
+    state.autosync_mode =
+        next_autosync_mode(state.autosync_mode, state.course_display_totals.is_some());
 }
 
 #[inline(always)]

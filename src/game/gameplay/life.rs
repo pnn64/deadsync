@@ -2,11 +2,11 @@ use log::debug;
 
 use deadsync_rules::life::{self as life_rules, LifeMeter};
 
-use super::{MAX_PLAYERS, PlayerRuntime, State};
+use super::{MAX_PLAYERS, PlayerRuntime, State, course_submit_life_eligible, player_life_is_dead};
 
 #[inline(always)]
 pub(super) fn is_player_dead(p: &PlayerRuntime) -> bool {
-    p.is_failing || p.life <= 0.0
+    player_life_is_dead(p.life, p.is_failing)
 }
 
 #[inline(always)]
@@ -37,12 +37,7 @@ pub fn course_stage_life_submit_eligible(state: &State, player_idx: usize) -> bo
     if player_idx >= state.num_players.min(MAX_PLAYERS) {
         return true;
     }
-    state.players[player_idx]
-        .course_submit_life
-        .as_ref()
-        .map_or(true, |life| {
-            !life.is_failing && life.fail_time.is_none() && life.life > 0.0
-        })
+    course_submit_life_eligible(state.players[player_idx].course_submit_life.as_ref())
 }
 
 #[inline(always)]

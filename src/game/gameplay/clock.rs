@@ -4,9 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use super::{
-    GameplayAudioSnapshot, SongTimeNs, State, normalized_song_rate, scaled_song_delta_ns,
-    scaled_song_time_ns, song_time_ns_from_seconds, song_time_ns_invalid,
-    song_time_ns_span_seconds, song_time_ns_to_seconds, stream_pos_to_music_time,
+    DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, FrameStableDisplayClock,
+    GameplayAudioSnapshot, SongTimeNs, State, frame_stable_display_clock_step,
+    normalized_song_rate, scaled_song_delta_ns, song_time_ns_from_seconds, song_time_ns_to_seconds,
+    stream_pos_to_music_time,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -20,38 +21,8 @@ pub(crate) struct SongClockSnapshot {
     pub(crate) timing_diag_callback_gap_ns: u64,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct FrameStableDisplayClock {
-    current_time_ns: SongTimeNs,
-    target_time_ns: SongTimeNs,
-    catching_up: bool,
-    error_over_threshold: bool,
-}
-
 const DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT: usize = 32;
 static DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DisplayClockDiagEventKind {
-    ResetJump,
-    TargetJump,
-    ClampStep,
-    ErrorThreshold,
-    CatchUpStart,
-}
-
-impl std::fmt::Display for DisplayClockDiagEventKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            Self::ResetJump => "reset_jump",
-            Self::TargetJump => "target_jump",
-            Self::ClampStep => "clamp_step",
-            Self::ErrorThreshold => "error_threshold",
-            Self::CatchUpStart => "catch_up_start",
-        };
-        f.write_str(label)
-    }
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct DisplayClockDiagEvent {
@@ -135,42 +106,9 @@ impl DisplayClockDiagRing {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DisplayClockHealth {
-    pub error_seconds: f32,
-    pub catching_up: bool,
-}
-
-impl FrameStableDisplayClock {
-    #[inline(always)]
-    pub(crate) const fn new(time_ns: SongTimeNs) -> Self {
-        Self {
-            current_time_ns: time_ns,
-            target_time_ns: time_ns,
-            catching_up: false,
-            error_over_threshold: false,
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
-        self.current_time_ns = time_ns;
-        self.target_time_ns = time_ns;
-        self.catching_up = false;
-        self.error_over_threshold = false;
-        time_ns
-    }
-}
-
 #[inline(always)]
 pub fn display_clock_health(state: &State) -> DisplayClockHealth {
-    DisplayClockHealth {
-        error_seconds: song_time_ns_span_seconds(
-            i128::from(state.display_clock.target_time_ns)
-                - i128::from(state.display_clock.current_time_ns),
-        ),
-        catching_up: state.display_clock.catching_up,
-    }
+    state.display_clock.health()
 }
 
 #[inline(always)]
@@ -299,12 +237,6 @@ pub(crate) fn music_time_ns_from_song_clock(
     )
 }
 
-const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
-const DISPLAY_CLOCK_MAX_LAG_S: f32 = 0.020;
-const DISPLAY_CLOCK_MAX_LEAD_S: f32 = 0.006;
-const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
-const DISPLAY_CLOCK_MAX_STEP_S: f32 = 1.0 / 60.0;
-
 #[inline(always)]
 fn display_clock_stutter_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Trace)
@@ -313,26 +245,20 @@ fn display_clock_stutter_diag_enabled() -> bool {
 fn note_display_clock_diag_event(
     diag: &mut DisplayClockDiagRing,
     at_host_nanos: u64,
-    kind: DisplayClockDiagEventKind,
-    target_time_sec: f32,
-    previous_time_sec: f32,
-    current_time_sec: f32,
-    error_seconds: f32,
-    step_seconds: f32,
-    limit_seconds: f32,
+    event: DisplayClockStepEvent,
 ) {
     if !display_clock_stutter_diag_enabled() || at_host_nanos == 0 {
         return;
     }
     diag.push(DisplayClockDiagEvent {
         at_host_nanos,
-        kind,
-        target_time_sec,
-        previous_time_sec,
-        current_time_sec,
-        error_seconds,
-        step_seconds,
-        limit_seconds,
+        kind: event.kind,
+        target_time_sec: event.target_time_sec,
+        previous_time_sec: event.previous_time_sec,
+        current_time_sec: event.current_time_sec,
+        error_seconds: event.error_seconds,
+        step_seconds: event.step_seconds,
+        limit_seconds: event.limit_seconds,
     });
 }
 
@@ -346,112 +272,12 @@ pub(crate) fn frame_stable_display_music_time_ns(
     seconds_per_second: f32,
     first_update: bool,
 ) -> SongTimeNs {
-    display_clock.target_time_ns = target_display_time_ns;
-    if first_update
-        || song_time_ns_invalid(display_clock.current_time_ns)
-        || song_time_ns_invalid(target_display_time_ns)
-        || !delta_time.is_finite()
-        || delta_time <= 0.0
-    {
-        return display_clock.reset(target_display_time_ns);
-    }
-
-    let slope = normalized_song_rate(seconds_per_second);
-    let previous_display_time_ns = display_clock.current_time_ns;
-    let previous_catching_up = display_clock.catching_up;
-    let previous_error_over_threshold = display_clock.error_over_threshold;
-    let target_delta_ns = i128::from(target_display_time_ns) - i128::from(previous_display_time_ns);
-    let max_error_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_RESET_ERROR_S, slope));
-    if target_delta_ns.abs() > max_error_ns {
-        note_display_clock_diag_event(
-            diag,
-            at_host_nanos,
-            DisplayClockDiagEventKind::ResetJump,
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_to_seconds(previous_display_time_ns),
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_span_seconds(target_delta_ns),
-            song_time_ns_span_seconds(target_delta_ns),
-            song_time_ns_span_seconds(max_error_ns),
-        );
-        return display_clock.reset(target_display_time_ns);
-    }
-
-    let advanced_ns =
-        i128::from(previous_display_time_ns) + i128::from(scaled_song_time_ns(delta_time, slope));
-    let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
-    let mut corrected_ns = advanced_ns
-        + ((i128::from(target_display_time_ns) - advanced_ns) as f64 * correction_alpha as f64)
-            .round() as i128;
-    let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
-    if target_delta_ns.abs() > (max_step_ns as f64 * 2.0).round() as i128 {
-        note_display_clock_diag_event(
-            diag,
-            at_host_nanos,
-            DisplayClockDiagEventKind::TargetJump,
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_to_seconds(previous_display_time_ns),
-            song_time_ns_to_seconds(clamp_song_time_ns(corrected_ns)),
-            song_time_ns_span_seconds(target_delta_ns),
-            song_time_ns_span_seconds(target_delta_ns),
-            song_time_ns_span_seconds((max_step_ns as f64 * 2.0).round() as i128),
-        );
-    }
-    let step_ns = corrected_ns - i128::from(previous_display_time_ns);
-    let mut clamped_step = false;
-    if step_ns.abs() > (max_step_ns as f64 * 1.2).round() as i128 {
-        corrected_ns = i128::from(previous_display_time_ns) + step_ns.signum() * max_step_ns;
-        clamped_step = true;
-    }
-    let min_allowed_ns = i128::from(target_display_time_ns)
-        - i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LAG_S, slope));
-    let max_allowed_ns = i128::from(target_display_time_ns)
-        + i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LEAD_S, slope));
-    corrected_ns = corrected_ns
-        .clamp(min_allowed_ns, max_allowed_ns)
-        .max(i128::from(previous_display_time_ns));
-    display_clock.current_time_ns = clamp_song_time_ns(corrected_ns);
-    let error_ns = i128::from(target_display_time_ns) - corrected_ns;
-    display_clock.catching_up = error_ns.abs() > (max_step_ns / 2);
-    display_clock.error_over_threshold = error_ns.abs() > max_step_ns;
-    if clamped_step {
-        note_display_clock_diag_event(
-            diag,
-            at_host_nanos,
-            DisplayClockDiagEventKind::ClampStep,
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_to_seconds(previous_display_time_ns),
-            song_time_ns_to_seconds(display_clock.current_time_ns),
-            song_time_ns_span_seconds(error_ns),
-            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
-            song_time_ns_span_seconds(max_step_ns),
-        );
-    }
-    if !previous_error_over_threshold && display_clock.error_over_threshold {
-        note_display_clock_diag_event(
-            diag,
-            at_host_nanos,
-            DisplayClockDiagEventKind::ErrorThreshold,
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_to_seconds(previous_display_time_ns),
-            song_time_ns_to_seconds(display_clock.current_time_ns),
-            song_time_ns_span_seconds(error_ns),
-            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
-            song_time_ns_span_seconds(max_step_ns),
-        );
-    }
-    if !previous_catching_up && display_clock.catching_up {
-        note_display_clock_diag_event(
-            diag,
-            at_host_nanos,
-            DisplayClockDiagEventKind::CatchUpStart,
-            song_time_ns_to_seconds(target_display_time_ns),
-            song_time_ns_to_seconds(previous_display_time_ns),
-            song_time_ns_to_seconds(display_clock.current_time_ns),
-            song_time_ns_span_seconds(error_ns),
-            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
-            song_time_ns_span_seconds(max_step_ns / 2),
-        );
-    }
-    display_clock.current_time_ns
+    frame_stable_display_clock_step(
+        display_clock,
+        target_display_time_ns,
+        delta_time,
+        seconds_per_second,
+        first_update,
+        |event| note_display_clock_diag_event(diag, at_host_nanos, event),
+    )
 }

@@ -3,37 +3,9 @@ use deadsync_rules::judgment::JudgeGrade;
 use super::offset::{apply_global_offset_delta, apply_song_offset_delta};
 use super::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AUTOSYNC_STDDEV_MAX_SECONDS, AutosyncMode, SongTimeNs, State,
-    autoplay_blocks_scoring, song_time_ns_invalid, song_time_ns_span_seconds,
+    autoplay_blocks_scoring, autosync_mean_ns, autosync_stddev_seconds, song_time_ns_invalid,
     song_time_ns_to_seconds,
 };
-
-#[inline(always)]
-fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> SongTimeNs {
-    let mut sum = 0i128;
-    for value in samples {
-        sum += i128::from(*value);
-    }
-    let count = AUTOSYNC_OFFSET_SAMPLE_COUNT as i128;
-    let rounded = if sum >= 0 {
-        (sum + count / 2) / count
-    } else {
-        (sum - count / 2) / count
-    };
-    rounded.clamp(i64::MIN as i128, i64::MAX as i128) as SongTimeNs
-}
-
-#[inline(always)]
-fn autosync_stddev_seconds(
-    samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
-    mean_ns: SongTimeNs,
-) -> f32 {
-    let mut dev = 0.0_f64;
-    for value in samples {
-        let d = song_time_ns_span_seconds(i128::from(*value) - i128::from(mean_ns)) as f64;
-        dev += d * d;
-    }
-    (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f64).sqrt() as f32
-}
 
 #[inline(always)]
 fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeNs) {

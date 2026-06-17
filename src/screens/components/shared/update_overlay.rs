@@ -349,7 +349,11 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 let mut row = tr_fmt("Updater", key, &[("version", &info.tag)]).to_string();
                 if let Some(date) = format_published_at(info.published_at.as_deref()) {
                     row.push(' ');
-                    row.push_str(&tr_fmt("Updater", "BodyRollbackRowDate", &[("date", &date)]));
+                    row.push_str(&tr_fmt(
+                        "Updater",
+                        "BodyRollbackRowDate",
+                        &[("date", &date)],
+                    ));
                 }
                 body.push(row);
             }
@@ -565,15 +569,15 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
         // points and exits to Idle without committing partial state).
         // All other input is swallowed so the user can't open menus
         // underneath.
-        ActionPhase::Checking
-        | ActionPhase::Downloading { .. }
-        | ActionPhase::RollbackChecking => match ev.action {
-            VirtualAction::p1_back | VirtualAction::p2_back => {
-                action::request_cancel();
-                InputOutcome::Consumed
+        ActionPhase::Checking | ActionPhase::Downloading { .. } | ActionPhase::RollbackChecking => {
+            match ev.action {
+                VirtualAction::p1_back | VirtualAction::p2_back => {
+                    action::request_cancel();
+                    InputOutcome::Consumed
+                }
+                _ => InputOutcome::Consumed,
             }
-            _ => InputOutcome::Consumed,
-        },
+        }
         // Applying: cannot safely abort a partial extract / swap, so
         // every input is swallowed.  Listed explicitly (rather than
         // falling through to a `_` arm) so adding a new `ActionPhase`
@@ -1015,9 +1019,7 @@ mod tests {
     fn build_rollback_checking_shows_spinner() {
         let actors = build(&ActionPhase::RollbackChecking, 0);
         assert!(
-            actors
-                .iter()
-                .any(|a| matches!(a, Actor::Sprite { .. })),
+            actors.iter().any(|a| matches!(a, Actor::Sprite { .. })),
             "rollback-checking should render the spinner sprite",
         );
     }

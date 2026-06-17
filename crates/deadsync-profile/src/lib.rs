@@ -6094,7 +6094,8 @@ mod tests {
 
     #[test]
     fn favorited_packs_content_trims_ignores_empty_lines_and_dedupes() {
-        let packs = parse_favorited_packs_content(" Tachyon Alpha \n\nIn The Groove\nTachyon Alpha\n   \n");
+        let packs =
+            parse_favorited_packs_content(" Tachyon Alpha \n\nIn The Groove\nTachyon Alpha\n   \n");
 
         assert_eq!(packs.len(), 2);
         assert!(packs.contains("Tachyon Alpha"));

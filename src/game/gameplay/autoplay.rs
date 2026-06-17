@@ -3,21 +3,14 @@ use deadsync_input::{INPUT_SLOT_INVALID, lane_from_column};
 
 use super::input::push_input_edge;
 use super::{
-    MAX_COLS, SongTimeNs, State, handle_hold_let_go, handle_hold_success, judge_a_lift,
-    judge_a_tap, player_note_range, refresh_roll_life_on_step,
+    MAX_COLS, SongTimeNs, State, autoplay_blocks_scoring_from_flags, handle_hold_let_go,
+    handle_hold_success, judge_a_lift, judge_a_tap, live_autoplay_enabled_from_flags,
+    player_note_range, refresh_roll_life_on_step,
 };
 
 #[inline(always)]
 pub(super) fn autoplay_blocks_scoring(state: &State) -> bool {
-    live_autoplay_enabled(state)
-}
-
-#[inline(always)]
-pub(super) const fn live_autoplay_enabled_from_flags(
-    autoplay_enabled: bool,
-    replay_mode: bool,
-) -> bool {
-    autoplay_enabled && !replay_mode
+    autoplay_blocks_scoring_from_flags(state.autoplay_enabled, state.replay_mode)
 }
 
 #[inline(always)]

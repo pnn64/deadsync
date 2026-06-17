@@ -9,15 +9,19 @@ use super::{
     ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, ExitTransitionKind,
     GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
-    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
-    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS,
-    MAX_ACTIVE_INPUT_SLOTS, RECEPTOR_GLOW_DURATION, RecordedLaneEdge, SongClockSnapshot,
-    SongTimeNs, State, TickMode, abort_hold_to_exit, active_hold_counts_as_pressed, add_elapsed_us,
+    GameplayReceptorGlowBehavior, GameplayReceptorGlowState, GameplayReceptorStepBehavior,
+    GameplayUpdatePhaseTimings, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
+    HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, RecordedLaneEdge,
+    SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit,
+    active_hold_counts_as_pressed, active_input_slot_lane_is_down, add_elapsed_us,
     begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
-    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
-    lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
-    live_autoplay_enabled, music_time_ns_from_song_clock, queue_preloaded_assist_tick,
-    record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid, song_time_ns_to_seconds,
+    gameplay_input_log_enabled, input_lane_bit, integrate_active_hold_to_time, judge_a_lift,
+    judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+    lane_release_finished, live_autoplay_enabled, local_column_for_field,
+    music_time_ns_from_song_clock, normalized_input_slot, player_index_for_column,
+    queue_preloaded_assist_tick, receptor_glow_duration, receptor_glow_lift_start,
+    receptor_glow_visual, record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid,
+    song_time_ns_to_seconds,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -37,26 +41,17 @@ fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
 
 #[inline(always)]
 fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
-    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
-        0
-    } else {
-        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
-    };
-    let behavior = state
-        .noteskin_effects
-        .receptor_glow_behavior_for_player(player);
-    Some(behavior.duration)
-        .filter(|d| *d > f32::EPSILON)
-        .unwrap_or(RECEPTOR_GLOW_DURATION)
+    let player = player_index_for_column(state.num_players, state.cols_per_player, col);
+    receptor_glow_duration(
+        state
+            .noteskin_effects
+            .receptor_glow_behavior_for_player(player),
+    )
 }
 
 #[inline(always)]
 fn receptor_glow_behavior_for_col(state: &State, col: usize) -> GameplayReceptorGlowBehavior {
-    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
-        0
-    } else {
-        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
-    };
+    let player = player_index_for_column(state.num_players, state.cols_per_player, col);
     state
         .noteskin_effects
         .receptor_glow_behavior_for_player(player)
@@ -68,16 +63,8 @@ fn receptor_step_behavior_for_col(
     col: usize,
     window: Option<&str>,
 ) -> GameplayReceptorStepBehavior {
-    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
-        0
-    } else {
-        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
-    };
-    let local_col = if state.cols_per_player == 0 {
-        col
-    } else {
-        col % state.cols_per_player
-    };
+    let player = player_index_for_column(state.num_players, state.cols_per_player, col);
+    let local_col = local_column_for_field(state.cols_per_player, col);
     state
         .noteskin_effects
         .receptor_step_behavior_for_col(player, local_col, window)
@@ -89,17 +76,8 @@ pub(super) fn lane_is_pressed(state: &State, col: usize) -> bool {
 }
 
 #[inline(always)]
-const fn lane_bit(lane_idx: usize) -> u8 {
-    1u8 << lane_idx
-}
-
-#[inline(always)]
-fn normalized_input_slot(lane: Lane, input_slot: u32) -> u32 {
-    if input_slot == INPUT_SLOT_INVALID {
-        lane.index() as u32
-    } else {
-        input_slot
-    }
+fn normalized_lane_input_slot(lane: Lane, input_slot: u32) -> u32 {
+    normalized_input_slot(input_slot, lane.index() as u32, INPUT_SLOT_INVALID)
 }
 
 #[inline(always)]
@@ -149,10 +127,14 @@ fn input_slot_lane_is_down(
     source: InputSource,
     input_slot: u32,
 ) -> bool {
-    let input_slot = normalized_input_slot(lane, input_slot);
-    let bit = lane_bit(lane.index());
-    find_input_slot(state, source, input_slot)
-        .is_some_and(|idx| state.input_slots[idx].lane_mask & bit != 0)
+    let input_slot = normalized_lane_input_slot(lane, input_slot);
+    active_input_slot_lane_is_down(
+        &state.input_slots,
+        state.input_slot_count,
+        lane.index(),
+        source,
+        input_slot,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,8 +152,8 @@ pub(super) fn update_lane_input_slot(
     pressed: bool,
 ) -> LaneInputUpdate {
     let lane_idx = lane.index();
-    let input_slot = normalized_input_slot(lane, input_slot);
-    let bit = lane_bit(lane_idx);
+    let input_slot = normalized_lane_input_slot(lane, input_slot);
+    let bit = input_lane_bit(lane_idx);
     let was_down = lane_is_pressed(state, lane_idx);
     let mut slot_was_down = false;
 
@@ -244,13 +226,7 @@ fn start_receptor_glow_press(state: &mut State, col: usize) {
 #[inline(always)]
 fn release_receptor_glow(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    let (alpha, zoom) = if state.receptor_glow_press_timers[col] > f32::EPSILON
-        && behavior.press_duration > f32::EPSILON
-    {
-        behavior.sample_press(state.receptor_glow_press_timers[col])
-    } else {
-        (behavior.press_alpha_end, behavior.press_zoom_end)
-    };
+    let (alpha, zoom) = receptor_glow_lift_start(behavior, state.receptor_glow_press_timers[col]);
     state.receptor_glow_press_timers[col] = 0.0;
     state.receptor_glow_lift_start_alpha[col] = alpha;
     state.receptor_glow_lift_start_zoom[col] = zoom;
@@ -262,23 +238,16 @@ pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f
     if col >= state.num_cols {
         return None;
     }
-    let behavior = receptor_glow_behavior_for_col(state, col);
-    if state.receptor_glow_press_timers[col] > f32::EPSILON
-        && behavior.press_duration > f32::EPSILON
-    {
-        return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
-    }
-    if lane_is_pressed(state, col) {
-        return Some((behavior.press_alpha_end, behavior.press_zoom_end));
-    }
-    if state.receptor_glow_timers[col] > f32::EPSILON {
-        return Some(behavior.sample_lift(
-            state.receptor_glow_timers[col],
-            state.receptor_glow_lift_start_alpha[col],
-            state.receptor_glow_lift_start_zoom[col],
-        ));
-    }
-    None
+    receptor_glow_visual(
+        receptor_glow_behavior_for_col(state, col),
+        GameplayReceptorGlowState {
+            press_timer: state.receptor_glow_press_timers[col],
+            lift_timer: state.receptor_glow_timers[col],
+            lift_start_alpha: state.receptor_glow_lift_start_alpha[col],
+            lift_start_zoom: state.receptor_glow_lift_start_zoom[col],
+            lane_pressed: lane_is_pressed(state, col),
+        },
+    )
 }
 
 #[inline(always)]

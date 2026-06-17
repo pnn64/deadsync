@@ -1,7 +1,7 @@
 use crate::game::parsing::song_lua::{SongLuaCapturedActor, SongLuaOverlayActor};
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongData, SyncPref};
-use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 pub(crate) use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
@@ -10,26 +10,32 @@ pub(crate) use deadsync_gameplay::song_lua_ease_factor;
 #[cfg(test)]
 use deadsync_gameplay::step_stats_notefield_width;
 pub use deadsync_gameplay::{
-    ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
-    ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects,
-    AppearanceOverrides, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
-    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ChartAttackEffects,
-    ColumnCue, ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags, ColumnTapJudgment,
-    ComboMilestoneKind, CourseDisplayCarry, CourseDisplayStage, CourseDisplayTiming,
-    CourseDisplayTotals, DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER,
-    DangerFx, DisplayWindowCountsMode, DisplayWindowCountsSources, ErrorBarText, ErrorBarTick,
-    ExScoreInputs, ExitTransition, ExitTransitionKind, FantasticFeedbackOptions,
-    FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN, GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction,
-    GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayFailType,
-    GameplayMiniIndicatorData, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
-    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayScoreDisplayMode,
-    GameplayStreamClockSnapshot, GameplayTurnOption, GameplayTween, GameplayViewport,
-    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HOLDS_MASK_BIT_FLOORED,
-    HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
-    HOLDS_MASK_BIT_TWISTER, HealthState, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
-    INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
-    INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
-    INSERT_MASK_BIT_WIDE, ItgScoreInputs, ItgScoreStage, JudgmentRenderInfo, LeadInTiming,
+    ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AUTOSYNC_OFFSET_SAMPLE_COUNT,
+    AUTOSYNC_STDDEV_MAX_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
+    ActiveComboMilestone, ActiveHold, ActiveInputSlot, ActiveMineExplosion, ActiveTapExplosion,
+    AppearanceEffects, AppearanceOverrides, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION,
+    COLUMN_FLASH_MISS_DURATION, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO,
+    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
+    CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects, ColumnCue, ColumnCueColumn, ColumnFlashOptions,
+    ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind, CourseComboCarryState,
+    CourseDisplayCarry, CourseDisplayStage, CourseDisplayTiming, CourseDisplayTotals, CrossoverRow,
+    DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx,
+    DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, DisplayWindowCountsMode,
+    DisplayWindowCountsSources, EMPTY_ACTIVE_INPUT_SLOT, ErrorBarText, ErrorBarTick, ExScoreInputs,
+    ExitTransition, ExitTransitionKind, FantasticFeedbackOptions, FantasticWindowOptions,
+    FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
+    GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
+    GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
+    GameplayReceptorGlowState, GameplayReceptorStepBehavior, GameplayScoreDisplayMode,
+    GameplayStreamClockSnapshot, GameplayTimingTickMode, GameplayTurnOption, GameplayTween,
+    GameplayViewport, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
+    HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS,
+    HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, HealthState, HeldMissRenderInfo,
+    HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG,
+    INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
+    INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, ItgScoreInputs,
+    ItgScoreStage, JudgmentRenderInfo, LeadInTiming, MAX_ACTIVE_INPUT_SLOTS,
     MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MineJudgmentRenderInfo,
     MiniAttackMode, NoteCountStat, OffsetIndicatorText, PerspectiveEffects, PerspectiveOverrides,
     PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
@@ -41,53 +47,63 @@ pub use deadsync_gameplay::{
     ScrollEffects, ScrollOverrides, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
     TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions, TurnRng,
     VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides,
-    active_hold_counts_as_pressed, active_hold_is_engaged, advance_judged_row_cursor,
-    apply_echo_insert, apply_hyper_shuffle, apply_insert_intelligent_taps, apply_mines_insert,
-    apply_stomp_insert, apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
-    apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks, apply_wide_insert,
-    approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
+    active_hold_counts_as_pressed, active_hold_is_engaged, active_input_slot_lane_is_down,
+    advance_judged_row_cursor, apply_combo_update_feedback, apply_course_combo_carry_state,
+    apply_echo_insert, apply_hold_let_go_combo_policy, apply_hold_success_combo_policy,
+    apply_hyper_shuffle, apply_insert_intelligent_taps, apply_mine_hit_combo_policy,
+    apply_mines_insert, apply_stomp_insert, apply_super_shuffle_taps, apply_turn_options,
+    apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
+    apply_wide_insert, approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
     assist_clap_cursor_for_row, assist_lookahead_music_horizon_seconds,
     assist_row_no_offset_for_timing, attack_mini_target_percent,
-    autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
-    build_column_cues_for_player, build_note_count_stats, build_row_entry, build_row_grids,
-    cell_has_any_note, cell_has_nonfake_note, closest_lane_note_ns, collect_edge_judge_indices,
-    column_cue_is_mine, column_flash_duration, column_flash_enabled_for_options,
-    column_scroll_dirs_for_flags, completed_row_final_judgment,
-    completed_row_flash_note_indices_and_judgment, compute_end_times_ns, convert_tap_row_to_mines,
-    convert_taps_to_holds, count_held_tracks_at_row, count_nonempty_tracks_at_row,
-    count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row,
-    counts_for_early_rescore, course_display_carry_for_stage, course_display_totals_for_chart,
-    crossed_mine_bounds_ns, crossed_mine_held_start_time, danger_fx_rgba, danger_health_state,
-    display_ex_score_percent_for_mode, display_hard_ex_score_percent_for_mode,
-    display_itg_score_percent_for_mode, display_judgment_count_for_grade,
-    display_window_counts_current, display_window_counts_mode, display_window_counts_with_carry,
-    draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
-    enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
-    error_bar_push_tick, error_bar_window_ix, ex_score_data_from_display_inputs,
-    exit_total_seconds, exit_transition_alpha, finalized_row_outcome_for_cached_row,
+    autoplay_blocks_scoring_from_flags, autoplay_random_offset_music_ns_for_window,
+    autosync_mean_ns, autosync_mode_status_line, autosync_stddev_seconds, blue_fantastic_window_ms,
+    build_assist_clap_rows, build_column_cues_for_player, build_crossover_cues_from_annotations,
+    build_note_count_stats, build_row_entry, build_row_grids, cell_has_any_note,
+    cell_has_nonfake_note, closest_lane_note_ns, collect_edge_judge_indices, column_cue_is_mine,
+    column_flash_duration, column_flash_enabled_for_options, column_scroll_dirs_for_flags,
+    completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+    compute_end_times_ns, convert_tap_row_to_mines, convert_taps_to_holds,
+    count_held_tracks_at_row, count_nonempty_tracks_at_row, count_rescore_tracks_on_row,
+    count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row, counts_for_early_rescore,
+    course_display_carry_for_stage, course_display_totals_for_chart, course_life_after_carry,
+    course_submit_life_eligible, crossed_mine_bounds_ns, crossed_mine_held_start_time,
+    crossover_arrow_col, danger_fx_rgba, danger_health_state, display_ex_score_percent_for_mode,
+    display_hard_ex_score_percent_for_mode, display_itg_score_percent_for_mode,
+    display_judgment_count_for_grade, display_window_counts_current, display_window_counts_mode,
+    display_window_counts_with_carry, draw_distance_after_targets, draw_distance_before_targets,
+    effective_mini_percent, enforce_max_simultaneous_notes, error_bar_average_offset_s,
+    error_bar_long_term_offset_s, error_bar_push_tick, error_bar_window_ix,
+    ex_score_data_from_display_inputs, exit_total_seconds, exit_transition_alpha,
+    fantastic_window_seconds, finalized_row_outcome_for_cached_row,
     finalized_row_outcome_for_entry, first_nonempty_track_at_row,
     first_row_entry_index_at_or_after_time, first_tap_track_at_row, first_time_index_at_or_after,
-    gameplay_exit_for_kind, grade_to_window, hold_explosion_active,
-    hold_explosion_enabled_for_options, hold_head_render_flags, hold_to_exit_seconds,
-    input_queue_cap, is_hold_body_at_row, itg_score_inputs_from_display,
-    itg_score_percent_from_inputs, lane_edge_judges_lift, lane_edge_judges_tap,
-    lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-    lane_press_started, lane_release_finished, late_note_resolution_window_ns, let_go_head_beat,
-    local_player_col, max_step_distance_ns, measure_counter_segments_for_densities,
-    mine_window_bounds_ns, mini_value_for_percent, missed_note_cutoff_row_for_timing,
-    music_time_from_stream_position, next_ready_row_in_lookahead, note_has_displayable_hold,
-    note_tracks_held_miss, notes_row_sorted, player_draw_scale_for_mini, player_row_scan_state,
-    player_rows, predictive_itg_score_percent_from_inputs, quantization_index_from_beat,
-    recent_step_tracks, remove_cell_notes, replay_edge_cap, row_entry_for_cached_row,
-    row_entry_index_for_cached_row, row_final_grade_hides_note, scroll_receptor_y,
-    scroll_reverse_percent_for_column, scroll_reverse_scale_for_column, set_added_mine_note,
-    set_added_tap_note, song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
+    frame_stable_display_clock_step, gameplay_exit_for_kind, grade_to_window,
+    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
+    hold_to_exit_seconds, input_lane_bit, input_queue_cap, is_hold_body_at_row,
+    itg_score_inputs_from_display, itg_score_percent_from_inputs, lane_edge_judges_lift,
+    lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
+    lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
+    late_note_resolution_window_ns, let_go_head_beat, live_autoplay_enabled_from_flags,
+    local_column_for_field, local_player_col, max_step_distance_ns,
+    measure_counter_segments_for_densities, mine_window_bounds_ns, mini_value_for_percent,
+    missed_note_cutoff_row_for_timing, music_time_from_stream_position, next_autosync_mode,
+    next_ready_row_in_lookahead, next_timing_tick_mode, normalized_input_slot,
+    note_has_displayable_hold, note_tracks_held_miss, notes_row_sorted, player_draw_scale_for_mini,
+    player_index_for_column, player_life_is_dead, player_row_scan_state, player_rows,
+    predictive_itg_score_percent_from_inputs, quantization_index_from_beat, recent_step_tracks,
+    receptor_glow_duration, receptor_glow_lift_start, receptor_glow_visual, remove_cell_notes,
+    replay_edge_cap, row_entry_for_cached_row, row_entry_index_for_cached_row,
+    row_final_grade_hides_note, scroll_receptor_y, scroll_reverse_percent_for_column,
+    scroll_reverse_scale_for_column, set_added_mine_note, set_added_tap_note,
+    song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
     spacing_multiplier_for_percent, stage_music_cut, step_search_row_bounds, stomp_mirror_track,
     suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
     tap_judgment_uses_bright_explosion_for_options, timing_row_floor, timing_row_nearest,
-    toggle_flash_alpha, track_held_miss_window_for_player, track_range_has_any_note,
-    trigger_combo_milestone, turn_seed_for_song, update_danger_fx_for_health,
-    visible_notefield_time_ns, zmod_stream_totals_for_densities,
+    timing_tick_mode_debug_label, timing_tick_mode_status_line, toggle_flash_alpha,
+    track_held_miss_window_for_player, track_range_has_any_note, trigger_combo_milestone,
+    turn_seed_for_song, update_danger_fx_for_health, visible_notefield_time_ns,
+    zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
     StepStatsPlayStyle, resolve_target_score_percent,
@@ -98,7 +114,7 @@ use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{
-    self as combo_rules, ComboState, apply_row_combo_state as apply_rules_row_combo_state,
+    ComboState, ComboUpdate, apply_row_combo_state as apply_rules_row_combo_state,
 };
 use deadsync_rules::judgment::{
     self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
@@ -180,22 +196,18 @@ use self::attacks::{
     build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows, parse_attack_mods,
     parse_song_lua_runtime_mods, turn_option_bits,
 };
-#[cfg(test)]
-use self::autoplay::live_autoplay_enabled_from_flags;
 use self::autoplay::{autoplay_blocks_scoring, live_autoplay_enabled, run_autoplay, run_replay};
 use self::autosync::apply_autosync_for_row_hits;
 pub use self::clock::{
-    DisplayClockDiagEvent, DisplayClockDiagEventKind, DisplayClockHealth,
-    collect_display_clock_stutter_diag_events, display_clock_health,
+    DisplayClockDiagEvent, collect_display_clock_stutter_diag_events, display_clock_health,
     display_clock_stutter_diag_trigger_seq,
 };
 use self::clock::{
-    DisplayClockDiagRing, FrameStableDisplayClock, SongClockSnapshot, current_song_clock_snapshot,
+    DisplayClockDiagRing, SongClockSnapshot, current_song_clock_snapshot,
     frame_stable_display_music_time_ns, music_time_ns_from_song_clock,
 };
 pub use self::controls::{
-    RawKeyAction, autosync_mode_status_line, handle_queued_raw_key, sync_queued_raw_modifiers,
-    timing_tick_status_line,
+    RawKeyAction, handle_queued_raw_key, sync_queued_raw_modifiers, timing_tick_status_line,
 };
 #[cfg(test)]
 use self::controls::{next_tick_mode, tick_mode_status_line};
@@ -254,8 +266,7 @@ pub use self::stats::{
 use self::stats::{gameplay_target_score_setting, mini_indicator_mode, needs_stream_data};
 use self::time::{
     INVALID_SONG_TIME_NS, current_music_time_s, normalized_song_rate, scaled_song_delta_ns,
-    scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_delta_seconds,
-    song_time_ns_span_seconds,
+    song_time_ns_add_seconds, song_time_ns_delta_seconds,
 };
 pub(crate) use self::time::{
     song_time_ns_from_seconds, song_time_ns_invalid, song_time_ns_to_seconds,
@@ -272,21 +283,13 @@ pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
-const MAX_ACTIVE_INPUT_SLOTS: usize = 128;
-// ITGmania _fallback and Simply Love keep mine hits from incrementing miss combo.
-const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
 const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
 const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
 const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 const M_MOD_HIGH_CAP: f32 = 600.0;
 pub const SCOREBOX_NUM_ENTRIES: usize = 5;
 
-// ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
-const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
-
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
-pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
-const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
 const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
@@ -372,11 +375,7 @@ pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) 
 
 #[inline(always)]
 fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat: f32) -> bool {
-    let local_col = if state.cols_per_player == 0 {
-        column
-    } else {
-        column % state.cols_per_player
-    };
+    let local_col = local_column_for_field(state.cols_per_player, column);
     song_lua_note_hidden(&state.song_lua_note_hides[player], local_col, beat)
 }
 
@@ -440,57 +439,6 @@ fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEff
     }
 }
 
-/// Lead-in/out fade applied to every crossover cue.
-const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
-
-/// Lowest matching lane wins so results are deterministic; `pos % 4` keeps it
-/// working for the second pad of doubles, not just the left pad.
-fn crossover_arrow_col(column_mask: u8, want_outer: bool) -> Option<usize> {
-    let mut m = column_mask;
-    while m != 0 {
-        let c = m.trailing_zeros() as usize;
-        m &= m - 1;
-        let pos = c % 4;
-        let is_outer = pos == 0 || pos == 3;
-        if is_outer == want_outer {
-            return Some(c);
-        }
-    }
-    None
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct CrossoverRow {
-    beat: f32,
-    /// Occupancy bitmask of the foot-bearing columns this row (0-indexed).
-    column_mask: u8,
-    /// Whether the parity solver flagged this row as a crossover.
-    crossover: bool,
-    /// Kept raw (rather than pre-filtered) so the cue builder can honour the
-    /// per-player "include brackets" toggle.
-    bracket: bool,
-}
-
-impl CrossoverRow {
-    /// A bracket crossover only counts when the player opts brackets in.
-    #[inline]
-    fn is_active_crossover(&self, include_brackets: bool) -> bool {
-        self.crossover && (include_brackets || !self.bracket)
-    }
-}
-
-impl From<&rssp::RowAnnotation> for CrossoverRow {
-    #[inline]
-    fn from(anno: &rssp::RowAnnotation) -> Self {
-        Self {
-            beat: anno.beat,
-            column_mask: anno.column_mask,
-            crossover: anno.row_tech.crossovers > 0,
-            bracket: anno.foot_count() > 1,
-        }
-    }
-}
-
 /// Re-encodes notes into `rssp`'s parity row format. Keyed by note row so hold
 /// tails (`3`) merge with coincident taps and foot occupancy stays correct.
 fn build_crossover_rows<const LANES: usize>(
@@ -498,88 +446,15 @@ fn build_crossover_rows<const LANES: usize>(
     note_range: (usize, usize),
     col_start: usize,
 ) -> (Vec<[u8; LANES]>, Vec<f32>) {
-    use std::collections::BTreeMap;
-    let (start, end) = note_range;
-    let mut rows: BTreeMap<usize, ([u8; LANES], f32)> = BTreeMap::new();
-    for note in &notes[start..end] {
-        if note.column < col_start || note.column - col_start >= LANES {
-            continue;
-        }
-        let lane = note.column - col_start;
-        let ch = if note.is_fake {
-            // Fake mines still bias parity foot placement (ITGMania feeds them
-            // to the solver); fake taps/holds/lifts are skipped.
-            match note.note_type {
-                NoteType::Mine => b'M',
-                _ => continue,
-            }
-        } else {
-            match note.note_type {
-                NoteType::Tap => b'1',
-                NoteType::Lift => b'L',
-                NoteType::Hold => b'2',
-                NoteType::Roll => b'4',
-                NoteType::Mine => b'M',
-                NoteType::Fake => continue,
-            }
-        };
-        let entry = rows
-            .entry(note.row_index)
-            .or_insert(([b'0'; LANES], note.beat));
-        // A real arrow outranks a mine sharing the same row+lane.
-        if ch == b'M' {
-            if entry.0[lane] == b'0' {
-                entry.0[lane] = b'M';
-            }
-        } else {
-            entry.0[lane] = ch;
-        }
-        if let Some(hold) = note.hold.as_ref() {
-            let tail = rows
-                .entry(hold.end_row_index)
-                .or_insert(([b'0'; LANES], hold.end_beat));
-            if tail.0[lane] == b'0' {
-                tail.0[lane] = b'3';
-            }
-        }
-    }
-    let mut row_arrays = Vec::with_capacity(rows.len());
-    let mut row_to_beat = Vec::with_capacity(rows.len());
-    for (_row_index, (arr, beat)) in rows {
-        row_arrays.push(arr);
-        row_to_beat.push(beat);
-    }
-    (row_arrays, row_to_beat)
+    deadsync_gameplay::build_crossover_rows(notes, note_range, col_start)
 }
 
 /// Uses the player's base `TimingData` (not rate-scaled) so cue times share the
 /// mine-cue frame; rate scaling is reapplied at render time.
-#[allow(clippy::too_many_arguments)]
-fn build_crossover_cues_from_annotations(
-    annos: &[CrossoverRow],
-    timing_player: &TimingData,
-    col_start: usize,
-    duration_ms: u16,
-    quantization: u8,
-    include_brackets: bool,
-    first_visible_time: f32,
-) -> Vec<ColumnCue> {
-    let arrow_time =
-        |beat: f32| -> f32 { song_time_ns_to_seconds(timing_player.get_time_for_beat_ns(beat)) };
-    build_crossover_cues_core(
-        annos,
-        arrow_time,
-        col_start,
-        duration_ms,
-        quantization,
-        include_brackets,
-        first_visible_time,
-    )
-}
-
 /// Split from the public entry so the beat→seconds mapping can be faked in
 /// unit tests without a full `TimingData`.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn build_crossover_cues_core(
     annos: &[CrossoverRow],
     arrow_time: impl Fn(f32) -> f32,
@@ -740,7 +615,12 @@ fn build_crossover_cues_for_player(
         _ => return Vec::new(),
     }
     .iter()
-    .map(CrossoverRow::from)
+    .map(|anno| CrossoverRow {
+        beat: anno.beat,
+        column_mask: anno.column_mask,
+        crossover: anno.row_tech.crossovers > 0,
+        bracket: anno.foot_count() > 1,
+    })
     .collect();
     build_crossover_cues_from_annotations(
         &annos,
@@ -886,12 +766,7 @@ fn init_player_runtime() -> PlayerRuntime {
 
 #[inline(always)]
 fn apply_course_life_carry(player: &mut PlayerRuntime, course_carry: Option<CourseDisplayCarry>) {
-    let Some(carry) = course_carry else {
-        return;
-    };
-    if carry.life.is_finite() {
-        player.life = carry.life.clamp(0.0, 1.0);
-    }
+    player.life = course_life_after_carry(player.life, course_carry);
 }
 
 #[inline(always)]
@@ -902,36 +777,26 @@ fn apply_course_combo_carry(
     combo_carry: u32,
     course_carry: Option<CourseDisplayCarry>,
 ) {
-    if carry_combo_between_songs && !replay_mode {
-        player.combo = combo_carry;
-        if let Some(carry) = course_carry {
-            if combo_carry > 0 {
-                player.full_combo_grade = carry.full_combo_grade;
-                player.current_combo_grade = carry.current_combo_grade;
-                player.current_combo_window_counts = carry.current_combo_window_counts;
-                player.first_fc_attempt_broken = carry.first_fc_attempt_broken;
-            } else {
-                player.first_fc_attempt_broken =
-                    carry.first_fc_attempt_broken || carry.full_combo_grade.is_some();
-            }
-        }
-    } else if course_carry.is_some() {
-        player.first_fc_attempt_broken = true;
-    }
+    let mut state = CourseComboCarryState {
+        combo: player.combo,
+        full_combo_grade: player.full_combo_grade,
+        current_combo_grade: player.current_combo_grade,
+        current_combo_window_counts: player.current_combo_window_counts,
+        first_fc_attempt_broken: player.first_fc_attempt_broken,
+    };
+    apply_course_combo_carry_state(
+        &mut state,
+        carry_combo_between_songs,
+        replay_mode,
+        combo_carry,
+        course_carry,
+    );
+    player.combo = state.combo;
+    player.full_combo_grade = state.full_combo_grade;
+    player.current_combo_grade = state.current_combo_grade;
+    player.current_combo_window_counts = state.current_combo_window_counts;
+    player.first_fc_attempt_broken = state.first_fc_attempt_broken;
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ActiveInputSlot {
-    source: InputSource,
-    input_slot: u32,
-    lane_mask: u8,
-}
-
-const EMPTY_ACTIVE_INPUT_SLOT: ActiveInputSlot = ActiveInputSlot {
-    source: InputSource::Keyboard,
-    input_slot: 0,
-    lane_mask: 0,
-};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayUpdatePhaseTimings {
@@ -2030,10 +1895,7 @@ pub fn lane_pressed(state: &State, col: usize) -> bool {
 
 #[inline(always)]
 fn player_for_col(state: &State, col: usize) -> usize {
-    if state.num_players <= 1 || state.cols_per_player == 0 {
-        return 0;
-    }
-    (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+    player_index_for_column(state.num_players, state.cols_per_player, col)
 }
 
 #[inline(always)]
@@ -2617,11 +2479,7 @@ pub fn init(
         if lane >= num_cols || song_time_ns_invalid(edge.event_music_time_ns) {
             continue;
         }
-        let player = if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (lane / cols_per_player).min(num_players.saturating_sub(1))
-        };
+        let player = player_index_for_column(num_players, cols_per_player, lane);
         let replay_beat0_shift_ns = if song_time_ns_invalid(replay_offsets.beat0_time_ns) {
             0
         } else {
@@ -2866,13 +2724,8 @@ pub fn init(
         std::array::from_fn(|player| build_note_count_stats(&notes, note_ranges[player]));
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
-    let note_player_for_col = |col: usize| -> usize {
-        if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (col / cols_per_player).min(num_players.saturating_sub(1))
-        }
-    };
+    let note_player_for_col =
+        |col: usize| -> usize { player_index_for_column(num_players, cols_per_player, col) };
 
     let cache_build_started = Instant::now();
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
@@ -3916,11 +3769,7 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
     if !tap_explosion_enabled_for_options(tap_explosion_options_from_profile(profile), window_key) {
         return;
     }
-    let local_col = if state.cols_per_player == 0 {
-        column
-    } else {
-        column % state.cols_per_player
-    };
+    let local_col = local_column_for_field(state.cols_per_player, column);
     let spawn_duration = state
         .noteskin_effects
         .tap_explosion_duration(player, local_col, window_key, bright);
@@ -3969,31 +3818,12 @@ fn write_player_combo_state(p: &mut PlayerRuntime, state: ComboState) {
 }
 
 #[inline(always)]
-fn apply_combo_update(p: &mut PlayerRuntime, update: combo_rules::ComboUpdate) {
-    if update.combo_broken {
-        p.current_combo_window_counts = deadsync_rules::timing::WindowCounts::default();
-    }
-    if update.hit_thousand_milestone {
-        trigger_combo_milestone(&mut p.combo_milestones, ComboMilestoneKind::Thousand);
-    }
-    if update.hit_hundred_milestone {
-        trigger_combo_milestone(&mut p.combo_milestones, ComboMilestoneKind::Hundred);
-    }
-}
-
-#[inline(always)]
-fn clear_full_combo_state(p: &mut PlayerRuntime) {
-    let mut state = player_combo_state(p);
-    combo_rules::clear_full_combo_state(&mut state);
-    write_player_combo_state(p, state);
-}
-
-#[inline(always)]
-fn break_combo_state(p: &mut PlayerRuntime, miss_combo_delta: u32) {
-    let mut state = player_combo_state(p);
-    let update = combo_rules::break_combo_state(&mut state, miss_combo_delta);
-    write_player_combo_state(p, state);
-    apply_combo_update(p, update);
+fn apply_combo_update(p: &mut PlayerRuntime, update: ComboUpdate) {
+    apply_combo_update_feedback(
+        &mut p.current_combo_window_counts,
+        &mut p.combo_milestones,
+        update,
+    );
 }
 
 #[inline(always)]
@@ -4012,14 +3842,26 @@ fn apply_row_combo_state(
 
 #[inline(always)]
 fn apply_mine_hit_combo_state(p: &mut PlayerRuntime) {
-    if MINE_HIT_INCREMENTS_MISS_COMBO {
-        break_combo_state(p, 1);
-    }
+    let mut state = player_combo_state(p);
+    let update = apply_mine_hit_combo_policy(&mut state);
+    write_player_combo_state(p, state);
+    apply_combo_update(p, update);
 }
 
 #[inline(always)]
-fn apply_hold_success_combo_state(_p: &mut PlayerRuntime) {
-    // ITG dance/pump scoring does not let Held / Roll Held reset miss combo.
+fn apply_hold_let_go_combo_state(p: &mut PlayerRuntime) {
+    let mut state = player_combo_state(p);
+    let update = apply_hold_let_go_combo_policy(&mut state);
+    write_player_combo_state(p, state);
+    apply_combo_update(p, update);
+}
+
+#[inline(always)]
+fn apply_hold_success_combo_state(p: &mut PlayerRuntime) {
+    let mut state = player_combo_state(p);
+    let update = apply_hold_success_combo_policy(&mut state);
+    write_player_combo_state(p, state);
+    apply_combo_update(p, update);
 }
 
 fn hit_mine(
@@ -5822,19 +5664,18 @@ mod tests {
         hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
         lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
         lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
-        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        render_provisional_early_rescore_feedback, replay_edge_cap, resolve_pending_missed_holds,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        set_final_note_result, settle_completion_rows, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
-        step_stats_density_graph_width, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        lane_release_finished, late_note_resolution_window_ns, max_step_distance_ns,
+        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
+        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
+        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, start_active_hold, step_stats_density_graph_width,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -7212,13 +7053,6 @@ return Def.ActorFrame{}
                 (false, true)
             ]
         );
-    }
-
-    #[test]
-    fn live_autoplay_helper_excludes_replays() {
-        assert!(live_autoplay_enabled_from_flags(true, false));
-        assert!(!live_autoplay_enabled_from_flags(true, true));
-        assert!(!live_autoplay_enabled_from_flags(false, false));
     }
 
     #[test]
