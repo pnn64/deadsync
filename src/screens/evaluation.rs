@@ -2065,6 +2065,18 @@ fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGrap
     ]
 }
 
+/// Short label describing what each scatter pane's colors encode, shown in the
+/// bottom-left corner of the graph.
+#[inline(always)]
+fn eval_graph_pane_label(pane: EvalGraphPane) -> &'static str {
+    match pane {
+        EvalGraphPane::Itg | EvalGraphPane::Ex | EvalGraphPane::HardEx => "By Judgment",
+        EvalGraphPane::Arrow => "By Column",
+        EvalGraphPane::Quant => "By Quantization",
+        EvalGraphPane::FootParity => "By Foot",
+    }
+}
+
 #[inline(always)]
 fn eval_graph_shift(
     pane: EvalGraphPane,
@@ -5134,6 +5146,15 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                             act!(sprite("__white"): visible(false))
                         }
                     },
+                    act!(text:
+                        font("miso"):
+                        settext(eval_graph_pane_label(graph_mode).to_string()):
+                        align(0.0, 1.0):
+                        xy(3.0, graph_height - 2.0):
+                        zoom(0.5):
+                        diffuse(1.0, 1.0, 1.0, 0.6):
+                        z(6)
+                    ),
                     {
                         // Reserve the worst-case child count (≤2 quads per life-history
                         // change point) so the segment quads never trigger reallocations.
