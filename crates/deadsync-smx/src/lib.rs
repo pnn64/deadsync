@@ -109,6 +109,17 @@ struct SmxShared {
     uuid: [Mutex<[u8; 16]>; 2],
     /// Per-pad serial string, cached at connect, used for friendly trigger labels.
     serial: [Mutex<String>; 2],
+    /// Latest sensor test data per pad, pushed from the SDK's `SensorTestData`
+    /// event (~30Hz while test mode is active) and read by `get_test_data`.
+    ///
+    /// This decouples the per-frame reader (the gameplay FSR overlay) from the
+    /// SDK's global state mutex, which is contended by the USB/main/animation
+    /// threads. Reading that shared lock once per render frame was costing
+    /// milliseconds with vsync off. This is our own mutex, held only for a tiny
+    /// copy and contended only by the 30Hz writer, so the reader never waits on
+    /// SDK USB/light work. Safe to write from the callback for the same reason
+    /// the `uuid`/`serial` caches are (see above).
+    sensor_data: [Mutex<Option<SensorTestData>>; 2],
     p1_assigned: AtomicBool,
     p2_assigned: AtomicBool,
     /// Set while a deferred `set_serial_numbers()` is in flight, so a burst of
@@ -167,6 +178,7 @@ pub fn init(config: InitConfig) -> bool {
             prev_input: [AtomicU16::new(0), AtomicU16::new(0)],
             uuid: [Mutex::new([0u8; 16]), Mutex::new([0u8; 16])],
             serial: [Mutex::new(String::new()), Mutex::new(String::new())],
+            sensor_data: [Mutex::new(None), Mutex::new(None)],
             p1_assigned: AtomicBool::new(config.p1_serial.is_some()),
             p2_assigned: AtomicBool::new(config.p2_serial.is_some()),
             serial_assign_inflight: AtomicBool::new(false),
@@ -618,12 +630,24 @@ pub fn apply_preset(pad: usize, preset: SmxPadPreset) -> bool {
 pub fn set_test_mode(pad: usize, mode: SensorTestMode) {
     if let Some(s) = SHARED.get() {
         s.manager.set_test_mode(pad, mode);
+        // Streaming stopped: drop the snapshot so a later session can't read a
+        // stale value before the first fresh sample arrives.
+        if mode == SensorTestMode::Off
+            && let Some(slot) = s.sensor_data.get(pad)
+        {
+            *slot.lock().unwrap() = None;
+        }
     }
 }
 
-/// Get sensor test data for a pad.
+/// Get the latest sensor test data for a pad. Reads our local snapshot (fed by
+/// the SDK's `SensorTestData` event), so it never touches the SDK's global state
+/// mutex. Returns `None` until the first sample arrives after test mode is on.
 pub fn get_test_data(pad: usize) -> Option<SensorTestData> {
-    SHARED.get().and_then(|s| s.manager.get_test_data(pad))
+    SHARED
+        .get()
+        .and_then(|s| s.sensor_data.get(pad))
+        .and_then(|slot| slot.lock().unwrap().clone())
 }
 
 /// Assign serial numbers to any connected pads that don't have one.
@@ -847,6 +871,9 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
                 return;
             }
             shared.prev_input[pad].store(0, Ordering::Relaxed);
+            if let Some(slot) = shared.sensor_data.get(pad) {
+                *slot.lock().unwrap() = None;
+            }
             log::info!("SMX: pad {pad} disconnected");
             let sys_event = GpSystemEvent::Disconnected {
                 name: format!("StepManiaX pad {pad}"),
@@ -897,6 +924,13 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
                 for listener in listeners.iter() {
                     listener(event);
                 }
+            }
+        }
+        SmxEvent::SensorTestData { pad, data } => {
+            // Publish to the local snapshot so the per-frame reader stays off the
+            // SDK state mutex. Fired ~30Hz while sensor test mode is active.
+            if let Some(slot) = shared.sensor_data.get(pad) {
+                *slot.lock().unwrap() = Some(data);
             }
         }
         _ => {}
