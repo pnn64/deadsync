@@ -505,20 +505,35 @@ fn build_crossover_rows<const LANES: usize>(
         if note.column < col_start || note.column - col_start >= LANES {
             continue;
         }
-        if note.is_fake {
-            continue;
-        }
         let lane = note.column - col_start;
-        let ch = match note.note_type {
-            NoteType::Tap | NoteType::Lift => b'1',
-            NoteType::Hold => b'2',
-            NoteType::Roll => b'4',
-            NoteType::Mine | NoteType::Fake => continue,
+        let ch = if note.is_fake {
+            // Fake mines still bias parity foot placement (ITGMania feeds them
+            // to the solver); fake taps/holds/lifts are skipped.
+            match note.note_type {
+                NoteType::Mine => b'M',
+                _ => continue,
+            }
+        } else {
+            match note.note_type {
+                NoteType::Tap => b'1',
+                NoteType::Lift => b'L',
+                NoteType::Hold => b'2',
+                NoteType::Roll => b'4',
+                NoteType::Mine => b'M',
+                NoteType::Fake => continue,
+            }
         };
         let entry = rows
             .entry(note.row_index)
             .or_insert(([b'0'; LANES], note.beat));
-        entry.0[lane] = ch;
+        // A real arrow outranks a mine sharing the same row+lane.
+        if ch == b'M' {
+            if entry.0[lane] == b'0' {
+                entry.0[lane] = b'M';
+            }
+        } else {
+            entry.0[lane] = ch;
+        }
         if let Some(hold) = note.hold.as_ref() {
             let tail = rows
                 .entry(hold.end_row_index)
@@ -602,10 +617,14 @@ fn build_crossover_cues_core(
         let is_scooby = next.is_some_and(|a| a.is_active_crossover(include_brackets));
         let first_condition = current.beat - prev.beat <= spacing_threshold;
         let second_condition = next.is_some_and(|n| n.beat - current.beat <= spacing_threshold);
-        let third_condition = match (next, next_next) {
-            (Some(n), Some(nn)) => nn.beat - n.beat <= spacing_threshold,
-            _ => false,
-        };
+        // Only a scooby chain looks two steps ahead; otherwise the step after
+        // next is irrelevant to whether this crossover gets a cue. Evaluating it
+        // unconditionally emits cues the reference builder never would.
+        let third_condition = is_scooby
+            && match (next, next_next) {
+                (Some(n), Some(nn)) => nn.beat - n.beat <= spacing_threshold,
+                _ => false,
+            };
         if !(first_condition || second_condition || third_condition) {
             continue;
         }
