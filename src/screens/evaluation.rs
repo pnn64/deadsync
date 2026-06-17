@@ -2292,10 +2292,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let prof = &gs.player_profiles[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
 
-            // Compute timing statistics across all non-miss tap judgments
+            // Compute timing statistics across all non-miss tap judgments.
+            // Real rssp foot parity drives the per-foot breakdown (empty on
+            // non-4/8-panel charts, where it falls back to alternation).
             let stats = timing_stats::compute_note_timing_stats(notes);
-            let arrow_timing =
-                timing_stats::compute_arrow_timing_stats(notes, col_offset, cols_per_player);
+            let foot_by_note =
+                crate::game::gameplay::foot_parity_by_note_for_results(&gs, player_idx);
+            let arrow_timing = timing_stats::compute_arrow_timing_stats(
+                notes,
+                col_offset,
+                cols_per_player,
+                (!foot_by_note.is_empty()).then_some(&foot_by_note),
+            );
             // Prepare scatter points and histogram bins
             let mut scatter = timing_stats::build_scatter_points(
                 notes,

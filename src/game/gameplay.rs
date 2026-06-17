@@ -884,6 +884,72 @@ pub fn foot_parity_by_row_for_results(
     }
 }
 
+/// Per-arrow left/right foot placement from `rssp` parity, keyed by
+/// `(row_index, absolute column)`, for the per-arrow timing-stats pane. Splits
+/// jumps correctly (each arrow gets its own foot). Returns an empty map on
+/// non-4/8-panel layouts, in which case the timing stats fall back to the
+/// alternation heuristic.
+fn foot_parity_by_note_map<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+    rssp_timing: &rssp::timing::TimingData,
+) -> std::collections::HashMap<(usize, usize), deadsync_rules::timing::ScatterFoot> {
+    use deadsync_rules::timing::ScatterFoot;
+    use std::collections::HashMap;
+    let (rows, row_to_beat, row_indices) =
+        build_crossover_rows::<LANES>(notes, note_range, col_start);
+    let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<LANES>() else {
+        return HashMap::new();
+    };
+    let annos = rssp::step_parity::annotate_timing_rows::<LANES>(
+        &rows,
+        &row_to_beat,
+        rssp_timing,
+        &mut scratch,
+    );
+    let mut map = HashMap::new();
+    for (anno, &row_index) in annos.iter().zip(row_indices.iter()) {
+        for local in 0..LANES {
+            let foot = match anno.foot(local) {
+                rssp::Foot::LeftHeel | rssp::Foot::LeftToe => ScatterFoot::Left,
+                rssp::Foot::RightHeel | rssp::Foot::RightToe => ScatterFoot::Right,
+                rssp::Foot::None => continue,
+            };
+            map.insert((row_index, col_start + local), foot);
+        }
+    }
+    map
+}
+
+/// Per-arrow left/right foot placement from `rssp` parity for the per-arrow
+/// timing-stats pane, keyed by `(row_index, absolute column)`. Returns an empty
+/// map on non-4/8-panel layouts (the only layouts `rssp` parity models), so the
+/// timing stats fall back to the alternation heuristic.
+pub fn foot_parity_by_note_for_results(
+    state: &State,
+    player: usize,
+) -> std::collections::HashMap<(usize, usize), deadsync_rules::timing::ScatterFoot> {
+    use std::collections::HashMap;
+    if player >= state.num_players {
+        return HashMap::new();
+    }
+    let cols_per_player = state.cols_per_player;
+    let note_range = state.note_ranges[player];
+    if note_range.0 >= note_range.1 {
+        return HashMap::new();
+    }
+    let col_start = player.saturating_mul(cols_per_player);
+    let timing_segments = &state.gameplay_charts[player].timing_segments;
+    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
+    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    match cols_per_player {
+        4 => foot_parity_by_note_map::<4>(&state.notes, note_range, col_start, &rssp_timing),
+        8 => foot_parity_by_note_map::<8>(&state.notes, note_range, col_start, &rssp_timing),
+        _ => HashMap::new(),
+    }
+}
+
 #[inline(always)]
 fn compute_column_scroll_dirs(
     scroll_option: profile_data::ScrollOption,
