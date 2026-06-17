@@ -4236,6 +4236,8 @@ fn error_bar_register_tap(
     let error_bar_multi_tick = prof.error_bar_multi_tick;
     let error_ms_display = prof.error_ms_display;
     let short_avg_enabled = prof.short_average_error_bar_enabled;
+    let short_avg_intensity =
+        profile_data::clamp_average_error_bar_intensity(prof.average_error_bar_intensity);
     let long_avg_enabled = prof.long_error_bar_enabled;
     let long_avg_threshold_s =
         profile_data::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms) as f32
@@ -4357,24 +4359,26 @@ fn error_bar_register_tap(
 
     if show_average {
         if short_avg_enabled {
-            let avg = error_bar_average_offset_s(
+            let (avg_raw, avg_count) = error_bar_average_offset_s(
                 &mut p.error_bar_avg_samples,
                 tap_music_time_s,
                 offset_s,
                 average_interval_ms,
             );
-            let avg_clamped = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                avg.clamp(-max_offset_s, max_offset_s)
-            } else {
-                avg
-            };
+            let mut avg = avg_raw * short_avg_intensity;
+            if max_offset_s.is_finite() && max_offset_s > 0.0 {
+                avg = avg.clamp(-max_offset_s, max_offset_s);
+            }
+            if avg_count == 1 {
+                avg *= 0.75;
+            }
             error_bar_push_tick(
                 &mut p.error_bar_avg_ticks,
                 &mut p.error_bar_avg_next,
                 error_bar_multi_tick,
                 ErrorBarTick {
                     started_at: now,
-                    offset_s: avg_clamped,
+                    offset_s: avg,
                     window,
                 },
             );
@@ -8187,6 +8191,53 @@ return Def.ActorFrame{}
         }
 
         assert!(!state.players[0].error_bar_long_avg_visible);
+    }
+
+    #[test]
+    fn short_average_error_bar_applies_single_sample_correction_after_clamp() {
+        // Faithful to Average.lua: a single sample is scaled by intensity,
+        // clamped to the trim window, and only then multiplied by 0.75. With a
+        // large offset the intensity-scaled value saturates the clamp, so the
+        // stored offset must be clamp * 0.75 (not a pre-clamp 0.75).
+        let p1 = profile_data::Profile {
+            error_bar_active_mask: profile_data::ErrorBarMask::AVERAGE,
+            short_average_error_bar_enabled: true,
+            long_error_bar_enabled: false,
+            error_bar_trim: profile_data::ErrorBarTrim::Off,
+            average_error_bar_intensity: 2.0,
+            ..profile_data::Profile::default()
+        };
+        let mut state = regression_state([p1, profile_data::Profile::default()]);
+        state.total_elapsed_in_screen = 1.0;
+        let max_offset_s = state.timing_profile.windows_s[4];
+
+        error_bar_register_tap(
+            &mut state,
+            0,
+            &Judgment {
+                time_error_ms: 500.0,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(500.0, 1.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+            0.0,
+        );
+
+        let tick = state.players[0]
+            .error_bar_avg_ticks
+            .iter()
+            .flatten()
+            .next()
+            .copied()
+            .expect("a single tap should register a short average tick");
+        let expected = max_offset_s * 0.75;
+        assert!(
+            (tick.offset_s - expected).abs() <= 1e-6,
+            "single-sample offset {} should equal clamp(offset * intensity) * 0.75 = {}",
+            tick.offset_s,
+            expected
+        );
     }
 
     #[test]
