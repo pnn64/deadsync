@@ -42,52 +42,55 @@ pub use deadsync_gameplay::{
     LeadInTiming, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX,
     MINI_PERCENT_MIN, MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, NoteHitEval,
     OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL, OFFSET_ADJUST_STEP_SECONDS,
-    OffsetIndicatorText, PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming,
-    PlayerRowScanState, PracticePlayerCursors, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
-    REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
-    REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
-    REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
-    ReplayOffsetSnapshot, RowEntry, RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
-    ScrollEffects, ScrollOverrides, ScrollReverseOptions, SongClockSnapshot, TAP_EXPLOSION_WINDOWS,
-    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions, TurnRng,
-    VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides,
-    active_hold_counts_as_pressed, active_hold_is_engaged, active_input_slot_lane_is_down,
-    advance_active_hold_to_time, advance_judged_row_cursor, apply_autosync_offset_sample,
-    apply_combo_update_feedback, apply_course_combo_carry_state, apply_echo_insert,
-    apply_final_note_result, apply_gameplay_life_delta, apply_hold_let_go_combo_policy,
-    apply_hold_let_go_result, apply_hold_result_stats_update, apply_hold_success_combo_policy,
-    apply_hold_success_result, apply_hyper_shuffle, apply_insert_intelligent_taps,
-    apply_mine_hit_combo_policy, apply_mines_insert, apply_stomp_insert, apply_super_shuffle_taps,
-    apply_turn_options, apply_turn_permutation, apply_uncommon_chart_transforms,
-    apply_uncommon_masks_with_masks, apply_wide_insert, approach_attack_mini_percent_to_target,
-    approach_attack_value, approach_f32, assist_clap_cursor_for_row,
-    assist_lookahead_music_horizon_seconds, assist_row_no_offset_for_timing,
-    attack_mini_target_percent, autoplay_blocks_scoring_from_flags, autoplay_cursor_for_enable,
+    OffsetIndicatorText, PendingMissedHoldResolution, PerspectiveEffects, PerspectiveOverrides,
+    PlayerJudgmentTiming, PlayerRowScanState, PracticePlayerCursors, RECEPTOR_GLOW_DURATION,
+    RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS,
+    REMOVE_MASK_BIT_NO_HOLDS, REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS,
+    REMOVE_MASK_BIT_NO_MINES, REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge,
+    ReplayInputEdge, ReplayOffsetSnapshot, RowEntry, RowGrid, SPACING_PERCENT_MAX,
+    SPACING_PERCENT_MIN, ScrollEffects, ScrollOverrides, ScrollReverseOptions, SongClockSnapshot,
+    TAP_EXPLOSION_WINDOWS, TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions,
+    TimeBasedTapMissScan, TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects,
+    VisualOverrides, active_hold_counts_as_pressed, active_hold_is_engaged,
+    active_input_slot_lane_is_down, advance_active_hold_to_time, advance_judged_row_cursor,
+    apply_autosync_offset_sample, apply_combo_update_feedback, apply_completed_mine_avoid_result,
+    apply_course_combo_carry_state, apply_echo_insert, apply_final_note_result,
+    apply_gameplay_life_delta, apply_hold_let_go_combo_policy, apply_hold_let_go_result,
+    apply_hold_result_stats_update, apply_hold_success_combo_policy, apply_hold_success_result,
+    apply_hyper_shuffle, apply_insert_intelligent_taps, apply_mine_avoid_result,
+    apply_mine_hit_combo_policy, apply_mine_hit_result, apply_mines_insert, apply_stomp_insert,
+    apply_super_shuffle_taps, apply_time_based_hold_miss_result, apply_turn_options,
+    apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
+    apply_wide_insert, approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
+    assist_clap_cursor_for_row, assist_lookahead_music_horizon_seconds,
+    assist_row_no_offset_for_timing, attack_mini_target_percent,
+    autoplay_blocks_scoring_from_flags, autoplay_cursor_for_enable,
     autoplay_due_active_hold_resolution, autoplay_judgment_offset_music_ns,
     autoplay_random_offset_music_ns_for_window, autosync_mean_ns, autosync_mode_status_line,
-    autosync_stddev_seconds, begin_hold_life_decay, blue_fantastic_window_ms,
-    build_assist_clap_rows, build_column_cues_for_player, build_crossover_cues_from_annotations,
-    build_note_count_stats, build_player_judgment_timing_for_options, build_replay_input_edges,
-    build_row_entry, build_row_grids, carried_holds_down_at_row, cell_has_any_note,
-    cell_has_nonfake_note, clear_offset_adjust_hold_state, closest_lane_note_ns,
-    collect_edge_judge_indices, column_cue_is_mine, column_flash_duration,
-    column_flash_enabled_for_options, column_flash_expired_at, column_scroll_dirs_for_flags,
-    combo_milestone_duration, completed_row_final_judgment,
-    completed_row_flash_note_indices_and_judgment, compute_end_times_ns, convert_tap_row_to_mines,
-    convert_taps_to_holds, count_held_tracks_at_row, count_nonempty_tracks_at_row,
-    count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row,
-    counts_for_early_rescore, course_display_carry_for_stage, course_display_totals_for_chart,
-    course_life_after_carry, course_submit_life_eligible, crossed_held_mine_can_hit,
-    crossed_mine_bounds_ns, crossed_mine_held_start_time, crossover_arrow_col,
-    current_song_clock_snapshot, danger_fx_rgba, danger_health_state,
-    display_ex_score_percent_for_mode, display_hard_ex_score_percent_for_mode,
-    display_itg_score_percent_for_mode, display_judgment_count_for_grade,
-    display_window_counts_current, display_window_counts_mode, display_window_counts_with_carry,
-    draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
-    enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
-    error_bar_push_tick, error_bar_window_ix, ex_score_data_from_display_inputs,
-    exit_total_seconds, exit_transition_alpha, fantastic_window_seconds, final_note_result_effects,
+    autosync_stddev_seconds, blue_fantastic_window_ms, build_assist_clap_rows,
+    build_column_cues_for_player, build_crossover_cues_from_annotations, build_note_count_stats,
+    build_player_judgment_timing_for_options, build_replay_input_edges, build_row_entry,
+    build_row_grids, carried_holds_down_at_row, cell_has_any_note, cell_has_nonfake_note,
+    clear_offset_adjust_hold_state, closest_lane_note_ns, collect_edge_judge_indices,
+    column_cue_is_mine, column_flash_duration, column_flash_enabled_for_options,
+    column_flash_expired_at, column_scroll_dirs_for_flags, combo_milestone_duration,
+    completed_mine_can_be_avoided, completed_row_final_judgment,
+    completed_row_flash_note_indices_and_judgment, completed_row_hides_note, compute_end_times_ns,
+    convert_tap_row_to_mines, convert_taps_to_holds, count_held_tracks_at_row,
+    count_nonempty_tracks_at_row, count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row,
+    count_tap_tracks_at_row, counts_for_early_rescore, course_display_carry_for_stage,
+    course_display_totals_for_chart, course_life_after_carry, course_submit_life_eligible,
+    crossed_held_mine_can_hit, crossed_mine_bounds_ns, crossed_mine_held_start_time,
+    crossover_arrow_col, current_song_clock_snapshot, danger_fx_rgba, danger_health_state,
+    decay_let_go_hold_life_step, display_ex_score_percent_for_mode,
+    display_hard_ex_score_percent_for_mode, display_itg_score_percent_for_mode,
+    display_judgment_count_for_grade, display_window_counts_current, display_window_counts_mode,
+    display_window_counts_with_carry, draw_distance_after_targets, draw_distance_before_targets,
+    effective_mini_percent, enforce_max_simultaneous_notes, error_bar_average_offset_s,
+    error_bar_long_term_offset_s, error_bar_push_tick, error_bar_window_ix,
+    ex_score_data_from_display_inputs, exit_total_seconds, exit_transition_alpha,
+    fantastic_window_seconds, final_note_hit_judgment, final_note_result_effects,
     finalized_row_awards_hand, finalized_row_outcome_for_cached_row,
     finalized_row_outcome_for_entry, first_nonempty_track_at_row,
     first_row_entry_index_at_or_after_time, first_tap_track_at_row, first_time_index_at_or_after,
@@ -101,34 +104,38 @@ pub use deadsync_gameplay::{
     late_note_resolution_window_ns, let_go_head_beat, live_autoplay_enabled_from_flags,
     local_column_for_field, local_player_col, mark_row_entry_note_finalized,
     mark_row_entry_provisional_early_result, max_step_distance_ns,
-    measure_counter_segments_for_densities, mine_window_bounds_ns, mini_indicator_mode_for_options,
-    mini_indicator_needs_stream_data, mini_value_for_percent, missed_note_cutoff_row_for_timing,
-    music_time_from_stream_position, next_autosync_mode, next_ready_replay_edge,
-    next_ready_row_in_lookahead, next_timing_tick_mode, normalized_input_slot,
-    note_has_displayable_hold, note_hit_eval_for_timing, note_tracks_held_miss, notes_row_sorted,
-    offset_adjust_delta_for_key, offset_adjust_repeat_ready, offset_adjust_slot_for_key,
-    player_draw_scale_for_mini, player_index_for_column, player_life_is_dead,
+    measure_counter_segments_for_densities, mine_avoid_cursor_end, mine_can_be_avoided,
+    mine_can_be_hit, mine_hit_offset_in_window, mine_window_bounds_ns,
+    mini_indicator_mode_for_options, mini_indicator_needs_stream_data, mini_value_for_percent,
+    missed_note_cutoff_row_for_timing, music_time_from_stream_position, next_autosync_mode,
+    next_ready_replay_edge, next_ready_row_in_lookahead, next_timing_tick_mode,
+    normalized_input_slot, note_has_displayable_hold, note_hit_eval_for_timing, note_hit_judgment,
+    note_tracks_held_miss, notes_row_sorted, offset_adjust_delta_for_key,
+    offset_adjust_repeat_ready, offset_adjust_slot_for_key, pending_mine_hit_ready,
+    pending_missed_hold_resolution_action, player_column_range, player_draw_scale_for_mini,
+    player_index_for_column, player_life_is_dead, player_note_range_for_ranges,
     player_row_scan_state, player_rows, practice_player_cursors,
     predictive_itg_score_percent_from_inputs, push_density_life_point,
-    quantization_index_from_beat, recent_step_calories, recent_step_tracks,
-    receptor_glow_press_timers, receptor_glow_pulse_timers, receptor_glow_release_timers,
-    receptor_glow_visual, reference_bpm_from_display_tag, refresh_roll_life_for_step,
-    register_provisional_early_note_result, remap_live_input_lane, remove_cell_notes,
-    replaced_active_hold_settle_time, replay_edge_cap, reset_practice_notes_and_rows,
-    row_entry_for_cached_row, row_entry_index_for_cached_row, row_final_grade_hides_note,
-    score_rows_finalized_for_players, scroll_receptor_y, scroll_reverse_percent_for_column,
-    scroll_reverse_scale_for_column, set_added_mine_note, set_added_tap_note,
-    song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
-    spacing_multiplier_for_percent, stage_music_cut, start_offset_adjust_hold_state,
-    started_active_hold_state, step_search_row_bounds, stomp_mirror_track,
-    suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
+    quantization_index_from_beat, queue_pending_missed_hold_resolution, recent_step_calories,
+    recent_step_tracks, receptor_glow_press_timers, receptor_glow_pulse_timers,
+    receptor_glow_release_timers, receptor_glow_visual, reference_bpm_from_display_tag,
+    refresh_roll_life_for_step, register_provisional_early_note_result, remap_live_input_lane,
+    remove_cell_notes, replaced_active_hold_settle_time, replay_edge_cap,
+    reset_practice_notes_and_rows, row_entry_for_cached_row, row_entry_index_for_cached_row,
+    row_final_grade_hides_note, score_rows_finalized_for_players, scroll_receptor_y,
+    scroll_reverse_percent_for_column, scroll_reverse_scale_for_column, set_added_mine_note,
+    set_added_tap_note, song_audio_end_time_ns, song_lua_field_note_hidden, song_lua_note_hidden,
+    sort_player_notes, spacing_multiplier_for_percent, stage_music_cut,
+    start_offset_adjust_hold_state, started_active_hold_state, step_search_row_bounds,
+    stomp_mirror_track, suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
     tap_judgment_uses_bright_explosion_for_options, tick_combo_milestones,
     tick_mine_explosion_slot, tick_offset_adjust_hold_state, tick_positive_timer,
-    tick_receptor_glow_timers, tick_tap_explosion_slot, timing_row_floor, timing_row_nearest,
-    timing_tick_mode_debug_label, timing_tick_mode_status_line, toggle_flash_alpha,
-    track_held_miss_window_for_player, track_range_has_any_note, trigger_combo_milestone,
-    turn_seed_for_song, update_active_input_slot, update_danger_fx_for_health,
-    visible_notefield_time_ns, zmod_stream_totals_for_densities,
+    tick_receptor_glow_timers, tick_tap_explosion_slot, time_based_tap_miss_judgment,
+    time_based_tap_miss_scan, timing_row_floor, timing_row_nearest, timing_tick_mode_debug_label,
+    timing_tick_mode_status_line, toggle_flash_alpha, track_held_miss_window_for_player,
+    track_range_has_any_note, trigger_combo_milestone, turn_seed_for_song,
+    update_active_input_slot, update_danger_fx_for_health, visible_notefield_time_ns,
+    zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
     StepStatsPlayStyle, resolve_target_score_percent,
@@ -149,12 +156,12 @@ use deadsync_rules::life::{
     LIFE_DECENT, LIFE_GREAT, MAX_REGEN_COMBO_AFTER_MISS, REGEN_COMBO_AFTER_MISS,
 };
 use deadsync_rules::life::{LIFE_HELD, LIFE_HIT_MINE, LIFE_LET_GO, judge_life_delta};
-use deadsync_rules::note::{
-    HoldData, HoldResult, MAX_HOLD_LIFE, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD,
-    TIMING_WINDOW_SECONDS_ROLL, recompute_player_totals,
-};
+use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
 #[cfg(test)]
-use deadsync_rules::note::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
+use deadsync_rules::note::{
+    HoldLifeAdvance, MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL,
+    advance_hold_last_held, advance_hold_life_ns,
+};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{StreamSegment, measure_densities};
 use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
@@ -386,18 +393,17 @@ fn player_draw_scale(profile: &profile_data::Profile) -> f32 {
 
 #[inline(always)]
 pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) -> bool {
-    finalized_row_outcome_for_cached_row(
-        &state.row_entries,
-        &state.row_map_cache[player],
-        row_index,
-    )
-    .is_some_and(|outcome| row_final_grade_hides_note(outcome.final_grade))
+    completed_row_hides_note(&state.row_entries, &state.row_map_cache[player], row_index)
 }
 
 #[inline(always)]
 fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat: f32) -> bool {
-    let local_col = local_column_for_field(state.cols_per_player, column);
-    song_lua_note_hidden(&state.song_lua_note_hides[player], local_col, beat)
+    song_lua_field_note_hidden(
+        &state.song_lua_note_hides[player],
+        state.cols_per_player,
+        column,
+        beat,
+    )
 }
 
 #[inline(always)]
@@ -468,124 +474,6 @@ fn build_crossover_rows<const LANES: usize>(
     col_start: usize,
 ) -> (Vec<[u8; LANES]>, Vec<f32>) {
     deadsync_gameplay::build_crossover_rows(notes, note_range, col_start)
-}
-
-/// Uses the player's base `TimingData` (not rate-scaled) so cue times share the
-/// mine-cue frame; rate scaling is reapplied at render time.
-/// Split from the public entry so the beat→seconds mapping can be faked in
-/// unit tests without a full `TimingData`.
-#[allow(clippy::too_many_arguments)]
-#[cfg(test)]
-fn build_crossover_cues_core(
-    annos: &[CrossoverRow],
-    arrow_time: impl Fn(f32) -> f32,
-    col_start: usize,
-    duration_ms: u16,
-    quantization: u8,
-    include_brackets: bool,
-    first_visible_time: f32,
-) -> Vec<ColumnCue> {
-    if annos.len() < 2 {
-        return Vec::new();
-    }
-    let duration = f32::from(duration_ms) / 1000.0;
-    let fade = CROSSOVER_CUE_FADE_SECONDS;
-    let quant = if quantization == 0 {
-        1.0
-    } else {
-        f32::from(quantization)
-    };
-    let spacing_threshold = 4.0 / quant + 0.001;
-
-    let mut cues: Vec<ColumnCue> = Vec::new();
-    for i in 1..annos.len() {
-        let current = &annos[i];
-        let prev = &annos[i - 1];
-        // Consecutive crossovers: `current` is a scooby already emitted while
-        // processing `prev`, so skip it here.
-        if !current.is_active_crossover(include_brackets)
-            || prev.is_active_crossover(include_brackets)
-        {
-            continue;
-        }
-        let next = annos.get(i + 1);
-        let next_next = annos.get(i + 2);
-        let is_scooby = next.is_some_and(|a| a.is_active_crossover(include_brackets));
-        let first_condition = current.beat - prev.beat <= spacing_threshold;
-        let second_condition = next.is_some_and(|n| n.beat - current.beat <= spacing_threshold);
-        // Only a scooby chain looks two steps ahead; otherwise the step after
-        // next is irrelevant to whether this crossover gets a cue. Evaluating it
-        // unconditionally emits cues the reference builder never would.
-        let third_condition = is_scooby
-            && match (next, next_next) {
-                (Some(n), Some(nn)) => nn.beat - n.beat <= spacing_threshold,
-                _ => false,
-            };
-        if !(first_condition || second_condition || third_condition) {
-            continue;
-        }
-        let (Some(prev_col), Some(curr_col)) = (
-            crossover_arrow_col(prev.column_mask, false),
-            crossover_arrow_col(current.column_mask, true),
-        ) else {
-            continue;
-        };
-        let prev_arrow_time = arrow_time(prev.beat);
-        let cur_arrow_time = arrow_time(current.beat);
-        let mut columns = vec![
-            ColumnCueColumn {
-                column: col_start + curr_col,
-                is_mine: false,
-            },
-            ColumnCueColumn {
-                column: col_start + prev_col,
-                is_mine: false,
-            },
-        ];
-        let mut start_time = prev_arrow_time - duration;
-        let mut cue_duration = duration + fade;
-        // Large gap before the crossover: keep the cue lit until the crossover
-        // actually happens, not just until the arrow before it.
-        if !first_condition {
-            cue_duration += cur_arrow_time - prev_arrow_time;
-        }
-        if is_scooby
-            && let Some(next_anno) = next
-            && let Some(next_col) = crossover_arrow_col(next_anno.column_mask, true)
-        {
-            columns.push(ColumnCueColumn {
-                column: col_start + next_col,
-                is_mine: true,
-            });
-        }
-        // Keep consecutive cues from overlapping.
-        if let Some(last) = cues.last() {
-            let prev_end = last.start_time + last.duration;
-            if start_time < prev_end {
-                let duration_difference = prev_end - start_time;
-                start_time = prev_end - fade;
-                cue_duration = cue_duration - duration_difference + fade;
-            }
-        }
-        cues.push(ColumnCue {
-            start_time,
-            duration: cue_duration,
-            columns,
-        });
-    }
-
-    // Without this guard, a first crossover deep in the song gets pulled
-    // earlier and over-inflated — a spurious, over-long first cue. Only cues
-    // already due before t=0 should absorb the pre-roll, hence the
-    // `start_time <= 0` gate.
-    if first_visible_time < 0.0
-        && let Some(first) = cues.first_mut()
-        && first.start_time <= 0.0
-    {
-        first.duration -= first_visible_time;
-        first.start_time += first_visible_time;
-    }
-    cues
 }
 
 /// Bails on non-4/8-panel layouts because `rssp` parity only models those.
@@ -1940,8 +1828,7 @@ fn player_for_col(state: &State, col: usize) -> usize {
 
 #[inline(always)]
 const fn player_col_range(state: &State, player: usize) -> (usize, usize) {
-    let start = player * state.cols_per_player;
-    (start, start + state.cols_per_player)
+    player_column_range(state.cols_per_player, player)
 }
 
 #[inline(always)]
@@ -1961,10 +1848,7 @@ fn record_step_calories(state: &mut State, lane_idx: usize, event_music_time_ns:
 
 #[inline(always)]
 fn player_note_range(state: &State, player: usize) -> (usize, usize) {
-    if player >= state.num_players {
-        return (0, 0);
-    }
-    state.note_ranges[player]
+    player_note_range_for_ranges(&state.note_ranges, state.num_players, player)
 }
 
 fn update_density_graph(
@@ -3772,17 +3656,14 @@ fn hit_mine(
     let mine_window_music_ns = state.player_judgment_timing[player]
         .profile_music_ns
         .mine_window_ns;
-    if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
-        return false;
-    }
-    if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake {
-        return false;
-    }
-    if !state.notes[note_index].can_be_judged {
+    if !apply_mine_hit_result(
+        &mut state.notes[note_index],
+        time_error_music_ns,
+        mine_window_music_ns,
+    ) {
         return false;
     }
 
-    state.notes[note_index].mine_result = Some(MineResult::Hit);
     state.pending_mine_hit_indices.push(note_index);
     let note_time_ns = state.note_time_cache_ns[note_index];
     let hit_time_ns = note_time_ns.saturating_add(time_error_music_ns);
@@ -3812,7 +3693,7 @@ fn apply_pending_mine_hits(state: &mut State) {
         let Some(note) = state.notes.get(note_index) else {
             continue;
         };
-        if note.mine_result != Some(MineResult::Hit) || note.is_fake || !note.can_be_judged {
+        if !pending_mine_hit_ready(note) {
             continue;
         }
 
@@ -4315,16 +4196,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
                     rate,
                 );
                 if state.notes[note_index].early_result.is_none() {
-                    let judgment = Judgment {
-                        time_error_ms: judgment_time_error_ms_from_music_ns(
-                            hit.measured_offset_music_ns,
-                            rate,
-                        ),
-                        time_error_music_ns: hit.measured_offset_music_ns,
-                        grade: hit.grade,
-                        window: Some(hit.window),
-                        miss_because_held: false,
-                    };
+                    let judgment = note_hit_judgment(hit, hit.measured_offset_music_ns, rate);
                     register_provisional_early_result(state, note_index, judgment);
                     let life_delta = judge_life_delta(hit.grade);
                     let current_music_time = current_music_time_s(state);
@@ -4652,16 +4524,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
 
         if row_rescore_track_count == 1 && is_early && is_bad {
             if state.notes[note_index].early_result.is_none() {
-                let judgment = Judgment {
-                    time_error_ms: judgment_time_error_ms_from_music_ns(
-                        hit.measured_offset_music_ns,
-                        rate,
-                    ),
-                    time_error_music_ns: hit.measured_offset_music_ns,
-                    grade: hit.grade,
-                    window: Some(hit.window),
-                    miss_because_held: false,
-                };
+                let judgment = note_hit_judgment(hit, hit.measured_offset_music_ns, rate);
                 register_provisional_early_result(state, note_index, judgment);
                 let life_delta = judge_life_delta(hit.grade);
                 let current_music_time = current_music_time_s(state);
@@ -4829,35 +4692,12 @@ fn decay_let_go_hold_life(state: &mut State) {
             state.decaying_hold_indices.swap_remove(i);
             continue;
         };
-        if hold.result == Some(HoldResult::Held) || hold.let_go_started_at.is_none() {
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
-            continue;
-        }
-        let window = match note.note_type {
-            NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
-            _ => TIMING_WINDOW_SECONDS_HOLD,
-        };
-        if window <= 0.0 {
-            hold.life = 0.0;
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
-            continue;
-        }
-        let start_time = hold.let_go_started_at.unwrap();
-        let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
-        if base_life <= 0.0 {
-            hold.life = 0.0;
-            state.hold_decay_active[note_index] = false;
-            state.decaying_hold_indices.swap_remove(i);
-            continue;
-        }
-        let rate = normalized_song_rate(state.music_rate);
-        let elapsed_music =
-            song_time_ns_delta_seconds(state.current_music_time_ns, start_time).max(0.0);
-        let elapsed_real = elapsed_music / rate;
-        hold.life = (base_life - elapsed_real / window).max(0.0);
-        if hold.life <= f32::EPSILON {
+        if !decay_let_go_hold_life_step(
+            hold,
+            note.note_type,
+            state.current_music_time_ns,
+            state.music_rate,
+        ) {
             state.hold_decay_active[note_index] = false;
             state.decaying_hold_indices.swap_remove(i);
             continue;
@@ -4868,13 +4708,11 @@ fn decay_let_go_hold_life(state: &mut State) {
 
 #[inline(always)]
 fn queue_missed_hold_resolution(state: &mut State, note_index: usize) {
-    if note_index >= state.pending_missed_hold_resolution.len()
-        || state.pending_missed_hold_resolution[note_index]
-    {
-        return;
-    }
-    state.pending_missed_hold_resolution[note_index] = true;
-    state.pending_missed_hold_indices.push(note_index);
+    queue_pending_missed_hold_resolution(
+        &mut state.pending_missed_hold_resolution,
+        &mut state.pending_missed_hold_indices,
+        note_index,
+    );
 }
 
 #[inline(always)]
@@ -4905,20 +4743,22 @@ fn resolve_pending_missed_holds(state: &mut State, current_time_ns: SongTimeNs) 
             state.pending_missed_hold_indices.swap_remove(i);
             continue;
         }
-        let hold_result = note.hold.as_ref().and_then(|hold| hold.result);
-        if hold_result == Some(HoldResult::Missed) {
-            state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
-                result: HoldResult::Missed,
-                started_at_screen_s: state.total_elapsed_in_screen,
-            });
-        } else if hold_result.is_none()
-            && note
-                .result
-                .as_ref()
-                .is_some_and(|judgment| judgment.grade == JudgeGrade::Miss)
-            && state.score_missed_holds_rolls[player_for_col(state, column)]
-        {
-            handle_hold_let_go(state, column, note_index, end_time_ns);
+        let action = pending_missed_hold_resolution_action(
+            note.hold.as_ref().and_then(|hold| hold.result),
+            note.result.as_ref().map(|judgment| judgment.grade),
+            state.score_missed_holds_rolls[player_for_col(state, column)],
+        );
+        match action {
+            PendingMissedHoldResolution::None => {}
+            PendingMissedHoldResolution::ShowMissedFeedback => {
+                state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
+                    result: HoldResult::Missed,
+                    started_at_screen_s: state.total_elapsed_in_screen,
+                });
+            }
+            PendingMissedHoldResolution::ScoreLetGo => {
+                handle_hold_let_go(state, column, note_index, end_time_ns);
+            }
         }
         state.pending_missed_hold_indices.swap_remove(i);
     }
@@ -4973,22 +4813,19 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs)
         let mines_len = state.mine_note_ix[player].len();
         let mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
         let cutoff_row = missed_note_cutoff_row(state, player, music_time_ns);
-        let mut mine_end = mine_cursor;
-        while mine_end < mines_len {
-            let note_idx = state.mine_note_ix[player][mine_end];
-            if state.notes[note_idx].row_index >= cutoff_row {
-                break;
-            }
-            mine_end += 1;
-        }
+        let mine_end = mine_avoid_cursor_end(
+            &state.notes,
+            &state.mine_note_ix[player],
+            mine_cursor,
+            cutoff_row,
+        );
         let mut avoided_count = 0u32;
         for cursor in mine_cursor..mine_end {
             let note_idx = state.mine_note_ix[player][cursor];
             let note = &mut state.notes[note_idx];
-            if note.can_be_judged && note.mine_result.is_none() {
+            if apply_mine_avoid_result(note) {
                 let row_index = note.row_index;
                 let column = note.column;
-                note.mine_result = Some(MineResult::Avoided);
                 set_last_mine_judgment(state, player, column, MineResult::Avoided);
                 avoided_count = avoided_count.saturating_add(1);
                 if log_mine_avoid {
@@ -5017,13 +4854,7 @@ fn finalize_completed_mines(state: &mut State) {
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         for note in &mut state.notes[note_start..note_end] {
-            if matches!(note.note_type, NoteType::Mine)
-                && note.can_be_judged
-                && !note.is_fake
-                && note.mine_result.is_none()
-            {
-                note.mine_result = Some(MineResult::Avoided);
-            }
+            apply_completed_mine_avoid_result(note);
         }
 
         let total = state.mines_total[player];
@@ -5045,55 +4876,39 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
             let note_time_ns = state.note_time_cache_ns[cursor];
             let (row, col, beat) = {
                 let note = &state.notes[cursor];
-                if note.row_index >= cutoff_row {
-                    break;
+                match time_based_tap_miss_scan(note, cutoff_row) {
+                    TimeBasedTapMissScan::Stop => break,
+                    TimeBasedTapMissScan::Skip => {
+                        cursor += 1;
+                        continue;
+                    }
+                    TimeBasedTapMissScan::Miss => (note.row_index, note.column, note.beat),
                 }
-                if matches!(note.note_type, NoteType::Mine)
-                    || !note.can_be_judged
-                    || note.result.is_some()
-                {
-                    cursor += 1;
-                    continue;
-                }
-                (note.row_index, note.column, note.beat)
             };
             {
-                let miss_offset_music_ns = music_time_ns.saturating_sub(note_time_ns);
                 let miss_because_held = state
                     .tap_miss_held_window
                     .get(cursor)
                     .copied()
                     .unwrap_or(false);
-                let miss = Judgment {
-                    time_error_ms: judgment_time_error_ms_from_music_ns(miss_offset_music_ns, rate),
-                    time_error_music_ns: miss_offset_music_ns,
-                    grade: JudgeGrade::Miss,
-                    window: None,
+                let judgment = time_based_tap_miss_judgment(
+                    state.notes[cursor].early_result,
+                    note_time_ns,
+                    music_time_ns,
+                    rate,
                     miss_because_held,
-                };
-                let judgment = state.notes[cursor].early_result.unwrap_or(miss);
+                );
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
-                let mut queue_missed_hold = false;
-                if judgment_grade == JudgeGrade::Miss
-                    && let Some(hold) = state.notes[cursor].hold.as_mut()
-                    && hold.result != Some(HoldResult::Held)
-                {
-                    if should_score_miss {
-                        queue_missed_hold = true;
-                    } else {
-                        hold.result = Some(HoldResult::Missed);
-                        queue_missed_hold = true;
-                    }
-                    begin_hold_life_decay(
-                        hold,
-                        &mut state.hold_decay_active,
-                        &mut state.decaying_hold_indices,
-                        cursor,
-                        music_time_ns,
-                    );
-                }
-                if queue_missed_hold {
+                if apply_time_based_hold_miss_result(
+                    state.notes[cursor].hold.as_mut(),
+                    &mut state.hold_decay_active,
+                    &mut state.decaying_hold_indices,
+                    cursor,
+                    music_time_ns,
+                    judgment_grade,
+                    should_score_miss,
+                ) {
                     queue_missed_hold_resolution(state, cursor);
                 }
                 set_final_note_result(state, cursor, judgment);
@@ -11901,256 +11716,5 @@ return Def.ActorFrame{}
         assert!(super::set_music_rate(&mut state, 1.5));
         assert!(super::set_music_rate(&mut state, -2.0));
         assert!((state.music_rate - 1.0).abs() < 1e-6);
-    }
-
-    fn xover_anno(
-        beat: f32,
-        note_count: u8,
-        column_mask: u8,
-        is_crossover: bool,
-    ) -> super::CrossoverRow {
-        debug_assert_eq!(
-            u32::from(note_count),
-            column_mask.count_ones(),
-            "xover_anno note_count must equal the number of set columns",
-        );
-        super::CrossoverRow {
-            beat,
-            column_mask,
-            crossover: is_crossover,
-            bracket: note_count > 1,
-        }
-    }
-
-    // 120 BPM: beat b occurs at b * 0.5 seconds.
-    fn xover_time(beat: f32) -> f32 {
-        beat * 0.5
-    }
-
-    #[test]
-    fn crossover_arrow_col_picks_outer_and_inner_panels() {
-        // Single-pad panels: col0/col3 outer, col1/col2 inner.
-        assert_eq!(super::crossover_arrow_col(0b0001, true), Some(0));
-        assert_eq!(super::crossover_arrow_col(0b0001, false), None);
-        assert_eq!(super::crossover_arrow_col(0b1000, true), Some(3));
-        assert_eq!(super::crossover_arrow_col(0b0010, false), Some(1));
-        assert_eq!(super::crossover_arrow_col(0b0010, true), None);
-        assert_eq!(super::crossover_arrow_col(0b0100, false), Some(2));
-        // Lowest matching lane wins when several are set.
-        assert_eq!(super::crossover_arrow_col(0b1001, true), Some(0));
-        assert_eq!(super::crossover_arrow_col(0b0110, false), Some(1));
-        // Second pad of doubles repeats the pattern (col4 outer, col5 inner).
-        assert_eq!(super::crossover_arrow_col(1 << 4, true), Some(4));
-        assert_eq!(super::crossover_arrow_col(1 << 5, false), Some(5));
-    }
-
-    #[test]
-    fn crossover_cue_single_event() {
-        // prev = inner pivot tap, current = outer crossover, closely spaced.
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert_eq!(cues.len(), 1);
-        let cue = &cues[0];
-        assert!(
-            (cue.start_time - (-0.5)).abs() < 1e-4,
-            "start {}",
-            cue.start_time
-        );
-        assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
-        assert_eq!(cue.columns.len(), 2);
-        assert_eq!(cue.columns[0].column, 0);
-        assert!(!cue.columns[0].is_mine);
-        assert_eq!(cue.columns[1].column, 1);
-        assert!(!cue.columns[1].is_mine);
-    }
-
-    #[test]
-    fn crossover_cue_scooby_appends_red_column() {
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-            xover_anno(1.0, 1, 0b1000, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        // Only one cue: the second crossover is consumed as the scooby.
-        assert_eq!(cues.len(), 1);
-        let cue = &cues[0];
-        assert_eq!(cue.columns.len(), 3);
-        assert_eq!(cue.columns[2].column, 3);
-        assert!(cue.columns[2].is_mine, "scooby column flagged red");
-    }
-
-    #[test]
-    fn crossover_cue_quantization_threshold_skips_isolated() {
-        // Lone crossover far from any neighbour and no following note: none of
-        // the spacing conditions hold, so no cue is produced.
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(5.0, 1, 0b0001, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert!(cues.is_empty());
-    }
-
-    #[test]
-    fn crossover_cue_extends_across_large_gap() {
-        // Large gap before the crossover (first condition false) but a close
-        // following note (second condition true): the cue stretches to cover
-        // the gap.
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(2.0, 1, 0b0001, true),
-            xover_anno(2.4, 1, 0b0010, false),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert_eq!(cues.len(), 1);
-        let cue = &cues[0];
-        // base 0.575 + (cur_arrow 1.0 - prev_arrow 0.0) = 1.575
-        assert!((cue.duration - 1.575).abs() < 1e-4, "dur {}", cue.duration);
-        assert!(
-            (cue.start_time - (-0.5)).abs() < 1e-4,
-            "start {}",
-            cue.start_time
-        );
-    }
-
-    #[test]
-    fn crossover_cue_clamps_overlapping_consecutive() {
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-            xover_anno(0.6, 1, 0b0100, false),
-            xover_anno(0.7, 1, 0b1000, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert_eq!(cues.len(), 2);
-        // First cue ends at -0.5 + 0.575 = 0.075; the second would start at
-        // -0.2, so it is clamped to start at prev_end - fade = 0.0 with its
-        // duration shortened accordingly.
-        assert!(
-            (cues[1].start_time - 0.0).abs() < 1e-4,
-            "start {}",
-            cues[1].start_time
-        );
-        assert!(
-            (cues[1].duration - 0.375).abs() < 1e-4,
-            "dur {}",
-            cues[1].duration
-        );
-    }
-
-    #[test]
-    fn crossover_cue_negative_first_visible_adjust() {
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, -0.3);
-        assert_eq!(cues.len(), 1);
-        let cue = &cues[0];
-        // First cue genuinely starts before t=0 (start_time -0.5), so the
-        // pre-roll compensation applies: start += fvt, duration -= fvt (fvt
-        // negative => earlier start, longer duration).
-        assert!(
-            (cue.start_time - (-0.8)).abs() < 1e-4,
-            "start {}",
-            cue.start_time
-        );
-        assert!((cue.duration - 0.875).abs() < 1e-4, "dur {}", cue.duration);
-    }
-
-    #[test]
-    fn crossover_cue_positive_first_start_not_adjusted() {
-        // First crossover occurs well into the song: prev arrow at beat 2.0
-        // (t=1.0s) minus the 500ms lead gives a positive start_time of 0.5s.
-        // Even with a negative first-visible (pre-roll) time, the cue must NOT
-        // be shifted earlier or have its duration inflated — only cues already
-        // due before t=0 get the pre-roll compensation. Regression for a
-        // spurious, over-long first crossover cue.
-        let annos = [
-            xover_anno(2.0, 1, 0b0010, false),
-            xover_anno(2.5, 1, 0b0001, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, -0.3);
-        assert_eq!(cues.len(), 1);
-        let cue = &cues[0];
-        assert!(
-            (cue.start_time - 0.5).abs() < 1e-4,
-            "start {}",
-            cue.start_time
-        );
-        assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
-    }
-
-    #[test]
-    fn crossover_cue_respects_col_start_offset() {
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 4, 500, 8, false, 0.0);
-        assert_eq!(cues.len(), 1);
-        assert_eq!(cues[0].columns[0].column, 4);
-        assert_eq!(cues[0].columns[1].column, 5);
-    }
-
-    #[test]
-    fn crossover_bracket_suppressed_when_excluded() {
-        // A two-foot (bracket) crossover. With brackets excluded — the
-        // default — it is not an active crossover, so no cue.
-        let annos = [
-            xover_anno(0.0, 1, 0b0100, false),
-            xover_anno(0.5, 2, 0b0011, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert!(
-            cues.is_empty(),
-            "bracket crossover suppressed when excluded"
-        );
-    }
-
-    #[test]
-    fn crossover_bracket_emitted_when_included() {
-        // Same bracket crossover, but with brackets included it schedules a cue.
-        let annos = [
-            xover_anno(0.0, 1, 0b0100, false),
-            xover_anno(0.5, 2, 0b0011, true),
-        ];
-        let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, true, 0.0);
-        assert_eq!(cues.len(), 1, "bracket crossover emitted when included");
-    }
-
-    #[test]
-    fn crossover_bracket_scooby_respects_toggle() {
-        // A single-foot crossover followed by a bracket crossover. The bracket
-        // only chains as a scooby when brackets are included.
-        let annos = [
-            xover_anno(0.0, 1, 0b0010, false),
-            xover_anno(0.5, 1, 0b0001, true),
-            xover_anno(1.0, 2, 0b1100, true),
-        ];
-
-        // Excluded: the bracket is not an active crossover, so it is neither a
-        // scooby nor its own cue — one plain cue with no appended red column.
-        let excluded = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert_eq!(excluded.len(), 1);
-        assert_eq!(
-            excluded[0].columns.len(),
-            2,
-            "no scooby when bracket excluded"
-        );
-
-        // Included: the bracket chains as a scooby and is appended in red.
-        let included = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, true, 0.0);
-        assert_eq!(included.len(), 1);
-        assert_eq!(
-            included[0].columns.len(),
-            3,
-            "scooby appended when bracket included"
-        );
-        assert!(included[0].columns[2].is_mine, "scooby column flagged red");
     }
 }

@@ -1,11 +1,11 @@
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::{Judgment, judgment_time_error_ms_from_music_ns};
+use deadsync_rules::judgment::Judgment;
 use deadsync_rules::timing::TimingProfile;
 
 use super::{
     FantasticWindowOptions, NoteHitEval, PlayerJudgmentTiming, SongTimeNs, State,
     blue_fantastic_window_ms, build_player_judgment_timing_for_options, fantastic_window_seconds,
-    live_autoplay_judgment_offset_music_ns, note_hit_eval_for_timing,
+    final_note_hit_judgment, live_autoplay_judgment_offset_music_ns, note_hit_eval_for_timing,
 };
 
 #[inline(always)]
@@ -118,17 +118,7 @@ pub(super) fn build_final_note_hit_judgment(
         hit.window,
         hit.measured_offset_music_ns,
     );
-    let judgment_event_time_ns = hit.note_time_ns.saturating_add(judgment_offset_music_ns);
-    (
-        Judgment {
-            time_error_ms: judgment_time_error_ms_from_music_ns(judgment_offset_music_ns, rate),
-            time_error_music_ns: judgment_offset_music_ns,
-            grade: hit.grade,
-            window: Some(hit.window),
-            miss_because_held: false,
-        },
-        judgment_event_time_ns,
-    )
+    final_note_hit_judgment(hit, judgment_offset_music_ns, rate)
 }
 
 #[inline(always)]
