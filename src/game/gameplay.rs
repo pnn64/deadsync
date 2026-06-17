@@ -12,98 +12,117 @@ use deadsync_gameplay::step_stats_notefield_width;
 pub use deadsync_gameplay::{
     ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AUTOSYNC_OFFSET_SAMPLE_COUNT,
     AUTOSYNC_STDDEV_MAX_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
-    ActiveComboMilestone, ActiveHold, ActiveInputSlot, ActiveMineExplosion, ActiveTapExplosion,
-    AppearanceEffects, AppearanceOverrides, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION,
-    COLUMN_FLASH_MISS_DURATION, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO,
-    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
-    CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects, ColumnCue, ColumnCueColumn, ColumnFlashOptions,
-    ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind, CourseComboCarryState,
-    CourseDisplayCarry, CourseDisplayStage, CourseDisplayTiming, CourseDisplayTotals, CrossoverRow,
-    DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx,
-    DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, DisplayWindowCountsMode,
-    DisplayWindowCountsSources, EMPTY_ACTIVE_INPUT_SLOT, ErrorBarText, ErrorBarTick, ExScoreInputs,
-    ExitTransition, ExitTransitionKind, FantasticFeedbackOptions, FantasticWindowOptions,
-    FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-    GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayConfig, GameplayExit, GameplayFailType, GameplayMiniIndicatorData, GameplayMusicCut,
-    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorGlowState, GameplayReceptorStepBehavior, GameplayScoreDisplayMode,
+    ActiveComboMilestone, ActiveHold, ActiveHoldAdvance, ActiveHoldResolution, ActiveInputSlot,
+    ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects, AppearanceOverrides, AutosyncMode,
+    AutosyncOffsetCorrection, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
+    COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, COMBO_HUNDRED_MILESTONE_DURATION,
+    COMBO_THOUSAND_MILESTONE_DURATION, CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects, ColumnCue,
+    ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind,
+    CourseComboCarryState, CourseDisplayCarry, CourseDisplayStage, CourseDisplayTiming,
+    CourseDisplayTotals, CrossoverRow, DRAW_DISTANCE_AFTER_TARGETS,
+    DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx, DisplayClockDiagEventKind,
+    DisplayClockHealth, DisplayClockStepEvent, DisplayWindowCountsMode, DisplayWindowCountsSources,
+    EMPTY_ACTIVE_INPUT_SLOT, ErrorBarText, ErrorBarTick, ExScoreInputs, ExitTransition,
+    ExitTransitionKind, FantasticFeedbackOptions, FantasticWindowOptions, FinalizedRowOutcome,
+    FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, GIVE_UP_ABORT_TEXT_SECONDS,
+    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
+    GameplayFailType, GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayLifeDeltaUpdate,
+    GameplayMiniIndicatorData, GameplayMiniIndicatorMode, GameplayMiniIndicatorOptions,
+    GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects, GameplayOffsetAdjustKey,
+    GameplayReceptorGlowBehavior, GameplayReceptorGlowState, GameplayReceptorGlowTimers,
+    GameplayReceptorStepBehavior, GameplayScoreDisplayMode, GameplaySessionCommand,
     GameplayStreamClockSnapshot, GameplayTimingTickMode, GameplayTurnOption, GameplayTween,
     GameplayViewport, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
     HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS,
     HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, HealthState, HeldMissRenderInfo,
-    HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG,
-    INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
-    INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, ItgScoreInputs,
-    ItgScoreStage, JudgmentRenderInfo, LeadInTiming, MAX_ACTIVE_INPUT_SLOTS,
-    MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MineJudgmentRenderInfo,
-    MiniAttackMode, NoteCountStat, OffsetIndicatorText, PerspectiveEffects, PerspectiveOverrides,
+    HoldJudgmentRenderInfo, HoldResultStatsState, HoldResultStatsUpdate, HoldToExitKey,
+    INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
+    INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
+    INSERT_MASK_BIT_WIDE, ItgScoreInputs, ItgScoreStage, JudgmentRenderInfo, LaneInputUpdate,
+    LeadInTiming, MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX,
+    MINI_PERCENT_MIN, MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, NoteHitEval,
+    OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL, OFFSET_ADJUST_STEP_SECONDS,
+    OffsetIndicatorText, PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming,
     PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
     REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
     REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
     REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
     ReplayOffsetSnapshot, RowEntry, RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
-    ScrollEffects, ScrollOverrides, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
+    ScrollEffects, ScrollOverrides, ScrollReverseOptions, SongClockSnapshot, TAP_EXPLOSION_WINDOWS,
     TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions, TurnRng,
     VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides,
     active_hold_counts_as_pressed, active_hold_is_engaged, active_input_slot_lane_is_down,
-    advance_judged_row_cursor, apply_combo_update_feedback, apply_course_combo_carry_state,
-    apply_echo_insert, apply_hold_let_go_combo_policy, apply_hold_success_combo_policy,
-    apply_hyper_shuffle, apply_insert_intelligent_taps, apply_mine_hit_combo_policy,
-    apply_mines_insert, apply_stomp_insert, apply_super_shuffle_taps, apply_turn_options,
-    apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
-    apply_wide_insert, approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
-    assist_clap_cursor_for_row, assist_lookahead_music_horizon_seconds,
-    assist_row_no_offset_for_timing, attack_mini_target_percent,
-    autoplay_blocks_scoring_from_flags, autoplay_random_offset_music_ns_for_window,
-    autosync_mean_ns, autosync_mode_status_line, autosync_stddev_seconds, blue_fantastic_window_ms,
+    advance_active_hold_to_time, advance_judged_row_cursor, apply_autosync_offset_sample,
+    apply_combo_update_feedback, apply_course_combo_carry_state, apply_echo_insert,
+    apply_final_note_result, apply_gameplay_life_delta, apply_hold_let_go_combo_policy,
+    apply_hold_let_go_result, apply_hold_result_stats_update, apply_hold_success_combo_policy,
+    apply_hold_success_result, apply_hyper_shuffle, apply_insert_intelligent_taps,
+    apply_mine_hit_combo_policy, apply_mines_insert, apply_stomp_insert, apply_super_shuffle_taps,
+    apply_turn_options, apply_turn_permutation, apply_uncommon_chart_transforms,
+    apply_uncommon_masks_with_masks, apply_wide_insert, approach_attack_mini_percent_to_target,
+    approach_attack_value, approach_f32, assist_clap_cursor_for_row,
+    assist_lookahead_music_horizon_seconds, assist_row_no_offset_for_timing,
+    attack_mini_target_percent, autoplay_blocks_scoring_from_flags,
+    autoplay_random_offset_music_ns_for_window, autosync_mean_ns, autosync_mode_status_line,
+    autosync_stddev_seconds, begin_hold_life_decay, blue_fantastic_window_ms,
     build_assist_clap_rows, build_column_cues_for_player, build_crossover_cues_from_annotations,
-    build_note_count_stats, build_row_entry, build_row_grids, cell_has_any_note,
-    cell_has_nonfake_note, closest_lane_note_ns, collect_edge_judge_indices, column_cue_is_mine,
-    column_flash_duration, column_flash_enabled_for_options, column_scroll_dirs_for_flags,
-    completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
-    compute_end_times_ns, convert_tap_row_to_mines, convert_taps_to_holds,
-    count_held_tracks_at_row, count_nonempty_tracks_at_row, count_rescore_tracks_on_row,
-    count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row, counts_for_early_rescore,
-    course_display_carry_for_stage, course_display_totals_for_chart, course_life_after_carry,
-    course_submit_life_eligible, crossed_mine_bounds_ns, crossed_mine_held_start_time,
-    crossover_arrow_col, danger_fx_rgba, danger_health_state, display_ex_score_percent_for_mode,
-    display_hard_ex_score_percent_for_mode, display_itg_score_percent_for_mode,
-    display_judgment_count_for_grade, display_window_counts_current, display_window_counts_mode,
-    display_window_counts_with_carry, draw_distance_after_targets, draw_distance_before_targets,
-    effective_mini_percent, enforce_max_simultaneous_notes, error_bar_average_offset_s,
-    error_bar_long_term_offset_s, error_bar_push_tick, error_bar_window_ix,
-    ex_score_data_from_display_inputs, exit_total_seconds, exit_transition_alpha,
-    fantastic_window_seconds, finalized_row_outcome_for_cached_row,
+    build_note_count_stats, build_player_judgment_timing_for_options, build_row_entry,
+    build_row_grids, cell_has_any_note, cell_has_nonfake_note, closest_lane_note_ns,
+    collect_edge_judge_indices, column_cue_is_mine, column_flash_duration,
+    column_flash_enabled_for_options, column_flash_expired_at, column_scroll_dirs_for_flags,
+    combo_milestone_duration, completed_row_final_judgment,
+    completed_row_flash_note_indices_and_judgment, compute_end_times_ns, convert_tap_row_to_mines,
+    convert_taps_to_holds, count_held_tracks_at_row, count_nonempty_tracks_at_row,
+    count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row,
+    counts_for_early_rescore, course_display_carry_for_stage, course_display_totals_for_chart,
+    course_life_after_carry, course_submit_life_eligible, crossed_mine_bounds_ns,
+    crossed_mine_held_start_time, crossover_arrow_col, current_song_clock_snapshot, danger_fx_rgba,
+    danger_health_state, display_ex_score_percent_for_mode, display_hard_ex_score_percent_for_mode,
+    display_itg_score_percent_for_mode, display_judgment_count_for_grade,
+    display_window_counts_current, display_window_counts_mode, display_window_counts_with_carry,
+    draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
+    enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
+    error_bar_push_tick, error_bar_window_ix, ex_score_data_from_display_inputs,
+    exit_total_seconds, exit_transition_alpha, fantastic_window_seconds, final_note_result_effects,
+    finalized_row_awards_hand, finalized_row_outcome_for_cached_row,
     finalized_row_outcome_for_entry, first_nonempty_track_at_row,
     first_row_entry_index_at_or_after_time, first_tap_track_at_row, first_time_index_at_or_after,
     frame_stable_display_clock_step, gameplay_exit_for_kind, grade_to_window,
-    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
+    held_miss_judgment_expired_at, hold_explosion_active, hold_explosion_enabled_for_options,
+    hold_head_render_flags, hold_judgment_expired_at, hold_result_stats_update,
     hold_to_exit_seconds, input_lane_bit, input_queue_cap, is_hold_body_at_row,
     itg_score_inputs_from_display, itg_score_percent_from_inputs, lane_edge_judges_lift,
     lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
     lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
     late_note_resolution_window_ns, let_go_head_beat, live_autoplay_enabled_from_flags,
-    local_column_for_field, local_player_col, max_step_distance_ns,
-    measure_counter_segments_for_densities, mine_window_bounds_ns, mini_value_for_percent,
-    missed_note_cutoff_row_for_timing, music_time_from_stream_position, next_autosync_mode,
-    next_ready_row_in_lookahead, next_timing_tick_mode, normalized_input_slot,
-    note_has_displayable_hold, note_tracks_held_miss, notes_row_sorted, player_draw_scale_for_mini,
+    local_column_for_field, local_player_col, mark_row_entry_note_finalized,
+    mark_row_entry_provisional_early_result, max_step_distance_ns,
+    measure_counter_segments_for_densities, mine_window_bounds_ns, mini_indicator_mode_for_options,
+    mini_indicator_needs_stream_data, mini_value_for_percent, missed_note_cutoff_row_for_timing,
+    music_time_from_stream_position, next_autosync_mode, next_ready_row_in_lookahead,
+    next_timing_tick_mode, normalized_input_slot, note_has_displayable_hold,
+    note_hit_eval_for_timing, note_tracks_held_miss, notes_row_sorted, offset_adjust_delta_for_key,
+    offset_adjust_repeat_ready, offset_adjust_slot_for_key, player_draw_scale_for_mini,
     player_index_for_column, player_life_is_dead, player_row_scan_state, player_rows,
-    predictive_itg_score_percent_from_inputs, quantization_index_from_beat, recent_step_tracks,
-    receptor_glow_duration, receptor_glow_lift_start, receptor_glow_visual, remove_cell_notes,
-    replay_edge_cap, row_entry_for_cached_row, row_entry_index_for_cached_row,
-    row_final_grade_hides_note, scroll_receptor_y, scroll_reverse_percent_for_column,
-    scroll_reverse_scale_for_column, set_added_mine_note, set_added_tap_note,
-    song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
-    spacing_multiplier_for_percent, stage_music_cut, step_search_row_bounds, stomp_mirror_track,
-    suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
-    tap_judgment_uses_bright_explosion_for_options, timing_row_floor, timing_row_nearest,
+    predictive_itg_score_percent_from_inputs, push_density_life_point,
+    quantization_index_from_beat, recent_step_tracks, receptor_glow_press_timers,
+    receptor_glow_pulse_timers, receptor_glow_release_timers, receptor_glow_visual,
+    reference_bpm_from_display_tag, refresh_roll_life_for_step,
+    register_provisional_early_note_result, remap_live_input_lane, remove_cell_notes,
+    replaced_active_hold_settle_time, replay_edge_cap, row_entry_for_cached_row,
+    row_entry_index_for_cached_row, row_final_grade_hides_note, scroll_receptor_y,
+    scroll_reverse_percent_for_column, scroll_reverse_scale_for_column, set_added_mine_note,
+    set_added_tap_note, song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
+    spacing_multiplier_for_percent, stage_music_cut, started_active_hold_state,
+    step_search_row_bounds, stomp_mirror_track, suppress_final_bad_rescore_visual,
+    tap_explosion_enabled_for_options, tap_judgment_uses_bright_explosion_for_options,
+    tick_combo_milestones, tick_mine_explosion_slot, tick_positive_timer,
+    tick_receptor_glow_timers, tick_tap_explosion_slot, timing_row_floor, timing_row_nearest,
     timing_tick_mode_debug_label, timing_tick_mode_status_line, toggle_flash_alpha,
     track_held_miss_window_for_player, track_range_has_any_note, trigger_combo_milestone,
-    turn_seed_for_song, update_danger_fx_for_health, visible_notefield_time_ns,
-    zmod_stream_totals_for_densities,
+    turn_seed_for_song, update_active_input_slot, update_danger_fx_for_health,
+    visible_notefield_time_ns, zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
     StepStatsPlayStyle, resolve_target_score_percent,
@@ -203,8 +222,7 @@ pub use self::clock::{
     display_clock_stutter_diag_trigger_seq,
 };
 use self::clock::{
-    DisplayClockDiagRing, SongClockSnapshot, current_song_clock_snapshot,
-    frame_stable_display_music_time_ns, music_time_ns_from_song_clock,
+    DisplayClockDiagRing, frame_stable_display_music_time_ns, music_time_ns_from_song_clock,
 };
 pub use self::controls::{
     RawKeyAction, handle_queued_raw_key, sync_queued_raw_modifiers, timing_tick_status_line,
@@ -224,11 +242,11 @@ pub use self::display::{
     display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
-use self::holds::{begin_hold_life_decay, start_active_hold, update_active_holds};
 use self::holds::{
     handle_hold_let_go, handle_hold_success, integrate_active_hold_to_time,
     refresh_roll_life_on_step,
 };
+use self::holds::{start_active_hold, update_active_holds};
 pub use self::input::{
     handle_input, queue_input_edge, receptor_glow_visual_for_col, replay_capture_enabled,
     set_replay_capture_enabled,
@@ -240,7 +258,7 @@ use self::input::{
 #[cfg(test)]
 use self::input::{trigger_receptor_step_pulse, update_lane_input_slot};
 use self::judging::{
-    PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
+    build_final_note_hit_judgment, build_player_judgment_timing,
     effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
 };
 pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
@@ -283,9 +301,6 @@ pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
-const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
-const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
-const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 const M_MOD_HIGH_CAP: f32 = 600.0;
 pub const SCOREBOX_NUM_ENTRIES: usize = 5;
 
@@ -958,9 +973,22 @@ impl Default for GameplaySession {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameplaySessionCommand {
-    SetTimingTickMode(TickMode),
+#[inline(always)]
+pub(crate) const fn gameplay_tick_mode_from_profile(mode: TickMode) -> GameplayTimingTickMode {
+    match mode {
+        TickMode::Off => GameplayTimingTickMode::Off,
+        TickMode::Assist => GameplayTimingTickMode::Assist,
+        TickMode::Hit => GameplayTimingTickMode::Hit,
+    }
+}
+
+#[inline(always)]
+pub(crate) const fn profile_tick_mode_from_gameplay(mode: GameplayTimingTickMode) -> TickMode {
+    match mode {
+        GameplayTimingTickMode::Off => TickMode::Off,
+        GameplayTimingTickMode::Assist => TickMode::Assist,
+        GameplayTimingTickMode::Hit => TickMode::Hit,
+    }
 }
 
 pub struct State {
@@ -1929,46 +1957,6 @@ fn player_note_range(state: &State, player: usize) -> (usize, usize) {
     state.note_ranges[player]
 }
 
-#[inline(always)]
-fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bool {
-    const EPS: f32 = 0.000_1_f32;
-    const ANGLE_SIN2_MAX: f32 = 0.032_f32; // sin(0.18rad)^2
-
-    if let Some(last) = points.last_mut()
-        && x <= last[0] + EPS
-    {
-        if (y - last[1]).abs() <= EPS {
-            return false;
-        }
-        last[1] = y;
-        return true;
-    }
-
-    if points.len() >= 2 {
-        let a = points[points.len() - 2];
-        let b = points[points.len() - 1];
-        let abx = b[0] - a[0];
-        let aby = b[1] - a[1];
-        let bcx = x - b[0];
-        let bcy = y - b[1];
-        let ab_len_sq = abx.mul_add(abx, aby * aby);
-        let bc_len_sq = bcx.mul_add(bcx, bcy * bcy);
-        let dot = abx.mul_add(bcx, aby * bcy);
-        if dot > 0.0_f32 && ab_len_sq > EPS && bc_len_sq > EPS {
-            let cross = abx.mul_add(bcy, -(aby * bcx));
-            let cross_sq = cross * cross;
-            if cross_sq <= ANGLE_SIN2_MAX * ab_len_sq * bc_len_sq {
-                let last_ix = points.len() - 1;
-                points[last_ix] = [x, y];
-                return true;
-            }
-        }
-    }
-
-    points.push([x, y]);
-    true
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -2044,16 +2032,6 @@ fn update_density_graph(
     }
 }
 
-#[inline(always)]
-fn stream_pos_to_music_time(state: &State, stream_pos: f32) -> f32 {
-    music_time_from_stream_position(
-        stream_pos,
-        state.audio_lead_in_seconds,
-        state.global_offset_seconds,
-        state.music_rate,
-    )
-}
-
 fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
     state.current_music_time_ns = music_time_ns;
     let display_time_ns = state.display_clock.reset(music_time_ns);
@@ -2086,11 +2064,7 @@ fn start_stage_music_audio(state: &mut State) {
         return;
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     debug!("Starting music with a preroll delay of {lead_in:.2}s");
     queue_play_music(state, music_path, stage_music_cut(lead_in), rate);
 }
@@ -2119,7 +2093,15 @@ pub fn current_music_time_seconds(state: &State) -> f32 {
 
 #[inline(always)]
 pub fn music_time_from_audio_snapshot(state: &State, audio_snapshot: GameplayAudioSnapshot) -> f32 {
-    song_time_ns_to_seconds(current_song_clock_snapshot(state, audio_snapshot).song_time_ns)
+    song_time_ns_to_seconds(
+        current_song_clock_snapshot(
+            audio_snapshot,
+            state.music_rate,
+            state.audio_lead_in_seconds,
+            state.global_offset_seconds,
+        )
+        .song_time_ns,
+    )
 }
 
 pub fn seek_practice_display(state: &mut State, music_time: f32) {
@@ -2141,11 +2123,7 @@ pub fn disable_score_for_practice(state: &mut State) {
 /// (e.g. practice-mode hotkeys) are responsible for keeping `audio::set_music_rate`
 /// and `profile::set_session_music_rate` in sync.
 pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
-    let normalized = if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    };
+    let normalized = normalized_song_rate(rate);
     if (normalized - state.music_rate).abs() <= f32::EPSILON {
         return false;
     }
@@ -2296,11 +2274,7 @@ pub fn start_practice_music_at(
     state.audio_lead_in_seconds = (-playback_music_time).max(0.0) as f32;
     set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
 
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     queue_play_music(
         state,
         music_path,
@@ -2311,32 +2285,6 @@ pub fn start_practice_music_at(
         },
         rate,
     );
-}
-
-fn get_reference_bpm_from_display_tag(
-    chart: &ChartData,
-    song_display_bpm_str: &str,
-) -> Option<f32> {
-    // 1. Try chart-level display BPM
-    match &chart.display_bpm {
-        Some(deadsync_chart::ChartDisplayBpm::Specified { max, .. }) => {
-            let v = *max as f32;
-            if v.is_finite() && v > 0.0 {
-                return Some(v);
-            }
-        }
-        Some(deadsync_chart::ChartDisplayBpm::Random) => return None,
-        None => {}
-    }
-    // 2. Fall back to song-level display BPM string
-    let s = song_display_bpm_str.trim();
-    if s.is_empty() || s == "*" {
-        return None;
-    }
-    if let Some((_, max_str)) = s.split_once(':') {
-        return max_str.trim().parse::<f32>().ok();
-    }
-    s.parse::<f32>().ok()
 }
 
 fn step_stats_play_style(play_style: profile_data::PlayStyle) -> StepStatsPlayStyle {
@@ -2396,11 +2344,7 @@ pub fn init(
 ) -> State {
     debug!("Initializing Gameplay Screen...");
     let init_started = Instant::now();
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(music_rate);
 
     let play_style = session.play_style;
     let p2_runtime_player = session.p2_runtime_player();
@@ -2820,14 +2764,15 @@ pub fn init(
     let first_note_beat = timing.get_beat_for_time(first_second);
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
-    let mut reference_bpm = get_reference_bpm_from_display_tag(&charts[0], &song.display_bpm)
-        .unwrap_or_else(|| {
-            let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
-            if !actual_max.is_finite() || actual_max <= 0.0 {
-                actual_max = initial_bpm.max(120.0);
-            }
-            actual_max
-        });
+    let mut reference_bpm =
+        reference_bpm_from_display_tag(charts[0].display_bpm.as_ref(), &song.display_bpm)
+            .unwrap_or_else(|| {
+                let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
+                if !actual_max.is_finite() || actual_max <= 0.0 {
+                    actual_max = initial_bpm.max(120.0);
+                }
+                actual_max
+            });
     if !reference_bpm.is_finite() || reference_bpm <= 0.0 {
         reference_bpm = initial_bpm.max(120.0);
     }
@@ -3871,11 +3816,7 @@ fn hit_mine(
     time_error_music_ns: SongTimeNs,
 ) -> bool {
     let player = player_for_col(state, column);
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     let mine_window_music_ns = state.player_judgment_timing[player]
         .profile_music_ns
         .mine_window_ns;
@@ -4247,11 +4188,7 @@ pub(super) fn render_provisional_early_rescore_feedback(
 }
 
 pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     let timing_hit_log = timing_hit_log_enabled();
     let input_log = gameplay_input_log_enabled();
     let player = player_for_col(state, column);
@@ -4699,11 +4636,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
 /// only matches NoteType::Lift.
 pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     let timing_hit_log = timing_hit_log_enabled();
     let player = player_for_col(state, column);
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
@@ -4977,11 +4910,7 @@ fn decay_let_go_hold_life(state: &mut State) {
             state.decaying_hold_indices.swap_remove(i);
             continue;
         }
-        let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-            state.music_rate
-        } else {
-            1.0
-        };
+        let rate = normalized_song_rate(state.music_rate);
         let elapsed_music =
             song_time_ns_delta_seconds(state.current_music_time_ns, start_time).max(0.0);
         let elapsed_real = elapsed_music / rate;
@@ -5163,11 +5092,7 @@ fn finalize_completed_mines(state: &mut State) {
 
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(state.music_rate);
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
@@ -5326,7 +5251,12 @@ pub fn update(
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
-    let song_clock = current_song_clock_snapshot(state, audio_snapshot);
+    let song_clock = current_song_clock_snapshot(
+        audio_snapshot,
+        state.music_rate,
+        state.audio_lead_in_seconds,
+        state.global_offset_seconds,
+    );
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time_ns = state.current_music_time_ns;
     let mut music_time_ns = song_clock.song_time_ns;
@@ -5640,42 +5570,43 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, ExitTransitionKind,
         FinalizedRowOutcome, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        GameplayAudioCommand, GameplaySessionCommand, GameplayTurnOption, HELD_MISS_TOTAL_DURATION,
-        HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS,
-        MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
-        ScrollSpeedSetting, SongClockSnapshot, SongLuaNoteHideWindowRuntime,
-        TIMING_WINDOW_SECONDS_HOLD, TickMode, active_hold_counts_as_pressed,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
-        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
-        apply_time_based_tap_misses, assist_lookahead_music_horizon_seconds,
-        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
-        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        crossed_mine_held_start_time, drain_audio_commands, drain_session_commands,
-        effective_appearance_effects_for_player, effective_mini_percent_for_player,
-        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
-        effective_visibility_effects_for_player, effective_visual_effects_for_player,
-        enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time_ns, grade_to_window, handle_input, handle_queued_raw_key,
-        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-        lane_release_finished, late_note_resolution_window_ns, max_step_distance_ns,
-        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
-        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
-        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_stats_density_graph_width,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        GameplayAudioCommand, GameplaySessionCommand, GameplayTimingTickMode, GameplayTurnOption,
+        HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
+        INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
+        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
+        SongLuaNoteHideWindowRuntime, TIMING_WINDOW_SECONDS_HOLD, TickMode,
+        active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
+        advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
+        apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
+        apply_time_based_mine_avoidance, apply_time_based_tap_misses,
+        assist_lookahead_music_horizon_seconds, begin_outro_attack_clear, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
+        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
+        drain_audio_commands, drain_session_commands, effective_appearance_effects_for_player,
+        effective_mini_percent_for_player, effective_player_global_offset_seconds,
+        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
+        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
+        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
+        handle_input, handle_queued_raw_key, hit_mine, input_queue_cap,
+        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        render_provisional_early_rescore_feedback, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        set_final_note_result, settle_completion_rows, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
+        step_stats_density_graph_width, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -6962,7 +6893,9 @@ return Def.ActorFrame{}
         assert_eq!(super::timing_tick_status_line(&state), Some("Assist Tick"));
         assert_eq!(
             drain_session_commands(&mut state).collect::<Vec<_>>(),
-            vec![GameplaySessionCommand::SetTimingTickMode(TickMode::Assist)]
+            vec![GameplaySessionCommand::SetTimingTickMode(
+                GameplayTimingTickMode::Assist
+            )]
         );
     }
 

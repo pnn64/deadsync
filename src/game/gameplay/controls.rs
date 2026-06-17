@@ -8,43 +8,26 @@ use super::offset::{
     start_offset_adjust_hold,
 };
 use super::{
-    GameplaySessionCommand, GameplayTimingTickMode, MAX_COLS, State, assist_clap_cursor_for_row,
-    assist_row_no_offset, next_autosync_mode, next_timing_tick_mode, player_note_range,
-    queue_session_command, timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
+    GameplaySessionCommand, MAX_COLS, State, assist_clap_cursor_for_row, assist_row_no_offset,
+    gameplay_tick_mode_from_profile, next_autosync_mode, next_timing_tick_mode, player_note_range,
+    profile_tick_mode_from_gameplay, queue_session_command,
+    timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
     timing_tick_mode_status_line as gameplay_tick_mode_status_line,
 };
 
 #[inline(always)]
-const fn gameplay_tick_mode(mode: TickMode) -> GameplayTimingTickMode {
-    match mode {
-        TickMode::Off => GameplayTimingTickMode::Off,
-        TickMode::Assist => GameplayTimingTickMode::Assist,
-        TickMode::Hit => GameplayTimingTickMode::Hit,
-    }
-}
-
-#[inline(always)]
-const fn profile_tick_mode(mode: GameplayTimingTickMode) -> TickMode {
-    match mode {
-        GameplayTimingTickMode::Off => TickMode::Off,
-        GameplayTimingTickMode::Assist => TickMode::Assist,
-        GameplayTimingTickMode::Hit => TickMode::Hit,
-    }
-}
-
-#[inline(always)]
 pub(super) const fn next_tick_mode(mode: TickMode) -> TickMode {
-    profile_tick_mode(next_timing_tick_mode(gameplay_tick_mode(mode)))
+    profile_tick_mode_from_gameplay(next_timing_tick_mode(gameplay_tick_mode_from_profile(mode)))
 }
 
 #[inline(always)]
 pub(super) const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
-    gameplay_tick_mode_status_line(gameplay_tick_mode(mode))
+    gameplay_tick_mode_status_line(gameplay_tick_mode_from_profile(mode))
 }
 
 #[inline(always)]
 const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
-    gameplay_tick_mode_debug_label(gameplay_tick_mode(mode))
+    gameplay_tick_mode_debug_label(gameplay_tick_mode_from_profile(mode))
 }
 
 #[inline(always)]
@@ -57,7 +40,10 @@ fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
         return;
     }
     state.tick_mode = mode;
-    queue_session_command(state, GameplaySessionCommand::SetTimingTickMode(mode));
+    queue_session_command(
+        state,
+        GameplaySessionCommand::SetTimingTickMode(gameplay_tick_mode_from_profile(mode)),
+    );
 
     let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;

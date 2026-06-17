@@ -1,4 +1,7 @@
-use deadsync_gameplay::effective_ex_score_inputs as gameplay_effective_ex_score_inputs;
+use deadsync_gameplay::{
+    capture_failed_ex_score_inputs as gameplay_capture_failed_ex_score_inputs,
+    effective_ex_score_inputs as gameplay_effective_ex_score_inputs,
+};
 use deadsync_profile::ScoreDisplayMode;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
 use deadsync_rules::timing::{self, WindowCounts};
@@ -219,10 +222,11 @@ pub(super) fn capture_failed_ex_score_inputs(state: &mut State, player_idx: usiz
     }
     let live = live_ex_score_inputs(state, player_idx);
     let player = &mut state.players[player_idx];
-    if player.fail_time.is_none() || player.failed_ex_score_inputs.is_some() {
-        return;
-    }
-    player.failed_ex_score_inputs = Some(live);
+    gameplay_capture_failed_ex_score_inputs(
+        &mut player.failed_ex_score_inputs,
+        player.fail_time,
+        live,
+    );
 }
 
 pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgment::ExScoreData {

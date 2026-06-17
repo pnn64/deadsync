@@ -1,41 +1,12 @@
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::{
-    JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
-};
-use deadsync_rules::timing::{
-    TimingProfile, TimingProfileNs, classify_offset_ns_with_disabled_windows,
-    largest_enabled_tap_window_ns,
-};
+use deadsync_rules::judgment::{Judgment, judgment_time_error_ms_from_music_ns};
+use deadsync_rules::timing::TimingProfile;
 
 use super::{
-    FantasticWindowOptions, SongTimeNs, State, blue_fantastic_window_ms, fantastic_window_seconds,
-    live_autoplay_judgment_offset_music_ns,
+    FantasticWindowOptions, NoteHitEval, PlayerJudgmentTiming, SongTimeNs, State,
+    blue_fantastic_window_ms, build_player_judgment_timing_for_options, fantastic_window_seconds,
+    live_autoplay_judgment_offset_music_ns, note_hit_eval_for_timing,
 };
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct PlayerJudgmentTiming {
-    pub(super) profile_music_ns: TimingProfileNs,
-    pub(super) disabled_windows: [bool; 5],
-    pub(super) largest_tap_window_music_ns: SongTimeNs,
-}
-
-impl Default for PlayerJudgmentTiming {
-    fn default() -> Self {
-        Self {
-            profile_music_ns: TimingProfileNs::default(),
-            disabled_windows: [false; 5],
-            largest_tap_window_music_ns: 0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct NoteHitEval {
-    pub(super) note_time_ns: SongTimeNs,
-    pub(super) measured_offset_music_ns: SongTimeNs,
-    pub(super) grade: JudgeGrade,
-    pub(super) window: TimingWindow,
-}
 
 #[inline(always)]
 fn default_fa_plus_window_s(state: &State) -> f32 {
@@ -96,28 +67,20 @@ pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 
 #[inline(always)]
 pub(super) fn build_player_judgment_timing(
-    mut timing_profile: TimingProfile,
+    timing_profile: TimingProfile,
     player_profile: &profile_data::Profile,
     music_rate: f32,
 ) -> PlayerJudgmentTiming {
     let base_fa_plus_s = timing_profile
         .fa_plus_window_s
         .unwrap_or(timing_profile.windows_s[0]);
-    timing_profile.fa_plus_window_s = Some(fantastic_window_seconds(fantastic_window_options(
-        base_fa_plus_s,
-        player_profile,
-    )));
     let disabled_windows = player_profile.timing_windows.disabled_windows();
-    let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
-    let largest_tap_window_music_ns =
-        largest_enabled_tap_window_ns(&profile_music_ns, &disabled_windows)
-            .unwrap_or(profile_music_ns.windows_ns[2]);
-
-    PlayerJudgmentTiming {
-        profile_music_ns,
+    build_player_judgment_timing_for_options(
+        timing_profile,
+        fantastic_window_options(base_fa_plus_s, player_profile),
         disabled_windows,
-        largest_tap_window_music_ns,
-    }
+        music_rate,
+    )
 }
 
 #[inline(always)]
@@ -126,23 +89,6 @@ pub(super) fn player_largest_tap_window_ns(state: &State, player_idx: usize) -> 
         return 0;
     }
     state.player_judgment_timing[player_idx].largest_tap_window_music_ns
-}
-
-#[inline(always)]
-fn classify_player_tap_offset_ns(
-    state: &State,
-    player_idx: usize,
-    offset_music_ns: SongTimeNs,
-) -> Option<(JudgeGrade, TimingWindow)> {
-    if player_idx >= state.num_players {
-        return None;
-    }
-    let timing = state.player_judgment_timing[player_idx];
-    classify_offset_ns_with_disabled_windows(
-        offset_music_ns,
-        &timing.profile_music_ns,
-        &timing.disabled_windows,
-    )
 }
 
 #[inline(always)]
@@ -156,18 +102,7 @@ pub(super) fn note_hit_eval(
         return None;
     }
     let timing = state.player_judgment_timing[player_idx];
-    let measured_offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
-    if i128::from(measured_offset_music_ns).abs() > i128::from(timing.largest_tap_window_music_ns) {
-        return None;
-    }
-    let (grade, window) =
-        classify_player_tap_offset_ns(state, player_idx, measured_offset_music_ns)?;
-    Some(NoteHitEval {
-        note_time_ns,
-        measured_offset_music_ns,
-        grade,
-        window,
-    })
+    note_hit_eval_for_timing(timing, note_time_ns, current_time_ns)
 }
 
 #[inline(always)]

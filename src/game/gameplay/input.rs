@@ -6,22 +6,23 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
 use super::{
-    ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, ExitTransitionKind,
-    GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction,
-    GameplayReceptorGlowBehavior, GameplayReceptorGlowState, GameplayReceptorStepBehavior,
-    GameplayUpdatePhaseTimings, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
-    HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS, RecordedLaneEdge,
-    SongClockSnapshot, SongTimeNs, State, TickMode, abort_hold_to_exit,
-    active_hold_counts_as_pressed, active_input_slot_lane_is_down, add_elapsed_us,
-    begin_exit_transition, column_flash_duration, current_music_time_s, elapsed_us_between,
-    gameplay_input_log_enabled, input_lane_bit, integrate_active_hold_to_time, judge_a_lift,
-    judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+    ASSIST_TICK_SFX_PATH, ExitTransitionKind, GAMEPLAY_INPUT_BACKLOG_WARN,
+    GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayInputPlayStyle,
+    GameplayInputPlayerSide, GameplayReceptorGlowBehavior, GameplayReceptorGlowState,
+    GameplayReceptorGlowTimers, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
+    HoldToExitKey, INVALID_SONG_TIME_NS, LaneInputUpdate, RecordedLaneEdge, SongClockSnapshot,
+    SongTimeNs, State, TickMode, abort_hold_to_exit, active_hold_counts_as_pressed,
+    active_input_slot_lane_is_down, add_elapsed_us, begin_exit_transition, column_flash_expired_at,
+    current_music_time_s, elapsed_us_between, gameplay_input_log_enabled,
+    held_miss_judgment_expired_at, hold_judgment_expired_at, integrate_active_hold_to_time,
+    judge_a_lift, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
     lane_release_finished, live_autoplay_enabled, local_column_for_field,
     music_time_ns_from_song_clock, normalized_input_slot, player_index_for_column,
-    queue_preloaded_assist_tick, receptor_glow_duration, receptor_glow_lift_start,
-    receptor_glow_visual, record_step_calories, refresh_roll_life_on_step, song_time_ns_invalid,
-    song_time_ns_to_seconds,
+    queue_preloaded_assist_tick, receptor_glow_press_timers, receptor_glow_pulse_timers,
+    receptor_glow_release_timers, receptor_glow_visual, record_step_calories,
+    refresh_roll_life_on_step, remap_live_input_lane, song_time_ns_invalid,
+    song_time_ns_to_seconds, tick_combo_milestones, tick_mine_explosion_slot, tick_positive_timer,
+    tick_receptor_glow_timers, tick_tap_explosion_slot, update_active_input_slot,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
@@ -37,16 +38,6 @@ fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
         LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
     }
     should_warn
-}
-
-#[inline(always)]
-fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
-    let player = player_index_for_column(state.num_players, state.cols_per_player, col);
-    receptor_glow_duration(
-        state
-            .noteskin_effects
-            .receptor_glow_behavior_for_player(player),
-    )
 }
 
 #[inline(always)]
@@ -71,6 +62,28 @@ fn receptor_step_behavior_for_col(
 }
 
 #[inline(always)]
+fn receptor_glow_timers_for_col(state: &State, col: usize) -> GameplayReceptorGlowTimers {
+    GameplayReceptorGlowTimers {
+        press_timer: state.receptor_glow_press_timers[col],
+        lift_timer: state.receptor_glow_timers[col],
+        lift_start_alpha: state.receptor_glow_lift_start_alpha[col],
+        lift_start_zoom: state.receptor_glow_lift_start_zoom[col],
+    }
+}
+
+#[inline(always)]
+fn set_receptor_glow_timers_for_col(
+    state: &mut State,
+    col: usize,
+    timers: GameplayReceptorGlowTimers,
+) {
+    state.receptor_glow_press_timers[col] = timers.press_timer;
+    state.receptor_glow_timers[col] = timers.lift_timer;
+    state.receptor_glow_lift_start_alpha[col] = timers.lift_start_alpha;
+    state.receptor_glow_lift_start_zoom[col] = timers.lift_start_zoom;
+}
+
+#[inline(always)]
 pub(super) fn lane_is_pressed(state: &State, col: usize) -> bool {
     state.input_lane_counts[col] != 0
 }
@@ -81,42 +94,19 @@ fn normalized_lane_input_slot(lane: Lane, input_slot: u32) -> u32 {
 }
 
 #[inline(always)]
-fn find_input_slot(state: &State, source: InputSource, input_slot: u32) -> Option<usize> {
-    state.input_slots[..state.input_slot_count]
-        .iter()
-        .position(|slot| slot.source == source && slot.input_slot == input_slot)
+const fn gameplay_input_play_style(play_style: profile_data::PlayStyle) -> GameplayInputPlayStyle {
+    match play_style {
+        profile_data::PlayStyle::Single => GameplayInputPlayStyle::Single,
+        profile_data::PlayStyle::Versus => GameplayInputPlayStyle::Versus,
+        profile_data::PlayStyle::Double => GameplayInputPlayStyle::Double,
+    }
 }
 
 #[inline(always)]
-fn insert_input_slot(state: &mut State, source: InputSource, input_slot: u32) -> Option<usize> {
-    if let Some(idx) = find_input_slot(state, source, input_slot) {
-        return Some(idx);
-    }
-    if state.input_slot_count >= MAX_ACTIVE_INPUT_SLOTS {
-        debug!(
-            "Gameplay active input slot table full; dropping held-state edge for {:?} slot {}",
-            source, input_slot
-        );
-        return None;
-    }
-    let idx = state.input_slot_count;
-    state.input_slots[idx] = ActiveInputSlot {
-        source,
-        input_slot,
-        lane_mask: 0,
-    };
-    state.input_slot_count += 1;
-    Some(idx)
-}
-
-#[inline(always)]
-fn remove_input_slot_if_empty(state: &mut State, idx: usize) {
-    if state.input_slots[idx].lane_mask != 0 {
-        return;
-    }
-    state.input_slot_count = state.input_slot_count.saturating_sub(1);
-    if idx < state.input_slot_count {
-        state.input_slots[idx] = state.input_slots[state.input_slot_count];
+const fn gameplay_input_player_side(side: profile_data::PlayerSide) -> GameplayInputPlayerSide {
+    match side {
+        profile_data::PlayerSide::P1 => GameplayInputPlayerSide::P1,
+        profile_data::PlayerSide::P2 => GameplayInputPlayerSide::P2,
     }
 }
 
@@ -137,13 +127,6 @@ fn input_slot_lane_is_down(
     )
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct LaneInputUpdate {
-    pub(super) was_down: bool,
-    pub(super) is_down: bool,
-    pub(super) slot_was_down: bool,
-}
-
 pub(super) fn update_lane_input_slot(
     state: &mut State,
     lane: Lane,
@@ -153,42 +136,28 @@ pub(super) fn update_lane_input_slot(
 ) -> LaneInputUpdate {
     let lane_idx = lane.index();
     let input_slot = normalized_lane_input_slot(lane, input_slot);
-    let bit = input_lane_bit(lane_idx);
-    let was_down = lane_is_pressed(state, lane_idx);
-    let mut slot_was_down = false;
-
-    if pressed {
-        if let Some(idx) = insert_input_slot(state, source, input_slot) {
-            slot_was_down = state.input_slots[idx].lane_mask & bit != 0;
-            if !slot_was_down {
-                state.input_slots[idx].lane_mask |= bit;
-                state.input_lane_counts[lane_idx] =
-                    state.input_lane_counts[lane_idx].saturating_add(1);
-            }
-        }
-    } else if let Some(idx) = find_input_slot(state, source, input_slot) {
-        slot_was_down = state.input_slots[idx].lane_mask & bit != 0;
-        if slot_was_down {
-            state.input_slots[idx].lane_mask &= !bit;
-            state.input_lane_counts[lane_idx] = state.input_lane_counts[lane_idx].saturating_sub(1);
-            remove_input_slot_if_empty(state, idx);
-        }
+    let update = update_active_input_slot(
+        &mut state.input_slots,
+        &mut state.input_slot_count,
+        &mut state.input_lane_counts,
+        lane_idx,
+        source,
+        input_slot,
+        pressed,
+    );
+    if update.slot_table_full {
+        debug!(
+            "Gameplay active input slot table full; dropping held-state edge for {:?} slot {}",
+            source, input_slot
+        );
     }
-
-    LaneInputUpdate {
-        was_down,
-        is_down: lane_is_pressed(state, lane_idx),
-        slot_was_down,
-    }
+    update
 }
 
 #[inline(always)]
 pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    state.receptor_glow_press_timers[col] = 0.0;
-    state.receptor_glow_lift_start_alpha[col] = behavior.press_alpha_start;
-    state.receptor_glow_lift_start_zoom[col] = behavior.press_zoom_start;
-    state.receptor_glow_timers[col] = receptor_glow_duration_for_col(state, col);
+    set_receptor_glow_timers_for_col(state, col, receptor_glow_pulse_timers(behavior));
 }
 
 #[inline(always)]
@@ -217,20 +186,14 @@ pub(super) fn trigger_receptor_score_pulse(state: &mut State, col: usize, window
 #[inline(always)]
 fn start_receptor_glow_press(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    state.receptor_glow_timers[col] = 0.0;
-    state.receptor_glow_press_timers[col] = behavior.press_duration;
-    state.receptor_glow_lift_start_alpha[col] = behavior.press_alpha_end;
-    state.receptor_glow_lift_start_zoom[col] = behavior.press_zoom_end;
+    set_receptor_glow_timers_for_col(state, col, receptor_glow_press_timers(behavior));
 }
 
 #[inline(always)]
 fn release_receptor_glow(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    let (alpha, zoom) = receptor_glow_lift_start(behavior, state.receptor_glow_press_timers[col]);
-    state.receptor_glow_press_timers[col] = 0.0;
-    state.receptor_glow_lift_start_alpha[col] = alpha;
-    state.receptor_glow_lift_start_zoom[col] = zoom;
-    state.receptor_glow_timers[col] = receptor_glow_duration_for_col(state, col);
+    let timers = receptor_glow_release_timers(behavior, state.receptor_glow_press_timers[col]);
+    set_receptor_glow_timers_for_col(state, col, timers);
 }
 
 #[inline(always)]
@@ -273,26 +236,12 @@ pub fn queue_input_edge(
     if state.autoplay_enabled {
         return;
     }
-    let lane = match (state.session.play_style, state.session.player_side, lane) {
-        // Single-player: reject the "other side" entirely so only one set of bindings can play.
-        (
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P1,
-            Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right,
-        ) => return,
-        (
-            profile_data::PlayStyle::Single,
-            profile_data::PlayerSide::P2,
-            Lane::Left | Lane::Down | Lane::Up | Lane::Right,
-        ) => return,
-        // P2-only single: remap P2 lanes into the 4-col field.
-        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Left) => Lane::Left,
-        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Down) => Lane::Down,
-        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Up) => Lane::Up,
-        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, Lane::P2Right) => {
-            Lane::Right
-        }
-        _ => lane,
+    let Some(lane) = remap_live_input_lane(
+        gameplay_input_play_style(state.session.play_style),
+        gameplay_input_player_side(state.session.player_side),
+        lane,
+    ) else {
+        return;
     };
     if lane.index() >= state.num_cols {
         return;
@@ -702,75 +651,44 @@ pub(super) fn process_input_edges(
 #[inline(always)]
 pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
     for col in 0..state.num_cols {
-        if lane_is_pressed(state, col) {
-            state.receptor_glow_timers[col] = 0.0;
-            state.receptor_glow_press_timers[col] =
-                (state.receptor_glow_press_timers[col] - delta_time).max(0.0);
-        } else if state.receptor_glow_press_timers[col] > f32::EPSILON {
-            if state.receptor_glow_press_timers[col] <= delta_time {
-                release_receptor_glow(state, col);
-            } else {
-                state.receptor_glow_press_timers[col] -= delta_time;
-            }
-        } else {
-            state.receptor_glow_timers[col] =
-                (state.receptor_glow_timers[col] - delta_time).max(0.0);
-        }
+        let timers = tick_receptor_glow_timers(
+            receptor_glow_behavior_for_col(state, col),
+            receptor_glow_timers_for_col(state, col),
+            lane_is_pressed(state, col),
+            delta_time,
+        );
+        set_receptor_glow_timers_for_col(state, col, timers);
     }
     for timer in &mut state.receptor_bop_timers {
-        *timer = (*timer - delta_time).max(0.0);
+        tick_positive_timer(timer, delta_time);
     }
-    if state.toggle_flash_timer > 0.0 {
-        state.toggle_flash_timer = (state.toggle_flash_timer - delta_time).max(0.0);
-    }
+    tick_positive_timer(&mut state.toggle_flash_timer, delta_time);
     for player in 0..state.num_players {
-        state.players[player]
-            .combo_milestones
-            .retain_mut(|milestone| {
-                milestone.elapsed += delta_time;
-                let max_duration = match milestone.kind {
-                    ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
-                    ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
-                };
-                milestone.elapsed < max_duration
-            });
+        tick_combo_milestones(&mut state.players[player].combo_milestones, delta_time);
     }
-    for explosion in &mut state.tap_explosions {
-        if let Some(active) = explosion {
-            active.elapsed += delta_time;
-            if active.duration <= 0.0 || active.elapsed >= active.duration {
-                *explosion = None;
-            }
-        }
+    for slot in &mut state.tap_explosions {
+        tick_tap_explosion_slot(slot, delta_time);
     }
-    for explosion in &mut state.mine_explosions {
-        if let Some(active) = explosion {
-            active.elapsed += delta_time;
-            if active.duration <= 0.0 || active.elapsed >= active.duration {
-                *explosion = None;
-            }
-        }
+    for slot in &mut state.mine_explosions {
+        tick_mine_explosion_slot(slot, delta_time);
     }
     for slot in &mut state.column_flashes {
         if let Some(active) = slot
-            && state.total_elapsed_in_screen - active.started_at_screen_s
-                >= column_flash_duration(active.grade)
+            && column_flash_expired_at(*active, state.total_elapsed_in_screen)
         {
             *slot = None;
         }
     }
     for slot in &mut state.hold_judgments {
         if let Some(render_info) = slot
-            && state.total_elapsed_in_screen - render_info.started_at_screen_s
-                >= HOLD_JUDGMENT_TOTAL_DURATION
+            && hold_judgment_expired_at(*render_info, state.total_elapsed_in_screen)
         {
             *slot = None;
         }
     }
     for slot in &mut state.held_miss_judgments {
         if let Some(render_info) = slot
-            && state.total_elapsed_in_screen - render_info.started_at_screen_s
-                >= HELD_MISS_TOTAL_DURATION
+            && held_miss_judgment_expired_at(*render_info, state.total_elapsed_in_screen)
         {
             *slot = None;
         }

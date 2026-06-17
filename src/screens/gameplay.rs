@@ -1660,7 +1660,9 @@ pub fn drain_core_session_commands(state: &mut gameplay_core::State) {
     for command in gameplay_core::drain_session_commands(state) {
         match command {
             GameplaySessionCommand::SetTimingTickMode(mode) => {
-                crate::game::profile::set_session_timing_tick_mode(mode);
+                crate::game::profile::set_session_timing_tick_mode(
+                    gameplay_core::profile_tick_mode_from_gameplay(mode),
+                );
             }
         }
     }

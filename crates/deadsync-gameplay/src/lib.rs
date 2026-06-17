@@ -1,5 +1,5 @@
-use deadsync_chart::{ChartData, SongData, SyncPref};
-use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
+use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
+use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
     SongTimeNs, clamp_song_time_ns, normalized_song_rate, scaled_song_time_ns,
@@ -10,7 +10,8 @@ use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 use deadsync_rules::combo::{self, ComboState, ComboUpdate};
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{
-    HoldData, HoldResult, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL,
+    HoldData, HoldResult, MAX_HOLD_LIFE, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD,
+    TIMING_WINDOW_SECONDS_ROLL, advance_hold_last_held, advance_hold_life_ns,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{
@@ -18,12 +19,13 @@ use deadsync_rules::stream::{
 };
 use deadsync_rules::timing::{
     FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs, WindowCounts,
+    classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
 };
 use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
@@ -34,6 +36,9 @@ pub const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
 // Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).
 pub const GIVE_UP_ABORT_TEXT_SECONDS: f32 = 0.5;
 pub const BACK_OUT_HOLD_SECONDS: f32 = 1.0;
+pub const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
+pub const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
+pub const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 // Simply Love: ScreenGameplay out.lua (sleep 0.5, linear 1.0).
 const GIVE_UP_OUT_FADE_DELAY_SECONDS: f32 = 0.5;
 const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
@@ -95,11 +100,68 @@ pub struct ActiveInputSlot {
     pub lane_mask: u8,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneInputUpdate {
+    pub was_down: bool,
+    pub is_down: bool,
+    pub slot_was_down: bool,
+    pub slot_table_full: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayInputPlayStyle {
+    #[default]
+    Single,
+    Versus,
+    Double,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayInputPlayerSide {
+    #[default]
+    P1,
+    P2,
+}
+
 pub const EMPTY_ACTIVE_INPUT_SLOT: ActiveInputSlot = ActiveInputSlot {
     source: InputSource::Keyboard,
     input_slot: 0,
     lane_mask: 0,
 };
+
+#[inline(always)]
+pub const fn remap_live_input_lane(
+    play_style: GameplayInputPlayStyle,
+    player_side: GameplayInputPlayerSide,
+    lane: Lane,
+) -> Option<Lane> {
+    match (play_style, player_side, lane) {
+        // Single-player: reject the other side entirely so only one set of
+        // bindings can play.
+        (
+            GameplayInputPlayStyle::Single,
+            GameplayInputPlayerSide::P1,
+            Lane::P2Left | Lane::P2Down | Lane::P2Up | Lane::P2Right,
+        ) => None,
+        (
+            GameplayInputPlayStyle::Single,
+            GameplayInputPlayerSide::P2,
+            Lane::Left | Lane::Down | Lane::Up | Lane::Right,
+        ) => None,
+        // P2-only single: remap P2 lanes into the 4-col field.
+        (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2, Lane::P2Left) => {
+            Some(Lane::Left)
+        }
+        (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2, Lane::P2Down) => {
+            Some(Lane::Down)
+        }
+        (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2, Lane::P2Up) => Some(Lane::Up),
+        (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2, Lane::P2Right) => {
+            Some(Lane::Right)
+        }
+        _ => Some(lane),
+    }
+}
 
 #[inline(always)]
 pub const fn input_lane_bit(lane_idx: usize) -> u8 {
@@ -129,6 +191,101 @@ pub fn active_input_slot_lane_is_down(
 }
 
 #[inline(always)]
+fn find_active_input_slot(
+    slots: &[ActiveInputSlot],
+    slot_count: usize,
+    source: InputSource,
+    input_slot: u32,
+) -> Option<usize> {
+    slots[..slot_count.min(slots.len())]
+        .iter()
+        .position(|slot| slot.source == source && slot.input_slot == input_slot)
+}
+
+#[inline(always)]
+fn insert_active_input_slot(
+    slots: &mut [ActiveInputSlot],
+    slot_count: &mut usize,
+    source: InputSource,
+    input_slot: u32,
+) -> Option<usize> {
+    if let Some(idx) = find_active_input_slot(slots, *slot_count, source, input_slot) {
+        return Some(idx);
+    }
+    if *slot_count >= slots.len() {
+        return None;
+    }
+    let idx = *slot_count;
+    slots[idx] = ActiveInputSlot {
+        source,
+        input_slot,
+        lane_mask: 0,
+    };
+    *slot_count += 1;
+    Some(idx)
+}
+
+#[inline(always)]
+fn remove_active_input_slot_if_empty(
+    slots: &mut [ActiveInputSlot],
+    slot_count: &mut usize,
+    idx: usize,
+) {
+    if idx >= *slot_count || slots[idx].lane_mask != 0 {
+        return;
+    }
+    *slot_count = (*slot_count).saturating_sub(1);
+    if idx < *slot_count {
+        slots[idx] = slots[*slot_count];
+    }
+}
+
+pub fn update_active_input_slot(
+    slots: &mut [ActiveInputSlot],
+    slot_count: &mut usize,
+    lane_counts: &mut [u16],
+    lane_idx: usize,
+    source: InputSource,
+    input_slot: u32,
+    pressed: bool,
+) -> LaneInputUpdate {
+    if lane_idx >= lane_counts.len() || lane_idx >= MAX_COLS {
+        return LaneInputUpdate::default();
+    }
+    *slot_count = (*slot_count).min(slots.len());
+    let bit = input_lane_bit(lane_idx);
+    let was_down = lane_counts[lane_idx] != 0;
+    let mut slot_was_down = false;
+    let mut slot_table_full = false;
+
+    if pressed {
+        if let Some(idx) = insert_active_input_slot(slots, slot_count, source, input_slot) {
+            slot_was_down = slots[idx].lane_mask & bit != 0;
+            if !slot_was_down {
+                slots[idx].lane_mask |= bit;
+                lane_counts[lane_idx] = lane_counts[lane_idx].saturating_add(1);
+            }
+        } else {
+            slot_table_full = true;
+        }
+    } else if let Some(idx) = find_active_input_slot(slots, *slot_count, source, input_slot) {
+        slot_was_down = slots[idx].lane_mask & bit != 0;
+        if slot_was_down {
+            slots[idx].lane_mask &= !bit;
+            lane_counts[lane_idx] = lane_counts[lane_idx].saturating_sub(1);
+            remove_active_input_slot_if_empty(slots, slot_count, idx);
+        }
+    }
+
+    LaneInputUpdate {
+        was_down,
+        is_down: lane_counts[lane_idx] != 0,
+        slot_was_down,
+        slot_table_full,
+    }
+}
+
+#[inline(always)]
 pub fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> SongTimeNs {
     let mut sum = 0i128;
     for value in samples {
@@ -154,6 +311,55 @@ pub fn autosync_stddev_seconds(
         dev += d * d;
     }
     (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f64).sqrt() as f32
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AutosyncOffsetCorrection {
+    Song(f32),
+    Machine(f32),
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AutosyncSampleResult {
+    pub standard_deviation: Option<f32>,
+    pub correction: Option<AutosyncOffsetCorrection>,
+}
+
+pub fn apply_autosync_offset_sample(
+    samples: &mut [SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+    sample_count: &mut usize,
+    mode: AutosyncMode,
+    note_off_by_ns: SongTimeNs,
+) -> AutosyncSampleResult {
+    if song_time_ns_invalid(note_off_by_ns) || mode == AutosyncMode::Off {
+        return AutosyncSampleResult::default();
+    }
+
+    let sample_ix = (*sample_count).min(AUTOSYNC_OFFSET_SAMPLE_COUNT.saturating_sub(1));
+    samples[sample_ix] = note_off_by_ns;
+    *sample_count = (*sample_count).saturating_add(1);
+    if *sample_count < AUTOSYNC_OFFSET_SAMPLE_COUNT {
+        return AutosyncSampleResult::default();
+    }
+
+    let mean_ns = autosync_mean_ns(samples);
+    let stddev = autosync_stddev_seconds(samples, mean_ns);
+    let correction = if stddev < AUTOSYNC_STDDEV_MAX_SECONDS {
+        let mean = song_time_ns_to_seconds(mean_ns);
+        match mode {
+            AutosyncMode::Off => None,
+            AutosyncMode::Song => Some(AutosyncOffsetCorrection::Song(mean)),
+            AutosyncMode::Machine => Some(AutosyncOffsetCorrection::Machine(mean)),
+        }
+    } else {
+        None
+    };
+
+    *sample_count = 0;
+    AutosyncSampleResult {
+        standard_deviation: Some(stddev),
+        correction,
+    }
 }
 
 const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
@@ -404,6 +610,33 @@ pub const fn timing_tick_mode_debug_label(mode: GameplayTimingTickMode) -> &'sta
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayOffsetAdjustKey {
+    Decrease,
+    Increase,
+}
+
+#[inline(always)]
+pub const fn offset_adjust_slot_for_key(key: GameplayOffsetAdjustKey) -> usize {
+    match key {
+        GameplayOffsetAdjustKey::Decrease => 0,
+        GameplayOffsetAdjustKey::Increase => 1,
+    }
+}
+
+#[inline(always)]
+pub const fn offset_adjust_delta_for_key(key: GameplayOffsetAdjustKey) -> f32 {
+    match key {
+        GameplayOffsetAdjustKey::Decrease => -OFFSET_ADJUST_STEP_SECONDS,
+        GameplayOffsetAdjustKey::Increase => OFFSET_ADJUST_STEP_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub fn offset_adjust_repeat_ready(held_elapsed: Duration, last_elapsed: Duration) -> bool {
+    held_elapsed >= OFFSET_ADJUST_REPEAT_DELAY && last_elapsed >= OFFSET_ADJUST_REPEAT_INTERVAL
+}
+
 #[inline(always)]
 pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
     is_failing || life <= 0.0
@@ -412,6 +645,51 @@ pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
 #[inline(always)]
 pub fn course_submit_life_eligible(life: Option<&deadsync_rules::life::LifeMeter>) -> bool {
     life.is_none_or(|life| !life.is_failing && life.fail_time.is_none() && life.life > 0.0)
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameplayLifeDeltaUpdate {
+    pub failed_now: bool,
+    pub was_dead: bool,
+}
+
+pub fn apply_gameplay_life_delta(
+    meter: &mut deadsync_rules::life::LifeMeter,
+    life_history: &mut Vec<(f32, f32)>,
+    course_submit_life: Option<&mut deadsync_rules::life::LifeMeter>,
+    current_music_time: f32,
+    delta: f32,
+) -> GameplayLifeDeltaUpdate {
+    if player_life_is_dead(meter.life, meter.is_failing) {
+        meter.life = 0.0;
+        meter.is_failing = true;
+        return GameplayLifeDeltaUpdate {
+            failed_now: false,
+            was_dead: true,
+        };
+    }
+
+    let result = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
+    if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
+        deadsync_rules::life::record_life_history(
+            life_history,
+            current_music_time,
+            result.old_life,
+        );
+        deadsync_rules::life::record_life_history(
+            life_history,
+            current_music_time,
+            result.new_life,
+        );
+    }
+    if let Some(meter) = course_submit_life {
+        let _ = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
+    }
+
+    GameplayLifeDeltaUpdate {
+        failed_now: result.failed_now,
+        was_dead: false,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -575,6 +853,71 @@ pub fn step_stats_density_graph_width(
         return (sidepane_width * 0.95_f32).max(1.0_f32);
     }
     sidepane_width.round().max(1.0_f32)
+}
+
+#[inline(always)]
+pub fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bool {
+    const EPS: f32 = 0.000_1_f32;
+    const ANGLE_SIN2_MAX: f32 = 0.032_f32; // sin(0.18rad)^2
+
+    if let Some(last) = points.last_mut()
+        && x <= last[0] + EPS
+    {
+        if (y - last[1]).abs() <= EPS {
+            return false;
+        }
+        last[1] = y;
+        return true;
+    }
+
+    if points.len() >= 2 {
+        let a = points[points.len() - 2];
+        let b = points[points.len() - 1];
+        let abx = b[0] - a[0];
+        let aby = b[1] - a[1];
+        let bcx = x - b[0];
+        let bcy = y - b[1];
+        let ab_len_sq = abx.mul_add(abx, aby * aby);
+        let bc_len_sq = bcx.mul_add(bcx, bcy * bcy);
+        let dot = abx.mul_add(bcx, aby * bcy);
+        if dot > 0.0_f32 && ab_len_sq > EPS && bc_len_sq > EPS {
+            let cross = abx.mul_add(bcy, -(aby * bcx));
+            let cross_sq = cross * cross;
+            if cross_sq <= ANGLE_SIN2_MAX * ab_len_sq * bc_len_sq {
+                let last_ix = points.len() - 1;
+                points[last_ix] = [x, y];
+                return true;
+            }
+        }
+    }
+
+    points.push([x, y]);
+    true
+}
+
+pub fn reference_bpm_from_display_tag(
+    chart_display_bpm: Option<&ChartDisplayBpm>,
+    song_display_bpm: &str,
+) -> Option<f32> {
+    match chart_display_bpm {
+        Some(ChartDisplayBpm::Specified { max, .. }) => {
+            let value = *max as f32;
+            if value.is_finite() && value > 0.0 {
+                return Some(value);
+            }
+        }
+        Some(ChartDisplayBpm::Random) => return None,
+        None => {}
+    }
+
+    let tag = song_display_bpm.trim();
+    if tag.is_empty() || tag == "*" {
+        return None;
+    }
+    if let Some((_, max_tag)) = tag.split_once(':') {
+        return max_tag.trim().parse::<f32>().ok();
+    }
+    tag.parse::<f32>().ok()
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1548,11 +1891,7 @@ pub fn score_invalid_reason_lines_for_options(
     options: ScoreValidityOptions,
 ) -> Vec<&'static str> {
     let mut reasons = Vec::with_capacity(6);
-    let rate = if options.music_rate.is_finite() && options.music_rate > 0.0 {
-        options.music_rate
-    } else {
-        1.0
-    };
+    let rate = normalized_song_rate(options.music_rate);
     if rate < 1.0 {
         reasons.push("music rate is below 1.0x");
     }
@@ -1951,6 +2290,19 @@ pub fn effective_ex_score_inputs(
     failed_snapshot: Option<ExScoreInputs>,
 ) -> ExScoreInputs {
     failed_snapshot.unwrap_or(live)
+}
+
+#[inline(always)]
+pub fn capture_failed_ex_score_inputs(
+    failed_snapshot: &mut Option<ExScoreInputs>,
+    fail_time: Option<f32>,
+    live: ExScoreInputs,
+) -> bool {
+    if fail_time.is_none() || failed_snapshot.is_some() {
+        return false;
+    }
+    *failed_snapshot = Some(live);
+    true
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -5181,6 +5533,13 @@ pub fn toggle_flash_alpha(timer_remaining: f32) -> Option<f32> {
 }
 
 #[inline(always)]
+pub fn tick_positive_timer(timer: &mut f32, delta_time: f32) {
+    if *timer > 0.0 {
+        *timer = (*timer - delta_time).max(0.0);
+    }
+}
+
+#[inline(always)]
 pub fn approach_f32(current: &mut f32, target: f32, step: f32) {
     if !current.is_finite() || !target.is_finite() {
         *current = target;
@@ -5385,6 +5744,50 @@ impl Default for GameplayConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayMiniIndicatorMode {
+    #[default]
+    None,
+    SubtractiveScoring,
+    PredictiveScoring,
+    PaceScoring,
+    RivalScoring,
+    Pacemaker,
+    StreamProg,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GameplayMiniIndicatorOptions {
+    pub requested_mode: GameplayMiniIndicatorMode,
+    pub measure_counter_enabled: bool,
+    pub subtractive_scoring: bool,
+    pub pacemaker: bool,
+}
+
+#[inline(always)]
+pub const fn mini_indicator_mode_for_options(
+    options: GameplayMiniIndicatorOptions,
+) -> GameplayMiniIndicatorMode {
+    match options.requested_mode {
+        GameplayMiniIndicatorMode::None if options.subtractive_scoring => {
+            GameplayMiniIndicatorMode::SubtractiveScoring
+        }
+        GameplayMiniIndicatorMode::None if options.pacemaker => {
+            GameplayMiniIndicatorMode::Pacemaker
+        }
+        mode => mode,
+    }
+}
+
+#[inline(always)]
+pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOptions) -> bool {
+    options.measure_counter_enabled
+        || !matches!(
+            mini_indicator_mode_for_options(options),
+            GameplayMiniIndicatorMode::None
+        )
+}
+
 #[derive(Clone, Debug)]
 pub struct GameplayMiniIndicatorData {
     pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
@@ -5447,6 +5850,61 @@ pub struct GameplayAudioSnapshot {
     pub timing_diag_callback_gap_ns: u64,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SongClockSnapshot {
+    pub song_time_ns: SongTimeNs,
+    pub seconds_per_second: f32,
+    pub mapped_audio: bool,
+    pub valid_at: Instant,
+    pub valid_at_host_nanos: u64,
+    pub timing_diag_enabled: bool,
+    pub timing_diag_callback_gap_ns: u64,
+}
+
+#[inline(always)]
+pub fn current_song_clock_snapshot(
+    audio_snapshot: GameplayAudioSnapshot,
+    music_rate: f32,
+    audio_lead_in_seconds: f32,
+    global_offset_seconds: f32,
+) -> SongClockSnapshot {
+    let stream_clock = audio_snapshot.stream_clock;
+    let fallback_rate = normalized_song_rate(music_rate);
+    if stream_clock.has_music_mapping {
+        return SongClockSnapshot {
+            song_time_ns: stream_clock.music_nanos,
+            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
+                && stream_clock.music_seconds_per_second > 0.0
+            {
+                stream_clock.music_seconds_per_second
+            } else {
+                fallback_rate
+            },
+            mapped_audio: true,
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
+        };
+    }
+
+    let song_time = music_time_from_stream_position(
+        stream_clock.stream_seconds,
+        audio_lead_in_seconds,
+        global_offset_seconds,
+        fallback_rate,
+    );
+    SongClockSnapshot {
+        song_time_ns: song_time_ns_from_seconds(song_time),
+        seconds_per_second: fallback_rate,
+        mapped_audio: false,
+        valid_at: stream_clock.valid_at,
+        valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        timing_diag_enabled: audio_snapshot.timing_diag_enabled,
+        timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayMusicCut {
     pub start_sec: f64,
@@ -5481,6 +5939,11 @@ pub enum GameplayAudioCommand {
         path: &'static str,
         music_seconds: f64,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplaySessionCommand {
+    SetTimingTickMode(GameplayTimingTickMode),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -5741,6 +6204,58 @@ pub struct HeldMissRenderInfo {
     pub started_at_screen_s: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FinalNoteResultEffects {
+    pub mark_row_finalized: bool,
+    pub trigger_miss_flash_column: Option<usize>,
+    pub held_miss_column: Option<usize>,
+}
+
+#[inline(always)]
+pub const fn final_note_result_effects(
+    was_unjudged: bool,
+    judgment: &Judgment,
+    column: usize,
+    column_count: usize,
+) -> FinalNoteResultEffects {
+    if !was_unjudged {
+        return FinalNoteResultEffects {
+            mark_row_finalized: false,
+            trigger_miss_flash_column: None,
+            held_miss_column: None,
+        };
+    }
+    let is_miss = matches!(judgment.grade, JudgeGrade::Miss);
+    FinalNoteResultEffects {
+        mark_row_finalized: true,
+        trigger_miss_flash_column: if is_miss { Some(column) } else { None },
+        held_miss_column: if is_miss && judgment.miss_because_held && column < column_count {
+            Some(column)
+        } else {
+            None
+        },
+    }
+}
+
+pub fn register_provisional_early_note_result(note: &mut Note, judgment: Judgment) -> bool {
+    if note.early_result.is_some() {
+        return false;
+    }
+    note.early_result = Some(judgment);
+    true
+}
+
+pub fn apply_final_note_result(
+    note: &mut Note,
+    judgment: Judgment,
+    column_count: usize,
+) -> FinalNoteResultEffects {
+    let effects =
+        final_note_result_effects(note.result.is_none(), &judgment, note.column, column_count);
+    note.result = Some(judgment);
+    effects
+}
+
 pub const HOLD_JUDGMENT_TOTAL_DURATION: f32 = 0.8;
 pub const HELD_MISS_TOTAL_DURATION: f32 = 0.5;
 pub const RECEPTOR_GLOW_DURATION: f32 = 0.2;
@@ -5828,6 +6343,41 @@ pub struct ActiveMineExplosion {
     pub started_at_screen_s: f32,
 }
 
+#[inline(always)]
+pub fn tick_tap_explosion_slot(slot: &mut Option<ActiveTapExplosion>, delta_time: f32) {
+    if let Some(active) = slot {
+        active.elapsed += delta_time;
+        if active.duration <= 0.0 || active.elapsed >= active.duration {
+            *slot = None;
+        }
+    }
+}
+
+#[inline(always)]
+pub fn tick_mine_explosion_slot(slot: &mut Option<ActiveMineExplosion>, delta_time: f32) {
+    if let Some(active) = slot {
+        active.elapsed += delta_time;
+        if active.duration <= 0.0 || active.elapsed >= active.duration {
+            *slot = None;
+        }
+    }
+}
+
+#[inline(always)]
+pub fn column_flash_expired_at(flash: ActiveColumnFlash, screen_time_s: f32) -> bool {
+    screen_time_s - flash.started_at_screen_s >= column_flash_duration(flash.grade)
+}
+
+#[inline(always)]
+pub fn hold_judgment_expired_at(render_info: HoldJudgmentRenderInfo, screen_time_s: f32) -> bool {
+    screen_time_s - render_info.started_at_screen_s >= HOLD_JUDGMENT_TOTAL_DURATION
+}
+
+#[inline(always)]
+pub fn held_miss_judgment_expired_at(render_info: HeldMissRenderInfo, screen_time_s: f32) -> bool {
+    screen_time_s - render_info.started_at_screen_s >= HELD_MISS_TOTAL_DURATION
+}
+
 pub const MINE_EXPLOSION_DURATION: f32 = 0.6;
 pub const RECEPTOR_STEP_WINDOW_COUNT: usize = 7;
 pub const RECEPTOR_STEP_WINDOWS: [Option<&str>; RECEPTOR_STEP_WINDOW_COUNT] = [
@@ -5886,6 +6436,74 @@ pub fn blue_fantastic_window_ms(options: FantasticWindowOptions) -> f32 {
         return 10.0;
     }
     options.base_fa_plus_s * 1000.0
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PlayerJudgmentTiming {
+    pub profile_music_ns: TimingProfileNs,
+    pub disabled_windows: [bool; 5],
+    pub largest_tap_window_music_ns: SongTimeNs,
+}
+
+impl Default for PlayerJudgmentTiming {
+    fn default() -> Self {
+        Self {
+            profile_music_ns: TimingProfileNs::default(),
+            disabled_windows: [false; 5],
+            largest_tap_window_music_ns: 0,
+        }
+    }
+}
+
+#[inline(always)]
+pub fn build_player_judgment_timing_for_options(
+    mut timing_profile: TimingProfile,
+    fantastic_options: FantasticWindowOptions,
+    disabled_windows: [bool; 5],
+    music_rate: f32,
+) -> PlayerJudgmentTiming {
+    timing_profile.fa_plus_window_s = Some(fantastic_window_seconds(fantastic_options));
+    let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
+    let largest_tap_window_music_ns =
+        largest_enabled_tap_window_ns(&profile_music_ns, &disabled_windows)
+            .unwrap_or(profile_music_ns.windows_ns[2]);
+
+    PlayerJudgmentTiming {
+        profile_music_ns,
+        disabled_windows,
+        largest_tap_window_music_ns,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NoteHitEval {
+    pub note_time_ns: SongTimeNs,
+    pub measured_offset_music_ns: SongTimeNs,
+    pub grade: JudgeGrade,
+    pub window: TimingWindow,
+}
+
+#[inline(always)]
+pub fn note_hit_eval_for_timing(
+    timing: PlayerJudgmentTiming,
+    note_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+) -> Option<NoteHitEval> {
+    let measured_offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
+    if i128::from(measured_offset_music_ns).abs() > i128::from(timing.largest_tap_window_music_ns) {
+        return None;
+    }
+    let (grade, window) = classify_offset_ns_with_disabled_windows(
+        measured_offset_music_ns,
+        &timing.profile_music_ns,
+        &timing.disabled_windows,
+    )?;
+    Some(NoteHitEval {
+        note_time_ns,
+        measured_offset_music_ns,
+        grade,
+        window,
+    })
 }
 
 #[inline(always)]
@@ -6234,6 +6852,14 @@ pub struct GameplayReceptorGlowState {
     pub lane_pressed: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameplayReceptorGlowTimers {
+    pub press_timer: f32,
+    pub lift_timer: f32,
+    pub lift_start_alpha: f32,
+    pub lift_start_zoom: f32,
+}
+
 #[inline(always)]
 pub fn receptor_glow_duration(behavior: GameplayReceptorGlowBehavior) -> f32 {
     Some(behavior.duration)
@@ -6263,6 +6889,30 @@ pub fn receptor_glow_visual(
 }
 
 #[inline(always)]
+pub fn receptor_glow_pulse_timers(
+    behavior: GameplayReceptorGlowBehavior,
+) -> GameplayReceptorGlowTimers {
+    GameplayReceptorGlowTimers {
+        press_timer: 0.0,
+        lift_timer: receptor_glow_duration(behavior),
+        lift_start_alpha: behavior.press_alpha_start,
+        lift_start_zoom: behavior.press_zoom_start,
+    }
+}
+
+#[inline(always)]
+pub fn receptor_glow_press_timers(
+    behavior: GameplayReceptorGlowBehavior,
+) -> GameplayReceptorGlowTimers {
+    GameplayReceptorGlowTimers {
+        press_timer: behavior.press_duration,
+        lift_timer: 0.0,
+        lift_start_alpha: behavior.press_alpha_end,
+        lift_start_zoom: behavior.press_zoom_end,
+    }
+}
+
+#[inline(always)]
 pub fn receptor_glow_lift_start(
     behavior: GameplayReceptorGlowBehavior,
     press_timer: f32,
@@ -6271,6 +6921,51 @@ pub fn receptor_glow_lift_start(
         behavior.sample_press(press_timer)
     } else {
         (behavior.press_alpha_end, behavior.press_zoom_end)
+    }
+}
+
+#[inline(always)]
+pub fn receptor_glow_release_timers(
+    behavior: GameplayReceptorGlowBehavior,
+    press_timer: f32,
+) -> GameplayReceptorGlowTimers {
+    let (alpha, zoom) = receptor_glow_lift_start(behavior, press_timer);
+    GameplayReceptorGlowTimers {
+        press_timer: 0.0,
+        lift_timer: receptor_glow_duration(behavior),
+        lift_start_alpha: alpha,
+        lift_start_zoom: zoom,
+    }
+}
+
+#[inline(always)]
+pub fn tick_receptor_glow_timers(
+    behavior: GameplayReceptorGlowBehavior,
+    timers: GameplayReceptorGlowTimers,
+    lane_pressed: bool,
+    delta_time: f32,
+) -> GameplayReceptorGlowTimers {
+    if lane_pressed {
+        return GameplayReceptorGlowTimers {
+            press_timer: (timers.press_timer - delta_time).max(0.0),
+            lift_timer: 0.0,
+            ..timers
+        };
+    }
+    if timers.press_timer > f32::EPSILON {
+        if timers.press_timer <= delta_time {
+            receptor_glow_release_timers(behavior, timers.press_timer)
+        } else {
+            GameplayReceptorGlowTimers {
+                press_timer: timers.press_timer - delta_time,
+                ..timers
+            }
+        }
+    } else {
+        GameplayReceptorGlowTimers {
+            lift_timer: (timers.lift_timer - delta_time).max(0.0),
+            ..timers
+        }
     }
 }
 
@@ -6520,7 +7215,7 @@ impl Default for GameplayNoteskinData {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ComboMilestoneKind {
     Hundred,
     Thousand,
@@ -6548,6 +7243,21 @@ pub fn trigger_combo_milestone(
     } else {
         milestones.push(ActiveComboMilestone { kind, elapsed: 0.0 });
     }
+}
+
+#[inline(always)]
+pub const fn combo_milestone_duration(kind: ComboMilestoneKind) -> f32 {
+    match kind {
+        ComboMilestoneKind::Hundred => COMBO_HUNDRED_MILESTONE_DURATION,
+        ComboMilestoneKind::Thousand => COMBO_THOUSAND_MILESTONE_DURATION,
+    }
+}
+
+pub fn tick_combo_milestones(milestones: &mut Vec<ActiveComboMilestone>, delta_time: f32) {
+    milestones.retain_mut(|milestone| {
+        milestone.elapsed += delta_time;
+        milestone.elapsed < combo_milestone_duration(milestone.kind)
+    });
 }
 
 pub fn apply_combo_update_feedback(
@@ -6831,6 +7541,322 @@ pub struct ActiveHold {
     pub is_pressed: bool,
     pub life: f32,
     pub last_update_time_ns: SongTimeNs,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActiveHoldResolution {
+    LetGo {
+        note_index: usize,
+        time_ns: SongTimeNs,
+    },
+    Success {
+        note_index: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ActiveHoldAdvance {
+    pub clear_active: bool,
+    pub resolution: Option<ActiveHoldResolution>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HoldResultStatsUpdate {
+    pub decrement_hands_holding: bool,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub update_grade_totals: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HoldResultStatsState {
+    pub hands_holding_count_for_stats: i32,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+}
+
+pub fn apply_hold_result_stats_update(
+    state: &mut HoldResultStatsState,
+    update: HoldResultStatsUpdate,
+) {
+    if update.decrement_hands_holding && state.hands_holding_count_for_stats > 0 {
+        state.hands_holding_count_for_stats -= 1;
+    }
+    state.holds_held = state.holds_held.saturating_add(update.holds_held);
+    state.holds_held_for_score = state
+        .holds_held_for_score
+        .saturating_add(update.holds_held_for_score);
+    state.holds_let_go_for_score = state
+        .holds_let_go_for_score
+        .saturating_add(update.holds_let_go_for_score);
+    state.rolls_held = state.rolls_held.saturating_add(update.rolls_held);
+    state.rolls_held_for_score = state
+        .rolls_held_for_score
+        .saturating_add(update.rolls_held_for_score);
+    state.rolls_let_go_for_score = state
+        .rolls_let_go_for_score
+        .saturating_add(update.rolls_let_go_for_score);
+}
+
+#[inline(always)]
+pub const fn replaced_active_hold_settle_time(
+    active_note_index: usize,
+    active_end_time_ns: SongTimeNs,
+    next_note_index: usize,
+    next_start_time_ns: SongTimeNs,
+) -> Option<SongTimeNs> {
+    if active_note_index == next_note_index || active_end_time_ns > next_start_time_ns {
+        None
+    } else {
+        Some(active_end_time_ns)
+    }
+}
+
+#[inline(always)]
+pub fn begin_hold_life_decay(
+    hold: &mut HoldData,
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    note_index: usize,
+    start_time_ns: SongTimeNs,
+) {
+    if hold.let_go_started_at.is_none() {
+        hold.let_go_started_at = Some(start_time_ns);
+        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+    }
+    if note_index < hold_decay_active.len() && !hold_decay_active[note_index] {
+        hold_decay_active[note_index] = true;
+        decaying_hold_indices.push(note_index);
+    }
+}
+
+pub fn apply_hold_let_go_result(
+    hold: Option<&mut HoldData>,
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    note_index: usize,
+    let_go_time_ns: SongTimeNs,
+) -> bool {
+    let Some(hold) = hold else {
+        return true;
+    };
+    if hold.result == Some(HoldResult::LetGo) {
+        return false;
+    }
+    hold.result = Some(HoldResult::LetGo);
+    begin_hold_life_decay(
+        hold,
+        hold_decay_active,
+        decaying_hold_indices,
+        note_index,
+        let_go_time_ns,
+    );
+    true
+}
+
+pub fn apply_hold_success_result(
+    hold: Option<&mut HoldData>,
+    hold_decay_active: &mut [bool],
+    note_index: usize,
+) -> bool {
+    let Some(hold) = hold else {
+        return true;
+    };
+    if hold.result == Some(HoldResult::Held) {
+        return false;
+    }
+    hold.result = Some(HoldResult::Held);
+    hold.life = MAX_HOLD_LIFE;
+    hold.let_go_started_at = None;
+    hold.let_go_starting_life = 0.0;
+    hold.last_held_row_index = hold.end_row_index;
+    hold.last_held_beat = hold.end_beat;
+    if note_index < hold_decay_active.len() {
+        hold_decay_active[note_index] = false;
+    }
+    true
+}
+
+pub const fn hold_result_stats_update(
+    note_type: NoteType,
+    result: HoldResult,
+    scoring_blocked: bool,
+    player_dead: bool,
+) -> HoldResultStatsUpdate {
+    let mut update = HoldResultStatsUpdate {
+        decrement_hands_holding: true,
+        ..HoldResultStatsUpdate::ZERO
+    };
+    if scoring_blocked {
+        return update;
+    }
+
+    match (note_type, result, player_dead) {
+        (NoteType::Hold, HoldResult::Held, false) => {
+            update.holds_held = 1;
+            update.holds_held_for_score = 1;
+            update.update_grade_totals = true;
+        }
+        (NoteType::Hold, HoldResult::Held, true) => {
+            update.holds_held = 1;
+        }
+        (NoteType::Hold, HoldResult::LetGo, false) => {
+            update.holds_let_go_for_score = 1;
+            update.update_grade_totals = true;
+        }
+        (NoteType::Roll, HoldResult::Held, false) => {
+            update.rolls_held = 1;
+            update.rolls_held_for_score = 1;
+            update.update_grade_totals = true;
+        }
+        (NoteType::Roll, HoldResult::Held, true) => {
+            update.rolls_held = 1;
+        }
+        (NoteType::Roll, HoldResult::LetGo, false) => {
+            update.rolls_let_go_for_score = 1;
+            update.update_grade_totals = true;
+        }
+        _ => {}
+    }
+    update
+}
+
+impl HoldResultStatsUpdate {
+    pub const ZERO: Self = Self {
+        decrement_hands_holding: false,
+        holds_held: 0,
+        holds_held_for_score: 0,
+        holds_let_go_for_score: 0,
+        rolls_held: 0,
+        rolls_held_for_score: 0,
+        rolls_let_go_for_score: 0,
+        update_grade_totals: false,
+    };
+}
+
+pub fn started_active_hold_state(
+    hold: Option<&mut HoldData>,
+    note_index: usize,
+    note_type: NoteType,
+    start_time_ns: SongTimeNs,
+    end_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+) -> ActiveHold {
+    if let Some(hold) = hold {
+        hold.life = MAX_HOLD_LIFE;
+        hold.let_go_started_at = None;
+        hold.let_go_starting_life = 0.0;
+    }
+    ActiveHold {
+        note_index,
+        start_time_ns,
+        end_time_ns,
+        note_type,
+        let_go: false,
+        is_pressed: true,
+        life: MAX_HOLD_LIFE,
+        last_update_time_ns: current_time_ns,
+    }
+}
+
+pub fn refresh_roll_life_for_step(
+    active: &mut ActiveHold,
+    hold: &mut HoldData,
+    event_time_ns: SongTimeNs,
+) -> bool {
+    if !matches!(active.note_type, NoteType::Roll)
+        || active.let_go
+        || active.life <= 0.0
+        || song_time_ns_invalid(event_time_ns)
+        || event_time_ns < active.start_time_ns
+        || matches!(hold.result, Some(HoldResult::LetGo | HoldResult::Missed))
+    {
+        return false;
+    }
+
+    active.life = MAX_HOLD_LIFE;
+    active.last_update_time_ns = active
+        .last_update_time_ns
+        .max(event_time_ns.min(active.end_time_ns));
+    hold.life = MAX_HOLD_LIFE;
+    hold.let_go_started_at = None;
+    hold.let_go_starting_life = 0.0;
+    true
+}
+
+pub fn advance_active_hold_to_time(
+    active: &mut ActiveHold,
+    hold: &mut HoldData,
+    timing: &TimingData,
+    note_start_row: usize,
+    note_start_beat: f32,
+    target_time_ns: SongTimeNs,
+    music_rate: f32,
+) -> ActiveHoldAdvance {
+    let note_index = active.note_index;
+    let from_time_ns = active.last_update_time_ns;
+    let final_time_ns = target_time_ns.max(from_time_ns).min(active.end_time_ns);
+    let mut resolution = None;
+
+    if !active.let_go && active.life <= 0.0 {
+        active.let_go = true;
+        resolution = Some(ActiveHoldResolution::LetGo {
+            note_index,
+            time_ns: from_time_ns.max(active.start_time_ns),
+        });
+    } else if final_time_ns > from_time_ns && !active.let_go {
+        let body_from_ns = from_time_ns.max(active.start_time_ns);
+        let body_to_ns = final_time_ns.max(active.start_time_ns);
+        if body_to_ns > body_from_ns && active.life > 0.0 {
+            let advance = advance_hold_life_ns(
+                active.note_type,
+                active.life,
+                active.is_pressed,
+                body_to_ns.saturating_sub(body_from_ns),
+                music_rate,
+            );
+            // ITG updates iLastHeldRow before subtracting hold life for the
+            // frame. If this interval drains life to zero, keep the visual
+            // last-held row at the frame target while still resolving LetGo at
+            // the exact crossing.
+            let progress_time = song_time_ns_to_seconds(body_to_ns);
+            if body_to_ns > body_from_ns && progress_time.is_finite() {
+                let current_beat = timing.get_beat_for_time(progress_time);
+                advance_hold_last_held(hold, timing, current_beat, note_start_row, note_start_beat);
+            }
+            active.life = advance.life_after;
+            hold.life = active.life;
+            if let Some(zero_elapsed_music_ns) = advance.zero_elapsed_music_ns {
+                active.let_go = true;
+                resolution = Some(ActiveHoldResolution::LetGo {
+                    note_index,
+                    time_ns: body_from_ns.saturating_add(zero_elapsed_music_ns),
+                });
+            }
+        }
+        active.last_update_time_ns = final_time_ns;
+    }
+
+    if !active.let_go {
+        hold.let_go_started_at = None;
+        hold.let_go_starting_life = 0.0;
+    }
+    if resolution.is_none() && !active.let_go && final_time_ns >= active.end_time_ns {
+        resolution = Some(ActiveHoldResolution::Success { note_index });
+    }
+
+    ActiveHoldAdvance {
+        clear_active: resolution.is_some() || active.let_go,
+        resolution,
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -7492,6 +8518,48 @@ pub fn build_row_entry(
 }
 
 #[inline(always)]
+pub fn mark_row_entry_provisional_early_result(
+    row_entries: &mut [RowEntry],
+    note_row_entry_indices: &[u32],
+    note_index: usize,
+) -> bool {
+    let Some(&row_entry_index) = note_row_entry_indices.get(note_index) else {
+        return false;
+    };
+    if row_entry_index == u32::MAX {
+        return false;
+    }
+    let Some(row_entry) = row_entries.get_mut(row_entry_index as usize) else {
+        return false;
+    };
+    row_entry.had_provisional_early_hit = true;
+    true
+}
+
+#[inline(always)]
+pub fn mark_row_entry_note_finalized(
+    row_entries: &mut [RowEntry],
+    note_row_entry_indices: &[u32],
+    note_index: usize,
+    note_type: NoteType,
+) -> bool {
+    let Some(&row_entry_index) = note_row_entry_indices.get(note_index) else {
+        return false;
+    };
+    if row_entry_index == u32::MAX {
+        return false;
+    }
+    let Some(row_entry) = row_entries.get_mut(row_entry_index as usize) else {
+        return false;
+    };
+    row_entry.unresolved_count = row_entry.unresolved_count.saturating_sub(1);
+    if note_type != NoteType::Lift {
+        row_entry.unresolved_nonlift_count = row_entry.unresolved_nonlift_count.saturating_sub(1);
+    }
+    true
+}
+
+#[inline(always)]
 pub fn row_entry_index_for_cached_row(row_map_cache: &[u32], row_index: usize) -> Option<usize> {
     let pos = *row_map_cache.get(row_index)?;
     if pos == u32::MAX {
@@ -7579,6 +8647,18 @@ pub const fn suppress_final_bad_rescore_visual(
     final_grade: JudgeGrade,
 ) -> bool {
     row_had_provisional_early_hit && matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff)
+}
+
+#[inline(always)]
+pub const fn finalized_row_awards_hand(
+    final_grade: JudgeGrade,
+    note_count: u32,
+    carried_holds_down: usize,
+) -> bool {
+    if matches!(final_grade, JudgeGrade::Miss | JudgeGrade::WayOff) {
+        return false;
+    }
+    note_count as usize + carried_holds_down >= 3
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -9580,6 +10660,95 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn gameplay_life_delta_records_history_for_life_changes() {
+        let mut meter = deadsync_rules::life::LifeMeter::new(0.5);
+        let mut history = vec![(0.0, 0.5)];
+
+        let update = apply_gameplay_life_delta(
+            &mut meter,
+            &mut history,
+            None,
+            12.0,
+            deadsync_rules::life::LIFE_GREAT,
+        );
+
+        assert_eq!(update, GameplayLifeDeltaUpdate::default());
+        assert_near(meter.life, 0.504);
+        assert_eq!(history, vec![(0.0, 0.5), (12.0, 0.504)]);
+    }
+
+    #[test]
+    fn gameplay_life_delta_reports_failure_and_updates_course_submit_life() {
+        let mut meter = deadsync_rules::life::LifeMeter::new(1.0);
+        let mut course_submit_life = deadsync_rules::life::LifeMeter::course_submit_start();
+        let mut history = vec![(0.0, 1.0)];
+
+        let update = apply_gameplay_life_delta(
+            &mut meter,
+            &mut history,
+            Some(&mut course_submit_life),
+            12.0,
+            -0.6,
+        );
+
+        assert!(!update.failed_now);
+        assert!(!update.was_dead);
+        assert_near(meter.life, 0.4);
+        assert!(!meter.is_failing);
+        assert_eq!(meter.fail_time, None);
+        assert_eq!(course_submit_life.life, 0.0);
+        assert!(course_submit_life.is_failing);
+        assert_eq!(course_submit_life.fail_time, Some(12.0));
+    }
+
+    #[test]
+    fn gameplay_life_delta_reports_active_meter_failure() {
+        let mut meter = deadsync_rules::life::LifeMeter::new(0.05);
+        let mut history = vec![(0.0, 0.05)];
+
+        let update = apply_gameplay_life_delta(
+            &mut meter,
+            &mut history,
+            None,
+            8.0,
+            deadsync_rules::life::LIFE_MISS,
+        );
+
+        assert!(update.failed_now);
+        assert!(!update.was_dead);
+        assert_eq!(meter.life, 0.0);
+        assert!(meter.is_failing);
+        assert_eq!(meter.fail_time, Some(8.0));
+        assert_eq!(history, vec![(0.0, 0.05), (8.0, 0.0)]);
+    }
+
+    #[test]
+    fn gameplay_life_delta_clamps_already_dead_meter() {
+        let mut meter = deadsync_rules::life::LifeMeter {
+            life: -0.25,
+            combo_after_miss: 3,
+            is_failing: false,
+            fail_time: None,
+        };
+        let mut history = vec![(0.0, 0.0)];
+
+        let update = apply_gameplay_life_delta(
+            &mut meter,
+            &mut history,
+            None,
+            8.0,
+            deadsync_rules::life::LIFE_GREAT,
+        );
+
+        assert!(!update.failed_now);
+        assert!(update.was_dead);
+        assert_eq!(meter.life, 0.0);
+        assert!(meter.is_failing);
+        assert_eq!(meter.fail_time, None);
+        assert_eq!(history, vec![(0.0, 0.0)]);
+    }
+
     fn song_lua_ease_mask_window(
         target: SongLuaEaseMaskTarget,
         start_second: f32,
@@ -9786,6 +10955,79 @@ mod tests {
                 false,
             ),
             512.0,
+        );
+    }
+
+    #[test]
+    fn density_life_points_skip_duplicate_and_update_same_time() {
+        let mut points = vec![[1.0, 0.25]];
+
+        assert!(!push_density_life_point(&mut points, 1.0, 0.25));
+        assert_eq!(points, vec![[1.0, 0.25]]);
+
+        assert!(push_density_life_point(&mut points, 1.0, 0.5));
+        assert_eq!(points, vec![[1.0, 0.5]]);
+    }
+
+    #[test]
+    fn density_life_points_replace_nearly_straight_segments() {
+        let mut points = vec![[0.0, 0.0], [1.0, 0.1]];
+
+        assert!(push_density_life_point(&mut points, 2.0, 0.2));
+
+        assert_eq!(points.len(), 2);
+        assert_near(points[1][0], 2.0);
+        assert_near(points[1][1], 0.2);
+    }
+
+    #[test]
+    fn density_life_points_keep_sharp_turns() {
+        let mut points = vec![[0.0, 0.0], [1.0, 0.0]];
+
+        assert!(push_density_life_point(&mut points, 2.0, 1.0));
+
+        assert_eq!(points, vec![[0.0, 0.0], [1.0, 0.0], [2.0, 1.0]]);
+    }
+
+    #[test]
+    fn reference_bpm_prefers_chart_display_max() {
+        let display_bpm = ChartDisplayBpm::Specified {
+            min: 100.0,
+            max: 180.0,
+        };
+
+        assert_eq!(
+            reference_bpm_from_display_tag(Some(&display_bpm), "120"),
+            Some(180.0)
+        );
+    }
+
+    #[test]
+    fn reference_bpm_random_chart_display_suppresses_fallback() {
+        assert_eq!(
+            reference_bpm_from_display_tag(Some(&ChartDisplayBpm::Random), "100:160"),
+            None
+        );
+    }
+
+    #[test]
+    fn reference_bpm_uses_song_range_max_and_single_value() {
+        assert_eq!(reference_bpm_from_display_tag(None, "100:160"), Some(160.0));
+        assert_eq!(reference_bpm_from_display_tag(None, " 145 "), Some(145.0));
+    }
+
+    #[test]
+    fn reference_bpm_ignores_empty_star_and_invalid_chart_max() {
+        let invalid_chart = ChartDisplayBpm::Specified {
+            min: 100.0,
+            max: f64::NAN,
+        };
+
+        assert_eq!(reference_bpm_from_display_tag(None, ""), None);
+        assert_eq!(reference_bpm_from_display_tag(None, "*"), None);
+        assert_eq!(
+            reference_bpm_from_display_tag(Some(&invalid_chart), "125"),
+            Some(125.0)
         );
     }
 
@@ -11375,6 +12617,23 @@ mod tests {
     }
 
     #[test]
+    fn positive_timer_tick_drains_only_active_timers() {
+        let mut active = 0.5;
+        tick_positive_timer(&mut active, 0.2);
+        assert_near(active, 0.3);
+        tick_positive_timer(&mut active, 1.0);
+        assert_near(active, 0.0);
+
+        let mut inactive = 0.0;
+        tick_positive_timer(&mut inactive, 0.2);
+        assert_near(inactive, 0.0);
+
+        let mut negative = -0.5;
+        tick_positive_timer(&mut negative, 0.2);
+        assert_near(negative, -0.5);
+    }
+
+    #[test]
     fn approach_f32_steps_toward_target_without_overshoot() {
         let mut value = 0.0;
         approach_f32(&mut value, 1.0, 0.25);
@@ -11465,6 +12724,41 @@ mod tests {
         assert_eq!(milestones.len(), 2);
         assert_eq!(milestones[1].kind, ComboMilestoneKind::Thousand);
         assert_near(milestones[1].elapsed, 0.0);
+    }
+
+    #[test]
+    fn combo_milestone_tick_ages_and_drops_expired_kinds() {
+        assert_near(
+            combo_milestone_duration(ComboMilestoneKind::Hundred),
+            COMBO_HUNDRED_MILESTONE_DURATION,
+        );
+        assert_near(
+            combo_milestone_duration(ComboMilestoneKind::Thousand),
+            COMBO_THOUSAND_MILESTONE_DURATION,
+        );
+
+        let mut milestones = vec![
+            ActiveComboMilestone {
+                kind: ComboMilestoneKind::Hundred,
+                elapsed: COMBO_HUNDRED_MILESTONE_DURATION - 0.1,
+            },
+            ActiveComboMilestone {
+                kind: ComboMilestoneKind::Thousand,
+                elapsed: COMBO_THOUSAND_MILESTONE_DURATION - 0.2,
+            },
+        ];
+
+        tick_combo_milestones(&mut milestones, 0.15);
+
+        assert_eq!(milestones.len(), 1);
+        assert_eq!(milestones[0].kind, ComboMilestoneKind::Thousand);
+        assert_near(
+            milestones[0].elapsed,
+            COMBO_THOUSAND_MILESTONE_DURATION - 0.05,
+        );
+
+        tick_combo_milestones(&mut milestones, 0.05);
+        assert!(milestones.is_empty());
     }
 
     #[test]
@@ -11683,6 +12977,191 @@ mod tests {
     }
 
     #[test]
+    fn feedback_explosion_slots_tick_elapsed_and_expire() {
+        let mut tap = Some(ActiveTapExplosion {
+            window: "W1",
+            bright: false,
+            elapsed: 0.2,
+            duration: 0.5,
+            start_beat: 8.0,
+        });
+        tick_tap_explosion_slot(&mut tap, 0.2);
+        assert_near(tap.expect("tap explosion should remain").elapsed, 0.4);
+        tick_tap_explosion_slot(&mut tap, 0.1);
+        assert!(tap.is_none());
+
+        let mut instant_tap = Some(ActiveTapExplosion {
+            window: "Miss",
+            bright: false,
+            elapsed: 0.0,
+            duration: 0.0,
+            start_beat: 0.0,
+        });
+        tick_tap_explosion_slot(&mut instant_tap, 0.0);
+        assert!(instant_tap.is_none());
+
+        let mut mine = Some(ActiveMineExplosion {
+            elapsed: 0.1,
+            duration: 0.3,
+            started_at_screen_s: 2.0,
+        });
+        tick_mine_explosion_slot(&mut mine, 0.1);
+        assert_near(
+            mine.as_ref().expect("mine explosion should remain").elapsed,
+            0.2,
+        );
+        tick_mine_explosion_slot(&mut mine, 0.1);
+        assert!(mine.is_none());
+    }
+
+    #[test]
+    fn feedback_slots_expire_at_runtime_durations() {
+        let flash = ActiveColumnFlash {
+            grade: JudgeGrade::Great,
+            blue_fantastic: false,
+            started_at_screen_s: 10.0,
+        };
+        assert!(!column_flash_expired_at(
+            flash,
+            10.0 + COLUMN_FLASH_JUDGMENT_DURATION - 0.001
+        ));
+        assert!(column_flash_expired_at(
+            flash,
+            10.0 + COLUMN_FLASH_JUDGMENT_DURATION + 0.001
+        ));
+
+        let miss_flash = ActiveColumnFlash {
+            grade: JudgeGrade::Miss,
+            ..flash
+        };
+        assert!(column_flash_expired_at(
+            miss_flash,
+            10.0 + COLUMN_FLASH_MISS_DURATION + 0.001
+        ));
+
+        let hold = HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 3.0,
+        };
+        assert!(!hold_judgment_expired_at(
+            hold,
+            3.0 + HOLD_JUDGMENT_TOTAL_DURATION - 0.001
+        ));
+        assert!(hold_judgment_expired_at(
+            hold,
+            3.0 + HOLD_JUDGMENT_TOTAL_DURATION + 0.001
+        ));
+
+        let held_miss = HeldMissRenderInfo {
+            started_at_screen_s: 4.0,
+        };
+        assert!(!held_miss_judgment_expired_at(
+            held_miss,
+            4.0 + HELD_MISS_TOTAL_DURATION - 0.001
+        ));
+        assert!(held_miss_judgment_expired_at(
+            held_miss,
+            4.0 + HELD_MISS_TOTAL_DURATION + 0.001
+        ));
+    }
+
+    #[test]
+    fn final_note_result_effects_mark_first_finalization() {
+        let judgment = test_judgment(JudgeGrade::Great);
+
+        assert_eq!(
+            final_note_result_effects(true, &judgment, 2, MAX_COLS),
+            FinalNoteResultEffects {
+                mark_row_finalized: true,
+                trigger_miss_flash_column: None,
+                held_miss_column: None,
+            }
+        );
+        assert_eq!(
+            final_note_result_effects(false, &judgment, 2, MAX_COLS),
+            FinalNoteResultEffects::default()
+        );
+    }
+
+    #[test]
+    fn final_note_result_effects_trigger_miss_feedback() {
+        let judgment = test_judgment(JudgeGrade::Miss);
+
+        assert_eq!(
+            final_note_result_effects(true, &judgment, 2, MAX_COLS),
+            FinalNoteResultEffects {
+                mark_row_finalized: true,
+                trigger_miss_flash_column: Some(2),
+                held_miss_column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn final_note_result_effects_record_held_miss_column_when_in_bounds() {
+        let mut judgment = test_judgment(JudgeGrade::Miss);
+        judgment.miss_because_held = true;
+
+        assert_eq!(
+            final_note_result_effects(true, &judgment, 2, MAX_COLS),
+            FinalNoteResultEffects {
+                mark_row_finalized: true,
+                trigger_miss_flash_column: Some(2),
+                held_miss_column: Some(2),
+            }
+        );
+        assert_eq!(
+            final_note_result_effects(true, &judgment, MAX_COLS, MAX_COLS),
+            FinalNoteResultEffects {
+                mark_row_finalized: true,
+                trigger_miss_flash_column: Some(MAX_COLS),
+                held_miss_column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn register_provisional_early_note_result_only_sets_first_result() {
+        let first = test_judgment(JudgeGrade::Great);
+        let second = test_judgment(JudgeGrade::Miss);
+        let mut note = test_note(NoteType::Tap, None, false);
+
+        assert!(register_provisional_early_note_result(&mut note, first));
+        assert_eq!(
+            note.early_result.as_ref().map(|j| j.grade),
+            Some(first.grade)
+        );
+        assert!(!register_provisional_early_note_result(&mut note, second));
+        assert_eq!(
+            note.early_result.as_ref().map(|j| j.grade),
+            Some(first.grade)
+        );
+    }
+
+    #[test]
+    fn apply_final_note_result_sets_result_and_returns_first_effects() {
+        let first = test_judgment(JudgeGrade::Miss);
+        let second = test_judgment(JudgeGrade::Great);
+        let mut note = test_note(NoteType::Tap, None, false);
+        note.column = 2;
+
+        let first_effects = apply_final_note_result(&mut note, first, MAX_COLS);
+        assert_eq!(note.result.as_ref().map(|j| j.grade), Some(first.grade));
+        assert_eq!(
+            first_effects,
+            FinalNoteResultEffects {
+                mark_row_finalized: true,
+                trigger_miss_flash_column: Some(2),
+                held_miss_column: None,
+            }
+        );
+
+        let second_effects = apply_final_note_result(&mut note, second, MAX_COLS);
+        assert_eq!(note.result.as_ref().map(|j| j.grade), Some(second.grade));
+        assert_eq!(second_effects, FinalNoteResultEffects::default());
+    }
+
+    #[test]
     fn danger_health_state_uses_life_threshold_and_fail_state() {
         assert_eq!(danger_health_state(1.0, false), HealthState::Alive);
         assert_eq!(danger_health_state(0.2, false), HealthState::Alive);
@@ -11811,6 +13290,74 @@ mod tests {
     }
 
     #[test]
+    fn remap_live_input_lane_filters_other_side_for_single_p1() {
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Single,
+                GameplayInputPlayerSide::P1,
+                Lane::Left,
+            ),
+            Some(Lane::Left)
+        );
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Single,
+                GameplayInputPlayerSide::P1,
+                Lane::P2Left,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn remap_live_input_lane_remaps_single_p2_into_first_field() {
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Single,
+                GameplayInputPlayerSide::P2,
+                Lane::Left,
+            ),
+            None
+        );
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Single,
+                GameplayInputPlayerSide::P2,
+                Lane::P2Left,
+            ),
+            Some(Lane::Left)
+        );
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Single,
+                GameplayInputPlayerSide::P2,
+                Lane::P2Right,
+            ),
+            Some(Lane::Right)
+        );
+    }
+
+    #[test]
+    fn remap_live_input_lane_keeps_double_and_versus_lanes() {
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Double,
+                GameplayInputPlayerSide::P2,
+                Lane::P2Left,
+            ),
+            Some(Lane::P2Left)
+        );
+        assert_eq!(
+            remap_live_input_lane(
+                GameplayInputPlayStyle::Versus,
+                GameplayInputPlayerSide::P1,
+                Lane::P2Down,
+            ),
+            Some(Lane::P2Down)
+        );
+    }
+
+    #[test]
     fn active_input_slot_helpers_normalize_and_match_lanes() {
         assert_eq!(MAX_ACTIVE_INPUT_SLOTS, 128);
         assert_eq!(input_lane_bit(0), 0b0000_0001);
@@ -11863,6 +13410,101 @@ mod tests {
     }
 
     #[test]
+    fn active_input_slot_update_holds_until_last_alias_release() {
+        let mut slots = [EMPTY_ACTIVE_INPUT_SLOT; 4];
+        let mut slot_count = 0;
+        let mut lane_counts = [0_u16; MAX_COLS];
+        let mut transitions = Vec::new();
+
+        for (source, slot, pressed) in [
+            (InputSource::Keyboard, 10, true),
+            (InputSource::Keyboard, 11, true),
+            (InputSource::Keyboard, 10, false),
+            (InputSource::Keyboard, 11, false),
+            (InputSource::Gamepad, 7, true),
+            (InputSource::Keyboard, 12, true),
+            (InputSource::Gamepad, 7, false),
+            (InputSource::Keyboard, 12, false),
+        ] {
+            let update = update_active_input_slot(
+                &mut slots,
+                &mut slot_count,
+                &mut lane_counts,
+                0,
+                source,
+                slot,
+                pressed,
+            );
+            transitions.push((update.was_down, update.is_down, update.slot_was_down));
+            assert!(!update.slot_table_full);
+        }
+
+        assert_eq!(
+            transitions,
+            vec![
+                (false, true, false),
+                (true, true, false),
+                (true, true, true),
+                (true, false, true),
+                (false, true, false),
+                (true, true, false),
+                (true, true, true),
+                (true, false, true),
+            ]
+        );
+        assert_eq!(slot_count, 0);
+        assert_eq!(lane_counts[0], 0);
+    }
+
+    #[test]
+    fn active_input_slot_update_reports_full_table_without_mutating_counts() {
+        let mut slots = [EMPTY_ACTIVE_INPUT_SLOT; 1];
+        let mut slot_count = 0;
+        let mut lane_counts = [0_u16; MAX_COLS];
+
+        let first = update_active_input_slot(
+            &mut slots,
+            &mut slot_count,
+            &mut lane_counts,
+            0,
+            InputSource::Keyboard,
+            10,
+            true,
+        );
+        let full = update_active_input_slot(
+            &mut slots,
+            &mut slot_count,
+            &mut lane_counts,
+            1,
+            InputSource::Keyboard,
+            11,
+            true,
+        );
+
+        assert_eq!(
+            first,
+            LaneInputUpdate {
+                was_down: false,
+                is_down: true,
+                slot_was_down: false,
+                slot_table_full: false,
+            }
+        );
+        assert_eq!(
+            full,
+            LaneInputUpdate {
+                was_down: false,
+                is_down: false,
+                slot_was_down: false,
+                slot_table_full: true,
+            }
+        );
+        assert_eq!(slot_count, 1);
+        assert_eq!(lane_counts[0], 1);
+        assert_eq!(lane_counts[1], 0);
+    }
+
+    #[test]
     fn autosync_sample_math_rounds_mean_and_measures_stddev() {
         assert_eq!(AUTOSYNC_OFFSET_SAMPLE_COUNT, 24);
         assert_near(AUTOSYNC_STDDEV_MAX_SECONDS, 0.03);
@@ -11886,6 +13528,108 @@ mod tests {
         let stddev = autosync_stddev_seconds(&spread, autosync_mean_ns(&spread));
         assert!(stddev > 0.008);
         assert!(stddev < AUTOSYNC_STDDEV_MAX_SECONDS);
+    }
+
+    #[test]
+    fn autosync_offset_sample_buffers_until_full() {
+        let mut samples = [0; AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        let mut sample_count = 0;
+
+        for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT - 1 {
+            let result = apply_autosync_offset_sample(
+                &mut samples,
+                &mut sample_count,
+                AutosyncMode::Song,
+                song_time_ns_from_seconds(0.010),
+            );
+
+            assert_eq!(result, AutosyncSampleResult::default());
+        }
+
+        assert_eq!(sample_count, AUTOSYNC_OFFSET_SAMPLE_COUNT - 1);
+    }
+
+    #[test]
+    fn autosync_offset_sample_returns_stable_song_correction() {
+        let mut samples = [0; AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        let mut sample_count = 0;
+
+        let mut result = AutosyncSampleResult::default();
+        for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
+            result = apply_autosync_offset_sample(
+                &mut samples,
+                &mut sample_count,
+                AutosyncMode::Song,
+                song_time_ns_from_seconds(0.010),
+            );
+        }
+
+        assert_eq!(sample_count, 0);
+        assert_eq!(
+            result.correction,
+            Some(AutosyncOffsetCorrection::Song(0.010))
+        );
+        assert_eq!(result.standard_deviation, Some(0.0));
+    }
+
+    #[test]
+    fn autosync_offset_sample_returns_machine_correction() {
+        let mut samples = [song_time_ns_from_seconds(0.020); AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        let mut sample_count = AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
+
+        let result = apply_autosync_offset_sample(
+            &mut samples,
+            &mut sample_count,
+            AutosyncMode::Machine,
+            song_time_ns_from_seconds(0.020),
+        );
+
+        assert_eq!(
+            result.correction,
+            Some(AutosyncOffsetCorrection::Machine(0.020))
+        );
+        assert_eq!(result.standard_deviation, Some(0.0));
+    }
+
+    #[test]
+    fn autosync_offset_sample_no_correction_for_noisy_samples() {
+        let mut samples = [0; AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        samples[0] = song_time_ns_from_seconds(0.20);
+        let mut sample_count = AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
+
+        let result = apply_autosync_offset_sample(
+            &mut samples,
+            &mut sample_count,
+            AutosyncMode::Song,
+            song_time_ns_from_seconds(-0.20),
+        );
+
+        assert_eq!(sample_count, 0);
+        assert!(result.standard_deviation.unwrap() > AUTOSYNC_STDDEV_MAX_SECONDS);
+        assert_eq!(result.correction, None);
+    }
+
+    #[test]
+    fn autosync_offset_sample_ignores_invalid_and_off_mode() {
+        let mut samples = [0; AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        let mut sample_count = 0;
+
+        let invalid = apply_autosync_offset_sample(
+            &mut samples,
+            &mut sample_count,
+            AutosyncMode::Song,
+            INVALID_SONG_TIME_NS,
+        );
+        let off = apply_autosync_offset_sample(
+            &mut samples,
+            &mut sample_count,
+            AutosyncMode::Off,
+            song_time_ns_from_seconds(0.010),
+        );
+
+        assert_eq!(invalid, AutosyncSampleResult::default());
+        assert_eq!(off, AutosyncSampleResult::default());
+        assert_eq!(sample_count, 0);
     }
 
     #[test]
@@ -11987,6 +13731,43 @@ mod tests {
             timing_tick_mode_debug_label(GameplayTimingTickMode::Hit),
             "hit tick"
         );
+    }
+
+    #[test]
+    fn offset_adjust_keys_map_to_slots_and_deltas() {
+        assert_near(OFFSET_ADJUST_STEP_SECONDS, 0.001);
+        assert_eq!(
+            offset_adjust_slot_for_key(GameplayOffsetAdjustKey::Decrease),
+            0
+        );
+        assert_eq!(
+            offset_adjust_slot_for_key(GameplayOffsetAdjustKey::Increase),
+            1
+        );
+        assert_near(
+            offset_adjust_delta_for_key(GameplayOffsetAdjustKey::Decrease),
+            -0.001,
+        );
+        assert_near(
+            offset_adjust_delta_for_key(GameplayOffsetAdjustKey::Increase),
+            0.001,
+        );
+    }
+
+    #[test]
+    fn offset_adjust_repeat_ready_respects_delay_and_interval() {
+        assert!(!offset_adjust_repeat_ready(
+            OFFSET_ADJUST_REPEAT_DELAY - Duration::from_millis(1),
+            OFFSET_ADJUST_REPEAT_INTERVAL,
+        ));
+        assert!(!offset_adjust_repeat_ready(
+            OFFSET_ADJUST_REPEAT_DELAY,
+            OFFSET_ADJUST_REPEAT_INTERVAL - Duration::from_millis(1),
+        ));
+        assert!(offset_adjust_repeat_ready(
+            OFFSET_ADJUST_REPEAT_DELAY,
+            OFFSET_ADJUST_REPEAT_INTERVAL,
+        ));
     }
 
     #[test]
@@ -13204,6 +14985,97 @@ mod tests {
     }
 
     #[test]
+    fn player_judgment_timing_applies_custom_fantastic_and_rate() {
+        let timing = build_player_judgment_timing_for_options(
+            TimingProfile::default_itg_with_fa_plus(),
+            FantasticWindowOptions {
+                base_fa_plus_s: 0.015,
+                custom_fantastic_window_s: Some(0.012),
+                fa_plus_10ms_blue_window: false,
+            },
+            [false; 5],
+            1.5,
+        );
+
+        let fa_plus_ns = timing
+            .profile_music_ns
+            .fa_plus_window_ns
+            .expect("fa+ window");
+        assert!((fa_plus_ns - song_time_ns_from_seconds(0.018)).abs() <= 1);
+        assert_eq!(
+            timing.largest_tap_window_music_ns,
+            timing.profile_music_ns.windows_ns[4]
+        );
+    }
+
+    #[test]
+    fn player_judgment_timing_respects_disabled_windows() {
+        let mut disabled = [false; 5];
+        disabled[3] = true;
+        disabled[4] = true;
+        let timing = build_player_judgment_timing_for_options(
+            TimingProfile::default_itg_with_fa_plus(),
+            FantasticWindowOptions {
+                base_fa_plus_s: 0.015,
+                custom_fantastic_window_s: None,
+                fa_plus_10ms_blue_window: false,
+            },
+            disabled,
+            1.0,
+        );
+
+        assert_eq!(timing.disabled_windows, disabled);
+        assert_eq!(
+            timing.largest_tap_window_music_ns,
+            timing.profile_music_ns.windows_ns[2]
+        );
+    }
+
+    #[test]
+    fn note_hit_eval_for_timing_classifies_offsets() {
+        let timing = build_player_judgment_timing_for_options(
+            TimingProfile::default_itg_with_fa_plus(),
+            FantasticWindowOptions {
+                base_fa_plus_s: 0.015,
+                custom_fantastic_window_s: None,
+                fa_plus_10ms_blue_window: false,
+            },
+            [false; 5],
+            1.0,
+        );
+        let note_time_ns = song_time_ns_from_seconds(10.0);
+        let event_time_ns = note_time_ns + timing.profile_music_ns.windows_ns[2];
+
+        let hit = note_hit_eval_for_timing(timing, note_time_ns, event_time_ns).expect("valid hit");
+
+        assert_eq!(hit.note_time_ns, note_time_ns);
+        assert_eq!(
+            hit.measured_offset_music_ns,
+            timing.profile_music_ns.windows_ns[2]
+        );
+        assert_eq!(hit.grade, JudgeGrade::Great);
+        assert_eq!(hit.window, TimingWindow::W3);
+    }
+
+    #[test]
+    fn note_hit_eval_for_timing_rejects_beyond_largest_window() {
+        let timing = build_player_judgment_timing_for_options(
+            TimingProfile::default_itg_with_fa_plus(),
+            FantasticWindowOptions {
+                base_fa_plus_s: 0.015,
+                custom_fantastic_window_s: None,
+                fa_plus_10ms_blue_window: false,
+            },
+            [false; 5],
+            1.0,
+        );
+        let note_time_ns = song_time_ns_from_seconds(10.0);
+        let event_time_ns = note_time_ns + timing.largest_tap_window_music_ns + 1;
+
+        assert!(note_hit_eval_for_timing(timing, note_time_ns, event_time_ns).is_none());
+    }
+
+    #[test]
     fn fantastic_feedback_requires_fa_plus_and_fantastic_grade() {
         let fantastic = test_judgment(JudgeGrade::Fantastic);
         let excellent = test_judgment(JudgeGrade::Excellent);
@@ -13436,6 +15308,113 @@ mod tests {
         let (alpha, zoom) = receptor_glow_lift_start(behavior, 0.5);
         assert_near(alpha, 1.0);
         assert_near(zoom, 2.0);
+    }
+
+    #[test]
+    fn receptor_glow_timer_entries_match_press_pulse_and_release_policy() {
+        let mut behavior = GameplayReceptorGlowBehavior {
+            press_duration: 1.0,
+            press_alpha_start: 0.25,
+            press_alpha_end: 0.75,
+            press_zoom_start: 1.25,
+            press_zoom_end: 1.75,
+            press_tween: GameplayTween::Linear,
+            duration: 0.5,
+            alpha_start: 1.0,
+            alpha_end: 0.0,
+            zoom_start: 2.0,
+            zoom_end: 1.0,
+            tween: GameplayTween::Linear,
+            blend_add: true,
+        };
+
+        let press = receptor_glow_press_timers(behavior);
+        assert_near(press.press_timer, 1.0);
+        assert_near(press.lift_timer, 0.0);
+        assert_near(press.lift_start_alpha, 0.75);
+        assert_near(press.lift_start_zoom, 1.75);
+
+        let pulse = receptor_glow_pulse_timers(behavior);
+        assert_near(pulse.press_timer, 0.0);
+        assert_near(pulse.lift_timer, 0.5);
+        assert_near(pulse.lift_start_alpha, 0.25);
+        assert_near(pulse.lift_start_zoom, 1.25);
+
+        behavior.duration = 0.0;
+        let pulse = receptor_glow_pulse_timers(behavior);
+        assert_near(pulse.lift_timer, RECEPTOR_GLOW_DURATION);
+
+        let release = receptor_glow_release_timers(behavior, 0.5);
+        assert_near(release.press_timer, 0.0);
+        assert_near(release.lift_timer, RECEPTOR_GLOW_DURATION);
+        assert_near(release.lift_start_alpha, 0.5);
+        assert_near(release.lift_start_zoom, 1.5);
+    }
+
+    #[test]
+    fn receptor_glow_timer_tick_handles_pressed_release_and_lift_decay() {
+        let behavior = GameplayReceptorGlowBehavior {
+            press_duration: 1.0,
+            press_alpha_start: 0.0,
+            press_alpha_end: 1.0,
+            press_zoom_start: 1.0,
+            press_zoom_end: 2.0,
+            press_tween: GameplayTween::Linear,
+            duration: 0.4,
+            alpha_start: 1.0,
+            alpha_end: 0.0,
+            zoom_start: 2.0,
+            zoom_end: 1.0,
+            tween: GameplayTween::Linear,
+            blend_add: true,
+        };
+
+        let pressed = tick_receptor_glow_timers(
+            behavior,
+            GameplayReceptorGlowTimers {
+                press_timer: 0.7,
+                lift_timer: 0.25,
+                lift_start_alpha: 0.4,
+                lift_start_zoom: 1.4,
+            },
+            true,
+            0.2,
+        );
+        assert_near(pressed.press_timer, 0.5);
+        assert_near(pressed.lift_timer, 0.0);
+        assert_near(pressed.lift_start_alpha, 0.4);
+        assert_near(pressed.lift_start_zoom, 1.4);
+
+        let release = tick_receptor_glow_timers(
+            behavior,
+            GameplayReceptorGlowTimers {
+                press_timer: 0.3,
+                lift_timer: 0.0,
+                lift_start_alpha: 0.0,
+                lift_start_zoom: 1.0,
+            },
+            false,
+            0.3,
+        );
+        assert_near(release.press_timer, 0.0);
+        assert_near(release.lift_timer, 0.4);
+        assert_near(release.lift_start_alpha, 0.7);
+        assert_near(release.lift_start_zoom, 1.7);
+
+        let lift = tick_receptor_glow_timers(
+            behavior,
+            GameplayReceptorGlowTimers {
+                press_timer: 0.0,
+                lift_timer: 0.25,
+                lift_start_alpha: 0.7,
+                lift_start_zoom: 1.7,
+            },
+            false,
+            0.1,
+        );
+        assert_near(lift.lift_timer, 0.15);
+        assert_near(lift.lift_start_alpha, 0.7);
+        assert_near(lift.lift_start_zoom, 1.7);
     }
 
     #[test]
@@ -14168,6 +16147,69 @@ mod tests {
     }
 
     #[test]
+    fn mini_indicator_mode_for_options_uses_requested_mode_first() {
+        let options = GameplayMiniIndicatorOptions {
+            requested_mode: GameplayMiniIndicatorMode::RivalScoring,
+            subtractive_scoring: true,
+            pacemaker: true,
+            ..GameplayMiniIndicatorOptions::default()
+        };
+
+        assert_eq!(
+            mini_indicator_mode_for_options(options),
+            GameplayMiniIndicatorMode::RivalScoring
+        );
+    }
+
+    #[test]
+    fn mini_indicator_mode_for_options_falls_back_to_scoring_flags() {
+        assert_eq!(
+            mini_indicator_mode_for_options(GameplayMiniIndicatorOptions {
+                subtractive_scoring: true,
+                pacemaker: true,
+                ..GameplayMiniIndicatorOptions::default()
+            }),
+            GameplayMiniIndicatorMode::SubtractiveScoring
+        );
+        assert_eq!(
+            mini_indicator_mode_for_options(GameplayMiniIndicatorOptions {
+                pacemaker: true,
+                ..GameplayMiniIndicatorOptions::default()
+            }),
+            GameplayMiniIndicatorMode::Pacemaker
+        );
+        assert_eq!(
+            mini_indicator_mode_for_options(GameplayMiniIndicatorOptions::default()),
+            GameplayMiniIndicatorMode::None
+        );
+    }
+
+    #[test]
+    fn mini_indicator_needs_stream_data_for_measure_or_mode() {
+        assert!(!mini_indicator_needs_stream_data(
+            GameplayMiniIndicatorOptions::default()
+        ));
+        assert!(mini_indicator_needs_stream_data(
+            GameplayMiniIndicatorOptions {
+                measure_counter_enabled: true,
+                ..GameplayMiniIndicatorOptions::default()
+            }
+        ));
+        assert!(mini_indicator_needs_stream_data(
+            GameplayMiniIndicatorOptions {
+                requested_mode: GameplayMiniIndicatorMode::StreamProg,
+                ..GameplayMiniIndicatorOptions::default()
+            }
+        ));
+        assert!(mini_indicator_needs_stream_data(
+            GameplayMiniIndicatorOptions {
+                pacemaker: true,
+                ..GameplayMiniIndicatorOptions::default()
+            }
+        ));
+    }
+
+    #[test]
     fn ex_score_data_combines_live_inputs_with_course_carry() {
         let data = ex_score_data_from_display_inputs(
             ExScoreInputs {
@@ -14241,6 +16283,43 @@ mod tests {
         assert_eq!(selected_live.mines_hit_for_score, 4);
         assert_eq!(selected_failed.counts.w2, 7);
         assert_eq!(selected_failed.mines_hit_for_score, 8);
+    }
+
+    #[test]
+    fn failed_ex_score_capture_requires_fail_time() {
+        let mut snapshot = None;
+        let live = ExScoreInputs {
+            mines_hit_for_score: 3,
+            ..ExScoreInputs::default()
+        };
+
+        assert!(!capture_failed_ex_score_inputs(&mut snapshot, None, live));
+        assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn failed_ex_score_capture_records_first_snapshot_only() {
+        let mut snapshot = None;
+        let first = ExScoreInputs {
+            holds_held_for_score: 2,
+            ..ExScoreInputs::default()
+        };
+        let second = ExScoreInputs {
+            holds_held_for_score: 9,
+            ..ExScoreInputs::default()
+        };
+
+        assert!(capture_failed_ex_score_inputs(
+            &mut snapshot,
+            Some(10.0),
+            first
+        ));
+        assert!(!capture_failed_ex_score_inputs(
+            &mut snapshot,
+            Some(12.0),
+            second
+        ));
+        assert_eq!(snapshot.unwrap().holds_held_for_score, 2);
     }
 
     #[test]
@@ -14471,6 +16550,498 @@ mod tests {
         assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
         assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
         assert!(!hold_explosion_active(None, 100.0, 100.0));
+    }
+
+    #[test]
+    fn replaced_active_hold_settle_time_ignores_same_note() {
+        assert_eq!(replaced_active_hold_settle_time(7, 100, 7, 200), None);
+    }
+
+    #[test]
+    fn replaced_active_hold_settle_time_ignores_overlapping_hold() {
+        assert_eq!(replaced_active_hold_settle_time(7, 300, 8, 200), None);
+    }
+
+    #[test]
+    fn replaced_active_hold_settle_time_returns_previous_end() {
+        assert_eq!(replaced_active_hold_settle_time(7, 200, 8, 200), Some(200));
+        assert_eq!(replaced_active_hold_settle_time(7, 150, 8, 200), Some(150));
+    }
+
+    #[test]
+    fn begin_hold_life_decay_starts_decay_once() {
+        let mut hold = test_hold();
+        hold.life = 0.25;
+        let mut active = [false; 3];
+        let mut indices = Vec::new();
+
+        begin_hold_life_decay(&mut hold, &mut active, &mut indices, 1, 123);
+        begin_hold_life_decay(&mut hold, &mut active, &mut indices, 1, 456);
+
+        assert_eq!(hold.let_go_started_at, Some(123));
+        assert_eq!(hold.let_go_starting_life, 0.25);
+        assert_eq!(active, [false, true, false]);
+        assert_eq!(indices, vec![1]);
+    }
+
+    #[test]
+    fn begin_hold_life_decay_clamps_starting_life() {
+        let mut high = test_hold();
+        high.life = 2.0;
+        let mut low = test_hold();
+        low.life = -0.5;
+        let mut active = [false; 2];
+        let mut indices = Vec::new();
+
+        begin_hold_life_decay(&mut high, &mut active, &mut indices, 0, 10);
+        begin_hold_life_decay(&mut low, &mut active, &mut indices, 1, 20);
+
+        assert_eq!(high.let_go_starting_life, MAX_HOLD_LIFE);
+        assert_eq!(low.let_go_starting_life, 0.0);
+    }
+
+    #[test]
+    fn begin_hold_life_decay_ignores_out_of_range_tracking_slot() {
+        let mut hold = test_hold();
+        let mut active = [false; 1];
+        let mut indices = Vec::new();
+
+        begin_hold_life_decay(&mut hold, &mut active, &mut indices, 4, 99);
+
+        assert_eq!(hold.let_go_started_at, Some(99));
+        assert_eq!(active, [false]);
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn apply_hold_let_go_result_marks_and_starts_decay() {
+        let mut hold = test_hold();
+        hold.life = 0.4;
+        let mut active = [false; 2];
+        let mut indices = Vec::new();
+
+        assert!(apply_hold_let_go_result(
+            Some(&mut hold),
+            &mut active,
+            &mut indices,
+            1,
+            123,
+        ));
+
+        assert_eq!(hold.result, Some(HoldResult::LetGo));
+        assert_eq!(hold.let_go_started_at, Some(123));
+        assert_eq!(hold.let_go_starting_life, 0.4);
+        assert_eq!(active, [false, true]);
+        assert_eq!(indices, vec![1]);
+    }
+
+    #[test]
+    fn apply_hold_let_go_result_rejects_duplicate_but_allows_missing_hold() {
+        let mut hold = test_hold();
+        hold.result = Some(HoldResult::LetGo);
+        let mut active = [false; 1];
+        let mut indices = Vec::new();
+
+        assert!(!apply_hold_let_go_result(
+            Some(&mut hold),
+            &mut active,
+            &mut indices,
+            0,
+            10,
+        ));
+        assert!(apply_hold_let_go_result(
+            None,
+            &mut active,
+            &mut indices,
+            0,
+            10,
+        ));
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn apply_hold_success_result_marks_held_and_clears_decay() {
+        let mut hold = test_hold();
+        hold.life = 0.2;
+        hold.let_go_started_at = Some(10);
+        hold.let_go_starting_life = 0.2;
+        hold.last_held_row_index = 1;
+        hold.last_held_beat = 0.25;
+        let mut active = [false, true];
+
+        assert!(apply_hold_success_result(Some(&mut hold), &mut active, 1));
+
+        assert_eq!(hold.result, Some(HoldResult::Held));
+        assert_eq!(hold.life, MAX_HOLD_LIFE);
+        assert_eq!(hold.let_go_started_at, None);
+        assert_eq!(hold.let_go_starting_life, 0.0);
+        assert_eq!(hold.last_held_row_index, hold.end_row_index);
+        assert_eq!(hold.last_held_beat, hold.end_beat);
+        assert_eq!(active, [false, false]);
+    }
+
+    #[test]
+    fn apply_hold_success_result_rejects_duplicate_but_allows_missing_hold() {
+        let mut hold = test_hold();
+        hold.result = Some(HoldResult::Held);
+        let mut active = [true];
+
+        assert!(!apply_hold_success_result(Some(&mut hold), &mut active, 0));
+        assert!(apply_hold_success_result(None, &mut active, 0));
+        assert_eq!(active, [true]);
+    }
+
+    #[test]
+    fn hold_result_stats_update_counts_held_holds_and_rolls() {
+        let hold = hold_result_stats_update(NoteType::Hold, HoldResult::Held, false, false);
+        let roll = hold_result_stats_update(NoteType::Roll, HoldResult::Held, false, false);
+
+        assert_eq!(hold.holds_held, 1);
+        assert_eq!(hold.holds_held_for_score, 1);
+        assert!(hold.decrement_hands_holding);
+        assert!(hold.update_grade_totals);
+        assert_eq!(roll.rolls_held, 1);
+        assert_eq!(roll.rolls_held_for_score, 1);
+        assert!(roll.decrement_hands_holding);
+        assert!(roll.update_grade_totals);
+    }
+
+    #[test]
+    fn hold_result_stats_update_counts_let_go_for_score_only() {
+        let hold = hold_result_stats_update(NoteType::Hold, HoldResult::LetGo, false, false);
+        let roll = hold_result_stats_update(NoteType::Roll, HoldResult::LetGo, false, false);
+
+        assert_eq!(hold.holds_held, 0);
+        assert_eq!(hold.holds_let_go_for_score, 1);
+        assert!(hold.update_grade_totals);
+        assert_eq!(roll.rolls_held, 0);
+        assert_eq!(roll.rolls_let_go_for_score, 1);
+        assert!(roll.update_grade_totals);
+    }
+
+    #[test]
+    fn hold_result_stats_update_respects_scoring_block_and_dead_state() {
+        let blocked = hold_result_stats_update(NoteType::Hold, HoldResult::Held, true, false);
+        let dead_held = hold_result_stats_update(NoteType::Hold, HoldResult::Held, false, true);
+        let dead_let_go = hold_result_stats_update(NoteType::Hold, HoldResult::LetGo, false, true);
+
+        assert_eq!(
+            blocked,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
+        assert_eq!(dead_held.holds_held, 1);
+        assert_eq!(dead_held.holds_held_for_score, 0);
+        assert!(!dead_held.update_grade_totals);
+        assert_eq!(
+            dead_let_go,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
+    }
+
+    #[test]
+    fn hold_result_stats_update_ignores_non_hold_note_types() {
+        let update = hold_result_stats_update(NoteType::Tap, HoldResult::Held, false, false);
+
+        assert_eq!(
+            update,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
+    }
+
+    #[test]
+    fn hold_result_stats_application_decrements_hands_and_adds_counts() {
+        let mut state = HoldResultStatsState {
+            hands_holding_count_for_stats: 2,
+            holds_held: 10,
+            holds_held_for_score: 20,
+            holds_let_go_for_score: 30,
+            rolls_held: 40,
+            rolls_held_for_score: 50,
+            rolls_let_go_for_score: 60,
+        };
+
+        apply_hold_result_stats_update(
+            &mut state,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                holds_held: 1,
+                holds_held_for_score: 2,
+                holds_let_go_for_score: 3,
+                rolls_held: 4,
+                rolls_held_for_score: 5,
+                rolls_let_go_for_score: 6,
+                update_grade_totals: true,
+            },
+        );
+
+        assert_eq!(state.hands_holding_count_for_stats, 1);
+        assert_eq!(state.holds_held, 11);
+        assert_eq!(state.holds_held_for_score, 22);
+        assert_eq!(state.holds_let_go_for_score, 33);
+        assert_eq!(state.rolls_held, 44);
+        assert_eq!(state.rolls_held_for_score, 55);
+        assert_eq!(state.rolls_let_go_for_score, 66);
+    }
+
+    #[test]
+    fn hold_result_stats_application_saturates_and_clamps_hand_count() {
+        let mut zero_hands = HoldResultStatsState {
+            hands_holding_count_for_stats: 0,
+            holds_held: u32::MAX,
+            ..HoldResultStatsState::default()
+        };
+
+        apply_hold_result_stats_update(
+            &mut zero_hands,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                holds_held: 1,
+                ..HoldResultStatsUpdate::ZERO
+            },
+        );
+
+        assert_eq!(zero_hands.hands_holding_count_for_stats, 0);
+        assert_eq!(zero_hands.holds_held, u32::MAX);
+
+        let mut negative_hands = HoldResultStatsState {
+            hands_holding_count_for_stats: -3,
+            ..HoldResultStatsState::default()
+        };
+        apply_hold_result_stats_update(
+            &mut negative_hands,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                ..HoldResultStatsUpdate::ZERO
+            },
+        );
+        assert_eq!(negative_hands.hands_holding_count_for_stats, -3);
+    }
+
+    #[test]
+    fn started_active_hold_state_resets_hold_and_builds_active_slot() {
+        let mut hold = test_hold();
+        hold.result = Some(HoldResult::LetGo);
+        hold.life = 0.25;
+        hold.let_go_started_at = Some(10);
+        hold.let_go_starting_life = 0.25;
+
+        let active = started_active_hold_state(Some(&mut hold), 3, NoteType::Hold, 100, 200, 150);
+
+        assert_eq!(hold.result, Some(HoldResult::LetGo));
+        assert_eq!(hold.life, MAX_HOLD_LIFE);
+        assert_eq!(hold.let_go_started_at, None);
+        assert_eq!(hold.let_go_starting_life, 0.0);
+        assert_eq!(active.note_index, 3);
+        assert_eq!(active.start_time_ns, 100);
+        assert_eq!(active.end_time_ns, 200);
+        assert_eq!(active.note_type, NoteType::Hold);
+        assert!(!active.let_go);
+        assert!(active.is_pressed);
+        assert_eq!(active.life, MAX_HOLD_LIFE);
+        assert_eq!(active.last_update_time_ns, 150);
+    }
+
+    #[test]
+    fn started_active_hold_state_allows_missing_hold_data() {
+        let active = started_active_hold_state(None, 4, NoteType::Roll, 10, 20, 12);
+
+        assert_eq!(active.note_index, 4);
+        assert_eq!(active.start_time_ns, 10);
+        assert_eq!(active.end_time_ns, 20);
+        assert_eq!(active.note_type, NoteType::Roll);
+        assert_eq!(active.life, MAX_HOLD_LIFE);
+    }
+
+    #[test]
+    fn refresh_roll_life_for_step_restores_life_and_progress_time() {
+        let mut active = test_active_hold(NoteType::Roll, true, false, 0.2);
+        active.start_time_ns = 100;
+        active.end_time_ns = 300;
+        active.last_update_time_ns = 120;
+        let mut hold = test_hold();
+        hold.life = 0.2;
+        hold.let_go_started_at = Some(150);
+        hold.let_go_starting_life = 0.2;
+
+        assert!(refresh_roll_life_for_step(&mut active, &mut hold, 250));
+
+        assert_eq!(active.life, MAX_HOLD_LIFE);
+        assert_eq!(active.last_update_time_ns, 250);
+        assert_eq!(hold.life, MAX_HOLD_LIFE);
+        assert_eq!(hold.let_go_started_at, None);
+        assert_eq!(hold.let_go_starting_life, 0.0);
+    }
+
+    #[test]
+    fn refresh_roll_life_for_step_caps_progress_at_roll_end() {
+        let mut active = test_active_hold(NoteType::Roll, true, false, 0.2);
+        active.start_time_ns = 100;
+        active.end_time_ns = 300;
+        active.last_update_time_ns = 120;
+        let mut hold = test_hold();
+
+        assert!(refresh_roll_life_for_step(&mut active, &mut hold, 400));
+
+        assert_eq!(active.last_update_time_ns, 300);
+    }
+
+    #[test]
+    fn refresh_roll_life_for_step_rejects_non_roll_or_inactive_hold() {
+        let mut hold_active = test_active_hold(NoteType::Hold, true, false, 0.2);
+        let mut roll_let_go = test_active_hold(NoteType::Roll, true, true, 0.2);
+        let mut exhausted_roll = test_active_hold(NoteType::Roll, true, false, 0.0);
+        let mut hold = test_hold();
+
+        assert!(!refresh_roll_life_for_step(&mut hold_active, &mut hold, 1));
+        assert!(!refresh_roll_life_for_step(&mut roll_let_go, &mut hold, 1));
+        assert!(!refresh_roll_life_for_step(
+            &mut exhausted_roll,
+            &mut hold,
+            1,
+        ));
+    }
+
+    #[test]
+    fn refresh_roll_life_for_step_rejects_invalid_time_and_resolved_hold() {
+        let mut early = test_active_hold(NoteType::Roll, true, false, 0.2);
+        early.start_time_ns = 100;
+        let mut invalid = early.clone();
+        let mut resolved = early.clone();
+        let mut hold = test_hold();
+        let mut resolved_hold = test_hold();
+        resolved_hold.result = Some(HoldResult::LetGo);
+
+        assert!(!refresh_roll_life_for_step(&mut early, &mut hold, 99));
+        assert!(!refresh_roll_life_for_step(
+            &mut invalid,
+            &mut hold,
+            i64::MIN,
+        ));
+        assert!(!refresh_roll_life_for_step(
+            &mut resolved,
+            &mut resolved_hold,
+            100,
+        ));
+    }
+
+    #[test]
+    fn advance_active_hold_to_time_resolves_success_at_tail() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.start_time_ns = 0;
+        active.end_time_ns = song_time_ns_from_seconds(1.0);
+        active.last_update_time_ns = 0;
+        let mut hold = test_hold();
+        let target_time_ns = active.end_time_ns;
+
+        let result = advance_active_hold_to_time(
+            &mut active,
+            &mut hold,
+            &timing,
+            0,
+            0.0,
+            target_time_ns,
+            1.0,
+        );
+
+        assert_eq!(
+            result.resolution,
+            Some(ActiveHoldResolution::Success { note_index: 42 })
+        );
+        assert!(result.clear_active);
+        assert_eq!(active.life, MAX_HOLD_LIFE);
+        assert_eq!(hold.life, MAX_HOLD_LIFE);
+    }
+
+    #[test]
+    fn advance_active_hold_to_time_resolves_let_go_at_zero_crossing() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Roll, false, false, 0.5);
+        active.start_time_ns = 0;
+        active.end_time_ns = song_time_ns_from_seconds(1.0);
+        active.last_update_time_ns = 0;
+        let mut hold = test_hold();
+        hold.life = 0.5;
+        let target_time_ns = active.end_time_ns;
+
+        let result = advance_active_hold_to_time(
+            &mut active,
+            &mut hold,
+            &timing,
+            0,
+            0.0,
+            target_time_ns,
+            1.0,
+        );
+
+        assert_eq!(
+            result.resolution,
+            Some(ActiveHoldResolution::LetGo {
+                note_index: 42,
+                time_ns: song_time_ns_from_seconds(TIMING_WINDOW_SECONDS_ROLL * 0.5),
+            })
+        );
+        assert!(result.clear_active);
+        assert!(active.let_go);
+        assert_eq!(active.life, 0.0);
+        assert_eq!(hold.life, 0.0);
+    }
+
+    #[test]
+    fn advance_active_hold_to_time_resolves_pre_exhausted_life_at_start() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, false, false, 0.0);
+        active.start_time_ns = 100;
+        active.last_update_time_ns = 50;
+        let mut hold = test_hold();
+
+        let result = advance_active_hold_to_time(&mut active, &mut hold, &timing, 0, 0.0, 200, 1.0);
+
+        assert_eq!(
+            result.resolution,
+            Some(ActiveHoldResolution::LetGo {
+                note_index: 42,
+                time_ns: 100,
+            })
+        );
+        assert!(result.clear_active);
+        assert!(active.let_go);
+    }
+
+    #[test]
+    fn advance_active_hold_to_time_updates_held_progress_row() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.start_time_ns = 0;
+        active.end_time_ns = song_time_ns_from_seconds(2.0);
+        active.last_update_time_ns = 0;
+        let mut hold = test_hold();
+        hold.end_row_index = 192;
+        hold.end_beat = 4.0;
+
+        let result = advance_active_hold_to_time(
+            &mut active,
+            &mut hold,
+            &timing,
+            0,
+            0.0,
+            song_time_ns_from_seconds(0.5),
+            1.0,
+        );
+
+        assert_eq!(result, ActiveHoldAdvance::default());
+        assert!(hold.last_held_row_index > 0);
+        assert!(hold.last_held_beat > 0.0);
+        assert_eq!(active.last_update_time_ns, song_time_ns_from_seconds(0.5));
     }
 
     #[test]
@@ -14982,6 +17553,79 @@ mod tests {
     }
 
     #[test]
+    fn current_song_clock_snapshot_prefers_mapped_audio_time() {
+        let now = Instant::now();
+        let snapshot = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    stream_seconds: 12.0,
+                    music_nanos: song_time_ns_from_seconds(4.25),
+                    music_seconds_per_second: 1.5,
+                    has_music_mapping: true,
+                    valid_at: now,
+                    valid_at_host_nanos: 99,
+                },
+                timing_diag_enabled: true,
+                timing_diag_callback_gap_ns: 123,
+                ..GameplayAudioSnapshot::default()
+            },
+            0.75,
+            2.0,
+            -0.1,
+        );
+
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(4.25));
+        assert_eq!(snapshot.seconds_per_second, 1.5);
+        assert!(snapshot.mapped_audio);
+        assert_eq!(snapshot.valid_at_host_nanos, 99);
+        assert!(snapshot.timing_diag_enabled);
+        assert_eq!(snapshot.timing_diag_callback_gap_ns, 123);
+    }
+
+    #[test]
+    fn current_song_clock_snapshot_falls_back_for_invalid_mapped_slope() {
+        let snapshot = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos: song_time_ns_from_seconds(2.0),
+                    music_seconds_per_second: f32::NAN,
+                    has_music_mapping: true,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+            1.25,
+            0.0,
+            0.0,
+        );
+
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(2.0));
+        assert_eq!(snapshot.seconds_per_second, 1.25);
+        assert!(snapshot.mapped_audio);
+    }
+
+    #[test]
+    fn current_song_clock_snapshot_maps_unmapped_stream_position() {
+        let snapshot = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    stream_seconds: 3.0,
+                    has_music_mapping: false,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+            1.5,
+            2.0,
+            -0.1,
+        );
+
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.45));
+        assert_eq!(snapshot.seconds_per_second, 1.5);
+        assert!(!snapshot.mapped_audio);
+    }
+
+    #[test]
     fn recent_step_tracks_count_current_press_inside_jump_window() {
         let mut pressed_since_ns = [None; MAX_COLS];
         pressed_since_ns[0] = Some(song_time_ns_from_seconds(10.0));
@@ -15325,6 +17969,96 @@ mod tests {
     }
 
     #[test]
+    fn row_entry_provisional_early_marks_valid_row_only() {
+        let notes = [test_note_at(NoteType::Tap, None, false, 48, 1.0)];
+        let note_times = [song_time_ns_from_seconds(1.0)];
+        let mut note_indices = [usize::MAX; MAX_COLS];
+        note_indices[0] = 0;
+        let mut row_entries = vec![build_row_entry(48, note_indices, 1, &notes, &note_times)];
+        let note_row_entry_indices = [u32::MAX, 0];
+
+        assert!(!mark_row_entry_provisional_early_result(
+            &mut row_entries,
+            &note_row_entry_indices,
+            0,
+        ));
+        assert!(!row_entries[0].had_provisional_early_hit);
+        assert!(mark_row_entry_provisional_early_result(
+            &mut row_entries,
+            &note_row_entry_indices,
+            1,
+        ));
+        assert!(row_entries[0].had_provisional_early_hit);
+    }
+
+    #[test]
+    fn row_entry_note_finalized_decrements_counts() {
+        let notes = [
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Lift, None, false, 48, 1.0),
+        ];
+        let note_times = [
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.0),
+        ];
+        let mut note_indices = [usize::MAX; MAX_COLS];
+        note_indices[0] = 0;
+        note_indices[1] = 1;
+        let mut row_entries = vec![build_row_entry(48, note_indices, 2, &notes, &note_times)];
+        let note_row_entry_indices = [0, 0];
+
+        assert!(mark_row_entry_note_finalized(
+            &mut row_entries,
+            &note_row_entry_indices,
+            0,
+            NoteType::Tap,
+        ));
+        assert_eq!(row_entries[0].unresolved_count, 1);
+        assert_eq!(row_entries[0].unresolved_nonlift_count, 0);
+        assert!(mark_row_entry_note_finalized(
+            &mut row_entries,
+            &note_row_entry_indices,
+            1,
+            NoteType::Lift,
+        ));
+        assert_eq!(row_entries[0].unresolved_count, 0);
+        assert_eq!(row_entries[0].unresolved_nonlift_count, 0);
+    }
+
+    #[test]
+    fn row_entry_note_finalized_saturates_and_ignores_missing_rows() {
+        let notes = [test_note_at(NoteType::Tap, None, false, 48, 1.0)];
+        let note_times = [song_time_ns_from_seconds(1.0)];
+        let mut note_indices = [usize::MAX; MAX_COLS];
+        note_indices[0] = 0;
+        let mut row_entries = vec![build_row_entry(48, note_indices, 1, &notes, &note_times)];
+        row_entries[0].unresolved_count = 0;
+        row_entries[0].unresolved_nonlift_count = 0;
+        let note_row_entry_indices = [0, 99];
+
+        assert!(mark_row_entry_note_finalized(
+            &mut row_entries,
+            &note_row_entry_indices,
+            0,
+            NoteType::Tap,
+        ));
+        assert_eq!(row_entries[0].unresolved_count, 0);
+        assert_eq!(row_entries[0].unresolved_nonlift_count, 0);
+        assert!(!mark_row_entry_note_finalized(
+            &mut row_entries,
+            &note_row_entry_indices,
+            1,
+            NoteType::Tap,
+        ));
+        assert!(!mark_row_entry_note_finalized(
+            &mut row_entries,
+            &note_row_entry_indices,
+            2,
+            NoteType::Tap,
+        ));
+    }
+
+    #[test]
     fn cached_row_lookup_uses_row_map_and_final_outcome() {
         let mut note = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         note.result = Some(test_judgment(JudgeGrade::Great));
@@ -15419,6 +18153,21 @@ mod tests {
         assert_eq!(ready, Some((2, 144, true)));
         assert!(suppress_final_bad_rescore_visual(true, JudgeGrade::Decent));
         assert!(!suppress_final_bad_rescore_visual(true, JudgeGrade::Great));
+    }
+
+    #[test]
+    fn finalized_row_awards_hand_for_notes_or_carried_holds() {
+        assert!(finalized_row_awards_hand(JudgeGrade::Great, 3, 0));
+        assert!(finalized_row_awards_hand(JudgeGrade::Excellent, 2, 1));
+        assert!(finalized_row_awards_hand(JudgeGrade::Fantastic, 1, 2));
+        assert!(!finalized_row_awards_hand(JudgeGrade::Great, 2, 0));
+    }
+
+    #[test]
+    fn finalized_row_awards_hand_suppresses_bad_rows() {
+        assert!(!finalized_row_awards_hand(JudgeGrade::Miss, 4, 0));
+        assert!(!finalized_row_awards_hand(JudgeGrade::WayOff, 4, 0));
+        assert!(finalized_row_awards_hand(JudgeGrade::Decent, 3, 0));
     }
 
     #[test]

@@ -1,8 +1,11 @@
 use log::debug;
 
-use deadsync_rules::life::{self as life_rules, LifeMeter};
+use deadsync_rules::life::LifeMeter;
 
-use super::{MAX_PLAYERS, PlayerRuntime, State, course_submit_life_eligible, player_life_is_dead};
+use super::{
+    MAX_PLAYERS, PlayerRuntime, State, apply_gameplay_life_delta, course_submit_life_eligible,
+    player_life_is_dead,
+};
 
 #[inline(always)]
 pub(super) fn is_player_dead(p: &PlayerRuntime) -> bool {
@@ -58,30 +61,17 @@ fn write_player_life_meter(p: &mut PlayerRuntime, meter: LifeMeter) {
     p.fail_time = meter.fail_time;
 }
 
-#[inline(always)]
-fn apply_course_submit_life_change(meter: &mut LifeMeter, current_music_time: f32, delta: f32) {
-    let _ = life_rules::apply_life_delta(meter, current_music_time, delta);
-}
-
 pub(super) fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
-    if is_player_dead(p) {
-        p.life = 0.0;
-        p.is_failing = true;
-        return;
-    }
-
     let mut meter = player_life_meter(p);
-    let result = life_rules::apply_life_delta(&mut meter, current_music_time, delta);
+    let result = apply_gameplay_life_delta(
+        &mut meter,
+        &mut p.life_history,
+        p.course_submit_life.as_mut(),
+        current_music_time,
+        delta,
+    );
     write_player_life_meter(p, meter);
     if result.failed_now {
         debug!("Player has failed!");
-    }
-
-    if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
-        life_rules::record_life_history(&mut p.life_history, current_music_time, result.old_life);
-        life_rules::record_life_history(&mut p.life_history, current_music_time, result.new_life);
-    }
-    if let Some(meter) = &mut p.course_submit_life {
-        apply_course_submit_life_change(meter, current_music_time, delta);
     }
 }

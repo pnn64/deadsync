@@ -5,21 +5,9 @@ use std::time::Instant;
 
 use super::{
     DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, FrameStableDisplayClock,
-    GameplayAudioSnapshot, SongTimeNs, State, frame_stable_display_clock_step,
-    normalized_song_rate, scaled_song_delta_ns, song_time_ns_from_seconds, song_time_ns_to_seconds,
-    stream_pos_to_music_time,
+    SongClockSnapshot, SongTimeNs, State, frame_stable_display_clock_step, normalized_song_rate,
+    scaled_song_delta_ns, song_time_ns_to_seconds,
 };
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct SongClockSnapshot {
-    pub(crate) song_time_ns: SongTimeNs,
-    pub(crate) seconds_per_second: f32,
-    pub(crate) mapped_audio: bool,
-    pub(crate) valid_at: Instant,
-    pub(crate) valid_at_host_nanos: u64,
-    pub(crate) timing_diag_enabled: bool,
-    pub(crate) timing_diag_callback_gap_ns: u64,
-}
 
 const DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT: usize = 32;
 static DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -125,47 +113,6 @@ pub fn collect_display_clock_stutter_diag_events(
     state
         .display_clock_diag
         .collect_recent(now_host_nanos, window_ns, out);
-}
-
-#[inline(always)]
-pub(crate) fn current_song_clock_snapshot(
-    state: &State,
-    audio_snapshot: GameplayAudioSnapshot,
-) -> SongClockSnapshot {
-    let stream_clock = audio_snapshot.stream_clock;
-    let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    if stream_clock.has_music_mapping {
-        SongClockSnapshot {
-            song_time_ns: stream_clock.music_nanos,
-            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
-                && stream_clock.music_seconds_per_second > 0.0
-            {
-                stream_clock.music_seconds_per_second
-            } else {
-                fallback_rate
-            },
-            mapped_audio: true,
-            valid_at: stream_clock.valid_at,
-            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
-            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
-            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
-        }
-    } else {
-        let song_time = stream_pos_to_music_time(state, stream_clock.stream_seconds);
-        SongClockSnapshot {
-            song_time_ns: song_time_ns_from_seconds(song_time),
-            seconds_per_second: fallback_rate,
-            mapped_audio: false,
-            valid_at: stream_clock.valid_at,
-            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
-            timing_diag_enabled: audio_snapshot.timing_diag_enabled,
-            timing_diag_callback_gap_ns: audio_snapshot.timing_diag_callback_gap_ns,
-        }
-    }
 }
 
 pub(crate) fn music_time_ns_from_song_clock(

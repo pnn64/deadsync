@@ -2,44 +2,30 @@ use deadsync_rules::judgment::JudgeGrade;
 
 use super::offset::{apply_global_offset_delta, apply_song_offset_delta};
 use super::{
-    AUTOSYNC_OFFSET_SAMPLE_COUNT, AUTOSYNC_STDDEV_MAX_SECONDS, AutosyncMode, SongTimeNs, State,
-    autoplay_blocks_scoring, autosync_mean_ns, autosync_stddev_seconds, song_time_ns_invalid,
-    song_time_ns_to_seconds,
+    AutosyncMode, AutosyncOffsetCorrection, SongTimeNs, State, apply_autosync_offset_sample,
+    autoplay_blocks_scoring,
 };
 
 #[inline(always)]
 fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeNs) {
-    if song_time_ns_invalid(note_off_by_ns) || state.autosync_mode == AutosyncMode::Off {
-        return;
+    let result = apply_autosync_offset_sample(
+        &mut state.autosync_offset_samples,
+        &mut state.autosync_offset_sample_count,
+        state.autosync_mode,
+        note_off_by_ns,
+    );
+    if let Some(stddev) = result.standard_deviation {
+        state.autosync_standard_deviation = stddev;
     }
-    let sample_ix = state
-        .autosync_offset_sample_count
-        .min(AUTOSYNC_OFFSET_SAMPLE_COUNT.saturating_sub(1));
-    state.autosync_offset_samples[sample_ix] = note_off_by_ns;
-    state.autosync_offset_sample_count = state.autosync_offset_sample_count.saturating_add(1);
-    if state.autosync_offset_sample_count < AUTOSYNC_OFFSET_SAMPLE_COUNT {
-        return;
-    }
-
-    let mean_ns = autosync_mean_ns(&state.autosync_offset_samples);
-    let stddev = autosync_stddev_seconds(&state.autosync_offset_samples, mean_ns);
-    if stddev < AUTOSYNC_STDDEV_MAX_SECONDS {
-        let mean = song_time_ns_to_seconds(mean_ns);
-        match state.autosync_mode {
-            AutosyncMode::Off => {}
-            AutosyncMode::Song => {
-                if state.course_display_totals.is_none() {
-                    let _ = apply_song_offset_delta(state, mean);
-                }
-            }
-            AutosyncMode::Machine => {
-                let _ = apply_global_offset_delta(state, mean);
-            }
+    match result.correction {
+        Some(AutosyncOffsetCorrection::Song(mean)) => {
+            let _ = apply_song_offset_delta(state, mean);
         }
+        Some(AutosyncOffsetCorrection::Machine(mean)) => {
+            let _ = apply_global_offset_delta(state, mean);
+        }
+        None => {}
     }
-
-    state.autosync_standard_deviation = stddev;
-    state.autosync_offset_sample_count = 0;
 }
 
 #[inline(always)]

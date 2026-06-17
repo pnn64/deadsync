@@ -4,8 +4,8 @@ use std::time::Instant;
 use winit::keyboard::KeyCode;
 
 use super::{
-    OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL, OFFSET_ADJUST_STEP_SECONDS, State,
-    compute_end_times_ns, player_index_for_column,
+    GameplayOffsetAdjustKey, State, compute_end_times_ns, offset_adjust_delta_for_key,
+    offset_adjust_repeat_ready, offset_adjust_slot_for_key, player_index_for_column,
 };
 
 #[inline(always)]
@@ -63,21 +63,22 @@ pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
 }
 
 #[inline(always)]
-fn offset_adjust_slot(code: KeyCode) -> Option<usize> {
+fn offset_adjust_key(code: KeyCode) -> Option<GameplayOffsetAdjustKey> {
     match code {
-        KeyCode::F11 => Some(0),
-        KeyCode::F12 => Some(1),
+        KeyCode::F11 => Some(GameplayOffsetAdjustKey::Decrease),
+        KeyCode::F12 => Some(GameplayOffsetAdjustKey::Increase),
         _ => None,
     }
 }
 
 #[inline(always)]
+fn offset_adjust_slot(code: KeyCode) -> Option<usize> {
+    offset_adjust_key(code).map(offset_adjust_slot_for_key)
+}
+
+#[inline(always)]
 fn offset_adjust_delta(code: KeyCode) -> Option<f32> {
-    match code {
-        KeyCode::F11 => Some(-OFFSET_ADJUST_STEP_SECONDS),
-        KeyCode::F12 => Some(OFFSET_ADJUST_STEP_SECONDS),
-        _ => None,
-    }
+    offset_adjust_key(code).map(offset_adjust_delta_for_key)
 }
 
 #[inline(always)]
@@ -105,24 +106,22 @@ pub(super) fn start_offset_adjust_hold(
 #[inline(always)]
 pub(super) fn update_offset_adjust_hold(state: &mut State) {
     let now = Instant::now();
-    for code in [KeyCode::F11, KeyCode::F12] {
-        let Some(slot) = offset_adjust_slot(code) else {
-            continue;
-        };
+    for key in [
+        GameplayOffsetAdjustKey::Decrease,
+        GameplayOffsetAdjustKey::Increase,
+    ] {
+        let slot = offset_adjust_slot_for_key(key);
         let (Some(held_since), Some(last_at)) = (
             state.offset_adjust_held_since[slot],
             state.offset_adjust_last_at[slot],
         ) else {
             continue;
         };
-        if now.duration_since(held_since) < OFFSET_ADJUST_REPEAT_DELAY
-            || now.duration_since(last_at) < OFFSET_ADJUST_REPEAT_INTERVAL
+        if !offset_adjust_repeat_ready(now.duration_since(held_since), now.duration_since(last_at))
         {
             continue;
         }
-        let Some(delta) = offset_adjust_delta(code) else {
-            continue;
-        };
+        let delta = offset_adjust_delta_for_key(key);
         if state.shift_held {
             let _ = apply_global_offset_delta(state, delta);
         } else if state.course_display_totals.is_none() {

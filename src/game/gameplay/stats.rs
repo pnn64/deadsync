@@ -1,7 +1,8 @@
 use deadsync_chart::ChartData;
 use deadsync_gameplay::{
-    GameplayTargetScoreSetting, ScoreValidityOptions, score_invalid_reason_lines_for_options,
-    stream_segments_for_note_data,
+    GameplayMiniIndicatorMode, GameplayMiniIndicatorOptions, GameplayTargetScoreSetting,
+    ScoreValidityOptions, mini_indicator_mode_for_options, mini_indicator_needs_stream_data,
+    score_invalid_reason_lines_for_options, stream_segments_for_note_data,
 };
 use deadsync_profile::{MeasureCounter, MiniIndicator, TargetScoreSetting};
 use deadsync_rules::stream::StreamSegment;
@@ -12,22 +13,51 @@ use super::{
 };
 
 #[inline(always)]
-pub(crate) fn mini_indicator_mode(profile: &deadsync_profile::Profile) -> MiniIndicator {
-    if profile.mini_indicator != MiniIndicator::None {
-        profile.mini_indicator
-    } else if profile.subtractive_scoring {
-        MiniIndicator::SubtractiveScoring
-    } else if profile.pacemaker {
-        MiniIndicator::Pacemaker
-    } else {
-        MiniIndicator::None
+fn gameplay_mini_indicator_mode(mode: MiniIndicator) -> GameplayMiniIndicatorMode {
+    match mode {
+        MiniIndicator::None => GameplayMiniIndicatorMode::None,
+        MiniIndicator::SubtractiveScoring => GameplayMiniIndicatorMode::SubtractiveScoring,
+        MiniIndicator::PredictiveScoring => GameplayMiniIndicatorMode::PredictiveScoring,
+        MiniIndicator::PaceScoring => GameplayMiniIndicatorMode::PaceScoring,
+        MiniIndicator::RivalScoring => GameplayMiniIndicatorMode::RivalScoring,
+        MiniIndicator::Pacemaker => GameplayMiniIndicatorMode::Pacemaker,
+        MiniIndicator::StreamProg => GameplayMiniIndicatorMode::StreamProg,
     }
 }
 
 #[inline(always)]
+fn profile_mini_indicator_mode(mode: GameplayMiniIndicatorMode) -> MiniIndicator {
+    match mode {
+        GameplayMiniIndicatorMode::None => MiniIndicator::None,
+        GameplayMiniIndicatorMode::SubtractiveScoring => MiniIndicator::SubtractiveScoring,
+        GameplayMiniIndicatorMode::PredictiveScoring => MiniIndicator::PredictiveScoring,
+        GameplayMiniIndicatorMode::PaceScoring => MiniIndicator::PaceScoring,
+        GameplayMiniIndicatorMode::RivalScoring => MiniIndicator::RivalScoring,
+        GameplayMiniIndicatorMode::Pacemaker => MiniIndicator::Pacemaker,
+        GameplayMiniIndicatorMode::StreamProg => MiniIndicator::StreamProg,
+    }
+}
+
+#[inline(always)]
+fn mini_indicator_options(profile: &deadsync_profile::Profile) -> GameplayMiniIndicatorOptions {
+    GameplayMiniIndicatorOptions {
+        requested_mode: gameplay_mini_indicator_mode(profile.mini_indicator),
+        measure_counter_enabled: profile.measure_counter != MeasureCounter::None,
+        subtractive_scoring: profile.subtractive_scoring,
+        pacemaker: profile.pacemaker,
+    }
+}
+
+#[inline(always)]
+pub(crate) fn mini_indicator_mode(profile: &deadsync_profile::Profile) -> MiniIndicator {
+    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(
+        profile,
+    )))
+}
+
+#[inline(always)]
 pub(crate) fn needs_stream_data(profile: &deadsync_profile::Profile) -> bool {
-    profile.measure_counter != MeasureCounter::None
-        || mini_indicator_mode(profile) != MiniIndicator::None
+    mini_indicator_needs_stream_data(mini_indicator_options(profile))
 }
 
 pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSegment> {
